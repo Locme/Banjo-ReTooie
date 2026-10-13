@@ -21,6 +21,10 @@ namespace tooie {
     // Overlay bookkeeping (overlays.cpp). The game numbers overlays from 1.
     bool overlay_section(uint32_t overlay_index, uint32_t& rom_addr, uint32_t& size);
 
+    // How much wider than 4:3 RT64 draws the picture: 1 unless Aspect Ratio is
+    // Expand and the window is wider than 4:3 (widescreen.cpp).
+    float widescreen_scale();
+
     // Settings (config.cpp).
     void init_config();
 

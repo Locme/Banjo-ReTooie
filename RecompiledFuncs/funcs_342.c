@@ -3846,6 +3846,7 @@ L_8001B374:
 RECOMP_FUNC void scinfobar_entrypoint_24(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_hud_element_begin(rdram, ctx);
     // 0x80800764: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x80800768: sw          $ra, 0x2C($sp)
@@ -4058,6 +4059,7 @@ L_80800878:
 L_80800894:
     // 0x80800894: lw          $s0, 0x1C($sp)
     ctx->r16 = MEM_W(ctx->r29, 0X1C);
+    tooie_hud_element_end(rdram, ctx);
     // 0x80800898: lw          $s1, 0x20($sp)
     ctx->r17 = MEM_W(ctx->r29, 0X20);
     // 0x8080089C: lw          $s2, 0x24($sp)

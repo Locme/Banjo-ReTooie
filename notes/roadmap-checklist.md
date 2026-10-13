@@ -41,9 +41,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.22 Fit to window: fill / letterbox / 4:3, HUD 16:9
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
-- Partial (2026-10-13): Fill works through Settings > Graphics > Aspect Ratio = Expand (RT64 widens the picture; the game's culling now widens with it, src/game/widescreen.cpp). 4:3 is Aspect Ratio = Original. The HUD stays in the middle 4:3. Letterbox 16:9 added (2026-10-13): Aspect Ratio now reads 4:3 / Fill / Letterbox 16:9. Not done: HUD pinned to the edges.
+- Partial (2026-10-13): Fill works through Settings > Graphics > Aspect Ratio = Expand (RT64 widens the picture; the game's culling now widens with it, src/game/widescreen.cpp). 4:3 is Aspect Ratio = Original. The HUD stays in the middle 4:3. Letterbox 16:9 added (2026-10-13): Aspect Ratio now reads 4:3 / Fill / Letterbox 16:9. HUD at the edges added (2026-10-13, src/game/hud_edges.cpp): Settings > Graphics > HUD Placement. Original keeps the HUD in the 4:3 middle, 16:9 spreads it up to 16:9, Expand to the window edges. Verified headless in a 16:9 window (paused in Spiral Mountain).
 
 ### 4.30 Cutscene audio sync and N64 intro pacing
 - [ ] Done

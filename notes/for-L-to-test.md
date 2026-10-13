@@ -86,3 +86,14 @@
   2. Press Start while the Rare, Nintendo and Dolby logos show
 - Look for: Does it jump straight to the file select with the jigsaw wipe? With Settings > General > Skip intro logos off, do the logos play through?
 - Status: waiting for L
+
+## T11 HUD at the screen edges
+- Asked: 2026-10-13 17:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.22
+- Steps:
+  1. Settings > Graphics: Aspect Ratio = Fill, HUD Placement = Expand, in a 16:9 (or wider) window
+  2. Load a file, play a little, collect a note, then pause
+  3. Switch HUD Placement between Original, 16:9 and Expand
+- Look for: Do the honeycombs and air sit at the left edge, and the notes, feathers and eggs (with their numbers) at the right edge? Does the jiggy counter stay in the middle? Does Original put everything back in the middle?
+- Status: waiting for L

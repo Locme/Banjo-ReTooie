@@ -20,30 +20,33 @@
 #include "funcs.h"
 #include "recompui/recompui.h"
 #include "ultramodern/config.hpp"
+#include "tooie_game.h"
 
 namespace {
     constexpr float original_aspect = 4.0f / 3.0f;
+}
 
-    // How much wider than 4:3 RT64 draws the 3D view.
-    float aspect_scale() {
-        const auto& config = ultramodern::renderer::get_graphics_config();
-        // Manual is the Letterbox 16:9 choice: RT64 draws a 16:9 view
-        // (its default manual target) and adds bars around it.
-        if (config.ar_option == ultramodern::renderer::AspectRatio::Manual) {
-            return (16.0f / 9.0f) / original_aspect;
-        }
-        if (config.ar_option != ultramodern::renderer::AspectRatio::Expand) {
-            return 1.0f;
-        }
-        int width = 0;
-        int height = 0;
-        recompui::get_window_size(width, height);
-        if (width <= 0 || height <= 0) {
-            return 1.0f;
-        }
-        return std::max((float)width / (float)height, original_aspect) / original_aspect;
+// How much wider than 4:3 RT64 draws the picture.
+float tooie::widescreen_scale() {
+    const auto& config = ultramodern::renderer::get_graphics_config();
+    // Manual is the Letterbox 16:9 choice: RT64 draws a 16:9 view
+    // (its default manual target) and adds bars around it.
+    if (config.ar_option == ultramodern::renderer::AspectRatio::Manual) {
+        return (16.0f / 9.0f) / original_aspect;
     }
+    if (config.ar_option != ultramodern::renderer::AspectRatio::Expand) {
+        return 1.0f;
+    }
+    int width = 0;
+    int height = 0;
+    recompui::get_window_size(width, height);
+    if (width <= 0 || height <= 0) {
+        return 1.0f;
+    }
+    return std::max((float)width / (float)height, original_aspect) / original_aspect;
+}
 
+namespace {
     float load_float(uint8_t* rdram, gpr base, int32_t offset) {
         uint32_t bits = MEM_W(offset, base);
         float value;
@@ -76,7 +79,7 @@ extern "C" void func_800CA2A8(uint8_t* rdram, recomp_context* ctx) {
     store_float(rdram, camera, 0x124, -cosine);
     store_float(rdram, camera, 0x118, -cosine);
 
-    float aspect = load_float(rdram, camera, 0xE8) * aspect_scale();
+    float aspect = load_float(rdram, camera, 0xE8) * tooie::widescreen_scale();
     store_float(rdram, camera, 0x11C, load_float(rdram, camera, 0x120) * aspect);
 
     ctx->r4 = camera + 0x11C;

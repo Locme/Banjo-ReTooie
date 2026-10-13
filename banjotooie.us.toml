@@ -212,3 +212,17 @@ text = "if (ctx->r19 != 0) tooie_preempt_point(rdram, ctx);"
 func = "func_800A7D84"
 before_vram = 0x800A7D84
 text = "tooie_warp_tick(rdram, ctx);"
+
+# --- HUD at the screen edges (src/game/hud_edges.cpp) -----------------------
+# scinfobar_entrypoint_24 draws one HUD element. Mark where its display list
+# starts (entry) and fix it up when it is done (the return, while $s1 still
+# holds the graphics context).
+[[patches.hook]]
+func = "scinfobar_entrypoint_24"
+before_vram = 0x80800764
+text = "tooie_hud_element_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "scinfobar_entrypoint_24"
+before_vram = 0x80800898
+text = "tooie_hud_element_end(rdram, ctx);"
