@@ -20,7 +20,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 ## Usage
 
-    [PAD='<pad script>'] [TOOIE_WATCH=addr,addr+len] tools/headless_boot.sh <seconds> <tag>
+    [PAD='<pad script>'] [TOOIE_WATCH=addr,addr+len] [TOOIE_WARP=map:exit@ms] tools/headless_boot.sh <seconds> <tag>
 
 - `<seconds>`: how long to run. A screenshot is taken every 20 s, so use a
   multiple of 20 where you can.
@@ -29,6 +29,11 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 - `TOOIE_WATCH`: RDRAM words to print every 2 s. Each entry is a hex address,
   or `addr+len` (both hex) to print every word in that range. The watch is
   read from `src/game/debug_watch.cpp`.
+- `TOOIE_WARP=map:exit[@ms]` (hex map and exit): warps with the game's own
+  map change, `ms` after the game loop first runs (default: at once). From the
+  title, `TOOIE_WARP=AF:0@15000` lands in Spiral Mountain about 20 s later with
+  no file loaded, skipping the 10-minute intro. Logs `[warp] map ... (from map
+  ...)`. Map ids are in handoff §4.80. Code: `src/debug/warp.cpp`.
 
 ## Pad script syntax
 

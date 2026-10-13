@@ -204,3 +204,11 @@ value = 0x03E00008
 func = "func_800C2AB8"
 before_vram = 0x800C2B50
 text = "if (ctx->r19 != 0) tooie_preempt_point(rdram, ctx);"
+
+# --- Map warps (src/debug/warp.cpp) ------------------------------------------
+# func_800A7D84 is the per-frame game-state update that acts on map change
+# requests. Warps are issued from its entry, on the game thread between frames.
+[[patches.hook]]
+func = "func_800A7D84"
+before_vram = 0x800A7D84
+text = "tooie_warp_tick(rdram, ctx);"
