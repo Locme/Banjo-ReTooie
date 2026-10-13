@@ -299,11 +299,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 
 ## Stretch
 
-### 4.38 Sun shadows
+### 4.97 Requested or planned but not started (carry onto the roadmap)
 - [ ] Done
 - [ ] Approved by L
 
-### 4.97 Requested or planned but not started (carry onto the roadmap)
+### 4.98 New sun shadows shader (rebuilt as an RT64 pass, replaces 4.38)
 - [ ] Done
 - [ ] Approved by L
 
@@ -405,5 +405,9 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 - [ ] Approved by L
 
 ### 4.96 Small fixes (XBLA or SDK)
+- [ ] Done
+- [ ] Approved by L
+
+### 4.38 Sun shadows
 - [ ] Done
 - [ ] Approved by L
