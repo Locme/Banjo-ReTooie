@@ -26,14 +26,16 @@ framework, not from this port's code, so it is not described here.
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
   page at a time). Menus are not affected. Default: 1x.
-- **Tiptoe button**: hold this button to tiptoe at any stick tilt. Choices: Off,
-  B, Left stick click, Right stick click. Default: B. With B, the game does not
-  see B while it is held, and a quick tap (under 0.2 seconds) still counts as B,
-  a moment late. The stick clicks are not seen by the game anyway, so they keep
-  working as normal.
 - **Level transitions**: how fast the screen wipe plays when you go to another
   area: Original, Fast (4x) or Instant (16x). Cutscene fades are not affected.
   Default: Original.
+
+## Controls: Hotkeys
+
+- **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
+  click on a controller, nothing on the keyboard. Rebind it in the Controls tab
+  under Hotkeys. The game still sees every button as usual.
+- **Speed-Up**: see Cheats below.
 
 ## Graphics: Aspect Ratio
 

@@ -3,7 +3,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <variant>
+#include <cstdio>
+#include <cstdlib>
 
 #ifdef _WIN32
 #include "SDL.h"
@@ -11,103 +12,76 @@
 #include "SDL2/SDL.h"
 #endif
 
-#include "recompui/config.h"
+#include "recompinput/recompinput.h"
+#include "recompinput/input_binding.h"
+#include "recompinput/profiles.h"
 
-#include "tooie_game.h"
 #include "tooie_tiptoe.h"
 
 namespace {
     using namespace std::chrono_literals;
     using Clock = std::chrono::steady_clock;
 
-    constexpr uint16_t button_b = 0x4000;
-
     // The left stick's tilt while tiptoeing, as a fraction of the stick range. Measured headless
     // (tilt: state): under 0.20 stands, 0.20 creeps (31), 0.25 to 0.40 tiptoes (2), 0.45 to 0.50 walks (3),
     // 0.60 and up runs (4). The cap sits in the middle of the tiptoe band.
     constexpr float tiptoe_tilt = 0.35f;
 
-    // A press shorter than this still reaches the game as B (a moment late).
-    constexpr auto tap_time = 200ms;
-    // How long the delayed B tap is shown to the game, enough for it to read it.
-    constexpr auto pulse_time = 150ms;
+    constexpr auto tiptoe_input = recompinput::GameInput::TIPTOE;
 
-    tooie::input::TiptoeButton cached_button = tooie::input::TiptoeButton::B;
-    Clock::time_point cached_at{};
-
-    tooie::input::TiptoeButton chosen_button(Clock::time_point now) {
-        // The option is read a few times a second, not on every pad read.
-        if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
-            cached_at = now;
-            try {
-                cached_button = static_cast<tooie::input::TiptoeButton>(std::get<uint32_t>(
-                    recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::input::tiptoe_option)));
-            } catch (...) {
-                cached_button = tooie::input::TiptoeButton::B;
-            }
+    // Whether any keyboard key or controller button bound to Tiptoe (Controls tab, Hotkeys) is held.
+    bool key_down() {
+        // Pressing the key to bind it in the Controls tab should not tiptoe.
+        if (recompinput::binding::is_binding()) {
+            return false;
         }
-        return cached_button;
-    }
-
-    // Whether any connected game controller has its stick pressed in.
-    bool stick_click_held(SDL_GameControllerButton which) {
-        for (int i = 0; i < SDL_NumJoysticks(); i++) {
-            if (!SDL_IsGameController(i)) {
+        bool down = false;
+        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
+            if (profile < 0) {
                 continue;
             }
-            // Already open elsewhere: SDL hands back the same handle and counts the reference.
-            SDL_GameController* pad = SDL_GameControllerOpen(i);
-            if (pad == nullptr) {
-                continue;
-            }
-            const bool down = SDL_GameControllerGetButton(pad, which) != 0;
-            SDL_GameControllerClose(pad);
-            if (down) {
-                return true;
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, tiptoe_input, b));
             }
         }
-        return false;
+        return down;
     }
 
-    bool was_held = false;
-    Clock::time_point held_since{};
-    Clock::time_point pulse_until{};
+    // Test hook for headless runs, where no key can be pressed: TOOIE_TIPTOE_HOLD=<from ms>:<to ms>
+    // acts as the Tiptoe key being held between those two times after the first pad read.
+    struct TestHold {
+        bool active = false;
+        long from = 0;
+        long to = 0;
+        Clock::time_point begin = Clock::now();
+    };
+
+    TestHold& test_hold() {
+        static TestHold t = [] {
+            TestHold h;
+            if (const char* v = std::getenv("TOOIE_TIPTOE_HOLD")) {
+                h.active = std::sscanf(v, "%ld:%ld", &h.from, &h.to) == 2;
+            }
+            return h;
+        }();
+        return t;
+    }
 }
 
-void tooie::input::apply_tiptoe(uint16_t* buttons, float* x, float* y) {
-    const auto now = Clock::now();
-    const TiptoeButton button = chosen_button(now);
+void tooie::input::register_input() {
+    recompinput::set_game_input_name(tiptoe_input, "Tiptoe");
+    recompinput::set_game_input_description(tiptoe_input,
+        "Hold to tiptoe at any left stick tilt, so Banjo never creeps or runs by accident.");
+    recompinput::set_default_mapping_for_keyboard(tiptoe_input, {});
+    recompinput::set_default_mapping_for_controller(tiptoe_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_LEFTSTICK) });
+}
 
-    bool held = false;
-    switch (button) {
-    case TiptoeButton::B:
-        held = (*buttons & button_b) != 0;
-        break;
-    case TiptoeButton::LeftStick:
-        held = stick_click_held(SDL_CONTROLLER_BUTTON_LEFTSTICK);
-        break;
-    case TiptoeButton::RightStick:
-        held = stick_click_held(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-        break;
-    case TiptoeButton::Off:
-        break;
-    }
-
-    if (held && !was_held) {
-        held_since = now;
-    } else if (!held && was_held && button == TiptoeButton::B && now - held_since < tap_time) {
-        // A tap: give B to the game now that it is over.
-        pulse_until = now + pulse_time;
-    }
-    was_held = held;
-
-    if (button == TiptoeButton::B) {
-        if (held) {
-            *buttons &= ~button_b;
-        }
-        if (now < pulse_until) {
-            *buttons |= button_b;
-        }
+void tooie::input::apply_tiptoe(uint16_t*, float* x, float* y) {
+    bool held = key_down();
+    TestHold& test = test_hold();
+    if (test.active) {
+        const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - test.begin).count();
+        held = held || (ms >= test.from && ms < test.to);
     }
 
     if (held) {

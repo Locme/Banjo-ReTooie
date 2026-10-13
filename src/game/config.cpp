@@ -14,6 +14,7 @@
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
+    tooie::input::register_input();
 
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {
@@ -115,17 +116,6 @@ void tooie::init_config() {
                                    &tooie::free_camera_invert_y_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
-    qol.add_enum_option(
-        tooie::input::tiptoe_option,
-        "Tiptoe button",
-        "Hold this button to tiptoe at any stick tilt. <recomp-color primary>B</recomp-color> is hidden from the game while held; a quick tap still counts as B.",
-        {
-            {tooie::input::TiptoeButton::Off, "Off", "Off"},
-            {tooie::input::TiptoeButton::B, "B", "B"},
-            {tooie::input::TiptoeButton::LeftStick, "Left stick click", "Left stick click"},
-            {tooie::input::TiptoeButton::RightStick, "Right stick click", "Right stick click"},
-        },
-        tooie::input::TiptoeButton::B);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

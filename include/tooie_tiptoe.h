@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <string>
 
-// Dedicated tiptoe button (src/input/tiptoe.cpp, handoff 4.56): while the chosen button is held, the
-// left stick's tilt is capped to the tiptoe band, so Banjo tiptoes at any tilt.
+// Tiptoe hotkey (src/input/tiptoe.cpp, handoff 4.56): a game input in the Controls tab (Hotkeys),
+// Left stick click on a controller by default. While it is held, the left stick's tilt is capped to
+// the tiptoe band, so Banjo tiptoes at any tilt.
 namespace tooie::input {
-    enum class TiptoeButton : uint32_t { Off, B, LeftStick, RightStick };
-    inline const std::string tiptoe_option = "tiptoe_button";
+    // Names the Tiptoe hotkey and gives it its default binding. Call before
+    // recompui::config::finalize(), which loads the controls config.
+    void register_input();
 
     // Applies the tiptoe button to player 1's input as the game is about to read it. The stick
     // values are the fractions (-1 to 1) of the stick range. Safe to call more than once per frame.

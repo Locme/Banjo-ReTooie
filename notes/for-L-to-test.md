@@ -233,15 +233,14 @@
   2. Try the Framerate mode you were on when you heard the glitch
 - Look for: Do you still hear the short glitchy or sped-up sound now and then? If yes, which level and which Framerate mode?
 
-## T25 Tiptoe button
-- Asked: 2026-10-13 19:30 UTC
+## T25 Tiptoe key
+- Asked: 2026-10-13 19:30 UTC, changed 19:55 UTC (now a hotkey in Controls, no longer a QOL setting)
 - Build: latest Windows CI build from main
 - XBLA history: report §4.56
 - Steps:
-  1. Load a file. Hold B and push the stick fully in any direction
-  2. Quickly tap B (no stick) a few times to attack
-  3. Esc > QOL > Tiptoe button: try Left stick click and Right stick click, then Off
-- Look for: Does Banjo tiptoe at any tilt while B is held, and run again when you let go? Does a quick B tap still attack, and does the delay feel too slow? Do the stick clicks work as the hold button?
+  1. Load a file. Hold the left stick click (L3) and push the left stick fully in any direction
+  2. Esc > Controls > Hotkeys: bind Tiptoe to another button or key and try it
+- Look for: Does Banjo tiptoe at any tilt while L3 is held, and run again when you let go? Does the new binding work?
 - Status: waiting for L
 
 ## T26 Stop 'n' Swop items
