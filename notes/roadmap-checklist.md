@@ -231,7 +231,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.86 Notice toasts
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.90 Discord Rich Presence
