@@ -33,8 +33,6 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
-- **Always High-Detail Models**: models that switch to a simpler version far
-  away always use the detailed one. Applies at once. Default: on.
 - **Free camera**: the right stick turns the camera smoothly around Banjo and
   tilts it, instead of the game's stepped camera swings. Push it on past the
   top or bottom of the tilt to move the camera in or out. Clicking the right
@@ -84,6 +82,11 @@ Graphics changes apply at once. Graphics API needs a restart.
 - **Retro: CRT**: 240 scanlines and the stripes of a CRT TV. Default: off.
 
 F12 screenshots are taken before these filters, so they don't show them.
+
+## Graphics: models
+
+- **Always High-Detail Models**: models that switch to a simpler version far
+  away always use the detailed one. Applies at once. Default: on.
 
 ## Cheats
 

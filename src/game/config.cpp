@@ -85,11 +85,6 @@ void tooie::init_config() {
         },
         tooie::TransitionSpeed::Original);
     qol.add_bool_option(
-        tooie::high_detail_models_option,
-        "Always High-Detail Models",
-        "Models that switch to a simpler version far away always use the detailed one.",
-        true);
-    qol.add_bool_option(
         tooie::free_camera_option,
         "Free camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
@@ -148,7 +143,14 @@ void tooie::init_config() {
         "Press B during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
         true);
 
-    tooie::picture_filters::add_options(recompui::config::create_graphics_tab());
+    recomp::config::Config& graphics = recompui::config::create_graphics_tab();
+    tooie::picture_filters::add_options(graphics);
+    graphics.add_bool_option(
+        tooie::high_detail_models_option,
+        "Always High-Detail Models",
+        "Models that switch to a simpler version far away always use the detailed one.",
+        true);
+
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
     tooie::cheats::create_tab();

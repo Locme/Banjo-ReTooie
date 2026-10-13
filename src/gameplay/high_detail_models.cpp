@@ -27,7 +27,7 @@
 namespace {
     bool high_detail_on() {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::high_detail_models_option));
+            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::high_detail_models_option));
         } catch (...) {
             return true;
         }

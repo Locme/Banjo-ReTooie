@@ -280,7 +280,7 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.28
 - Steps:
-  1. Settings (Esc) > QOL > Always High-Detail Models = On (the default)
+  1. Settings (Esc) > Graphics > Always High-Detail Models = On (the default)
   2. In a big area (Jinjo Village, Mayahem Temple, Witchyworld), look at things far away
   3. Switch the option Off and On while looking
 - Look for: With it On, do far-away objects keep their detailed look instead of turning simpler? Does anything flicker, vanish or slow down?
