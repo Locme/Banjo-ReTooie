@@ -37,6 +37,8 @@ game, start the exe with `--game bt`. Settings and saves are kept next to the
 exe (in `Release` after `build.bat`) when that folder is writable; otherwise they
 go to your user profile.
 
+If the game crashes or freezes, see [`notes/reporting-crashes.md`](notes/reporting-crashes.md) for which logs to send.
+
 ## Settings
 
 Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open

@@ -69,3 +69,24 @@ until 60 s, then quit. Run it for at least 70 s:
 `pkill -f` matches the full command line, which includes the shell running
 the test, so it can kill that shell too. The script uses `pgrep -x` and kills
 by exact process name. Do the same when you clean up by hand.
+
+## Finding the code behind something on screen
+
+Use the call profiler to see which functions run while something is on screen.
+
+1. Build the profiling copy: `tools/trace_build.sh`. It builds `build-trace/`,
+   where every recompiled function counts its calls. Nothing it makes is
+   committed.
+2. Run it with `TOOIE_TRACE=calls.txt`. The game writes the calls made in each
+   2-second window to `calls.txt`, one block per window.
+3. Compare two stretches of time with `tools/trace_diff.py`:
+
+       tools/trace_diff.py calls.txt A_FROM-A_TO B_FROM-B_TO [--top N]
+
+   Windows are numbered as they are in the file. The output lists functions
+   called in the B windows but never in the A windows, then the functions whose
+   call rate changed the most. For example, A is the HUD hidden and B is the HUD
+   shown, which points to the HUD's draw code.
+
+Details are in `include/trace.h`, `src/debug/trace.cpp` and
+`tools/trace_diff.py`.

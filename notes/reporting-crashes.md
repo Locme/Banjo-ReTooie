@@ -1,0 +1,17 @@
+# Reporting a crash or a freeze
+
+When the game crashes or freezes, send the logs from the folder that holds the
+exe you ran. For a local build from `build.bat` that is `Release\`.
+
+1. Open the folder with `BanjoTooieN64Recomp.exe`, then open `logs\`.
+2. Drag these files into the thread:
+   - `crashes.log`: one line per crash. Since build 47ab4e6 it also has the
+     last C++ error and the crashing code.
+   - `console.log`: everything the game printed. Since 227db85 it is kept here.
+   - `hangs.log`: freezes of 5 seconds or more, written by the watchdog.
+   - the newest `crash_*.dmp` file, if there is one.
+3. Keep `Release\BanjoTooieN64Recomp.pdb` next to the exe. Without it, crash
+   logs show addresses instead of function names.
+
+Only the files in `logs\` and the newest `.dmp` are needed. Nothing else in the
+folder is needed for a report.
