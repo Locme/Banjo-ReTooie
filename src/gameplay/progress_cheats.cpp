@@ -97,7 +97,9 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         for (size_t i = 0; i < cheato_count; i++) {
             std::printf(" %d", flag_get(rdram, ctx, cheato_list[i].flag) ? 1 : 0);
         }
-        std::printf("\n");
+        std::printf(" | moves 236:%d 237:%d 265:%d 296:%d 297:%d\n", flag_get(rdram, ctx, 236) ? 1 : 0,
+            flag_get(rdram, ctx, 237) ? 1 : 0, flag_get(rdram, ctx, 265) ? 1 : 0,
+            flag_get(rdram, ctx, 296) ? 1 : 0, flag_get(rdram, ctx, 297) ? 1 : 0);
         std::fflush(stdout);
     }
 }
