@@ -38,6 +38,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_game.h"
+#include "tooie_debug.h"
 #include "librecomp/game.hpp"
 #include "librecomp/mods.hpp"
 #include "librecomp/helpers.hpp"
@@ -545,6 +546,11 @@ int main(int argc, char** argv) {
         if (strcmp(argv[i], "--game") == 0 && strcmp(argv[i + 1], "bt") == 0) {
             autostart_game = true;
         }
+        else if (strcmp(argv[i], "--pad-script") == 0) {
+            if (!tooie::debug::parse_pad_script(argv[i + 1])) {
+                return EXIT_FAILURE;
+            }
+        }
     }
     recomp::Version project_version{};
     if (!recomp::Version::from_string(version_string, project_version)) {
@@ -676,7 +682,7 @@ int main(int argc, char** argv) {
 
     ultramodern::input::callbacks_t input_callbacks{
         .poll_input = recompinput::poll_inputs,
-        .get_input = recompinput::profiles::get_n64_input,
+        .get_input = tooie::debug::get_n64_input,
         .set_rumble = recompinput::set_rumble,
         .get_connected_device_info = get_connected_device_info,
     };
