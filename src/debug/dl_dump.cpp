@@ -154,7 +154,28 @@ namespace {
                     }
                     break;
                 case 0xFD:
-                    std::fprintf(out, "%*s%06X TIMG %08X\n", depth * 2, pad, phys, w1);
+                    std::fprintf(out, "%*s%06X TIMG %08X fmt=%u siz=%u\n", depth * 2, pad, phys, w1, (w0 >> 21) & 7, (w0 >> 19) & 3);
+                    break;
+                case 0xFC:
+                    std::fprintf(out, "%*s%06X COMBINE %06X %08X\n", depth * 2, pad, phys, w0 & 0xFFFFFF, w1);
+                    break;
+                case 0xE2:
+                    std::fprintf(out, "%*s%06X OTHERMODE_L shift=%u len=%u %08X\n", depth * 2, pad, phys, 32 - ((w0 >> 8) & 0xFF) - ((w0 & 0xFF) + 1), (w0 & 0xFF) + 1, w1);
+                    break;
+                case 0xE3:
+                    std::fprintf(out, "%*s%06X OTHERMODE_H shift=%u len=%u %08X\n", depth * 2, pad, phys, 32 - ((w0 >> 8) & 0xFF) - ((w0 & 0xFF) + 1), (w0 & 0xFF) + 1, w1);
+                    break;
+                case 0xD9:
+                    std::fprintf(out, "%*s%06X GEOMETRY clear=%06X set=%08X\n", depth * 2, pad, phys, ~w0 & 0xFFFFFF, w1);
+                    break;
+                case 0xF5:
+                    std::fprintf(out, "%*s%06X SETTILE fmt=%u siz=%u tile=%u %08X %08X\n", depth * 2, pad, phys, (w0 >> 21) & 7, (w0 >> 19) & 3, (w1 >> 24) & 7, w0, w1);
+                    break;
+                case 0xFA:
+                    std::fprintf(out, "%*s%06X PRIM %08X\n", depth * 2, pad, phys, w1);
+                    break;
+                case 0xFB:
+                    std::fprintf(out, "%*s%06X ENV %08X\n", depth * 2, pad, phys, w1);
                     break;
                 default:
                     if (all) {
@@ -168,8 +189,51 @@ namespace {
     };
 }
 
+// TOOIE_DLSKIP=addr,addr (hex, physical): top-level calls of the 3D scene
+// into these display lists, or made while segment 1 points at one of these
+// addresses (a model's vertices), are turned into no-ops, to find which list draws
+// something on screen.
+static void skip_calls(uint8_t* rdram, uint32_t start, uint32_t end) {
+    static std::vector<uint32_t> skip;
+    static std::once_flag once;
+    std::call_once(once, [] {
+        if (const char* env = std::getenv("TOOIE_DLSKIP")) {
+            std::stringstream stream{env};
+            std::string item;
+            while (std::getline(stream, item, ',')) {
+                if (!item.empty()) {
+                    skip.push_back((uint32_t)std::strtoul(item.c_str(), nullptr, 16));
+                }
+            }
+        }
+    });
+    if (skip.empty()) {
+        return;
+    }
+    // A value matches a called list's address, or a model's vertex segment
+    // (segment 1), which stays the same from frame to frame.
+    uint32_t seg1 = 0;
+    for (uint32_t p = start; p < end; p += 8) {
+        int32_t cmd = (int32_t)(0x80000000 | p);
+        uint32_t w0 = (uint32_t)MEM_W(0, cmd);
+        uint32_t w1 = (uint32_t)MEM_W(4, cmd) & 0x1FFFFFFF;
+        if ((w0 >> 24) == 0xDB && ((w0 >> 16) & 0xFF) == 0x06 && (w0 & 0xFFFF) == 4) {
+            seg1 = w1;
+        }
+        if ((w0 >> 24) == 0xDE && ((w0 >> 16) & 0xFF) == 0) {
+            for (uint32_t s : skip) {
+                if (s == w1 || s == seg1) {
+                    MEM_W(0, cmd) = 0;
+                    MEM_W(4, cmd) = 0;
+                }
+            }
+        }
+    }
+}
+
 void tooie::dl_dump::scene_end(uint8_t* rdram, uint32_t gfx_end) {
     std::call_once(env_flag, read_env);
+    skip_calls(rdram, tooie::model_tagging::scene_start(), gfx_end & 0x1FFFFFFF);
     if (next_time >= times.size()) {
         return;
     }
