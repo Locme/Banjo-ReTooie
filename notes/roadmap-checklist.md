@@ -141,7 +141,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.25 Brightness with a calibration pattern
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.26 Extended draw distance
@@ -163,11 +163,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.40 Retro: N64 3-point filtering, 16-bit dither, CRT
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.41 Colourblind filters
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.45 Water: underwater tint, water reflections, caustics, heat haze
@@ -187,7 +187,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.54 Talon Trot toggle
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.56 Dedicated tiptoe button
