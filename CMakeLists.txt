@@ -117,6 +117,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
     ${CMAKE_SOURCE_DIR}/src/game/crash_handler.cpp

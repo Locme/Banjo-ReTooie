@@ -4,6 +4,7 @@
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
 #include "librecomp/game.hpp"
+#include "tooie_cheats.h"
 
 void tooie::init_config() {
     std::filesystem::path app_dir = recomp::get_config_path();
@@ -30,6 +31,7 @@ void tooie::init_config() {
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
+    tooie::cheats::create_tab();
     recompui::config::create_mods_tab();
 
     recompui::config::finalize();
