@@ -57,15 +57,3 @@
   2. Watch the intro text starting Two years have passed
 - Look for: Are the letters clean, or do they overlap or get clipped?
 - Status: waiting for L
-
-## T7 Small fixes: controller and triple jump
-- Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
-- XBLA history: report §4.96
-- Steps:
-  1. Plug in a controller and start a game
-  2. Open the settings window, then close it
-  3. Try to move Banjo with the controller
-  4. Do a triple jump using the controller
-- Look for: Does the controller still work after closing the window, and does the triple jump come out every time?
-- Status: waiting for L
