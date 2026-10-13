@@ -24,14 +24,21 @@ already rising faster than that.
 rising. It does not work during transformations, swimming, climbing or some
 other states the code leaves out, so A keeps its usual job there.
 
-**Cheato: FEATHERS**, **Cheato: EGGS**, **Cheato: FALLPROOF**,
-**Cheato: HONEYBACK**, **Cheato: JUKEBOX**, **Cheato: GETJIGGY**,
-**Cheato: SUPERBANJO**, **Cheato: SUPERBADDY**, **Cheato: HONEYKING**,
-**Cheato: NESTKING**, **Cheato: HOMING**: each switches on the game's own code of
-that name, as if you had typed it in the Code Chamber, with no Code Chamber
-needed. What the code does is the game's own behaviour, and this port does not
-change it. Turning the cheat off clears only the flag this port switched on, so
-a code you typed in the Code Chamber stays on.
+Each Cheato switches on the game's own code of that name, as if you had typed it
+in the Code Chamber, with no Code Chamber needed. Turning the cheat off clears only
+the flag this port switched on, so a code you typed in the Code Chamber stays on.
+
+- **Cheato: FEATHERS**: switches on the game's FEATHERS code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: EGGS**: switches on the game's EGGS code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: FALLPROOF**: switches on the game's FALLPROOF code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: HONEYBACK**: switches on the game's HONEYBACK code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: JUKEBOX**: switches on the game's JUKEBOX code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: GETJIGGY**: switches on the game's GETJIGGY code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: SUPERBANJO**: switches on the game's SUPERBANJO code, as if typed in the Code Chamber. The handoff report (4.70) records a headless check in which Banjo walked about 1.5 times as far with it on. The port's code does not describe this.
+- **Cheato: SUPERBADDY**: switches on the game's SUPERBADDY code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: HONEYKING**: switches on the game's HONEYKING code, as if typed in the Code Chamber. effect not documented in the port's code yet.
+- **Cheato: NESTKING**: switches on the game's NESTKING code, as if typed in the Code Chamber. effect not documented in the port's code yet. The handoff report notes that the game's "infinite" item-cap value is the one NESTKING uses, but it does not say what NESTKING does.
+- **Cheato: HOMING**: switches on the game's HOMING code, as if typed in the Code Chamber. effect not documented in the port's code yet.
 
 **Stop 'n' Swop items**: marks the blue and pink Stop 'n' Swop mystery eggs as
 collected, as the Banjo-Kazooie link would, without a Banjo-Kazooie save. The
