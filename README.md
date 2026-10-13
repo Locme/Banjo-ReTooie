@@ -53,6 +53,11 @@ settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
   4:3, Fill and Letterbox 16:9. Graphics API needs a restart.
 - **F11** or **Alt+Enter** toggles fullscreen.
 
+Every menu option, with its default, is in [`notes/settings-guide.md`](notes/settings-guide.md).
+Every keyboard and controller shortcut is in [`notes/keys.md`](notes/keys.md).
+What each cheat does is in [`notes/cheats.md`](notes/cheats.md).
+What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
