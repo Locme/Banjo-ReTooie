@@ -393,11 +393,11 @@
 - Look for: Does the intro fast-forward (a "Skipping cutscene" message, the scene racing through its dialogue) and stop right as the fight starts? Which bosses did you try, and did any intro not skip?
 - Status: waiting for L
 
-## T40 Banjo slides when Jamjars talks
+## T40 Banjo slides in cutscenes (top priority, L)
 - Asked: 2026-10-13 22:11 UTC
 - Build: latest Windows CI build from main
 - Steps:
-  1. Walk up to a spot where Jamjars talks to you (a silo or sign) and let him talk, as before
+  1. Start a new game and go up Spiral Mountain to the Klungo cutscene, or walk up to a spot where Jamjars talks to you (a sign, e.g. near the Haunted Tavern) and let him talk
   2. Do it again with Settings (Esc) > QOL > Free camera = Off
   3. If he still slides, do it again with Graphics > Frame rate = Original
 - Look for: Which of the three runs does Banjo slide in? Does he end up somewhere else after the talk, or only look like he slides while it lasts?
