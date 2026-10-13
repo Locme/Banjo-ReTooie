@@ -97,3 +97,14 @@
   3. Switch HUD Placement between Original, 16:9 and Expand
 - Look for: Do the honeycombs and air sit at the left edge, and the notes, feathers and eggs (with their numbers) at the right edge? Does the jiggy counter stay in the middle? Does Original put everything back in the middle?
 - Status: waiting for L
+
+## T12 Frame rate (interpolation)
+- Asked: 2026-10-13 17:50 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.15
+- Steps:
+  1. Settings > Graphics > Framerate = Original, walk and turn the camera in Spiral Mountain
+  2. Set Framerate = Manual 40, then 60, then 120 (and Display), and do the same
+  3. Watch a cutscene with camera cuts, and go through a door to another area
+- Look for: Does movement look smoother above Original? Does the game still run at normal speed? Do camera cuts or doors show a one-frame smear or stretch? Does the HUD or anything else wobble?
+- Status: waiting for L

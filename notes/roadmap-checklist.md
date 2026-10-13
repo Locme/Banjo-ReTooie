@@ -39,6 +39,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.15 Frame rate modes: 30 / 40 / 60 / 120 / 175 / uncapped
 - [ ] Done
 - [ ] Approved by L
+- Partial (2026-10-13): handled the N64Recomp way (report §4.15 g). Game logic stays at its own rate and RT64 draws in-between frames. Settings > Graphics > Framerate: Original (the game's own 30 or lower), Display (the monitor's rate, the closest to "uncapped") and Manual 20 to 240 (covers 40, 60, 120 and 175). It applies live. Not checked yet: how smooth it looks and whether camera cuts smear, because the headless renderer only reaches about 7 fps (T12). No per-object tagging yet; add it only where T12 finds smearing.
 
 ### 4.22 Fit to window: fill / letterbox / 4:3, HUD 16:9
 - [x] Done
