@@ -291,3 +291,16 @@ text = "tooie_transition_frame(rdram, ctx);"
 func = "func_808000D8_gctransitionDll"
 before_vram = 0x808001D0
 text = "tooie_transition_anim_length(rdram, ctx);"
+
+# --- Unlock all moves, 4.71 (src/gameplay/progress_cheats.cpp) ---------------
+# func_800DA298 is the game flag getter: flag in $a0 at entry, result in $v0 at
+# its single jr $ra.
+[[patches.hook]]
+func = "func_800DA298"
+before_vram = 0x800DA298
+text = "tooie_flag_get_enter(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800DA298"
+before_vram = 0x800DA3B0
+text = "tooie_flag_get_leave(rdram, ctx);"
