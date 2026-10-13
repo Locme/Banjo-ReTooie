@@ -89,6 +89,9 @@ namespace {
     // degrees) all at once, from (nearly) still.
     constexpr float sudden_distance = 40.0f;
     constexpr float sudden_degrees = 10.0f;
+    // ...and changes of the picture's shape (width over height) by more than
+    // this, such as the black bars of a cutscene coming in.
+    constexpr float cut_shape = 0.02f;
     constexpr uint16_t game_select_map = 0x158;
 
     uint32_t slot = 0;
@@ -157,6 +160,8 @@ namespace {
     struct Camera {
         float pos[3];
         float forward[3];
+        // The projection's width over height.
+        float shape;
     };
     Camera last_camera;
     std::chrono::steady_clock::time_point last_camera_time;
@@ -218,6 +223,11 @@ namespace {
         for (int k = 0; k < 3; k++) {
             out.forward[k] = m[k][3] / length;
         }
+        // The view only turns, so the lengths of the x and y columns are the
+        // projection's x and y scales, whose ratio is the picture's shape.
+        float x_scale = std::sqrt(m[0][0] * m[0][0] + m[1][0] * m[1][0] + m[2][0] * m[2][0]);
+        float y_scale = std::sqrt(m[0][1] * m[0][1] + m[1][1] * m[1][1] + m[2][1] * m[2][1]);
+        out.shape = x_scale > 1e-9f ? y_scale / x_scale : 0.0f;
         return true;
     }
 
@@ -415,9 +425,12 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         block.model = block.first_list == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
     }
 
-    // A camera cut: the camera jumps or turns sharply in one game frame.
-    // Blending across it would slide everything (characters placed for the
-    // new shot included) through the in-between frames.
+    // A camera cut: the camera jumps or turns sharply in one game frame, or
+    // the picture changes shape. Blending across it would slide everything
+    // (characters placed for the new shot included) through the in-between
+    // frames. A shape change comes with a new viewport, which RT64 does not
+    // blend, so a blended projection would squash or stretch the picture for
+    // an in-between frame (the black bars of a cutscene coming in, say).
     bool cut = false;
     if (have_camera) {
         if (had_camera) {
@@ -434,7 +447,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             float frames = std::chrono::duration<float>(now_time - last_camera_time).count() * 30.0f;
             frames = std::min(std::max(frames, 1.0f), 4.0f);
             float limit = cut_distance * frames;
-            cut = moved > limit * limit || facing < cut_cosine;
+            bool reshaped = std::fabs(camera.shape - last_camera.shape) > cut_shape * last_camera.shape;
+            cut = moved > limit * limit || facing < cut_cosine || reshaped;
             // Shots of the same place can be closer than that, so a sudden
             // move or turn also counts: much more than the camera's own
             // motion the frame before (a steady pan or dolly does not).

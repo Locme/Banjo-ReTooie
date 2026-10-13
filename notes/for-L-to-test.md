@@ -423,3 +423,14 @@
   3. Turn the overlay off and on a few times while you play
 - Look for: Does the box sit in the top left corner and do its numbers change as you play? Does the frame rate it shows match your monitor (or the Manual value) and drop to about 30 or 20 with Original? Does "Game" stay at about 20 or 30 fps whatever Framerate says? Does turning the overlay on change how smooth the game feels? I could only check it with software rendering here, where it showed no difference beyond normal noise.
 - Status: waiting for L
+
+## T43 Picture shape jump when a cutscene starts (ultrawide)
+- Asked: 2026-10-13 22:31 UTC
+- Build: main after 8840cdc (next Windows CI build)
+- Steps:
+  1. Set Aspect Ratio to Expand on a 21:9 screen and Frame rate above Original
+  2. Pick up an item whose first pickup starts a scene (a Cheato page, say), or start any cutscene with black bars
+  3. Watch the first moment of the scene
+  4. Do it once more with Frame rate at Original
+- Look for: Does the picture keep its shape as the scene starts, or does it still squash or stretch for a moment (and at which frame rate setting)?
+- Status: waiting for L
