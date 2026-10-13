@@ -52,6 +52,8 @@ settings. There are five tabs: General, Graphics, Controls, Sound and Mods.
 
 Every menu option, with its default, is listed in [`notes/settings-guide.md`](notes/settings-guide.md).
 
+Every keyboard and controller shortcut is listed in [`notes/keys.md`](notes/keys.md).
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
