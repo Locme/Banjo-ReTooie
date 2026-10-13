@@ -35,6 +35,12 @@ namespace {
     };
     constexpr size_t cheato_count = sizeof(cheato_list) / sizeof(cheato_list[0]);
 
+    // The N64 game's Stop 'n' Swop flags (gameflags.h): the blue and pink mystery eggs are "acquired" when the
+    // game sees the Banjo-Kazooie link. The overlay that spawns them (0x80800024) reads these flags.
+    // The yellow egg only has a "hatched" flag, so it is left alone.
+    constexpr int32_t swop_flags[] = { 0x3E3, 0x3E5 };
+    constexpr size_t swop_count = sizeof(swop_flags) / sizeof(swop_flags[0]);
+
     // Move n is learned when game flag 237 + n is set (0xED = beak barge), for the 60 moves 237..296.
     constexpr int32_t first_move_flag = 237;
     constexpr int32_t last_move_flag = 296;
@@ -43,6 +49,7 @@ namespace {
     constexpr int check_interval = 10;
 
     std::array<bool, cheato_count> set_by_us{};
+    std::array<bool, swop_count> swop_set_by_us{};
     int frame_counter = 0;
 
     // The game's flag getter and setter (func_800DA298 and func_800DA3B8), called on the game thread
@@ -88,6 +95,19 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
+    const bool swop = tooie::cheats::is_on("cheat_stop_n_swop");
+    for (size_t i = 0; i < swop_count; i++) {
+        if (swop) {
+            if (!flag_get(rdram, ctx, swop_flags[i])) {
+                flag_set(rdram, ctx, swop_flags[i], true);
+                swop_set_by_us[i] = true;
+            }
+        } else if (swop_set_by_us[i]) {
+            flag_set(rdram, ctx, swop_flags[i], false);
+            swop_set_by_us[i] = false;
+        }
+    }
+
     // Headless test aid: once a second, print each Cheato flag as the game's own getter reads it.
     static const bool log = std::getenv("TOOIE_PLAYER_LOG") != nullptr;
     static int log_counter = 0;
@@ -97,6 +117,7 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         for (size_t i = 0; i < cheato_count; i++) {
             std::printf(" %d", flag_get(rdram, ctx, cheato_list[i].flag) ? 1 : 0);
         }
+        std::printf(" | swop %d %d", flag_get(rdram, ctx, 0x3E3) ? 1 : 0, flag_get(rdram, ctx, 0x3E5) ? 1 : 0);
         std::printf(" | moves 236:%d 237:%d 265:%d 296:%d 297:%d\n", flag_get(rdram, ctx, 236) ? 1 : 0,
             flag_get(rdram, ctx, 237) ? 1 : 0, flag_get(rdram, ctx, 265) ? 1 : 0,
             flag_get(rdram, ctx, 296) ? 1 : 0, flag_get(rdram, ctx, 297) ? 1 : 0);

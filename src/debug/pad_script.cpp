@@ -24,6 +24,7 @@
 
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_tiptoe.h"
 #include "recompinput/profiles.h"
 
 namespace {
@@ -114,7 +115,8 @@ bool tooie::debug::parse_pad_script(const char* script) {
     return true;
 }
 
-bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
+// Player input with any scripted input added.
+static bool merged_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = recompinput::profiles::get_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index != 0) {
         return ok;
@@ -169,4 +171,12 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
         }
     }
     return found;
+}
+
+bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
+    bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
+    if (player_index == 0) {
+        tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
+    }
+    return ok;
 }

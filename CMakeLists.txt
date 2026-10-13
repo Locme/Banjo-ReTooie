@@ -168,6 +168,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/mod_zips.cpp
     ${CMAKE_SOURCE_DIR}/src/game/timer_save.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/dialogue_speed.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/tiptoe.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp

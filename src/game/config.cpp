@@ -8,6 +8,7 @@
 #include "tooie_discord.h"
 #include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
+#include "tooie_tiptoe.h"
 #include "tooie_speedup.h"
 
 void tooie::init_config() {
@@ -105,6 +106,17 @@ void tooie::init_config() {
         "Free camera: invert up/down",
         "Reverses which way the right stick tilts the free camera.",
         false);
+    qol.add_enum_option(
+        tooie::input::tiptoe_option,
+        "Tiptoe button",
+        "Hold this button to tiptoe at any stick tilt. <recomp-color primary>B</recomp-color> is hidden from the game while held; a quick tap still counts as B.",
+        {
+            {tooie::input::TiptoeButton::Off, "Off", "Off"},
+            {tooie::input::TiptoeButton::B, "B", "B"},
+            {tooie::input::TiptoeButton::LeftStick, "Left stick click", "Left stick click"},
+            {tooie::input::TiptoeButton::RightStick, "Right stick click", "Right stick click"},
+        },
+        tooie::input::TiptoeButton::B);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

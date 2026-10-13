@@ -230,4 +230,24 @@
   1. Play normally for 10 minutes or more, in places with music and lots of sound (Spiral Mountain, Mayahem Temple, Witchyworld)
   2. Try the Framerate mode you were on when you heard the glitch
 - Look for: Do you still hear the short glitchy or sped-up sound now and then? If yes, which level and which Framerate mode?
+
+## T25 Tiptoe button
+- Asked: 2026-10-13 19:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.56
+- Steps:
+  1. Load a file. Hold B and push the stick fully in any direction
+  2. Quickly tap B (no stick) a few times to attack
+  3. Esc > QOL > Tiptoe button: try Left stick click and Right stick click, then Off
+- Look for: Does Banjo tiptoe at any tilt while B is held, and run again when you let go? Does a quick B tap still attack, and does the delay feel too slow? Do the stick clicks work as the hold button?
+- Status: waiting for L
+
+## T26 Stop 'n' Swop items
+- Asked: 2026-10-13 19:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.68
+- Steps:
+  1. Esc > Cheats, turn on Enable cheats, then Stop 'n' Swop items
+  2. Load a file, go to Spiral Mountain and the Isle O' Hags, and look for the mystery eggs (blue and pink)
+- Look for: Do the blue and pink mystery eggs appear or become collectable? This is only a flag set; I could confirm the flags but not that the game shows the eggs, so expect partial results.
 - Status: waiting for L

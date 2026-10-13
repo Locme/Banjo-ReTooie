@@ -57,6 +57,8 @@ namespace {
         { "cheato_honeyking", "Cheato: HONEYKING", "The game's HONEYKING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_nestking", "Cheato: NESTKING", "The game's NESTKING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_homing", "Cheato: HOMING", "The game's HOMING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_stop_n_swop", "Stop 'n' Swop items",
+          "Marks the Stop 'n' Swop mystery eggs (blue and pink) as collected from the Banjo-Kazooie link, without a Banjo-Kazooie save.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);

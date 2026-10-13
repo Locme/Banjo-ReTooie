@@ -116,7 +116,7 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
                 std::memcpy(&pos[k], &b, 4);
             }
         }
-        std::printf("[player] state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f\n", cur, vy, buttons, hv, av, pos[0], pos[1], pos[2]);
+        std::printf("[player] state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f stick %.2f %.2f\n", cur, vy, buttons, hv, av, pos[0], pos[1], pos[2], sx, sy);
         std::fflush(stdout);
     }
 }
