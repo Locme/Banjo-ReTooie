@@ -405,7 +405,7 @@ static FuncEntry section_13_core1_funcs[] = {
     { .func = func_80015F84, .offset = 0x00003F54, .rom_size = 0x0000001C },
     { .func = func_80015B34, .offset = 0x00003B04, .rom_size = 0x0000018C },
     { .func = __osExceptionPreambleDuplicate, .offset = 0x0001FFA0, .rom_size = 0x00000010 },
-    { .func = wait_one_frame, .offset = 0x00003748, .rom_size = 0x00000068 },
+    { .func = wait_one_frame_recomp, .offset = 0x00003748, .rom_size = 0x00000068 },
     { .func = func_80025DE4, .offset = 0x00013DB4, .rom_size = 0x0000009C },
     { .func = func_8001817C, .offset = 0x0000614C, .rom_size = 0x00000258 },
     { .func = func_80027214, .offset = 0x000151E4, .rom_size = 0x00000008 },

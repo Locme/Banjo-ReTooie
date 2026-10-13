@@ -498,7 +498,7 @@ RECOMP_FUNC void chcamwaypoint_entrypoint_0(uint8_t* rdram, recomp_context* ctx)
     // 0x80800008: addiu       $v0, $v0, 0x130
     ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(764, 0X130));
 ;}
-RECOMP_FUNC void wait_one_frame(uint8_t* rdram, recomp_context* ctx) {
+RECOMP_FUNC void wait_one_frame_recomp(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
     // 0x80015778: addiu       $sp, $sp, -0x18

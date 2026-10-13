@@ -3773,7 +3773,7 @@ L_80800018:
     // 0x80800018: jal         0x80015778
     // 0x8080001C: nop
 
-    wait_one_frame(rdram, ctx);
+    wait_one_frame_recomp(rdram, ctx);
         goto after_0;
     // 0x8080001C: nop
 

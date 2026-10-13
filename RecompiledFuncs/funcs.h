@@ -10536,7 +10536,7 @@ void _chstatueboss_entrypoint_0(uint8_t* rdram, recomp_context* ctx);
 void func_80801B44_chboilerboss(uint8_t* rdram, recomp_context* ctx);
 void func_8080046C_chbottlesfamily(uint8_t* rdram, recomp_context* ctx);
 void chcamwaypoint_entrypoint_0(uint8_t* rdram, recomp_context* ctx);
-void wait_one_frame(uint8_t* rdram, recomp_context* ctx);
+void wait_one_frame_recomp(uint8_t* rdram, recomp_context* ctx);
 void func_80800514_chmumbopad(uint8_t* rdram, recomp_context* ctx);
 void func_808042A8_chgameselect(uint8_t* rdram, recomp_context* ctx);
 void _sukickball_entrypoint_3(uint8_t* rdram, recomp_context* ctx);

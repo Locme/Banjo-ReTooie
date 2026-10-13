@@ -116,6 +116,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/debug_watch.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
 

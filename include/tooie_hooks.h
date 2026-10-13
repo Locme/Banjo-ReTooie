@@ -13,6 +13,7 @@ extern "C" {
 void tooie_read_overlay_key(uint8_t* rdram, recomp_context* ctx);
 void tooie_overlay_placed(uint8_t* rdram, recomp_context* ctx);
 void tooie_overlay_unloading(uint8_t* rdram, recomp_context* ctx);
+void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 
 #ifdef __cplusplus
 }
