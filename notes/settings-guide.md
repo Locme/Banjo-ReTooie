@@ -79,6 +79,13 @@ as they are.
   only undoes what this setting switched on, so a code you typed in the game
   stays on. Close the game with them off if you do not want them in your
   save.
+- **Transformation**: play as any of Mumbo's or Humba's forms (Banjo, Kazooie,
+  Mumbo, Bee, Stony, Washing machine, Snowball, Submarine, Golden Goliath,
+  Detonator, Van, small or large T-Rex, Banjo-Kazooie).
+  Picking one reloads the area you are in, at the entrance you came in by, so
+  the new model shows. Some forms break in areas the game never expects them
+  in (missing animations or data). Default: Off, which does nothing; the row
+  goes back to Off when Enable cheats is turned off.
 - **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
   to. F9 repeats the last warp. Default: off.
 - **Stop 'n' Swop items**: marks the blue and pink Stop 'n' Swop mystery eggs as

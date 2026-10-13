@@ -40,3 +40,9 @@ yellow egg is not affected.
 **Unlock all moves**: every move counts as learned while it is on. Your save
 file is not changed. Only the moves are changed, not the rest of the game's
 progress.
+
+**Transformation**: choose a form from the list and the area you are in reloads
+with you in it. It comes back in at the entrance you used, not where you were
+standing. Some forms break in areas the game never expects them in. Choosing
+Off does nothing; it does not turn you back, so pick Banjo or Banjo-Kazooie for
+that.

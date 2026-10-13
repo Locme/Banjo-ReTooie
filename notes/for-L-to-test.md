@@ -294,4 +294,14 @@
   2. Stand at one end of a big area (Mayahem Temple, Witchyworld, Grunty Industries outside) and look at far characters, enemies and objects
   3. Switch the option Off and On while looking
 - Look for: With it On, do far things stay drawn instead of popping in late? Does anything flicker, slow down, or behave oddly (enemies acting from far away)?
+
+## T31 Transformation picker
+- Asked: 2026-10-13 20:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.78
+- Steps:
+  1. Esc > Cheats > Enable cheats on, then Transformation: pick Bee
+  2. The area reloads. Try a few more forms (Washing machine, Van, Snowball, Submarine, T-Rex) in different areas
+- Checked headless: Mumbo, Bee, Stony and Kazooie show and hold in Spiral Mountain. The others are untested. Clockwork Kazooie is not offered (it crashes).
+- Look for: Does the new form show and play right after the reload? Which forms crash or look wrong, and where? Does pausing and leaving the area keep the form?
 - Status: waiting for L

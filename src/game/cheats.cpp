@@ -13,6 +13,7 @@
 #include "tooie_cheats.h"
 #include "tooie_level_warp.h"
 #include "tooie_speedup.h"
+#include "tooie_transform_picker.h"
 
 namespace {
     const std::string tab_id = "cheats";
@@ -136,6 +137,7 @@ void tooie::cheats::create_tab() {
         "Turns on the cheat options below. Achievements cannot be earned while this is on.", false);
     // Speed-up first: it is the cheat people reach for most (src/game/speedup.cpp).
     tooie::speedup::add_options(config, enabled_option);
+    tooie::transform_picker::add_options(config, enabled_option);
     for (const Cheat& cheat : cheat_list) {
         config.add_bool_option(cheat.option, cheat.name, cheat.description, false);
         // The rows only show while the master switch is on.
@@ -151,6 +153,7 @@ void tooie::cheats::create_tab() {
                     cfg.update_option_value(cheat.option, false);
                 }
                 cfg.update_option_value("debug_tab", false);
+                tooie::transform_picker::reset(cfg);
             }
             // The Warp tab follows the master switch too.
             tooie::level_warp::refresh();

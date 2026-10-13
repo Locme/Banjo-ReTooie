@@ -242,7 +242,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.78 Transformation picker
-- [ ] Done
+- [ ] Done (CI pending; Clockwork Kazooie left out, see for-L-to-test)
 - [ ] Approved by L
 
 ### 4.86 Notice toasts
