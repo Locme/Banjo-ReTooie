@@ -275,3 +275,16 @@ text = "tooie_draw2d_mark(rdram, ctx, 5);"
 func = "func_800A73F4"
 before_vram = 0x800A750C
 text = "tooie_draw2d_mark(rdram, ctx, 6);"
+# --- Level transition speed (src/gameplay/fast_transitions.cpp) -------------
+# gctransitionDll_entrypoint_9 updates a screen wipe: the frame time is in $f2
+# and the wipe in $a3 here.
+[[patches.hook]]
+func = "gctransitionDll_entrypoint_9"
+before_vram = 0x80800A78
+text = "tooie_transition_frame(rdram, ctx);"
+
+# func_808000D8_gctransitionDll has just set the wipe animation's length.
+[[patches.hook]]
+func = "func_808000D8_gctransitionDll"
+before_vram = 0x808001D0
+text = "tooie_transition_anim_length(rdram, ctx);"

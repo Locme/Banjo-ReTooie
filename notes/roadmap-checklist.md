@@ -150,7 +150,8 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.29 Level transition speed
-- [ ] Done
+- [x] Done
+- Note: General tab "Level transitions" (Original / Fast 4x / Instant 16x), default Original. Speeds up the gctransitionDll wipe of a map change and its fade-in only; cutscene fades keep their speed. Headless warp AF→B8: 5.3 s → 1.4 s. About 1.2 s between the wipe-out and the fade-in is outside the wipe and is left as is. `TOOIE_LOG_TRANSITIONS=1` logs wipe timing.
 - [ ] Approved by L
 
 ### 4.40 Retro: N64 3-point filtering, 16-bit dither, CRT

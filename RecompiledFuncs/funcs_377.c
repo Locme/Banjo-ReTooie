@@ -3188,6 +3188,7 @@ L_80800188:
     // 0x808001CC: lw          $a1, 0x4($t5)
     ctx->r5 = MEM_W(ctx->r13, 0X4);
     after_5:
+    tooie_transition_anim_length(rdram, ctx);
     // 0x808001D0: lw          $a0, 0x2C($s0)
     ctx->r4 = MEM_W(ctx->r16, 0X2C);
     // 0x808001D4: jal         0x8008B134

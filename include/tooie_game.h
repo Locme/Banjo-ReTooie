@@ -50,6 +50,10 @@ namespace tooie {
     // --dialogue_text_speed 1|2|4|instant; overrides the setting. False if the value is unknown.
     bool parse_text_speed_arg(const char* value);
 
+    // Level transition speed (src/gameplay/fast_transitions.cpp).
+    enum class TransitionSpeed : uint32_t { Original, Fast, Instant };
+    inline const std::string transition_speed_option = "transition_speed";
+
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
     void install_crash_handler(const std::filesystem::path& app_folder);

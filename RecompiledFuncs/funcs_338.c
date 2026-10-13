@@ -541,6 +541,7 @@ L_80800A68:
     CHECK_FR(ctx, 0);
     ctx->f2.fl = ctx->f0.fl;
 L_80800A78:
+    tooie_transition_frame(rdram, ctx);
     // 0x80800A78: lbu         $t7, 0x8($a3)
     ctx->r15 = MEM_BU(ctx->r7, 0X8);
     // 0x80800A7C: beql        $t7, $zero, L_80800C74

@@ -56,6 +56,16 @@ void tooie::init_config() {
             {tooie::TextSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TextSpeed::Normal);
+    general.add_enum_option(
+        tooie::transition_speed_option,
+        "Level transitions",
+        "How fast the screen wipe plays when you go to another area. <recomp-color primary>Fast</recomp-color> is 4x, <recomp-color primary>Instant</recomp-color> is 16x. Cutscene fades are not affected.",
+        {
+            {tooie::TransitionSpeed::Original, "Original", "Original"},
+            {tooie::TransitionSpeed::Fast, "Fast", "Fast"},
+            {tooie::TransitionSpeed::Instant, "Instant", "Instant"},
+        },
+        tooie::TransitionSpeed::Original);
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(

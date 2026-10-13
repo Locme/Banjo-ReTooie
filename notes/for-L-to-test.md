@@ -139,7 +139,7 @@
 - Look for: Does text print faster at 2x and 4x, and appear a page at a time on Instant? Do the pauses after commas and full stops shrink too? Are menus unchanged? Does the change apply without restarting?
 - Status: waiting for L
 
-## T15 Levitate and Infinite jumps cheats
+## T16 Levitate and Infinite jumps cheats
 - Asked: 2026-10-13 18:30 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.73 and §4.79
@@ -150,11 +150,20 @@
 - Look for: Does Levitate lift you smoothly while D-pad down is held, and stop when released? Does each extra A press in the air jump again, and does holding A keep you rising? Does it stay off when the master switch is off? Do you want to keep both or drop Levitate?
 - Status: waiting for L
 
-## T15 Hide HUD (F1)
+## T17 Hide HUD (F1)
 - Asked: 2026-10-13 18:25 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.84
 - Steps:
   1. In game, press F1, walk around, talk to someone, pause; then press F1 again
 - Look for: Do the HUD and text boxes vanish while hidden, and come back after the second F1? Does "HUD hidden" / "HUD shown" show? Anything else that vanishes or stays that should not?
+## T18 Level transition speed
+- Asked: 2026-10-13 18:40 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.29
+- Steps:
+  1. Settings (Esc) > General > Level transitions = Fast, then walk through a few doors and level entrances
+  2. Repeat with Instant, then Original
+  3. Watch a cutscene that fades to black
+- Look for: Are the wipes clearly faster on Fast and nearly gone on Instant? Does anything look cut off or flash? Do cutscene fades keep their normal speed?
 - Status: waiting for L
