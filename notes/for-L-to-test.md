@@ -349,3 +349,12 @@
   3. Do this at Esc > Graphics > Frame Rate = Original (30 fps), then again at your usual frame rate above 30
 - Look for: Does the shadow still flicker? If it does: only above Original, or at Original too? Does it blink fully on and off, or do parts of it shimmer at the edges? Wading, swimming, or both?
 - Status: waiting for L
+
+## T36 Faster Windows build (full inlining)
+- Asked: 2026-10-13 20:40 UTC
+- Build: main @ 85773ec or later
+- Steps:
+  1. Note your fps or how smooth it feels in a busy spot (e.g. Witchyworld or Mayahem Temple) on your current build
+  2. Update and build again (update_and_build.bat), then go to the same spot with the same settings
+- Look for: Is it the same or faster? Anything that broke or crashes that did not before?
+- Status: waiting for L
