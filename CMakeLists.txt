@@ -93,6 +93,10 @@ function(apply_nested_patch name dir)
         RESULT_VARIABLE patch_present OUTPUT_QUIET ERROR_QUIET)
     if (NOT patch_present EQUAL 0)
         execute_process(
+            COMMAND git checkout -- .
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
+            OUTPUT_QUIET ERROR_QUIET)
+        execute_process(
             COMMAND git apply --ignore-whitespace ${patch}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
             RESULT_VARIABLE patch_result)

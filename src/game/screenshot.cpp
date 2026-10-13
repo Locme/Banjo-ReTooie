@@ -22,7 +22,11 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include "SDL.h"
+#else
 #include "SDL2/SDL.h"
+#endif
 
 #include "librecomp/game.hpp"
 
