@@ -61,11 +61,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.67 "Enable cheats" gate
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.69 Infinite eggs, feathers, Glowbos and ice keys
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.70 Cheato cheats as live toggles
