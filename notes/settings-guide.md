@@ -78,7 +78,10 @@ Graphics changes apply at once. Graphics API needs a restart.
 - **Retro: N64 3-point filtering**: the N64's own texture smoothing. Off uses
   plain bilinear smoothing. Default: on.
 - **Retro: N64 16-bit colour**: the N64's 16-bit colour with its dither pattern,
-  at the game's original resolution. Default: off.
+  at the game's original resolution. **Console** smooths the dither the way the
+  N64 does on its way to the TV, so it looks close to Off with a little colour
+  banding. **Raw dither** shows the dither pattern itself, as emulators do with
+  the N64's dither filter turned off. Default: Off.
 - **Retro: CRT**: 240 scanlines and the stripes of a CRT TV. Default: off.
 
 F12 screenshots are taken before these filters, so they don't show them.

@@ -365,9 +365,9 @@
 - Steps:
   1. Esc > Graphics: turn on Brightness test pattern, close the menu, then try Brightness -5, 0 and +5
   2. Turn the pattern off. Set Colourblind filter to each of the three types, and try Colourblind filter strength
-  3. Turn on Retro: N64 16-bit colour, then Retro: CRT, then switch Retro: N64 3-point filtering off and on while looking at a close wall or the ground
+  3. Set Retro: N64 16-bit colour to Console, then Raw dither (changed after your first look), then turn on Retro: CRT, then switch Retro: N64 3-point filtering off and on while looking at a close wall or the ground
   4. Do the same on D3D12 and Vulkan (Graphics API, needs a restart)
-- Look for: Does each change show at once, with no restart? With the pattern on, can you set Brightness so box 1 just vanishes and box 2 just shows? Do the colourblind filters make reds and greens (or blues and yellows) easier to tell apart? Does 16-bit colour show the N64's fine dither in the sky, and do the CRT lines look right at your screen size? Anything black, wrong colours or a crash on D3D12? I could only run Vulkan here.
+- Look for: Does each change show at once, with no restart? With the pattern on, can you set Brightness so box 1 just vanishes and box 2 just shows? Do the colourblind filters make reds and greens (or blues and yellows) easier to tell apart? Does Console or Raw dither look like 16-bit colour on a real N64 to you, and do the CRT lines look right at your screen size? Anything black, wrong colours or a crash on D3D12? I could only run Vulkan here.
 - Status: waiting for L
 
 ## T38 Black squares: frame rate on or off

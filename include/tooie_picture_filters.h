@@ -11,6 +11,7 @@
 // and the retro filters (4.40).
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
+    enum class Colour16 : uint32_t { Off, Console, Raw };
 
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";

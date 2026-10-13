@@ -11,7 +11,9 @@
 //   channels it still sees; this corrects, it does not simulate.
 // - Retro: N64 3-point filtering is RT64's own texture filter and is on by default;
 //   off gives plain bilinear. N64 16-bit colour cuts each channel to 5 bits with the
-//   RDP's magic square dither, at the game's own resolution. CRT draws 240
+//   RDP's magic square dither, at the game's own resolution; Console then runs the
+//   VI's dither filter as the N64 does on its way to the TV, Raw dither leaves the
+//   dither pattern as it is in the framebuffer. CRT draws 240
 //   scanlines and an aperture grille.
 // The Graphics tab normally waits for Apply; these save and apply as they change.
 
@@ -23,7 +25,7 @@
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_vi_renderer.h (from lib-patches/rt64.patch).
-    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, bool dither16, bool threePointFiltering);
+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
 }
 
 namespace {
@@ -54,7 +56,7 @@ void tooie::picture_filters::apply() {
         value<uint32_t>(colourblind_option, (uint32_t)Colourblind::Off),
         (float)(value<double>(colourblind_strength_option, 100.0) / 100.0),
         value<bool>(crt_option, false),
-        value<bool>(dither16_option, false),
+        value<uint32_t>(dither16_option, (uint32_t)Colour16::Off),
         value<bool>(three_point_option, true));
 }
 
@@ -94,11 +96,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Retro: N64 3-point filtering",
         "The N64's own texture smoothing, as on the console. Off uses plain bilinear smoothing instead.",
         true);
-    graphics.add_bool_option(
+    graphics.add_enum_option(
         dither16_option,
         "Retro: N64 16-bit colour",
-        "Cuts the colours down to the N64's 16-bit colour with its dither pattern, at the game's original resolution.",
-        false);
+        "Cuts the colours down to the N64's 16-bit colour, with its dither pattern at the game's original resolution. <recomp-color primary>Console</recomp-color> smooths the dither as the N64 does on its way to the TV, leaving its colour banding. <recomp-color primary>Raw dither</recomp-color> shows the dither pattern itself.",
+        {
+            {Colour16::Off, "Off", "Off"},
+            {Colour16::Console, "Console", "Console"},
+            {Colour16::Raw, "Raw dither", "Raw dither"},
+        },
+        Colour16::Off);
     graphics.add_bool_option(
         crt_option,
         "Retro: CRT",

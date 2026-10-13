@@ -152,7 +152,7 @@ index 2970e71..64dc36f 100644
          for (size_t t = 0; t < callTileCount; t++) {
              DrawCallTile &callTile = workload.drawData.callTiles[t];
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
-index b4ff4e9..7753d4e 100644
+index b4ff4e9..ef54bf8 100644
 --- a/src/render/rt64_vi_renderer.cpp
 +++ b/src/render/rt64_vi_renderer.cpp
 @@ -4,10 +4,35 @@
@@ -172,7 +172,7 @@ index b4ff4e9..7753d4e 100644
 +        PictureFilters pictureFilters;
 +    }
 +
-+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, bool dither16, bool threePointFiltering) {
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering) {
 +        const std::scoped_lock lock(pictureFiltersMutex);
 +        pictureFilters.brightness = brightness;
 +        pictureFilters.brightnessPattern = brightnessPattern;
@@ -206,7 +206,7 @@ index b4ff4e9..7753d4e 100644
 +        pushConstants.colourblindMode = filters.colourblindMode;
 +        pushConstants.colourblindStrength = std::clamp(filters.colourblindStrength, 0.0f, 1.0f);
 +        pushConstants.crt = filters.crt ? 1 : 0;
-+        pushConstants.dither16 = filters.dither16 ? 1 : 0;
++        pushConstants.dither16 = std::min(filters.dither16, 2U);
 +        pushConstants.padding0 = 0;
 +        pushConstants.sdResolution = hlslpp::float2(p.vi->fbSize());
 +        pushConstants.windowResolution = { float(p.swapChain->getWidth()), float(p.swapChain->getHeight()) };
@@ -215,10 +215,10 @@ index b4ff4e9..7753d4e 100644
          p.commandList->setGraphicsPipelineLayout(shader->pipelineLayout.get());
          p.commandList->setGraphicsDescriptorSet(descriptorSet->get(), 0);
 diff --git a/src/render/rt64_vi_renderer.h b/src/render/rt64_vi_renderer.h
-index 8a3782a..c8f319a 100644
+index 8a3782a..5f1b8d5 100644
 --- a/src/render/rt64_vi_renderer.h
 +++ b/src/render/rt64_vi_renderer.h
-@@ -11,6 +11,27 @@
+@@ -11,6 +11,28 @@
  #include "rt64_shader_library.h"
  
  namespace RT64 {
@@ -233,24 +233,25 @@ index 8a3782a..c8f319a 100644
 +        float colourblindStrength = 1.0f;
 +        // 240 scanlines with an aperture grille.
 +        bool crt = false;
-+        // 5 bits per channel with the N64's dither pattern.
-+        bool dither16 = false;
++        // 5 bits per channel with the N64's dither pattern: 0 off, 1 with the VI's dither filter (as the
++        // console shows it), 2 the raw dither.
++        uint32_t dither16 = 0;
 +        // Off: textures are smoothed with plain bilinear filtering instead of the N64's 3-point filter.
 +        bool threePointFiltering = true;
 +    };
 +
 +    // Plain arguments, so the game can declare it without RT64's headers.
-+    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, bool dither16, bool threePointFiltering);
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
 +    bool PictureFiltersThreePoint();
 +
      struct VIRenderer {
          std::unique_ptr<VideoInterfaceDescriptorSet> descriptorSet;
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
-index 3f33475..6d13a70 100644
+index 3f33475..cb122d1 100644
 --- a/src/shaders/VideoInterfacePS.hlsl
 +++ b/src/shaders/VideoInterfacePS.hlsl
-@@ -32,10 +32,105 @@ float4 PixelAntialiasing(float2 uv) {
+@@ -32,10 +32,134 @@ float4 PixelAntialiasing(float2 uv) {
      return SampleInput(uvTexspace / gConstants.textureResolution);
  }
  
@@ -289,12 +290,41 @@ index 3f33475..6d13a70 100644
 +    return saturate(rgb + shifted * strength);
 +}
 +
-+// The N64's 16-bit colour: each channel is cut to 5 bits after adding the RDP's magic square dither.
-+float3 Dither16(float3 rgb, float2 uv) {
-+    const uint2 pixel = uint2(uv * gConstants.sdResolution);
++// The N64's 16-bit colour, as its two chips make it. The RDP cuts each channel to 5 bits after adding
++// its magic square dither, one dither value per pixel of the game's own resolution. The VI then runs
++// its dither filter on the way to the TV: each channel moves one 8-bit step towards each of its eight
++// neighbours that is lighter or darker, which turns the dither back into smooth colour in flat areas and
++// leaves the N64's banding and a faint grain in gradients.
++float3 Quantize16(float3 rgb, int2 pixel) {
 +    const uint MagicSquare[16] = { 0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0 };
 +    const float dither = float(MagicSquare[(pixel.y & 3) * 4 + (pixel.x & 3)]);
-+    return min(floor((rgb * 255.0f + dither) / 8.0f), 31.0f) / 31.0f;
++    return min(floor((rgb * 255.0f + dither) / 8.0f), 31.0f);
++}
++
++// mode 1: as the console shows it, with the VI dither filter. mode 2: the raw dither, with the VI filter off.
++float3 Dither16(float3 rgb, float2 uv, uint mode) {
++    const int2 pixel = int2(uv * gConstants.sdResolution);
++    const float3 center = Quantize16(rgb, pixel);
++    if (mode == 2) {
++        return (center * 8.0f + floor(center / 4.0f)) / 255.0f;
++    }
++
++
++    float3 restore = float3(0.0f, 0.0f, 0.0f);
++    for (int y = -1; y <= 1; y++) {
++        for (int x = -1; x <= 1; x++) {
++            if ((x == 0) && (y == 0)) {
++                continue;
++            }
++
++            const float2 neighbourUV = uv + float2(x, y) / gConstants.sdResolution;
++            const float3 neighbourColor = SampleInput((neighbourUV / gConstants.textureResolution) * gConstants.videoResolution).rgb;
++            restore += sign(Quantize16(neighbourColor, pixel + int2(x, y)) - center);
++        }
++    }
++
++    // 5 bits widened to 8 as the VI does, plus the dither filter's correction.
++    return saturate((center * 8.0f + floor(center / 4.0f) + restore) / 255.0f);
 +}
 +
 +// 240 scanlines and an aperture grille (vertical red, green and blue stripes, 3 window pixels wide).
@@ -329,7 +359,7 @@ index 3f33475..6d13a70 100644
 +
 +float4 ApplyPictureFilters(float4 color, float2 uv, float4 pos) {
 +    if (gConstants.dither16 != 0) {
-+        color.rgb = Dither16(color.rgb, uv);
++        color.rgb = Dither16(color.rgb, uv, gConstants.dither16);
 +    }
 +
 +    if (gConstants.colourblindMode != 0) {
