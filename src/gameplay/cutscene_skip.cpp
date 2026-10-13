@@ -2,7 +2,7 @@
 //
 // Boss intros run for a minute or more and wait on dialogue, and the game will
 // not skip them. With QOL > Skip boss intros on, pressing B while a letterboxed
-// scene is on screen in a boss's map (L's pick: bosses only, so a stray B
+// scene is on screen in a boss's map (bosses only, so a stray B
 // never pages through an NPC conversation) (tooie::in_letterboxed_scene, from the FOV
 // setter) fast-forwards it: the game clock runs at 16x (as the speed-up key
 // does) and A is tapped for the player every few frames so the dialogue pages
