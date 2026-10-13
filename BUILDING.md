@@ -67,3 +67,5 @@ of the form `time_ms:action[:hold_ms]` separated by `;`, for example
 `--pad-script "3000:start;6000:a;9000:x=1,y=0:2000;12000:quit"`. Buttons are
 `a b z start l r du dd dl dr cu cd cl cr`, joined with `,`; `x=` and `y=` set the
 stick; `quit` ends the program.
+
+For headless test runs, see [`notes/headless-testing.md`](notes/headless-testing.md).

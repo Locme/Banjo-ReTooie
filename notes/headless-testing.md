@@ -1,0 +1,66 @@
+# Headless test runs (Linux container)
+
+How to run the game without a display or a person, to check that it boots,
+reaches a point in the game and does not hang. `tools/headless_boot.sh` does
+the work. Read `tools/headless_boot.sh` and `src/debug/pad_script.cpp` if you
+need the details.
+
+## One-time setup
+
+- Start a virtual display: `Xvfb :99 -screen 0 1280x720x24 &`
+- The script needs `gdb` and ImageMagick (`import`, and `montage` for the sheet).
+- Software Vulkan (lavapipe) is picked up from `/usr/share/vulkan/icd.d/lvp_icd.json`.
+- Make a run folder (default `/home/claude/run`, or set `RUN_DIR`). It holds:
+  - a copy of `BanjoTooieN64Recomp` (copy the exe, do not symlink it)
+  - `assets/`
+  - an empty `portable.txt`
+  - the ROM, named `bt.n64.us.1.0.z64`
+
+Build the exe first, then copy it into the run folder each time you rebuild.
+
+## Usage
+
+    [PAD='<pad script>'] [TOOIE_WATCH=addr,addr+len] tools/headless_boot.sh <seconds> <tag>
+
+- `<seconds>`: how long to run. A screenshot is taken every 20 s, so use a
+  multiple of 20 where you can.
+- `<tag>`: a name for this run. Output files start with it.
+- `PAD`: scripted controller input, passed as `--pad-script`.
+- `TOOIE_WATCH`: RDRAM words to print every 2 s. Each entry is a hex address,
+  or `addr+len` (both hex) to print every word in that range. The watch is
+  read from `src/game/debug_watch.cpp`.
+
+## Pad script syntax
+
+Steps are separated by `;`. Each step is `time_ms:action[:hold_ms]`, with
+times counted from the game's first controller read.
+
+- Buttons, joined with `,`: `a b z start l r du dd dl dr cu cd cl cr`.
+  Held for `hold_ms` (default 150).
+- Stick: `x=<-1..1>` and `y=<-1..1>`, mixed freely with buttons.
+- `quit` ends the program.
+- Scripted input is added to player 1's real input.
+
+Worked example: press Start every 3 s from 15 s to 45 s, then A every 2.5 s
+until 60 s, then quit. Run it for at least 70 s:
+
+    PAD='15000:start;18000:start;21000:start;24000:start;27000:start;30000:start;33000:start;36000:start;39000:start;42000:start;45000:start;47500:a;50000:a;52500:a;55000:a;57500:a;60000:a;62500:quit' \
+        tools/headless_boot.sh 70 newgame
+
+## Reading the outputs
+
+- `<tag>-N.png`: a screenshot every 20 s.
+- `<tag>-all.png`: all screenshots in one sheet (needs `montage`).
+- `<tag>.log`: the game's output. The script prints its last 15 lines.
+- `<tag>-gdb.txt`: a backtrace of every thread, taken at the end.
+- The script also prints a summary of the game threads from that backtrace.
+  If one game thread is stuck inside a `func_` while the others sit in
+  `osRecvMesg`, that is a busy-wait livelock. The fix is a preemption point in
+  the loop: see `src/game/preempt.cpp`, and the hooks in `banjotooie.us.toml`
+  that call `tooie_preempt_point`.
+
+## Do not use `pkill -f`
+
+`pkill -f` matches the full command line, which includes the shell running
+the test, so it can kill that shell too. The script uses `pgrep -x` and kills
+by exact process name. Do the same when you clean up by hand.

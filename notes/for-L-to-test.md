@@ -1,7 +1,7 @@
 
 ## T1 Boots to the title screen
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - Steps:
   1. Run BanjoTooieN64Recomp.exe, choose Start Game and pick your ROM
   2. Wait for the logo and title screen
@@ -10,7 +10,7 @@
 
 ## T2 File select and new game
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - Steps:
   1. Press Start at the title screen
   2. Pick a file and start a new game
@@ -20,7 +20,7 @@
 
 ## T3 Beak Barge sound
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - XBLA history: report §4.66
 - Steps:
   1. Load a save in Witchyworld and do the Beak Barge
@@ -31,7 +31,7 @@
 
 ## T4 Witchyworld music
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - XBLA history: report §4.65
 - Steps:
   1. Enter Witchyworld
@@ -41,7 +41,7 @@
 
 ## T5 Cutscene audio sync
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - XBLA history: report §4.30
 - Steps:
   1. Start a new game to watch the intro cutscenes
@@ -51,7 +51,7 @@
 
 ## T6 Intro text
 - Asked: 2026-10-13 14:01 UTC
-- Build: first Windows CI build (link to follow)
+- Build: Windows CI run 38416771448 (https://github.com/Locme/Banjo-Tooie-N64-Recomp/actions/runs/38416771448), artifact BanjoTooieN64Recomp-Windows-RelWithDebInfo
 - Steps:
   1. Start a new game
   2. Watch the intro text starting Two years have passed

@@ -105,7 +105,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.95 Debug and test tooling
 - [ ] Done
 - [ ] Approved by L
-- Partial (2026-10-13): `--pad-script` (scripted controller input, see src/debug/pad_script.cpp) and `TOOIE_WATCH` (RDRAM watch) are on main. Traces not started.
+- Partial (2026-10-13): `--pad-script` (scripted controller input, see src/debug/pad_script.cpp) and `TOOIE_WATCH` (RDRAM watch) are on main. Traces not started. tools/headless_boot.sh and notes/headless-testing.md added.
 
 ## Mid
 
