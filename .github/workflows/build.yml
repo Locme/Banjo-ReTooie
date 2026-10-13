@@ -24,7 +24,7 @@ jobs:
       - name: Keep LF line endings (lib-patches apply to LF sources)
         run: git config --global core.autocrlf false
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
       - name: ccache
@@ -70,7 +70,7 @@ jobs:
     name: linux (x64, Release)
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
       - name: ccache
