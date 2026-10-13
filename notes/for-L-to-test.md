@@ -338,3 +338,13 @@
   3. If you have crash_*.dmp files from earlier, count them in logs/ after starting the game once
 - Look for: Does console.log start with a line naming the build and commit, then "Settings in effect:" with graphics, general, qol, cheats and sound lines? Is there a "Setting changed:" line for what you changed? Are at most 4 old crash_*.dmp files left in logs/? (The next crash entry in crashes.log will carry the same build and settings lines.)
 - Status: waiting for L
+
+## T35 Banjo's shadow in water
+- Asked: 2026-10-13 20:40 UTC
+- Build: latest Windows CI build from main (it has the shadow interpolation change from T20's thread)
+- Steps:
+  1. Load a file and walk into shallow water where Banjo wades (for example the pond in Mayahem Temple's Prison Compound), then swim into deeper water
+  2. Stand still for a few seconds, then walk slowly in the water
+  3. Do this at Esc > Graphics > Frame Rate = Original (30 fps), then again at your usual frame rate above 30
+- Look for: Does the shadow still flicker? If it does: only above Original, or at Original too? Does it blink fully on and off, or do parts of it shimmer at the edges? Wading, swimming, or both?
+- Status: waiting for L
