@@ -109,6 +109,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
 
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
