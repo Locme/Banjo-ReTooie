@@ -108,6 +108,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
 
+    ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp

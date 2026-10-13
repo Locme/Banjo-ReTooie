@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <filesystem>
 
 #include "recomp.h"
 
@@ -22,6 +23,10 @@ namespace tooie {
 
     // Settings (config.cpp).
     void init_config();
+
+    // App-data root (app_data.cpp): the exe's folder when writable (migrating the old per-user
+    // folder once), else the runtime's default location.
+    std::filesystem::path resolve_app_folder();
 }
 
 #endif

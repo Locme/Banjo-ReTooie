@@ -3,10 +3,10 @@
 #include "tooie_game.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
-#include "util/file.h"
+#include "librecomp/game.hpp"
 
 void tooie::init_config() {
-    std::filesystem::path app_dir = recompui::file::get_app_folder_path();
+    std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {
         std::filesystem::create_directories(app_dir);
     }

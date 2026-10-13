@@ -634,7 +634,7 @@ int main(int argc, char** argv) {
     recompui::register_primary_font("InterVariable.ttf", "Inter Variable");
 
     // Register configuration path.
-    recomp::register_config_path(recompui::file::get_app_folder_path());
+    recomp::register_config_path(tooie::resolve_app_folder());
 
     // Register supported games and patches
     for (const auto& game : supported_games) {
