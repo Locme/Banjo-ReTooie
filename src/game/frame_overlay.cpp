@@ -11,6 +11,8 @@
 // wake and rewrites the text, so the overlay costs the frame loop nothing but
 // drawing a few lines of UI text.
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -185,8 +187,14 @@ namespace {
 
     void worker() {
         Overlay overlay;
-        uint64_t last_game_frames = tooie::model_tagging::last_stats().scenes;
-        auto last_time = clock_type::now();
+        struct GameSample {
+            uint64_t frames = 0;
+            clock_type::time_point time;
+        };
+        std::array<GameSample, 9> game_window{};
+        game_window[0] = { tooie::model_tagging::last_stats().scenes, clock_type::now() };
+        size_t window_next = 1;
+        size_t window_filled = 1;
         for (;;) {
             std::this_thread::sleep_for(update_interval);
 
@@ -194,17 +202,22 @@ namespace {
             RT64::FrameStats frames = RT64::TakeFrameStats();
             uint64_t game_frames = tooie::model_tagging::last_stats().scenes;
             auto now = clock_type::now();
-            double seconds = std::chrono::duration<double>(now - last_time).count();
-            uint64_t game_delta = game_frames - last_game_frames;
-            last_game_frames = game_frames;
-            last_time = now;
+
+            // The game's frame rate is counted over the last 2 s: a 30 fps game only
+            // fits 7 or 8 frames into one 250 ms update, which read as 28 and 32.
+            game_window[window_next] = { game_frames, now };
+            window_next = (window_next + 1) % game_window.size();
+            window_filled = std::min(window_filled + 1, game_window.size());
+            const GameSample& oldest = game_window[window_filled < game_window.size() ? 0 : window_next];
+            uint64_t game_delta = game_frames - oldest.frames;
+            double game_seconds = std::chrono::duration<double>(now - oldest.time).count();
 
             // TOOIE_FRAME_LOG=1: prints the same figures every 2 s, shown or not.
             static const bool log = std::getenv("TOOIE_FRAME_LOG") != nullptr;
             static int ticks = 0;
             if (log && ++ticks % 8 == 0) {
                 std::string joined;
-                for (const std::string& line : format(frames, game_delta, seconds)) {
+                for (const std::string& line : format(frames, game_delta, game_seconds)) {
                     joined += (joined.empty() ? "" : " | ") + line;
                 }
                 std::printf("[frames] %s\n", joined.c_str());
@@ -222,7 +235,7 @@ namespace {
                 continue;
             }
 
-            std::vector<std::string> text = format(frames, game_delta, seconds);
+            std::vector<std::string> text = format(frames, game_delta, game_seconds);
             overlay.context.open();
             for (size_t i = 0; i < overlay.lines.size(); i++) {
                 bool used = i < text.size();

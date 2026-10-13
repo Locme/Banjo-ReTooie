@@ -114,6 +114,22 @@ F12 screenshots are taken before these filters, so they don't show them.
   away always use the detailed one, and Banjo always uses his close-up model
   (with his necklace and belt buckle). Applies at once. Default: on.
 
+## Graphics: Game Frame Rate
+
+- **Game Frame Rate**: how often the game itself updates, not the in-between
+  frames that Framerate adds. Applies from the next frame.
+  - **Original** (default): the game's own timing. It waits for at least two
+    screen refreshes (a few places, such as the title screen and the
+    Hailfire Peaks cannon, ask for three or four), and a frame that ran late
+    moves the whole game a bigger step.
+  - **30 FPS**: every game frame is exactly two refreshes long with the same
+    step, everywhere, including the places that asked for 20 or 15 fps.
+  - **60 FPS**: the game updates every refresh with half the step. Movement
+    keeps its speed; anything the game counts in frames rather than time
+    would run twice as fast.
+  - With 30 or 60 FPS, a PC that cannot keep up slows the game down instead
+    of taking bigger steps.
+
 ## Graphics: Frame rate overlay
 
 - **Frame rate overlay**: shows a small box in the top left corner, updated
@@ -123,7 +139,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   - the worst frame time in that quarter second
   - the GPU time per game frame
   - the game's own frame rate (the frames it really makes; with Framerate
-    above Original the rest are in-between frames)
+    above Original the rest are in-between frames), counted over the last
+    2 seconds (over a quarter second a 30 fps game read as 28 and 32)
   - the Framerate setting
   - frame interpolation: off, or on with how many models, bones and shadows
     it tracked in the last frame, and how many camera cuts it has seen.

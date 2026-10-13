@@ -1757,6 +1757,7 @@ L_80015204:
     // 0x80015208: nop
 
     after_4:
+    tooie_frame_wait(rdram, ctx);
     // 0x8001520C: lui         $t6, 0x8008
     ctx->r14 = S32(0X8008 << 16);
     // 0x80015210: lui         $t8, 0x8008
@@ -1802,6 +1803,7 @@ L_80015238:
     // 0x80015248: nop
 
     after_6:
+    tooie_frame_wait(rdram, ctx);
     // 0x8001524C: lui         $t0, 0x8008
     ctx->r8 = S32(0X8008 << 16);
     // 0x80015250: lui         $t2, 0x8008

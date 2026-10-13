@@ -220,6 +220,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/level_warp.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hide_hud.cpp
     ${CMAKE_SOURCE_DIR}/src/game/frame_overlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/game_frame_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp

@@ -5,6 +5,8 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Graphics: Game Frame Rate (Original, 30 FPS, 60 FPS) holds the game's own update rate steady.
+- Frame rate overlay: the game's frame rate is averaged over 2 seconds, so a steady 30 no longer reads as 28 and 32.
 - General: Back-Port: Get Jiggy animation, Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy (off by default).
 - Graphics: SMAA Anti-Aliasing (Low, Medium, High or Ultra) smooths jagged edges, with or without MSAA.
 - Transformation drop-down: moving through the list with a controller or the arrow keys no longer applies every entry on the way; the pick applies when you confirm.

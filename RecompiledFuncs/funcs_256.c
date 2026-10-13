@@ -2374,6 +2374,7 @@ L_800A7D64:
     // 0x800A7D68: nop
 
     after_1:
+    tooie_frame_step(rdram, ctx);
     // 0x800A7D6C: jal         0x800D8FA0
     // 0x800A7D70: or          $a0, $v0, $zero
     ctx->r4 = ctx->r2 | 0;

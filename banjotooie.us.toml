@@ -216,6 +216,28 @@ func = "func_800A7D84"
 before_vram = 0x800A7D84
 text = "tooie_warp_tick(rdram, ctx);"
 
+# --- Game frame rate (src/game/game_frame_rate.cpp) --------------------------
+# func_800151BC is the buffer swap: it waits until func_80015184() VIs have gone
+# by since the last frame ($v0 after each call), and its count becomes the next
+# frame's time step, which func_800A7D30 reads with func_80014F4C ($v0) and
+# passes to func_800D8FA0. The 30 / 60 FPS settings replace both so every game
+# frame is the same length. The step is changed at the call, not inside
+# func_800D8FA0, so attract demos still replay their recorded steps.
+[[patches.hook]]
+func = "func_800151BC"
+before_vram = 0x8001520C
+text = "tooie_frame_wait(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800151BC"
+before_vram = 0x8001524C
+text = "tooie_frame_wait(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800A7D30"
+before_vram = 0x800A7D6C
+text = "tooie_frame_step(rdram, ctx);"
+
 # --- HUD at the screen edges (src/game/hud_edges.cpp) -----------------------
 # scinfobar_entrypoint_24 draws one HUD element. Mark where its display list
 # starts (entry) and fix it up when it is done (the return, while $s1 still

@@ -16,6 +16,9 @@ void tooie_overlay_unloading(uint8_t* rdram, recomp_context* ctx);
 void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
+// Game frame rate (src/game/game_frame_rate.cpp): the wait between frames in func_800151BC, and the time step in func_800D8FA0.
+void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx);
+void tooie_frame_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_flag_get_enter(uint8_t* rdram, recomp_context* ctx);
 void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_begin(uint8_t* rdram, recomp_context* ctx);

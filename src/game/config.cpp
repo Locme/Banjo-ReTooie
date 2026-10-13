@@ -17,6 +17,7 @@
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
 #include "tooie_canary_mary.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_fine_aim.h"
 #include "tooie_picture_filters.h"
@@ -274,6 +275,7 @@ void tooie::init_config() {
         "Models that switch to a simpler version far away always use the detailed one. Banjo always uses his close-up model (with his necklace).",
         true);
     tooie::frame_overlay::add_option(graphics);
+    tooie::game_frame_rate::add_option(graphics);
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
