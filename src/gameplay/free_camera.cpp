@@ -67,6 +67,10 @@ namespace {
     // Elevation of the camera above the pivot, in degrees.
     constexpr float min_elevation = -20.0f;
     constexpr float max_elevation = 70.0f;
+    // How far above the pivot the camera aims (view pitch plus elevation), taken from the game's
+    // camera when the stick is first used.
+    constexpr float min_aim = -5.0f;
+    constexpr float max_aim = 20.0f;
     constexpr float stick_deadzone = 0.2f;
     // Distance, as a multiple of the game's, reached by pushing on past the tilt limits.
     constexpr float min_zoom = 0.25f;
@@ -83,7 +87,8 @@ namespace {
     struct State {
         bool active = false;   // the stick has been used and the yaw is held
         float yaw = 0.0f;      // held camera yaw (degrees)
-        float pitch_offset = 0.0f; // degrees added to the game's elevation
+        float elevation = 0.0f; // held height of the camera above the pivot, in degrees
+        float aim = 0.0f;       // view pitch plus elevation: how far above the pivot the camera looks
         float zoom = 1.0f;     // times the game's distance
         uint16_t map = 0xFFFF;
         std::chrono::steady_clock::time_point last;
@@ -162,6 +167,19 @@ namespace {
         }
         *ctx = saved;
         return hit;
+    }
+
+    // Height of the camera above the pivot as seen from the pivot, in degrees.
+    float game_elevation(const float pos[3], const float banjo[3]) {
+        const float dx = pos[0] - banjo[0];
+        const float dy = pos[1] - (banjo[1] + pivot_height);
+        const float dz = pos[2] - banjo[2];
+        return std::atan2(dy, std::sqrt(dx * dx + dz * dz)) / deg;
+    }
+
+    // 0..360 to -180..180.
+    float signed_degrees(float a) {
+        return a > 180.0f ? a - 360.0f : a;
     }
 
     float wrap_degrees(float a) {
@@ -248,7 +266,8 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         if (!state.active && (stick_x != 0.0f || stick_y != 0.0f)) {
             state.active = true;
             state.yaw = rot[1];
-            state.pitch_offset = 0.0f;
+            state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
+            state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
         }
         if (state.active) {
@@ -270,12 +289,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             const float rx = ox * c + oz * s;
             const float rz = -ox * s + oz * c;
 
-            // Tilted about the horizontal. Pushing on past the lowest tilt slides the camera in
-            // towards Banjo, past the highest it pulls out; tilting back reverses that first.
+            // Tilted about the horizontal to the held elevation. The game's own camera keeps
+            // changing its height and pitch as it chases the spot behind Banjo it wants, so the
+            // free camera holds its own elevation and aim instead of following the game's, which
+            // tipped the view towards the floor while walking. Pushing on past the lowest tilt
+            // slides the camera in towards Banjo, past the highest it pulls out; tilting back
+            // reverses that first.
             const float horizontal = std::sqrt(rx * rx + rz * rz);
             const float distance = std::sqrt(horizontal * horizontal + oy * oy);
-            const float elevation = std::atan2(oy, horizontal) / deg;
-            float wanted = elevation + state.pitch_offset;
             float tilt_left = tilt_input;
             if (tilt_left < 0.0f && state.zoom > 1.0f) {
                 const float used = std::max(tilt_left, (1.0f - state.zoom) / zoom_rate);
@@ -287,19 +308,16 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 state.zoom += used * zoom_rate;
                 tilt_left -= used;
             }
-            wanted += tilt_left;
-            const float low = std::min(min_elevation, elevation);
-            const float high = std::max(max_elevation, elevation);
-            if (wanted < low) {
-                state.zoom = std::max(min_zoom, state.zoom - (low - wanted) * zoom_rate);
-                wanted = low;
+            float wanted = state.elevation + tilt_left;
+            if (wanted < min_elevation) {
+                state.zoom = std::max(min_zoom, state.zoom - (min_elevation - wanted) * zoom_rate);
+                wanted = min_elevation;
             }
-            else if (wanted > high) {
-                state.zoom = std::min(max_zoom, state.zoom + (wanted - high) * zoom_rate);
-                wanted = high;
+            else if (wanted > max_elevation) {
+                state.zoom = std::min(max_zoom, state.zoom + (wanted - max_elevation) * zoom_rate);
+                wanted = max_elevation;
             }
-            state.pitch_offset = wanted - elevation;
-            const float tilt = wanted - elevation;
+            state.elevation = wanted;
 
             float want[3] = { pivot[0] + rx, pivot[1] + oy, pivot[2] + rz };
             if (horizontal > 1.0f && distance > 1.0f) {
@@ -317,16 +335,16 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             write_float(rdram, camera + cam_pos + 0, want[0]);
             write_float(rdram, camera + cam_pos + 4, want[1]);
             write_float(rdram, camera + cam_pos + 8, want[2]);
-            write_float(rdram, camera + cam_rot + 0, wrap_degrees(rot[0] - tilt));
+            write_float(rdram, camera + cam_rot + 0, wrap_degrees(state.aim - wanted));
             write_float(rdram, camera + cam_rot + 4, state.yaw);
         }
     }
 
     if (log && now - last_log >= std::chrono::milliseconds(250)) {
         last_log = now;
-        std::printf("[freecam] map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f pitch+ %.1f zoom %.2f wall %d\n",
+        std::printf("[freecam] map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f elev %.1f view %.1f zoom %.2f wall %d\n",
             map, mode, updating, paused, submode, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2],
-            banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.pitch_offset, state.zoom, blocked);
+            banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked);
         std::fflush(stdout);
     }
 }
