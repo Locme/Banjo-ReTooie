@@ -12,6 +12,8 @@ namespace tooie::debug {
     // thread at the start of the next frame.
     void request_warp(uint16_t map, uint8_t exit);
     uint16_t current_map(uint8_t* rdram);
+    // True while a save file is being played, so a warp can be issued.
+    bool can_warp();
 }
 
 namespace tooie::dl_dump {

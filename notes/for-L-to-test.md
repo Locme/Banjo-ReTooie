@@ -126,7 +126,7 @@
 - Steps:
   1. Settings > Cheats: turn on Enable cheats, then Warp tab. Load a file, press Esc, open the Warp tab and pick a few places in different levels
   2. Press F9 after leaving the area you warped to
-- Look for: Does each warp land you standing in the right place, with the usual wipe? Does F9 take you back to the last pick? Any place that crashes or drops you in a wall?
+- Look for: Does each warp land you standing in the right place, with the usual wipe? Does F9 take you back to the last pick? Any place that crashes or drops you in a wall? Picking a place from the launcher's Settings, the title screen or the game select should only show "Start the game and load a file first".
 
 ## T15 Text speed
 - Asked: 2026-10-13 18:10 UTC

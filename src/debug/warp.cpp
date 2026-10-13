@@ -36,6 +36,11 @@ namespace {
     constexpr gpr current_map_addr = (int32_t)0x80132DC2;
     // The game-state block holding map change requests.
     constexpr gpr game_state_addr = (int32_t)0x80127630;
+    // Maps where no save file is being played (map_names.inc).
+    constexpr uint16_t title_map = 0x18B;
+    constexpr uint16_t game_select_map = 0x158;
+    std::atomic<bool> ticked{false};
+    std::atomic<uint16_t> last_map{0};
 
     struct Request {
         uint16_t map;
@@ -78,6 +83,16 @@ void tooie::debug::request_warp(uint16_t map, uint8_t exit) {
     pending = Request{map, exit};
 }
 
+bool tooie::debug::can_warp() {
+    // The game loop has run (so not still in the launcher).
+    if (!ticked.load()) {
+        return false;
+    }
+    // A save file is being played: not the title screen or the game select.
+    uint16_t map = last_map.load();
+    return map != 0 && map != title_map && map != game_select_map;
+}
+
 uint16_t tooie::debug::current_map(uint8_t* rdram) {
     return (uint16_t)MEM_H(0x0, current_map_addr);
 }
@@ -86,6 +101,8 @@ uint16_t tooie::debug::current_map(uint8_t* rdram) {
 extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     std::call_once(env_flag, read_env);
     std::call_once(started_flag, [] { started = std::chrono::steady_clock::now(); });
+    ticked = true;
+    last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);
     tooie::player_cheats::tick(rdram, ctx);

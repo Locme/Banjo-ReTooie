@@ -5,7 +5,9 @@
 // Cheats > Warp tab are both on, and F9 only works then too. Picking one closes the menu and asks for the warp, which
 // src/debug/warp.cpp issues on the game thread at the start of the next frame
 // with the game's own map change (the usual wipe and title card). Warping to
-// the map you are in does nothing. F9 repeats the last warp.
+// the map you are in does nothing. F9 repeats the last warp. Before a save
+// file is being played (launcher, title screen, game select) a pick only shows
+// "Start the game and load a file first".
 
 #include <atomic>
 #include <chrono>
@@ -98,7 +100,11 @@ namespace {
                     place = last;
                 }
                 if (place.has_value()) {
-                    warp_to(*place);
+                    if (tooie::debug::can_warp()) {
+                        warp_to(*place);
+                    } else {
+                        tooie::toast::show("Start the game and load a file first");
+                    }
                 } else {
                     tooie::toast::show("Pick a place in Level warp first");
                 }
@@ -130,6 +136,10 @@ namespace {
             }
             Button* button = context.create_element<Button>(row, place.name, ButtonStyle::Secondary, ButtonSize::Medium);
             button->add_pressed_callback([place]() {
+                if (!tooie::debug::can_warp()) {
+                    tooie::toast::show("Start the game and load a file first");
+                    return;
+                }
                 recompui::config::close();
                 warp_to(place);
             });
