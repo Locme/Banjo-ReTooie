@@ -461,6 +461,7 @@
   3. Play where you saw the graphics hitch; whenever something turns red, note where you were
   4. Send logs/console.log (next to the exe) afterwards
 - Look for: Does the hitch line up with something turning red? Does anything turn red that looks fine? Do dust and feathers look smooth now?
+
 ## T46 Back-Port: Old Banjo sounds
 - Asked: 2026-10-13 22:40 UTC
 - Build: latest Windows CI build from main
