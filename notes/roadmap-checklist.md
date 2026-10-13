@@ -52,7 +52,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 
 ### 4.52 Text speed
 - [x] Done
-- Note: General tab "Text speed" (1x/2x/4x/Instant) and `--dialogue_text_speed 1|2|4|instant`. Hooks the zoombox print timer; verified headless in the new-game intro (Klungo's lines print whole on Instant).
+- Note: QOL tab "Text speed" (1x/2x/4x/Instant) and `--dialogue_text_speed 1|2|4|instant`. Hooks the zoombox print timer; verified headless in the new-game intro (Klungo's lines print whole on Instant).
 - [ ] Approved by L
 
 ### 4.55 Twin-stick (free) camera
@@ -151,7 +151,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 
 ### 4.29 Level transition speed
 - [x] Done
-- Note: General tab "Level transitions" (Original / Fast 4x / Instant 16x), default Original. Speeds up the gctransitionDll wipe of a map change and its fade-in only; cutscene fades keep their speed. Headless warp AF→B8: 5.3 s → 1.4 s. About 1.2 s between the wipe-out and the fade-in is outside the wipe and is left as is. `TOOIE_LOG_TRANSITIONS=1` logs wipe timing.
+- Note: QOL tab "Level transitions" (Original / Fast 4x / Instant 16x), default Original. Speeds up the gctransitionDll wipe of a map change and its fade-in only; cutscene fades keep their speed. Headless warp AF→B8: 5.3 s → 1.4 s. About 1.2 s between the wipe-out and the fade-in is outside the wipe and is left as is. `TOOIE_LOG_TRANSITIONS=1` logs wipe timing.
 - [ ] Approved by L
 
 ### 4.40 Retro: N64 3-point filtering, 16-bit dither, CRT

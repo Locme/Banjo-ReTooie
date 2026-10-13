@@ -133,7 +133,7 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.52
 - Steps:
-  1. Settings (Esc) > General > Text speed = 2x, then talk to someone (or start a new game and watch Klungo's intro)
+  1. Settings (Esc) > QOL > Text speed = 2x, then talk to someone (or start a new game and watch Klungo's intro)
   2. Repeat with 4x and Instant, then Normal
   3. Open the pause menu and the file select with each setting
 - Look for: Does text print faster at 2x and 4x, and appear a page at a time on Instant? Do the pauses after commas and full stops shrink too? Are menus unchanged? Does the change apply without restarting?
@@ -162,7 +162,7 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.29
 - Steps:
-  1. Settings (Esc) > General > Level transitions = Fast, then walk through a few doors and level entrances
+  1. Settings (Esc) > QOL > Level transitions = Fast, then walk through a few doors and level entrances
   2. Repeat with Instant, then Original
   3. Watch a cutscene that fades to black
 - Look for: Are the wipes clearly faster on Fast and nearly gone on Instant? Does anything look cut off or flash? Do cutscene fades keep their normal speed?

@@ -31,7 +31,7 @@ namespace {
         }
         try {
             return static_cast<tooie::TextSpeed>(std::get<uint32_t>(
-                recompui::config::get_general_config().get_option_value(tooie::text_speed_option)));
+                recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::text_speed_option)));
         } catch (...) {
             return tooie::TextSpeed::Normal;
         }

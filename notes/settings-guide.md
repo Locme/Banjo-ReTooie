@@ -25,6 +25,11 @@ framework, not from this port's code, so it is not described here.
 
 - **Skip intro logos**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
+- **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
+  page at a time). Menus are not affected. Default: 1x.
+- **Level transitions**: how fast the screen wipe plays when you go to another
+  area: Original, Fast (4x) or Instant (16x). Cutscene fades are not affected.
+  Default: Original.
 
 ## Graphics: Aspect Ratio
 

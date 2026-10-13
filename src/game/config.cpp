@@ -45,7 +45,14 @@ void tooie::init_config() {
         "Speed-up toggle",
         "Press F2 to switch the speed-up on and off instead of holding it.",
         false);
-    general.add_enum_option(
+
+    recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
+    qol.add_bool_option(
+        tooie::quick_start_option,
+        "Skip intro logos",
+        "Press Start during the logos and title flight to go straight to the file select.",
+        true);
+    qol.add_enum_option(
         tooie::text_speed_option,
         "Text speed",
         "How fast dialogue text prints. <recomp-color primary>Instant</recomp-color> shows each page at once. Menus are not affected.",
@@ -56,7 +63,7 @@ void tooie::init_config() {
             {tooie::TextSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TextSpeed::Normal);
-    general.add_enum_option(
+    qol.add_enum_option(
         tooie::transition_speed_option,
         "Level transitions",
         "How fast the screen wipe plays when you go to another area. <recomp-color primary>Fast</recomp-color> is 4x, <recomp-color primary>Instant</recomp-color> is 16x. Cutscene fades are not affected.",
@@ -66,13 +73,6 @@ void tooie::init_config() {
             {tooie::TransitionSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TransitionSpeed::Original);
-
-    recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
-    qol.add_bool_option(
-        tooie::quick_start_option,
-        "Skip intro logos",
-        "Press Start during the logos and title flight to go straight to the file select.",
-        true);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

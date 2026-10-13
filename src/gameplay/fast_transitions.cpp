@@ -39,7 +39,7 @@ namespace {
     float speed_factor() {
         uint32_t value = 0;
         try {
-            value = std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::transition_speed_option));
+            value = std::get<uint32_t>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::transition_speed_option));
         } catch (...) {
         }
         switch (static_cast<tooie::TransitionSpeed>(value)) {
