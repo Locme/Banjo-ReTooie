@@ -18,8 +18,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.7 Native in-game settings page ("GRAPHICAL SETTINGS", was "PC SETTINGS")
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- Note (2026-10-13): L chose the RmlUi settings screen opened with Esc or the controller's Back/Select button; no row in the N64 pause menu.
 
 ### 4.10 Settings apply without restart
 - [ ] Done
