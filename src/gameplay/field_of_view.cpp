@@ -13,7 +13,11 @@
 // boss and puzzle cameras) the cutscene offset. Cameras no controller steps
 // (the 3D HUD icons) count as other too. The normal gameplay FOV is 40.
 // TOOIE_FOV_LOG=1 logs each change.
+// tooie::in_letterboxed_scene() tells other features (the cutscene skip) when a
+// letterboxed scene camera, not the gameplay camera, is the one setting the FOV.
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -54,13 +58,31 @@ namespace {
         }
     }
 
-    bool is_gameplay_camera(uint32_t camera) {
+    // 0 = no controller steps this camera (HUD icons), 1 = gameplay, 2 = any other controller mode.
+    int camera_kind(uint32_t camera) {
         for (const CameraMode& m : modes) {
             if (m.camera == camera) {
-                return m.gameplay;
+                return m.gameplay ? 1 : 2;
             }
         }
-        return false;
+        return 0;
+    }
+
+    float read_float(uint8_t* rdram, uint32_t addr) {
+        uint32_t bits = read_word(rdram, addr);
+        float value;
+        std::memcpy(&value, &bits, sizeof(value));
+        return value;
+    }
+
+    // Last time a gameplay camera and a letterboxed scene camera set their FOV, for in_letterboxed_scene().
+    std::atomic<int64_t> last_gameplay_ms{0};
+    std::atomic<int64_t> last_letterbox_ms{0};
+    constexpr uint32_t cam_aspect = 0xE8;
+
+    int64_t now_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
     bool log_enabled() {
@@ -102,7 +124,14 @@ extern "C" void tooie_set_fov(uint8_t* rdram, recomp_context* ctx) {
     uint32_t bits = (uint32_t)ctx->r5;
     std::memcpy(&fov, &bits, sizeof(fov));
 
-    const bool gameplay = is_gameplay_camera(camera);
+    const int kind = camera_kind(camera);
+    const bool gameplay = kind == 1;
+    if (gameplay) {
+        last_gameplay_ms = now_ms();
+    } else if (kind == 2 && valid_ptr(camera) && read_float(rdram, camera + cam_aspect) > 1.5f) {
+        // Cutscenes draw letterboxed: a camera driven by a non-gameplay controller with a wide aspect.
+        last_letterbox_ms = now_ms();
+    }
     const int add = offset(gameplay ? tooie::fov_offset_option : tooie::cutscene_fov_offset_option);
     float result = fov + (float)add;
     if (result < 10.0f) result = 10.0f;
@@ -112,7 +141,8 @@ extern "C" void tooie_set_fov(uint8_t* rdram, recomp_context* ctx) {
         static float last_fov = -1.0f, last_result = -1.0f;
         static uint32_t last_camera = 0;
         if (fov != last_fov || result != last_result || camera != last_camera) {
-            printf("[fov] camera %08X %s %.2f -> %.2f\n", camera, gameplay ? "gameplay" : "other", fov, result);
+            printf("[fov] camera %08X %s %.2f -> %.2f aspect %.2f\n", camera, gameplay ? "gameplay" : kind == 2 ? "scene" : "other", fov, result,
+                valid_ptr(camera) ? read_float(rdram, camera + cam_aspect) : 0.0f);
             fflush(stdout);
             last_fov = fov; last_result = result; last_camera = camera;
         }
@@ -120,4 +150,9 @@ extern "C" void tooie_set_fov(uint8_t* rdram, recomp_context* ctx) {
 
     std::memcpy(&bits, &result, sizeof(bits));
     ctx->r5 = (int32_t)bits;
+}
+
+bool tooie::in_letterboxed_scene() {
+    const int64_t letterbox = last_letterbox_ms.load();
+    return letterbox != 0 && letterbox > last_gameplay_ms.load() && now_ms() - letterbox < 250;
 }

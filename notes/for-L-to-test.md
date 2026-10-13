@@ -381,3 +381,13 @@
 - Status: answered 2026-10-13 22:00 UTC
 - L's result: Frame rate Original fixes it: the squares only come with the in-between frames (170 fps)
 
+## T39 Skip cutscenes with B
+- Asked: 2026-10-13 22:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.62
+- Steps:
+  1. Settings (Esc) > QOL > Skip cutscenes with B = On (the default)
+  2. Warp to Chilly Willy (or any boss you haven't fought on this file) and press B once during the intro
+  3. Also press B while talking to someone, e.g. Jamjars or Mumbo
+- Look for: Does the intro fast-forward (a "Skipping cutscene" message, the scene racing through its dialogue) and stop right as the fight starts? Does B while talking to someone do anything unwanted, like skipping a conversation you wanted to read or picking an answer for you?
+- Status: waiting for L

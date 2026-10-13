@@ -179,6 +179,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
     if (player_index == 0) {
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
         tooie::talon_trot::apply(buttons_out);
+        tooie::cutscene_skip_apply(buttons_out);
     }
     return ok;
 }

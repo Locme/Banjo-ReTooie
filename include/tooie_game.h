@@ -70,6 +70,13 @@ namespace tooie {
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.
     inline const std::string fov_offset_option = "fov_offset";
     inline const std::string cutscene_fov_offset_option = "cutscene_fov_offset";
+    // True while a letterboxed scene camera is drawing instead of the gameplay camera (field_of_view.cpp).
+    bool in_letterboxed_scene();
+    // Skip cutscenes with B (src/gameplay/cutscene_skip.cpp), QOL tab.
+    inline const std::string cutscene_skip_option = "cutscene_skip_all";
+    void cutscene_skip_tick(uint8_t* rdram);
+    // Applies the skip to player 1's buttons as the game reads them (input thread).
+    void cutscene_skip_apply(uint16_t* buttons);
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
