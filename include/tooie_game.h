@@ -62,6 +62,9 @@ namespace tooie {
     enum class TransitionSpeed : uint32_t { Original, Fast, Instant };
     inline const std::string transition_speed_option = "transition_speed";
 
+    // High-detail models always (src/gameplay/high_detail_models.cpp), QOL tab.
+    inline const std::string high_detail_models_option = "high_detail_models";
+
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
     void install_crash_handler(const std::filesystem::path& app_folder);

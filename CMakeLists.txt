@@ -171,6 +171,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/input/tiptoe.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hud_edges.cpp
     ${CMAKE_SOURCE_DIR}/src/game/model_tagging.cpp

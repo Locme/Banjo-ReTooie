@@ -151,8 +151,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.28 High-detail models always
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-13: QOL > High-detail models (on by default, live). Hooks the geo LOD command (func_800DD214 draw pass, func_800DD2E8 matrix pass) after the squared camera distance is computed and sets it to 1, so every LOD command picks its detailed child. Checked headless with TOOIE_LOD_LOG=1: Jinjo Village, Mayahem Temple, Witchyworld, Terrydactyland and JRL all use LOD pairs (for example near 0 / far 1800 and near 1800 / far 2e8); with the option on, the detailed child runs at every distance. Banjo swapping by distance (report f) not checked. Code: src/gameplay/high_detail_models.cpp.
 
 ### 4.29 Level transition speed
 - [x] Done

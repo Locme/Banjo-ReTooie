@@ -328,3 +328,17 @@ text = "tooie_flag_get_leave(rdram, ctx);"
 func = "func_8010FC38"
 before_vram = 0x8010FCB8
 text = "tooie_free_camera(rdram, ctx);"
+
+# --- High-detail models, 4.28 (src/gameplay/high_detail_models.cpp) --------
+# Geo LOD command (8): func_800DD214 (draw pass) and func_800DD2E8 (matrix
+# pass) have the squared camera distance in $f0 here, just after func_800EEB40.
+[[patches.hook]]
+func = "func_800DD214"
+before_vram = 0x800DD294
+text = "tooie_lod_distance(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800DD2E8"
+before_vram = 0x800DD328
+text = "tooie_lod_distance(rdram, ctx);"
+

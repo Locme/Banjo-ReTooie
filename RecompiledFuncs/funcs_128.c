@@ -6540,6 +6540,7 @@ L_800DD26C:
     // 0x800DD290: addiu       $a0, $a0, -0x30A0
     ctx->r4 = ADD32(ctx->r4, -0X30A0);
     after_2:
+    tooie_lod_distance(rdram, ctx);
     // 0x800DD294: lw          $a2, 0x1C($sp)
     ctx->r6 = MEM_W(ctx->r29, 0X1C);
     // 0x800DD298: lwc1        $f2, 0xC($a2)

@@ -273,3 +273,15 @@
   4. Open logs/console.log and find the "Controller added" lines: they name the controller and list which back buttons it reports
 - Look for: Does the slot show L4, R4, L5 or R5 (or a Steam-style icon for the fifth one) when you press a back button? If nothing happens, what is the controller's name and model, and what do the "Controller added" lines say?
 - Status: waiting for L
+
+## T29 High-detail models
+- Asked: 2026-10-13 20:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.28
+- Steps:
+  1. Settings (Esc) > QOL > High-detail models = On (the default)
+  2. In a big area (Jinjo Village, Mayahem Temple, Witchyworld), look at things far away
+  3. Switch the option Off and On while looking
+- Look for: With it On, do far-away objects keep their detailed look instead of turning simpler? Does anything flicker, vanish or slow down?
+- Status: waiting for L
+

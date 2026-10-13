@@ -4004,6 +4004,7 @@ RECOMP_FUNC void func_800DD2E8(uint8_t* rdram, recomp_context* ctx) {
     // 0x800DD324: addiu       $a0, $a0, -0x3090
     ctx->r4 = ADD32(ctx->r4, -0X3090);
     after_1:
+    tooie_lod_distance(rdram, ctx);
     // 0x800DD328: lw          $a2, 0x1C($sp)
     ctx->r6 = MEM_W(ctx->r29, 0X1C);
     // 0x800DD32C: lwc1        $f2, 0xC($a2)

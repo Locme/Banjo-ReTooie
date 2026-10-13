@@ -82,6 +82,11 @@ void tooie::init_config() {
         },
         tooie::TransitionSpeed::Original);
     qol.add_bool_option(
+        tooie::high_detail_models_option,
+        "High-detail models",
+        "Models that switch to a simpler version far away always use the detailed one.",
+        true);
+    qol.add_bool_option(
         tooie::free_camera_option,
         "Free camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",

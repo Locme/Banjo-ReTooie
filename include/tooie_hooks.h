@@ -28,6 +28,8 @@ void tooie_transition_frame(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_anim_length(uint8_t* rdram, recomp_context* ctx);
 // Free camera (src/gameplay/free_camera.cpp): after a camera controller's mode has placed the camera.
 void tooie_free_camera(uint8_t* rdram, recomp_context* ctx);
+// High-detail models (src/gameplay/high_detail_models.cpp): $f0 holds a geo LOD command's squared camera distance.
+void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx);
 // Wide pictures (src/game/wide_transitions.cpp).
 void tooie_wipe_model_scale(uint8_t* rdram, recomp_context* ctx);
 
