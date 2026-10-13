@@ -490,7 +490,7 @@ L_808002F0:
     // 0x80800308: jal         0x80800000
     // 0x8080030C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
-    static_344_80800000(rdram, ctx);
+    func_80800000_bsrest(rdram, ctx);
         goto after_13;
     // 0x8080030C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;

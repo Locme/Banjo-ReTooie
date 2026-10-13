@@ -4207,6 +4207,73 @@ RECOMP_FUNC void func_80800000_bskazow(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800024: nop
 
 ;}
+RECOMP_FUNC void func_80800324_bsledge(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800324: addiu       $t6, $zero, 0x2
+    ctx->r14 = ADD32(0, 0X2);
+    // 0x80800328: sb          $t6, 0x168($a0)
+    MEM_B(0X168, ctx->r4) = ctx->r14;
+    // 0x8080032C: jr          $ra
+    // 0x80800330: sb          $zero, 0x169($a0)
+    MEM_B(0X169, ctx->r4) = 0;
+    return;
+    // 0x80800330: sb          $zero, 0x169($a0)
+    MEM_B(0X169, ctx->r4) = 0;
+;}
+RECOMP_FUNC void func_80800000_bsrest(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800004: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800008: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    // 0x8080000C: jal         0x8009B9B0
+    // 0x80800010: addiu       $a1, $zero, 0x0
+    ctx->r5 = ADD32(0, 0X0);
+    baphysics_set_target_horizontal_velocity(rdram, ctx);
+        goto after_0;
+    // 0x80800010: addiu       $a1, $zero, 0x0
+    ctx->r5 = ADD32(0, 0X0);
+    after_0:
+    // 0x80800014: jal         0x8008E078
+    // 0x80800018: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    player_isStable(rdram, ctx);
+        goto after_1;
+    // 0x80800018: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x8080001C: beq         $v0, $zero, L_8080002C
+    if (ctx->r2 == 0) {
+        // 0x80800020: lw          $a0, 0x18($sp)
+        ctx->r4 = MEM_W(ctx->r29, 0X18);
+            goto L_8080002C;
+    }
+    // 0x80800020: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    // 0x80800024: jal         0x8009BA9C
+    // 0x80800028: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    func_8009BA9C(rdram, ctx);
+        goto after_2;
+    // 0x80800028: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    after_2:
+L_8080002C:
+    // 0x8080002C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80800030: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800034: jr          $ra
+    // 0x80800038: nop
+
+    return;
+    // 0x80800038: nop
+
+;}
 RECOMP_FUNC void func_80013B90(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6947,12 +7014,4 @@ RECOMP_FUNC void static_16_80097978(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8009798C: and         $v0, $t7, $t9
     ctx->r2 = ctx->r15 & ctx->r25;
-;}
-RECOMP_FUNC void static_304_80800324(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-;}
-RECOMP_FUNC void static_344_80800000(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
 ;}

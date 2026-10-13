@@ -52,6 +52,48 @@ def read_extra_entries():
     return entries
 
 
+def called_unsized(elf_path, sized):
+    """Functions that are called but that N64Recomp would emit empty.
+
+    A `jal` to an address with no sized function symbol makes N64Recomp create
+    a static function that runs up to the next symbol of any kind. When a
+    label already sits at that address (bsrest's first function starts on
+    bsrest_TEXT_START, bsledge's func_80800324 has size 0) the function comes
+    out empty, so the call does nothing: Banjo kept his walking speed while
+    Jamjars talked, because bsrest's "stop moving" function was empty.
+    Yields (section index, vram, size) for each, the size running to the next
+    sized function or called address in the section, or the section's end.
+    """
+    with open(elf_path, "rb") as f:
+        elf = ELFFile(f)
+        labels = defaultdict(set)
+        for sym in elf.get_section_by_name(".symtab").iter_symbols():
+            shndx = sym["st_shndx"]
+            if isinstance(shndx, int) and sym.name:
+                labels[shndx].add(sym["st_value"])
+        for shndx, section in enumerate(elf.iter_sections()):
+            if section["sh_type"] != "SHT_PROGBITS" or not section["sh_flags"] & 4:
+                continue  # not code
+            data = section.data()
+            base, end = section["sh_addr"], section["sh_addr"] + len(data)
+            starts = set(start for start, _, _ in sized[shndx])
+            called = set()
+            for offset in range(0, len(data) - 3, 4):
+                word = int.from_bytes(data[offset:offset + 4], "big")
+                if word >> 26 == 3:  # jal
+                    target = ((base + offset + 4) & 0xF0000000) | ((word & 0x3FFFFFF) << 2)
+                    if base <= target < end and target not in starts:
+                        called.add(target)
+            for target in sorted(called):
+                if target not in labels[shndx]:
+                    continue  # N64Recomp sizes this one correctly
+                if any(start < target < stop for start, stop, _ in sized[shndx]):
+                    continue  # inside a function: a mid-function entry, handled above
+                after = [start for start in starts if start > target]
+                after += [other for other in called if other > target]
+                yield shndx, target, min(after + [end]) - target
+
+
 def main():
     elf_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
         ROOT, "lib", "bt-decomp", "build", "us", "banjotooie_decompressed.elf")
@@ -109,6 +151,9 @@ def main():
 
     by_name = {sections[i].name: i for i in range(len(sections))}
     manual = []
+    for shndx, vram, size in called_unsized(elf_path, sized):
+        section = sections[shndx].name
+        manual.append(("func_%08X_%s" % (vram, section.lstrip(".")), section, vram, size))
     for section, vram in read_extra_entries():
         container = [(st, e, n) for st, e, n in sized[by_name[section]] if st < vram < e]
         if not container:

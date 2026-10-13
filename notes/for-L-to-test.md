@@ -403,6 +403,7 @@
   3. If he still slides, do it again with Graphics > Frame rate = Original
 - Look for: Which of the three runs does Banjo slide in? Does he end up somewhere else after the talk, or only look like he slides while it lasts?
 - Status: waiting for L
+- Fix to test (2026-10-13 23:40 UTC, CI build after the "Banjo no longer slides" commit): the game's "stop moving" step for standing and talking was recompiled empty, so Banjo kept his walking speed through the talk at any frame rate. Headless at the Haunted Cavern sign he now stops where Jamjars starts talking. Retest step 1 (sign and Klungo).
 
 ## T41 Canary Mary races
 - Asked: 2026-10-13 22:14 UTC

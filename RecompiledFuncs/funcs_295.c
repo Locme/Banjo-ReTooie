@@ -2750,7 +2750,7 @@ RECOMP_FUNC void bsrest_entrypoint_17(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800810: jal         0x80800000
     // 0x80800814: lw          $a0, 0x20($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X20);
-    static_344_80800000(rdram, ctx);
+    func_80800000_bsrest(rdram, ctx);
         goto after_1;
     // 0x80800814: lw          $a0, 0x20($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X20);

@@ -20960,6 +20960,7 @@ static FuncEntry section_304_bsledge_funcs[] = {
     { .func = func_808001A8_bsledge, .offset = 0x000001A8, .rom_size = 0x00000090 },
     { .func = func_80800504_bsledge, .offset = 0x00000504, .rom_size = 0x0000003C },
     { .func = func_808004D8_bsledge, .offset = 0x000004D8, .rom_size = 0x0000002C },
+    { .func = func_80800324_bsledge, .offset = 0x00000324, .rom_size = 0x00000010 },
 };
 static RelocEntry section_304_bsledge_relocs[] = {
     { .offset = 0x00000008, .target_section_offset = 0x0000CC7C, .target_section = 16, .type = R_MIPS_26 }, 
@@ -22197,6 +22198,7 @@ static FuncEntry section_344_bsrest_funcs[] = {
     { .func = bsrest_entrypoint_19, .offset = 0x00000864, .rom_size = 0x00000080 },
     { .func = bsrest_entrypoint_5, .offset = 0x000004F4, .rom_size = 0x00000038 },
     { .func = bsrest_entrypoint_3, .offset = 0x000004C0, .rom_size = 0x00000020 },
+    { .func = func_80800000_bsrest, .offset = 0x00000000, .rom_size = 0x0000003C },
 };
 static RelocEntry section_344_bsrest_relocs[] = {
     { .offset = 0x0000000C, .target_section_offset = 0x0001A3F0, .target_section = 16, .type = R_MIPS_26 }, 

@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Banjo no longer slides when Jamjars (or anyone) starts talking to him: talking now stops him on the spot, as on N64. A function that stops Banjo was recompiled empty.
 - Graphics: Game Frame Rate (Original, 30 FPS, 60 FPS) holds the game's own update rate steady.
 - Frame rate overlay: the game's frame rate is averaged over 2 seconds, so a steady 30 no longer reads as 28 and 32.
 - General: Back-Port: Get Jiggy animation, Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy (off by default).

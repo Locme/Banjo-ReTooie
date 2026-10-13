@@ -16,6 +16,8 @@ recomp_include = """#include "recomp.h"
 
 # BEGIN GENERATED manual_funcs (tools/gen_recomp_config.py)
 manual_funcs = [
+    { name = "func_80800324_bsledge", section = ".bsledge", vram = 0x80800324, size = 0x10 },
+    { name = "func_80800000_bsrest", section = ".bsrest", vram = 0x80800000, size = 0x3C },
     { name = "func_80013B90", section = ".core1", vram = 0x80013B90, size = 0xB8 },
 ]
 # END GENERATED manual_funcs

@@ -1362,7 +1362,7 @@ RECOMP_FUNC void func_80800238_bsledge(uint8_t* rdram, recomp_context* ctx) {
     // 0x808002CC: jal         0x80800324
     // 0x808002D0: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
-    static_304_80800324(rdram, ctx);
+    func_80800324_bsledge(rdram, ctx);
         goto after_10;
     // 0x808002D0: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
