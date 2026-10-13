@@ -50,6 +50,8 @@ settings. There are five tabs: General, Graphics, Controls, Sound and Mods.
 - Graphics API needs a restart.
 - General has **Skip intro logos** (on by default) and **Back up saves**.
 
+Every menu option, with its default, is listed in [`notes/settings-guide.md`](notes/settings-guide.md).
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)
