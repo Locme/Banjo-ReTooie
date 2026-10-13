@@ -65,6 +65,12 @@ function(apply_submodule_patch name)
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
         RESULT_VARIABLE patch_present OUTPUT_QUIET ERROR_QUIET)
     if (NOT patch_present EQUAL 0)
+        # Not applied as it stands now: drop whatever an older version of the
+        # patch left in the checkout, then apply this one.
+        execute_process(
+            COMMAND git checkout -- .
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
+            OUTPUT_QUIET ERROR_QUIET)
         execute_process(
             COMMAND git apply --ignore-whitespace ${patch}
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}

@@ -7,7 +7,11 @@
 #include <thread>
 #include <variant>
 
+#ifdef _WIN32
+#include "SDL.h"
+#else
 #include "SDL2/SDL.h"
+#endif
 
 #include "recompui/config.h"
 #include "ultramodern/ultramodern.hpp"
