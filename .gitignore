@@ -38,3 +38,4 @@ screenshots/
 portable.txt
 build-trace/
 banjotooie.trace.toml
+/build-log.txt
