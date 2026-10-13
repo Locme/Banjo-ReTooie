@@ -33,9 +33,9 @@ You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
 `Release\BanjoTooieN64Recomp.exe`. The first time you
 start the game, choose **Start Game** in the launcher and pick the ROM file;
 it is remembered afterwards. To skip the launcher and go straight into the
-game, start the exe with `--game bt`. To keep settings and saves next to the
-exe instead of in your user profile, create an empty file named `portable.txt`
-beside it.
+game, start the exe with `--game bt`. Settings and saves are kept next to the
+exe (in `Release` after `build.bat`) when that folder is writable; otherwise they
+go to your user profile.
 
 ## Settings
 
