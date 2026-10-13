@@ -1,0 +1,24 @@
+# RSPRecomp config for Banjo-Tooie's audio microcode (n_aspMain).
+# Tooie's n_aspMain is a base image plus one overlay. Its DMEM data starts with
+# the overlay table (decompressed ROM 0x1E59B40, core1 0x80042010):
+#   base:    ucode offset 0x000, size 0xF80, loaded at IMEM 0x1080
+#   overlay: ucode offset 0xF80, size 0x848, loaded at IMEM 0x1238
+# followed by the 16-entry dispatch table at DMEM 0x10.
+text_offset = 0x1E4F3B0
+text_size = 0xF80
+text_address = 0x04001080
+rom_file_path = "decompressed.us.z64"
+output_file_path = "rsp/n_aspMain.cpp"
+output_function_name = "n_aspMain"
+extra_indirect_branch_targets = [
+    0x1AE8, 0x143C, 0x1240, 0x1D84, 0x126C, 0x1B20, 0x12A8, 0x1214,
+    0x141C, 0x1310, 0x13CC, 0x12E4, 0x1FB0, 0x1358, 0x16EC, 0x1408,
+]
+
+[[overlay_slots]]
+text_address = 0x04001238
+overlays = [
+    # The base image's own code at 0x1238, restored when the base is reloaded.
+    { offset = 0x1B8, size = 0x848 },
+    { offset = 0xF80, size = 0x848 },
+]

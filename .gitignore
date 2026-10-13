@@ -1,0 +1,29 @@
+# ROMs and anything extracted from them never go in git.
+*.z64
+*.n64
+*.v64
+baserom*
+decompressed*
+
+# Build output
+build/
+build-cmake/
+out/
+patches/*.o
+patches/*.d
+patches/*.elf
+patches/*.bin
+patches/*.map
+
+# Tool binaries copied to the root
+/N64Recomp
+/RSPRecomp
+/N64Recomp.exe
+/RSPRecomp.exe
+
+__pycache__/
+*.pyc
+*.log
+banjotooie.us.elf
+/BanjoTooieN64Recomp.exe
+/*.dll

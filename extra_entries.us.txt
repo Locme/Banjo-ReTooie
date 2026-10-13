@@ -1,0 +1,3 @@
+# Jump targets inside another function, each made into its own function.
+# Format: <ELF section> <vram>. Added by tools/recomp_loop.py.
+.core1 0x80013B90  # from func_80013B70

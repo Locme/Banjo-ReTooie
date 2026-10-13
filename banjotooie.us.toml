@@ -1,0 +1,128 @@
+# N64Recomp config for Banjo-Tooie (USA).
+# The input is the decomp's byte-matching ELF (see BUILDING.md), which carries
+# every function symbol and relocation. Paths are relative to this file.
+
+[input]
+entrypoint = 0x80000400
+elf_path = "banjotooie.us.elf"
+output_func_path = "RecompiledFuncs"
+# The 851 overlays all link at 0x80800000 and are relocated by the game at
+# load time, so their code must use runtime section addresses.
+relocatable_sections_path = "overlays.us.txt"
+bss_section_suffix = "_bss"
+# tooie_hooks.h declares the host functions the hooks below call.
+recomp_include = """#include "recomp.h"
+#include "tooie_hooks.h""""
+
+# BEGIN GENERATED manual_funcs (tools/gen_recomp_config.py)
+manual_funcs = [
+    { name = "func_80013B90", section = ".core1", vram = 0x80013B90, size = 0xB8 },
+]
+# END GENERATED manual_funcs
+
+
+[patches]
+# The boot segment carries its own copy of libultra. The boot code only uses
+# three of these functions (see "ignored"); the rest touch hardware that the
+# runtime replaces, so they are emptied.
+stubs = [
+    "boot___osDisableInt",
+    "boot___osRestoreInt",
+    "boot___osSetSR",
+    "boot___osGetSR",
+    "boot___osSetFpcCsr",
+    "boot___osSiRawReadIo",
+    "boot___osSiRawWriteIo",
+    "boot___osExceptionPreambleDuplicate",
+    "boot___osExceptionPreamble",
+    "boot___osException",
+    "boot_send_mesg",
+    "boot_handle_CpU",
+    "boot___osEnqueueAndYield",
+    "boot___osEnqueueThread",
+    "boot___osPopThread",
+    "boot___osDispatchThread",
+    "boot___osCleanupThread",
+    "boot_osWritebackDCache",
+    "boot_osInvalICache",
+    "boot_osUnmapTLBAll",
+    "boot_osMapTLBRdb",
+    "boot___osGetCause",
+    "boot_osCreatePiManager",
+    "boot_osVirtualToPhysical",
+    "boot___osDequeueThread",
+    "boot___osSiDeviceBusy",
+    "boot_osSetEventMesg",
+    "boot_osSetIntMask",
+    "boot_osDestroyThread",
+    "boot_osCreateMesgQueue",
+    "boot___osPiCreateAccessQueue",
+    "boot___osPiGetAccess",
+    "boot___osPiRelAccess",
+    "boot_osGetThreadPri",
+    "boot_osSetThreadPri",
+    "boot___osEPiRawStartDma",
+    "boot_osCreateThread",
+    "boot___osDevMgrMain",
+    "boot_osStartThread",
+    "boot___osProbeTLB",
+    "boot_osSendMesg",
+    "boot_osRecvMesg",
+    "boot___osResetGlobalIntMask",
+    "boot___osEPiRawWriteIo",
+    "boot___osEPiRawReadIo",
+    "boot___osSetGlobalIntMask",
+    "boot_osYieldThread",
+]
+ignored = [
+    # Boot libultra the boot code calls; implemented on the host in
+    # src/game/boot.cpp (ROM reads go straight to the runtime).
+    "boot_osInitialize",
+    "boot___osPiRawStartDma",
+    "boot_osPiGetStatus",
+    # Reads the cop0 Count register, which N64Recomp cannot express.
+    "func_8001DDC0",
+    # Templates copied into each loaded overlay header, never executed in place.
+    "ovl_entrypoint",
+    "ovl_entrypoint_alternate",
+]
+
+# --- Overlay relocation (func_80082088) -------------------------------------
+# It reads the PI status register and the per-overlay relocation key straight
+# from the cartridge (uncached ROM at 0xB0000040 + 4 * overlay index, inside
+# the IPL3 area). Neither address exists on the host.
+
+# lw $t2, 0($t1) (PI status) -> or $t2, $zero, $zero: the DMA is never busy.
+[[patches.instruction]]
+func = "func_80082088"
+vram = 0x80082138
+value = 0x00005025
+
+[[patches.instruction]]
+func = "func_80082088"
+vram = 0x80082144
+value = 0x00005025
+
+# lw $s5, 0x40($s5) -> or $s5, $s5, $zero; the hook reads the key instead.
+[[patches.hook]]
+func = "func_80082088"
+before_vram = 0x80082148
+text = "tooie_read_overlay_key(rdram, ctx);"
+
+[[patches.instruction]]
+func = "func_80082088"
+vram = 0x80082148
+value = 0x02A0A825
+
+# The overlay's code is now relocated at $s2, either freshly loaded or moved by
+# the heap defragmenter (ovl_shift). Map its recompiled functions there.
+[[patches.hook]]
+func = "func_80082088"
+before_vram = 0x800821D4
+text = "tooie_overlay_placed(rdram, ctx);"
+
+# The overlay at $a0 is about to be freed (unless it is pinned, flag 4).
+[[patches.hook]]
+func = "ovl_unload"
+before_vram = 0x800819E4
+text = "tooie_overlay_unloading(rdram, ctx);"
