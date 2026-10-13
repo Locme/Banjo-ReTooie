@@ -25,6 +25,7 @@
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_tiptoe.h"
+#include "tooie_talon_trot.h"
 #include "recompinput/profiles.h"
 
 namespace {
@@ -177,6 +178,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
+        tooie::talon_trot::apply(buttons_out);
     }
     return ok;
 }

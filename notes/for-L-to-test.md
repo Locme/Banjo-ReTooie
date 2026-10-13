@@ -305,3 +305,15 @@
 - Checked headless: Mumbo, Bee, Stony and Kazooie show and hold in Spiral Mountain. The others are untested. Clockwork Kazooie is not offered (it crashes).
 - Look for: Does the new form show and play right after the reload? Which forms crash or look wrong, and where? Does pausing and leaving the area keep the form?
 - Status: waiting for L
+
+## T31 Talon Trot toggle
+- Asked: 2026-10-13 20:13 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.54
+- Steps:
+  1. Settings (Esc) > QOL > Talon Trot = Toggle (the default)
+  2. Load a file where Talon Trot is learned (or turn on Cheats > Unlock all moves). Hold Z, press C-left to trot, then let go of Z
+  3. Trot around and jump with A, then press Z to stop. Start again and stop with C-left
+  4. Trot into water, then set the option to Hold and check the trot ends when you let go of Z
+- Look for: Does Banjo keep trotting after you let go of Z, and stop on Z or C-left? Does anything get stuck after the trot ends by itself (in water, when hit)? This was broken on the XBLA port on your PC, so please try it with your controller.
+- Status: waiting for L

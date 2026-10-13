@@ -29,6 +29,10 @@ framework, not from this port's code, so it is not described here.
 - **Level transitions**: how fast the screen wipe plays when you go to another
   area: Original, Fast (4x) or Instant (16x). Cutscene fades are not affected.
   Default: Original.
+- **Talon Trot**: Toggle or Hold. With Toggle, once Z + C-left starts the trot,
+  Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
+  toggle also ends by itself when the trot does (water, a hit, a cutscene).
+  Hold is the original: hold Z to keep trotting. Default: Toggle.
 
 ## Controls: Hotkeys
 

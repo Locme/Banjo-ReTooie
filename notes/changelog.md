@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Talon Trot can be a toggle (QOL, on by default): let go of Z and Banjo keeps trotting until you press Z or C-left.
 - Controller back buttons that SDL doesn't name can now be bound in Controls (they show as L4, R4, L5, R5).
 - Fixed the Jiggy level wipe ending early in wide pictures: it now opens the whole screen.
 - Fixed Banjo's limbs coming apart when the frame rate is above Original.

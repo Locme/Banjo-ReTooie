@@ -9,6 +9,7 @@
 #include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
+#include "tooie_talon_trot.h"
 #include "tooie_speedup.h"
 
 void tooie::init_config() {
@@ -121,6 +122,15 @@ void tooie::init_config() {
         "Extended draw distance",
         "Draws far scenery and characters about 5x further away than the original.",
         true);
+    qol.add_enum_option(
+        tooie::talon_trot::mode_option,
+        "Talon Trot",
+        "<recomp-color primary>Toggle</recomp-color>: once Z + C-left starts the trot, Banjo keeps trotting after you let go of Z. Press Z or C-left to stop. <recomp-color primary>Hold</recomp-color> is the original: hold Z to keep trotting.",
+        {
+            {tooie::talon_trot::Mode::Hold, "Hold", "Hold"},
+            {tooie::talon_trot::Mode::Toggle, "Toggle", "Toggle"},
+        },
+        tooie::talon_trot::Mode::Toggle);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();
