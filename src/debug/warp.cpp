@@ -87,6 +87,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     std::call_once(env_flag, read_env);
     std::call_once(started_flag, [] { started = std::chrono::steady_clock::now(); });
     tooie::quick_start_tick(rdram);
+    tooie::timer_save_tick(rdram, ctx);
     tooie::player_cheats::tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
 

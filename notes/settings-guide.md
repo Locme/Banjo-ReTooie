@@ -13,6 +13,9 @@ on a controller.
   while Discord is running. Default: on.
 - **Save backups to keep**: how many of the newest save backups to keep.
   Range 1 to 100. Default: 10.
+- **Timer save**: saves the game by itself after 5, 10, 30, 60 or 120 minutes of
+  play in a level. Pauses, menus and cutscenes don't count, and it never saves
+  during them. A "Game saved" notice shows. Default: Off.
 - **Speed-up factor**: how much faster the game runs while the speed-up key
   (F2) is active. Range 2 to 4. Default: 3.
 - **Speed-up toggle**: press F2 to switch the speed-up on and off, instead of

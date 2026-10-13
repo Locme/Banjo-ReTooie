@@ -35,6 +35,19 @@ void tooie::init_config() {
         "Save backups to keep",
         "How many of the newest save backups to keep.",
         1, 100, 1, 0, false, 10);
+    general.add_enum_option(
+        tooie::timer_save_option,
+        "Timer save",
+        "Saves the game by itself after this much play time in a level. Pauses, menus and cutscenes do not count, and a save never happens during them.",
+        {
+            {tooie::TimerSave::Off, "Off", "Off"},
+            {tooie::TimerSave::Minutes5, "5", "5 min"},
+            {tooie::TimerSave::Minutes10, "10", "10 min"},
+            {tooie::TimerSave::Minutes30, "30", "30 min"},
+            {tooie::TimerSave::Minutes60, "60", "60 min"},
+            {tooie::TimerSave::Minutes120, "120", "120 min"},
+        },
+        tooie::TimerSave::Off);
     general.add_number_option(
         tooie::speedup::factor_option,
         "Speed-up factor",

@@ -123,7 +123,8 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.13 Timer save
-- [ ] Done
+- [x] Done
+- Note: General > Timer save (Off/5/10/30/60/120 min, default Off). Counts the game's own play time (no pauses, menus or cutscenes) and calls _glsavegame_entrypoint_7(slot), the save half of the pause menu's Save and quit. Verified headless with TOOIE_TIMER_SAVE_SECONDS=10: new game, Spiral Mountain, the save file was rewritten every 10 s of play, and after a restart file 1 loaded straight into Spiral Mountain.
 - [ ] Approved by L
 
 ### 4.21 Speed-up key (F2)

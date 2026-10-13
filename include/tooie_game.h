@@ -53,6 +53,11 @@ namespace tooie {
     // Unpacks RT64 texture packs dropped into the mods folder as a .zip (src/game/mod_zips.cpp).
     void unpack_mod_zips();
 
+    // Timer save (src/game/timer_save.cpp): saves every N minutes of play. Called each frame from tooie_warp_tick.
+    enum class TimerSave : uint32_t { Off, Minutes5, Minutes10, Minutes30, Minutes60, Minutes120 };
+    inline const std::string timer_save_option = "timer_save";
+    void timer_save_tick(uint8_t* rdram, recomp_context* ctx);
+
     // Level transition speed (src/gameplay/fast_transitions.cpp).
     enum class TransitionSpeed : uint32_t { Original, Fast, Instant };
     inline const std::string transition_speed_option = "transition_speed";

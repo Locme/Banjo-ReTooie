@@ -197,3 +197,14 @@
   2. Walk, run, jump and swim with Banjo, and turn the camera; then walk past a few enemies and Jinjos
 - Look for: Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
 - Status: waiting for L
+
+## T20 Timer save
+- Asked: 2026-10-13 19:15 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.13
+- Steps:
+  1. Settings (Esc) > General > Timer save = 5
+  2. Play in a level for a bit over 5 minutes (pausing doesn't count)
+  3. Quit without saving, start again and load the file
+- Look for: Does "Game saved" show after about 5 minutes of play? Does the loaded file keep what you did before the notice? Does it ever save while paused or in a cutscene?
+- Status: waiting for L
