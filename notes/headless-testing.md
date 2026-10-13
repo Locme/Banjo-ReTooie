@@ -51,6 +51,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 - `TOOIE_FOV_LOG=1`: logs `[fov]` each time a camera's field of view or its gameplay/other kind changes (src/gameplay/field_of_view.cpp).
 - `TOOIE_DLDUMP=ms[,ms...]`: writes the 3D scene's display list of the first frame after each time to dl_<ms>.txt in the working directory (matrices, vertex loads, segments, called lists), followed by the frame's 2D (pause menu, HUD, text). `TOOIE_DLDUMP_ALL=1` also prints each matrix in full and every other command raw.
 - `TOOIE_CUT_LOG=1`: logs `[cut]` each frame with how far the camera moved and turned, and whether frame interpolation treats it as a camera cut (src/game/model_tagging.cpp).
+- `TOOIE_TAG_LOG=1`: logs `[ids]` each frame for every model with 20 or more tagged matrices: how many there are and how many ids carried over from the last frame (RT64 can only blend those).
 - `TOOIE_NO_MODEL_TAGS=1`: turns off the matrix ids for frame interpolation (src/game/model_tagging.cpp), for before/after comparisons. Interpolation only runs with Framerate set to Manual (headless, Display gives no in-between frames).
 
 ## Pad script syntax

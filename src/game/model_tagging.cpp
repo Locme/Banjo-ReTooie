@@ -486,7 +486,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         copy.instance = block.instance;
         now[block.model].push_back(copy);
     }
-    previous = std::move(now);
+    // The 2D has no models of its own; keep the scene's for next frame.
+    if (!overlay) {
+        previous = std::move(now);
+    }
 
     // Bone ids. A model loads a varying number of matrices from frame to
     // frame (Banjo 48 or 68, depending on what he is doing), so a bone is
@@ -709,6 +712,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     bool tagged = false;
     bool camera_tagged = false;
     std::unordered_map<uint32_t, uint32_t> repeats;
+    // Headless aid: TOOIE_TAG_LOG=1 logs how many of each big model's ids
+    // carry over from the last frame.
+    static const bool log_ids = std::getenv("TOOIE_TAG_LOG") != nullptr;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> ids_now;
     uint32_t p = start;
     for (size_t index = 0; index < commands.size(); index++, p += 8) {
         const Command& c = commands[index];
@@ -775,6 +782,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 uint32_t key = make_id(blocks[b].model, blocks[b].instance, bone);
                 // A list drawn twice in a model (both hands, say) gets a second id.
                 id = make_id(key, repeats[key]++, camera_generation);
+                if (log_ids) {
+                    ids_now[blocks[b].model].push_back(id);
+                }
             }
             else {
                 id = make_id(0, camera_generation, (uint32_t)index);
@@ -802,6 +812,24 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         if (!projection) {
             tagged = tag;
         }
+    }
+
+    if (log_ids && !overlay) {
+        // Per model: matrices this frame, and how many of their ids were also
+        // used last frame (RT64 can only blend those).
+        static std::unordered_map<uint32_t, std::vector<uint32_t>> ids_last;
+        for (auto& [model_key, ids] : ids_now) {
+            if (ids.size() < 20) {
+                continue;
+            }
+            auto& last = ids_last[model_key];
+            size_t kept = 0;
+            for (uint32_t id : ids) {
+                kept += std::find(last.begin(), last.end(), id) != last.end() ? 1 : 0;
+            }
+            std::fprintf(stderr, "[ids] model %08X matrices %zu kept %zu (last %zu)\n", model_key, ids.size(), kept, last.size());
+        }
+        ids_last = std::move(ids_now);
     }
 
     // Leave the rest of the frame with the defaults.
