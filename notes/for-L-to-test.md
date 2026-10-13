@@ -391,3 +391,13 @@
   3. Also press B while talking to someone outside a boss fight, e.g. Jamjars or Mumbo: nothing should be skipped
 - Look for: Does the intro fast-forward (a "Skipping cutscene" message, the scene racing through its dialogue) and stop right as the fight starts? Which bosses did you try, and did any intro not skip?
 - Status: waiting for L
+
+## T40 Banjo slides when Jamjars talks
+- Asked: 2026-10-13 22:11 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Walk up to a spot where Jamjars talks to you (a silo or sign) and let him talk, as before
+  2. Do it again with Settings (Esc) > QOL > Free camera = Off
+  3. If he still slides, do it again with Graphics > Frame rate = Original
+- Look for: Which of the three runs does Banjo slide in? Does he end up somewhere else after the talk, or only look like he slides while it lasts?
+- Status: waiting for L
