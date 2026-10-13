@@ -127,6 +127,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp
 )
