@@ -234,3 +234,44 @@ text = "tooie_hud_element_end(rdram, ctx);"
 func = "gczoombox_entrypoint_4"
 before_vram = 0x808020EC
 text = "tooie_dialogue_timer_advanced(rdram, ctx);"
+
+# --- Hide HUD, F1 (src/game/hide_hud.cpp) ------------------------------------
+# func_800A73F4 draws the frame. After the 3D scene, with the graphics context
+# in $s1, it calls func_800C0984 (pause menu backdrop and icons),
+# func_800C0130 (text box portraits), func_800FA508 (the HUD) and
+# func_800B7448 (text boxes and menu text). Marks before and after each let
+# the host drop what the last three drew while the HUD is hidden.
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A74C8
+text = "tooie_draw2d_mark(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A74D0
+text = "tooie_draw2d_mark(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A74DC
+text = "tooie_draw2d_mark(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A74E4
+text = "tooie_draw2d_mark(rdram, ctx, 3);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A74FC
+text = "tooie_draw2d_mark(rdram, ctx, 4);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A7504
+text = "tooie_draw2d_mark(rdram, ctx, 5);"
+
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A750C
+text = "tooie_draw2d_mark(rdram, ctx, 6);"

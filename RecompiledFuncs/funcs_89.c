@@ -310,6 +310,7 @@ L_800A74B0:
     ctx->r5 = ctx->r17 | 0;
     after_11:
 L_800A74C8:
+    tooie_draw2d_mark(rdram, ctx, 0);
     // 0x800A74C8: jal         0x800C0984
     // 0x800A74CC: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
@@ -318,6 +319,7 @@ L_800A74C8:
     // 0x800A74CC: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_12:
+    tooie_draw2d_mark(rdram, ctx, 1);
     // 0x800A74D0: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     // 0x800A74D4: jal         0x800C9358
@@ -328,6 +330,7 @@ L_800A74C8:
     // 0x800A74D8: or          $a1, $s0, $zero
     ctx->r5 = ctx->r16 | 0;
     after_13:
+    tooie_draw2d_mark(rdram, ctx, 2);
     // 0x800A74DC: jal         0x800C0130
     // 0x800A74E0: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
@@ -336,6 +339,7 @@ L_800A74C8:
     // 0x800A74E0: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_14:
+    tooie_draw2d_mark(rdram, ctx, 3);
     // 0x800A74E4: jal         0x800EA358
     // 0x800A74E8: nop
 
@@ -361,6 +365,7 @@ L_800A74C8:
     ctx->r5 = ctx->r17 | 0;
     after_16:
 L_800A74FC:
+    tooie_draw2d_mark(rdram, ctx, 4);
     // 0x800A74FC: jal         0x800FA508
     // 0x800A7500: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
@@ -369,6 +374,7 @@ L_800A74FC:
     // 0x800A7500: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_17:
+    tooie_draw2d_mark(rdram, ctx, 5);
     // 0x800A7504: jal         0x800B7448
     // 0x800A7508: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
@@ -377,6 +383,7 @@ L_800A74FC:
     // 0x800A7508: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_18:
+    tooie_draw2d_mark(rdram, ctx, 6);
     // 0x800A750C: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     // 0x800A7510: jal         0x800C940C

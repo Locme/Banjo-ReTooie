@@ -1,0 +1,86 @@
+// Hide HUD (handoff 4.84).
+//
+// F1 hides the game's screen-space 2D (the HUD, and text boxes with their
+// portraits, also the pause menu's text) and shows it again. func_800A73F4 draws each
+// frame; banjotooie.us.toml marks the display list pointer before and after
+// the calls that draw that 2D. While hidden, the pointer is put back to
+// where it was before each of those calls, so what they wrote is never run.
+// The game itself carries on as normal: only the drawing is skipped.
+//
+// Headless test hook: TOOIE_HIDE_HUD=1 starts with the HUD hidden.
+
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <mutex>
+#include <thread>
+
+#ifdef _WIN32
+#include "SDL.h"
+#else
+#include "SDL2/SDL.h"
+#endif
+
+#include "recomp.h"
+#include "tooie_hide_hud.h"
+#include "tooie_hooks.h"
+#include "tooie_toast.h"
+
+namespace {
+    using namespace std::chrono_literals;
+
+    constexpr auto poll_interval = 10ms;
+    std::once_flag started;
+    std::atomic<bool> hidden{false};
+
+    // Display list pointer at each mark. Marks 2-3, 4-5 and 5-6 span the
+    // portrait, HUD and text box calls. Marks 0-1 span func_800C0984, which is
+    // left alone: while paused it also draws the frozen picture of the game
+    // behind the menu, so dropping it blacks out the screen.
+    uint32_t marks[7];
+
+    bool key_down() {
+        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        return keys != nullptr && keys[SDL_SCANCODE_F1] != 0;
+    }
+
+    void worker() {
+        bool was_down = false;
+        for (;;) {
+            std::this_thread::sleep_for(poll_interval);
+            bool down = key_down();
+            if (down && !was_down) {
+                tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
+            }
+            was_down = down;
+        }
+    }
+}
+
+// Called from func_800A73F4 with the graphics context in $s1; its first word
+// is the display list pointer.
+extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index) {
+    gpr gfx_ctx = ctx->r17;
+    if ((index == 3 || index == 5 || index == 6) && hidden.load(std::memory_order_relaxed)) {
+        MEM_W(0, gfx_ctx) = (int32_t)marks[index - 1];
+    }
+    marks[index] = (uint32_t)MEM_W(0, gfx_ctx);
+}
+
+void tooie::hide_hud::set_hidden(bool hide) {
+    hidden = hide;
+    tooie::toast::show(hide ? "HUD hidden" : "HUD shown");
+}
+
+bool tooie::hide_hud::is_hidden() {
+    return hidden;
+}
+
+void tooie::hide_hud::start() {
+    std::call_once(started, [] {
+        if (const char* v = std::getenv("TOOIE_HIDE_HUD"); v != nullptr && v[0] == '1') {
+            hidden = true;
+        }
+        std::thread(worker).detach();
+    });
+}

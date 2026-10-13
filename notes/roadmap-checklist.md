@@ -102,8 +102,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - 2026-10-13: F12 saves the game picture (no menus or notices in it) as screenshots/<date>_<time>.png in the app-data folder and shows "Screenshot saved". The picture has its on-screen shape (wide in Fill). Code: src/game/screenshot.cpp, RT64 read-back in lib-patches/rt64.patch and plume.patch. Verified headless (Vulkan). D3D12 is untested (T13). Photo mode (A to shoot, crop to its frame) waits for photo mode.
 
 ### 4.84 Hide HUD (F1)
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-13: F1 hides and shows the HUD, text boxes with their portraits, and the pause menu's text, live, with a "HUD hidden" / "HUD shown" notice (src/game/hide_hud.cpp; hooks in func_800A73F4). Not hidden: the pause menu's backdrop and icons, because the same call draws the frozen game picture behind the menu. Verified headless in Heggy's Egg Shed (her talk scene, walking, paused).
 
 ### 4.91 Crash handler and minidumps
 - [x] Done

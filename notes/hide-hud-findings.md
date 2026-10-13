@@ -1,3 +1,10 @@
+# 4.84 Hide HUD: done
+
+Implemented in `src/game/hide_hud.cpp` (2026-10-13). The 2D draw calls were found from a host
+backtrace of the HUD hook: func_800A73F4 draws each frame and calls func_800C0984, func_800C0130,
+func_800FA508 and func_800B7448 after the 3D scene; see the Hide HUD section of banjotooie.us.toml.
+`TOOIE_HIDE_HUD=1` starts a headless run with the HUD hidden.
+
 # 4.84 Hide HUD: findings so far
 
 Starting notes for whoever picks this up (the main thread). Nothing is hooked yet.

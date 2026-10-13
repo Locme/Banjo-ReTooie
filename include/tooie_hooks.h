@@ -19,6 +19,8 @@ void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_dialogue_timer_advanced(uint8_t* rdram, recomp_context* ctx);
+// Hide HUD (src/game/hide_hud.cpp): marks between the 2D draw calls of func_800A73F4.
+void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index);
 
 #ifdef __cplusplus
 }

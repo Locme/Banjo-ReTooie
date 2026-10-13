@@ -41,6 +41,8 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.
 
+- `TOOIE_HIDE_HUD=1`: starts with the HUD hidden (as after F1).
+
 ## Pad script syntax
 
 Steps are separated by `;`. Each step is `time_ms:action[:hold_ms]`, with

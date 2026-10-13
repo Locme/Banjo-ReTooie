@@ -149,3 +149,12 @@
   3. Compare the two. Also try it as Kazooie flutter, and in water and as a transformation
 - Look for: Does Levitate lift you smoothly while D-pad down is held, and stop when released? Does each extra A press in the air jump again, and does holding A keep you rising? Does it stay off when the master switch is off? Do you want to keep both or drop Levitate?
 - Status: waiting for L
+
+## T15 Hide HUD (F1)
+- Asked: 2026-10-13 18:25 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.84
+- Steps:
+  1. In game, press F1, walk around, talk to someone, pause; then press F1 again
+- Look for: Do the HUD and text boxes vanish while hidden, and come back after the second F1? Does "HUD hidden" / "HUD shown" show? Anything else that vanishes or stays that should not?
+- Status: waiting for L

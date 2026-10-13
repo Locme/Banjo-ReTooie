@@ -1,6 +1,7 @@
 #include "tooie_game.h"
 #include "tooie_cheats.h"
 #include "tooie_discord.h"
+#include "tooie_hide_hud.h"
 #include "tooie_level_warp.h"
 #include "tooie_screenshot.h"
 #include "tooie_speedup.h"
@@ -22,4 +23,5 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* ctx) {
     tooie::speedup::start();
     tooie::screenshot::start();
     tooie::level_warp::start();
+    tooie::hide_hud::start();
 }
