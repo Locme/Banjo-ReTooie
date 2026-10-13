@@ -11,6 +11,7 @@
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
 #include "tooie_canary_mary.h"
+#include "tooie_frame_overlay.h"
 #include "tooie_picture_filters.h"
 #include "tooie_speedup.h"
 
@@ -161,6 +162,7 @@ void tooie::init_config() {
         "Always High-Detail Models",
         "Models that switch to a simpler version far away always use the detailed one.",
         true);
+    tooie::frame_overlay::add_option(graphics);
 
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();

@@ -29,6 +29,7 @@
 //
 // Headless A/B hook: TOOIE_NO_MODEL_TAGS=1 turns the tagging off.
 
+#include <atomic>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -92,6 +93,13 @@ namespace {
 
     uint32_t slot = 0;
     uint32_t frame_start = 0;
+
+    // For the frame rate overlay: what the last scene tagged.
+    std::atomic<uint32_t> stat_models{0};
+    std::atomic<uint32_t> stat_bones{0};
+    std::atomic<uint32_t> stat_shadows{0};
+    std::atomic<uint32_t> stat_cuts{0};
+    std::atomic<uint64_t> stat_scenes{0};
 
     struct Copy {
         float pos[3];
@@ -347,6 +355,11 @@ uint32_t tooie::model_tagging::scene_start() {
 // left to the scene.
 static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) {
     if (!interpolation_on() || end <= start) {
+        if (!overlay) {
+            stat_models = 0;
+            stat_bones = 0;
+            stat_shadows = 0;
+        }
         return 0;
     }
 
@@ -444,6 +457,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     }
     if (cut) {
         camera_generation++;
+        stat_cuts++;
     }
 
     // Pass 2: match each copy of a model to last frame's nearest copy.
@@ -708,6 +722,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     }
 
     // Pass 3: wrap the matrix loads.
+    uint32_t bones_tagged = 0;
+    uint32_t shadows_tagged = 0;
     bool enabled = false;
     bool tagged = false;
     bool camera_tagged = false;
@@ -755,6 +771,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             cursor += 8;
             put(rdram, p, op_dl << 24, list);
             tagged = true;
+            shadows_tagged++;
             continue;
         }
         if (!tag && !tagged && !tag_camera && restore[index] == 0) {
@@ -785,6 +802,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 if (log_ids) {
                     ids_now[blocks[b].model].push_back(id);
                 }
+                bones_tagged++;
             }
             else {
                 id = make_id(0, camera_generation, (uint32_t)index);
@@ -831,6 +849,15 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
         ids_last = std::move(ids_now);
     }
+    if (!overlay) {
+        uint32_t models = 0;
+        for (const auto& [model, copies] : previous) {
+            models += (uint32_t)copies.size();
+        }
+        stat_models = models;
+        stat_bones = bones_tagged;
+        stat_shadows = shadows_tagged;
+    }
 
     // Leave the rest of the frame with the defaults.
     if (tagged) {
@@ -842,9 +869,21 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
 }
 
 uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_t end) {
+    stat_scenes.fetch_add(1, std::memory_order_relaxed);
     return tag(rdram, start, end, false);
 }
 
 uint32_t tooie::model_tagging::tag_2d(uint8_t* rdram, uint32_t start, uint32_t end) {
     return tag(rdram, start, end, true);
+}
+
+tooie::model_tagging::Stats tooie::model_tagging::last_stats() {
+    Stats stats;
+    stats.interpolating = interpolation_on();
+    stats.models = stat_models;
+    stats.bones = stat_bones;
+    stats.shadows = stat_shadows;
+    stats.camera_cuts = stat_cuts;
+    stats.scenes = stat_scenes.load(std::memory_order_relaxed);
+    return stats;
 }

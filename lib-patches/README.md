@@ -65,6 +65,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
   N64 3-point texture filter can be switched to bilinear live (handoff 4.25,
   4.40, 4.41, `src/display/picture_filters.cpp`). Screenshots are taken before
   this pass, so they don't show these filters.
+* **Frame statistics** (`src/hle/rt64_present_queue.cpp`, `.h`,
+  `src/hle/rt64_workload_queue.cpp`): adds `RT64::TakeFrameStats()`, which
+  returns the presented frames, their total and worst interval (from
+  `presentProfiler`) and the GPU time per game frame (from the renderer's
+  timestamps) since the last call. Used by the frame rate overlay
+  (`src/game/frame_overlay.cpp`).
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`.

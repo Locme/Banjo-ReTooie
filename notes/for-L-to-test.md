@@ -413,3 +413,13 @@
   3. Try Easy, then Original, in a race you can restart
 - Look for: With Fair, does she stop catching up when you lead, while still racing at her normal pace? Is Easy clearly easier? Does Original feel like the N64 race you know? I could not reach a race headless, so this is untested in play.
 - Status: waiting for L
+
+## T42 Frame rate overlay
+- Asked: 2026-10-13 22:13 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > Graphics: turn on Frame rate overlay and close the menu
+  2. Play for a minute with Framerate on Display, then on Original, then on Manual at a few values
+  3. Turn the overlay off and on a few times while you play
+- Look for: Does the box sit in the top left corner and do its numbers change as you play? Does the frame rate it shows match your monitor (or the Manual value) and drop to about 30 or 20 with Original? Does "Game" stay at about 20 or 30 fps whatever Framerate says? Does turning the overlay on change how smooth the game feels? I could only check it with software rendering here, where it showed no difference beyond normal noise.
+- Status: waiting for L

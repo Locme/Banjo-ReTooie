@@ -95,6 +95,21 @@ F12 screenshots are taken before these filters, so they don't show them.
 - **Always High-Detail Models**: models that switch to a simpler version far
   away always use the detailed one. Applies at once. Default: on.
 
+## Graphics: Frame rate overlay
+
+- **Frame rate overlay**: shows a small box in the top left corner, updated
+  four times a second, with:
+  - the frame rate and frame time on screen (averaged over the last quarter
+    second)
+  - the worst frame time in that quarter second
+  - the GPU time per game frame
+  - the game's own frame rate (the frames it really makes; with Framerate
+    above Original the rest are in-between frames)
+  - the Framerate setting
+  - frame interpolation: off, or on with how many models, bones and shadows
+    it tracked in the last frame, and how many camera cuts it has seen.
+  Default: off.
+
 ## Cheats
 
 Cheats are in their own tab. Turn on **Enable cheats** first. Every cheat below

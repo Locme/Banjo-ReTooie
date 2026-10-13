@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-10-13
 
 - Canary Mary races: Fair (default), Easy or Original in QOL (works once the game code is regenerated with its hooks).
+- Graphics: Frame rate overlay shows frame rate, frame time, the worst frame, GPU time and frame interpolation figures in the top left corner.
 - Graphics: Brightness with a test pattern, Colourblind filters, and Retro N64 16-bit colour, CRT and a 3-point filtering switch.
 - Controller support now comes from SDL 3 (through sdl2-compat): back buttons work on more pads, including 8BitDo Pro 2, Pro 3, Ultimate 2 Wireless and Ultimate 3.
 - Talon Trot can be a toggle (QOL, on by default): let go of Z and Banjo keeps trotting until you press Z or C-left.
