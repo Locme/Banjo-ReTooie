@@ -27,6 +27,11 @@ void tooie::init_config() {
         "Save backups to keep",
         "How many of the newest save backups to keep.",
         1, 100, 1, 0, false, 10);
+    general.add_bool_option(
+        tooie::quick_start_option,
+        "Skip intro logos",
+        "Press Start during the logos and title flight to go straight to the file select.",
+        true);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

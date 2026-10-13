@@ -125,6 +125,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/quick_start.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp

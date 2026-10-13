@@ -34,6 +34,11 @@ namespace tooie {
     inline const std::string save_backups_keep_option = "save_backups_keep";
     void start_save_backups();
 
+    // Quick start (quick_start.cpp): Start during the boot logos goes to the file select.
+    inline const std::string quick_start_option = "quick_start";
+    void quick_start_note_input(uint16_t buttons);
+    void quick_start_tick(uint8_t* rdram);
+
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
     void install_crash_handler(const std::filesystem::path& app_folder);

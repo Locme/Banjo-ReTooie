@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "tooie_debug.h"
+#include "tooie_game.h"
 #include "recompinput/profiles.h"
 
 namespace {
@@ -105,7 +106,11 @@ bool tooie::debug::parse_pad_script(const char* script) {
 
 bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = recompinput::profiles::get_n64_input(player_index, buttons_out, x_out, y_out);
-    if (steps.empty() || player_index != 0) {
+    if (player_index != 0) {
+        return ok;
+    }
+    if (steps.empty()) {
+        tooie::quick_start_note_input(*buttons_out);
         return ok;
     }
     std::call_once(started_flag, []() { started = std::chrono::steady_clock::now(); });
@@ -128,5 +133,6 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
             *y_out = *step.y;
         }
     }
+    tooie::quick_start_note_input(*buttons_out);
     return true;
 }

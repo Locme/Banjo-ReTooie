@@ -14,8 +14,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.5 Quick start (Start skips the intro)
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- Note (2026-10-13): Start during the logos or title flight (map 0x18B) goes to the file select with the title's own wipe; on the finished title the game's own Start runs. General tab "Skip intro logos", on by default. Start in attract demos is left to the game.
 
 ### 4.7 Native in-game settings page ("GRAPHICAL SETTINGS", was "PC SETTINGS")
 - [x] Done
