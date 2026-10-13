@@ -164,6 +164,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
     ${CMAKE_SOURCE_DIR}/src/game/quick_start.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/mod_zips.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/dialogue_speed.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp

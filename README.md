@@ -54,6 +54,21 @@ Every menu option, with its default, is listed in [`notes/settings-guide.md`](no
 
 Every keyboard and controller shortcut is listed in [`notes/keys.md`](notes/keys.md).
 
+## Mods and texture packs
+
+Put mods in the `mods` folder next to the exe, then start the game. The Mods tab
+in settings turns each one on or off.
+
+- `.nrm` mods and `.rtz` texture packs load as they are.
+- An RT64 texture pack shipped as a `.zip` (one with an `rt64.json` inside, such
+  as BT Reloaded by GhostlyDark) is unpacked into a folder next to the zip the
+  first time the game starts. A big pack takes a while that once. The zip can
+  be deleted afterwards. If the zip changes, it is unpacked again.
+- Packs made only for GLideN64 (`.hts` / `.htc` cache files, or PNGs without an
+  `rt64.json`) can't be read.
+
+No texture pack is included with this port.
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)

@@ -677,6 +677,7 @@ int main(int argc, char** argv) {
     recompinput::players::set_single_player_mode(true);
 
     tooie::init_config();
+    tooie::unpack_mod_zips();
 
     tooie::start_save_backups();
 

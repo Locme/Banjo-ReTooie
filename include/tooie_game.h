@@ -50,6 +50,9 @@ namespace tooie {
     // --dialogue_text_speed 1|2|4|instant; overrides the setting. False if the value is unknown.
     bool parse_text_speed_arg(const char* value);
 
+    // Unpacks RT64 texture packs dropped into the mods folder as a .zip (src/game/mod_zips.cpp).
+    void unpack_mod_zips();
+
     // Level transition speed (src/gameplay/fast_transitions.cpp).
     enum class TransitionSpeed : uint32_t { Original, Fast, Instant };
     inline const std::string transition_speed_option = "transition_speed";
