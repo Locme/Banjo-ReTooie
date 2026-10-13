@@ -68,7 +68,12 @@ function(apply_submodule_patch name)
         # Not applied as it stands now: drop whatever an older version of the
         # patch left in the checkout, then apply this one.
         execute_process(
-            COMMAND git checkout -- .
+            COMMAND git reset --hard -q
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
+            OUTPUT_QUIET ERROR_QUIET)
+        # Files an older patch added are untracked, so the reset leaves them behind.
+        execute_process(
+            COMMAND git clean -fd
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
             OUTPUT_QUIET ERROR_QUIET)
         execute_process(
@@ -93,7 +98,12 @@ function(apply_nested_patch name dir)
         RESULT_VARIABLE patch_present OUTPUT_QUIET ERROR_QUIET)
     if (NOT patch_present EQUAL 0)
         execute_process(
-            COMMAND git checkout -- .
+            COMMAND git reset --hard -q
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
+            OUTPUT_QUIET ERROR_QUIET)
+        # Files an older patch added are untracked, so the reset leaves them behind.
+        execute_process(
+            COMMAND git clean -fd
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
             OUTPUT_QUIET ERROR_QUIET)
         execute_process(
