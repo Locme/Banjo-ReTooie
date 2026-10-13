@@ -50,6 +50,34 @@ namespace {
             ", high-precision framebuffer " + enum_name(config.hpfb_option);
     }
 
+    // Kept to plain option values: passing nlohmann::json across from librecomp fails to link on Windows.
+    std::string tab_line(const recomp::config::Config& config) {
+        std::string out;
+        for (const auto& option : config.get_config_schema().options) {
+            const recomp::config::ConfigValueVariant value = config.get_option_value(option.id);
+            std::string text;
+            if (const uint32_t* v = std::get_if<uint32_t>(&value)) {
+                text = std::to_string(*v);
+                if (const auto* e = std::get_if<recomp::config::ConfigOptionEnum>(&option.variant)) {
+                    auto it = e->find_option_from_value(*v);
+                    if (it != e->options.end()) {
+                        text = it->key;
+                    }
+                }
+            } else if (const double* v = std::get_if<double>(&value)) {
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%g", *v);
+                text = buf;
+            } else if (const bool* v = std::get_if<bool>(&value)) {
+                text = *v ? "on" : "off";
+            } else if (const std::string* v = std::get_if<std::string>(&value)) {
+                text = "\"" + *v + "\"";
+            }
+            out += (out.empty() ? "" : ", ") + option.id + "=" + text;
+        }
+        return out;
+    }
+
     std::string describe(bool with_fps) {
         std::string out = "build: " + build_line + "\n";
         try {
@@ -60,7 +88,7 @@ namespace {
         // The other tabs as stored, option id = value.
         for (const char* id : { "general", "qol", "cheats", "sound" }) {
             try {
-                out += std::string(id) + ": " + recompui::config::get_config(id).get_json_config().dump() + "\n";
+                out += std::string(id) + ": " + tab_line(recompui::config::get_config(id)) + "\n";
             } catch (const std::exception&) {
                 // Tab not created in this build.
             }
