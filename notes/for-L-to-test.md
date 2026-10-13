@@ -127,4 +127,14 @@
   1. Settings > General: turn on Debug tab. Load a file, press Esc, open the Debug tab and pick a few places in different levels
   2. Press F9 after leaving the area you warped to
 - Look for: Does each warp land you standing in the right place, with the usual wipe? Does F9 take you back to the last pick? Any place that crashes or drops you in a wall?
+
+## T15 Text speed
+- Asked: 2026-10-13 18:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.52
+- Steps:
+  1. Settings (Esc) > General > Text speed = 2x, then talk to someone (or start a new game and watch Klungo's intro)
+  2. Repeat with 4x and Instant, then Normal
+  3. Open the pause menu and the file select with each setting
+- Look for: Does text print faster at 2x and 4x, and appear a page at a time on Instant? Do the pauses after commas and full stops shrink too? Are menus unchanged? Does the change apply without restarting?
 - Status: waiting for L

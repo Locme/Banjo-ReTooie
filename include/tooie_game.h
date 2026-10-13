@@ -43,6 +43,12 @@ namespace tooie {
     void quick_start_note_input(uint16_t buttons);
     void quick_start_tick(uint8_t* rdram);
 
+    // Dialogue text speed (src/gameplay/dialogue_speed.cpp).
+    enum class TextSpeed : uint32_t { Normal, Double, Quadruple, Instant };
+    inline const std::string text_speed_option = "dialogue_text_speed";
+    // --dialogue_text_speed 1|2|4|instant; overrides the setting. False if the value is unknown.
+    bool parse_text_speed_arg(const char* value);
+
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
     void install_crash_handler(const std::filesystem::path& app_folder);

@@ -3432,6 +3432,7 @@ L_808020E4:
     ctx->f4.fl = ctx->f18.fl + ctx->f0.fl;
     // 0x808020E8: swc1        $f4, 0x1D4($s0)
     MEM_W(0X1D4, ctx->r16) = ctx->f4.u32l;
+    tooie_dialogue_timer_advanced(rdram, ctx);
     // 0x808020EC: lwc1        $f6, 0x1D4($s0)
     ctx->f6.u32l = MEM_W(ctx->r16, 0X1D4);
     // 0x808020F0: c.lt.s      $f2, $f6

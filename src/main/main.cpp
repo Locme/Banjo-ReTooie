@@ -552,6 +552,12 @@ int main(int argc, char** argv) {
                 return EXIT_FAILURE;
             }
         }
+        else if (strcmp(argv[i], "--dialogue_text_speed") == 0) {
+            if (!tooie::parse_text_speed_arg(argv[i + 1])) {
+                fprintf(stderr, "--dialogue_text_speed takes 1, 2, 4 or instant\n");
+                return EXIT_FAILURE;
+            }
+        }
     }
     recomp::Version project_version{};
     if (!recomp::Version::from_string(version_string, project_version)) {

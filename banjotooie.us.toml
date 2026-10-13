@@ -226,3 +226,11 @@ text = "tooie_hud_element_begin(rdram, ctx);"
 func = "scinfobar_entrypoint_24"
 before_vram = 0x80800898
 text = "tooie_hud_element_end(rdram, ctx);"
+
+# --- Dialogue text speed (src/gameplay/dialogue_speed.cpp) ------------------
+# gczoombox_entrypoint_4, printing state: the print timer at +0x1D4($s0) has
+# just been advanced by the frame time in $f0.
+[[patches.hook]]
+func = "gczoombox_entrypoint_4"
+before_vram = 0x808020EC
+text = "tooie_dialogue_timer_advanced(rdram, ctx);"

@@ -51,7 +51,8 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.52 Text speed
-- [ ] Done
+- [x] Done
+- Note: General tab "Text speed" (1x/2x/4x/Instant) and `--dialogue_text_speed 1|2|4|instant`. Hooks the zoombox print timer; verified headless in the new-game intro (Klungo's lines print whole on Instant).
 - [ ] Approved by L
 
 ### 4.55 Twin-stick (free) camera

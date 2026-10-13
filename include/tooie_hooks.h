@@ -18,6 +18,7 @@ void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_end(uint8_t* rdram, recomp_context* ctx);
+void tooie_dialogue_timer_advanced(uint8_t* rdram, recomp_context* ctx);
 
 #ifdef __cplusplus
 }

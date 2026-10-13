@@ -50,6 +50,17 @@ void tooie::init_config() {
         "Skip intro logos",
         "Press Start during the logos and title flight to go straight to the file select.",
         true);
+    general.add_enum_option(
+        tooie::text_speed_option,
+        "Text speed",
+        "How fast dialogue text prints. <recomp-color primary>Instant</recomp-color> shows each page at once. Menus are not affected.",
+        {
+            {tooie::TextSpeed::Normal, "Normal", "1x"},
+            {tooie::TextSpeed::Double, "Double", "2x"},
+            {tooie::TextSpeed::Quadruple, "Quadruple", "4x"},
+            {tooie::TextSpeed::Instant, "Instant", "Instant"},
+        },
+        tooie::TextSpeed::Normal);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();
