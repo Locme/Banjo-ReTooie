@@ -5969,6 +5969,7 @@ L_8010FCAC:
     // 0x8010FCB4: lw          $a0, 0x0($s0)
     ctx->r4 = MEM_W(ctx->r16, 0X0);
 L_8010FCB8:
+    tooie_free_camera(rdram, ctx);
     // 0x8010FCB8: addiu       $a1, $sp, 0x3C
     ctx->r5 = ADD32(ctx->r29, 0X3C);
     // 0x8010FCBC: jal         0x800CA8B4

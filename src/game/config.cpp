@@ -6,6 +6,7 @@
 #include "librecomp/game.hpp"
 #include "tooie_cheats.h"
 #include "tooie_discord.h"
+#include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
 #include "tooie_speedup.h"
 
@@ -79,6 +80,31 @@ void tooie::init_config() {
             {tooie::TransitionSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TransitionSpeed::Original);
+    qol.add_bool_option(
+        tooie::free_camera_option,
+        "Free camera",
+        "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
+        false);
+    qol.add_enum_option(
+        tooie::free_camera_speed_option,
+        "Free camera speed",
+        "How fast the right stick turns the free camera.",
+        {
+            {tooie::FreeCameraSpeed::Slow, "Slow", "Slow"},
+            {tooie::FreeCameraSpeed::Normal, "Normal", "Normal"},
+            {tooie::FreeCameraSpeed::Fast, "Fast", "Fast"},
+        },
+        tooie::FreeCameraSpeed::Normal);
+    qol.add_bool_option(
+        tooie::free_camera_invert_x_option,
+        "Free camera: invert left/right",
+        "Reverses which way the right stick turns the free camera.",
+        false);
+    qol.add_bool_option(
+        tooie::free_camera_invert_y_option,
+        "Free camera: invert up/down",
+        "Reverses which way the right stick tilts the free camera.",
+        false);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

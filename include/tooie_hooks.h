@@ -26,6 +26,8 @@ void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index);
 void tooie_scene_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_frame(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_anim_length(uint8_t* rdram, recomp_context* ctx);
+// Free camera (src/gameplay/free_camera.cpp): after a camera controller's mode has placed the camera.
+void tooie_free_camera(uint8_t* rdram, recomp_context* ctx);
 
 #ifdef __cplusplus
 }

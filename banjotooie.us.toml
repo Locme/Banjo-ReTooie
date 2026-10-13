@@ -311,3 +311,12 @@ text = "tooie_flag_get_enter(rdram, ctx);"
 func = "func_800DA298"
 before_vram = 0x800DA3B0
 text = "tooie_flag_get_leave(rdram, ctx);"
+
+# --- Free camera (src/gameplay/free_camera.cpp) -----------------------------
+# func_8010FC38 steps a viewport's camera controller ($s0). Here its mode has
+# just placed the camera and $a0 holds the viewport camera; the host turns the
+# camera about Banjo before the shake is added and the matrices are built.
+[[patches.hook]]
+func = "func_8010FC38"
+before_vram = 0x8010FCB8
+text = "tooie_free_camera(rdram, ctx);"

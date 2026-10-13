@@ -42,6 +42,10 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.
 
 - `TOOIE_HIDE_HUD=1`: starts with the HUD hidden (as after F1).
+
+- `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;
+  `TOOIE_FREECAM_LOG=1` logs the camera, Banjo and stick 4 times a second
+  (`[freecam]`). Drive the right stick with `rx=`/`ry=` in the pad script.
 - `TOOIE_DLDUMP=ms[,ms...]`: writes the 3D scene's display list of the first frame after each time to dl_<ms>.txt in the working directory (matrices, vertex loads, segments, called lists).
 - `TOOIE_NO_MODEL_TAGS=1`: turns off the matrix ids for frame interpolation (src/game/model_tagging.cpp), for before/after comparisons. Interpolation only runs with Framerate set to Manual (headless, Display gives no in-between frames).
 
@@ -53,6 +57,8 @@ times counted from the game's first controller read.
 - Buttons, joined with `,`: `a b z start l r du dd dl dr cu cd cl cr`.
   Held for `hold_ms` (default 150).
 - Stick: `x=<-1..1>` and `y=<-1..1>`, mixed freely with buttons.
+- Right stick: `rx=<-1..1>` and `ry=<-1..1>` (up is positive), read by the
+  free camera.
 - `quit` ends the program.
 - Scripted input is added to player 1's real input.
 

@@ -57,8 +57,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.55 Twin-stick (free) camera
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-13: QOL > Free camera (off by default), with Free camera speed (Slow/Normal/Fast) and invert left/right and up/down. The right stick turns the camera smoothly around Banjo and tilts it; pushing on past the lowest tilt slides the camera in to a quarter of the distance, past the highest it pulls out to 1.6x. Once used, the yaw is held in world space until a cutscene, a fixed camera or another area; first person is left to the game and the held yaw comes back after it. Walking follows the turned camera. Walls and floors pull the camera in with the game's own camera line test. While it is on, the right stick no longer acts as C buttons in normal play (R3 still gives C-up / first person). Code: src/gameplay/free_camera.cpp, hook in func_8010FC38. Verified headless in Spiral Mountain (turning, tilting, close-in, pull-out, first person, walking in the camera's direction). Not checked: flying, transformations, multiplayer split screen, feel on a real pad (T23).
 
 ### 4.66 Held sounds / "full-length sounds" (removed) and the Beak Barge investigation
 - [ ] Done

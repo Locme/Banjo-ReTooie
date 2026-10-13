@@ -209,3 +209,16 @@
   3. Quit without saving, start again and load the file
 - Look for: Does "Game saved" show after about 5 minutes of play? Does the loaded file keep what you did before the notice? Does it ever save while paused or in a cutscene?
 - Status: waiting for L
+
+## T23 Free camera (right stick)
+- Asked: 2026-10-13 19:25 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.55
+- Steps:
+  1. Settings (Esc) > QOL > Free camera = On
+  2. In a level, turn the camera with the right stick, then walk with the left stick
+  3. Hold the right stick down at the lowest tilt, then up at the highest
+  4. Walk next to walls, swim, fly, and enter first person (R3 or C-up)
+- Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
+- Status: waiting for L
+

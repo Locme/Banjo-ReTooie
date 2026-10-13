@@ -7,6 +7,8 @@
 //   * Buttons, joined with ',': a b z start l r du dd dl dr cu cd cl cr.
 //     Held for hold_ms (default 150).
 //   * Stick: x=<-1..1>, y=<-1..1>, mixed freely with buttons.
+//   * Right stick: rx=<-1..1>, ry=<-1..1> (read by the free camera, which
+//     sees the right stick itself rather than as C buttons).
 //   * `quit` ends the program.
 // Scripted input is added to player 1's real input, so a script and a person
 // can share the controller.
@@ -31,6 +33,8 @@ namespace {
         uint16_t buttons;
         std::optional<float> x;
         std::optional<float> y;
+        std::optional<float> rx;
+        std::optional<float> ry;
         bool quit;
     };
 
@@ -80,13 +84,19 @@ bool tooie::debug::parse_pad_script(const char* script) {
             fprintf(stderr, "[pad] bad step '%s'\n", text.c_str());
             return false;
         }
-        Step step{ (uint32_t)std::strtoul(fields[0].c_str(), nullptr, 10), 150, 0, {}, {}, false };
+        Step step{ (uint32_t)std::strtoul(fields[0].c_str(), nullptr, 10), 150, 0, {}, {}, {}, {}, false };
         if (fields.size() == 3) {
             step.hold_ms = (uint32_t)std::strtoul(fields[2].c_str(), nullptr, 10);
         }
         for (const std::string& action : split(fields[1], ',')) {
             if (action == "quit") {
                 step.quit = true;
+            }
+            else if (action.rfind("rx=", 0) == 0) {
+                step.rx = std::strtof(action.c_str() + 3, nullptr);
+            }
+            else if (action.rfind("ry=", 0) == 0) {
+                step.ry = std::strtof(action.c_str() + 3, nullptr);
             }
             else if (action.rfind("x=", 0) == 0) {
                 step.x = std::strtof(action.c_str() + 2, nullptr);
@@ -135,4 +145,28 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
     }
     tooie::quick_start_note_input(*buttons_out);
     return true;
+}
+
+bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
+    if (steps.empty()) {
+        return false;
+    }
+    std::call_once(started_flag, []() { started = std::chrono::steady_clock::now(); });
+    uint32_t now_ms = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - started).count();
+    bool found = false;
+    for (const Step& step : steps) {
+        if (now_ms < step.start_ms || now_ms >= step.start_ms + step.hold_ms) {
+            continue;
+        }
+        if (step.rx) {
+            *x_out = *step.rx;
+            found = true;
+        }
+        if (step.ry) {
+            *y_out = *step.ry;
+            found = true;
+        }
+    }
+    return found;
 }
