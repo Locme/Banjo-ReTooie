@@ -1,8 +1,9 @@
 // Skip cutscenes with B (handoff 4.62, "Skip boss intros").
 //
-// Boss intros and other scenes the game will not skip run for a minute or more
-// and wait on dialogue. With QOL > Skip cutscenes with B on, pressing B while a
-// letterboxed scene is on screen (tooie::in_letterboxed_scene, from the FOV
+// Boss intros run for a minute or more and wait on dialogue, and the game will
+// not skip them. With QOL > Skip boss intros on, pressing B while a letterboxed
+// scene is on screen in a boss's map (L's pick: bosses only, so a stray B
+// never pages through an NPC conversation) (tooie::in_letterboxed_scene, from the FOV
 // setter) fast-forwards it: the game clock runs at 16x (as the speed-up key
 // does) and A is tapped for the player every few frames so the dialogue pages
 // along. Both stop as soon as the gameplay camera is back, after a map change
@@ -35,6 +36,33 @@ namespace {
     // Real time a skip may last at most.
     constexpr auto skip_limit = std::chrono::seconds(45);
 
+    constexpr gpr current_map_addr = (int32_t)0x80132DC2;
+
+    // Maps with a boss whose intro the game will not skip (names from src/game/map_names.inc).
+    // Weldar's map is inferred from the decomp's map names, not seen headless.
+    constexpr uint16_t boss_maps[] = {
+        0x17A, // Targitzan's Really Sacred Chamber
+        0x0D1, // Inside Chuffy's Boiler (Old King Coal)
+        0x0F9, // Mr. Patch
+        0x0FC, // Lord Woo Fak Fak
+        0x113, // Terry's Nest
+        0x110, // GI Repair Depot (Weldar)
+        0x12B, // Chilli Billi
+        0x12C, // Chilly Willy
+        0x13F, // Mingy Jongo's Skull
+        0x15F, // Tower of Tragedy
+        0x19A, // HAG 1
+    };
+
+    bool boss_map(uint16_t map) {
+        for (uint16_t m : boss_maps) {
+            if (m == map) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::atomic<bool> scene_on{false};      // game thread -> input thread
     std::atomic<bool> skip_requested{false}; // input thread -> game thread
     std::atomic<bool> skipping{false};
@@ -60,14 +88,14 @@ namespace {
 }
 
 void tooie::cutscene_skip_tick(uint8_t* rdram) {
-    (void)rdram;
     const bool scene = tooie::in_letterboxed_scene();
+    const bool boss = boss_map((uint16_t)MEM_HU(0, current_map_addr));
     static const bool log = std::getenv("TOOIE_CUTSCENE_LOG") != nullptr;
     if (log && scene != scene_on.load()) {
         printf("[cutscene] %s\n", scene ? "scene" : "gameplay");
         fflush(stdout);
     }
-    scene_on = scene && enabled();
+    scene_on = scene && boss && enabled();
 
     if (skipping) {
         if (!scene) {

@@ -144,8 +144,8 @@ void tooie::init_config() {
         -10, 20, 1, 0, false, 0);
     qol.add_bool_option(
         tooie::cutscene_skip_option,
-        "Skip cutscenes with B",
-        "Press B during a cutscene the game won't let you skip, such as a boss intro, to fast-forward through it and its dialogue.",
+        "Skip boss intros",
+        "Press B during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
         true);
 
     tooie::picture_filters::add_options(recompui::config::create_graphics_tab());
