@@ -13,6 +13,10 @@ on a controller.
   while Discord is running. Default: on.
 - **Back-Port: Old Banjo sounds**: Banjo-Kazooie's jump sounds instead of
   Banjo-Tooie's. Default: off.
+- **Back-Port: Get Jiggy animation**: when Banjo collects a Jiggy he does
+  Banjo-Kazooie's jiggy dance (fist pumps, Kazooie pops out at the end) instead
+  of Tooie's pose. Tooie's jingle, camera and Jiggy count stay. The dance is
+  still in Tooie's own data, unused. Default: off.
 - **Save backups to keep**: how many of the newest save backups to keep.
   Range 1 to 100. Default: 10.
 - **Timer save**: saves the game by itself after 5, 10, 30, 60 or 120 minutes of

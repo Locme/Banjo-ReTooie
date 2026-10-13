@@ -502,3 +502,13 @@
   4. Try it as the bee too (Cheats > Transformation > Bee)
 - Look for: Does D-pad up take off from the ground and from mid-jump? Does B stop flying and drop you, instead of a Beak Bomb? Stopping high up can splat you like any long fall.
 - Status: waiting for L
+
+## T51 Back-Port: Get Jiggy animation
+- Asked: 2026-10-13 23:25 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > General: Back-Port: Get Jiggy animation on
+  2. Collect a Jiggy (as Banjo and Kazooie)
+  3. Turn it off and collect another one
+- Look for: With it on, does Banjo do BK's dance (fist pumps, Kazooie pops out at the end) under Tooie's black bars, and does the game carry on normally afterwards? Is it the right dance as you remember it from BK? Does any other item (Cheato page, Jinjo, Glowbo) wrongly get the dance too? Only checked here by starting the pose without a real Jiggy.
+- Status: waiting for L

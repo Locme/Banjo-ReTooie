@@ -6,6 +6,7 @@
 #include "tooie_game.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
+#include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
 #include "librecomp/game.hpp"
@@ -133,6 +134,11 @@ void tooie::init_config() {
         tooie::honeycomb_glitter::option,
         "Back-Port: Glittering honeycombs",
         "Health honeycombs sparkle like they did in Banjo-Kazooie.",
+        false);
+    general.add_bool_option(
+        tooie::jiggy_dance::option,
+        "Back-Port: Get Jiggy animation",
+        "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     general.add_number_option(
         tooie::save_backups_keep_option,

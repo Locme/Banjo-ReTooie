@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- General: Back-Port: Get Jiggy animation, Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy (off by default).
 - Graphics: SMAA Anti-Aliasing (Low, Medium, High or Ultra) smooths jagged edges, with or without MSAA.
 - Transformation drop-down: moving through the list with a controller or the arrow keys no longer applies every entry on the way; the pick applies when you confirm.
 - F7 turns on an interpolation check: models whose blend between frames looks wrong turn red for a moment and are logged.
