@@ -2,14 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void static_304_80800324(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-;}
-RECOMP_FUNC void static_344_80800000(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-;}
 RECOMP_FUNC void static_344_8080003C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;

@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800EAC_bsstatue(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800EAC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800EB0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800EB4: jal         0x8008E95C
-    // 0x80800EB8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_8008E95C(rdram, ctx);
-        goto after_0;
-    // 0x80800EB8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80800EBC: jal         0x80800130
-    // 0x80800EC0: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_80800130_bsstatue(rdram, ctx);
-        goto after_1;
-    // 0x80800EC0: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x80800EC4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800EC8: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800ECC: jr          $ra
-    // 0x80800ED0: nop
-
-    return;
-    // 0x80800ED0: nop
-
-;}
 RECOMP_FUNC void func_80800008_basetup(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6279,4 +6245,13 @@ L_80800810:
     return;
     // 0x80800818: nop
 
+;}
+RECOMP_FUNC void _chfactorymagnet_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800874E8: syscall     579
+    recomp_syscall_handler(rdram, ctx, 0x800874E8);
+    return;
+    // 0x800874EC: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
 ;}

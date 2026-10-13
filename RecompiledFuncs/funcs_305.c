@@ -2,84 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void susubgame_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080004C: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    // 0x80800050: jr          $ra
-    // 0x80800054: lbu         $v0, 0x0($a1)
-    ctx->r2 = MEM_BU(ctx->r5, 0X0);
-    return;
-    // 0x80800054: lbu         $v0, 0x0($a1)
-    ctx->r2 = MEM_BU(ctx->r5, 0X0);
-;}
-RECOMP_FUNC void func_800EDBA0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800EDBA0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800EDBA4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800EDBA8: lwc1        $f4, 0x0($a1)
-    ctx->f4.u32l = MEM_W(ctx->r5, 0X0);
-    // 0x800EDBAC: mtc1        $a3, $f12
-    ctx->f12.u32l = ctx->r7;
-    // 0x800EDBB0: addiu       $t6, $zero, 0x2
-    ctx->r14 = ADD32(0, 0X2);
-    // 0x800EDBB4: swc1        $f4, 0x2C($a0)
-    MEM_W(0X2C, ctx->r4) = ctx->f4.u32l;
-    // 0x800EDBB8: lwc1        $f6, 0x4($a1)
-    ctx->f6.u32l = MEM_W(ctx->r5, 0X4);
-    // 0x800EDBBC: mtc1        $zero, $f4
-    ctx->f4.u32l = 0;
-    // 0x800EDBC0: swc1        $f6, 0x30($a0)
-    MEM_W(0X30, ctx->r4) = ctx->f6.u32l;
-    // 0x800EDBC4: lwc1        $f8, 0x8($a1)
-    ctx->f8.u32l = MEM_W(ctx->r5, 0X8);
-    // 0x800EDBC8: swc1        $f8, 0x34($a0)
-    MEM_W(0X34, ctx->r4) = ctx->f8.u32l;
-    // 0x800EDBCC: lwc1        $f10, 0x0($a2)
-    ctx->f10.u32l = MEM_W(ctx->r6, 0X0);
-    // 0x800EDBD0: swc1        $f10, 0x38($a0)
-    MEM_W(0X38, ctx->r4) = ctx->f10.u32l;
-    // 0x800EDBD4: lwc1        $f16, 0x4($a2)
-    ctx->f16.u32l = MEM_W(ctx->r6, 0X4);
-    // 0x800EDBD8: swc1        $f16, 0x3C($a0)
-    MEM_W(0X3C, ctx->r4) = ctx->f16.u32l;
-    // 0x800EDBDC: lwc1        $f18, 0x8($a2)
-    ctx->f18.u32l = MEM_W(ctx->r6, 0X8);
-    // 0x800EDBE0: sb          $t6, 0x29($a0)
-    MEM_B(0X29, ctx->r4) = ctx->r14;
-    // 0x800EDBE4: sh          $zero, 0x4C($a0)
-    MEM_H(0X4C, ctx->r4) = 0;
-    // 0x800EDBE8: swc1        $f12, 0x48($a0)
-    MEM_W(0X48, ctx->r4) = ctx->f12.u32l;
-    // 0x800EDBEC: swc1        $f4, 0x44($a0)
-    MEM_W(0X44, ctx->r4) = ctx->f4.u32l;
-    // 0x800EDBF0: swc1        $f18, 0x40($a0)
-    MEM_W(0X40, ctx->r4) = ctx->f18.u32l;
-    // 0x800EDBF4: lw          $t7, 0x28($sp)
-    ctx->r15 = MEM_W(ctx->r29, 0X28);
-    // 0x800EDBF8: jal         0x800ED964
-    // 0x800EDBFC: sh          $t7, 0x4E($a0)
-    MEM_H(0X4E, ctx->r4) = ctx->r15;
-    func_800ED964(rdram, ctx);
-        goto after_0;
-    // 0x800EDBFC: sh          $t7, 0x4E($a0)
-    MEM_H(0X4E, ctx->r4) = ctx->r15;
-    after_0:
-    // 0x800EDC00: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800EDC04: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800EDC08: jr          $ra
-    // 0x800EDC0C: nop
-
-    return;
-    // 0x800EDC0C: nop
-
-;}
 RECOMP_FUNC void gcboundDll_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5681,5 +5603,90 @@ L_800972AC:
 
     return;
     // 0x800972B8: nop
+
+;}
+RECOMP_FUNC void _bsstand_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083B78: syscall     90
+    recomp_syscall_handler(rdram, ctx, 0x80083B78);
+    return;
+    // 0x80083B7C: addi        $t0, $zero, 0x28
+    ctx->r8 = ADD32(0, 0X28);
+;}
+RECOMP_FUNC void func_800FF3EC(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800FF3EC: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800FF3F0: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800FF3F4: lw          $t6, 0x64($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0X64);
+    // 0x800FF3F8: sll         $t8, $t6, 5
+    ctx->r24 = S32(ctx->r14 << 5);
+    // 0x800FF3FC: bltzl       $t8, L_800FF440
+    if (SIGNED(ctx->r24) < 0) {
+        // 0x800FF400: lw          $ra, 0x14($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X14);
+            goto L_800FF440;
+    }
+    goto skip_0;
+    // 0x800FF400: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    skip_0:
+    // 0x800FF404: jal         0x80100368
+    // 0x800FF408: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_80100368(rdram, ctx);
+        goto after_0;
+    // 0x800FF408: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x800FF40C: lw          $t9, 0x28($v0)
+    ctx->r25 = MEM_W(ctx->r2, 0X28);
+    // 0x800FF410: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    // 0x800FF414: beql        $t9, $zero, L_800FF434
+    if (ctx->r25 == 0) {
+        // 0x800FF418: lbu         $t1, 0x64($a0)
+        ctx->r9 = MEM_BU(ctx->r4, 0X64);
+            goto L_800FF434;
+    }
+    goto skip_1;
+    // 0x800FF418: lbu         $t1, 0x64($a0)
+    ctx->r9 = MEM_BU(ctx->r4, 0X64);
+    skip_1:
+    // 0x800FF41C: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    // 0x800FF420: lw          $t9, 0x28($v0)
+    ctx->r25 = MEM_W(ctx->r2, 0X28);
+    // 0x800FF424: jalr        $t9
+    // 0x800FF428: nop
+
+    LOOKUP_FUNC(ctx->r25)(rdram, ctx);
+        goto after_1;
+    // 0x800FF428: nop
+
+    after_1:
+    // 0x800FF42C: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    // 0x800FF430: lbu         $t1, 0x64($a0)
+    ctx->r9 = MEM_BU(ctx->r4, 0X64);
+L_800FF434:
+    // 0x800FF434: ori         $t2, $t1, 0x4
+    ctx->r10 = ctx->r9 | 0X4;
+    // 0x800FF438: sb          $t2, 0x64($a0)
+    MEM_B(0X64, ctx->r4) = ctx->r10;
+    // 0x800FF43C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_800FF440:
+    // 0x800FF440: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x800FF444: jr          $ra
+    // 0x800FF448: nop
+
+    return;
+    // 0x800FF448: nop
 
 ;}

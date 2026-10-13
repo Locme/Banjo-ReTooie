@@ -2,25 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bskazegghead_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083420: syscall     61
-    recomp_syscall_handler(rdram, ctx, 0x80083420);
-    return;
-    // 0x80083424: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
-RECOMP_FUNC void func_80115350(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80115350: jr          $ra
-    // 0x80115354: addiu       $v0, $zero, 0x1C
-    ctx->r2 = ADD32(0, 0X1C);
-    return;
-    // 0x80115354: addiu       $v0, $zero, 0x1C
-    ctx->r2 = ADD32(0, 0X1C);
-;}
 RECOMP_FUNC void func_808062A8_chgameselect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4413,4 +4394,25 @@ RECOMP_FUNC void ncbasuck_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800088: nop
 
+;}
+RECOMP_FUNC void _bsdronebitten_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083008: syscall     39
+    recomp_syscall_handler(rdram, ctx, 0x80083008);
+    return;
+    // 0x8008300C: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void bashoes_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800378: lw          $t6, 0x10C($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0X10C);
+    // 0x8080037C: jr          $ra
+    // 0x80800380: sb          $a1, 0x5($t6)
+    MEM_B(0X5, ctx->r14) = ctx->r5;
+    return;
+    // 0x80800380: sb          $a1, 0x5($t6)
+    MEM_B(0X5, ctx->r14) = ctx->r5;
 ;}

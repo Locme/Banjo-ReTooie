@@ -2,57 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800F36D4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F36D4: lw          $t6, 0x0($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0X0);
-    // 0x800F36D8: lw          $t7, 0x0($a1)
-    ctx->r15 = MEM_W(ctx->r5, 0X0);
-    // 0x800F36DC: xor         $v0, $t6, $t7
-    ctx->r2 = ctx->r14 ^ ctx->r15;
-    // 0x800F36E0: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x800F36E4: beq         $v0, $zero, L_800F3714
-    if (ctx->r2 == 0) {
-        // 0x800F36E8: nop
-    
-            goto L_800F3714;
-    }
-    // 0x800F36E8: nop
-
-    // 0x800F36EC: lw          $t8, 0x4($a0)
-    ctx->r24 = MEM_W(ctx->r4, 0X4);
-    // 0x800F36F0: lw          $t9, 0x4($a1)
-    ctx->r25 = MEM_W(ctx->r5, 0X4);
-    // 0x800F36F4: xor         $v0, $t8, $t9
-    ctx->r2 = ctx->r24 ^ ctx->r25;
-    // 0x800F36F8: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x800F36FC: beq         $v0, $zero, L_800F3714
-    if (ctx->r2 == 0) {
-        // 0x800F3700: nop
-    
-            goto L_800F3714;
-    }
-    // 0x800F3700: nop
-
-    // 0x800F3704: lw          $t0, 0x8($a0)
-    ctx->r8 = MEM_W(ctx->r4, 0X8);
-    // 0x800F3708: lw          $t1, 0x8($a1)
-    ctx->r9 = MEM_W(ctx->r5, 0X8);
-    // 0x800F370C: xor         $v0, $t0, $t1
-    ctx->r2 = ctx->r8 ^ ctx->r9;
-    // 0x800F3710: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-L_800F3714:
-    // 0x800F3714: jr          $ra
-    // 0x800F3718: nop
-
-    return;
-    // 0x800F3718: nop
-
-;}
 RECOMP_FUNC void func_800B9A24(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5197,4 +5146,13 @@ RECOMP_FUNC void gcnewoption_entrypoint_36(uint8_t* rdram, recomp_context* ctx) 
     return;
     // 0x80802B20: sb          $t8, 0x1C($a0)
     MEM_B(0X1C, ctx->r4) = ctx->r24;
+;}
+RECOMP_FUNC void _chcrusher_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086A98: syscall     413
+    recomp_syscall_handler(rdram, ctx, 0x80086A98);
+    return;
+    // 0x80086A9C: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

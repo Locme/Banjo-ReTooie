@@ -2,24 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chcollballcontrol_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80804AF8: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1840, 0X50CC) << 16);
-    // 0x80804AFC: jr          $ra
-    // 0x80804B00: addiu       $v0, $v0, 0x50CC
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1840, 0X50CC));
-    return;
-    // 0x80804B00: addiu       $v0, $v0, 0x50CC
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1840, 0X50CC));
-    // 0x80804B04: nop
-
-    // 0x80804B08: nop
-
-    // 0x80804B0C: nop
-
-;}
 RECOMP_FUNC void _chlagoonbits_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6645,4 +6627,13 @@ RECOMP_FUNC void bsbshock_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800500: lw          $v0, 0x870($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(116, 0X870));
+;}
+RECOMP_FUNC void _bsblongleg_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800829F8: syscall     24
+    recomp_syscall_handler(rdram, ctx, 0x800829F8);
+    return;
+    // 0x800829FC: addi        $t0, $zero, 0x18
+    ctx->r8 = ADD32(0, 0X18);
 ;}

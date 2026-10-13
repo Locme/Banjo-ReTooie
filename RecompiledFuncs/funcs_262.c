@@ -2,140 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800018_chminisubgame(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800018: addiu       $sp, $sp, -0x30
-    ctx->r29 = ADD32(ctx->r29, -0X30);
-    // 0x8080001C: sw          $ra, 0x24($sp)
-    MEM_W(0X24, ctx->r29) = ctx->r31;
-    // 0x80800020: sw          $s3, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r19;
-    // 0x80800024: or          $s3, $a0, $zero
-    ctx->r19 = ctx->r4 | 0;
-    // 0x80800028: sw          $s2, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r18;
-    // 0x8080002C: sw          $s1, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r17;
-    // 0x80800030: sw          $s0, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r16;
-    // 0x80800034: jal         0x80100094
-    // 0x80800038: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x80800038: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x8080003C: lui         $a1, 0x8080
-    ctx->r5 = S32(RELOC_HI16(792, 0X1590) << 16);
-    // 0x80800040: sw          $v0, 0x2C($sp)
-    MEM_W(0X2C, ctx->r29) = ctx->r2;
-    // 0x80800044: addiu       $a1, $a1, 0x1590
-    ctx->r5 = ADD32(ctx->r5, (int16_t)RELOC_LO16(792, 0X1590));
-    // 0x80800048: addiu       $a0, $zero, 0x1C0
-    ctx->r4 = ADD32(0, 0X1C0);
-    // 0x8080004C: jal         0x800882C0
-    // 0x80800050: addiu       $a2, $zero, 0x3C
-    ctx->r6 = ADD32(0, 0X3C);
-    _gccubesearch_entrypoint_9(rdram, ctx);
-        goto after_1;
-    // 0x80800050: addiu       $a2, $zero, 0x3C
-    ctx->r6 = ADD32(0, 0X3C);
-    after_1:
-    // 0x80800054: sw          $v0, 0x30($s3)
-    MEM_W(0X30, ctx->r19) = ctx->r2;
-    // 0x80800058: blez        $v0, L_80800090
-    if (SIGNED(ctx->r2) <= 0) {
-        // 0x8080005C: or          $s0, $zero, $zero
-        ctx->r16 = 0 | 0;
-            goto L_80800090;
-    }
-    // 0x8080005C: or          $s0, $zero, $zero
-    ctx->r16 = 0 | 0;
-    // 0x80800060: lui         $s1, 0x8080
-    ctx->r17 = S32(RELOC_HI16(792, 0X1590) << 16);
-    // 0x80800064: addiu       $s1, $s1, 0x1590
-    ctx->r17 = ADD32(ctx->r17, (int16_t)RELOC_LO16(792, 0X1590));
-    // 0x80800068: lw          $s2, 0x2C($sp)
-    ctx->r18 = MEM_W(ctx->r29, 0X2C);
-L_8080006C:
-    // 0x8080006C: lw          $a0, 0x0($s1)
-    ctx->r4 = MEM_W(ctx->r17, 0X0);
-    // 0x80800070: jal         0x80088C00
-    // 0x80800074: or          $a1, $s2, $zero
-    ctx->r5 = ctx->r18 | 0;
-    _gspropctrl_entrypoint_11(rdram, ctx);
-        goto after_2;
-    // 0x80800074: or          $a1, $s2, $zero
-    ctx->r5 = ctx->r18 | 0;
-    after_2:
-    // 0x80800078: lw          $t6, 0x30($s3)
-    ctx->r14 = MEM_W(ctx->r19, 0X30);
-    // 0x8080007C: addiu       $s0, $s0, 0x1
-    ctx->r16 = ADD32(ctx->r16, 0X1);
-    // 0x80800080: addiu       $s1, $s1, 0x4
-    ctx->r17 = ADD32(ctx->r17, 0X4);
-    // 0x80800084: slt         $at, $s0, $t6
-    ctx->r1 = SIGNED(ctx->r16) < SIGNED(ctx->r14) ? 1 : 0;
-    // 0x80800088: bne         $at, $zero, L_8080006C
-    if (ctx->r1 != 0) {
-        // 0x8080008C: addiu       $s2, $s2, 0xC
-        ctx->r18 = ADD32(ctx->r18, 0XC);
-            goto L_8080006C;
-    }
-    // 0x8080008C: addiu       $s2, $s2, 0xC
-    ctx->r18 = ADD32(ctx->r18, 0XC);
-L_80800090:
-    // 0x80800090: lw          $a1, 0x2C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X2C);
-    // 0x80800094: or          $a0, $s3, $zero
-    ctx->r4 = ctx->r19 | 0;
-    // 0x80800098: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    // 0x8080009C: jal         0x8008A2A0
-    // 0x808000A0: addiu       $a1, $a1, 0x30C
-    ctx->r5 = ADD32(ctx->r5, 0X30C);
-    _susubgame_entrypoint_0(rdram, ctx);
-        goto after_3;
-    // 0x808000A0: addiu       $a1, $a1, 0x30C
-    ctx->r5 = ADD32(ctx->r5, 0X30C);
-    after_3:
-    // 0x808000A4: jal         0x8008A2F8
-    // 0x808000A8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    _susubgame_entrypoint_11(rdram, ctx);
-        goto after_4;
-    // 0x808000A8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    after_4:
-    // 0x808000AC: lw          $ra, 0x24($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X24);
-    // 0x808000B0: lw          $s0, 0x14($sp)
-    ctx->r16 = MEM_W(ctx->r29, 0X14);
-    // 0x808000B4: lw          $s1, 0x18($sp)
-    ctx->r17 = MEM_W(ctx->r29, 0X18);
-    // 0x808000B8: lw          $s2, 0x1C($sp)
-    ctx->r18 = MEM_W(ctx->r29, 0X1C);
-    // 0x808000BC: lw          $s3, 0x20($sp)
-    ctx->r19 = MEM_W(ctx->r29, 0X20);
-    // 0x808000C0: jr          $ra
-    // 0x808000C4: addiu       $sp, $sp, 0x30
-    ctx->r29 = ADD32(ctx->r29, 0X30);
-    return;
-    // 0x808000C4: addiu       $sp, $sp, 0x30
-    ctx->r29 = ADD32(ctx->r29, 0X30);
-;}
-RECOMP_FUNC void bainput_getStructSize(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80097970: jr          $ra
-    // 0x80097974: addiu       $v0, $zero, 0xC
-    ctx->r2 = ADD32(0, 0XC);
-    return;
-    // 0x80097974: addiu       $v0, $zero, 0xC
-    ctx->r2 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void bswalk_entrypoint_11(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4977,5 +4843,343 @@ L_800C38D4:
 
     return;
     // 0x800C38E0: nop
+
+;}
+RECOMP_FUNC void func_800C3418(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800C3418: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x800C341C: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    // 0x800C3420: andi        $t6, $a0, 0xFF
+    ctx->r14 = ctx->r4 & 0XFF;
+    // 0x800C3424: or          $a0, $t6, $zero
+    ctx->r4 = ctx->r14 | 0;
+    // 0x800C3428: sw          $ra, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r31;
+    // 0x800C342C: beq         $t6, $zero, L_800C34B8
+    if (ctx->r14 == 0) {
+        // 0x800C3430: sw          $s0, 0x18($sp)
+        MEM_W(0X18, ctx->r29) = ctx->r16;
+            goto L_800C34B8;
+    }
+    // 0x800C3430: sw          $s0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r16;
+    // 0x800C3434: jal         0x800C1414
+    // 0x800C3438: sw          $a1, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r5;
+    func_800C1414(rdram, ctx);
+        goto after_0;
+    // 0x800C3438: sw          $a1, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r5;
+    after_0:
+    // 0x800C343C: lw          $a1, 0x24($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X24);
+    // 0x800C3440: or          $s0, $v0, $zero
+    ctx->r16 = ctx->r2 | 0;
+    // 0x800C3444: addiu       $at, $zero, 0x1
+    ctx->r1 = ADD32(0, 0X1);
+    // 0x800C3448: beq         $a1, $zero, L_800C346C
+    if (ctx->r5 == 0) {
+        // 0x800C344C: or          $a0, $s0, $zero
+        ctx->r4 = ctx->r16 | 0;
+            goto L_800C346C;
+    }
+    // 0x800C344C: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C3450: beq         $a1, $at, L_800C3488
+    if (ctx->r5 == ctx->r1) {
+        // 0x800C3454: or          $a0, $s0, $zero
+        ctx->r4 = ctx->r16 | 0;
+            goto L_800C3488;
+    }
+    // 0x800C3454: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C3458: addiu       $at, $zero, 0x2
+    ctx->r1 = ADD32(0, 0X2);
+    // 0x800C345C: beq         $a1, $at, L_800C34A4
+    if (ctx->r5 == ctx->r1) {
+        // 0x800C3460: or          $a0, $s0, $zero
+        ctx->r4 = ctx->r16 | 0;
+            goto L_800C34A4;
+    }
+    // 0x800C3460: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C3464: b           L_800C34BC
+    // 0x800C3468: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+        goto L_800C34BC;
+    // 0x800C3468: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_800C346C:
+    // 0x800C346C: jal         0x800C13B0
+    // 0x800C3470: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    func_800C13B0(rdram, ctx);
+        goto after_1;
+    // 0x800C3470: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    after_1:
+    // 0x800C3474: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C3478: jal         0x800C13B0
+    // 0x800C347C: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    func_800C13B0(rdram, ctx);
+        goto after_2;
+    // 0x800C347C: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    after_2:
+    // 0x800C3480: b           L_800C34BC
+    // 0x800C3484: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+        goto L_800C34BC;
+    // 0x800C3484: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_800C3488:
+    // 0x800C3488: jal         0x800C13A0
+    // 0x800C348C: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    func_800C13A0(rdram, ctx);
+        goto after_3;
+    // 0x800C348C: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    after_3:
+    // 0x800C3490: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C3494: jal         0x800C13B0
+    // 0x800C3498: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    func_800C13B0(rdram, ctx);
+        goto after_4;
+    // 0x800C3498: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    after_4:
+    // 0x800C349C: b           L_800C34BC
+    // 0x800C34A0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+        goto L_800C34BC;
+    // 0x800C34A0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_800C34A4:
+    // 0x800C34A4: jal         0x800C13A0
+    // 0x800C34A8: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    func_800C13A0(rdram, ctx);
+        goto after_5;
+    // 0x800C34A8: addiu       $a1, $zero, 0x40
+    ctx->r5 = ADD32(0, 0X40);
+    after_5:
+    // 0x800C34AC: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x800C34B0: jal         0x800C13A0
+    // 0x800C34B4: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    func_800C13A0(rdram, ctx);
+        goto after_6;
+    // 0x800C34B4: addiu       $a1, $zero, 0x80
+    ctx->r5 = ADD32(0, 0X80);
+    after_6:
+L_800C34B8:
+    // 0x800C34B8: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_800C34BC:
+    // 0x800C34BC: lw          $s0, 0x18($sp)
+    ctx->r16 = MEM_W(ctx->r29, 0X18);
+    // 0x800C34C0: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x800C34C4: jr          $ra
+    // 0x800C34C8: nop
+
+    return;
+    // 0x800C34C8: nop
+
+;}
+RECOMP_FUNC void func_80800194_suautobaddies(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800194: addiu       $sp, $sp, -0x28
+    ctx->r29 = ADD32(ctx->r29, -0X28);
+    // 0x80800198: sw          $ra, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r31;
+    // 0x8080019C: jal         0x800EA05C
+    // 0x808001A0: nop
+
+    func_800EA05C(rdram, ctx);
+        goto after_0;
+    // 0x808001A0: nop
+
+    after_0:
+    // 0x808001A4: jal         0x800DB9B0
+    // 0x808001A8: sw          $v0, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r2;
+    func_800DB9B0(rdram, ctx);
+        goto after_1;
+    // 0x808001A8: sw          $v0, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r2;
+    after_1:
+    // 0x808001AC: bnel        $v0, $zero, L_8080024C
+    if (ctx->r2 != 0) {
+        // 0x808001B0: lw          $ra, 0x1C($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X1C);
+            goto L_8080024C;
+    }
+    goto skip_0;
+    // 0x808001B0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    skip_0:
+    // 0x808001B4: jal         0x800887B0
+    // 0x808001B8: nop
+
+    _glcutDll_entrypoint_1(rdram, ctx);
+        goto after_2;
+    // 0x808001B8: nop
+
+    after_2:
+    // 0x808001BC: bnel        $v0, $zero, L_8080024C
+    if (ctx->r2 != 0) {
+        // 0x808001C0: lw          $ra, 0x1C($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X1C);
+            goto L_8080024C;
+    }
+    goto skip_1;
+    // 0x808001C0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    skip_1:
+    // 0x808001C4: jal         0x800DA298
+    // 0x808001C8: addiu       $a0, $zero, 0x647
+    ctx->r4 = ADD32(0, 0X647);
+    func_800DA298(rdram, ctx);
+        goto after_3;
+    // 0x808001C8: addiu       $a0, $zero, 0x647
+    ctx->r4 = ADD32(0, 0X647);
+    after_3:
+    // 0x808001CC: bnel        $v0, $zero, L_8080024C
+    if (ctx->r2 != 0) {
+        // 0x808001D0: lw          $ra, 0x1C($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X1C);
+            goto L_8080024C;
+    }
+    goto skip_2;
+    // 0x808001D0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    skip_2:
+    // 0x808001D4: jal         0x800A9C98
+    // 0x808001D8: nop
+
+    func_800A9C98(rdram, ctx);
+        goto after_4;
+    // 0x808001D8: nop
+
+    after_4:
+    // 0x808001DC: bnel        $v0, $zero, L_8080024C
+    if (ctx->r2 != 0) {
+        // 0x808001E0: lw          $ra, 0x1C($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X1C);
+            goto L_8080024C;
+    }
+    goto skip_3;
+    // 0x808001E0: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    skip_3:
+    // 0x808001E4: jal         0x80088268
+    // 0x808001E8: lw          $a0, 0x24($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X24);
+    _gcsectionDll_entrypoint_4(rdram, ctx);
+        goto after_5;
+    // 0x808001E8: lw          $a0, 0x24($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X24);
+    after_5:
+    // 0x808001EC: addiu       $at, $zero, 0xD
+    ctx->r1 = ADD32(0, 0XD);
+    // 0x808001F0: beql        $v0, $at, L_8080024C
+    if (ctx->r2 == ctx->r1) {
+        // 0x808001F4: lw          $ra, 0x1C($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X1C);
+            goto L_8080024C;
+    }
+    goto skip_4;
+    // 0x808001F4: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    skip_4:
+    // 0x808001F8: jal         0x800D3934
+    // 0x808001FC: nop
+
+    func_800D3934(rdram, ctx);
+        goto after_6;
+    // 0x808001FC: nop
+
+    after_6:
+    // 0x80800200: bne         $v0, $zero, L_80800214
+    if (ctx->r2 != 0) {
+        // 0x80800204: lw          $t6, 0x24($sp)
+        ctx->r14 = MEM_W(ctx->r29, 0X24);
+            goto L_80800214;
+    }
+    // 0x80800204: lw          $t6, 0x24($sp)
+    ctx->r14 = MEM_W(ctx->r29, 0X24);
+    // 0x80800208: addiu       $at, $zero, 0xAF
+    ctx->r1 = ADD32(0, 0XAF);
+    // 0x8080020C: bne         $t6, $at, L_80800240
+    if (ctx->r14 != ctx->r1) {
+        // 0x80800210: nop
+    
+            goto L_80800240;
+    }
+    // 0x80800210: nop
+
+L_80800214:
+    // 0x80800214: jal         0x800DA544
+    // 0x80800218: addiu       $a0, $zero, 0x6A7
+    ctx->r4 = ADD32(0, 0X6A7);
+    func_800DA544(rdram, ctx);
+        goto after_7;
+    // 0x80800218: addiu       $a0, $zero, 0x6A7
+    ctx->r4 = ADD32(0, 0X6A7);
+    after_7:
+    // 0x8080021C: lui         $a0, 0x8008
+    ctx->r4 = S32(0X8008 << 16);
+    // 0x80800220: addiu       $a0, $a0, 0x6D68
+    ctx->r4 = ADD32(ctx->r4, 0X6D68);
+    // 0x80800224: addiu       $a1, $zero, 0x153
+    ctx->r5 = ADD32(0, 0X153);
+    // 0x80800228: or          $a2, $zero, $zero
+    ctx->r6 = 0 | 0;
+    // 0x8080022C: or          $a3, $zero, $zero
+    ctx->r7 = 0 | 0;
+    // 0x80800230: jal         0x80086D48
+    // 0x80800234: sw          $zero, 0x10($sp)
+    MEM_W(0X10, ctx->r29) = 0;
+    _chbaddiesetup_entrypoint_4(rdram, ctx);
+        goto after_8;
+    // 0x80800234: sw          $zero, 0x10($sp)
+    MEM_W(0X10, ctx->r29) = 0;
+    after_8:
+    // 0x80800238: b           L_8080024C
+    // 0x8080023C: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+        goto L_8080024C;
+    // 0x8080023C: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_80800240:
+    // 0x80800240: jal         0x800DA524
+    // 0x80800244: addiu       $a0, $zero, 0x6A7
+    ctx->r4 = ADD32(0, 0X6A7);
+    func_800DA524(rdram, ctx);
+        goto after_9;
+    // 0x80800244: addiu       $a0, $zero, 0x6A7
+    ctx->r4 = ADD32(0, 0X6A7);
+    after_9:
+    // 0x80800248: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+L_8080024C:
+    // 0x8080024C: addiu       $sp, $sp, 0x28
+    ctx->r29 = ADD32(ctx->r29, 0X28);
+    // 0x80800250: jr          $ra
+    // 0x80800254: nop
+
+    return;
+    // 0x80800254: nop
 
 ;}

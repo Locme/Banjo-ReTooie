@@ -94,8 +94,11 @@ ignored = [
     # Implemented in src/game/boot.cpp.
     "__osGetSR_2",
     # Builds a camera's culling planes. Implemented in src/game/widescreen.cpp
-    # so culling widens with the picture (Aspect Ratio: Expand).
+    # so culling widens with the picture (Aspect Ratio: Expand); func_800CA218
+    # and func_800CA1B0 make the left and right planes.
     "func_800CA2A8",
+    "func_800CA218",
+    "func_800CA1B0",
     # Templates copied into each loaded overlay header, never executed in place.
     "ovl_entrypoint",
     "ovl_entrypoint_alternate",

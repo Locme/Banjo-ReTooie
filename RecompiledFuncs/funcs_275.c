@@ -2,24 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _dbmorph_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087980: syscall     643
-    recomp_syscall_handler(rdram, ctx, 0x80087980);
-    return;
-    // 0x80087984: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
-RECOMP_FUNC void _batimer_get(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085300: syscall     157
-    recomp_syscall_handler(rdram, ctx, 0x80085300);
-    return;
-    // 0x80085304: addi        $t0, $zero, 0x10
-    ctx->r8 = ADD32(0, 0X10);
-;}
 RECOMP_FUNC void func_8080000C_chstatueboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4877,4 +4859,25 @@ RECOMP_FUNC void func_800BFFA0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800BFFB0: lw          $v0, -0x7888($v0)
     ctx->r2 = MEM_W(ctx->r2, -0X7888);
+;}
+RECOMP_FUNC void _bsbfly_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80082968: syscall     22
+    recomp_syscall_handler(rdram, ctx, 0x80082968);
+    return;
+    // 0x8008296C: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
+;}
+RECOMP_FUNC void chjigsaw_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808006C0: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(704, 0X770) << 16);
+    // 0x808006C4: jr          $ra
+    // 0x808006C8: addiu       $v0, $v0, 0x770
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(704, 0X770));
+    return;
+    // 0x808006C8: addiu       $v0, $v0, 0x770
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(704, 0X770));
 ;}

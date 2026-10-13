@@ -2,24 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chevilmumbo_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086BC0: syscall     426
-    recomp_syscall_handler(rdram, ctx, 0x80086BC0);
-    return;
-    // 0x80086BC4: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
-RECOMP_FUNC void _baduo_entrypoint_19(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800849B0: syscall     124
-    recomp_syscall_handler(rdram, ctx, 0x800849B0);
-    return;
-    // 0x800849B4: addi        $t0, $zero, 0x4C
-    ctx->r8 = ADD32(0, 0X4C);
-;}
 RECOMP_FUNC void func_800BFB58(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5324,5 +5306,60 @@ RECOMP_FUNC void _gcmapsects_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     recomp_syscall_handler(rdram, ctx, 0x80087F20);
     return;
     // 0x80087F24: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
+;}
+RECOMP_FUNC void func_800F6E00(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800F6E00: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x800F6E04: lui         $a0, 0x8013
+    ctx->r4 = S32(0X8013 << 16);
+    // 0x800F6E08: addu        $a0, $a0, $t6
+    ctx->r4 = ADD32(ctx->r4, ctx->r14);
+    // 0x800F6E0C: lw          $a0, 0x5490($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X5490);
+    // 0x800F6E10: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x800F6E14: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800F6E18: jal         0x8009E6F8
+    // 0x800F6E1C: sw          $a0, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r4;
+    bs_getCurrentState(rdram, ctx);
+        goto after_0;
+    // 0x800F6E1C: sw          $a0, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x800F6E20: lw          $a0, 0x1C($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X1C);
+    // 0x800F6E24: or          $a1, $v0, $zero
+    ctx->r5 = ctx->r2 | 0;
+    // 0x800F6E28: jal         0x8009CA70
+    // 0x800F6E2C: lui         $a2, 0x10
+    ctx->r6 = S32(0X10 << 16);
+    func_8009CA70(rdram, ctx);
+        goto after_1;
+    // 0x800F6E2C: lui         $a2, 0x10
+    ctx->r6 = S32(0X10 << 16);
+    after_1:
+    // 0x800F6E30: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800F6E34: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x800F6E38: jr          $ra
+    // 0x800F6E3C: nop
+
+    return;
+    // 0x800F6E3C: nop
+
+;}
+RECOMP_FUNC void _suexpressmorph_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089B58: syscall     803
+    recomp_syscall_handler(rdram, ctx, 0x80089B58);
+    return;
+    // 0x80089B5C: addi        $t0, $zero, 0x10
     ctx->r8 = ADD32(0, 0X10);
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chmineentrygrille_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087098: syscall     507
-    recomp_syscall_handler(rdram, ctx, 0x80087098);
-    return;
-    // 0x8008709C: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _chblackeye_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5588,5 +5579,43 @@ L_800F1DBC:
 
     return;
     // 0x800F1DC8: nop
+
+;}
+RECOMP_FUNC void func_80094E40(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80094E40: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80094E44: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80094E48: jal         0x800883C8
+    // 0x80094E4C: nop
+
+    _gcegg_entrypoint_2(rdram, ctx);
+        goto after_0;
+    // 0x80094E4C: nop
+
+    after_0:
+    // 0x80094E50: jal         0x800FC660
+    // 0x80094E54: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    func_800FC660(rdram, ctx);
+        goto after_1;
+    // 0x80094E54: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    after_1:
+    // 0x80094E58: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80094E5C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80094E60: jr          $ra
+    // 0x80094E64: nop
+
+    return;
+    // 0x80094E64: nop
+
+    // 0x80094E68: nop
+
+    // 0x80094E6C: nop
 
 ;}

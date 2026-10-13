@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsblongleg_entrypoint_31(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080144C: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80801450: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(104, 0X14E0) << 16);
-    // 0x80801454: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80801458: jr          $ra
-    // 0x8080145C: lw          $v0, 0x14E0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(104, 0X14E0));
-    return;
-    // 0x8080145C: lw          $v0, 0x14E0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(104, 0X14E0));
-;}
 RECOMP_FUNC void func_808008D8_bssub(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3251,4 +3235,16 @@ RECOMP_FUNC void _basquash_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800850CC: addi        $t0, $zero, 0xC
     ctx->r8 = ADD32(0, 0XC);
+;}
+RECOMP_FUNC void func_800EB854(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800EB854: lui         $v0, 0x8013
+    ctx->r2 = S32(0X8013 << 16);
+    // 0x800EB858: jr          $ra
+    // 0x800EB85C: lh          $v0, 0x2E9C($v0)
+    ctx->r2 = MEM_H(ctx->r2, 0X2E9C);
+    return;
+    // 0x800EB85C: lh          $v0, 0x2E9C($v0)
+    ctx->r2 = MEM_H(ctx->r2, 0X2E9C);
 ;}

@@ -2,58 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801C7C_chinflatableboss(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801C7C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80801C80: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801C84: jal         0x80801CB4
-    // 0x80801C88: nop
-
-    func_80801CB4_chinflatableboss(rdram, ctx);
-        goto after_0;
-    // 0x80801C88: nop
-
-    after_0:
-    // 0x80801C8C: addiu       $t6, $zero, 0xC
-    ctx->r14 = ADD32(0, 0XC);
-    // 0x80801C90: subu        $v0, $t6, $v0
-    ctx->r2 = SUB32(ctx->r14, ctx->r2);
-    // 0x80801C94: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801C98: bgez        $v0, L_80801CA8
-    if (SIGNED(ctx->r2) >= 0) {
-        // 0x80801C9C: sra         $t7, $v0, 1
-        ctx->r15 = S32(SIGNED(ctx->r2) >> 1);
-            goto L_80801CA8;
-    }
-    // 0x80801C9C: sra         $t7, $v0, 1
-    ctx->r15 = S32(SIGNED(ctx->r2) >> 1);
-    // 0x80801CA0: addiu       $at, $v0, 0x1
-    ctx->r1 = ADD32(ctx->r2, 0X1);
-    // 0x80801CA4: sra         $t7, $at, 1
-    ctx->r15 = S32(SIGNED(ctx->r1) >> 1);
-L_80801CA8:
-    // 0x80801CA8: or          $v0, $t7, $zero
-    ctx->r2 = ctx->r15 | 0;
-    // 0x80801CAC: jr          $ra
-    // 0x80801CB0: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    return;
-    // 0x80801CB0: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-;}
-RECOMP_FUNC void _glgamestore_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800884C0: syscall     688
-    recomp_syscall_handler(rdram, ctx, 0x800884C0);
-    return;
-    // 0x800884C4: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void func_80092E5C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3607,4 +3555,22 @@ L_808005F0:
     return;
     // 0x80800600: nop
 
+;}
+RECOMP_FUNC void _bsbshock_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80082B10: syscall     27
+    recomp_syscall_handler(rdram, ctx, 0x80082B10);
+    return;
+    // 0x80082B14: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void _cosectionstor_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087848: syscall     634
+    recomp_syscall_handler(rdram, ctx, 0x80087848);
+    return;
+    // 0x8008784C: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

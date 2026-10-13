@@ -2,81 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _cadbfunc_entrypoint_18(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085610: syscall     169
-    recomp_syscall_handler(rdram, ctx, 0x80085610);
-    return;
-    // 0x80085614: addi        $t0, $zero, 0x48
-    ctx->r8 = ADD32(0, 0X48);
-;}
-RECOMP_FUNC void func_800F122C(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F122C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800F1230: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800F1234: swc1        $f14, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->f14.u32l;
-    // 0x800F1238: sw          $a2, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r6;
-    // 0x800F123C: jal         0x800F2108
-    // 0x800F1240: swc1        $f12, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->f12.u32l;
-    func_800F2108(rdram, ctx);
-        goto after_0;
-    // 0x800F1240: swc1        $f12, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->f12.u32l;
-    after_0:
-    // 0x800F1244: lwc1        $f12, 0x18($sp)
-    ctx->f12.u32l = MEM_W(ctx->r29, 0X18);
-    // 0x800F1248: lwc1        $f2, 0x1C($sp)
-    ctx->f2.u32l = MEM_W(ctx->r29, 0X1C);
-    // 0x800F124C: lwc1        $f4, 0x20($sp)
-    ctx->f4.u32l = MEM_W(ctx->r29, 0X20);
-    // 0x800F1250: mul.s       $f12, $f12, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f0.fl); 
-    ctx->f12.fl = MUL_S(ctx->f12.fl, ctx->f0.fl);
-    // 0x800F1254: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800F1258: sub.s       $f6, $f4, $f2
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 4);
-    CHECK_FR(ctx, 2);
-    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f2.fl); 
-    ctx->f6.fl = ctx->f4.fl - ctx->f2.fl;
-    // 0x800F125C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800F1260: mul.s       $f8, $f6, $f12
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 12);
-    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f12.fl); 
-    ctx->f8.fl = MUL_S(ctx->f6.fl, ctx->f12.fl);
-    // 0x800F1264: add.s       $f10, $f8, $f2
-    CHECK_FR(ctx, 10);
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 2);
-    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f2.fl); 
-    ctx->f10.fl = ctx->f8.fl + ctx->f2.fl;
-    // 0x800F1268: mul.s       $f0, $f0, $f10
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 10);
-    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f10.fl); 
-    ctx->f0.fl = MUL_S(ctx->f0.fl, ctx->f10.fl);
-    // 0x800F126C: jr          $ra
-    // 0x800F1270: nop
-
-    return;
-    // 0x800F1270: nop
-
-;}
 RECOMP_FUNC void func_8009C2A0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7022,4 +6947,12 @@ RECOMP_FUNC void static_16_80097978(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8009798C: and         $v0, $t7, $t9
     ctx->r2 = ctx->r15 & ctx->r25;
+;}
+RECOMP_FUNC void static_304_80800324(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+;}
+RECOMP_FUNC void static_344_80800000(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
 ;}

@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800EB854(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800EB854: lui         $v0, 0x8013
-    ctx->r2 = S32(0X8013 << 16);
-    // 0x800EB858: jr          $ra
-    // 0x800EB85C: lh          $v0, 0x2E9C($v0)
-    ctx->r2 = MEM_H(ctx->r2, 0X2E9C);
-    return;
-    // 0x800EB85C: lh          $v0, 0x2E9C($v0)
-    ctx->r2 = MEM_H(ctx->r2, 0X2E9C);
-;}
 RECOMP_FUNC void func_80801EB4_chboilerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4093,4 +4081,14 @@ RECOMP_FUNC void func_800F6C88(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800F6CC4: addiu       $sp, $sp, 0x20
     ctx->r29 = ADD32(ctx->r29, 0X20);
+;}
+RECOMP_FUNC void func_800D2140(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800D2140: jr          $ra
+    // 0x800D2144: addiu       $v0, $zero, 0x2E
+    ctx->r2 = ADD32(0, 0X2E);
+    return;
+    // 0x800D2144: addiu       $v0, $zero, 0x2E
+    ctx->r2 = ADD32(0, 0X2E);
 ;}

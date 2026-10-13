@@ -2,52 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800F7844(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F7844: mtc1        $a2, $f12
-    ctx->f12.u32l = ctx->r6;
-    // 0x800F7848: mtc1        $a3, $f14
-    ctx->f14.u32l = ctx->r7;
-    // 0x800F784C: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x800F7850: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x800F7854: mfc1        $a2, $f12
-    ctx->r6 = (int32_t)ctx->f12.u32l;
-    // 0x800F7858: mfc1        $a3, $f14
-    ctx->r7 = (int32_t)ctx->f14.u32l;
-    // 0x800F785C: jal         0x800F7750
-    // 0x800F7860: sw          $zero, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = 0;
-    func_800F7750(rdram, ctx);
-        goto after_0;
-    // 0x800F7860: sw          $zero, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = 0;
-    after_0:
-    // 0x800F7864: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x800F7868: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x800F786C: jr          $ra
-    // 0x800F7870: nop
-
-    return;
-    // 0x800F7870: nop
-
-;}
-RECOMP_FUNC void chdummyjigsaw_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800174: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(2236, 0X190) << 16);
-    // 0x80800178: jr          $ra
-    // 0x8080017C: addiu       $v0, $v0, 0x190
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2236, 0X190));
-    return;
-    // 0x8080017C: addiu       $v0, $v0, 0x190
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2236, 0X190));
-;}
 RECOMP_FUNC void bawandglow_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5893,4 +5847,22 @@ L_80801180:
     return;
     // 0x8080118C: nop
 
+;}
+RECOMP_FUNC void _chevilmumbo_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086BC0: syscall     426
+    recomp_syscall_handler(rdram, ctx, 0x80086BC0);
+    return;
+    // 0x80086BC4: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void _baduo_entrypoint_19(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800849B0: syscall     124
+    recomp_syscall_handler(rdram, ctx, 0x800849B0);
+    return;
+    // 0x800849B4: addi        $t0, $zero, 0x4C
+    ctx->r8 = ADD32(0, 0X4C);
 ;}

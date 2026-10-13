@@ -2,41 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801B10_bswasher(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801B10: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80801B14: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801B18: jal         0x808000F0
-    // 0x80801B1C: nop
-
-    func_808000F0_bswasher(rdram, ctx);
-        goto after_0;
-    // 0x80801B1C: nop
-
-    after_0:
-    // 0x80801B20: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801B24: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80801B28: jr          $ra
-    // 0x80801B2C: nop
-
-    return;
-    // 0x80801B2C: nop
-
-;}
-RECOMP_FUNC void _fxrain_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80088928: syscall     710
-    recomp_syscall_handler(rdram, ctx, 0x80088928);
-    return;
-    // 0x8008892C: addi        $t0, $zero, 0x24
-    ctx->r8 = ADD32(0, 0X24);
-;}
 RECOMP_FUNC void func_80803448_chhandcart(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3958,4 +3923,22 @@ L_800DC4F8:
     return;
     // 0x800DC504: nop
 
+;}
+RECOMP_FUNC void _gccubesearch_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800882C8: syscall     678
+    recomp_syscall_handler(rdram, ctx, 0x800882C8);
+    return;
+    // 0x800882CC: addi        $t0, $zero, 0x28
+    ctx->r8 = ADD32(0, 0X28);
+;}
+RECOMP_FUNC void _ncpod_entrypoint_14(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089530: syscall     783
+    recomp_syscall_handler(rdram, ctx, 0x80089530);
+    return;
+    // 0x80089534: addi        $t0, $zero, 0x38
+    ctx->r8 = ADD32(0, 0X38);
 ;}

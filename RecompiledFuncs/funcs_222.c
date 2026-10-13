@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chcrusher_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086A98: syscall     413
-    recomp_syscall_handler(rdram, ctx, 0x80086A98);
-    return;
-    // 0x80086A9C: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_800914FC(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6586,4 +6577,13 @@ RECOMP_FUNC void _chbaddiesetup_entrypoint_10(uint8_t* rdram, recomp_context* ct
     return;
     // 0x80086D7C: addi        $t0, $zero, 0x28
     ctx->r8 = ADD32(0, 0X28);
+;}
+RECOMP_FUNC void _glidmake_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088888: syscall     707
+    recomp_syscall_handler(rdram, ctx, 0x80088888);
+    return;
+    // 0x8008888C: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

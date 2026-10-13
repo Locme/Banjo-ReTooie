@@ -2,187 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80107A80(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80107A80: lui         $t6, 0x8012
-    ctx->r14 = S32(0X8012 << 16);
-    // 0x80107A84: lbu         $t6, 0x762C($t6)
-    ctx->r14 = MEM_BU(ctx->r14, 0X762C);
-    // 0x80107A88: addiu       $t7, $t6, -0xF
-    ctx->r15 = ADD32(ctx->r14, -0XF);
-    // 0x80107A8C: sltiu       $at, $t7, 0xC
-    ctx->r1 = ctx->r15 < 0XC ? 1 : 0;
-    // 0x80107A90: beq         $at, $zero, L_80107B5C
-    if (ctx->r1 == 0) {
-        // 0x80107A94: sll         $t7, $t7, 2
-        ctx->r15 = S32(ctx->r15 << 2);
-            goto L_80107B5C;
-    }
-    // 0x80107A94: sll         $t7, $t7, 2
-    ctx->r15 = S32(ctx->r15 << 2);
-    // 0x80107A98: lui         $at, 0x8012
-    ctx->r1 = S32(0X8012 << 16);
-    // 0x80107A9C: addu        $at, $at, $t7
-    gpr jr_addend_80107AA4 = ctx->r15;
-    ctx->r1 = ADD32(ctx->r1, ctx->r15);
-    // 0x80107AA0: lw          $t7, 0x6478($at)
-    ctx->r15 = ADD32(ctx->r1, 0X6478);
-    // 0x80107AA4: jr          $t7
-    // 0x80107AA8: nop
-
-    switch (jr_addend_80107AA4 >> 2) {
-        case 0: goto L_80107ACC; break;
-        case 1: goto L_80107ABC; break;
-        case 2: goto L_80107B5C; break;
-        case 3: goto L_80107ADC; break;
-        case 4: goto L_80107AAC; break;
-        case 5: goto L_80107AEC; break;
-        case 6: goto L_80107AFC; break;
-        case 7: goto L_80107B0C; break;
-        case 8: goto L_80107B1C; break;
-        case 9: goto L_80107B2C; break;
-        case 10: goto L_80107B3C; break;
-        case 11: goto L_80107B4C; break;
-        default: switch_error(__func__, 0x80107AA4, 0x80126478);
-    }
-    // 0x80107AA8: nop
-
-L_80107AAC:
-    // 0x80107AAC: lui         $at, 0x4220
-    ctx->r1 = S32(0X4220 << 16);
-    // 0x80107AB0: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107AB4: jr          $ra
-    // 0x80107AB8: nop
-
-    return;
-    // 0x80107AB8: nop
-
-L_80107ABC:
-    // 0x80107ABC: lui         $at, 0x41F0
-    ctx->r1 = S32(0X41F0 << 16);
-    // 0x80107AC0: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107AC4: jr          $ra
-    // 0x80107AC8: nop
-
-    return;
-    // 0x80107AC8: nop
-
-L_80107ACC:
-    // 0x80107ACC: lui         $at, 0x41E0
-    ctx->r1 = S32(0X41E0 << 16);
-    // 0x80107AD0: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107AD4: jr          $ra
-    // 0x80107AD8: nop
-
-    return;
-    // 0x80107AD8: nop
-
-L_80107ADC:
-    // 0x80107ADC: lui         $at, 0x41D0
-    ctx->r1 = S32(0X41D0 << 16);
-    // 0x80107AE0: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107AE4: jr          $ra
-    // 0x80107AE8: nop
-
-    return;
-    // 0x80107AE8: nop
-
-L_80107AEC:
-    // 0x80107AEC: lui         $at, 0x41C0
-    ctx->r1 = S32(0X41C0 << 16);
-    // 0x80107AF0: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107AF4: jr          $ra
-    // 0x80107AF8: nop
-
-    return;
-    // 0x80107AF8: nop
-
-L_80107AFC:
-    // 0x80107AFC: lui         $at, 0x41B0
-    ctx->r1 = S32(0X41B0 << 16);
-    // 0x80107B00: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B04: jr          $ra
-    // 0x80107B08: nop
-
-    return;
-    // 0x80107B08: nop
-
-L_80107B0C:
-    // 0x80107B0C: lui         $at, 0x41A0
-    ctx->r1 = S32(0X41A0 << 16);
-    // 0x80107B10: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B14: jr          $ra
-    // 0x80107B18: nop
-
-    return;
-    // 0x80107B18: nop
-
-L_80107B1C:
-    // 0x80107B1C: lui         $at, 0x4190
-    ctx->r1 = S32(0X4190 << 16);
-    // 0x80107B20: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B24: jr          $ra
-    // 0x80107B28: nop
-
-    return;
-    // 0x80107B28: nop
-
-L_80107B2C:
-    // 0x80107B2C: lui         $at, 0x4184
-    ctx->r1 = S32(0X4184 << 16);
-    // 0x80107B30: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B34: jr          $ra
-    // 0x80107B38: nop
-
-    return;
-    // 0x80107B38: nop
-
-L_80107B3C:
-    // 0x80107B3C: lui         $at, 0x4160
-    ctx->r1 = S32(0X4160 << 16);
-    // 0x80107B40: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B44: jr          $ra
-    // 0x80107B48: nop
-
-    return;
-    // 0x80107B48: nop
-
-L_80107B4C:
-    // 0x80107B4C: lui         $at, 0x41F0
-    ctx->r1 = S32(0X41F0 << 16);
-    // 0x80107B50: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B54: jr          $ra
-    // 0x80107B58: nop
-
-    return;
-    // 0x80107B58: nop
-
-L_80107B5C:
-    // 0x80107B5C: lui         $at, 0x41F0
-    ctx->r1 = S32(0X41F0 << 16);
-    // 0x80107B60: mtc1        $at, $f0
-    ctx->f0.u32l = ctx->r1;
-    // 0x80107B64: nop
-
-    // 0x80107B68: jr          $ra
-    // 0x80107B6C: nop
-
-    return;
-    // 0x80107B6C: nop
-
-;}
 RECOMP_FUNC void _chprisonbits_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6258,4 +6077,13 @@ RECOMP_FUNC void _sumissilehome_entrypoint_4(uint8_t* rdram, recomp_context* ctx
     return;
     // 0x8008A78C: addi        $t0, $zero, 0x10
     ctx->r8 = ADD32(0, 0X10);
+;}
+RECOMP_FUNC void _gcskyDll_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088058: syscall     667
+    recomp_syscall_handler(rdram, ctx, 0x80088058);
+    return;
+    // 0x8008805C: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

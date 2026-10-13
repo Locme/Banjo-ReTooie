@@ -2,27 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80809D94_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80809D94: lw          $v0, 0x188($a0)
-    ctx->r2 = MEM_W(ctx->r4, 0X188);
-    // 0x80809D98: jr          $ra
-    // 0x80809D9C: lwc1        $f0, 0x25C($v0)
-    ctx->f0.u32l = MEM_W(ctx->r2, 0X25C);
-    return;
-    // 0x80809D9C: lwc1        $f0, 0x25C($v0)
-    ctx->f0.u32l = MEM_W(ctx->r2, 0X25C);
-;}
-RECOMP_FUNC void _chgoldsnakehead_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085970: syscall     183
-    recomp_syscall_handler(rdram, ctx, 0x80085970);
-    return;
-    // 0x80085974: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void func_80800090_chmole_prehist(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4368,4 +4347,22 @@ L_80800D3C:
     return;
     // 0x80800D54: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void _dbmorph_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087980: syscall     643
+    recomp_syscall_handler(rdram, ctx, 0x80087980);
+    return;
+    // 0x80087984: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void _batimer_get(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085300: syscall     157
+    recomp_syscall_handler(rdram, ctx, 0x80085300);
+    return;
+    // 0x80085304: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
 ;}

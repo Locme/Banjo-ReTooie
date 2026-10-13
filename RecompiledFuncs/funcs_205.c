@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chfactorymagnet_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800874E8: syscall     579
-    recomp_syscall_handler(rdram, ctx, 0x800874E8);
-    return;
-    // 0x800874EC: addi        $t0, $zero, 0x10
-    ctx->r8 = ADD32(0, 0X10);
-;}
 RECOMP_FUNC void func_800C9B84(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4749,4 +4740,18 @@ RECOMP_FUNC void _bstrexsmall_entrypoint_11(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x800840D4: addi        $t0, $zero, 0x2C
     ctx->r8 = ADD32(0, 0X2C);
+;}
+RECOMP_FUNC void chwaterfallgrill_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800320: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1940, 0X330) << 16);
+    // 0x80800324: jr          $ra
+    // 0x80800328: addiu       $v0, $v0, 0x330
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1940, 0X330));
+    return;
+    // 0x80800328: addiu       $v0, $v0, 0x330
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1940, 0X330));
+    // 0x8080032C: nop
+
 ;}

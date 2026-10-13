@@ -2,48 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8009B7C0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009B7C0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8009B7C4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8009B7C8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x8009B7CC: jal         0x8009B9B0
-    // 0x8009B7D0: addiu       $a1, $zero, 0x0
-    ctx->r5 = ADD32(0, 0X0);
-    baphysics_set_target_horizontal_velocity(rdram, ctx);
-        goto after_0;
-    // 0x8009B7D0: addiu       $a1, $zero, 0x0
-    ctx->r5 = ADD32(0, 0X0);
-    after_0:
-    // 0x8009B7D4: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x8009B7D8: mtc1        $zero, $f4
-    ctx->f4.u32l = 0;
-    // 0x8009B7DC: lw          $t6, 0xC8($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0XC8);
-    // 0x8009B7E0: swc1        $f4, 0x18($t6)
-    MEM_W(0X18, ctx->r14) = ctx->f4.u32l;
-    // 0x8009B7E4: lw          $v0, 0xC8($a0)
-    ctx->r2 = MEM_W(ctx->r4, 0XC8);
-    // 0x8009B7E8: lwc1        $f6, 0x18($v0)
-    ctx->f6.u32l = MEM_W(ctx->r2, 0X18);
-    // 0x8009B7EC: swc1        $f6, 0x10($v0)
-    MEM_W(0X10, ctx->r2) = ctx->f6.u32l;
-    // 0x8009B7F0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8009B7F4: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8009B7F8: jr          $ra
-    // 0x8009B7FC: nop
-
-    return;
-    // 0x8009B7FC: nop
-
-;}
 RECOMP_FUNC void func_8001DEE8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3137,5 +3095,19 @@ RECOMP_FUNC void func_800A0064(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800A00C8: nop
+
+;}
+RECOMP_FUNC void chjadesnake_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808008D0: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1868, 0X9F4) << 16);
+    // 0x808008D4: jr          $ra
+    // 0x808008D8: addiu       $v0, $v0, 0x9F4
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1868, 0X9F4));
+    return;
+    // 0x808008D8: addiu       $v0, $v0, 0x9F4
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1868, 0X9F4));
+    // 0x808008DC: nop
 
 ;}

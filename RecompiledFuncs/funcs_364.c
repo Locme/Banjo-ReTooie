@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bskazpaddle_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808003E0: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x808003E4: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(268, 0XA50) << 16);
-    // 0x808003E8: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x808003EC: jr          $ra
-    // 0x808003F0: lw          $v0, 0xA50($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(268, 0XA50));
-    return;
-    // 0x808003F0: lw          $v0, 0xA50($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(268, 0XA50));
-;}
-RECOMP_FUNC void chmasterjiggy_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800950: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(768, 0X16F8) << 16);
-    // 0x80800954: jr          $ra
-    // 0x80800958: addiu       $v0, $v0, 0x16F8
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(768, 0X16F8));
-    return;
-    // 0x80800958: addiu       $v0, $v0, 0x16F8
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(768, 0X16F8));
-;}
 RECOMP_FUNC void gctransitionDll_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4574,4 +4546,25 @@ RECOMP_FUNC void _idlight_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80088CFC: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _chlagoonufoint_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085A48: syscall     190
+    recomp_syscall_handler(rdram, ctx, 0x80085A48);
+    return;
+    // 0x80085A4C: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void chmineprospector_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080000C: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(892, 0X1074) << 16);
+    // 0x80800010: jr          $ra
+    // 0x80800014: addiu       $v0, $v0, 0x1074
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(892, 0X1074));
+    return;
+    // 0x80800014: addiu       $v0, $v0, 0x1074
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(892, 0X1074));
 ;}

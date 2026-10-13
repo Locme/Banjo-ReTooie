@@ -2,91 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsstand_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083B78: syscall     90
-    recomp_syscall_handler(rdram, ctx, 0x80083B78);
-    return;
-    // 0x80083B7C: addi        $t0, $zero, 0x28
-    ctx->r8 = ADD32(0, 0X28);
-;}
-RECOMP_FUNC void func_800FF3EC(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800FF3EC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800FF3F0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800FF3F4: lw          $t6, 0x64($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0X64);
-    // 0x800FF3F8: sll         $t8, $t6, 5
-    ctx->r24 = S32(ctx->r14 << 5);
-    // 0x800FF3FC: bltzl       $t8, L_800FF440
-    if (SIGNED(ctx->r24) < 0) {
-        // 0x800FF400: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_800FF440;
-    }
-    goto skip_0;
-    // 0x800FF400: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x800FF404: jal         0x80100368
-    // 0x800FF408: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_80100368(rdram, ctx);
-        goto after_0;
-    // 0x800FF408: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x800FF40C: lw          $t9, 0x28($v0)
-    ctx->r25 = MEM_W(ctx->r2, 0X28);
-    // 0x800FF410: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x800FF414: beql        $t9, $zero, L_800FF434
-    if (ctx->r25 == 0) {
-        // 0x800FF418: lbu         $t1, 0x64($a0)
-        ctx->r9 = MEM_BU(ctx->r4, 0X64);
-            goto L_800FF434;
-    }
-    goto skip_1;
-    // 0x800FF418: lbu         $t1, 0x64($a0)
-    ctx->r9 = MEM_BU(ctx->r4, 0X64);
-    skip_1:
-    // 0x800FF41C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800FF420: lw          $t9, 0x28($v0)
-    ctx->r25 = MEM_W(ctx->r2, 0X28);
-    // 0x800FF424: jalr        $t9
-    // 0x800FF428: nop
-
-    LOOKUP_FUNC(ctx->r25)(rdram, ctx);
-        goto after_1;
-    // 0x800FF428: nop
-
-    after_1:
-    // 0x800FF42C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x800FF430: lbu         $t1, 0x64($a0)
-    ctx->r9 = MEM_BU(ctx->r4, 0X64);
-L_800FF434:
-    // 0x800FF434: ori         $t2, $t1, 0x4
-    ctx->r10 = ctx->r9 | 0X4;
-    // 0x800FF438: sb          $t2, 0x64($a0)
-    MEM_B(0X64, ctx->r4) = ctx->r10;
-    // 0x800FF43C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_800FF440:
-    // 0x800FF440: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800FF444: jr          $ra
-    // 0x800FF448: nop
-
-    return;
-    // 0x800FF448: nop
-
-;}
 RECOMP_FUNC void bainput_func_80097B28(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3751,4 +3666,22 @@ RECOMP_FUNC void func_80800020_ncbasuck(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8080003C: nop
 
+;}
+RECOMP_FUNC void _bsrest_entrypoint_16(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800839C8: syscall     84
+    recomp_syscall_handler(rdram, ctx, 0x800839C8);
+    return;
+    // 0x800839CC: addi        $t0, $zero, 0x40
+    ctx->r8 = ADD32(0, 0X40);
+;}
+RECOMP_FUNC void _gcegg_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800883D8: syscall     680
+    recomp_syscall_handler(rdram, ctx, 0x800883D8);
+    return;
+    // 0x800883DC: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
 ;}
