@@ -178,7 +178,7 @@
 - Look for: Does each code do what its name says while on, and stop when off? Does a code you typed in the Code Chamber stay on after the row is switched off? The flag numbers are the N64 ones from the decomp, so any row that does nothing is worth telling me.
 - Status: waiting for L
 
-## T19 Texture pack from a zip (BT Reloaded)
+## T21 Texture pack from a zip (BT Reloaded)
 - Asked: 2026-10-13 19:05 UTC
 - Build: latest Windows CI build from main
 - Steps:
@@ -198,7 +198,7 @@
 - Look for: Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
 - Status: waiting for L
 
-## T20 Timer save
+## T22 Timer save
 - Asked: 2026-10-13 19:15 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.13
