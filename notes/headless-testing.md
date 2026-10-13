@@ -41,6 +41,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.
 
+- `TOOIE_AUDIO_LOG=1`: prints `[audio]` every 2 s: how much audio was queued when each chunk arrived (normal is about 10 to 50 ms), how many chunks were sped up to cut latency, and how often the queue ran dry. Both counts should be 0 in normal play.
 - `TOOIE_HIDE_HUD=1`: starts with the HUD hidden (as after F1).
 
 - `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;

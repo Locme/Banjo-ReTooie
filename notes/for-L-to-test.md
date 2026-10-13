@@ -222,3 +222,12 @@
 - Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
 - Status: waiting for L
 
+
+## T24 Audio glitch sounds
+- Asked: 2026-10-13 19:21 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Play normally for 10 minutes or more, in places with music and lots of sound (Spiral Mountain, Mayahem Temple, Witchyworld)
+  2. Try the Framerate mode you were on when you heard the glitch
+- Look for: Do you still hear the short glitchy or sped-up sound now and then? If yes, which level and which Framerate mode?
+- Status: waiting for L

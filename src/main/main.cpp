@@ -1,4 +1,7 @@
 #include <thread>
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <cstdio>
 #include <cassert>
 #include <unordered_map>
@@ -213,6 +216,37 @@ static uint32_t discarded_output_frames;
 
 constexpr uint32_t bytes_per_frame = input_channels * sizeof(float);
 
+// Debug aid: TOOIE_AUDIO_LOG=1 prints, every 2 s, how much audio was queued when the game handed over
+// each chunk, how many chunks were sped up to cut latency, and how often the queue had run dry.
+static void audio_stats_note(uint64_t queued_us, uint32_t skip_factor) {
+    static const bool enabled = std::getenv("TOOIE_AUDIO_LOG") != nullptr;
+    if (!enabled) {
+        return;
+    }
+    static uint64_t chunks = 0, skipped = 0, dry = 0, min_us = UINT64_MAX, max_us = 0;
+    static auto last = std::chrono::steady_clock::now();
+    static bool started = false;
+    chunks++;
+    if (skip_factor != 0) {
+        skipped++;
+    }
+    if (started && queued_us == 0) {
+        dry++;
+    }
+    started = true;
+    min_us = std::min(min_us, queued_us);
+    max_us = std::max(max_us, queued_us);
+    auto now = std::chrono::steady_clock::now();
+    if (now - last >= std::chrono::seconds(2)) {
+        printf("[audio] %llu chunks, queued %.1f-%.1f ms, %llu sped up, %llu ran dry\n", (unsigned long long)chunks,
+            min_us / 1000.0, max_us / 1000.0, (unsigned long long)skipped, (unsigned long long)dry);
+        fflush(stdout);
+        chunks = skipped = dry = max_us = 0;
+        min_us = UINT64_MAX;
+        last = now;
+    }
+}
+
 void queue_samples(int16_t* audio_data, size_t sample_count) {
     // Buffer for holding the output of swapping the audio channels. This is reused across
     // calls to reduce runtime allocations.
@@ -257,7 +291,12 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
         throw std::runtime_error("Error using SDL audio converter");
     }
 
-    uint64_t cur_queued_microseconds = uint64_t(SDL_GetQueuedAudioSize(audio_device)) / bytes_per_frame * 1000000 / sample_rate;
+    // The SDL queue holds output frames (float, output_channels each) at the output rate, so time it with
+    // those. It used to be divided by the game's rate (22050 Hz) and the input frame size, which counted
+    // the queue about 2.2x too long: normal play then crossed the 100 ms limit below now and then and a
+    // chunk was played at double speed, which was the short glitchy sound in some scenes.
+    uint64_t queued_output_frames = uint64_t(SDL_GetQueuedAudioSize(audio_device)) / (output_channels * sizeof(float));
+    uint64_t cur_queued_microseconds = queued_output_frames * 1000000 / output_sample_rate;
     uint32_t num_bytes_to_queue = audio_convert.len_cvt - output_channels * discarded_output_frames * sizeof(swap_buffer[0]);
     float* samples_to_queue = swap_buffer.data() + output_channels * discarded_output_frames / 2;
 
@@ -272,6 +311,8 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
             samples_to_queue[2 * i + 1] = samples_to_queue[2 * skip_ratio * i + 1];
         }
     }
+
+    audio_stats_note(cur_queued_microseconds, skip_factor);
 
     // Queue the swapped audio data.
     // Offset the data start by only half the discarded frame count as the other half of the discarded frames are at the end of the buffer.
