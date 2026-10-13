@@ -187,3 +187,13 @@
   3. Open settings (Esc) > Mods and check BT Reloaded is listed and on
 - Look for: Do the title logo, the copyright text and the menus look sharp instead of pixelated? Any textures that look wrong?
 - Status: waiting for L
+
+## T20 Banjo's animation above Original
+- Asked: 2026-10-13 19:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.15
+- Steps:
+  1. Settings > Graphics > Framerate = Manual 60 (then 120, and Display)
+  2. Walk, run, jump and swim with Banjo, and turn the camera; then walk past a few enemies and Jinjos
+- Look for: Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
+- Status: waiting for L

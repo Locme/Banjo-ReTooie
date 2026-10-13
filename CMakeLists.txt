@@ -145,6 +145,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
 
+    ${CMAKE_SOURCE_DIR}/src/debug/dl_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/trace.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
@@ -169,6 +170,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hud_edges.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/model_tagging.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
     ${CMAKE_SOURCE_DIR}/src/game/screenshot.cpp

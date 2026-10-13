@@ -142,6 +142,7 @@ RECOMP_FUNC void func_800A73F4(uint8_t* rdram, recomp_context* ctx) {
     ctx->r17 = S32(0X8012 << 16);
     // 0x800A7400: addiu       $s1, $s1, 0x7658
     ctx->r17 = ADD32(ctx->r17, 0X7658);
+    tooie_scene_begin(rdram, ctx);
     // 0x800A7404: lw          $t6, 0x4($s1)
     ctx->r14 = MEM_W(ctx->r17, 0X4);
     // 0x800A7408: lw          $t7, 0x8($s1)

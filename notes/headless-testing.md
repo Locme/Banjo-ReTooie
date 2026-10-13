@@ -42,6 +42,8 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.
 
 - `TOOIE_HIDE_HUD=1`: starts with the HUD hidden (as after F1).
+- `TOOIE_DLDUMP=ms[,ms...]`: writes the 3D scene's display list of the first frame after each time to dl_<ms>.txt in the working directory (matrices, vertex loads, segments, called lists).
+- `TOOIE_NO_MODEL_TAGS=1`: turns off the matrix ids for frame interpolation (src/game/model_tagging.cpp), for before/after comparisons. Interpolation only runs with Framerate set to Manual (headless, Display gives no in-between frames).
 
 ## Pad script syntax
 

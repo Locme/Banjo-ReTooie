@@ -243,7 +243,14 @@ text = "tooie_dialogue_timer_advanced(rdram, ctx);"
 # in $s1, it calls func_800C0984 (pause menu backdrop and icons),
 # func_800C0130 (text box portraits), func_800FA508 (the HUD) and
 # func_800B7448 (text boxes and menu text). Marks before and after each let
-# the host drop what the last three drew while the HUD is hidden.
+# the host drop what the last three drew while the HUD is hidden. The mark at
+# 0x800A7404 records where the frame's display list starts, for the matrix
+# tagging that the first mark runs (src/game/model_tagging.cpp).
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A7404
+text = "tooie_scene_begin(rdram, ctx);"
+
 [[patches.hook]]
 func = "func_800A73F4"
 before_vram = 0x800A74C8

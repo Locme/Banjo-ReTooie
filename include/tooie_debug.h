@@ -14,4 +14,9 @@ namespace tooie::debug {
     uint16_t current_map(uint8_t* rdram);
 }
 
+namespace tooie::dl_dump {
+    // Display list dumps (see src/debug/dl_dump.cpp), called after the 3D scene.
+    void scene_end(uint8_t* rdram, uint32_t gfx_end);
+}
+
 #endif
