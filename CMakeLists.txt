@@ -149,6 +149,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/trace.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/distance_probe.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
@@ -170,6 +171,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/dialogue_speed.cpp
     ${CMAKE_SOURCE_DIR}/src/input/tiptoe.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp

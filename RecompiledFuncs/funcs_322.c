@@ -1849,6 +1849,7 @@ RECOMP_FUNC void freelist_capacity(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800EEB40(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_distance_probe(rdram, ctx, 1);
     // 0x800EEB40: lwc1        $f4, 0x0($a0)
     ctx->f4.u32l = MEM_W(ctx->r4, 0X0);
     // 0x800EEB44: lwc1        $f6, 0x0($a1)

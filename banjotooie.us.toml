@@ -342,3 +342,14 @@ func = "func_800DD2E8"
 before_vram = 0x800DD328
 text = "tooie_lod_distance(rdram, ctx);"
 
+# --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
+# Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
+[[patches.hook]]
+func = "func_800EEAD4"
+before_vram = 0x800EEAD4
+text = "tooie_distance_probe(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800EEB40"
+before_vram = 0x800EEB40
+text = "tooie_distance_probe(rdram, ctx, 1);"

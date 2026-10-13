@@ -284,3 +284,13 @@
 - Look for: With it On, do far-away objects keep their detailed look instead of turning simpler? Does anything flicker, vanish or slow down?
 - Status: waiting for L
 
+## T30 Extended draw distance
+- Asked: 2026-10-13 20:40 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.26
+- Steps:
+  1. Settings (Esc) > QOL > Extended draw distance = On (the default)
+  2. Stand at one end of a big area (Mayahem Temple, Witchyworld, Grunty Industries outside) and look at far characters, enemies and objects
+  3. Switch the option Off and On while looking
+- Look for: With it On, do far things stay drawn instead of popping in late? Does anything flicker, slow down, or behave oddly (enemies acting from far away)?
+- Status: waiting for L

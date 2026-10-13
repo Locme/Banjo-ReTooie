@@ -116,6 +116,11 @@ void tooie::init_config() {
                                    &tooie::free_camera_invert_y_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
+    qol.add_bool_option(
+        tooie::draw_distance_option,
+        "Extended draw distance",
+        "Draws far scenery and characters about 5x further away than the original.",
+        true);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

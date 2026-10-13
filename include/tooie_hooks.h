@@ -26,6 +26,7 @@ void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index);
 void tooie_scene_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_frame(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_anim_length(uint8_t* rdram, recomp_context* ctx);
+void tooie_distance_probe(uint8_t* rdram, recomp_context* ctx, int squared);
 // Free camera (src/gameplay/free_camera.cpp): after a camera controller's mode has placed the camera.
 void tooie_free_camera(uint8_t* rdram, recomp_context* ctx);
 // High-detail models (src/gameplay/high_detail_models.cpp): $f0 holds a geo LOD command's squared camera distance.

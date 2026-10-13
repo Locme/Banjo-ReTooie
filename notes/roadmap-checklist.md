@@ -143,7 +143,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.26 Extended draw distance
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.27 Detailed nests and Mayahem Temple stairs
