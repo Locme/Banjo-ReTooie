@@ -12,6 +12,7 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_player_cheats.h"
+#include "tooie_hooks.h"
 
 namespace {
     // Player 0's PlayerState pointer lives in a table of words at 0x80135490 (func_800F53D0 reads it).
@@ -24,6 +25,7 @@ namespace {
     constexpr uint16_t button_a = 0x8000;
     constexpr uint16_t button_b = 0x4000;
     constexpr uint16_t button_d_up = 0x0800;
+    constexpr uint16_t button_d_down = 0x0400;
     constexpr uint16_t button_z = 0x2000;
     constexpr uint16_t button_r = 0x0010;
 
@@ -31,6 +33,8 @@ namespace {
     constexpr uint32_t form_addr = 0x80136F63;
     constexpr uint8_t form_banjo_kazooie = 1;
     constexpr uint8_t form_bee = 6;
+    constexpr uint8_t form_banjo = 10;
+    constexpr uint8_t form_kazooie = 11;
 
     // Player states (the same ids as the XBLA report; checked against the N64 state ids in a headless run).
     constexpr uint32_t state_jump = 5;
@@ -43,6 +47,8 @@ namespace {
     constexpr uint32_t state_bee_launch = 0x8B;
     constexpr uint32_t state_bee_flying = 0x8C;
     constexpr uint32_t state_bee_fall = 0x88;
+    // Split up anywhere: the split-up pad's split animation (Banjo then walks off, Kazooie appears).
+    constexpr uint32_t state_split_up = 184;
     // Moving upwards at this speed (units per second) while A is held in mid-air (Infinite Jumps
     // (Levitate)). A normal jump takes off at about 665.
     constexpr float levitate_speed = 300.0f;
@@ -105,6 +111,11 @@ namespace {
         return s == 0 || s == 0x98 || s == 0x97 || s == 0x93 || s == 0x92 || s == 0x5D || s == 0x75 || s == 0x9A;
     }
     std::atomic<bool> noclip_on{false};
+
+    // Split up anywhere, read by the game's join check (tooie_split_join_check).
+    std::atomic<bool> split_cheat_on{false};
+    std::atomic<bool> split_by_cheat{false};
+    std::atomic<bool> join_requested{false};
     // Player 1's buttons before Z and R were hidden, for noclip's up and down.
     std::atomic<uint16_t> unhidden_buttons{0};
     std::atomic<bool> stop_requested{false};
@@ -206,6 +217,41 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         stop_requested = false;
     }
 
+    // Split up anywhere (handoff 4.76): D-pad down splits Banjo and Kazooie where they stand (state 184, the
+    // split-up pad's own animation; the pad search is answered by tooie_split_pad_search), and joins them
+    // again when they are split. The game joins them by itself whenever Banjo stands within 90 units of
+    // Kazooie (func_8008D40C); after a split made here that check is held off, so they stay apart until
+    // D-pad down is pressed again, which makes it answer yes.
+    {
+        static bool was_dd = false;
+        const bool dd_pressed = (buttons & button_d_down) && !was_dd;
+        was_dd = (buttons & button_d_down) != 0;
+        const bool on = tooie::cheats::is_on("cheat_split_anywhere") && !tooie::cheats::is_on("cheat_noclip");
+        split_cheat_on = on;
+        const bool split = form == form_banjo || form == form_kazooie;
+        const bool splitting = cur >= state_split_up && cur <= state_split_up + 2;
+        if (!split && !splitting) {
+            split_by_cheat = false;
+            join_requested = false;
+        }
+        if (on && dd_pressed) {
+            if (form == form_banjo_kazooie && cur >= 1 && cur <= 4) {
+                if (log) {
+                    std::printf("[split] splitting up from state %u\n", cur);
+                    std::fflush(stdout);
+                }
+                split_by_cheat = true;
+                set_state(rdram, ctx, player, state_split_up);
+            } else if (split) {
+                if (log) {
+                    std::printf("[split] joining up\n");
+                    std::fflush(stdout);
+                }
+                join_requested = true;
+            }
+        }
+    }
+
     // Noclip.
     {
         static bool anchored = false;
@@ -271,4 +317,34 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         std::printf("[player] form %u state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f stick %.2f %.2f\n", form, cur, vy, buttons, hv, av, pos[0], pos[1], pos[2], sx, sy);
         std::fflush(stdout);
     }
+}
+
+extern "C" void tooie_split_pad_search(uint8_t* rdram, recomp_context* ctx, int after) {
+    // The search writes the found pad to sp+0x34; Banjo's position is at sp+0x3C, and the caller copies
+    // the pad's position from pad+4.
+    const uint32_t sp = (uint32_t)ctx->r29;
+    uint32_t* result = reinterpret_cast<uint32_t*>(rdram + (sp + 0x34 - 0x80000000u));
+    if (!after) {
+        *result = 0;
+        return;
+    }
+    if (*result == 0) {
+        *result = sp + 0x3C - 4;
+        static const bool log = std::getenv("TOOIE_PLAYER_LOG") != nullptr;
+        if (log) {
+            std::printf("[split] no split-up pad nearby, splitting where Banjo stands\n");
+            std::fflush(stdout);
+        }
+    }
+}
+
+extern "C" int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx) {
+    if (!split_cheat_on) {
+        return -1;
+    }
+    if (join_requested) {
+        return 1;
+    }
+    // Hold off the game's own join only for splits made with D-pad down; split-up pads work as before.
+    return split_by_cheat ? 0 : -1;
 }

@@ -545,3 +545,16 @@
   2. Open the Save Game Select screen and watch the hand waving in picture 1, and the pictures
 - Look for: Does the hand's wave look smooth now? The pictures' small shake should stay quick and crisp, as before (it is drawn at the game's own rate on purpose). Anything stretched or jumping?
 - Status: waiting for L
+
+## T55 Split up anywhere
+- Asked: 2026-10-14 00:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.76
+- Steps:
+  1. Esc > Cheats: Enable cheats, then Split up anywhere = On
+  2. Load a save that has learned Split Up, stand still somewhere and press D-pad down
+  3. The first time, Jamjars explains splitting up; press A through it
+  4. Walk Banjo right up to Kazooie: they should stay apart
+  5. Press D-pad down again
+- Look for: Do they split where you stand, without a split-up pad? Do they stay apart until you press D-pad down, then join up again? Try it somewhere cramped or on a slope too. Switching between Banjo and Kazooie (D-pad left/right) isn't built yet.
+- Status: waiting for L

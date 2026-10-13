@@ -441,3 +441,24 @@ text = "if (tooie_canary_mary_rule(rdram, ctx, 0)) return;"
 func = "func_80802724_chclockworkmouse"
 before_vram = 0x80802724
 text = "if (tooie_canary_mary_rule(rdram, ctx, 1)) return;"
+
+# Split up anywhere (src/gameplay/player_cheats.cpp). Splitting up (state 184 and on) looks for the
+# nearest split-up pad (actor 0x156, within 800 units) and walks Banjo onto it, reading the found
+# actor even when there is none. The host clears the result before the search and, when nothing was
+# found, points it at a stand-in whose position is Banjo's own, so he splits up where he stands.
+[[patches.hook]]
+func = "func_8080012C_bssplitup"
+before_vram = 0x808001F8
+text = "tooie_split_pad_search(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_8080012C_bssplitup"
+before_vram = 0x80800200
+text = "tooie_split_pad_search(rdram, ctx, 1);"
+
+# Split up anywhere: the game's check for whether split Banjo and Kazooie should join up again (Banjo
+# standing within 90 units of Kazooie). The host answers it itself after a split made with D-pad down.
+[[patches.hook]]
+func = "func_8008D40C"
+before_vram = 0x8008D40C
+text = "{ int join = tooie_split_join_check(rdram, ctx); if (join >= 0) { ctx->r2 = join; return; } }"

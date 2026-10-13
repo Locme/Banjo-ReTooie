@@ -736,6 +736,7 @@ L_808001CC:
     ctx->r6 = ADD32(0, 0X2);
     // 0x808001F4: addiu       $a3, $sp, 0x3C
     ctx->r7 = ADD32(ctx->r29, 0X3C);
+    tooie_split_pad_search(rdram, ctx, 0);
     // 0x808001F8: jal         0x80089C48
     // 0x808001FC: swc1        $f4, 0x10($sp)
     MEM_W(0X10, ctx->r29) = ctx->f4.u32l;
@@ -744,6 +745,7 @@ L_808001CC:
     // 0x808001FC: swc1        $f4, 0x10($sp)
     MEM_W(0X10, ctx->r29) = ctx->f4.u32l;
     after_6:
+    tooie_split_pad_search(rdram, ctx, 1);
     // 0x80800200: lw          $a1, 0x34($sp)
     ctx->r5 = MEM_W(ctx->r29, 0X34);
     // 0x80800204: addiu       $a0, $sp, 0x3C

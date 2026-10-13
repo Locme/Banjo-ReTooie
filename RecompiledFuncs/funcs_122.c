@@ -3868,6 +3868,7 @@ RECOMP_FUNC void func_800F8B7C(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8008D40C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    { int join = tooie_split_join_check(rdram, ctx); if (join >= 0) { ctx->r2 = join; return; } }
     // 0x8008D40C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x8008D410: sw          $ra, 0x14($sp)

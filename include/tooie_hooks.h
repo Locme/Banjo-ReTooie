@@ -46,6 +46,11 @@ void tooie_wipe_model_scale(uint8_t* rdram, recomp_context* ctx);
 // Canary Mary races (src/gameplay/canary_mary.cpp): nonzero when the host ran Mary's speed rule
 // instead of the game. race 0 is the mine cart race, 1 the Cloud Cuckooland race.
 int tooie_canary_mary_rule(uint8_t* rdram, recomp_context* ctx, int race);
+// Split up anywhere (src/gameplay/player_cheats.cpp): around the split-up pad search in Banjo's split-up
+// state; after = 0 before the search, 1 after it.
+void tooie_split_pad_search(uint8_t* rdram, recomp_context* ctx, int after);
+// The game's should-they-join-up check (func_8008D40C): -1 to run it, otherwise its answer.
+int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx);
 
 #ifdef __cplusplus
 }
