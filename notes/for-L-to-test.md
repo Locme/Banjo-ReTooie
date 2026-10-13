@@ -475,13 +475,13 @@
 - Status: waiting for L
 
 ## T48 Back-Port: Glittering honeycombs
-- Asked: 2026-10-13 22:50 UTC
+- Asked: 2026-10-13 22:50 UTC; reworked 23:30 UTC to match Banjo-Kazooie (L: "it works, but its not good", then picked "Match BK")
 - Build: latest Windows CI build from main
 - XBLA history: report §4.63
 - Steps:
   1. Settings (Esc) > General > Back-Port: Glittering honeycombs = On (off by default)
-  2. Find a health honeycomb (Spiral Mountain has three; enemies and beehives drop more)
-- Look for: Does it sparkle like in Banjo-Kazooie, about as often as an empty honeycomb? Does switching the option off stop it?
+  2. Find a health honeycomb (Spiral Mountain has three in a cave; enemies and beehives drop more)
+- Look for: The glints now flash on the comb itself, at its edges, like in Banjo-Kazooie, instead of in the air around it. Is that closer? Too many or too few? Does switching the option off stop it?
 - Status: waiting for L
 
 ## T49 SMAA Anti-Aliasing
