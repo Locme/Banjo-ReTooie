@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Fixed the Jiggy level wipe ending early in wide pictures: it now opens the whole screen.
 - Fixed Banjo's limbs coming apart when the frame rate is above Original.
 - Texture packs can be dropped into the mods folder as a .zip.
 - The Warp tab switch is in Cheats, and needs Enable cheats on.

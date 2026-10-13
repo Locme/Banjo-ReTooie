@@ -252,3 +252,13 @@
   2. Load a file, go to Spiral Mountain and the Isle O' Hags, and look for the mystery eggs (blue and pink)
 - Look for: Do the blue and pink mystery eggs appear or become collectable? This is only a flag set; I could confirm the flags but not that the game shows the eggs, so expect partial results.
 - Status: waiting for L
+
+## T27 Jiggy level wipe in ultrawide
+- Asked: 2026-10-13 19:40 UTC
+- Build: main after 30992ad (next Windows CI build)
+- Steps:
+  1. Set Graphics > Aspect Ratio to Expand and use a 21:9 (or wider) window or screen
+  2. Load a file and enter or leave a level, or use the Warp tab
+  3. Watch the Jiggy-shaped wipe that opens the picture
+- Look for: Does the Jiggy hole grow until the whole wide screen is clear, with no black left at the sides when it disappears?
+- Status: waiting for L

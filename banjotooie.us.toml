@@ -299,6 +299,14 @@ func = "func_808000D8_gctransitionDll"
 before_vram = 0x808001D0
 text = "tooie_transition_anim_length(rdram, ctx);"
 
+# --- Screen wipes in wide pictures (src/game/wide_transitions.cpp) ----------
+# func_80800098_gctransitionDll sizes a shaped wipe's model for the viewport;
+# the scale is in $f10 before it is stored.
+[[patches.hook]]
+func = "func_80800098_gctransitionDll"
+before_vram = 0x808000C4
+text = "tooie_wipe_model_scale(rdram, ctx);"
+
 # --- Unlock all moves, 4.71 (src/gameplay/progress_cheats.cpp) ---------------
 # func_800DA298 is the game flag getter: flag in $a0 at entry, result in $v0 at
 # its single jr $ra.
