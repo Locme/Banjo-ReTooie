@@ -461,4 +461,12 @@
   3. Play where you saw the graphics hitch; whenever something turns red, note where you were
   4. Send logs/console.log (next to the exe) afterwards
 - Look for: Does the hitch line up with something turning red? Does anything turn red that looks fine? Do dust and feathers look smooth now?
+## T46 Back-Port: Old Banjo sounds
+- Asked: 2026-10-13 22:40 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > General: turn on Back-Port: Old Banjo sounds
+  2. Load a save and jump a few times, then twirl-jump and flap
+  3. Turn the option off and jump again
+- Look for: With it on, are Banjo's jump grunts the Banjo-Kazooie ones? With it off, are they Banjo-Tooie's again? I could only check headless that the jump sound table holds the old ids; there is no audio here.
 - Status: waiting for L

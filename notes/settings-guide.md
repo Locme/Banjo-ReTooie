@@ -11,6 +11,8 @@ on a controller.
   whenever it changes. Default: on.
 - **Discord status**: shows the level you are playing in your Discord status
   while Discord is running. Default: on.
+- **Back-Port: Old Banjo sounds**: Banjo-Kazooie's jump sounds instead of
+  Banjo-Tooie's. Default: off.
 - **Save backups to keep**: how many of the newest save backups to keep.
   Range 1 to 100. Default: 10.
 - **Timer save**: saves the game by itself after 5, 10, 30, 60 or 120 minutes of
