@@ -81,7 +81,10 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
 
 target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
 
-# RecompiledFuncs - Library containing the primary recompiler output
+# RecompiledFuncs - Library containing the primary recompiler output.
+# RECOMP_FUNCS_DIR points a call-profiling build at a trace-mode copy of the
+# generated code (tools/trace_build.sh); normal builds use RecompiledFuncs/.
+set(RECOMP_FUNCS_DIR ${CMAKE_SOURCE_DIR}/RecompiledFuncs CACHE PATH "Generated recompiled code")
 add_library(RecompiledFuncs STATIC)
 
 target_compile_options(RecompiledFuncs PRIVATE
@@ -94,14 +97,14 @@ target_compile_options(RecompiledFuncs PRIVATE
 
 target_include_directories(RecompiledFuncs PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/RecompiledFuncs
+    ${RECOMP_FUNCS_DIR}
     ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/ultramodern/include
     ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/librecomp/include
     ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/N64Recomp/include
 )
 
-file(GLOB FUNC_C_SOURCES ${CMAKE_SOURCE_DIR}/RecompiledFuncs/*.c)
-file(GLOB FUNC_CXX_SOURCES ${CMAKE_SOURCE_DIR}/RecompiledFuncs/*.cpp)
+file(GLOB FUNC_C_SOURCES ${RECOMP_FUNCS_DIR}/*.c)
+file(GLOB FUNC_CXX_SOURCES ${RECOMP_FUNCS_DIR}/*.cpp)
 
 target_sources(RecompiledFuncs PRIVATE ${FUNC_C_SOURCES} ${FUNC_CXX_SOURCES})
 
@@ -113,6 +116,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
 
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/trace.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
@@ -137,7 +141,7 @@ set (SOURCES
 
 target_include_directories(BanjoTooieN64Recomp PRIVATE
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/RecompiledFuncs
+    ${RECOMP_FUNCS_DIR}
     ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/N64Recomp/include
     ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime/thirdparty/sse2neon
     ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib

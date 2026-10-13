@@ -36,3 +36,5 @@ saves/
 save_backups/
 screenshots/
 portable.txt
+build-trace/
+banjotooie.trace.toml
