@@ -111,7 +111,8 @@ F12 screenshots are taken before these filters, so they don't show them.
 ## Graphics: models
 
 - **Always High-Detail Models**: models that switch to a simpler version far
-  away always use the detailed one. Applies at once. Default: on.
+  away always use the detailed one, and Banjo always uses his close-up model
+  (with his necklace and belt buckle). Applies at once. Default: on.
 
 ## Graphics: Frame rate overlay
 

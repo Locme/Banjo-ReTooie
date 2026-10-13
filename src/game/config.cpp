@@ -271,7 +271,7 @@ void tooie::init_config() {
     graphics.add_bool_option(
         tooie::high_detail_models_option,
         "Always High-Detail Models",
-        "Models that switch to a simpler version far away always use the detailed one.",
+        "Models that switch to a simpler version far away always use the detailed one. Banjo always uses his close-up model (with his necklace).",
         true);
     tooie::frame_overlay::add_option(graphics);
     graphics.add_bool_option(

@@ -283,7 +283,8 @@
   1. Settings (Esc) > Graphics > Always High-Detail Models = On (the default)
   2. In a big area (Jinjo Village, Mayahem Temple, Witchyworld), look at things far away
   3. Switch the option Off and On while looking
-- Look for: With it On, do far-away objects keep their detailed look instead of turning simpler? Does anything flicker, vanish or slow down?
+  4. Turn the camera to look at Banjo from the front, from a normal distance
+- Look for: With it On, do far-away objects keep their detailed look instead of turning simpler? Does Banjo wear his necklace and the white belt buckle even when the camera is not close (with it On)? Does anything flicker, vanish or slow down?
 - Status: waiting for L
 
 ## T30 Extended draw distance

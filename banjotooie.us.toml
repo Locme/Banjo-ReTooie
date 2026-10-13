@@ -348,6 +348,15 @@ func = "func_800DD37C"
 before_vram = 0x800DD3BC
 text = "tooie_lod_distance(rdram, ctx);"
 
+# Banjo's close-up model: func_80093F30(index) returns the Banjo-Kazooie model
+# for a detail level (0 = close-up, with the necklace; 1 = far). Its callers
+# pick the index from the camera distance (func_80094070) or the map
+# (func_80093FD4).
+[[patches.hook]]
+func = "func_80093F30"
+before_vram = 0x80093F30
+text = "tooie_banjo_detail(rdram, ctx);"
+
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
 [[patches.hook]]

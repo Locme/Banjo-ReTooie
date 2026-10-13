@@ -9,6 +9,14 @@
 // every LOD command runs as if the camera were right next to it: the detailed
 // child (near 0) is drawn and the simpler ones (near further out) are not.
 // The option is read on every call, so switching it applies at once.
+//
+// Banjo and Kazooie are not swapped by a LOD command. Their model (0x607) has
+// two versions: a close-up one (Banjo's necklace, belt buckle, Kazooie's
+// detail) and a simpler far one. func_80094070 measures the camera distance
+// each frame and asks func_80093F30 for the model of detail level 0 (close) or
+// 1 (far); func_80093FD4 picks the starting level from the map. With the option
+// on, the hook at func_80093F30's entry always asks for level 0. With it off,
+// the next distance check goes back to the game's choice.
 
 #include <chrono>
 #include <cmath>
@@ -70,5 +78,11 @@ extern "C" void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx) {
     }
     if (high_detail_on()) {
         ctx->f0.fl = 1.0f;
+    }
+}
+
+extern "C" void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx) {
+    if (high_detail_on()) {
+        ctx->r4 = 0;
     }
 }

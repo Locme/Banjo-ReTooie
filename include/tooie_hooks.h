@@ -31,6 +31,8 @@ void tooie_distance_probe(uint8_t* rdram, recomp_context* ctx, int squared);
 void tooie_free_camera(uint8_t* rdram, recomp_context* ctx);
 // High-detail models (src/gameplay/high_detail_models.cpp): $f0 holds a geo LOD command's squared camera distance.
 void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx);
+// Same file: $a0 is the Banjo-Kazooie detail level func_80093F30 is asked for.
+void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance (src/display/draw_distance.cpp): $v0 holds func_800D2F20's model draw distance.
 void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.
