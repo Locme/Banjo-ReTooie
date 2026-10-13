@@ -93,7 +93,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.80 Level warp (F5 list and F9)
 - [x] Done
 - [ ] Approved by L
-- 2026-10-13: a "Level warp" tab in the menu (Esc) lists 42 places by area (Spiral Mountain, 10 Isle o' Hags spots, every level with 3 sub-areas, Cauldron Keep). Picking one closes the menu and warps with the game's own map change. F9 repeats the last warp. Warping to the current map does nothing, and a warp waits while another map change is under way. All 42 were warped to in one headless run and each landed with Banjo standing in the area. Code: src/game/level_warp.cpp, level_warp_places.inc, src/debug/warp.cpp. Placement of the list is on a decision card to L.
+- 2026-10-13: a "Debug" tab in the menu (Esc), shown while Settings > General > Debug tab is on (L's pick), lists 42 places by area (Spiral Mountain, 10 Isle o' Hags spots, every level with 3 sub-areas, Cauldron Keep). Picking one closes the menu and warps with the game's own map change. F9 repeats the last warp (only while the Debug tab is on). Warping to the current map does nothing, and a warp waits while another map change is under way. All 42 were warped to in one headless run and each landed with Banjo standing in the area. Code: src/game/level_warp.cpp, level_warp_places.inc, src/debug/warp.cpp.
 
 ### 4.83 Screenshots (F12) with a notice
 - [x] Done

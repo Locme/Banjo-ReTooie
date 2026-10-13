@@ -1,7 +1,8 @@
 // Level warp (handoff 4.80).
 //
-// A "Level warp" tab in the menu lists the places in level_warp_places.inc,
-// grouped by area. Picking one closes the menu and asks for the warp, which
+// A "Debug" tab in the menu lists the places in level_warp_places.inc,
+// grouped by area. The tab shows only while General > Debug tab is on (L's
+// choice, 2026-10-13), and F9 only works then too. Picking one closes the menu and asks for the warp, which
 // src/debug/warp.cpp issues on the game thread at the start of the next frame
 // with the game's own map change (the usual wipe and title card). Warping to
 // the map you are in does nothing. F9 repeats the last warp.
@@ -12,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <variant>
 
 #ifdef _WIN32
 #include "SDL.h"
@@ -45,6 +47,23 @@ namespace {
     };
 
     constexpr auto poll_interval = 10ms;
+    const std::string tab_id = "debug";
+    const std::string option_id = "debug_tab";
+
+    bool debug_tab_on() {
+        try {
+            return std::get<bool>(recompui::config::get_general_config().get_option_value(option_id));
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void show_tab(bool visible) {
+        try {
+            recompui::config::set_tab_visible(tab_id, visible);
+        } catch (...) {
+        }
+    }
     std::once_flag started;
 
     std::mutex last_mutex;
@@ -68,7 +87,7 @@ namespace {
         bool was_down = false;
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
-            bool down = key_down();
+            bool down = key_down() && debug_tab_on();
             if (down && !was_down) {
                 std::optional<Place> place;
                 {
@@ -116,7 +135,19 @@ namespace {
 }
 
 void tooie::level_warp::create_tab() {
-    recompui::config::create_tab("Level warp", "level_warp", create_contents);
+    recomp::config::Config& general = recompui::config::get_general_config();
+    general.add_bool_option(option_id, "Debug tab",
+        "Shows the Debug tab, with the level warp list. F9 repeats the last warp.", false);
+    general.add_option_change_callback(option_id,
+        [](recomp::config::ConfigValueVariant new_value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_tab(std::holds_alternative<bool>(new_value) && std::get<bool>(new_value));
+        });
+    // The saved value is known once the configs load (the general tab has no
+    // other load callback).
+    general.set_load_callback([] { show_tab(debug_tab_on()); });
+
+    recompui::config::create_tab("Debug", tab_id, create_contents);
+    show_tab(false);
 }
 
 void tooie::level_warp::start() {

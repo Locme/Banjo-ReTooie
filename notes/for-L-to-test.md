@@ -124,7 +124,7 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.80
 - Steps:
-  1. Load a file, press Esc, open the Level warp tab and pick a few places in different levels
+  1. Settings > General: turn on Debug tab. Load a file, press Esc, open the Debug tab and pick a few places in different levels
   2. Press F9 after leaving the area you warped to
 - Look for: Does each warp land you standing in the right place, with the usual wipe? Does F9 take you back to the last pick? Any place that crashes or drops you in a wall?
 - Status: waiting for L
