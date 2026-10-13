@@ -30,7 +30,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.12 Save backups
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.15 Frame rate modes: 30 / 40 / 60 / 120 / 175 / uncapped
@@ -99,7 +99,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.91 Crash handler and minidumps
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.95 Debug and test tooling
