@@ -85,7 +85,7 @@ void tooie::init_config() {
         tooie::TransitionSpeed::Original);
     qol.add_bool_option(
         tooie::high_detail_models_option,
-        "High-detail models",
+        "Always High-Detail Models",
         "Models that switch to a simpler version far away always use the detailed one.",
         true);
     qol.add_bool_option(

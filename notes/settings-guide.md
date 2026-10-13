@@ -33,6 +33,15 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
+- **Always High-Detail Models**: models that switch to a simpler version far
+  away always use the detailed one. Applies at once. Default: on.
+- **Free camera**: the right stick turns the camera smoothly around Banjo and
+  tilts it, instead of the game's stepped camera swings. Push it on past the
+  top or bottom of the tilt to move the camera in or out. Clicking the right
+  stick is first person, as before. The camera stays where you turned it until
+  a cutscene or another area. Default: on.
+  - **Free camera speed**: Slow, Normal or Fast. Default: Normal.
+  - **Free camera: invert left/right** and **invert up/down**. Default: off.
 
 ## Controls: Hotkeys
 
