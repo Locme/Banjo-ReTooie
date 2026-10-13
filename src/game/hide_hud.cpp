@@ -74,6 +74,14 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         MEM_W(0, gfx_ctx) = (int32_t)(end + added);
         tooie::dl_dump::scene_end(rdram, end + added);
     }
+    if (index == 6) {
+        // And the 2D after it: its panels and icons are also placed through
+        // the projection (model_tagging.cpp).
+        uint32_t end = (uint32_t)MEM_W(0, gfx_ctx);
+        uint32_t added = tooie::model_tagging::tag_2d(rdram, marks[0] & 0x1FFFFFFF, end & 0x1FFFFFFF);
+        MEM_W(0, gfx_ctx) = (int32_t)(end + added);
+        tooie::dl_dump::frame_end(rdram, marks[0], end + added);
+    }
     marks[index] = (uint32_t)MEM_W(0, gfx_ctx);
 }
 

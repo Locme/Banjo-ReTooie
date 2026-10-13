@@ -28,6 +28,8 @@ namespace {
     std::vector<uint32_t> times;
     size_t next_time = 0;
     std::chrono::steady_clock::time_point started;
+    // The file the 3D scene of this frame was just dumped to, for frame_end.
+    std::string pending_2d;
 
     void read_env() {
         started = std::chrono::steady_clock::now();
@@ -185,4 +187,20 @@ void tooie::dl_dump::scene_end(uint8_t* rdram, uint32_t gfx_end) {
     dumper.walk(tooie::model_tagging::scene_start(), 0, gfx_end & 0x1FFFFFFF);
     std::fclose(out);
     std::fprintf(stderr, "[dldump] wrote %s\n", name.c_str());
+    pending_2d = name;
+}
+
+void tooie::dl_dump::frame_end(uint8_t* rdram, uint32_t from, uint32_t to) {
+    if (pending_2d.empty()) {
+        return;
+    }
+    FILE* out = std::fopen(pending_2d.c_str(), "a");
+    pending_2d.clear();
+    if (out == nullptr) {
+        return;
+    }
+    std::fprintf(out, "--- 2D (pause menu, portraits, HUD, text) ---\n");
+    Dumper dumper{rdram, out};
+    dumper.walk(from & 0x1FFFFFFF, 0, to & 0x1FFFFFFF);
+    std::fclose(out);
 }

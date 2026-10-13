@@ -21,6 +21,9 @@ namespace tooie::debug {
 namespace tooie::dl_dump {
     // Display list dumps (see src/debug/dl_dump.cpp), called after the 3D scene.
     void scene_end(uint8_t* rdram, uint32_t gfx_end);
+    // After the frame's 2D (hide_hud.cpp's last mark): appends it to the
+    // dump scene_end just wrote, if any.
+    void frame_end(uint8_t* rdram, uint32_t from, uint32_t to);
 }
 
 #endif

@@ -24,7 +24,7 @@
 // place their bones instead (see ShadowScan).
 //
 // The small lists live in RDRAM above the game's 8 MB (which RT64 reads
-// without its extended addressing) in four rotating slots, so a slot is never
+// without its extended addressing) in eight rotating slots, so a slot is never
 // rewritten while RT64 may still be reading the frame that uses it.
 //
 // Headless A/B hook: TOOIE_NO_MODEL_TAGS=1 turns the tagging off.
@@ -44,6 +44,8 @@
 #include "tooie_model_tagging.h"
 
 namespace {
+    constexpr uint32_t op_vtx = 0x01;
+    constexpr uint32_t op_popmtx = 0xD8;
     constexpr uint32_t op_mtx = 0xDA;
     constexpr uint32_t op_moveword = 0xDB;
     constexpr uint32_t op_dl = 0xDE;
@@ -52,6 +54,8 @@ namespace {
     // F3DEX2 stores G_MTX params with G_MTX_PUSH inverted.
     constexpr uint32_t mtx_projection = 0x04;
     constexpr uint32_t mtx_load = 0x02;
+    // G_MTX loading the modelview without pushing (F3DEX2 encoding).
+    constexpr uint32_t mtx_modelview_load = (op_mtx << 24) | 0x380000 | (mtx_load ^ 1);
 
     // RT64 extended GBI (lib/rt64/include/rt64_extended_gbi.h).
     constexpr uint32_t rt64_hook_word0 = 0xE0000000 | 0x525464;
@@ -70,8 +74,9 @@ namespace {
     // Physical RDRAM for the small lists: 15-16 MB, above the game's 8 MB and
     // the runtime's data at 8 MB, below the mod heap at 16 MB.
     constexpr uint32_t list_area = 0x00F00000;
-    constexpr uint32_t slot_size = 0x40000;
-    constexpr uint32_t slot_count = 4;
+    // Two slots per frame (the scene and the 2D after it).
+    constexpr uint32_t slot_size = 0x20000;
+    constexpr uint32_t slot_count = 8;
     // Game units a model may move in one frame before it counts as a teleport.
     constexpr float teleport_distance = 250.0f;
     // Camera moves larger than this in one game frame (at 30 fps) count as a cut.
@@ -89,6 +94,10 @@ namespace {
     };
     // Copies drawn last frame, by model.
     std::unordered_map<uint32_t, std::vector<Copy>> previous;
+    // The same for models placed through the projection (ShadowScan), in the
+    // scene and in the 2D after it.
+    std::unordered_map<uint32_t, std::vector<Copy>> previous_projected;
+    std::unordered_map<uint32_t, std::vector<Copy>> previous_2d;
     uint32_t next_instance = 1;
 
     gpr kseg0(uint32_t phys) {
@@ -221,6 +230,12 @@ namespace {
         uint8_t* rdram;
         uint32_t bones = 0;
         int budget = 4096;
+        // The matrix stack, true where a bone is loaded; the bottom is the
+        // modelview in effect before the model.
+        std::vector<bool> stack{false};
+        // Whether vertices are loaded with that modelview (the pause menu's
+        // panels stretch between a bone and it).
+        bool base_vertices = false;
 
         // Walks one list; false if it does anything other than load bones
         // from segment 5.
@@ -235,6 +250,23 @@ namespace {
                         return false;
                     }
                     bones = std::max(bones, (w1 & 0xFFFFFF) / 64 + 1);
+                    if ((params & 1) != 0) {
+                        stack.push_back(true);
+                    }
+                    else {
+                        stack.back() = true;
+                    }
+                }
+                else if (op == op_popmtx) {
+                    for (uint32_t n = w1 / 64; n > 0; n--) {
+                        if (stack.size() < 2) {
+                            return false;
+                        }
+                        stack.pop_back();
+                    }
+                }
+                else if (op == op_vtx && !stack.back()) {
+                    base_vertices = true;
                 }
                 else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
                     segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
@@ -242,7 +274,12 @@ namespace {
                 else if (op == op_dl) {
                     uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
                         ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
-                    if (depth > 8 || target == 0 || !walk(target, segments, depth + 1)) {
+                    // A segment the scan does not know (set before it
+                    // started): leave that list alone.
+                    if (target == 0) {
+                        continue;
+                    }
+                    if (depth > 8 || !walk(target, segments, depth + 1)) {
                         return false;
                     }
                     if (((w0 >> 16) & 0xFF) != 0) {
@@ -297,7 +334,10 @@ uint32_t tooie::model_tagging::scene_start() {
     return frame_start;
 }
 
-uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_t end) {
+// overlay: the 2D drawn after the scene (pause menu, HUD, text boxes). Only
+// its projected models (see ShadowScan) are tagged there, and the camera is
+// left to the scene.
+static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) {
     if (!interpolation_on() || end <= start) {
         return 0;
     }
@@ -329,7 +369,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             uint32_t params = (w0 & 0xFF) ^ 1;
             if ((params & mtx_projection) != 0) {
                 current = -1;
-                if (!have_camera && (params & mtx_load) != 0) {
+                if (!overlay && !have_camera && (params & mtx_load) != 0) {
                     have_camera = read_camera(rdram, w1 & 0x1FFFFFFF, camera);
                 }
             }
@@ -351,7 +391,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         commands.push_back({w0, w1, current});
     }
     for (Block& block : blocks) {
-        block.model = block.first_list == 0 ? 0 : make_id(block.first_list, block.textures, 0);
+        block.model = block.first_list == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
     }
 
     // A camera cut: the camera jumps or turns sharply in one game frame.
@@ -460,7 +500,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     // small turn every game frame; blended, the shake turns into a slow wobble.
     // Its models are drawn at the game's own rate instead, as is everything
     // on the first frame after a camera cut.
-    const bool snap = cut || tooie::debug::current_map(rdram) == game_select_map;
+    const bool snap = (cut && !overlay) || tooie::debug::current_map(rdram) == game_select_map;
 
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
@@ -468,14 +508,48 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
 
     // Shadows (see ShadowScan): a model matrix multiplied into the projection,
     // then segment 5 and the calls that load the bones from it.
-    std::vector<bool> shadow(commands.size(), false);
+    std::vector<uint32_t> shadow(commands.size(), 0);
+    std::vector<uint32_t> shadow_base(commands.size(), 0);
+    std::vector<uint32_t> restore(commands.size(), 0);
     {
+        // The overlay starts with the segments the scene left.
+        static uint32_t scene_segments[16] = {};
         uint32_t segments[16] = {};
+        if (overlay) {
+            std::copy(scene_segments, scene_segments + 16, segments);
+        }
+        std::unordered_map<uint32_t, std::vector<Copy>>& last_copies = overlay ? previous_2d : previous_projected;
+        std::unordered_map<uint32_t, std::vector<Copy>> now_copies;
+        std::unordered_map<uint32_t, std::vector<bool>> used_copies;
+        // The modelview stack as the top-level list leaves it (0 where
+        // unknown), for models that also draw with the modelview before them.
+        std::vector<uint32_t> modelview{0};
         for (size_t i = 0; i < commands.size(); i++) {
             const Command& c = commands[i];
             uint32_t op = c.w0 >> 24;
+            if (op == op_mtx && (((c.w0 & 0xFF) ^ 1) & mtx_projection) == 0) {
+                uint32_t params = (c.w0 & 0xFF) ^ 1;
+                uint32_t address = (c.w1 & 0x80000000) != 0 || (c.w1 >> 24) == 0 ? (c.w1 & 0x1FFFFFFF) : 0;
+                uint32_t top = (params & mtx_load) != 0 ? address : 0;
+                if ((params & 1) != 0) {
+                    modelview.push_back(top);
+                }
+                else {
+                    modelview.back() = top;
+                }
+                continue;
+            }
+            if (op == op_popmtx) {
+                for (uint32_t n = c.w1 / 64; n > 0 && modelview.size() > 1; n--) {
+                    modelview.pop_back();
+                }
+                continue;
+            }
             if (op == op_moveword && ((c.w0 >> 16) & 0xFF) == moveword_segment) {
                 segments[((c.w0 & 0xFFFF) / 4) & 0xF] = c.w1 & 0x1FFFFFFF;
+                if (!overlay) {
+                    scene_segments[((c.w0 & 0xFFFF) / 4) & 0xF] = c.w1 & 0x1FFFFFFF;
+                }
                 continue;
             }
             if (op != op_mtx || (((c.w0 & 0xFF) ^ 1) & (mtx_projection | mtx_load)) != mtx_projection) {
@@ -485,12 +559,19 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             std::copy(segments, segments + 16, local);
             ShadowScan scan{rdram};
             size_t segment_command = 0;
+            size_t next_matrix = 0;
+            uint32_t first_list = 0;
             bool ok = true;
             for (size_t j = i + 1; j < commands.size() && ok; j++) {
                 uint32_t w0 = commands[j].w0;
                 uint32_t w1 = commands[j].w1;
                 uint32_t jop = w0 >> 24;
                 if (jop == op_mtx) {
+                    next_matrix = j;
+                    break;
+                }
+                if (jop == op_popmtx) {
+                    ok = false;
                     break;
                 }
                 if (jop == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
@@ -503,10 +584,17 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
                 else if (jop == op_dl) {
                     uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
                         ((local[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                    if (first_list == 0) {
+                        first_list = target;
+                    }
                     ok = segment_command != 0 && target != 0 && scan.walk(target, local, 0);
                 }
             }
-            uint32_t bytes = scan.bones * 64;
+            uint32_t base = modelview.back();
+            if (scan.base_vertices && (base == 0 || next_matrix == 0)) {
+                ok = false;
+            }
+            uint32_t bytes = (scan.bones + (scan.base_vertices ? 1 : 0)) * 64;
             if (!ok || segment_command == 0 || scan.bones == 0 || cursor + bytes + 64 > limit) {
                 continue;
             }
@@ -534,16 +622,69 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
                 write_matrix(rdram, cursor + n * 64, product);
             }
             put(rdram, start + (uint32_t)segment_command * 8, commands[segment_command].w0, cursor);
+            if (scan.base_vertices) {
+                // The modelview before the model gets the same treatment, and
+                // is put back before the next matrix.
+                for (int r = 0; r < 4; r++) {
+                    for (int k = 0; k < 4; k++) {
+                        bone[r][k] = matrix_element(rdram, base, r, k);
+                    }
+                }
+                for (int r = 0; r < 4; r++) {
+                    for (int k = 0; k < 4; k++) {
+                        product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
+                    }
+                }
+                shadow_base[i] = cursor + scan.bones * 64;
+                write_matrix(rdram, shadow_base[i], product);
+                restore[next_matrix] = base;
+            }
             cursor += bytes;
-            shadow[i] = true;
+
+            // Which copy this is: the nearest of last frame's copies of the
+            // same model, as in pass 2, so one appearing or vanishing does
+            // not shift the others' ids (the pause menu's panels).
+            uint32_t key = make_id(first_list, local[2], 0x534844);
+            auto& last = last_copies[key];
+            auto& used = used_copies[key];
+            used.resize(last.size(), false);
+            int best = -1;
+            float best_distance = teleport_distance * teleport_distance;
+            for (size_t n = 0; n < last.size() && !snap; n++) {
+                if (used[n]) {
+                    continue;
+                }
+                float d = 0.0f;
+                for (int k = 0; k < 3; k++) {
+                    float diff = last[n].pos[k] - m[3][k];
+                    d += diff * diff;
+                }
+                if (d < best_distance) {
+                    best_distance = d;
+                    best = (int)n;
+                }
+            }
+            Copy copy;
+            for (int k = 0; k < 3; k++) {
+                copy.pos[k] = m[3][k];
+            }
+            if (best >= 0) {
+                used[best] = true;
+                copy.instance = last[best].instance;
+            }
+            else {
+                copy.instance = next_instance++;
+            }
+            now_copies[key].push_back(copy);
+            shadow[i] = make_id(key, copy.instance, camera_generation);
         }
+        last_copies = std::move(now_copies);
     }
 
     // Pass 3: wrap the matrix loads.
     bool enabled = false;
     bool tagged = false;
     bool camera_tagged = false;
-    uint32_t shadows = 0;
     std::unordered_map<uint32_t, uint32_t> repeats;
     uint32_t p = start;
     for (size_t index = 0; index < commands.size(); index++, p += 8) {
@@ -555,7 +696,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         uint32_t params = (c.w0 & 0xFF) ^ 1;
         bool projection = (params & mtx_projection) != 0;
         bool model = b >= 0 && blocks[b].model != 0 && !projection;
-        bool tag = model || (snap && !projection);
+        bool tag = model || (snap && !projection && !overlay);
         // The perspective camera gets an id that changes at each cut, so RT64
         // does not blend the camera across it.
         bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera;
@@ -563,7 +704,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             // Replaces the projection multiply: one id for all the shadow's
             // bones, matched in load order and blended element by element
             // (they are flat, so they cannot be split into turn and scale).
-            if (cursor + 40 > limit) {
+            if (cursor + 48 > limit) {
                 break;
             }
             uint32_t list = cursor;
@@ -573,18 +714,23 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
                 enabled = true;
             }
             uint32_t components = snap ? component_skip : component_interpolate;
-            put(rdram, cursor, group_word0(), make_id(0x534844, shadows++, camera_generation));
+            put(rdram, cursor, group_word0(), shadow[index]);
             put(rdram, cursor + 8, group_params(interpolate_simple, components, order_linear), 0);
-            put(rdram, cursor + 16, op_enddl << 24, 0);
-            cursor += 24;
+            cursor += 16;
+            if (shadow_base[index] != 0) {
+                put(rdram, cursor, mtx_modelview_load, shadow_base[index]);
+                cursor += 8;
+            }
+            put(rdram, cursor, op_enddl << 24, 0);
+            cursor += 8;
             put(rdram, p, op_dl << 24, list);
             tagged = true;
             continue;
         }
-        if (!tag && !tagged && !tag_camera) {
+        if (!tag && !tagged && !tag_camera && restore[index] == 0) {
             continue;
         }
-        if (cursor + 64 > limit) {
+        if (cursor + 72 > limit) {
             break;
         }
         uint32_t list = cursor;
@@ -622,6 +768,10 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             put(rdram, cursor + 8, group_params(interpolate_decompose, component_auto, order_auto), 0);
             cursor += 16;
         }
+        if (restore[index] != 0) {
+            put(rdram, cursor, mtx_modelview_load, restore[index]);
+            cursor += 8;
+        }
         put(rdram, cursor, c.w0, c.w1);
         put(rdram, cursor + 8, op_enddl << 24, 0);
         cursor += 16;
@@ -638,4 +788,12 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         return 16;
     }
     return 0;
+}
+
+uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_t end) {
+    return tag(rdram, start, end, false);
+}
+
+uint32_t tooie::model_tagging::tag_2d(uint8_t* rdram, uint32_t start, uint32_t end) {
+    return tag(rdram, start, end, true);
 }

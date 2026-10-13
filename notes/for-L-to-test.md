@@ -198,7 +198,8 @@
   3. On the game select screen, watch the shaking portraits and the hand
   4. Watch a few cutscenes with camera cuts (start a new game for the intro)
   5. Do a few flutter jumps (jump, then hold A) and watch Banjo's shadow
-- Look for: Does the shadow keep its shape and stay under Banjo during the flutter? Does the portrait and hand shake look the same as at Original (quick jitter, not a slow wobble)? At each cutscene camera cut, does the picture switch at once, without Banjo or the camera sliding? Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
+  6. Press Start a few times in a level and watch the menu's dark panels open and close
+- Look for: Does the shadow keep its shape and stay under Banjo during the flutter? Do the pause panels slide open smoothly, without jumping back? Does the portrait and hand shake look the same as at Original (quick jitter, not a slow wobble)? At each cutscene camera cut, does the picture switch at once, without Banjo or the camera sliding? Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
 - Status: waiting for L
 
 ## T22 Timer save
