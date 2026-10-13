@@ -250,16 +250,18 @@ endif()
 if (WIN32)
     include(FetchContent)
 
-    if (DEFINED ENV{SDL2_VERSION})
-        set(SDL2_VERSION $ENV{SDL2_VERSION})
+    if (DEFINED ENV{SDL2_COMPAT_VERSION})
+        set(SDL2_COMPAT_VERSION $ENV{SDL2_COMPAT_VERSION})
     else()
-        set(SDL2_VERSION "2.30.3")
+        set(SDL2_COMPAT_VERSION "2.32.74")
     endif()
 
-    # Fetch SDL2 on windows
+    # Fetch sdl2-compat on windows: the SDL2 API running on SDL3, whose controller
+    # drivers report back buttons on more pads (8BitDo, Flydigi, newer Xbox and
+    # PlayStation pads). Its package carries both SDL2.dll and SDL3.dll.
     FetchContent_Declare(
         sdl2
-        URL https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-devel-${SDL2_VERSION}-VC.zip
+        URL https://github.com/libsdl-org/sdl2-compat/releases/download/release-${SDL2_COMPAT_VERSION}/sdl2-compat-devel-${SDL2_COMPAT_VERSION}-VC.zip
     )
     FetchContent_MakeAvailable(sdl2)
     target_include_directories(BanjoTooieN64Recomp PRIVATE
@@ -269,10 +271,11 @@ if (WIN32)
         ${sdl2_SOURCE_DIR}/lib/x64
     )
 
-    # Copy SDL2 and dxc DLLs to output folder as post build step
+    # Copy SDL and dxc DLLs to output folder as post build step
     add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${sdl2_SOURCE_DIR}/lib/x64/SDL2.dll"
+            "${sdl2_SOURCE_DIR}/lib/x64/SDL3.dll"
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxil.dll"
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
             $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)

@@ -51,7 +51,10 @@ them from the repository, or run from `Release` after `build.bat`).
 
 ## Linux
 
-Needs clang, ninja, SDL2 and GTK 3 development packages.
+Needs clang, ninja and GTK 3 development packages, plus SDL3 with
+[sdl2-compat](https://github.com/libsdl-org/sdl2-compat) on top (the game uses
+the SDL2 API; SDL3's controller drivers report back buttons on more pads).
+`.github/workflows/build.yml` shows how to build and install both.
 
 ```sh
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++

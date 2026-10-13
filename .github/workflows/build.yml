@@ -12,7 +12,8 @@ concurrency:
   # while several threads pushed.
   cancel-in-progress: false
 env:
-  SDL2_VERSION: '2.30.3'
+  SDL2_COMPAT_VERSION: '2.32.74'
+  SDL3_VERSION: '3.4.18'
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -50,6 +51,7 @@ jobs:
           Move-Item -Path "cmake-build/dxcompiler.dll" -Destination "dxcompiler.dll"
           Move-Item -Path "cmake-build/dxil.dll" -Destination "dxil.dll"
           Move-Item -Path "cmake-build/SDL2.dll" -Destination "SDL2.dll"
+          Move-Item -Path "cmake-build/SDL3.dll" -Destination "SDL3.dll"
           Move-Item -Path "cmake-build/BanjoTooieN64Recomp.pdb" -Destination "BanjoTooieN64Recomp.pdb"
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -61,6 +63,7 @@ jobs:
             dxcompiler.dll
             dxil.dll
             SDL2.dll
+            SDL3.dll
             assets/
             recompcontrollerdb.txt
             COPYING
@@ -82,12 +85,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build libgtk-3-dev lld llvm clang-15 libfuse2
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          wget https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-${SDL2_VERSION}.tar.gz
-          tar -xzf SDL2-${SDL2_VERSION}.tar.gz
-          cd SDL2-${SDL2_VERSION}
-          ./configure
-          make -j $(nproc)
-          sudo make install
+          # SDL3, with sdl2-compat on top (the SDL2 API the game uses), as on Windows.
+          wget https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/SDL3-${SDL3_VERSION}.tar.gz
+          tar -xzf SDL3-${SDL3_VERSION}.tar.gz
+          cmake -S SDL3-${SDL3_VERSION} -B SDL3-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL_TESTS=OFF -DSDL_X11_XSCRNSAVER=OFF -DSDL_X11_XTEST=OFF
+          cmake --build SDL3-build -j $(nproc)
+          sudo cmake --install SDL3-build
+          wget https://github.com/libsdl-org/sdl2-compat/releases/download/release-${SDL2_COMPAT_VERSION}/sdl2-compat-${SDL2_COMPAT_VERSION}.tar.gz
+          tar -xzf sdl2-compat-${SDL2_COMPAT_VERSION}.tar.gz
+          cmake -S sdl2-compat-${SDL2_COMPAT_VERSION} -B sdl2-compat-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSDL2COMPAT_TESTS=OFF
+          cmake --build sdl2-compat-build -j $(nproc)
+          sudo cmake --install sdl2-compat-build
           sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
       - name: Build
         run: |-
