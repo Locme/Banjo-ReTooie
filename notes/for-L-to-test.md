@@ -524,3 +524,15 @@
   3. Switch Game Frame Rate to 30 FPS, then 60 FPS, and play the same spot
 - Look for: Does the Game line now sit at 30 at Original and 30 FPS (it used to flip 28/32 because it was counted over a quarter second), and at 60 with 60 FPS? Does 60 FPS feel smoother without anything running too fast (Banjo moved at the same speed here; timers, animations, enemies, music sync and minigames are untested)? Does any place hitch or go slow-motion at 30 or 60?
 - Status: waiting for L
+
+## T53 Noclip
+- Asked: 2026-10-13 23:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.75 (the XBLA version didn't clip and its D-pad didn't rise on your PC; this one is new and uses LT/RT as you asked)
+- Steps:
+  1. Esc > Cheats: Enable cheats, then Noclip = On
+  2. Load a save, hold RT (R) to rise, let go, walk around in the air
+  3. Hold LT (Z) to sink through the ground, then walk into a wall or cliff
+  4. Turn Noclip off
+- Look for: Do you rise and sink while held and stay at that height when you let go? Do you pass through walls, floors and ceilings? When you switch it off, do you fall normally? If you rebound LT/RT in Controls, the buttons follow the N64 Z and R bindings.
+- Status: waiting for L

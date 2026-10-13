@@ -235,7 +235,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.75 Clip through anything (noclip)
-- [ ] Done
+- [x] Done (T53)
 - [ ] Approved by L
 
 ### 4.76 Split up anywhere
