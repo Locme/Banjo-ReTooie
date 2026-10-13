@@ -33,8 +33,11 @@ If you use a normal Command Prompt instead, replace both `clang-cl` names with
 the full path, `"C:\Program Files\Microsoft Visual Studio\2022\<edition>\VC\Tools\Llvm\x64\bin\clang-cl.exe"`
 (adjust the path to your install).
 
-The program is `build-cmake\BanjoTooieN64Recomp.exe`. Run it from the
-repository folder so it finds `assets\`.
+`build.bat` puts the finished game in the `Release` folder: the exe, its DLLs,
+`assets\` and `recompcontrollerdb.txt`. Run `Release\BanjoTooieN64Recomp.exe`.
+If you build by hand, the program is `build-cmake\BanjoTooieN64Recomp.exe`;
+run it from a folder that holds `assets\` and `recompcontrollerdb.txt` (copy
+them from the repository, or run from `Release` after `build.bat`).
 
 ### Troubleshooting
 

@@ -28,7 +28,9 @@ for the feature roadmap and [`BUILDING.md`](BUILDING.md) for how to build.
 
 ## Running
 
-You need your own legally obtained Banjo-Tooie (US) ROM. The first time you
+You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
+(or `update_and_build.bat`) leaves the finished game in the `Release` folder; run
+`Release\BanjoTooieN64Recomp.exe`. The first time you
 start the game, choose **Start Game** in the launcher and pick the ROM file;
 it is remembered afterwards. To skip the launcher and go straight into the
 game, start the exe with `--game bt`. To keep settings and saves next to the

@@ -49,10 +49,15 @@ git submodule update --init --recursive || goto :fail
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER="%CLANG_CL%" -DCMAKE_CXX_COMPILER="%CLANG_CL%" -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions" || goto :fail
 cmake --build build-cmake --target BanjoTooieN64Recomp || goto :fail
 
-copy /y build-cmake\BanjoTooieN64Recomp.exe . >nul
-copy /y build-cmake\*.dll . >nul
+rem Gather everything the game needs to run into the Release folder.
+if not exist Release mkdir Release
+copy /y build-cmake\BanjoTooieN64Recomp.exe Release >nul || goto :fail
+copy /y build-cmake\*.dll Release >nul || goto :fail
+if exist build-cmake\BanjoTooieN64Recomp.pdb copy /y build-cmake\BanjoTooieN64Recomp.pdb Release >nul
+copy /y recompcontrollerdb.txt Release >nul || goto :fail
+xcopy /e /i /y /q assets Release\assets >nul || goto :fail
 echo.
-echo Built BanjoTooieN64Recomp.exe in %CD%
+echo Built BanjoTooieN64Recomp.exe in %CD%\Release
 if not defined NOPAUSE pause
 exit /b 0
 
