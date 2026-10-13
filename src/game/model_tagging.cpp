@@ -31,11 +31,14 @@
 
 #include <atomic>
 #include <algorithm>
+#include <array>
+#include <functional>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <unordered_map>
 #include <vector>
 
@@ -43,6 +46,7 @@
 #include "ultramodern/config.hpp"
 #include "tooie_debug.h"
 #include "tooie_hooks.h"
+#include "tooie_interp_check.h"
 #include "tooie_model_tagging.h"
 
 namespace {
@@ -77,8 +81,13 @@ namespace {
     // the runtime's data at 8 MB, below the mod heap at 16 MB.
     constexpr uint32_t list_area = 0x00F00000;
     // Two slots per frame (the scene and the 2D after it).
-    constexpr uint32_t slot_size = 0x20000;
+    constexpr uint32_t slot_size = 0x1E000;
     constexpr uint32_t slot_count = 8;
+    // The interpolation check's tint: 64 KB of red after the slots, put in
+    // place of a flagged model's textures (red in 16-bit colour, and a red
+    // palette entry for colour-indexed ones).
+    constexpr uint32_t tint_texture = list_area + slot_size * slot_count;
+    constexpr uint32_t tint_size = 0x10000;
     // Game units a model may move in one frame before it counts as a teleport.
     constexpr float teleport_distance = 250.0f;
     // Camera moves larger than this in one game frame (at 30 fps) count as a cut.
@@ -342,7 +351,30 @@ namespace {
         bool have_pos = false;
         float pos[3] = {};
         uint32_t instance = 0;
+        // Index of its SEG 2 command, for the interpolation check's tint.
+        size_t texture_command = SIZE_MAX;
+        // Index of its SEG 1 command (its vertices).
+        size_t vertex_command = SIZE_MAX;
+        // Matrix ids given this frame (filled in pass 3).
+        std::vector<uint32_t> ids;
     };
+
+    // Interpolation check (F7, see tooie_interp_check.h): what each copy of a
+    // model did last frame, by model and copy.
+    struct Track {
+        float pos[3];
+        float step;
+        std::vector<uint32_t> ids;
+        uint32_t tint_frames;
+        bool seen;
+    };
+    std::unordered_map<uint64_t, Track> tracks;
+    uint64_t check_frame = 0;
+    // Game frames a flagged model stays tinted.
+    constexpr uint32_t tint_length = 10;
+    // A move counts as a jump above this many units per frame and over three
+    // times the copy's own move the frame before.
+    constexpr float jump_distance = 60.0f;
 
     bool interpolation_on() {
         static const bool disabled = std::getenv("TOOIE_NO_MODEL_TAGS") != nullptr;
@@ -392,9 +424,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 4) {
             blocks.emplace_back();
             current = (int)blocks.size() - 1;
+            blocks[current].vertex_command = commands.size();
         }
         else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 8 && current >= 0) {
             blocks[current].textures = w1;
+            blocks[current].texture_command = commands.size();
         }
         else if (op == op_mtx) {
             uint32_t params = (w0 & 0xFF) ^ 1;
@@ -422,7 +456,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         commands.push_back({w0, w1, current});
     }
     for (Block& block : blocks) {
-        block.model = block.first_list == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
+        // Particles (dust, feathers, sparkles) set no texture segment and
+        // draw from lists the game builds anew every frame, one matrix per
+        // particle; no id would last, so they keep RT64's automatic matching.
+        block.model = block.first_list == 0 || block.textures == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
     }
 
     // A camera cut: the camera jumps or turns sharply in one game frame, or
@@ -817,6 +854,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     ids_now[blocks[b].model].push_back(id);
                 }
                 bones_tagged++;
+                blocks[b].ids.push_back(id);
             }
             else {
                 id = make_id(0, camera_generation, (uint32_t)index);
@@ -843,6 +881,149 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         put(rdram, p, op_dl << 24, list);
         if (!projection) {
             tagged = tag;
+        }
+    }
+
+    // How many bytes of segment 1 a model's vertex loads reach (its lists
+    // walked as the top-level list calls them).
+    auto vertex_extent = [](uint8_t* rdram, const std::vector<Command>& list, std::array<uint32_t, 16> segments, size_t model) {
+        uint32_t extent = 0;
+        int budget = 20000;
+        std::function<void(uint32_t, int)> walk = [&](uint32_t phys, int depth) {
+            for (; budget > 0; budget--, phys += 8) {
+                uint32_t w0 = word(rdram, phys);
+                uint32_t w1 = word(rdram, phys + 4);
+                uint32_t op = w0 >> 24;
+                if (op == op_vtx && (w1 >> 24) == 1) {
+                    extent = std::max(extent, (w1 & 0xFFFFFF) + ((w0 >> 12) & 0xFF) * 16);
+                }
+                else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
+                    segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
+                }
+                else if (op == op_dl) {
+                    uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
+                        ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                    if (target != 0 && depth < 8) {
+                        walk(target, depth + 1);
+                    }
+                    if (((w0 >> 16) & 0xFF) != 0) {
+                        return;
+                    }
+                }
+                else if (op == op_enddl) {
+                    return;
+                }
+            }
+        };
+        for (const Command& c : list) {
+            if (c.block != (int)model) {
+                continue;
+            }
+            uint32_t op = c.w0 >> 24;
+            if (op == op_moveword && ((c.w0 >> 16) & 0xFF) == moveword_segment) {
+                segments[((c.w0 & 0xFFFF) / 4) & 0xF] = c.w1 & 0x1FFFFFFF;
+            }
+            else if (op == op_dl && budget > 0) {
+                uint32_t target = (c.w1 & 0x80000000) != 0 ? (c.w1 & 0x1FFFFFFF) :
+                    ((segments[(c.w1 >> 24) & 0xF] + (c.w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                // Lists in the small-list area are this file's own.
+                if (target != 0 && (target < list_area || target >= list_area + slot_size * slot_count)) {
+                    walk(target, 0);
+                }
+            }
+        }
+        return extent;
+    };
+
+    if (!overlay && tooie::interp_check::enabled()) {
+        // Flag the copies whose blend will look wrong: a sudden jump (smeared
+        // over the in-between frames), or bones RT64 cannot pair with last
+        // frame's (drawn at the game's rate). Flagged copies are tinted red
+        // for a moment and logged.
+        check_frame++;
+        // The segments as the top-level list leaves them at each model.
+        std::vector<std::array<uint32_t, 16>> block_segments(blocks.size());
+        {
+            std::array<uint32_t, 16> segments{};
+            for (const Command& c : commands) {
+                if ((c.w0 >> 24) == op_moveword && ((c.w0 >> 16) & 0xFF) == moveword_segment) {
+                    segments[((c.w0 & 0xFFFF) / 4) & 0xF] = c.w1 & 0x1FFFFFFF;
+                }
+                if (c.block >= 0) {
+                    block_segments[c.block] = segments;
+                }
+            }
+        }
+        for (auto& [key, track] : tracks) {
+            track.seen = false;
+        }
+        for (size_t bi = 0; bi < blocks.size(); bi++) {
+            Block& block = blocks[bi];
+            if (block.model == 0 || block.matrices == 0) {
+                continue;
+            }
+            uint64_t key = ((uint64_t)block.model << 32) | block.instance;
+            auto found = tracks.find(key);
+            bool fresh = found == tracks.end();
+            Track& track = tracks[key];
+            float step = 0.0f;
+            if (!fresh) {
+                for (int k = 0; k < 3; k++) {
+                    float d = block.pos[k] - track.pos[k];
+                    step += d * d;
+                }
+                step = std::sqrt(step);
+                bool jump = !cut && !snap && step > std::max(jump_distance, 3.0f * track.step + 20.0f);
+                size_t lost = 0;
+                if (!cut && !snap && block.ids.size() == track.ids.size()) {
+                    for (uint32_t id : block.ids) {
+                        lost += std::find(track.ids.begin(), track.ids.end(), id) == track.ids.end() ? 1 : 0;
+                    }
+                }
+                if (jump || lost != 0) {
+                    track.tint_frames = tint_length;
+                    std::printf("[interp-check] frame %llu map %X model %08X (list %08X textures %08X) copy %u at %.0f,%.0f,%.0f: %s",
+                        (unsigned long long)check_frame, tooie::debug::current_map(rdram), block.model, block.first_list, block.textures, block.instance,
+                        block.pos[0], block.pos[1], block.pos[2], jump ? "jumped" : "");
+                    if (jump) {
+                        std::printf(" %.0f units (moved %.0f the frame before)", step, track.step);
+                    }
+                    if (lost != 0) {
+                        std::printf("%s%zu of %zu bones not blended", jump ? ", " : "", lost, block.ids.size());
+                    }
+                    std::printf("\n");
+                }
+            }
+            for (int k = 0; k < 3; k++) {
+                track.pos[k] = block.pos[k];
+            }
+            track.step = step;
+            track.ids = std::move(block.ids);
+            track.seen = true;
+            if (track.tint_frames > 0) {
+                track.tint_frames--;
+                if (block.texture_command != SIZE_MAX) {
+                    put(rdram, start + (uint32_t)block.texture_command * 8, commands[block.texture_command].w0, tint_texture);
+                }
+                // Most characters are coloured by their vertices rather than
+                // textures: draw them from a red copy.
+                uint32_t vertices = commands[block.vertex_command].w1 & 0x1FFFFFFF;
+                uint32_t bytes = std::min<uint32_t>(vertex_extent(rdram, commands, block_segments[bi], bi), 0x8000);
+                if (bytes != 0 && cursor + bytes <= limit) {
+                    for (uint32_t offset = 0; offset < bytes; offset += 16) {
+                        for (uint32_t w = 0; w < 12; w += 4) {
+                            MEM_W(0, kseg0(cursor + offset + w)) = MEM_W(0, kseg0(vertices + offset + w));
+                        }
+                        uint32_t color = (uint32_t)MEM_W(0, kseg0(vertices + offset + 12));
+                        MEM_W(0, kseg0(cursor + offset + 12)) = (int32_t)(0xFF000000 | (color & 0xFF));
+                    }
+                    put(rdram, start + (uint32_t)block.vertex_command * 8, commands[block.vertex_command].w0, cursor);
+                    cursor += bytes;
+                }
+            }
+        }
+        for (auto it = tracks.begin(); it != tracks.end();) {
+            it = it->second.seen ? std::next(it) : tracks.erase(it);
         }
     }
 
@@ -884,6 +1065,16 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
 
 uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_t end) {
     stat_scenes.fetch_add(1, std::memory_order_relaxed);
+    tooie::interp_check::start();
+    if (tooie::interp_check::enabled()) {
+        static bool filled = false;
+        if (!filled) {
+            for (uint32_t offset = 0; offset < tint_size; offset += 4) {
+                MEM_W(0, kseg0(tint_texture + offset)) = (int32_t)0xF801F801;
+            }
+            filled = true;
+        }
+    }
     return tag(rdram, start, end, false);
 }
 

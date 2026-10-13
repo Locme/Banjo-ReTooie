@@ -451,3 +451,14 @@
   1. Settings (Esc) > Graphics > Resolution: pick 720p, then 1080p, then 4K, then Auto
 - Look for: Does the picture get sharper with each step (4K may be slow on weaker GPUs)? Does your choice stay after a restart? The window size itself does not change; this is the resolution the game is drawn at.
 - Status: waiting for L
+
+## T45 Interpolation check (F7)
+- Asked: 2026-10-13 22:38 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Play at your usual frame rate above Original (170)
+  2. Press F7 (a notice says "Interpolation check on")
+  3. Play where you saw the graphics hitch; whenever something turns red, note where you were
+  4. Send logs/console.log (next to the exe) afterwards
+- Look for: Does the hitch line up with something turning red? Does anything turn red that looks fine? Do dust and feathers look smooth now?
+- Status: waiting for L
