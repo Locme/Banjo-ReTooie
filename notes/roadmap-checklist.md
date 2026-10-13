@@ -84,11 +84,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.73 Levitate
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.79 Infinite jumps
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.80 Level warp (F5 list and F9)
