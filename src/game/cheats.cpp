@@ -11,6 +11,7 @@
 #include "recompui/config.h"
 
 #include "tooie_cheats.h"
+#include "tooie_level_warp.h"
 
 namespace {
     const std::string tab_id = "cheats";
@@ -144,7 +145,10 @@ void tooie::cheats::create_tab() {
                 for (const Cheat& cheat : cheat_list) {
                     cfg.update_option_value(cheat.option, false);
                 }
+                cfg.update_option_value("debug_tab", false);
             }
+            // The Warp tab follows the master switch too.
+            tooie::level_warp::refresh();
         });
 }
 

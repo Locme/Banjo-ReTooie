@@ -29,6 +29,7 @@
 #include "elements/ui_scroll_container.h"
 
 #include "tooie_debug.h"
+#include "tooie_cheats.h"
 #include "tooie_level_warp.h"
 #include "tooie_toast.h"
 
@@ -50,9 +51,11 @@ namespace {
     const std::string tab_id = "debug";
     const std::string option_id = "debug_tab";
 
+    // The switch lives in the Cheats tab and only counts while "Enable cheats" is on.
     bool debug_tab_on() {
         try {
-            return std::get<bool>(recompui::config::get_general_config().get_option_value(option_id));
+            return tooie::cheats::enabled() &&
+                std::get<bool>(recompui::config::get_config("cheats").get_option_value(option_id));
         } catch (...) {
             return false;
         }
@@ -135,16 +138,17 @@ namespace {
 }
 
 void tooie::level_warp::create_tab() {
-    recomp::config::Config& general = recompui::config::get_general_config();
-    general.add_bool_option(option_id, "Debug tab",
-        "Shows the Debug tab, with the level warp list. F9 repeats the last warp.", false);
-    general.add_option_change_callback(option_id,
-        [](recomp::config::ConfigValueVariant new_value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            show_tab(std::holds_alternative<bool>(new_value) && std::get<bool>(new_value));
+    recomp::config::Config& cheats = recompui::config::get_config("cheats");
+    cheats.add_bool_option(option_id, "Warp tab",
+        "Shows the Warp tab, with the level warp list. F9 repeats the last warp.", false);
+    // The row only shows while the master switch is on.
+    cheats.add_option_hidden_dependency(option_id, "cheats_enabled", false);
+    cheats.add_option_change_callback(option_id,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            tooie::level_warp::refresh();
         });
-    // The saved value is known once the configs load (the general tab has no
-    // other load callback).
-    general.set_load_callback([] { show_tab(debug_tab_on()); });
+    // The saved values are known once the configs load.
+    cheats.set_load_callback([] { show_tab(debug_tab_on()); });
 
     recompui::config::create_tab("Debug", tab_id, create_contents);
     show_tab(false);
@@ -154,4 +158,8 @@ void tooie::level_warp::start() {
     std::call_once(started, [] {
         std::thread(worker).detach();
     });
+}
+
+void tooie::level_warp::refresh() {
+    show_tab(debug_tab_on());
 }

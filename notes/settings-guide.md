@@ -63,5 +63,7 @@ while cheats are on.
   only undoes what this setting switched on, so a code you typed in the game
   stays on. Close the game with them off if you do not want them in your
   save.
+- **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
+  to. F9 repeats the last warp. Default: off.
 - **Unlock all moves**: every move counts as learned. Your save file is not
   changed.
