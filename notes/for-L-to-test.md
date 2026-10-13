@@ -118,3 +118,13 @@
   2. Open the screenshots folder next to the exe
 - Look for: Does "Screenshot saved" show each time? Is each PNG the game picture only (no menu, no notice), with the right colours and the same shape as the window?
 - Status: waiting for L
+
+## T14 Level warp
+- Asked: 2026-10-13 18:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.80
+- Steps:
+  1. Load a file, press Esc, open the Level warp tab and pick a few places in different levels
+  2. Press F9 after leaving the area you warped to
+- Look for: Does each warp land you standing in the right place, with the usual wipe? Does F9 take you back to the last pick? Any place that crashes or drops you in a wall?
+- Status: waiting for L

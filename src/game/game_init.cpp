@@ -1,6 +1,7 @@
 #include "tooie_game.h"
 #include "tooie_cheats.h"
 #include "tooie_discord.h"
+#include "tooie_level_warp.h"
 #include "tooie_screenshot.h"
 #include "tooie_speedup.h"
 #include "tooie_watchdog.h"
@@ -20,4 +21,5 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* ctx) {
     tooie::discord::start(rdram);
     tooie::speedup::start();
     tooie::screenshot::start();
+    tooie::level_warp::start();
 }

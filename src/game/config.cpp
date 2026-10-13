@@ -6,6 +6,7 @@
 #include "librecomp/game.hpp"
 #include "tooie_cheats.h"
 #include "tooie_discord.h"
+#include "tooie_level_warp.h"
 #include "tooie_speedup.h"
 
 void tooie::init_config() {
@@ -54,6 +55,7 @@ void tooie::init_config() {
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
     tooie::cheats::create_tab();
+    tooie::level_warp::create_tab();
     recompui::config::create_mods_tab();
 
     recompui::config::finalize();

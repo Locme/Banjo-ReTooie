@@ -33,7 +33,9 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   map change, `ms` after the game loop first runs (default: at once). From the
   title, `TOOIE_WARP=AF:0@15000` lands in Spiral Mountain about 20 s later with
   no file loaded, skipping the 10-minute intro. Logs `[warp] map ... (from map
-  ...)`. Map ids are in handoff §4.80. Code: `src/debug/warp.cpp`.
+  ...)`. Map ids are in handoff §4.80 and `src/game/level_warp_places.inc`.
+  Several warps: `TOOIE_WARP=AF:0@15000,142:0@29000,...` (in time order).
+  Code: `src/debug/warp.cpp`.
 
 - `TOOIE_SCREENSHOT_AT=ms[,ms...]`: takes an F12 screenshot at those times
   after the game started; files land in `screenshots/` in the run folder and
