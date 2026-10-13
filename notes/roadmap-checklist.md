@@ -237,7 +237,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.90 Discord Rich Presence
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.92 Hang watchdog
