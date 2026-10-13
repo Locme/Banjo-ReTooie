@@ -16,10 +16,6 @@ on a controller.
 - **Timer save**: saves the game by itself after 5, 10, 30, 60 or 120 minutes of
   play in a level. Pauses, menus and cutscenes don't count, and it never saves
   during them. A "Game saved" notice shows. Default: Off.
-- **Speed-up factor**: how much faster the game runs while the speed-up key
-  (F2) is active. Range 2 to 4. Default: 3.
-- **Speed-up toggle**: press F2 to switch the speed-up on and off, instead of
-  holding it. Default: off.
 
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.
@@ -52,6 +48,16 @@ is off by default and only shows while **Enable cheats** is on. Turning
 **Enable cheats** off resets all the cheats below. Achievements cannot be earned
 while cheats are on.
 
+The three speed-up rows are the exception: **Speed-up** is on by default (it
+still needs **Enable cheats**), and turning **Enable cheats** off leaves them
+as they are.
+
+- **Speed-up**: lets the Speed-Up key run the game faster. Off means the key
+  does nothing. Default: on.
+- **Speed-up factor**: how much faster the game runs while the speed-up is
+  active. Range 2 to 4. Default: 3. Greyed out while **Speed-up** is off.
+- **Speed-up toggle**: press the Speed-Up key to switch the speed-up on and
+  off, instead of holding it. Default: off. Greyed out while **Speed-up** is off.
 - **Infinite eggs**: blue, fire, ice, grenade, clockwork and mine eggs have no
   limit.
 - **Infinite feathers**: red and gold feathers have no limit.

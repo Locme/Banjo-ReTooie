@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <variant>
+#include <vector>
 
 #ifdef _WIN32
 #include "SDL.h"
@@ -14,8 +15,12 @@
 #endif
 
 #include "recompui/config.h"
+#include "recompinput/recompinput.h"
+#include "recompinput/input_binding.h"
+#include "recompinput/profiles.h"
 #include "ultramodern/ultramodern.hpp"
 
+#include "tooie_cheats.h"
 #include "tooie_speedup.h"
 #include "tooie_toast.h"
 
@@ -28,22 +33,37 @@ namespace {
 
     std::once_flag started;
 
+    constexpr auto speed_up_input = recompinput::GameInput::SPEED_UP;
+
     template <typename T>
     T option(const std::string& name, T fallback) {
         try {
-            return std::get<T>(recompui::config::get_general_config().get_option_value(name));
+            return std::get<T>(recompui::config::get_config("cheats").get_option_value(name));
         } catch (...) {
             return fallback;
         }
     }
 
+    // Whether any keyboard key or controller button bound to Speed-Up (Controls tab, Hotkeys) is held.
     bool key_down() {
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        return keys != nullptr && keys[SDL_SCANCODE_F2] != 0;
+        // Pressing the key to bind it in the Controls tab should not switch the speed-up on.
+        if (recompinput::binding::is_binding()) {
+            return false;
+        }
+        bool down = false;
+        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
+            if (profile < 0) {
+                continue;
+            }
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, speed_up_input, b));
+            }
+        }
+        return down;
     }
 
     // Test hook for headless runs, where no key can be pressed: TOOIE_SPEEDUP_HOLD=<from ms>:<to ms>
-    // acts as F2 being held between those two times after the game started.
+    // acts as the Speed-Up key being held between those two times after the game started.
     struct TestHold {
         bool active = false;
         long from = 0;
@@ -89,6 +109,19 @@ namespace {
                 down = down || (ms >= test.from && ms < test.to);
             }
 
+            // Off unless "Enable cheats" and "Speed-up" are both on. Turning either off while the
+            // speed-up is running puts the game back to normal speed.
+            const bool allowed = tooie::cheats::enabled() && option<bool>(tooie::speedup::enabled_option, true);
+            if (!allowed) {
+                down = false;
+                if (on) {
+                    on = false;
+                    set_speed(1, true);
+                }
+                was_down = false;
+                continue;
+            }
+
             bool toggle = option<bool>(tooie::speedup::toggle_option, false);
             uint32_t factor = (uint32_t)option<double>(tooie::speedup::factor_option, 3.0);
             if (factor < 2) {
@@ -116,6 +149,34 @@ namespace {
             }
         }
     }
+}
+
+void tooie::speedup::register_input() {
+    recompinput::set_game_input_name(speed_up_input, "Speed-Up");
+    recompinput::set_game_input_description(speed_up_input,
+        "Runs the game faster while held (or switches it on and off, with Speed-up toggle on). "
+        "Works only while Enable cheats and Speed-up are on in the Cheats tab.");
+    recompinput::set_default_mapping_for_keyboard(speed_up_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F2) });
+    recompinput::set_default_mapping_for_controller(speed_up_input, {});
+}
+
+void tooie::speedup::add_options(recomp::config::Config& cheats, const std::string& master_option) {
+    cheats.add_bool_option(enabled_option, "Speed-up",
+        "Lets the Speed-Up key (F2 unless changed under Hotkeys in the Controls tab) run the game faster. Off means the key does nothing.",
+        true);
+    cheats.add_number_option(factor_option, "Speed-up factor",
+        "How much faster the game runs while the speed-up is active.",
+        2, 4, 1, 0, false, 3);
+    cheats.add_bool_option(toggle_option, "Speed-up toggle",
+        "Press the Speed-Up key to switch the speed-up on and off instead of holding it.",
+        false);
+    for (const std::string* id : { &enabled_option, &factor_option, &toggle_option }) {
+        cheats.add_option_hidden_dependency(*id, master_option, false);
+    }
+    // The factor and toggle rows grey out while the speed-up itself is off.
+    std::vector<recomp::config::ConfigValueVariant> off{ false };
+    cheats.add_option_disable_dependency(factor_option, enabled_option, off);
+    cheats.add_option_disable_dependency(toggle_option, enabled_option, off);
 }
 
 void tooie::speedup::start() {

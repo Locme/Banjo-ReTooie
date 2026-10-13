@@ -10,6 +10,9 @@
 #include "tooie_speedup.h"
 
 void tooie::init_config() {
+    // Before finalize(), which loads the controls config and with it the hotkey bindings.
+    tooie::speedup::register_input();
+
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {
         std::filesystem::create_directories(app_dir);
@@ -48,16 +51,6 @@ void tooie::init_config() {
             {tooie::TimerSave::Minutes120, "120", "120 min"},
         },
         tooie::TimerSave::Off);
-    general.add_number_option(
-        tooie::speedup::factor_option,
-        "Speed-up factor",
-        "How much faster the game runs while the speed-up key (F2) is active.",
-        2, 4, 1, 0, false, 3);
-    general.add_bool_option(
-        tooie::speedup::toggle_option,
-        "Speed-up toggle",
-        "Press F2 to switch the speed-up on and off instead of holding it.",
-        false);
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(
