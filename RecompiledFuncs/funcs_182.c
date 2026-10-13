@@ -5862,6 +5862,7 @@ L_808002AC:
 RECOMP_FUNC void func_8010FC38(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_camera_controller_step(rdram, ctx);
     // 0x8010FC38: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x8010FC3C: sw          $ra, 0x1C($sp)

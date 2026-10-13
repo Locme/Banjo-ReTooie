@@ -2025,6 +2025,7 @@ RECOMP_FUNC void bsbtrot_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800CA558(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_set_fov(rdram, ctx);
     // 0x800CA558: lui         $at, 0x3F00
     ctx->r1 = S32(0X3F00 << 16);
     // 0x800CA55C: mtc1        $a1, $f14

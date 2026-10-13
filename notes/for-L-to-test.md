@@ -306,7 +306,7 @@
 - Look for: Does the new form show and play right after the reload? Which forms crash or look wrong, and where? Does pausing and leaving the area keep the form?
 - Status: waiting for L
 
-## T31 Talon Trot toggle
+## T32 Talon Trot toggle
 - Asked: 2026-10-13 20:13 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.54
@@ -316,4 +316,15 @@
   3. Trot around and jump with A, then press Z to stop. Start again and stop with C-left
   4. Trot into water, then set the option to Hold and check the trot ends when you let go of Z
 - Look for: Does Banjo keep trotting after you let go of Z, and stop on Z or C-left? Does anything get stuck after the trot ends by itself (in water, when hit)? This was broken on the XBLA port on your PC, so please try it with your controller.
+- Status: waiting for L
+
+## T33 Field of view
+- Asked: 2026-10-13 21:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.24
+- Steps:
+  1. Settings (Esc) > QOL > Field of view = +20 (default 0, range -10 to +30)
+  2. Walk around Spiral Mountain, then change the value while playing
+  3. Watch a cutscene; set Cutscene field of view to +10 and watch one again
+- Look for: Does the view get wider during play and change as soon as you move the slider? Do cutscenes stay as they were until you change the cutscene setting? Is anything missing at the screen edges, or do the HUD icons look wrong?
 - Status: waiting for L

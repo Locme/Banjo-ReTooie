@@ -67,6 +67,9 @@ namespace tooie {
     // Extended draw distance (src/display/draw_distance.cpp). Called each frame from tooie_warp_tick.
     inline const std::string draw_distance_option = "extended_draw_distance";
     void draw_distance_tick(uint8_t* rdram);
+    // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.
+    inline const std::string fov_offset_option = "fov_offset";
+    inline const std::string cutscene_fov_offset_option = "cutscene_fov_offset";
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.

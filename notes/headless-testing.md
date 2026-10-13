@@ -47,6 +47,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 - `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;
   `TOOIE_FREECAM_LOG=1` logs the camera, Banjo and stick 4 times a second
   (`[freecam]`). Drive the right stick with `rx=`/`ry=` in the pad script.
+- `TOOIE_FOV_LOG=1`: logs `[fov]` each time a camera's field of view or its gameplay/other kind changes (src/gameplay/field_of_view.cpp).
 - `TOOIE_DLDUMP=ms[,ms...]`: writes the 3D scene's display list of the first frame after each time to dl_<ms>.txt in the working directory (matrices, vertex loads, segments, called lists). `TOOIE_DLDUMP_ALL=1` also prints each matrix in full and every other command raw.
 - `TOOIE_NO_MODEL_TAGS=1`: turns off the matrix ids for frame interpolation (src/game/model_tagging.cpp), for before/after comparisons. Interpolation only runs with Framerate set to Manual (headless, Display gives no in-between frames).
 

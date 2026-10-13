@@ -31,6 +31,9 @@ void tooie_distance_probe(uint8_t* rdram, recomp_context* ctx, int squared);
 void tooie_free_camera(uint8_t* rdram, recomp_context* ctx);
 // High-detail models (src/gameplay/high_detail_models.cpp): $f0 holds a geo LOD command's squared camera distance.
 void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx);
+// Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.
+void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx);
+void tooie_set_fov(uint8_t* rdram, recomp_context* ctx);
 // Wide pictures (src/game/wide_transitions.cpp).
 void tooie_wipe_model_scale(uint8_t* rdram, recomp_context* ctx);
 

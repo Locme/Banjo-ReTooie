@@ -131,6 +131,16 @@ void tooie::init_config() {
             {tooie::talon_trot::Mode::Toggle, "Toggle", "Toggle"},
         },
         tooie::talon_trot::Mode::Toggle);
+    qol.add_number_option(
+        tooie::fov_offset_option,
+        "Field of view",
+        "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
+        -10, 30, 1, 0, false, 0);
+    qol.add_number_option(
+        tooie::cutscene_fov_offset_option,
+        "Cutscene field of view",
+        "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
+        -10, 20, 1, 0, false, 0);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

@@ -136,7 +136,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.24 Field of view and cutscene field of view
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.25 Brightness with a calibration pattern

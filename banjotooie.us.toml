@@ -353,3 +353,16 @@ text = "tooie_distance_probe(rdram, ctx, 0);"
 func = "func_800EEB40"
 before_vram = 0x800EEB40
 text = "tooie_distance_probe(rdram, ctx, 1);"
+
+# --- Field of view, 4.24 (src/gameplay/field_of_view.cpp) -------------------
+# func_800CA558(camera, fov) is the viewport FOV setter; the FOV is in $a1.
+[[patches.hook]]
+func = "func_800CA558"
+before_vram = 0x800CA558
+text = "tooie_set_fov(rdram, ctx);"
+
+# func_8010FC38 steps a viewport's camera controller ($a0); remembers its mode.
+[[patches.hook]]
+func = "func_8010FC38"
+before_vram = 0x8010FC38
+text = "tooie_camera_controller_step(rdram, ctx);"
