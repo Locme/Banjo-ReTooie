@@ -38,6 +38,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_game.h"
+#include "tooie_watchdog.h"
 #include "tooie_debug.h"
 #include "librecomp/game.hpp"
 #include "librecomp/mods.hpp"
@@ -668,7 +669,7 @@ int main(int argc, char** argv) {
     ultramodern::renderer::callbacks_t renderer_callbacks{
         .create_render_context = [](uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool developer_mode) {
             auto presentation_mode = ultramodern::renderer::PresentationMode::PresentEarly;
-            return recompui::renderer::create_render_context(rdram, window_handle, presentation_mode, developer_mode);
+            return tooie::watchdog::wrap(recompui::renderer::create_render_context(rdram, window_handle, presentation_mode, developer_mode));
         },
     };
 
