@@ -1,0 +1,140 @@
+diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
+index 3227ab1..54a1bf9 100644
+--- a/src/hle/rt64_present_queue.cpp
++++ b/src/hle/rt64_present_queue.cpp
+@@ -10,6 +10,64 @@
+ #include "rt64_workload_queue.h"
+ 
+ namespace RT64 {
++    namespace {
++        std::mutex screenshotMutex;
++        ScreenshotCallback screenshotCallback;
++
++        struct ScreenshotReadback {
++            std::unique_ptr<RenderBuffer> buffer;
++            ScreenshotCallback callback;
++            RenderFormat format = RenderFormat::UNKNOWN;
++            uint32_t width = 0;
++            uint32_t height = 0;
++            uint32_t rowWidth = 0;
++        };
++
++        bool screenshotFormatSupported(RenderFormat format) {
++            return (format == RenderFormat::R8G8B8A8_UNORM) || (format == RenderFormat::B8G8R8A8_UNORM) || (format == RenderFormat::R16G16B16A16_UNORM);
++        }
++
++        // Converts the read-back rows to packed RGBA8 and calls the callback.
++        void finishScreenshot(ScreenshotReadback &readback) {
++            const uint32_t texelSize = RenderFormatSize(readback.format);
++            const uint8_t *src = reinterpret_cast<const uint8_t *>(readback.buffer->map());
++            std::vector<uint8_t> rgba(size_t(readback.width) * readback.height * 4);
++            for (uint32_t y = 0; y < readback.height; y++) {
++                const uint8_t *row = src + size_t(y) * readback.rowWidth * texelSize;
++                uint8_t *out = rgba.data() + size_t(y) * readback.width * 4;
++                for (uint32_t x = 0; x < readback.width; x++) {
++                    const uint8_t *texel = row + size_t(x) * texelSize;
++                    if (readback.format == RenderFormat::R16G16B16A16_UNORM) {
++                        const uint16_t *wide = reinterpret_cast<const uint16_t *>(texel);
++                        out[x * 4 + 0] = uint8_t(wide[0] >> 8);
++                        out[x * 4 + 1] = uint8_t(wide[1] >> 8);
++                        out[x * 4 + 2] = uint8_t(wide[2] >> 8);
++                    }
++                    else if (readback.format == RenderFormat::B8G8R8A8_UNORM) {
++                        out[x * 4 + 0] = texel[2];
++                        out[x * 4 + 1] = texel[1];
++                        out[x * 4 + 2] = texel[0];
++                    }
++                    else {
++                        out[x * 4 + 0] = texel[0];
++                        out[x * 4 + 1] = texel[1];
++                        out[x * 4 + 2] = texel[2];
++                    }
++
++                    out[x * 4 + 3] = 0xFF;
++                }
++            }
++
++            readback.buffer->unmap();
++            readback.callback(readback.width, readback.height, std::move(rgba));
++        }
++    }
++
++    void RequestScreenshot(ScreenshotCallback callback) {
++        const std::scoped_lock lock(screenshotMutex);
++        screenshotCallback = std::move(callback);
++    }
++
+     // PresentQueue
+ 
+     PresentQueue::PresentQueue() {
+@@ -340,6 +398,32 @@ namespace RT64 {
+                     }
+                 }
+                 
++                // Copy the game image for a pending screenshot, before any UI is drawn.
++                ScreenshotReadback screenshot;
++                if ((renderParams.texture != nullptr) && screenshotFormatSupported(renderParams.textureFormat)) {
++                    const std::scoped_lock lock(screenshotMutex);
++                    if (screenshotCallback) {
++                        screenshot.callback = std::move(screenshotCallback);
++                        screenshotCallback = nullptr;
++                    }
++                }
++
++                if (screenshot.callback) {
++                    screenshot.format = renderParams.textureFormat;
++                    screenshot.width = renderParams.textureWidth;
++                    screenshot.height = renderParams.textureHeight;
++
++                    // Rows are padded to 256 bytes, as D3D12 requires.
++                    const uint32_t texelSize = RenderFormatSize(screenshot.format);
++                    const uint32_t rowBytes = ((screenshot.width * texelSize) + 255) & ~255U;
++                    screenshot.rowWidth = rowBytes / texelSize;
++                    screenshot.buffer = ext.device->createBuffer(RenderBufferDesc::ReadbackBuffer(uint64_t(rowBytes) * screenshot.height));
++                    commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(renderParams.texture, RenderTextureLayout::COPY_SOURCE));
++                    commandList->copyTextureRegion(
++                        RenderTextureCopyLocation::PlacedFootprint(screenshot.buffer.get(), screenshot.format, screenshot.width, screenshot.height, 1, screenshot.rowWidth),
++                        RenderTextureCopyLocation::Subresource(renderParams.texture));
++                }
++
+                 commandList->setFramebuffer(swapChainFramebuffer);
+                 commandList->clearColor();
+ 
+@@ -367,6 +451,10 @@ namespace RT64 {
+                     ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
+                     ext.presentGraphicsWorker->wait();
+                 }
++
++                if (screenshot.callback) {
++                    finishScreenshot(screenshot);
++                }
+             }
+ 
+             if (lockedWorkloadMutex) {
+diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
+index e08b02c..f71b2cb 100644
+--- a/src/hle/rt64_present_queue.h
++++ b/src/hle/rt64_present_queue.h
+@@ -4,6 +4,9 @@
+ 
+ #pragma once
+ 
++#include <functional>
++#include <vector>
++
+ #include "common/rt64_profiling_timer.h"
+ #include "gui/rt64_inspector.h"
+ #include "render/rt64_vi_renderer.h"
+@@ -17,6 +20,12 @@
+ namespace RT64 {
+     struct WorkloadQueue;
+ 
++    // Screenshots: the next presented frame's game image (before any UI is drawn over it)
++    // is read back and handed to the callback as tightly packed 8-bit RGBA rows, on the
++    // present thread. Only one request is kept; a newer one replaces it.
++    typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
++    void RequestScreenshot(ScreenshotCallback callback);
++
+     struct PresentQueue {
+         struct External {
+             ApplicationWindow *appWindow = nullptr;

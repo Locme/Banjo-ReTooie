@@ -108,3 +108,13 @@
   3. Watch a cutscene with camera cuts, and go through a door to another area
 - Look for: Does movement look smoother above Original? Does the game still run at normal speed? Do camera cuts or doors show a one-frame smear or stretch? Does the HUD or anything else wobble?
 - Status: waiting for L
+
+## T13 Screenshots (F12)
+- Asked: 2026-10-13 17:55 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.83
+- Steps:
+  1. In game, press F12, then open the menu (Esc) and press F12 again
+  2. Open the screenshots folder next to the exe
+- Look for: Does "Screenshot saved" show each time? Is each PNG the game picture only (no menu, no notice), with the right colours and the same shape as the window?
+- Status: waiting for L

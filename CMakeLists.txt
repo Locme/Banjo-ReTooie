@@ -82,6 +82,26 @@ function(apply_submodule_patch name)
 endfunction()
 apply_submodule_patch(N64ModernRuntime)
 apply_submodule_patch(RecompFrontend)
+apply_submodule_patch(rt64)
+
+# The same for a submodule nested inside another: lib-patches/<name>.patch is applied in <dir>.
+function(apply_nested_patch name dir)
+    set(patch ${CMAKE_SOURCE_DIR}/lib-patches/${name}.patch)
+    execute_process(
+        COMMAND git apply --ignore-whitespace --reverse --check ${patch}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
+        RESULT_VARIABLE patch_present OUTPUT_QUIET ERROR_QUIET)
+    if (NOT patch_present EQUAL 0)
+        execute_process(
+            COMMAND git apply --ignore-whitespace ${patch}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/${dir}
+            RESULT_VARIABLE patch_result)
+        if (NOT patch_result EQUAL 0)
+            message(FATAL_ERROR "Could not apply ${patch} to ${dir}")
+        endif()
+    endif()
+endfunction()
+apply_nested_patch(plume lib/rt64/src/contrib/plume)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
 
@@ -142,6 +162,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/hud_edges.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/screenshot.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp

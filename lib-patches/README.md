@@ -30,3 +30,26 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
+
+## rt64.patch
+
+* **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`): adds
+  `RT64::RequestScreenshot(callback)`. The next presented frame's game image is
+  copied to a read-back buffer before the UI is drawn over it, converted to
+  RGBA8 and handed to the callback (handoff 4.83, `src/game/screenshot.cpp`).
+
+To change it: edit the files in `lib/rt64`, then
+`git -C lib/rt64 diff > lib-patches/rt64.patch`.
+
+## plume.patch
+
+Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
+
+* **Texture to buffer copies**: plume's Vulkan `copyTextureRegion` only copied
+  buffer to texture or texture to texture; it now also copies a texture into a
+  buffer (`vkCmdCopyImageToBuffer`). Its D3D12 version no longer sets sample
+  positions for a destination that is a buffer (it dereferenced a null
+  texture). The screenshot read-back needs both.
+
+To change it: edit the files in `lib/rt64/src/contrib/plume`, then
+`git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.

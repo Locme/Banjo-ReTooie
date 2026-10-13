@@ -95,8 +95,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.83 Screenshots (F12) with a notice
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-13: F12 saves the game picture (no menus or notices in it) as screenshots/<date>_<time>.png in the app-data folder and shows "Screenshot saved". The picture has its on-screen shape (wide in Fill). Code: src/game/screenshot.cpp, RT64 read-back in lib-patches/rt64.patch and plume.patch. Verified headless (Vulkan). D3D12 is untested (T13). Photo mode (A to shoot, crop to its frame) waits for photo mode.
 
 ### 4.84 Hide HUD (F1)
 - [ ] Done
