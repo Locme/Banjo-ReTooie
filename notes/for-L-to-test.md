@@ -186,7 +186,7 @@
   2. Start the game and wait. The first start unpacks it, which can take a minute for the 4K pack
   3. Open settings (Esc) > Mods and check BT Reloaded is listed and on
 - Look for: Do the title logo, the copyright text and the menus look sharp instead of pixelated? Any textures that look wrong?
-- Status: waiting for L
+- Status: L, 2026-10-13 19:13: "Tested texture pack, seemingly works"
 
 ## T20 Banjo's animation above Original
 - Asked: 2026-10-13 19:05 UTC
