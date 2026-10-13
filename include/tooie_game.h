@@ -73,7 +73,10 @@ namespace tooie {
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
+    // Only the newest 5 minidumps are kept.
     void install_crash_handler(const std::filesystem::path& app_folder);
+    // Lines (build, settings) written under every crash entry; see tooie_session_log.h.
+    void set_crash_context(const std::string& text);
 }
 
 #endif

@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -35,6 +37,14 @@ namespace {
     char crash_log_path[1100];
     std::atomic_flag crashing;
 
+    // Build and settings for the crash log (set_crash_context). Two buffers so a crash never reads
+    // one that is half written: the writer fills the idle one, then flips the index.
+    char context[2][16384];
+    std::atomic<int> context_index{0};
+
+    // Minidumps are tens of MB each; older ones are deleted at start so these many are kept.
+    constexpr size_t dumps_kept = 5;
+
     void timestamp(char* out, size_t size) {
         std::time_t t = std::time(nullptr);
         std::tm tm_buf{};
@@ -52,6 +62,27 @@ namespace {
             std::fprintf(f, "%s\n", line);
             std::fclose(f);
         }
+    }
+
+    // The build and settings, each line indented under the crash line.
+    void append_context() {
+        const char* text = context[context_index.load()];
+        FILE* f = std::fopen(crash_log_path, "a");
+        if (!f) {
+            return;
+        }
+        bool line_start = true;
+        for (const char* c = text; *c != '\0'; c++) {
+            if (line_start) {
+                std::fputs("    ", f);
+            }
+            std::fputc(*c, f);
+            line_start = *c == '\n';
+        }
+        if (!line_start) {
+            std::fputc('\n', f);
+        }
+        std::fclose(f);
     }
 
     void remove_marker() {
@@ -172,6 +203,7 @@ namespace {
             ep && ep->ExceptionRecord ? static_cast<unsigned long>(ep->ExceptionRecord->ExceptionCode) : 0ul,
             dumped ? dump_name : "not written");
         append_log_line(line);
+        append_context();
         if (last_cpp_exception[0] != '\0') {
             std::snprintf(line, sizeof(line), "    last C++ exception thrown: %s", last_cpp_exception);
             append_log_line(line);
@@ -219,6 +251,7 @@ namespace {
             char line[256];
             std::snprintf(line, sizeof(line), "%s crash: signal %d (%s)", ts, sig, strsignal(sig));
             append_log_line(line);
+            append_context();
 #if defined(__GLIBC__)
             // Raw addresses and any exported symbols; recompiled functions appear as func_80XXXXXX when the symbols are available.
             int fd = open(crash_log_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -254,6 +287,12 @@ namespace {
 #endif
 }
 
+void tooie::set_crash_context(const std::string& text) {
+    int next = 1 - context_index.load();
+    std::snprintf(context[next], sizeof(context[next]), "%s", text.c_str());
+    context_index.store(next);
+}
+
 void tooie::install_crash_handler(const fs::path& app_folder) {
     std::error_code ec;
     fs::path logs = app_folder / "logs";
@@ -275,6 +314,18 @@ void tooie::install_crash_handler(const fs::path& app_folder) {
         char ts[32];
         timestamp(ts, sizeof(ts));
         marker << "started " << ts << "\n";
+    }
+    // Keep room for this run's dump: delete all but the newest dumps_kept - 1 (names sort by date).
+    std::vector<fs::path> dumps;
+    for (const auto& entry : fs::directory_iterator(logs, ec)) {
+        const std::string name = entry.path().filename().string();
+        if (name.rfind("crash_", 0) == 0 && entry.path().extension() == ".dmp") {
+            dumps.push_back(entry.path());
+        }
+    }
+    std::sort(dumps.begin(), dumps.end());
+    for (size_t i = 0; i + (dumps_kept - 1) < dumps.size(); i++) {
+        fs::remove(dumps[i], ec);
     }
     std::atexit(clean_exit);
     install_handlers();

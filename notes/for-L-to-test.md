@@ -328,3 +328,13 @@
   3. Watch a cutscene; set Cutscene field of view to +10 and watch one again
 - Look for: Does the view get wider during play and change as soon as you move the slider? Do cutscenes stay as they were until you change the cutscene setting? Is anything missing at the screen edges, or do the HUD icons look wrong?
 - Status: waiting for L
+
+## T34 Build and settings in the logs
+- Asked: 2026-10-13 20:25 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Start the game, open Esc > Graphics and change Aspect Ratio or Frame Rate, apply, then quit normally
+  2. Open logs/console.log next to the exe
+  3. If you have crash_*.dmp files from earlier, count them in logs/ after starting the game once
+- Look for: Does console.log start with a line naming the build and commit, then "Settings in effect:" with graphics, general, qol, cheats and sound lines? Is there a "Setting changed:" line for what you changed? Are at most 4 old crash_*.dmp files left in logs/? (The next crash entry in crashes.log will carry the same build and settings lines.)
+- Status: waiting for L

@@ -161,6 +161,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/distance_probe.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/session_log.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cheats.cpp
@@ -402,5 +403,14 @@ target_sources(BanjoTooieN64Recomp PRIVATE ${SOURCES})
 if (DEFINED ENV{TOOIE_VERSION})
     target_compile_definitions(BanjoTooieN64Recomp PRIVATE "TOOIE_VERSION=\"$ENV{TOOIE_VERSION}\"")
 endif()
+
+# Every build records the commit it was built from (build_info.h), for the logs.
+add_custom_target(tooie_build_info
+    COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/build_info/build_info.h
+        -P ${CMAKE_SOURCE_DIR}/cmake/build_info.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/build_info/build_info.h
+    VERBATIM)
+add_dependencies(BanjoTooieN64Recomp tooie_build_info)
+target_include_directories(BanjoTooieN64Recomp PRIVATE ${CMAKE_BINARY_DIR}/build_info)
 
 set_property(TARGET BanjoTooieN64Recomp PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

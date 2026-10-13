@@ -41,6 +41,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_game.h"
+#include "tooie_session_log.h"
 #include "tooie_watchdog.h"
 #include "tooie_debug.h"
 #include "librecomp/game.hpp"
@@ -718,6 +719,7 @@ int main(int argc, char** argv) {
     recompinput::players::set_single_player_mode(true);
 
     tooie::init_config();
+    tooie::session_log::start(version_string);
     tooie::unpack_mod_zips();
 
     tooie::start_save_backups();
