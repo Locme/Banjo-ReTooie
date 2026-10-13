@@ -401,3 +401,14 @@
   3. If he still slides, do it again with Graphics > Frame rate = Original
 - Look for: Which of the three runs does Banjo slide in? Does he end up somewhere else after the talk, or only look like he slides while it lasts?
 - Status: waiting for L
+
+## T41 Canary Mary races
+- Asked: 2026-10-13 22:14 UTC
+- Build: the Windows CI build after the main thread regenerates with the Canary Mary hooks (the changelog will say so)
+- XBLA history: report §4.53
+- Steps:
+  1. Esc > QOL > Canary Mary races = Fair (the default)
+  2. Race Canary Mary in Glitter Gulch Mine (and in Cloud Cuckooland if you can reach it). Try to get ahead of her
+  3. Try Easy, then Original, in a race you can restart
+- Look for: With Fair, does she stop catching up when you lead, while still racing at her normal pace? Is Easy clearly easier? Does Original feel like the N64 race you know? I could not reach a race headless, so this is untested in play.
+- Status: waiting for L

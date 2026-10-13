@@ -10,6 +10,7 @@
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_canary_mary.h"
 #include "tooie_picture_filters.h"
 #include "tooie_speedup.h"
 
@@ -127,6 +128,16 @@ void tooie::init_config() {
             {tooie::talon_trot::Mode::Toggle, "Toggle", "Toggle"},
         },
         tooie::talon_trot::Mode::Toggle);
+    qol.add_enum_option(
+        tooie::canary_mary::mode_option,
+        "Canary Mary races",
+        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
+        {
+            {tooie::canary_mary::Mode::Original, "Original", "Original"},
+            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
+            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
+        },
+        tooie::canary_mary::Mode::Fair);
     qol.add_number_option(
         tooie::fov_offset_option,
         "Field of view",

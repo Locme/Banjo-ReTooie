@@ -33,6 +33,10 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
+- **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
+  past her normal pace whenever you lead; Fair removes that catch-up, Easy is
+  Fair with her pace at 85%. She still slows down when you fall behind.
+  Default: Fair.
 - **Free camera**: the right stick turns the camera smoothly around Banjo and
   tilts it, instead of the game's stepped camera swings. Push it on past the
   top or bottom of the tilt to move the camera in or out. Clicking the right

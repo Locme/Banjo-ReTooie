@@ -36,6 +36,9 @@ void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_set_fov(uint8_t* rdram, recomp_context* ctx);
 // Wide pictures (src/game/wide_transitions.cpp).
 void tooie_wipe_model_scale(uint8_t* rdram, recomp_context* ctx);
+// Canary Mary races (src/gameplay/canary_mary.cpp): nonzero when the host ran Mary's speed rule
+// instead of the game. race 0 is the mine cart race, 1 the Cloud Cuckooland race.
+int tooie_canary_mary_rule(uint8_t* rdram, recomp_context* ctx, int race);
 
 #ifdef __cplusplus
 }
