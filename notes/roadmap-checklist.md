@@ -75,11 +75,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.70 Cheato cheats as live toggles
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.71 Unlock all moves
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.72 Unlock everything
@@ -187,7 +187,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.56 Dedicated tiptoe button
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.57 Fine aim
@@ -219,7 +219,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.68 Stop 'n' Swop without a Banjo-Kazooie save
-- [ ] Done
+- [x] Done (flags only; the in-world effect is untested, T26)
 - [ ] Approved by L
 
 ### 4.74 Fly anywhere, and the stop-flying button
