@@ -198,7 +198,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.57 Fine aim
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.58 Gyro aiming and camera
