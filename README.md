@@ -48,7 +48,7 @@ settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
   Speed-up factor and Speed-up toggle.
 - **QOL**: Press Start Early to Skip Intro, Text speed and Level transitions.
 - **Cheats**: Enable cheats, which must be on for the cheat options and the
-  Warp tab to show. The Warp tab lists level warps and adds a Debug tab.
+  Warp tab to show. The Warp tab switch adds a Warp tab listing level warps.
 - **Graphics**: changes apply at once, with no Apply button. Aspect Ratio offers
   4:3, Fill and Letterbox 16:9. Graphics API needs a restart.
 - **F11** or **Alt+Enter** toggles fullscreen.

@@ -17,7 +17,7 @@ regenerated code, CI, notes and tooling are left out.
 - F1 hides the HUD and text boxes.
 - Cheats: Levitate (D-pad down) and Infinite jumps (A in mid-air).
 - Dialogue text speed: 1x, 2x, 4x or instant.
-- Level warp list is in a Debug tab, shown by General > Debug tab. F9 repeats the last warp.
+- Level warp list is in a Warp tab, shown by Cheats > Warp tab (with Enable cheats on). F9 repeats the last warp.
 - Level warp tab with 42 places.
 - F12 takes screenshots, with a "Screenshot saved" notice.
 - The HUD is at the screen edges in wide pictures.
