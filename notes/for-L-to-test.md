@@ -389,7 +389,7 @@
 - Steps:
   1. Settings (Esc) > QOL > Skip boss intros = On (the default)
   2. Warp to Chilly Willy (or any boss you haven't fought on this file) and press B once during the intro
-  3. Also press B while talking to someone outside a boss fight, e.g. Jamjars or Mumbo: nothing should be skipped
+  3. Press B while talking to someone, e.g. Jamjars or Mumbo: nothing should be skipped. Then turn on QOL > Skip other cutscenes and try again: the conversation should race through
 - Look for: Does the intro fast-forward (a "Skipping cutscene" message, the scene racing through its dialogue) and stop right as the fight starts? Which bosses did you try, and did any intro not skip?
 - Status: waiting for L
 

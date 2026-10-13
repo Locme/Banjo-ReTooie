@@ -1,9 +1,10 @@
 // Skip cutscenes with B (handoff 4.62, "Skip boss intros").
 //
 // Boss intros run for a minute or more and wait on dialogue, and the game will
-// not skip them. With QOL > Skip boss intros on, pressing B while a letterboxed
-// scene is on screen in a boss's map (bosses only, so a stray B
-// never pages through an NPC conversation) (tooie::in_letterboxed_scene, from the FOV
+// not skip them. Two QOL toggles (L): "Skip boss intros" (on) for letterboxed
+// scenes in a boss's map, and "Skip other cutscenes" (off) for every other
+// letterboxed scene, NPC conversations included. With the matching toggle on,
+// pressing B while such a scene is on screen (tooie::in_letterboxed_scene, from the FOV
 // setter) fast-forwards it: the game clock runs at 16x (as the speed-up key
 // does) and A is tapped for the player every few frames so the dialogue pages
 // along. Both stop as soon as the gameplay camera is back, after a map change
@@ -71,11 +72,11 @@ namespace {
     uint32_t speed_before = 1;
     std::chrono::steady_clock::time_point skip_started;
 
-    bool enabled() {
+    bool option(const std::string& id, bool fallback) {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::cutscene_skip_option));
+            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(id));
         } catch (...) {
-            return true;
+            return fallback;
         }
     }
 
@@ -95,7 +96,7 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
         printf("[cutscene] %s\n", scene ? "scene" : "gameplay");
         fflush(stdout);
     }
-    scene_on = scene && boss && enabled();
+    scene_on = scene && (boss ? option(tooie::cutscene_skip_option, true) : option(tooie::cutscene_skip_other_option, false));
 
     if (skipping) {
         if (!scene) {

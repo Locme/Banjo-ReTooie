@@ -73,6 +73,7 @@ namespace tooie {
     bool in_letterboxed_scene();
     // Skip cutscenes with B (src/gameplay/cutscene_skip.cpp), QOL tab.
     inline const std::string cutscene_skip_option = "cutscene_skip_all";
+    inline const std::string cutscene_skip_other_option = "cutscene_skip_other";
     void cutscene_skip_tick(uint8_t* rdram);
     // Applies the skip to player 1's buttons as the game reads them (input thread).
     void cutscene_skip_apply(uint16_t* buttons);
