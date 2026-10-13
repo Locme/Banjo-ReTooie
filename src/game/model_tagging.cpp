@@ -18,6 +18,8 @@
 // of the same model in the last frame; one that jumps further than a teleport
 // distance gets a new id, so it is not smeared across the jump. Matrices
 // outside a model, such as the camera's, keep RT64's automatic matching.
+// On the game select screen every matrix is drawn as the game left it (see
+// below), so the portraits shake as they do at 30 fps.
 //
 // The small lists live in RDRAM above the game's 8 MB (which RT64 reads
 // without its extended addressing) in four rotating slots, so a slot is never
@@ -33,6 +35,7 @@
 
 #include "recomp.h"
 #include "ultramodern/config.hpp"
+#include "tooie_debug.h"
 #include "tooie_hooks.h"
 #include "tooie_model_tagging.h"
 
@@ -66,6 +69,7 @@ namespace {
     constexpr uint32_t slot_count = 4;
     // Game units a model may move in one frame before it counts as a teleport.
     constexpr float teleport_distance = 400.0f;
+    constexpr uint16_t game_select_map = 0x158;
 
     uint32_t slot = 0;
     uint32_t frame_start = 0;
@@ -235,6 +239,11 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     }
     previous = std::move(now);
 
+    // On the game select screen the portraits and the hand shake by a random
+    // small turn every game frame; blended, the shake turns into a slow wobble.
+    // Its models are drawn at the game's own rate instead.
+    const bool snap = tooie::debug::current_map(rdram) == game_select_map;
+
     // Pass 3: wrap the matrix loads.
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
@@ -249,7 +258,8 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             continue;
         }
         int b = owner[index];
-        bool tag = b >= 0 && blocks[b].model != 0;
+        bool projection = (((w0 & 0xFF) ^ 1) & mtx_projection) != 0;
+        bool tag = (b >= 0 && blocks[b].model != 0) || (snap && !projection);
         if (!tag && !tagged) {
             continue;
         }
@@ -263,7 +273,13 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             cursor += 8;
             enabled = true;
         }
-        if (tag) {
+        if (tag && snap) {
+            // Drawn as the game left it: no blending towards the next frame.
+            uint32_t id = b >= 0 && blocks[b].model != 0 ? make_id(blocks[b].model, blocks[b].instance, bone[b]++) : make_id(0, 0, (uint32_t)index);
+            put(rdram, cursor, group_word0(), id);
+            put(rdram, cursor + 8, group_params(interpolate_simple, component_skip, order_linear), 0);
+        }
+        else if (tag) {
             const Block& block = blocks[b];
             uint32_t mode = block.matrices > 1 ? interpolate_simple : interpolate_decompose;
             put(rdram, cursor, group_word0(), make_id(block.model, block.instance, bone[b]++));
