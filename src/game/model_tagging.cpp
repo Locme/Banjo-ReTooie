@@ -33,6 +33,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <unordered_map>
 #include <vector>
@@ -83,6 +84,10 @@ namespace {
     constexpr float cut_distance = 150.0f;
     // ...and so do turns sharper than about 35 degrees.
     constexpr float cut_cosine = 0.82f;
+    // ...or moves more than this per frame (or turns more than this many
+    // degrees) all at once, from (nearly) still.
+    constexpr float sudden_distance = 40.0f;
+    constexpr float sudden_degrees = 10.0f;
     constexpr uint16_t game_select_map = 0x158;
 
     uint32_t slot = 0;
@@ -149,6 +154,9 @@ namespace {
     std::chrono::steady_clock::time_point last_camera_time;
     bool had_camera = false;
     uint32_t camera_generation = 0;
+    // The camera's motion per game frame, last frame.
+    float last_step = 0.0f;
+    float last_turn = 0.0f;
 
     float matrix_element(uint8_t* rdram, uint32_t phys, int row, int column) {
         gpr mtx = kseg0(phys);
@@ -414,6 +422,21 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             frames = std::min(std::max(frames, 1.0f), 4.0f);
             float limit = cut_distance * frames;
             cut = moved > limit * limit || facing < cut_cosine;
+            // Shots of the same place can be closer than that, so a sudden
+            // move or turn also counts: much more than the camera's own
+            // motion the frame before (a steady pan or dolly does not).
+            float step = std::sqrt(moved) / frames;
+            float turn = std::acos(std::min(std::max(facing, -1.0f), 1.0f)) * 57.29578f / frames;
+            bool sudden = step > std::max(sudden_distance, 3.0f * last_step + 15.0f) ||
+                turn > std::max(sudden_degrees, 3.0f * last_turn + 4.0f);
+            cut = cut || sudden;
+            last_step = step;
+            last_turn = turn;
+            // Headless aid: TOOIE_CUT_LOG=1 logs the camera's motion each frame.
+            static const bool log_cuts = std::getenv("TOOIE_CUT_LOG") != nullptr;
+            if (log_cuts) {
+                std::fprintf(stderr, "[cut] moved %.1f turned %.1f frames %.2f%s\n", std::sqrt(moved), turn * frames, frames, cut ? " CUT" : "");
+            }
         }
         last_camera = camera;
         last_camera_time = std::chrono::steady_clock::now();
