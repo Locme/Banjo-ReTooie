@@ -123,6 +123,13 @@ namespace {
     // scene and in the 2D after it.
     std::unordered_map<uint32_t, std::vector<Copy>> previous_projected;
     std::unordered_map<uint32_t, std::vector<Copy>> previous_2d;
+    struct Particle {
+        float pos[3];
+        uint32_t instance;
+    };
+    std::vector<Particle> last_particles;
+    // Furthest a particle may move in one game frame and still be paired.
+    constexpr float particle_distance = 40.0f;
     uint32_t next_instance = 1;
 
     gpr kseg0(uint32_t phys) {
@@ -456,9 +463,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         commands.push_back({w0, w1, current});
     }
     for (Block& block : blocks) {
-        // Particles (dust, feathers, sparkles) set no texture segment and
-        // draw from lists the game builds anew every frame, one matrix per
-        // particle; no id would last, so they keep RT64's automatic matching.
+        // Particles (fire, dust, feathers) set no texture segment and draw
+        // from lists the game builds anew every frame, one matrix per
+        // particle; they are paired one by one below instead.
         block.model = block.first_list == 0 || block.textures == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
     }
 
@@ -554,6 +561,72 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // The 2D has no models of its own; keep the scene's for next frame.
     if (!overlay) {
         previous = std::move(now);
+    }
+
+    // Particles (fire, dust, feathers): one matrix each, in lists the game
+    // rebuilds every frame. Left to RT64's automatic matching, look-alike
+    // flames got paired with each other and jumped about between frames.
+    // Each is paired with the nearest particle of last frame instead, and one
+    // with none near enough is drawn as it is.
+    std::vector<uint32_t> particle_id(commands.size(), 0);
+    if (!overlay) {
+        struct Candidate {
+            float distance;
+            size_t now;
+            size_t last;
+        };
+        std::vector<Particle> current;
+        std::vector<size_t> current_command;
+        for (size_t i = 0; i < commands.size(); i++) {
+            const Command& c = commands[i];
+            if ((c.w0 >> 24) != op_mtx || c.block < 0 || (((c.w0 & 0xFF) ^ 1) & mtx_projection) != 0) {
+                continue;
+            }
+            const Block& block = blocks[c.block];
+            if (block.first_list == 0 || block.textures != 0) {
+                continue;
+            }
+            Particle particle;
+            read_translation(rdram, c.w1 & 0x1FFFFFFF, particle.pos);
+            particle.instance = 0;
+            current.push_back(particle);
+            current_command.push_back(i);
+        }
+        std::vector<Candidate> candidates;
+        if (!cut) {
+            for (size_t a = 0; a < current.size(); a++) {
+                for (size_t b = 0; b < last_particles.size(); b++) {
+                    float d = 0.0f;
+                    for (int k = 0; k < 3; k++) {
+                        float diff = current[a].pos[k] - last_particles[b].pos[k];
+                        d += diff * diff;
+                    }
+                    if (d < particle_distance * particle_distance) {
+                        candidates.push_back({d, a, b});
+                    }
+                }
+            }
+        }
+        std::sort(candidates.begin(), candidates.end(), [](const Candidate& x, const Candidate& y) { return x.distance < y.distance; });
+        std::vector<bool> last_used(last_particles.size(), false);
+        for (const Candidate& candidate : candidates) {
+            if (current[candidate.now].instance != 0 || last_used[candidate.last]) {
+                continue;
+            }
+            current[candidate.now].instance = last_particles[candidate.last].instance;
+            last_used[candidate.last] = true;
+        }
+        for (size_t a = 0; a < current.size(); a++) {
+            if (current[a].instance == 0) {
+                current[a].instance = next_instance++;
+            }
+            particle_id[current_command[a]] = make_id(0x504152, current[a].instance, camera_generation);
+        }
+        static const bool log_particles = std::getenv("TOOIE_TAG_LOG") != nullptr;
+        if (log_particles && !current.empty()) {
+            std::printf("[particles] %zu, %zu paired with last frame's\n", current.size(), (size_t)std::count(last_used.begin(), last_used.end(), true));
+        }
+        last_particles = std::move(current);
     }
 
     // Bone ids. A model loads a varying number of matrices from frame to
@@ -793,7 +866,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         uint32_t params = (c.w0 & 0xFF) ^ 1;
         bool projection = (params & mtx_projection) != 0;
         bool model = b >= 0 && blocks[b].model != 0 && !projection;
-        bool tag = model || (snap && !projection && !overlay);
+        bool particle = particle_id[index] != 0;
+        bool tag = model || particle || (snap && !projection && !overlay);
         // The perspective camera gets an id that changes at each cut, so RT64
         // does not blend the camera across it.
         bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera;
@@ -856,12 +930,16 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 bones_tagged++;
                 blocks[b].ids.push_back(id);
             }
+            else if (particle) {
+                id = particle_id[index];
+            }
             else {
                 id = make_id(0, camera_generation, (uint32_t)index);
             }
             uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
-            uint32_t vertices = snap ? component_skip : component_interpolate;
+            // A particle's quad is rebuilt each frame; only its place blends.
+            uint32_t vertices = snap || particle ? component_skip : component_interpolate;
             put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear, vertices), 0);
             cursor += 16;
         }
