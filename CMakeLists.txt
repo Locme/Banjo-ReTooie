@@ -16,6 +16,15 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_SIMULATE_ID STREQUAL "M
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-everything /W4")
 endif()
 
+# The Windows CI ships RelWithDebInfo so crash dumps have symbols. For MSVC-style compilers CMake gives
+# that config /Ob1, which only inlines functions marked inline; use full inlining (/Ob2, as Release has)
+# so RT64, the runtime and the recompiled code get the same optimisation as a Release build.
+if (MSVC)
+    foreach(flags_var CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+        string(REPLACE "/Ob1" "/Ob2" ${flags_var} "${${flags_var}}")
+    endforeach()
+endif()
+
 # Opt out of constexpr mutex constructor on windows to prevent vcredist issues
 if (WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
