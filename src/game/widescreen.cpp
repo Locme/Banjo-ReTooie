@@ -27,6 +27,11 @@ namespace {
     // How much wider than 4:3 RT64 draws the 3D view.
     float aspect_scale() {
         const auto& config = ultramodern::renderer::get_graphics_config();
+        // Manual is the Letterbox 16:9 choice: RT64 draws a 16:9 view
+        // (its default manual target) and adds bars around it.
+        if (config.ar_option == ultramodern::renderer::AspectRatio::Manual) {
+            return (16.0f / 9.0f) / original_aspect;
+        }
         if (config.ar_option != ultramodern::renderer::AspectRatio::Expand) {
             return 1.0f;
         }

@@ -56,22 +56,26 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)
 
-# Fixes to N64ModernRuntime that Banjo-Tooie needs (lib-patches/README.md).
-# Applied to the submodule checkout once; a second configure finds it applied.
-set(RUNTIME_PATCH ${CMAKE_SOURCE_DIR}/lib-patches/N64ModernRuntime.patch)
-execute_process(
-    COMMAND git apply --ignore-whitespace --reverse --check ${RUNTIME_PATCH}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime
-    RESULT_VARIABLE RUNTIME_PATCH_PRESENT OUTPUT_QUIET ERROR_QUIET)
-if (NOT RUNTIME_PATCH_PRESENT EQUAL 0)
+# Changes to submodules that Banjo-Tooie needs (lib-patches/README.md).
+# Each is applied to the submodule checkout once; a second configure finds it applied.
+function(apply_submodule_patch name)
+    set(patch ${CMAKE_SOURCE_DIR}/lib-patches/${name}.patch)
     execute_process(
-        COMMAND git apply --ignore-whitespace ${RUNTIME_PATCH}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime
-        RESULT_VARIABLE RUNTIME_PATCH_RESULT)
-    if (NOT RUNTIME_PATCH_RESULT EQUAL 0)
-        message(FATAL_ERROR "Could not apply ${RUNTIME_PATCH} to lib/N64ModernRuntime")
+        COMMAND git apply --ignore-whitespace --reverse --check ${patch}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
+        RESULT_VARIABLE patch_present OUTPUT_QUIET ERROR_QUIET)
+    if (NOT patch_present EQUAL 0)
+        execute_process(
+            COMMAND git apply --ignore-whitespace ${patch}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/${name}
+            RESULT_VARIABLE patch_result)
+        if (NOT patch_result EQUAL 0)
+            message(FATAL_ERROR "Could not apply ${patch} to lib/${name}")
+        endif()
     endif()
-endif()
+endfunction()
+apply_submodule_patch(N64ModernRuntime)
+apply_submodule_patch(RecompFrontend)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
 

@@ -18,3 +18,15 @@ so the submodules stay pinned to their upstream commits.
 
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
+
+## RecompFrontend.patch
+
+* **Live graphics settings** (`recompui/src/config/ui_config_tab_graphics.cpp`):
+  every graphics option applies and saves as soon as it changes, so the
+  Apply button is no longer needed (handoff 4.10).
+* **Letterbox 16:9** (same file): the Aspect Ratio row offers RT64's manual
+  aspect (16:9 with bars) as "Letterbox 16:9"; the other two are labelled
+  "4:3" and "Fill" (handoff 4.22).
+
+To change it: edit the files in `lib/RecompFrontend`, then
+`git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

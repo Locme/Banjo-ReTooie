@@ -1,0 +1,74 @@
+diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
+index 4fdf81f..cdd4d49 100644
+--- a/recompui/src/config/ui_config_tab_graphics.cpp
++++ b/recompui/src/config/ui_config_tab_graphics.cpp
+@@ -65,9 +65,9 @@ namespace recompui {
+         };
+ 
+         static EnumOptionVector aspect_ratio_options = {
+-            {ultramodern::renderer::AspectRatio::Original, "Original"},
+-            {ultramodern::renderer::AspectRatio::Expand, "Expand"},
+-            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
++            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
++            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
++            {ultramodern::renderer::AspectRatio::Manual, "Manual", "Letterbox 16:9"},
+         };
+ 
+         static EnumOptionVector antialiasing_options = {
+@@ -217,6 +217,14 @@ namespace recompui {
+             apply_graphics_config();
+         }
+ 
++        // Banjo-Tooie: graphics settings apply as soon as they change, without
++        // the Apply button (the port's rule is that every setting is live).
++        static void apply_live(OptionChangeContext change_context) {
++            if (change_context == OptionChangeContext::Temporary) {
++                get_graphics_config().save_config();
++            }
++        }
++
+         recomp::config::Config &create_graphics_tab(const std::string &name) {
+             created_graphics_config = true;
+ 
+@@ -245,6 +253,7 @@ namespace recompui {
+                     [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
+                         auto new_opt = static_cast<ultramodern::renderer::Resolution>(std::get<uint32_t>(cur_value));
+                         determine_downsampling_display(new_opt, change_context);
++                        apply_live(change_context);
+                     }
+                 );
+             }
+@@ -265,6 +274,7 @@ namespace recompui {
+                     [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
+                         auto resolution_opt = get_graphics_enum_value<ultramodern::renderer::Resolution>(graphics::options::res_option, change_context);
+                         determine_downsampling_display(resolution_opt, change_context);
++                        apply_live(change_context);
+                     }
+                 );
+ 
+@@ -286,7 +296,7 @@ namespace recompui {
+             config.add_enum_option(
+                 graphics::options::ar_option,
+                 "Aspect Ratio",
+-                "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
++                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
+                 aspect_ratio_options,
+                 ultramodern::renderer::AspectRatio::Expand
+             );
+@@ -359,6 +369,16 @@ namespace recompui {
+                 true
+             );
+ 
++            for (const std::string *id : {
++                &graphics::options::developer_mode, &graphics::options::ar_option, &graphics::options::wm_option,
++                &graphics::options::rr_option, &graphics::options::rr_manual_value, &graphics::options::msaa_option,
++                &graphics::options::hr_option, &graphics::options::api_option, &graphics::options::hpfb_option }) {
++                config.add_option_change_callback(*id,
++                    [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {
++                        apply_live(change_context);
++                    });
++            }
++
+             return config;
+         }
+     }
