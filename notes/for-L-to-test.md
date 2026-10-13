@@ -196,7 +196,8 @@
   1. Settings > Graphics > Framerate = Manual 60 (then 120, and Display)
   2. Walk, run, jump and swim with Banjo, and turn the camera; then walk past a few enemies and Jinjos
   3. On the game select screen, watch the shaking portraits and the hand
-- Look for: Does the portrait and hand shake look the same as at Original (quick jitter, not a slow wobble)? Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
+  4. Watch a few cutscenes with camera cuts (start a new game for the intro)
+- Look for: Does the portrait and hand shake look the same as at Original (quick jitter, not a slow wobble)? At each cutscene camera cut, does the picture switch at once, without Banjo or the camera sliding? Do Banjo's and Kazooie's arms, legs and heads stay attached and move smoothly? Any part that flickers, stretches or floats away for a moment? Do other characters look right?
 - Status: waiting for L
 
 ## T22 Timer save

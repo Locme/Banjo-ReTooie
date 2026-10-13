@@ -27,6 +27,8 @@
 //
 // Headless A/B hook: TOOIE_NO_MODEL_TAGS=1 turns the tagging off.
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -47,6 +49,7 @@ namespace {
     constexpr uint32_t moveword_segment = 0x06;
     // F3DEX2 stores G_MTX params with G_MTX_PUSH inverted.
     constexpr uint32_t mtx_projection = 0x04;
+    constexpr uint32_t mtx_load = 0x02;
 
     // RT64 extended GBI (lib/rt64/include/rt64_extended_gbi.h).
     constexpr uint32_t rt64_hook_word0 = 0xE0000000 | 0x525464;
@@ -68,7 +71,11 @@ namespace {
     constexpr uint32_t slot_size = 0x40000;
     constexpr uint32_t slot_count = 4;
     // Game units a model may move in one frame before it counts as a teleport.
-    constexpr float teleport_distance = 400.0f;
+    constexpr float teleport_distance = 250.0f;
+    // Camera moves larger than this in one game frame (at 30 fps) count as a cut.
+    constexpr float cut_distance = 150.0f;
+    // ...and so do turns sharper than about 35 degrees.
+    constexpr float cut_cosine = 0.82f;
     constexpr uint16_t game_select_map = 0x158;
 
     uint32_t slot = 0;
@@ -120,6 +127,73 @@ namespace {
         return hash;
     }
 
+    // gEXMatrixGroup's projection flag.
+    constexpr uint32_t group_projection = 1 << 1;
+
+    struct Camera {
+        float pos[3];
+        float forward[3];
+    };
+    Camera last_camera;
+    std::chrono::steady_clock::time_point last_camera_time;
+    bool had_camera = false;
+    uint32_t camera_generation = 0;
+
+    float matrix_element(uint8_t* rdram, uint32_t phys, int row, int column) {
+        gpr mtx = kseg0(phys);
+        int i = row * 4 + column;
+        int16_t whole = (int16_t)MEM_HU(2 * i, mtx);
+        uint16_t frac = MEM_HU(32 + 2 * i, mtx);
+        return (float)((int32_t)((uint32_t)(uint16_t)whole << 16 | frac)) / 65536.0f;
+    }
+
+    // Camera position and facing from a view-projection matrix (row vectors,
+    // clip = [x y z 1] M): the position is where clip x, y and w are all 0,
+    // and w grows along the facing.
+    bool read_camera(uint8_t* rdram, uint32_t phys, Camera& out) {
+        float m[4][4];
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                m[r][c] = matrix_element(rdram, phys, r, c);
+            }
+        }
+        const int cols[3] = { 0, 1, 3 };
+        float a[3][3];
+        float b[3];
+        for (int e = 0; e < 3; e++) {
+            for (int k = 0; k < 3; k++) {
+                a[e][k] = m[k][cols[e]];
+            }
+            b[e] = -m[3][cols[e]];
+        }
+        float det = a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+            a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+            a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+        if (std::fabs(det) < 1e-12f) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) {
+            float t[3][3];
+            for (int e = 0; e < 3; e++) {
+                for (int j = 0; j < 3; j++) {
+                    t[e][j] = j == k ? b[e] : a[e][j];
+                }
+            }
+            float dk = t[0][0] * (t[1][1] * t[2][2] - t[1][2] * t[2][1]) -
+                t[0][1] * (t[1][0] * t[2][2] - t[1][2] * t[2][0]) +
+                t[0][2] * (t[1][0] * t[2][1] - t[1][1] * t[2][0]);
+            out.pos[k] = dk / det;
+        }
+        float length = std::sqrt(m[0][3] * m[0][3] + m[1][3] * m[1][3] + m[2][3] * m[2][3]);
+        if (length < 1e-9f) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) {
+            out.forward[k] = m[k][3] / length;
+        }
+        return true;
+    }
+
     uint32_t group_word0() {
         return (rt64_extended_opcode << 24) | g_ex_matrixgroup_v1;
     }
@@ -133,6 +207,8 @@ namespace {
     }
 
     struct Block {
+        uint32_t first_list = 0;
+        uint32_t textures = 0;
         uint32_t model = 0;
         uint32_t matrices = 0;
         bool have_pos = false;
@@ -161,24 +237,36 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         return 0;
     }
 
-    // Pass 1: find the models and the commands that belong to each.
+    // Pass 1: find the models, the commands that belong to each, and the
+    // camera.
+    struct Command {
+        uint32_t w0;
+        uint32_t w1;
+        int block;
+    };
+    std::vector<Command> commands;
     std::vector<Block> blocks;
-    std::vector<int> owner;
     int current = -1;
+    bool have_camera = false;
+    Camera camera;
     for (uint32_t p = start; p < end; p += 8) {
         uint32_t w0 = word(rdram, p);
         uint32_t w1 = word(rdram, p + 4);
         uint32_t op = w0 >> 24;
-        owner.push_back(current);
         if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 4) {
             blocks.emplace_back();
             current = (int)blocks.size() - 1;
-            owner.back() = current;
+        }
+        else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 8 && current >= 0) {
+            blocks[current].textures = w1;
         }
         else if (op == op_mtx) {
-            if ((((w0 & 0xFF) ^ 1) & mtx_projection) != 0) {
+            uint32_t params = (w0 & 0xFF) ^ 1;
+            if ((params & mtx_projection) != 0) {
                 current = -1;
-                owner.back() = -1;
+                if (!have_camera && (params & mtx_load) != 0) {
+                    have_camera = read_camera(rdram, w1 & 0x1FFFFFFF, camera);
+                }
             }
             else if (current >= 0) {
                 Block& block = blocks[current];
@@ -189,12 +277,45 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
                 block.matrices++;
             }
         }
-        else if (op == op_dl && current >= 0 && blocks[current].model == 0) {
-            blocks[current].model = w1;
+        else if (op == op_dl && current >= 0 && blocks[current].first_list == 0) {
+            blocks[current].first_list = w1;
         }
         else if (op == op_enddl || (op == op_dl && ((w0 >> 16) & 0xFF) != 0)) {
             break;
         }
+        commands.push_back({w0, w1, current});
+    }
+    for (Block& block : blocks) {
+        block.model = block.first_list == 0 ? 0 : make_id(block.first_list, block.textures, 0);
+    }
+
+    // A camera cut: the camera jumps or turns sharply in one game frame.
+    // Blending across it would slide everything (characters placed for the
+    // new shot included) through the in-between frames.
+    bool cut = false;
+    if (have_camera) {
+        if (had_camera) {
+            float moved = 0.0f;
+            float facing = 0.0f;
+            for (int k = 0; k < 3; k++) {
+                float d = camera.pos[k] - last_camera.pos[k];
+                moved += d * d;
+                facing += camera.forward[k] * last_camera.forward[k];
+            }
+            // The game moves things further per frame when it runs slowly
+            // (it counts elapsed time), so allow for longer frames.
+            auto now_time = std::chrono::steady_clock::now();
+            float frames = std::chrono::duration<float>(now_time - last_camera_time).count() * 30.0f;
+            frames = std::min(std::max(frames, 1.0f), 4.0f);
+            float limit = cut_distance * frames;
+            cut = moved > limit * limit || facing < cut_cosine;
+        }
+        last_camera = camera;
+        last_camera_time = std::chrono::steady_clock::now();
+        had_camera = true;
+    }
+    if (cut) {
+        camera_generation++;
     }
 
     // Pass 2: match each copy of a model to last frame's nearest copy.
@@ -209,7 +330,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         used.resize(last.size(), false);
         int best = -1;
         float best_distance = teleport_distance * teleport_distance;
-        for (size_t i = 0; i < last.size(); i++) {
+        for (size_t i = 0; i < last.size() && !cut; i++) {
             if (used[i]) {
                 continue;
             }
@@ -239,10 +360,42 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     }
     previous = std::move(now);
 
+    // Bone ids. A model loads a varying number of matrices from frame to
+    // frame (Banjo 48 or 68, depending on what he is doing), so a bone is
+    // named by the geometry list it draws next and its place among the
+    // matrices loaded since the list before, not by a running count.
+    std::vector<uint32_t> bone_id(commands.size(), 0);
+    {
+        std::vector<size_t> pending;
+        int pending_block = -1;
+        auto settle = [&](uint32_t list) {
+            for (size_t k = 0; k < pending.size(); k++) {
+                bone_id[pending[k]] = make_id(list, (uint32_t)k, (uint32_t)pending.size() - (uint32_t)k);
+            }
+            pending.clear();
+        };
+        for (size_t i = 0; i < commands.size(); i++) {
+            const Command& c = commands[i];
+            if (c.block != pending_block) {
+                settle(0);
+                pending_block = c.block;
+            }
+            uint32_t op = c.w0 >> 24;
+            if (op == op_mtx && c.block >= 0 && (((c.w0 & 0xFF) ^ 1) & mtx_projection) == 0) {
+                pending.push_back(i);
+            }
+            else if (op == op_dl && c.block >= 0) {
+                settle(c.w1);
+            }
+        }
+        settle(0);
+    }
+
     // On the game select screen the portraits and the hand shake by a random
     // small turn every game frame; blended, the shake turns into a slow wobble.
-    // Its models are drawn at the game's own rate instead.
-    const bool snap = tooie::debug::current_map(rdram) == game_select_map;
+    // Its models are drawn at the game's own rate instead, as is everything
+    // on the first frame after a camera cut.
+    const bool snap = cut || tooie::debug::current_map(rdram) == game_select_map;
 
     // Pass 3: wrap the matrix loads.
     slot = (slot + 1) % slot_count;
@@ -250,51 +403,69 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     uint32_t limit = cursor + slot_size;
     bool enabled = false;
     bool tagged = false;
-    std::vector<uint32_t> bone(blocks.size(), 0);
-    size_t index = 0;
-    for (uint32_t p = start; p < end && index < owner.size(); p += 8, index++) {
-        uint32_t w0 = word(rdram, p);
-        if ((w0 >> 24) != op_mtx) {
+    bool camera_tagged = false;
+    std::unordered_map<uint32_t, uint32_t> repeats;
+    uint32_t p = start;
+    for (size_t index = 0; index < commands.size(); index++, p += 8) {
+        const Command& c = commands[index];
+        if ((c.w0 >> 24) != op_mtx) {
             continue;
         }
-        int b = owner[index];
-        bool projection = (((w0 & 0xFF) ^ 1) & mtx_projection) != 0;
-        bool tag = (b >= 0 && blocks[b].model != 0) || (snap && !projection);
-        if (!tag && !tagged) {
+        int b = c.block;
+        uint32_t params = (c.w0 & 0xFF) ^ 1;
+        bool projection = (params & mtx_projection) != 0;
+        bool model = b >= 0 && blocks[b].model != 0 && !projection;
+        bool tag = model || (snap && !projection);
+        // The perspective camera gets an id that changes at each cut, so RT64
+        // does not blend the camera across it.
+        bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera;
+        if (!tag && !tagged && !tag_camera) {
             continue;
         }
-        if (cursor + 40 > limit) {
+        if (cursor + 64 > limit) {
             break;
         }
-        uint32_t w1 = word(rdram, p + 4);
         uint32_t list = cursor;
         if (!enabled) {
             put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
             cursor += 8;
             enabled = true;
         }
-        if (tag && snap) {
-            // Drawn as the game left it: no blending towards the next frame.
-            uint32_t id = b >= 0 && blocks[b].model != 0 ? make_id(blocks[b].model, blocks[b].instance, bone[b]++) : make_id(0, 0, (uint32_t)index);
+        if (tag_camera) {
+            put(rdram, cursor, group_word0(), make_id(0x43414D, camera_generation, 0));
+            put(rdram, cursor + 8, group_params(interpolate_simple, component_interpolate, order_auto) | group_projection, 0);
+            cursor += 16;
+            camera_tagged = true;
+        }
+        if (tag) {
+            uint32_t id;
+            if (model) {
+                uint32_t bone = bone_id[index];
+                uint32_t key = make_id(blocks[b].model, blocks[b].instance, bone);
+                // A list drawn twice in a model (both hands, say) gets a second id.
+                id = make_id(key, repeats[key]++, camera_generation);
+            }
+            else {
+                id = make_id(0, camera_generation, (uint32_t)index);
+            }
+            uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
-            put(rdram, cursor + 8, group_params(interpolate_simple, component_skip, order_linear), 0);
+            put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear), 0);
+            cursor += 16;
         }
-        else if (tag) {
-            const Block& block = blocks[b];
-            uint32_t mode = block.matrices > 1 ? interpolate_simple : interpolate_decompose;
-            put(rdram, cursor, group_word0(), make_id(block.model, block.instance, bone[b]++));
-            put(rdram, cursor + 8, group_params(mode, component_interpolate, order_linear), 0);
-        }
-        else {
+        else if (tagged) {
             // Back to RT64's defaults for matrices outside a model.
             put(rdram, cursor, group_word0(), g_ex_id_auto);
             put(rdram, cursor + 8, group_params(interpolate_decompose, component_auto, order_auto), 0);
+            cursor += 16;
         }
-        put(rdram, cursor + 16, w0, w1);
-        put(rdram, cursor + 24, op_enddl << 24, 0);
-        cursor += 32;
+        put(rdram, cursor, c.w0, c.w1);
+        put(rdram, cursor + 8, op_enddl << 24, 0);
+        cursor += 16;
         put(rdram, p, op_dl << 24, list);
-        tagged = tag;
+        if (!projection) {
+            tagged = tag;
+        }
     }
 
     // Leave the rest of the frame with the defaults.
