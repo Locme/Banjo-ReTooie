@@ -74,7 +74,8 @@ GPL-3.0, see [`COPYING`](COPYING). N64ModernRuntime is GPL-3.0; N64Recomp and
 RT64 are MIT; RecompFrontend ships no licence file and is used only as a
 submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
 ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
-`assets/icons/` come from BanjoRecomp (GPL-3.0).
+`assets/icons/` come from BanjoRecomp (GPL-3.0). SMAA in `lib/smaa/` is
+MIT (`lib/smaa/LICENSE.txt`).
 
 ## Credits
 
@@ -93,3 +94,5 @@ ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
   data.
 * retroben, illusion and wedarobi: facts from the Xenia Banjo-Tooie game patch.
 * PromptFont by Yukari "Shinmera" Hafner.
+* [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
+  Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.

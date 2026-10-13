@@ -19,6 +19,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_fine_aim.h"
 #include "tooie_picture_filters.h"
+#include "tooie_smaa.h"
 #include "tooie_speedup.h"
 
 namespace {
@@ -282,6 +283,7 @@ void tooie::init_config() {
         "Cutscene Field of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
+    tooie::smaa::add_option(graphics);
 
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
@@ -302,4 +304,5 @@ void tooie::init_config() {
     show_wip_tab();
     move_saved_discord_option();
     tooie::picture_filters::apply();
+    tooie::smaa::apply();
 }

@@ -481,3 +481,13 @@
   2. Find a health honeycomb (Spiral Mountain has three; enemies and beehives drop more)
 - Look for: Does it sparkle like in Banjo-Kazooie, about as often as an empty honeycomb? Does switching the option off stop it?
 - Status: waiting for L
+
+## T49 SMAA Anti-Aliasing
+- Asked: 2026-10-13 23:00 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > Graphics: MS Anti-Aliasing None, SMAA Anti-Aliasing High, and close the menu
+  2. Stand somewhere with straight edges against the sky or grass (Spiral Mountain's cliffs and posts) and switch SMAA between Off and High a few times
+  3. Try Low and Ultra, then MSAA 2X or 4X together with SMAA High
+- Look for: Are the stair-steps on edges smoothed with SMAA on, without the picture going blurry? Does it change at once when you switch it? Does it work with MSAA on, and does the frame rate drop noticeably at Ultra? Only checked here with software rendering on Vulkan; D3D12 wasn't tested.
+- Status: waiting for L

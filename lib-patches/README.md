@@ -76,8 +76,20 @@ To change it: edit the files in `lib/RecompFrontend`, then
   timestamps) since the last call. Used by the frame rate overlay
   (`src/game/frame_overlay.cpp`).
 
+* **SMAA** (`src/render/rt64_smaa.cpp`, `.h`, `src/shaders/SmaaPS.hlsl`,
+  `src/shared/rt64_smaa.h`, `src/render/rt64_shader_library.cpp`, `.h`,
+  `src/render/rt64_descriptor_sets.h`, `src/hle/rt64_present_queue.cpp`, `.h`,
+  `CMakeLists.txt`): adds `RT64::SetSmaaQuality(...)`. Before the VI pass, SMAA
+  1x (edges, blend weights, neighbourhood blending) runs on the game image, so
+  it works with MSAA and screenshots show it. The shader and lookup textures
+  are iryoku/smaa in `lib/smaa` (MIT); the top-level `CMakeLists.txt` points
+  `RT64_SMAA_DIR` at it. Because this patch changes RT64's `CMakeLists.txt`,
+  the patches are applied before `add_subdirectory(lib/rt64)`.
+  `src/display/smaa.cpp` sets the quality.
+
 To change it: edit the files in `lib/rt64`, then
-`git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`.
+`git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
+need `git -C lib/rt64 add -N <file>` first, or the diff leaves them out.
 
 ## plume.patch
 

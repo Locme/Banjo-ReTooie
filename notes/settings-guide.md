@@ -95,6 +95,15 @@ Graphics changes apply at once. Graphics API needs a restart.
 
 F12 screenshots are taken before these filters, so they don't show them.
 
+## Graphics: SMAA Anti-Aliasing
+
+- **SMAA Anti-Aliasing**: Off, Low, Medium, High or Ultra. Smooths jagged edges
+  by finding them in the finished picture (SMAA 1x by Jimenez et al.). It works
+  on top of MS Anti-Aliasing and also smooths edges MSAA can't, such as
+  see-through leaves and fences. Higher settings find fainter edges and
+  diagonals and cost a little more GPU time. Applies at once. F12 screenshots
+  show it. Default: Off.
+
 ## Graphics: models
 
 - **Always High-Detail Models**: models that switch to a simpler version far

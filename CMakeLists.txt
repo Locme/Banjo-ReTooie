@@ -61,11 +61,8 @@ if (RECOMP_FLATPAK)
     add_compile_definitions(RECOMP_FLATPAK)
 endif()
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
-
-set(BUILD_SHARED_LIBS OFF)
-
-# Changes to submodules that Banjo-Tooie needs (lib-patches/README.md).
+# Changes to submodules that Banjo-Tooie needs (lib-patches/README.md). They are applied before
+# any submodule is added, so a patched CMakeLists.txt is the one CMake reads.
 # Each is applied to the submodule checkout once; a second configure finds it applied.
 function(apply_submodule_patch name)
     set(patch ${CMAKE_SOURCE_DIR}/lib-patches/${name}.patch)
@@ -125,6 +122,13 @@ function(apply_nested_patch name dir)
     endif()
 endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
+
+# iryoku/smaa, for the SMAA passes rt64.patch adds.
+set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
+add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
+
+set(BUILD_SHARED_LIBS OFF)
+
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
 
@@ -196,6 +200,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/canary_mary.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fine_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/smaa.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
