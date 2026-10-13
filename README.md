@@ -26,6 +26,15 @@ emulator at runtime.
 Early bring-up. See [`notes/roadmap-checklist.md`](notes/roadmap-checklist.md)
 for the feature roadmap and [`BUILDING.md`](BUILDING.md) for how to build.
 
+## Running
+
+You need your own legally obtained Banjo-Tooie (US) ROM. The first time you
+start the game, choose **Start Game** in the launcher and pick the ROM file;
+it is remembered afterwards. To skip the launcher and go straight into the
+game, start the exe with `--game bt`. To keep settings and saves next to the
+exe instead of in your user profile, create an empty file named `portable.txt`
+beside it.
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)

@@ -14,11 +14,17 @@ git pull --ff-only origin main || goto :fail
 git submodule sync --recursive || goto :fail
 git submodule update --init --recursive || goto :fail
 
-call "%~dp0build.bat"
-exit /b %errorlevel%
+set NOPAUSE=1
+call "%~dp0build.bat" || goto :fail
+
+echo.
+echo Update and build finished.
+pause
+exit /b 0
 
 :fail
 echo.
-echo Update failed. The messages above say where. Commit or stash local changes and try again.
+echo Update or build FAILED. The messages above say where.
+echo If the pull failed, commit or stash local changes and try again.
 pause
 exit /b 1

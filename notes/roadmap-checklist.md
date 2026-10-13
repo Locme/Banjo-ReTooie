@@ -46,6 +46,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.39 Sun flare through walls fix
+L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for instance is not relevant in this Project"). Leave unticked.
 - [ ] Done
 - [ ] Approved by L
 
