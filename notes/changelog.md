@@ -20,7 +20,7 @@ regenerated code, CI, notes and tooling are left out.
 - Level transition speed: Original, Fast 4x or Instant 16x.
 - Skip intro logos moved to a new QOL tab.
 - F1 hides the HUD and text boxes.
-- Cheats: Levitate (D-pad down) and Infinite jumps (A in mid-air).
+- Cheats: Infinite Jumps (Levitate) (A in mid-air; the separate D-pad down Levitate was removed).
 - Dialogue text speed: 1x, 2x, 4x or instant.
 - Level warp list is in a Warp tab, shown by Cheats > Warp tab (with Enable cheats on). F9 repeats the last warp.
 - Level warp tab with 42 places.

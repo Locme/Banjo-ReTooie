@@ -42,10 +42,8 @@ namespace {
           "Glowbos have no limit.", { 8, -1, -1, -1, -1, -1 } },
         { "infinite_ice_keys", "Infinite ice keys",
           "Ice keys have no limit.", { 19, -1, -1, -1, -1, -1 } },
-        // These two change the player's movement (src/gameplay/player_cheats.cpp), not the item table.
-        { "cheat_levitate", "Levitate",
-          "Hold D-pad down to float upwards.", { -1, -1, -1, -1, -1, -1 } },
-        { "cheat_infinite_jumps", "Infinite jumps",
+        // This one changes the player's movement (src/gameplay/player_cheats.cpp), not the item table.
+        { "cheat_infinite_jumps", "Infinite Jumps (Levitate)",
           "Press A again in mid-air to jump again, and hold it to keep rising.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_feathers", "Cheato: FEATHERS", "The game's FEATHERS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_eggs", "Cheato: EGGS", "The game's EGGS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },

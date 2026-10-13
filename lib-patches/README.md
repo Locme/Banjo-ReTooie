@@ -43,6 +43,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   controller's name, raw button count and back buttons are logged when it is
   added.
 
+* **Enum drop-down** (`recompui/src/config/ui_config_option.{h,cpp}`): an enum
+  option with more than 6 entries is drawn as a drop-down (the menu's Select
+  element) instead of a row of tabs, which ran together. Used by the Cheats
+  tab's Transformation row.
+
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
 

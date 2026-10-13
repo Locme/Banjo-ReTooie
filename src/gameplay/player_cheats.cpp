@@ -20,14 +20,13 @@ namespace {
     constexpr uint32_t state_current = 0x4;    // state block -> current state id
 
     constexpr uint16_t button_a = 0x8000;
-    constexpr uint16_t button_dd = 0x0400;
 
     // Player states (the same ids as the XBLA report; checked against the N64 state ids in a headless run).
     constexpr uint32_t state_jump = 5;
     constexpr uint32_t state_flutter = 16;
     constexpr uint32_t state_fall = 47;
-    // Moving upwards at this speed (units per second) while D-pad down (Levitate) or A in mid-air
-    // (Infinite jumps) is held. A normal jump takes off at about 665.
+    // Moving upwards at this speed (units per second) while A is held in mid-air (Infinite Jumps
+    // (Levitate)). A normal jump takes off at about 665.
     constexpr float levitate_speed = 300.0f;
     constexpr float takeoff_speed = 665.0f;
     constexpr float falling_speed = -150.0f;
@@ -67,16 +66,11 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     float sx = 0, sy = 0;
     tooie::debug::get_n64_input(0, &buttons, &sx, &sy);
 
-    const bool levitate = tooie::cheats::is_on("cheat_levitate");
     const bool infinite_jumps = tooie::cheats::is_on("cheat_infinite_jumps");
     static bool was_a = false;
     const bool a_down = (buttons & button_a) != 0;
     const bool a_pressed = a_down && !was_a;
     was_a = a_down;
-
-    if (levitate && (buttons & button_dd) && vy < levitate_speed) {
-        write_float(rdram, physics + vel_y_offset, levitate_speed);
-    }
 
     if (infinite_jumps) {
         // Transformations and swimming/climbing-like states keep their own A button.

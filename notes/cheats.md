@@ -16,12 +16,8 @@ limit. Limits are restored when the cheat is turned off.
 
 **Infinite ice keys**: ice keys have no limit. Same restore rule.
 
-**Levitate**: hold D-pad down to float upwards. It pushes your upward speed to
-about 300 units a second while the button is held. It does nothing when you are
-already rising faster than that.
-
-**Infinite jumps**: press A again in mid-air to jump again. Hold A to keep
-rising. It does not work during transformations, swimming, climbing or some
+**Infinite Jumps (Levitate)**: press A again in mid-air to jump again. Hold A
+to keep rising, which floats you upwards. It does not work during transformations, swimming, climbing or some
 other states the code leaves out, so A keeps its usual job there.
 
 Each Cheato switches on the game's own code of that name, as if you had typed it
@@ -51,5 +47,5 @@ progress.
 **Transformation**: choose a form from the list and the area you are in reloads
 with you in it. It comes back in at the entrance you used, not where you were
 standing. Some forms break in areas the game never expects them in. Choosing
-Off does nothing; it does not turn you back, so pick Banjo or Banjo-Kazooie for
-that.
+Off after a form puts you back as Banjo-Kazooie and reloads the area the same
+way. The list is a drop-down.

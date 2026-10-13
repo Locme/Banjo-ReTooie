@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -16,6 +17,8 @@ namespace {
     // The form the game gives the player when an area loads (read by basetup_entrypoint_2).
     constexpr gpr form_addr = (int32_t)0x8012704C;
     // The game-state block holding map change requests: +0x12 go byte, +0x13 exit.
+    // Banjo-Kazooie together, the form the game starts in.
+    constexpr uint8_t normal_form = 0x1;
     // The word table of player pointers (player 0 first).
     constexpr gpr player_table = (int32_t)0x80135490;
     constexpr gpr game_state_addr = (int32_t)0x80127630;
@@ -49,15 +52,19 @@ namespace {
     // The form waiting to be applied (0 = none), set by the row's change callback.
     std::atomic<uint8_t> pending_form{0};
 
-    // Headless test hook: TOOIE_TRANSFORM=<hex form>[@ms] applies that form once, ms after the game loop first runs.
+    // Headless test hook: TOOIE_TRANSFORM=<hex form>[@ms][,<hex form>@ms...] applies each form once, ms after
+    // the game loop first runs (the Off row is form 1, the normal form).
     struct EnvRequest {
-        bool read = false;
-        bool active = false;
         uint8_t form = 0;
         uint32_t delay_ms = 0;
+    };
+    struct EnvState {
+        bool read = false;
+        std::vector<EnvRequest> requests;
+        size_t next = 0;
         std::chrono::steady_clock::time_point started;
     };
-    EnvRequest env;
+    EnvState env;
 }
 
 void tooie::transform_picker::add_options(recomp::config::Config& cheats, const std::string& master_option) {
@@ -70,10 +77,20 @@ void tooie::transform_picker::add_options(recomp::config::Config& cheats, const 
         entries, 0u);
     cheats.add_option_hidden_dependency(option, master_option, false);
     cheats.add_option_change_callback(option,
-        [](recomp::config::ConfigValueVariant cur, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            if (const uint32_t* idx = std::get_if<uint32_t>(&cur); idx != nullptr && *idx > 0 && *idx < form_count) {
-                pending_form = forms[*idx].id;
+        [](recomp::config::ConfigValueVariant cur, recomp::config::ConfigValueVariant prev, recomp::config::OptionChangeContext) {
+            const uint32_t* idx = std::get_if<uint32_t>(&cur);
+            const uint32_t* was = std::get_if<uint32_t>(&prev);
+            if (idx == nullptr || *idx >= form_count || (was != nullptr && *was == *idx)) {
+                return;
             }
+            // Off goes back to the normal form, but only when something was picked before.
+            if (*idx == 0) {
+                if (was != nullptr && *was > 0) {
+                    pending_form = normal_form;
+                }
+                return;
+            }
+            pending_form = forms[*idx].id;
         });
 }
 
@@ -87,19 +104,22 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
         env.read = true;
         env.started = std::chrono::steady_clock::now();
         if (const char* v = std::getenv("TOOIE_TRANSFORM")) {
-            unsigned form = 0, delay = 0;
-            if (std::sscanf(v, "%x@%u", &form, &delay) >= 1 && form != 0) {
-                env.active = true;
-                env.form = (uint8_t)form;
-                env.delay_ms = delay;
+            std::string list{v};
+            size_t pos = 0;
+            while (pos < list.size()) {
+                size_t comma = list.find(',', pos);
+                unsigned form = 0, delay = 0;
+                if (std::sscanf(list.substr(pos, comma - pos).c_str(), "%x@%u", &form, &delay) >= 1 && form != 0) {
+                    env.requests.push_back({ (uint8_t)form, delay });
+                }
+                pos = comma == std::string::npos ? list.size() : comma + 1;
             }
         }
     }
-    if (env.active && tooie::debug::can_warp()) {
+    if (env.next < env.requests.size() && tooie::debug::can_warp() && pending_form.load() == 0) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - env.started).count();
-        if (elapsed >= env.delay_ms) {
-            env.active = false;
-            pending_form = env.form;
+        if (elapsed >= env.requests[env.next].delay_ms) {
+            pending_form = env.requests[env.next++].form;
         }
     }
 
@@ -132,6 +152,13 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     pending_form = 0;
+
+    {
+        const uint32_t cur_player = MEM_W(0, player_table);
+        if (cur_player != 0 && MEM_B(0x29, MEM_W(0xA0, (gpr)(int32_t)cur_player)) == form) {
+            return;
+        }
+    }
 
     const uint16_t map = tooie::debug::current_map(rdram);
     const uint8_t exit = MEM_B(0x13, game_state_addr);

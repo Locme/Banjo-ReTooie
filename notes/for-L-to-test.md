@@ -139,15 +139,15 @@
 - Look for: Does text print faster at 2x and 4x, and appear a page at a time on Instant? Do the pauses after commas and full stops shrink too? Are menus unchanged? Does the change apply without restarting?
 - Status: waiting for L
 
-## T16 Levitate and Infinite jumps cheats
-- Asked: 2026-10-13 18:30 UTC
+## T16 Infinite Jumps (Levitate) cheat
+- Asked: 2026-10-13 18:30 UTC, changed 22:00 UTC (the separate Levitate cheat was removed, L's call)
 - Build: latest Windows CI build from main
 - XBLA history: report §4.73 and §4.79
 - Steps:
-  1. Esc > Cheats, turn on Enable cheats, then Levitate. Load a file, hold D-pad down
-  2. Turn Levitate off and Infinite jumps on. Jump, then press A again in the air several times, then hold A
-  3. Compare the two. Also try it as Kazooie flutter, and in water and as a transformation
-- Look for: Does Levitate lift you smoothly while D-pad down is held, and stop when released? Does each extra A press in the air jump again, and does holding A keep you rising? Does it stay off when the master switch is off? Do you want to keep both or drop Levitate?
+  1. Esc > Cheats, turn on Enable cheats, then Infinite Jumps (Levitate). Load a file
+  2. Jump, then press A again in the air several times, then hold A
+  3. Also try it as Kazooie flutter, and in water and as a transformation
+- Look for: Does each extra A press in the air jump again, and does holding A keep you rising? Does it stay off when the master switch is off?
 - Status: waiting for L
 
 ## T17 Hide HUD (F1)
@@ -302,7 +302,7 @@
 - XBLA history: report §4.78
 - Steps:
   1. Esc > Cheats > Enable cheats on, then Transformation: pick Bee
-  2. The area reloads. Try a few more forms (Washing machine, Van, Snowball, Submarine, T-Rex) in different areas
+  2. The area reloads. Then pick Off: you should be Banjo-Kazooie again. Try a few more forms (Washing machine, Van, Snowball, Submarine, T-Rex) in different areas
 - Checked headless: Mumbo, Bee, Stony and Kazooie show and hold in Spiral Mountain. The others are untested. Clockwork Kazooie was added later (crash fixed) and holds in Spiral Mountain.
 - Look for: Does the new form show and play right after the reload? Which forms crash or look wrong, and where? Does pausing and leaving the area keep the form?
 - Status: waiting for L

@@ -113,9 +113,8 @@ as they are.
 - **Infinite feathers**: red and gold feathers have no limit.
 - **Infinite Glowbos**: Glowbos have no limit.
 - **Infinite ice keys**: ice keys have no limit.
-- **Levitate**: hold D-pad down to float upwards.
-- **Infinite jumps**: press A again in mid-air to jump again, and hold A to keep
-  rising.
+- **Infinite Jumps (Levitate)**: press A again in mid-air to jump again, and
+  hold A to keep rising.
 - **Cheato: FEATHERS, EGGS, FALLPROOF, HONEYBACK, JUKEBOX, GETJIGGY,
   SUPERBANJO, SUPERBADDY, HONEYKING, NESTKING and HOMING**: the game's own
   Cheato codes, switched on directly without the Code Chamber. Turning one off
@@ -127,8 +126,9 @@ as they are.
   Detonator, Van, small or large T-Rex, Banjo-Kazooie).
   Picking one reloads the area you are in, at the entrance you came in by, so
   the new model shows. Some forms break in areas the game never expects them
-  in (missing animations or data). Default: Off, which does nothing; the row
-  goes back to Off when Enable cheats is turned off.
+  in (missing animations or data). It is a drop-down. Off puts you back as
+  Banjo-Kazooie (and reloads the area) if you had picked a form. Default: Off;
+  the row goes back to Off when Enable cheats is turned off.
 - **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
   to. F9 repeats the last warp. Default: off.
 - **Stop 'n' Swop items**: marks the blue and pink Stop 'n' Swop mystery eggs as
