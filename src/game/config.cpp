@@ -19,6 +19,38 @@
 #include "tooie_speedup.h"
 
 namespace {
+    void show_wip_tab() {
+        bool on = false;
+        try {
+            on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::wip_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on);
+        } catch (...) {
+        }
+    }
+
+    // Discord status moved from General to WIP: carry a saved value over once.
+    void move_saved_discord_option() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        if (std::filesystem::exists(dir / (tooie::wip_tab_id + ".json"))) {
+            return;
+        }
+        std::ifstream general_file(dir / "general.json");
+        if (!general_file) {
+            return;
+        }
+        nlohmann::json general_json = nlohmann::json::parse(general_file, nullptr, false);
+        if (!general_json.is_object() || !general_json.contains(tooie::discord::presence_option) ||
+            !general_json[tooie::discord::presence_option].is_boolean()) {
+            return;
+        }
+        recomp::config::Config& wip = recompui::config::get_config(tooie::wip_tab_id);
+        wip.set_option_value(tooie::discord::presence_option, general_json[tooie::discord::presence_option].get<bool>());
+        wip.save_config();
+    }
+
     // Options that moved from the QOL tab to Graphics (L, 2026-10-13): carry a value saved in qol.json
     // over once, unless graphics.json already has one. Extended draw distance is not carried over, so
     // it starts off after its fix whatever the broken first version saved.
@@ -80,10 +112,14 @@ void tooie::init_config() {
         "Copies your save file into the save_backups folder whenever it changes.",
         true);
     general.add_bool_option(
-        tooie::discord::presence_option,
-        "Discord status",
-        "Shows the level you are playing in your Discord status while Discord is running.",
-        true);
+        tooie::wip_tab_option,
+        "WIP tab",
+        "Shows the WIP tab, with features that are still being worked on.",
+        false);
+    general.add_option_change_callback(tooie::wip_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_wip_tab();
+        });
     general.add_number_option(
         tooie::save_backups_keep_option,
         "Save backups to keep",
@@ -219,7 +255,17 @@ void tooie::init_config() {
     tooie::level_warp::create_tab();
     recompui::config::create_mods_tab();
 
+    // Work-in-progress features (L, 2026-10-13), shown with General > WIP tab.
+    recomp::config::Config& wip = recompui::config::create_config_tab("WIP", tooie::wip_tab_id, false);
+    wip.add_bool_option(
+        tooie::discord::presence_option,
+        "Discord status",
+        "Shows the level you are playing in your Discord status while Discord is running.",
+        true);
+
     recompui::config::finalize();
     move_saved_options_to_graphics();
+    show_wip_tab();
+    move_saved_discord_option();
     tooie::picture_filters::apply();
 }

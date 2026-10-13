@@ -24,6 +24,7 @@
 
 #include "tooie_debug.h"
 #include "tooie_discord.h"
+#include "tooie_game.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -119,7 +120,7 @@ namespace {
 
     bool presence_enabled() {
         try {
-            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::discord::presence_option));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::discord::presence_option));
         } catch (...) {
             return true;
         }
