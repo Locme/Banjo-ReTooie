@@ -35,6 +35,16 @@ game, start the exe with `--game bt`. To keep settings and saves next to the
 exe instead of in your user profile, create an empty file named `portable.txt`
 beside it.
 
+## Settings
+
+Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open
+settings. There are five tabs: General, Graphics, Controls, Sound and Mods.
+
+- Graphics changes apply at once, with no Apply button. Aspect Ratio offers
+  4:3, Fill and Letterbox 16:9.
+- **F11** or **Alt+Enter** toggles fullscreen.
+- Graphics API needs a restart.
+
 ## How it works
 
 1. The [Banjo-Tooie decompilation](https://github.com/Mr-Wiseguy/banjo-tooie)

@@ -67,3 +67,13 @@
   2. Start a game and walk around Spiral Mountain and Jinjo Village, turning the camera
 - Look for: Does the picture fill the window without looking stretched? Do things pop in or vanish at the left and right edges while still on screen?
 - Status: waiting for L
+
+## T9 Graphics settings live
+- Asked: 2026-10-13 17:02 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Press Esc, open Graphics
+  2. Switch Aspect Ratio between 4:3, Fill and Letterbox 16:9 with the game running behind
+  3. Make the window very wide, then very tall
+- Look for: Does the picture change at once each time? Does Letterbox show exactly 16:9 with black bars? Do things pop in or vanish at the screen edges in Fill?
+- Status: waiting for L

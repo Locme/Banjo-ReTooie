@@ -27,3 +27,11 @@ __pycache__/
 banjotooie.us.elf
 /BanjoTooieN64Recomp.exe
 /*.dll
+
+# Runtime output and local data (never commit)
+/*.png
+logs/
+saves/
+save_backups/
+screenshots/
+portable.txt
