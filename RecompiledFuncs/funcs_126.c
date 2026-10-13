@@ -188,6 +188,7 @@ L_8080186C:
 RECOMP_FUNC void func_80802724_chclockworkmouse(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_canary_mary_rule(rdram, ctx, 1)) return;
     // 0x80802724: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x80802728: sw          $ra, 0x14($sp)

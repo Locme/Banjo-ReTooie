@@ -395,3 +395,16 @@ text = "tooie_model_draw_distance(rdram, ctx);"
 func = "func_80101970"
 before_vram = 0x80101A10
 text = "tooie_model_draw_distance(rdram, ctx);"
+
+# --- Canary Mary races, 4.53 (src/gameplay/canary_mary.cpp) ------------------
+# Mary's per-frame speed rule, a0 = Mary, a1 = player. At entry, before the
+# stack frame: when the host ran the rule (Fair/Easy) the game's is skipped.
+[[patches.hook]]
+func = "func_80803218_chhandcart"
+before_vram = 0x80803218
+text = "if (tooie_canary_mary_rule(rdram, ctx, 0)) return;"
+
+[[patches.hook]]
+func = "func_80802724_chclockworkmouse"
+before_vram = 0x80802724
+text = "if (tooie_canary_mary_rule(rdram, ctx, 1)) return;"

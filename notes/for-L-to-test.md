@@ -444,7 +444,7 @@
   3. Try Hold R (turn with and without R held), and the Slow and Fast speeds
 - Look for: Is turning slower but still smooth, with no stick range where nothing happens? Does R do anything else in first person that this gets in the way of? Breegull Blaster sections weren't tested.
 
-## T45 Resolution 720p, 1080p, 4K
+## T47 Resolution 720p, 1080p, 4K
 - Asked: 2026-10-13 22:40 UTC
 - Build: latest Windows CI build from main
 - Steps:

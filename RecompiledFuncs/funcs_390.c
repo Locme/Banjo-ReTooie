@@ -1461,6 +1461,7 @@ RECOMP_FUNC void _glintrosyncDll_entrypoint_4(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_80803218_chhandcart(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_canary_mary_rule(rdram, ctx, 0)) return;
     // 0x80803218: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x8080321C: sw          $ra, 0x14($sp)
