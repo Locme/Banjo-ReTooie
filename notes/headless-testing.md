@@ -48,6 +48,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 - `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;
   `TOOIE_FREECAM_LOG=1` logs the camera, Banjo and stick 4 times a second
   (`[freecam]`). Drive the right stick with `rx=`/`ry=` in the pad script.
+- `TOOIE_HONEYCOMB_LOG=1`: logs how many health honeycombs are loaded (src/gameplay/honeycomb_glitter.cpp). `TOOIE_HONEYCOMB_AT_PLAYER=1` makes the sparkles appear around Banjo, and `TOOIE_HONEYCOMB_MODEL=<hex>` sparkles one more model, to see the spawner work.
 - `TOOIE_CUTSCENE_LOG=1`: logs `[cutscene] scene` / `gameplay` when a letterboxed scene starts or ends (src/gameplay/cutscene_skip.cpp). The skip itself always logs start and end.
 - `TOOIE_FOV_LOG=1`: logs `[fov]` each time a camera's field of view or its gameplay/other kind changes (src/gameplay/field_of_view.cpp).
 - `TOOIE_DLDUMP=ms[,ms...]`: writes the 3D scene's display list of the first frame after each time to dl_<ms>.txt in the working directory (matrices, vertex loads, segments, called lists), followed by the frame's 2D (pause menu, HUD, text). `TOOIE_DLDUMP_ALL=1` also prints each matrix in full and every other command raw.

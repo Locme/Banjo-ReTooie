@@ -33,6 +33,7 @@
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
 #include "tooie_classic_sounds.h"
+#include "tooie_honeycomb_glitter.h"
 
 namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
@@ -116,6 +117,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
+    tooie::honeycomb_glitter::tick(rdram, ctx);
 
     if (env_next < env_requests.size()) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

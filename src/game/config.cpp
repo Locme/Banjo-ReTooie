@@ -5,6 +5,7 @@
 
 #include "tooie_game.h"
 #include "tooie_classic_sounds.h"
+#include "tooie_honeycomb_glitter.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
 #include "librecomp/game.hpp"
@@ -126,6 +127,11 @@ void tooie::init_config() {
         tooie::classic_sounds::option,
         "Back-Port: Old Banjo sounds",
         "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
+        false);
+    general.add_bool_option(
+        tooie::honeycomb_glitter::option,
+        "Back-Port: Glittering honeycombs",
+        "Health honeycombs sparkle like they did in Banjo-Kazooie.",
         false);
     general.add_number_option(
         tooie::save_backups_keep_option,

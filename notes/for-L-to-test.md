@@ -471,3 +471,13 @@
   3. Turn the option off and jump again
 - Look for: With it on, are Banjo's jump grunts the Banjo-Kazooie ones? With it off, are they Banjo-Tooie's again? I could only check headless that the jump sound table holds the old ids; there is no audio here.
 - Status: waiting for L
+
+## T48 Back-Port: Glittering honeycombs
+- Asked: 2026-10-13 22:50 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.63
+- Steps:
+  1. Settings (Esc) > General > Back-Port: Glittering honeycombs = On (off by default)
+  2. Find a health honeycomb (Spiral Mountain has three; enemies and beehives drop more)
+- Look for: Does it sparkle like in Banjo-Kazooie, about as often as an empty honeycomb? Does switching the option off stop it?
+- Status: waiting for L
