@@ -77,3 +77,12 @@
   3. Make the window very wide, then very tall
 - Look for: Does the picture change at once each time? Does Letterbox show exactly 16:9 with black bars? Do things pop in or vanish at the screen edges in Fill?
 - Status: waiting for L
+
+## T10 Quick start
+- Asked: 2026-10-13 17:10 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Start the game
+  2. Press Start while the Rare, Nintendo and Dolby logos show
+- Look for: Does it jump straight to the file select with the jigsaw wipe? With Settings > General > Skip intro logos off, do the logos play through?
+- Status: waiting for L

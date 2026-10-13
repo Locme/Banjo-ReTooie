@@ -8,12 +8,19 @@ building the program needs no ROM. You only need your own Banjo-Tooie ROM
 
 Install:
 
-* Visual Studio 2022 with the "Desktop development with C++" workload and its
-  "C++ Clang tools for Windows" component.
+* Visual Studio 2022 or newer, with the "Desktop development with C++"
+  workload and the individual component "C++ Clang tools for Windows".
+  To add the component to an installed Visual Studio: open the Visual Studio
+  Installer, click **Modify**, open the **Individual components** tab, search
+  for "C++ Clang tools for Windows", tick it and click **Modify** again.
 * [Git](https://git-scm.com/download/win).
 
-Then double-click `build.bat`, or from a "x64 Native Tools Command Prompt for
-VS 2022":
+The easy path is to double-click `build.bat`. It finds Visual Studio and the
+Clang tools, fetches the submodules and builds. It stops with a message if
+something is missing.
+
+To build by hand, open an "x64 Native Tools Command Prompt for VS 2022" (or
+the version you have) and run:
 
 ```bat
 git clone --recursive https://github.com/Locme/Banjo-Tooie-N64-Recomp.git
@@ -22,8 +29,22 @@ cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_C
 cmake --build build-cmake --target BanjoTooieN64Recomp
 ```
 
+If you use a normal Command Prompt instead, replace both `clang-cl` names with
+the full path, `"C:\Program Files\Microsoft Visual Studio\2022\<edition>\VC\Tools\Llvm\x64\bin\clang-cl.exe"`
+(adjust the path to your install).
+
 The program is `build-cmake\BanjoTooieN64Recomp.exe`. Run it from the
 repository folder so it finds `assets\`.
+
+### Troubleshooting
+
+* **`clang-cl is not a full path and was not found in the PATH`**: CMake
+  cannot find the Clang compiler. Either build from an "x64 Native Tools Command
+  Prompt", or use `build.bat`, or give the full path to `clang-cl.exe` as shown
+  above.
+* **`clang-cl.exe was not found`** from `build.bat`: the "C++ Clang tools for
+  Windows" component is not installed. Add it as described above, then run
+  `build.bat` again.
 
 ## Linux
 

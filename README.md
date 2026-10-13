@@ -44,6 +44,7 @@ settings. There are five tabs: General, Graphics, Controls, Sound and Mods.
   4:3, Fill and Letterbox 16:9.
 - **F11** or **Alt+Enter** toggles fullscreen.
 - Graphics API needs a restart.
+- General has **Skip intro logos** (on by default) and **Back up saves**.
 
 ## How it works
 
