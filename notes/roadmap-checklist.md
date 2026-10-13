@@ -239,7 +239,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.92 Hang watchdog
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ## Long
