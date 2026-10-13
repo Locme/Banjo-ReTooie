@@ -45,11 +45,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Done
 - [ ] Approved by L
 
-### 4.39 Sun flare through walls fix
-L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for instance is not relevant in this Project"). Leave unticked.
-- [ ] Done
-- [ ] Approved by L
-
 ### 4.52 Text speed
 - [ ] Done
 - [ ] Approved by L
@@ -107,10 +102,6 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 - [ ] Approved by L
 
 ### 4.95 Debug and test tooling
-- [ ] Done
-- [ ] Approved by L
-
-### 4.96 Small fixes (XBLA or SDK)
 - [ ] Done
 - [ ] Approved by L
 
@@ -405,5 +396,14 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 - [ ] Approved by L
 
 ### 4.94 Sound list loop guard
+- [ ] Done
+- [ ] Approved by L
+
+### 4.39 Sun flare through walls fix
+L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for instance is not relevant in this Project"). Leave unticked.
+- [ ] Done
+- [ ] Approved by L
+
+### 4.96 Small fixes (XBLA or SDK)
 - [ ] Done
 - [ ] Approved by L
