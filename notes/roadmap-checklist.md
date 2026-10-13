@@ -187,7 +187,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.53 Canary Mary rubber banding
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.54 Talon Trot toggle
