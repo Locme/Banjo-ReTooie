@@ -191,9 +191,7 @@ void tooie::init_config() {
         "Always High-Detail Models",
         "Models that switch to a simpler version far away always use the detailed one.",
         true);
-<<<<<<< Updated upstream
     tooie::frame_overlay::add_option(graphics);
-=======
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -209,7 +207,6 @@ void tooie::init_config() {
         "Cutscene Field of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
->>>>>>> Stashed changes
 
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
