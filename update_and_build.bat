@@ -11,9 +11,12 @@ setlocal
 
 rem git pull can replace this file while cmd is still reading it, so run from a temporary copy.
 if /i not "%~1"=="--from-copy" (
-    copy /y "%~f0" "%TEMP%\tooie_update_and_build.bat" >nul
-    call "%TEMP%\tooie_update_and_build.bat" --from-copy "%~dp0"
-    exit /b %errorlevel%
+    rem A fresh name each run: a newer version may start while an older copy is still running.
+    for /f %%r in ("%RANDOM%%RANDOM%") do (
+        copy /y "%~f0" "%TEMP%\tooie_update_and_build_%%r.bat" >nul
+        call "%TEMP%\tooie_update_and_build_%%r.bat" --from-copy "%~dp0"
+    )
+    exit /b
 )
 cd /d "%~2"
 
@@ -46,6 +49,14 @@ echo Your main has commits that are not on GitHub. Keeping them on branch backup
 git branch "backup-%STAMP%" || goto :fail
 git reset --hard FETCH_HEAD || goto :fail
 :updated
+
+rem If the update changed this script, start the new version (the copy running now is the old one).
+fc /b "%~f0" "%~2update_and_build.bat" >nul 2>&1
+if errorlevel 1 (
+    echo update_and_build.bat was updated. Starting the new version...
+    call "%~2update_and_build.bat"
+    exit /b
+)
 
 rem Put every submodule back to its clean checkout. CMake re-applies lib-patches on the
 rem next configure, so leftovers from an older patch can never block it.
