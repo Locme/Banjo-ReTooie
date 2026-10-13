@@ -490,4 +490,15 @@
   2. Stand somewhere with straight edges against the sky or grass (Spiral Mountain's cliffs and posts) and switch SMAA between Off and High a few times
   3. Try Low and Ultra, then MSAA 2X or 4X together with SMAA High
 - Look for: Are the stair-steps on edges smoothed with SMAA on, without the picture going blurry? Does it change at once when you switch it? Does it work with MSAA on, and does the frame rate drop noticeably at Ultra? Only checked here with software rendering on Vulkan; D3D12 wasn't tested.
+
+## T50 Fly anywhere
+- Asked: 2026-10-13 23:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.74
+- Steps:
+  1. Esc > Cheats: Enable cheats, then Fly anywhere = On
+  2. Load a save, stand anywhere and press D-pad up
+  3. Fly around, then press B
+  4. Try it as the bee too (Cheats > Transformation > Bee)
+- Look for: Does D-pad up take off from the ground and from mid-jump? Does B stop flying and drop you, instead of a Beak Bomb? Stopping high up can splat you like any long fall.
 - Status: waiting for L

@@ -231,7 +231,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.74 Fly anywhere, and the stop-flying button
-- [ ] Done
+- [x] Done (T50)
 - [ ] Approved by L
 
 ### 4.75 Clip through anything (noclip)

@@ -1,3 +1,4 @@
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -20,11 +21,25 @@ namespace {
     constexpr uint32_t state_current = 0x4;    // state block -> current state id
 
     constexpr uint16_t button_a = 0x8000;
+    constexpr uint16_t button_b = 0x4000;
+    constexpr uint16_t button_d_up = 0x0800;
+
+    // The player's form byte (ScriptHawk's character_state, US address): 1 Banjo-Kazooie, 6 the bee.
+    constexpr uint32_t form_addr = 0x80136F63;
+    constexpr uint8_t form_banjo_kazooie = 1;
+    constexpr uint8_t form_bee = 6;
 
     // Player states (the same ids as the XBLA report; checked against the N64 state ids in a headless run).
     constexpr uint32_t state_jump = 5;
     constexpr uint32_t state_flutter = 16;
     constexpr uint32_t state_fall = 47;
+    // Fly anywhere (handoff 4.74). Banjo-Kazooie: take-off 35 leads to flying 36. The bee: the flight pad
+    // launch 0x8B leads to flying 0x8C, and 0x88 is the bee falling.
+    constexpr uint32_t state_takeoff = 35;
+    constexpr uint32_t state_flying = 36;
+    constexpr uint32_t state_bee_launch = 0x8B;
+    constexpr uint32_t state_bee_flying = 0x8C;
+    constexpr uint32_t state_bee_fall = 0x88;
     // Moving upwards at this speed (units per second) while A is held in mid-air (Infinite Jumps
     // (Levitate)). A normal jump takes off at about 665.
     constexpr float levitate_speed = 300.0f;
@@ -41,6 +56,56 @@ namespace {
 
     bool valid_ptr(uint32_t p) {
         return p >= 0x80000000u && p < 0x80800000u;
+    }
+
+    uint8_t rd_byte(uint8_t* rdram, uint32_t addr) {
+        return rdram[(addr - 0x80000000u) ^ 3u];
+    }
+
+    void set_state(uint8_t* rdram, recomp_context* ctx, uint32_t player, uint32_t id) {
+        recomp_context saved = *ctx;
+        ctx->r4 = (int32_t)player; // addresses are sign-extended in the registers
+        ctx->r5 = id;
+        bs_setState(rdram, ctx);
+        *ctx = saved;
+    }
+
+    // States Banjo-Kazooie may take off from: standing, walking, jumping, crouching, the Feathery Flap,
+    // the Flap Flip, landing and falling. Swimming, climbing, talking and the moves with their own
+    // animations are left alone.
+    bool can_take_off(uint32_t s) {
+        return (s >= 1 && s <= 5) || s == 7 || s == 0x10 || s == 0x12 || s == 0x20 || s == state_fall;
+    }
+
+    // The bee on the ground or in the air (idle, walking, jumping, falling).
+    bool bee_can_take_off(uint32_t s) {
+        return s >= 0x85 && s <= 0x88;
+    }
+
+    // Set by the game thread every frame: whether the player is flying with Fly anywhere on, so the input
+    // hook can keep B (Beak Bomb) from the game and stop the flight instead.
+    std::atomic<bool> flying_with_cheat{false};
+    std::atomic<bool> stop_requested{false};
+    uint16_t last_input_buttons = 0;
+    // B stays hidden from the game until it is let go after stopping, or the fall would turn it into a Rat-a-tat Rap.
+    bool hide_b = false;
+}
+
+void tooie::player_cheats::apply_input(uint16_t* buttons) {
+    const uint16_t now = *buttons;
+    const bool b_pressed = (now & button_b) && !(last_input_buttons & button_b);
+    last_input_buttons = now;
+    if (!(now & button_b)) {
+        hide_b = false;
+    }
+    if (flying_with_cheat) {
+        if (b_pressed) {
+            stop_requested = true;
+        }
+        hide_b = hide_b || (now & button_b);
+    }
+    if (hide_b) {
+        *buttons &= (uint16_t)~button_b;
     }
 }
 
@@ -94,6 +159,27 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
+    const bool fly_anywhere = tooie::cheats::is_on("cheat_fly_anywhere");
+    static bool was_d_up = false;
+    const bool d_up_pressed = (buttons & button_d_up) && !was_d_up;
+    was_d_up = (buttons & button_d_up) != 0;
+    const uint8_t form = rd_byte(rdram, form_addr);
+    const bool flying = cur == state_flying || cur == state_bee_flying;
+    flying_with_cheat = fly_anywhere && flying;
+    if (fly_anywhere) {
+        if (stop_requested.exchange(false) && flying) {
+            set_state(rdram, ctx, player, cur == state_flying ? state_fall : state_bee_fall);
+        } else if (d_up_pressed) {
+            if (form == form_banjo_kazooie && can_take_off(cur)) {
+                set_state(rdram, ctx, player, state_takeoff);
+            } else if (form == form_bee && bee_can_take_off(cur)) {
+                set_state(rdram, ctx, player, state_bee_launch);
+            }
+        }
+    } else {
+        stop_requested = false;
+    }
+
     if (log && std::chrono::steady_clock::now() - last_log >= std::chrono::milliseconds(100)) {
         last_log = std::chrono::steady_clock::now();
         uint32_t hv_bits = rd_word(rdram, physics + 0x3C); // target horizontal velocity
@@ -110,7 +196,7 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
                 std::memcpy(&pos[k], &b, 4);
             }
         }
-        std::printf("[player] state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f stick %.2f %.2f\n", cur, vy, buttons, hv, av, pos[0], pos[1], pos[2], sx, sy);
+        std::printf("[player] form %u state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f stick %.2f %.2f\n", form, cur, vy, buttons, hv, av, pos[0], pos[1], pos[2], sx, sy);
         std::fflush(stdout);
     }
 }

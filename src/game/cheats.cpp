@@ -45,6 +45,8 @@ namespace {
         // This one changes the player's movement (src/gameplay/player_cheats.cpp), not the item table.
         { "cheat_infinite_jumps", "Infinite Jumps (Levitate)",
           "Press A again in mid-air to jump again, and hold it to keep rising.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_fly_anywhere", "Fly anywhere",
+          "Press D-pad up to take off anywhere, as Banjo-Kazooie or the bee. While flying, B stops flying instead of doing a Beak Bomb.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_feathers", "Cheato: FEATHERS", "The game's FEATHERS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_eggs", "Cheato: EGGS", "The game's EGGS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_fallproof", "Cheato: FALLPROOF", "The game's FALLPROOF code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
