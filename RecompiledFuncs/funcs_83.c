@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bskazstilt_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800836C8: syscall     71
-    recomp_syscall_handler(rdram, ctx, 0x800836C8);
-    return;
-    // 0x800836CC: addi        $t0, $zero, 0x34
-    ctx->r8 = ADD32(0, 0X34);
-;}
 RECOMP_FUNC void func_80800BC4_bsmum(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5276,5 +5267,39 @@ L_808007FC:
     // 0x80800808: nop
 
     // 0x8080080C: nop
+
+;}
+RECOMP_FUNC void func_8080000C_chtntminecelldoor(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080000C: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800010: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800014: jal         0x80089D00
+    // 0x80800018: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    _subaddiefade_entrypoint_14(rdram, ctx);
+        goto after_0;
+    // 0x80800018: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x8080001C: jal         0x8010A63C
+    // 0x80800020: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    func_8010A63C(rdram, ctx);
+        goto after_1;
+    // 0x80800020: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x80800024: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80800028: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x8080002C: jr          $ra
+    // 0x80800030: nop
+
+    return;
+    // 0x80800030: nop
 
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _dbanim_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800879B0: syscall     645
-    recomp_syscall_handler(rdram, ctx, 0x800879B0);
-    return;
-    // 0x800879B4: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _bswasher_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6228,4 +6219,13 @@ RECOMP_FUNC void func_80800240_chjamjarsdummy(uint8_t* rdram, recomp_context* ct
     return;
     // 0x808002A8: nop
 
+;}
+RECOMP_FUNC void _bsmumswim_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800838F8: syscall     81
+    recomp_syscall_handler(rdram, ctx, 0x800838F8);
+    return;
+    // 0x800838FC: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

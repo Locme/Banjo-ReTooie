@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _sumumbofx_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089868: syscall     797
-    recomp_syscall_handler(rdram, ctx, 0x80089868);
-    return;
-    // 0x8008986C: addi        $t0, $zero, 0x14
-    ctx->r8 = ADD32(0, 0X14);
-;}
 RECOMP_FUNC void func_80800A88_chflysaucercrate(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4107,5 +4098,45 @@ RECOMP_FUNC void func_800FFBE4(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800FFBE8: nop
+
+;}
+RECOMP_FUNC void func_800E88E4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800E88E4: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800E88E8: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800E88EC: jal         0x800A89F8
+    // 0x800E88F0: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_800A89F8(rdram, ctx);
+        goto after_0;
+    // 0x800E88F0: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x800E88F4: lbu         $a0, 0x1B($sp)
+    ctx->r4 = MEM_BU(ctx->r29, 0X1B);
+    // 0x800E88F8: or          $a1, $v0, $zero
+    ctx->r5 = ctx->r2 | 0;
+    // 0x800E88FC: or          $a2, $zero, $zero
+    ctx->r6 = 0 | 0;
+    // 0x800E8900: jal         0x800E8918
+    // 0x800E8904: or          $a3, $zero, $zero
+    ctx->r7 = 0 | 0;
+    func_800E8918(rdram, ctx);
+        goto after_1;
+    // 0x800E8904: or          $a3, $zero, $zero
+    ctx->r7 = 0 | 0;
+    after_1:
+    // 0x800E8908: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800E890C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x800E8910: jr          $ra
+    // 0x800E8914: nop
+
+    return;
+    // 0x800E8914: nop
 
 ;}

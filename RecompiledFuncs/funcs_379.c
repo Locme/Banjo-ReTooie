@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chweather_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800859D8: syscall     185
-    recomp_syscall_handler(rdram, ctx, 0x800859D8);
-    return;
-    // 0x800859DC: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void gcmapsects_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5921,4 +5912,38 @@ RECOMP_FUNC void _bsbfly_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008298C: addi        $t0, $zero, 0x1C
     ctx->r8 = ADD32(0, 0X1C);
+;}
+RECOMP_FUNC void func_80090010(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80090010: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80090014: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80090018: jal         0x800F54E4
+    // 0x8009001C: nop
+
+    func_800F54E4(rdram, ctx);
+        goto after_0;
+    // 0x8009001C: nop
+
+    after_0:
+    // 0x80090020: jal         0x800F5F24
+    // 0x80090024: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    func_800F5F24(rdram, ctx);
+        goto after_1;
+    // 0x80090024: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    after_1:
+    // 0x80090028: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x8009002C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80090030: jr          $ra
+    // 0x80090034: nop
+
+    return;
+    // 0x80090034: nop
+
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chconga_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085DE0: syscall     242
-    recomp_syscall_handler(rdram, ctx, 0x80085DE0);
-    return;
-    // 0x80085DE4: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_8002AD60(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5431,4 +5422,16 @@ L_808000F4:
     return;
     // 0x8080010C: nop
 
+;}
+RECOMP_FUNC void chhotfloorsmoke_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(928, 0X2D0) << 16);
+    // 0x80800004: jr          $ra
+    // 0x80800008: addiu       $v0, $v0, 0x2D0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(928, 0X2D0));
+    return;
+    // 0x80800008: addiu       $v0, $v0, 0x2D0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(928, 0X2D0));
 ;}

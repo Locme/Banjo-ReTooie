@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _badrone_entrypoint_32(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800848E8: syscall     122
-    recomp_syscall_handler(rdram, ctx, 0x800848E8);
-    return;
-    // 0x800848EC: addi        $t0, $zero, 0x80
-    ctx->r8 = ADD32(0, 0X80);
-;}
 RECOMP_FUNC void func_808002D4_chtimetable(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4785,4 +4776,13 @@ L_800DCF1C:
     return;
     // 0x800DCF44: nop
 
+;}
+RECOMP_FUNC void _chworlddoors_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800877C8: syscall     627
+    recomp_syscall_handler(rdram, ctx, 0x800877C8);
+    return;
+    // 0x800877CC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

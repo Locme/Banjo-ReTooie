@@ -2,90 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808008DC_susubgame(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808008DC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x808008E0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808008E4: jal         0x800D3948
-    // 0x808008E8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_800D3948(rdram, ctx);
-        goto after_0;
-    // 0x808008E8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x808008EC: beq         $v0, $zero, L_8080091C
-    if (ctx->r2 == 0) {
-        // 0x808008F0: nop
-    
-            goto L_8080091C;
-    }
-    // 0x808008F0: nop
-
-    // 0x808008F4: jal         0x800F6438
-    // 0x808008F8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_800F6438(rdram, ctx);
-        goto after_1;
-    // 0x808008F8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x808008FC: sltu        $t6, $zero, $v0
-    ctx->r14 = 0 < ctx->r2 ? 1 : 0;
-    // 0x80800900: beq         $t6, $zero, L_80800930
-    if (ctx->r14 == 0) {
-        // 0x80800904: or          $v0, $t6, $zero
-        ctx->r2 = ctx->r14 | 0;
-            goto L_80800930;
-    }
-    // 0x80800904: or          $v0, $t6, $zero
-    ctx->r2 = ctx->r14 | 0;
-    // 0x80800908: jal         0x800A9420
-    // 0x8080090C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_800A9420(rdram, ctx);
-        goto after_2;
-    // 0x8080090C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_2:
-    // 0x80800910: sltu        $t7, $zero, $v0
-    ctx->r15 = 0 < ctx->r2 ? 1 : 0;
-    // 0x80800914: b           L_80800930
-    // 0x80800918: or          $v0, $t7, $zero
-    ctx->r2 = ctx->r15 | 0;
-        goto L_80800930;
-    // 0x80800918: or          $v0, $t7, $zero
-    ctx->r2 = ctx->r15 | 0;
-L_8080091C:
-    // 0x8080091C: jal         0x800F54E4
-    // 0x80800920: nop
-
-    func_800F54E4(rdram, ctx);
-        goto after_3;
-    // 0x80800920: nop
-
-    after_3:
-    // 0x80800924: lw          $t8, 0x18($sp)
-    ctx->r24 = MEM_W(ctx->r29, 0X18);
-    // 0x80800928: xor         $v0, $v0, $t8
-    ctx->r2 = ctx->r2 ^ ctx->r24;
-    // 0x8080092C: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-L_80800930:
-    // 0x80800930: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800934: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800938: jr          $ra
-    // 0x8080093C: nop
-
-    return;
-    // 0x8080093C: nop
-
-;}
 RECOMP_FUNC void func_800F5CC0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7700,4 +7616,16 @@ RECOMP_FUNC void _suexpressmorph_entrypoint_0(uint8_t* rdram, recomp_context* ct
     return;
     // 0x80089B3C: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void func_8009D2E4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8009D2E4: lw          $t6, 0xFC($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0XFC);
+    // 0x8009D2E8: jr          $ra
+    // 0x8009D2EC: lw          $v0, 0x0($t6)
+    ctx->r2 = MEM_W(ctx->r14, 0X0);
+    return;
+    // 0x8009D2EC: lw          $v0, 0x0($t6)
+    ctx->r2 = MEM_W(ctx->r14, 0X0);
 ;}

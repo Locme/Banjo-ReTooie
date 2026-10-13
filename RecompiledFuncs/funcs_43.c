@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsmummove_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800838B8: syscall     78
-    recomp_syscall_handler(rdram, ctx, 0x800838B8);
-    return;
-    // 0x800838BC: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void rom_dma_read(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7494,4 +7485,20 @@ RECOMP_FUNC void func_8008FC00(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008FC24: nop
 
+;}
+RECOMP_FUNC void mlwave_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800108: mtc1        $a1, $f12
+    ctx->f12.u32l = ctx->r5;
+    // 0x8080010C: mtc1        $a2, $f14
+    ctx->f14.u32l = ctx->r6;
+    // 0x80800110: swc1        $f12, 0x10($a0)
+    MEM_W(0X10, ctx->r4) = ctx->f12.u32l;
+    // 0x80800114: jr          $ra
+    // 0x80800118: swc1        $f14, 0x14($a0)
+    MEM_W(0X14, ctx->r4) = ctx->f14.u32l;
+    return;
+    // 0x80800118: swc1        $f14, 0x14($a0)
+    MEM_W(0X14, ctx->r4) = ctx->f14.u32l;
 ;}

@@ -2,59 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800BEA24(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800BEA24: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800BEA28: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800BEA2C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800BEA30: jal         0x800BE7F8
-    // 0x800BEA34: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    func_800BE7F8(rdram, ctx);
-        goto after_0;
-    // 0x800BEA34: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    after_0:
-    // 0x800BEA38: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800BEA3C: addiu       $a0, $a0, -0x7A50
-    ctx->r4 = ADD32(ctx->r4, -0X7A50);
-    // 0x800BEA40: lbu         $t6, 0x77($a0)
-    ctx->r14 = MEM_BU(ctx->r4, 0X77);
-    // 0x800BEA44: beql        $t6, $zero, L_800BEA58
-    if (ctx->r14 == 0) {
-        // 0x800BEA48: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_800BEA58;
-    }
-    goto skip_0;
-    // 0x800BEA48: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x800BEA4C: jal         0x80087F98
-    // 0x800BEA50: lw          $a1, 0x18($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X18);
-    _gcmapsects_entrypoint_19(rdram, ctx);
-        goto after_1;
-    // 0x800BEA50: lw          $a1, 0x18($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x800BEA54: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_800BEA58:
-    // 0x800BEA58: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800BEA5C: jr          $ra
-    // 0x800BEA60: nop
-
-    return;
-    // 0x800BEA60: nop
-
-;}
 RECOMP_FUNC void func_800C4140(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5547,4 +5494,13 @@ L_80800498:
     return;
     // 0x808004C0: addiu       $sp, $sp, 0x38
     ctx->r29 = ADD32(ctx->r29, 0X38);
+;}
+RECOMP_FUNC void _chconga_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085DE0: syscall     242
+    recomp_syscall_handler(rdram, ctx, 0x80085DE0);
+    return;
+    // 0x80085DE4: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800090_chclockworkmouse(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800090: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800094: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800098: addiu       $a0, $zero, 0x9DA
-    ctx->r4 = ADD32(0, 0X9DA);
-    // 0x8080009C: jal         0x800DA564
-    // 0x808000A0: addiu       $a1, $zero, 0x2
-    ctx->r5 = ADD32(0, 0X2);
-    func_800DA564(rdram, ctx);
-        goto after_0;
-    // 0x808000A0: addiu       $a1, $zero, 0x2
-    ctx->r5 = ADD32(0, 0X2);
-    after_0:
-    // 0x808000A4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808000A8: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x808000AC: jr          $ra
-    // 0x808000B0: nop
-
-    return;
-    // 0x808000B0: nop
-
-;}
 RECOMP_FUNC void gcmapsects_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5005,4 +4977,13 @@ RECOMP_FUNC void func_800AF5A8(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800AF5AC: lh          $v0, 0x2($a0)
     ctx->r2 = MEM_H(ctx->r4, 0X2);
+;}
+RECOMP_FUNC void _bsbeggass_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800828E8: syscall     18
+    recomp_syscall_handler(rdram, ctx, 0x800828E8);
+    return;
+    // 0x800828EC: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

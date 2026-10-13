@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gclevel_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80088238: syscall     676
-    recomp_syscall_handler(rdram, ctx, 0x80088238);
-    return;
-    // 0x8008823C: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void func_80800200_chmadamegrunty(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4736,5 +4727,151 @@ L_80800220:
 
     return;
     // 0x8080022C: nop
+
+;}
+RECOMP_FUNC void func_80800350_chfactoryworkerwear(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800350: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800354: addiu       $at, $zero, 0x21
+    ctx->r1 = ADD32(0, 0X21);
+    // 0x80800358: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8080035C: sw          $a2, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r6;
+    // 0x80800360: beq         $a1, $at, L_8080037C
+    if (ctx->r5 == ctx->r1) {
+        // 0x80800364: or          $a3, $a0, $zero
+        ctx->r7 = ctx->r4 | 0;
+            goto L_8080037C;
+    }
+    // 0x80800364: or          $a3, $a0, $zero
+    ctx->r7 = ctx->r4 | 0;
+    // 0x80800368: addiu       $at, $zero, 0x2C
+    ctx->r1 = ADD32(0, 0X2C);
+    // 0x8080036C: beq         $a1, $at, L_808003D8
+    if (ctx->r5 == ctx->r1) {
+        // 0x80800370: nop
+    
+            goto L_808003D8;
+    }
+    // 0x80800370: nop
+
+    // 0x80800374: b           L_808003E4
+    // 0x80800378: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_808003E4;
+    // 0x80800378: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_8080037C:
+    // 0x8080037C: lh          $v1, 0x20($sp)
+    ctx->r3 = MEM_H(ctx->r29, 0X20);
+    // 0x80800380: addiu       $at, $zero, 0x1
+    ctx->r1 = ADD32(0, 0X1);
+    // 0x80800384: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    // 0x80800388: beq         $v1, $at, L_808003A8
+    if (ctx->r3 == ctx->r1) {
+        // 0x8080038C: addiu       $at, $zero, 0x2
+        ctx->r1 = ADD32(0, 0X2);
+            goto L_808003A8;
+    }
+    // 0x8080038C: addiu       $at, $zero, 0x2
+    ctx->r1 = ADD32(0, 0X2);
+    // 0x80800390: beq         $v1, $at, L_808003B8
+    if (ctx->r3 == ctx->r1) {
+        // 0x80800394: addiu       $at, $zero, 0x3
+        ctx->r1 = ADD32(0, 0X3);
+            goto L_808003B8;
+    }
+    // 0x80800394: addiu       $at, $zero, 0x3
+    ctx->r1 = ADD32(0, 0X3);
+    // 0x80800398: beq         $v1, $at, L_808003C8
+    if (ctx->r3 == ctx->r1) {
+        // 0x8080039C: nop
+    
+            goto L_808003C8;
+    }
+    // 0x8080039C: nop
+
+    // 0x808003A0: b           L_808003E4
+    // 0x808003A4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_808003E4;
+    // 0x808003A4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_808003A8:
+    // 0x808003A8: jal         0x80800260
+    // 0x808003AC: lh          $a1, 0x22($sp)
+    ctx->r5 = MEM_H(ctx->r29, 0X22);
+    func_80800260_chfactoryworkerwear(rdram, ctx);
+        goto after_0;
+    // 0x808003AC: lh          $a1, 0x22($sp)
+    ctx->r5 = MEM_H(ctx->r29, 0X22);
+    after_0:
+    // 0x808003B0: b           L_808003E4
+    // 0x808003B4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_808003E4;
+    // 0x808003B4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_808003B8:
+    // 0x808003B8: jal         0x80800320
+    // 0x808003BC: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    func_80800320_chfactoryworkerwear(rdram, ctx);
+        goto after_1;
+    // 0x808003BC: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    after_1:
+    // 0x808003C0: b           L_808003E4
+    // 0x808003C4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_808003E4;
+    // 0x808003C4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_808003C8:
+    // 0x808003C8: jal         0x808002E4
+    // 0x808003CC: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    func_808002E4_chfactoryworkerwear(rdram, ctx);
+        goto after_2;
+    // 0x808003CC: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    after_2:
+    // 0x808003D0: b           L_808003E4
+    // 0x808003D4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_808003E4;
+    // 0x808003D4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_808003D8:
+    // 0x808003D8: jal         0x800FFA88
+    // 0x808003DC: lw          $a0, 0x0($a3)
+    ctx->r4 = MEM_W(ctx->r7, 0X0);
+    func_800FFA88(rdram, ctx);
+        goto after_3;
+    // 0x808003DC: lw          $a0, 0x0($a3)
+    ctx->r4 = MEM_W(ctx->r7, 0X0);
+    after_3:
+    // 0x808003E0: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_808003E4:
+    // 0x808003E4: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808003E8: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+    // 0x808003EC: jr          $ra
+    // 0x808003F0: nop
+
+    return;
+    // 0x808003F0: nop
+
+    // 0x808003F4: nop
+
+    // 0x808003F8: nop
+
+    // 0x808003FC: nop
 
 ;}

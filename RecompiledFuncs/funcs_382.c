@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _plcamera_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087908: syscall     639
-    recomp_syscall_handler(rdram, ctx, 0x80087908);
-    return;
-    // 0x8008790C: addi        $t0, $zero, 0x28
-    ctx->r8 = ADD32(0, 0X28);
-;}
 RECOMP_FUNC void bsdronesuckunder_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3704,4 +3695,13 @@ RECOMP_FUNC void _sucoasterfly_entrypoint_3(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x80089EDC: addi        $t0, $zero, 0xC
     ctx->r8 = ADD32(0, 0XC);
+;}
+RECOMP_FUNC void _chpowerhutwitchy_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086070: syscall     275
+    recomp_syscall_handler(rdram, ctx, 0x80086070);
+    return;
+    // 0x80086074: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

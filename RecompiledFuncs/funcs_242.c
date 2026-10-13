@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80102EC0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80102EC0: jr          $ra
-    // 0x80102EC4: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    return;
-    // 0x80102EC4: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-;}
 RECOMP_FUNC void _sumissilehome_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6999,4 +6989,13 @@ L_8080019C:
     return;
     // 0x808001A4: nop
 
+;}
+RECOMP_FUNC void _chfirefx_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086140: syscall     281
+    recomp_syscall_handler(rdram, ctx, 0x80086140);
+    return;
+    // 0x80086144: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

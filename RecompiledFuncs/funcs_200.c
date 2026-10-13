@@ -2,94 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bafly_entrypoint_21(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800D18: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x80800D1C: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x80800D20: jal         0x80084C90
-    // 0x80800D24: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    _bafpctrl_entrypoint_3(rdram, ctx);
-        goto after_0;
-    // 0x80800D24: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80800D28: mul.s       $f4, $f0, $f0
-    CHECK_FR(ctx, 4);
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f0.fl); 
-    ctx->f4.fl = MUL_S(ctx->f0.fl, ctx->f0.fl);
-    // 0x80800D2C: lui         $at, 0x3F80
-    ctx->r1 = S32(0X3F80 << 16);
-    // 0x80800D30: mtc1        $at, $f2
-    ctx->f2.u32l = ctx->r1;
-    // 0x80800D34: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(528, 0XDB0) << 16);
-    // 0x80800D38: lwc1        $f14, 0xDB0($at)
-    ctx->f14.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(528, 0XDB0));
-    // 0x80800D3C: mfc1        $a2, $f2
-    ctx->r6 = (int32_t)ctx->f2.u32l;
-    // 0x80800D40: mov.s       $f12, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    ctx->f12.fl = ctx->f0.fl;
-    // 0x80800D44: mfc1        $a3, $f4
-    ctx->r7 = (int32_t)ctx->f4.u32l;
-    // 0x80800D48: jal         0x800F10B4
-    // 0x80800D4C: swc1        $f2, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->f2.u32l;
-    func_800F10B4(rdram, ctx);
-        goto after_1;
-    // 0x80800D4C: swc1        $f2, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->f2.u32l;
-    after_1:
-    // 0x80800D50: lui         $at, 0x447A
-    ctx->r1 = S32(0X447A << 16);
-    // 0x80800D54: mtc1        $at, $f6
-    ctx->f6.u32l = ctx->r1;
-    // 0x80800D58: lui         $a2, 0x400C
-    ctx->r6 = S32(0X400C << 16);
-    // 0x80800D5C: ori         $a2, $a2, 0xCCCD
-    ctx->r6 = ctx->r6 | 0XCCCD;
-    // 0x80800D60: mul.s       $f8, $f6, $f0
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f0.fl); 
-    ctx->f8.fl = MUL_S(ctx->f6.fl, ctx->f0.fl);
-    // 0x80800D64: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x80800D68: mfc1        $a1, $f8
-    ctx->r5 = (int32_t)ctx->f8.u32l;
-    // 0x80800D6C: jal         0x8009BFE4
-    // 0x80800D70: nop
-
-    func_8009BFE4(rdram, ctx);
-        goto after_2;
-    // 0x80800D70: nop
-
-    after_2:
-    // 0x80800D74: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x80800D78: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80800D7C: jr          $ra
-    // 0x80800D80: nop
-
-    return;
-    // 0x80800D80: nop
-
-    // 0x80800D84: nop
-
-    // 0x80800D88: nop
-
-    // 0x80800D8C: nop
-
-;}
 RECOMP_FUNC void bsstonehead_entrypoint_32(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4093,4 +4005,13 @@ RECOMP_FUNC void _gcmapsects_lagoonmid_entrypoint_0(uint8_t* rdram, recomp_conte
     return;
     // 0x80087FF4: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _bsvan_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80084158: syscall     105
+    recomp_syscall_handler(rdram, ctx, 0x80084158);
+    return;
+    // 0x8008415C: addi        $t0, $zero, 0x1C
+    ctx->r8 = ADD32(0, 0X1C);
 ;}

@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800F66F0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F66F0: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x800F66F4: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800F66F8: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800F66FC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800F6700: addu        $a0, $a0, $t6
-    ctx->r4 = ADD32(ctx->r4, ctx->r14);
-    // 0x800F6704: jal         0x8009E6F8
-    // 0x800F6708: lw          $a0, 0x5490($a0)
-    ctx->r4 = MEM_W(ctx->r4, 0X5490);
-    bs_getCurrentState(rdram, ctx);
-        goto after_0;
-    // 0x800F6708: lw          $a0, 0x5490($a0)
-    ctx->r4 = MEM_W(ctx->r4, 0X5490);
-    after_0:
-    // 0x800F670C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800F6710: xori        $t7, $v0, 0x6F
-    ctx->r15 = ctx->r2 ^ 0X6F;
-    // 0x800F6714: sltiu       $v0, $t7, 0x1
-    ctx->r2 = ctx->r15 < 0X1 ? 1 : 0;
-    // 0x800F6718: jr          $ra
-    // 0x800F671C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    return;
-    // 0x800F671C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-;}
 RECOMP_FUNC void gcdialogcamera_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -13015,5 +12981,57 @@ RECOMP_FUNC void bsbansack_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
     // 0x80801DA8: lw          $v0, 0x1EA0($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(41, 0X1EA0));
     // 0x80801DAC: nop
+
+;}
+RECOMP_FUNC void capod_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800130: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800134: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800138: jal         0x8008FFE8
+    // 0x8080013C: nop
+
+    func_8008FFE8(rdram, ctx);
+        goto after_0;
+    // 0x8080013C: nop
+
+    after_0:
+    // 0x80800140: beq         $v0, $zero, L_80800158
+    if (ctx->r2 == 0) {
+        // 0x80800144: or          $a0, $v0, $zero
+        ctx->r4 = ctx->r2 | 0;
+            goto L_80800158;
+    }
+    // 0x80800144: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    // 0x80800148: jal         0x80089550
+    // 0x8080014C: nop
+
+    _ncpod_entrypoint_18(rdram, ctx);
+        goto after_1;
+    // 0x8080014C: nop
+
+    after_1:
+    // 0x80800150: b           L_80800160
+    // 0x80800154: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_80800160;
+    // 0x80800154: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_80800158:
+    // 0x80800158: addiu       $v0, $zero, -0x1
+    ctx->r2 = ADD32(0, -0X1);
+    // 0x8080015C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_80800160:
+    // 0x80800160: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800164: jr          $ra
+    // 0x80800168: nop
+
+    return;
+    // 0x80800168: nop
 
 ;}

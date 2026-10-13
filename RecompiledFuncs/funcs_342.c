@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800574_chclinker(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800574: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800578: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8080057C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800580: jal         0x8008A2F8
-    // 0x80800584: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    _susubgame_entrypoint_11(rdram, ctx);
-        goto after_0;
-    // 0x80800584: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    after_0:
-    // 0x80800588: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8080058C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800590: jr          $ra
-    // 0x80800594: nop
-
-    return;
-    // 0x80800594: nop
-
-;}
 RECOMP_FUNC void bsstand_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5120,4 +5092,54 @@ RECOMP_FUNC void func_800EFA4C(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800EFA68: swc1        $f4, 0x8($a0)
     MEM_W(0X8, ctx->r4) = ctx->f4.u32l;
+;}
+RECOMP_FUNC void func_80800948_chdippy(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800948: addiu       $sp, $sp, -0x28
+    ctx->r29 = ADD32(ctx->r29, -0X28);
+    // 0x8080094C: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800950: sw          $a0, 0x28($sp)
+    MEM_W(0X28, ctx->r29) = ctx->r4;
+    // 0x80800954: lw          $a0, 0x0($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X0);
+    // 0x80800958: addiu       $a2, $sp, 0x1C
+    ctx->r6 = ADD32(ctx->r29, 0X1C);
+    // 0x8080095C: jal         0x8008A0E8
+    // 0x80800960: addiu       $a1, $zero, 0x5
+    ctx->r5 = ADD32(0, 0X5);
+    _subaddieskeleton_entrypoint_3(rdram, ctx);
+        goto after_0;
+    // 0x80800960: addiu       $a1, $zero, 0x5
+    ctx->r5 = ADD32(0, 0X5);
+    after_0:
+    // 0x80800964: lui         $a2, 0x8080
+    ctx->r6 = S32(RELOC_HI16(1284, 0X1480) << 16);
+    // 0x80800968: lui         $a3, 0x3ECC
+    ctx->r7 = S32(0X3ECC << 16);
+    // 0x8080096C: ori         $a3, $a3, 0xCCCD
+    ctx->r7 = ctx->r7 | 0XCCCD;
+    // 0x80800970: addiu       $a2, $a2, 0x1480
+    ctx->r6 = ADD32(ctx->r6, (int16_t)RELOC_LO16(1284, 0X1480));
+    // 0x80800974: lw          $a0, 0x28($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X28);
+    // 0x80800978: jal         0x80089D20
+    // 0x8080097C: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    _subaddieaudioquick_entrypoint_3(rdram, ctx);
+        goto after_1;
+    // 0x8080097C: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    after_1:
+    // 0x80800980: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80800984: addiu       $sp, $sp, 0x28
+    ctx->r29 = ADD32(ctx->r29, 0X28);
+    // 0x80800988: jr          $ra
+    // 0x8080098C: nop
+
+    return;
+    // 0x8080098C: nop
+
 ;}

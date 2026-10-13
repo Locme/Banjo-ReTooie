@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void yaw_get(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009C984: lw          $t6, 0xF8($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0XF8);
-    // 0x8009C988: jr          $ra
-    // 0x8009C98C: lwc1        $f0, 0x0($t6)
-    ctx->f0.u32l = MEM_W(ctx->r14, 0X0);
-    return;
-    // 0x8009C98C: lwc1        $f0, 0x0($t6)
-    ctx->f0.u32l = MEM_W(ctx->r14, 0X0);
-;}
 RECOMP_FUNC void bsstatue_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4492,5 +4480,39 @@ RECOMP_FUNC void func_800DBBF8(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800DBC64: nop
+
+;}
+RECOMP_FUNC void bsstonehead_entrypoint_40(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801484: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80801488: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8080148C: jal         0x80800000
+    // 0x80801490: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_80800000_bsstonehead(rdram, ctx);
+        goto after_0;
+    // 0x80801490: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x80801494: jal         0x80090A2C
+    // 0x80801498: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    func_80090A2C(rdram, ctx);
+        goto after_1;
+    // 0x80801498: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x8080149C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808014A0: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808014A4: jr          $ra
+    // 0x808014A8: nop
+
+    return;
+    // 0x808014A8: nop
 
 ;}

@@ -82,6 +82,13 @@ ignored = [
     "boot_osPiGetStatus",
     # Reads the cop0 Count register, which N64Recomp cannot express.
     "func_8001DDC0",
+    # Reads a word straight from the cartridge (0xB0000000 + offset) with
+    # interrupts masked through cop0 Status. Implemented in src/game/cic.cpp.
+    "rom_read_word",
+    # Returns cop0 Status. The scheduler halts the game (its reset handler)
+    # unless interrupt mask bit 5 is set, which the runtime never sets.
+    # Implemented in src/game/boot.cpp.
+    "__osGetSR_2",
     # Templates copied into each loaded overlay header, never executed in place.
     "ovl_entrypoint",
     "ovl_entrypoint_alternate",
@@ -126,3 +133,57 @@ text = "tooie_overlay_placed(rdram, ctx);"
 func = "ovl_unload"
 before_vram = 0x800819E4
 text = "tooie_overlay_unloading(rdram, ctx);"
+
+# --- Anti-tamper boot words (func_8001DE64) ---------------------------------
+# The CIC thread reads two words the IPL3 leaves in RDRAM through uncached
+# addresses (0xA02FB1F4, 0xA02FE1C0) and flags tampering unless they are
+# 0xAD090010 and 0xAD170014. The host never ran an IPL3, so load the expected
+# values directly.
+
+# lui $t6, 0xA030 -> lui $t7, 0xAD09
+[[patches.instruction]]
+func = "func_8001DE64"
+vram = 0x8001DE70
+value = 0x3C0FAD09
+
+# lw $t7, -0x4E0C($t6) -> ori $t7, $t7, 0x0010
+[[patches.instruction]]
+func = "func_8001DE64"
+vram = 0x8001DE74
+value = 0x35EF0010
+
+# lui $t8, 0xA030 -> lui $t9, 0xAD17
+[[patches.instruction]]
+func = "func_8001DE64"
+vram = 0x8001DE80
+value = 0x3C19AD17
+
+# lw $t9, -0x1E40($t8) -> ori $t9, $t9, 0x0014
+[[patches.instruction]]
+func = "func_8001DE64"
+vram = 0x8001DE88
+value = 0x37390014
+
+# --- Float helpers that return through a copy of $ra (core1 1E2B200) --------
+# Hand-written sinf/cosf/atan wrappers keep $ra in $a1/$a3 across a jal and
+# return with `jr $a1`/`jr $a3`. The recompiled jal is a host call that leaves
+# no return address behind, so return with `jr $ra` instead.
+[[patches.instruction]]
+func = "func_800137D4"
+vram = 0x800137EC
+value = 0x03E00008
+
+[[patches.instruction]]
+func = "func_800137F4"
+vram = 0x80013810
+value = 0x03E00008
+
+[[patches.instruction]]
+func = "func_80013A5C"
+vram = 0x80013A74
+value = 0x03E00008
+
+[[patches.instruction]]
+func = "func_80013A7C"
+vram = 0x80013A98
+value = 0x03E00008

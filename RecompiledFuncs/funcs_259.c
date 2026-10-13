@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _badata_entrypoint_19(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800846D8: syscall     118
-    recomp_syscall_handler(rdram, ctx, 0x800846D8);
-    return;
-    // 0x800846DC: addi        $t0, $zero, 0x4C
-    ctx->r8 = ADD32(0, 0X4C);
-;}
 RECOMP_FUNC void func_808014B4_bsbansack(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4074,4 +4065,13 @@ RECOMP_FUNC void _gctransitionDll_entrypoint_1(uint8_t* rdram, recomp_context* c
     return;
     // 0x800881B4: addi        $t0, $zero, 0x4
     ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void _glsplineDll_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800884D8: syscall     689
+    recomp_syscall_handler(rdram, ctx, 0x800884D8);
+    return;
+    // 0x800884DC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

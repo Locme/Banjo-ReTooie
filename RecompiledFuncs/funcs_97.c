@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bafpctrl_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80084CB0: syscall     133
-    recomp_syscall_handler(rdram, ctx, 0x80084CB0);
-    return;
-    // 0x80084CB4: addi        $t0, $zero, 0x1C
-    ctx->r8 = ADD32(0, 0X1C);
-;}
 RECOMP_FUNC void func_80803C80_chgameselect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6184,4 +6175,18 @@ L_80800048:
     return;
     // 0x80800068: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void func_80803124_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80803124: sw          $a1, 0x4($sp)
+    MEM_W(0X4, ctx->r29) = ctx->r5;
+    // 0x80803128: lw          $v0, 0x188($a0)
+    ctx->r2 = MEM_W(ctx->r4, 0X188);
+    // 0x8080312C: jr          $ra
+    // 0x80803130: sh          $zero, 0xE0($v0)
+    MEM_H(0XE0, ctx->r2) = 0;
+    return;
+    // 0x80803130: sh          $zero, 0xE0($v0)
+    MEM_H(0XE0, ctx->r2) = 0;
 ;}

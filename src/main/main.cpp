@@ -1,3 +1,4 @@
+#include <thread>
 #include <cstdio>
 #include <cassert>
 #include <unordered_map>
@@ -509,6 +510,10 @@ void reorder_texture_pack(recomp::mods::ModContext&) {
     recompui::renderer::trigger_texture_pack_update();
 }
 
+// Set by `--game bt`: start the game straight away when the ROM is installed,
+// skipping the launcher.
+bool autostart_game = false;
+
 void on_launcher_init(recompui::LauncherMenu *menu) {
     auto game_options_menu = menu->init_game_options_menu(
         supported_games[0].game_id,
@@ -519,13 +524,28 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
     );
 
     game_options_menu->add_default_options();
+
+    if (autostart_game && recomp::is_rom_valid(supported_games[0].game_id)) {
+        // Start a moment later, as the launcher's own option does: the VI
+        // thread only sets up a video mode while no game is running, and it
+        // has not run yet when the launcher is first built.
+        std::thread([]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            recompui::update_game_mod_id(supported_games[0].mod_game_id);
+            recomp::start_game(supported_games[0].game_id, {});
+            recompui::hide_all_contexts();
+        }).detach();
+    }
 }
 
 #define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
 
 int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+    for (int i = 1; i + 1 < argc; i++) {
+        if (strcmp(argv[i], "--game") == 0 && strcmp(argv[i + 1], "bt") == 0) {
+            autostart_game = true;
+        }
+    }
     recomp::Version project_version{};
     if (!recomp::Version::from_string(version_string, project_version)) {
         ultramodern::error_handling::message_box(("Invalid version string: " + version_string).c_str());

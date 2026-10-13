@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsstonehead_entrypoint_36(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080132C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80801330: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801334: jal         0x80800000
-    // 0x80801338: nop
-
-    func_80800000_bsstonehead(rdram, ctx);
-        goto after_0;
-    // 0x80801338: nop
-
-    after_0:
-    // 0x8080133C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801340: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80801344: jr          $ra
-    // 0x80801348: nop
-
-    return;
-    // 0x80801348: nop
-
-;}
 RECOMP_FUNC void bsfirstp_entrypoint_32(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5374,4 +5348,13 @@ RECOMP_FUNC void _chlagoonbits_entrypoint_5(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x80085FE4: addi        $t0, $zero, 0x14
     ctx->r8 = ADD32(0, 0X14);
+;}
+RECOMP_FUNC void _sucoasterflydata_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A270: syscall     832
+    recomp_syscall_handler(rdram, ctx, 0x8008A270);
+    return;
+    // 0x8008A274: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

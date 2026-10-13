@@ -2,42 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800EDCEC(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800EDCEC: mtc1        $a1, $f12
-    ctx->f12.u32l = ctx->r5;
-    // 0x800EDCF0: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x800EDCF4: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x800EDCF8: addiu       $t6, $zero, 0x1
-    ctx->r14 = ADD32(0, 0X1);
-    // 0x800EDCFC: mfc1        $a1, $f12
-    ctx->r5 = (int32_t)ctx->f12.u32l;
-    // 0x800EDD00: mfc1        $a2, $f12
-    ctx->r6 = (int32_t)ctx->f12.u32l;
-    // 0x800EDD04: sw          $t6, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->r14;
-    // 0x800EDD08: jal         0x800EDC64
-    // 0x800EDD0C: addiu       $a3, $zero, 0x0
-    ctx->r7 = ADD32(0, 0X0);
-    func_800EDC64(rdram, ctx);
-        goto after_0;
-    // 0x800EDD0C: addiu       $a3, $zero, 0x0
-    ctx->r7 = ADD32(0, 0X0);
-    after_0:
-    // 0x800EDD10: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x800EDD14: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x800EDD18: jr          $ra
-    // 0x800EDD1C: nop
-
-    return;
-    // 0x800EDD1C: nop
-
-;}
 RECOMP_FUNC void _bsbkflamethrower_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3449,4 +3413,13 @@ RECOMP_FUNC void _ncbajig_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80089304: addi        $t0, $zero, 0x8
     ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void _chbottlesfamily_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800864D0: syscall     331
+    recomp_syscall_handler(rdram, ctx, 0x800864D0);
+    return;
+    // 0x800864D4: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

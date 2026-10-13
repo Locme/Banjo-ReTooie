@@ -18,6 +18,8 @@ jobs:
         type: [ RelWithDebInfo ]
     name: windows (${{ matrix.type }})
     steps:
+      - name: Keep LF line endings (lib-patches apply to LF sources)
+        run: git config --global core.autocrlf false
       - name: Checkout
         uses: actions/checkout@v4
         with:

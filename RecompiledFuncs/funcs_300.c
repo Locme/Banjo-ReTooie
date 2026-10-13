@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800A33F8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800A33F8: lw          $t6, 0xA0($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0XA0);
-    // 0x800A33FC: jr          $ra
-    // 0x800A3400: lbu         $v0, 0x28($t6)
-    ctx->r2 = MEM_BU(ctx->r14, 0X28);
-    return;
-    // 0x800A3400: lbu         $v0, 0x28($t6)
-    ctx->r2 = MEM_BU(ctx->r14, 0X28);
-;}
 RECOMP_FUNC void chflamer_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5228,4 +5216,13 @@ RECOMP_FUNC void _chlakemonster_entrypoint_3(uint8_t* rdram, recomp_context* ctx
     return;
     // 0x80086CDC: addi        $t0, $zero, 0xC
     ctx->r8 = ADD32(0, 0XC);
+;}
+RECOMP_FUNC void _sueggmove_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A440: syscall     842
+    recomp_syscall_handler(rdram, ctx, 0x8008A440);
+    return;
+    // 0x8008A444: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

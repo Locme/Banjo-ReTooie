@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _sueggmove_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8008A440: syscall     842
-    recomp_syscall_handler(rdram, ctx, 0x8008A440);
-    return;
-    // 0x8008A444: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void _bababykaz_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4576,4 +4567,38 @@ RECOMP_FUNC void _subaddierouteDll_entrypoint_2(uint8_t* rdram, recomp_context* 
     return;
     // 0x80089F6C: addi        $t0, $zero, 0x8
     ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void func_80801058_bstnt(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801058: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x8080105C: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80801060: jal         0x80085240
+    // 0x80801064: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    _basudie_entrypoint_8(rdram, ctx);
+        goto after_0;
+    // 0x80801064: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x80801068: jal         0x80800E54
+    // 0x8080106C: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    bstnt_entrypoint_2(rdram, ctx);
+        goto after_1;
+    // 0x8080106C: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x80801070: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80801074: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80801078: jr          $ra
+    // 0x8080107C: nop
+
+    return;
+    // 0x8080107C: nop
+
 ;}

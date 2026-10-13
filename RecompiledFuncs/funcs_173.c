@@ -2,44 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800BAAE4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800BAAE4: mtc1        $a1, $f12
-    ctx->f12.u32l = ctx->r5;
-    // 0x800BAAE8: mtc1        $a2, $f14
-    ctx->f14.u32l = ctx->r6;
-    // 0x800BAAEC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800BAAF0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800BAAF4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800BAAF8: mfc1        $a1, $f12
-    ctx->r5 = (int32_t)ctx->f12.u32l;
-    // 0x800BAAFC: mfc1        $a2, $f14
-    ctx->r6 = (int32_t)ctx->f14.u32l;
-    // 0x800BAB00: sw          $a3, 0x24($sp)
-    MEM_W(0X24, ctx->r29) = ctx->r7;
-    // 0x800BAB04: jal         0x800EFA4C
-    // 0x800BAB08: addiu       $a0, $a0, 0x6C
-    ctx->r4 = ADD32(ctx->r4, 0X6C);
-    func_800EFA4C(rdram, ctx);
-        goto after_0;
-    // 0x800BAB08: addiu       $a0, $a0, 0x6C
-    ctx->r4 = ADD32(ctx->r4, 0X6C);
-    after_0:
-    // 0x800BAB0C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800BAB10: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800BAB14: jr          $ra
-    // 0x800BAB18: nop
-
-    return;
-    // 0x800BAB18: nop
-
-;}
 RECOMP_FUNC void func_80800030_bssub(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4772,4 +4734,13 @@ RECOMP_FUNC void _subaddiejoy_entrypoint_0(uint8_t* rdram, recomp_context* ctx) 
     return;
     // 0x80089BAC: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _chtiptup_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085F20: syscall     260
+    recomp_syscall_handler(rdram, ctx, 0x80085F20);
+    return;
+    // 0x80085F24: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

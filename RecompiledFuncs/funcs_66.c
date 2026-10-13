@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _scinfobar_entrypoint_20(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8008A620: syscall     845
-    recomp_syscall_handler(rdram, ctx, 0x8008A620);
-    return;
-    // 0x8008A624: addi        $t0, $zero, 0x50
-    ctx->r8 = ADD32(0, 0X50);
-;}
 RECOMP_FUNC void fxtwinkle_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5529,4 +5520,13 @@ L_8080065C:
     return;
     // 0x80800668: nop
 
+;}
+RECOMP_FUNC void _sufreezy_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089B98: syscall     804
+    recomp_syscall_handler(rdram, ctx, 0x80089B98);
+    return;
+    // 0x80089B9C: addi        $t0, $zero, 0x18
+    ctx->r8 = ADD32(0, 0X18);
 ;}

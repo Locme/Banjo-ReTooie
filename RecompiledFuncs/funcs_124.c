@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80804FB4_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80804FB4: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80804FB8: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80804FBC: jal         0x80807C8C
-    // 0x80804FC0: nop
-
-    func_80807C8C_bsfirstp(rdram, ctx);
-        goto after_0;
-    // 0x80804FC0: nop
-
-    after_0:
-    // 0x80804FC4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80804FC8: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80804FCC: jr          $ra
-    // 0x80804FD0: nop
-
-    return;
-    // 0x80804FD0: nop
-
-;}
 RECOMP_FUNC void func_808002A0_chpumproomswitch(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4901,4 +4875,20 @@ L_80806D4C:
     return;
     // 0x80806D94: addiu       $sp, $sp, 0x50
     ctx->r29 = ADD32(ctx->r29, 0X50);
+;}
+RECOMP_FUNC void bsride_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808006BC: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x808006C0: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(348, 0XA80) << 16);
+    // 0x808006C4: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x808006C8: jr          $ra
+    // 0x808006CC: lw          $v0, 0xA80($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(348, 0XA80));
+    return;
+    // 0x808006CC: lw          $v0, 0xA80($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(348, 0XA80));
 ;}

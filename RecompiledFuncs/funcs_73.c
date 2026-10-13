@@ -2,38 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800170D4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800170D4: andi        $t6, $a0, 0xFF
-    ctx->r14 = ctx->r4 & 0XFF;
-    // 0x800170D8: sll         $t7, $t6, 2
-    ctx->r15 = S32(ctx->r14 << 2);
-    // 0x800170DC: addu        $t7, $t7, $t6
-    ctx->r15 = ADD32(ctx->r15, ctx->r14);
-    // 0x800170E0: sll         $t7, $t7, 3
-    ctx->r15 = S32(ctx->r15 << 3);
-    // 0x800170E4: subu        $t7, $t7, $t6
-    ctx->r15 = SUB32(ctx->r15, ctx->r14);
-    // 0x800170E8: sll         $t7, $t7, 2
-    ctx->r15 = S32(ctx->r15 << 2);
-    // 0x800170EC: addu        $t7, $t7, $t6
-    ctx->r15 = ADD32(ctx->r15, ctx->r14);
-    // 0x800170F0: sll         $t7, $t7, 2
-    ctx->r15 = S32(ctx->r15 << 2);
-    // 0x800170F4: lui         $v0, 0x8008
-    ctx->r2 = S32(0X8008 << 16);
-    // 0x800170F8: addu        $v0, $v0, $t7
-    ctx->r2 = ADD32(ctx->r2, ctx->r15);
-    // 0x800170FC: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    // 0x80017100: jr          $ra
-    // 0x80017104: lw          $v0, -0x5E50($v0)
-    ctx->r2 = MEM_W(ctx->r2, -0X5E50);
-    return;
-    // 0x80017104: lw          $v0, -0x5E50($v0)
-    ctx->r2 = MEM_W(ctx->r2, -0X5E50);
-;}
 RECOMP_FUNC void func_800A7AD4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4432,4 +4400,16 @@ RECOMP_FUNC void _chdinoswitches_entrypoint_1(uint8_t* rdram, recomp_context* ct
     return;
     // 0x80085F9C: addi        $t0, $zero, 0x4
     ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void susplinet_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800350: lh          $t6, 0x34($a0)
+    ctx->r14 = MEM_H(ctx->r4, 0X34);
+    // 0x80800354: jr          $ra
+    // 0x80800358: addu        $v0, $a0, $t6
+    ctx->r2 = ADD32(ctx->r4, ctx->r14);
+    return;
+    // 0x80800358: addu        $v0, $a0, $t6
+    ctx->r2 = ADD32(ctx->r4, ctx->r14);
 ;}

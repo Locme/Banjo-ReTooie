@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsbeemain_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800C14: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80800C18: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(80, 0X12B0) << 16);
-    // 0x80800C1C: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80800C20: jr          $ra
-    // 0x80800C24: lw          $v0, 0x12B0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(80, 0X12B0));
-    return;
-    // 0x80800C24: lw          $v0, 0x12B0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(80, 0X12B0));
-;}
 RECOMP_FUNC void babackpack_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4355,4 +4339,13 @@ L_800A8224:
     return;
     // 0x800A822C: nop
 
+;}
+RECOMP_FUNC void _bschokedie_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80082EA8: syscall     32
+    recomp_syscall_handler(rdram, ctx, 0x80082EA8);
+    return;
+    // 0x80082EAC: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

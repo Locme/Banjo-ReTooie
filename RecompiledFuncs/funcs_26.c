@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800EA34C(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800EA34C: lui         $at, 0x8013
-    ctx->r1 = S32(0X8013 << 16);
-    // 0x800EA350: jr          $ra
-    // 0x800EA354: sh          $a0, 0x2DCC($at)
-    MEM_H(0X2DCC, ctx->r1) = ctx->r4;
-    return;
-    // 0x800EA354: sh          $a0, 0x2DCC($at)
-    MEM_H(0X2DCC, ctx->r1) = ctx->r4;
-;}
 RECOMP_FUNC void func_80801D50_chhandcart(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6541,4 +6529,13 @@ L_800F4898:
     return;
     // 0x800F48B8: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void _ncbadie_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089278: syscall     769
+    recomp_syscall_handler(rdram, ctx, 0x80089278);
+    return;
+    // 0x8008927C: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

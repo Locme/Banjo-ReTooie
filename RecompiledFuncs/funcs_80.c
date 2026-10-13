@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800D593C(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800D593C: jr          $ra
-    // 0x800D5940: addiu       $v0, $zero, 0x3666
-    ctx->r2 = ADD32(0, 0X3666);
-    return;
-    // 0x800D5940: addiu       $v0, $zero, 0x3666
-    ctx->r2 = ADD32(0, 0X3666);
-;}
 RECOMP_FUNC void func_808003F8_chbanjoctrl(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5753,4 +5743,57 @@ RECOMP_FUNC void _gcnewoption_entrypoint_19(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x80087D34: addi        $t0, $zero, 0x4C
     ctx->r8 = ADD32(0, 0X4C);
+;}
+RECOMP_FUNC void func_808020B0_chcollballcontrol(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808020B0: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x808020B4: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x808020B8: jal         0x8080237C
+    // 0x808020BC: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_8080237C_chcollballcontrol(rdram, ctx);
+        goto after_0;
+    // 0x808020BC: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x808020C0: lui         $at, 0x41F0
+    ctx->r1 = S32(0X41F0 << 16);
+    // 0x808020C4: mtc1        $at, $f4
+    ctx->f4.u32l = ctx->r1;
+    // 0x808020C8: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    // 0x808020CC: addiu       $at, $zero, -0x1
+    ctx->r1 = ADD32(0, -0X1);
+    // 0x808020D0: or          $a1, $v0, $zero
+    ctx->r5 = ctx->r2 | 0;
+    // 0x808020D4: beq         $v0, $at, L_808020E4
+    if (ctx->r2 == ctx->r1) {
+        // 0x808020D8: swc1        $f4, 0x8($a0)
+        MEM_W(0X8, ctx->r4) = ctx->f4.u32l;
+            goto L_808020E4;
+    }
+    // 0x808020D8: swc1        $f4, 0x8($a0)
+    MEM_W(0X8, ctx->r4) = ctx->f4.u32l;
+    // 0x808020DC: jal         0x808023FC
+    // 0x808020E0: nop
+
+    func_808023FC_chcollballcontrol(rdram, ctx);
+        goto after_1;
+    // 0x808020E0: nop
+
+    after_1:
+L_808020E4:
+    // 0x808020E4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808020E8: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808020EC: jr          $ra
+    // 0x808020F0: nop
+
+    return;
+    // 0x808020F0: nop
+
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _baeggsetup_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80084A78: syscall     126
-    recomp_syscall_handler(rdram, ctx, 0x80084A78);
-    return;
-    // 0x80084A7C: addi        $t0, $zero, 0x20
-    ctx->r8 = ADD32(0, 0X20);
-;}
 RECOMP_FUNC void func_808006BC_chdinofoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4347,4 +4338,38 @@ RECOMP_FUNC void func_800E146C(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800E1488: swc1        $f12, -0x305C($at)
     MEM_W(-0X305C, ctx->r1) = ctx->f12.u32l;
+;}
+RECOMP_FUNC void func_80804210_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80804210: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80804214: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80804218: jal         0x808090D8
+    // 0x8080421C: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_808090D8_bsfirstp(rdram, ctx);
+        goto after_0;
+    // 0x8080421C: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x80804220: jal         0x80807C8C
+    // 0x80804224: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    func_80807C8C_bsfirstp(rdram, ctx);
+        goto after_1;
+    // 0x80804224: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x80804228: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x8080422C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80804230: jr          $ra
+    // 0x80804234: nop
+
+    return;
+    // 0x80804234: nop
+
 ;}

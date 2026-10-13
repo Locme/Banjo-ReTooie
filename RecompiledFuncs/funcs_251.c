@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bssnowball_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800B30: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80800B34: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(356, 0X1094) << 16);
-    // 0x80800B38: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80800B3C: jr          $ra
-    // 0x80800B40: lw          $v0, 0x1094($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X1094));
-    return;
-    // 0x80800B40: lw          $v0, 0x1094($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X1094));
-;}
 RECOMP_FUNC void func_8080082C_chmadamegrunty(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4629,4 +4613,20 @@ L_80800BCC:
     return;
     // 0x80800BD8: nop
 
+;}
+RECOMP_FUNC void bsfirstp_entrypoint_34(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80808A10: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x80808A14: lui         $v0, 0x8081
+    ctx->r2 = S32(RELOC_HI16(439, 0XB5B0) << 16);
+    // 0x80808A18: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x80808A1C: jr          $ra
+    // 0x80808A20: lw          $v0, -0x4A50($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(439, 0XB5B0));
+    return;
+    // 0x80808A20: lw          $v0, -0x4A50($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(439, 0XB5B0));
 ;}

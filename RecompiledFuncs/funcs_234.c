@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800964D0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800964D0: lw          $t6, 0x94($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0X94);
-    // 0x800964D4: jr          $ra
-    // 0x800964D8: lw          $v0, 0xA8($t6)
-    ctx->r2 = MEM_W(ctx->r14, 0XA8);
-    return;
-    // 0x800964D8: lw          $v0, 0xA8($t6)
-    ctx->r2 = MEM_W(ctx->r14, 0XA8);
-;}
 RECOMP_FUNC void func_808011B4_bswasher(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7673,4 +7661,13 @@ RECOMP_FUNC void _rtlight_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800890A4: addi        $t0, $zero, 0x4
     ctx->r8 = ADD32(0, 0X4);
+;}
+RECOMP_FUNC void _sujiggy_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A6C8: syscall     849
+    recomp_syscall_handler(rdram, ctx, 0x8008A6C8);
+    return;
+    // 0x8008A6CC: addi        $t0, $zero, 0x18
+    ctx->r8 = ADD32(0, 0X18);
 ;}

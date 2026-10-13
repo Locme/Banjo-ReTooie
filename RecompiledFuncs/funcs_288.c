@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bskazglide_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808009EC: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x808009F0: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(244, 0XAE0) << 16);
-    // 0x808009F4: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x808009F8: jr          $ra
-    // 0x808009FC: lw          $v0, 0xAE0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(244, 0XAE0));
-    return;
-    // 0x808009FC: lw          $v0, 0xAE0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(244, 0XAE0));
-;}
 RECOMP_FUNC void func_80802AD8_chinflatableboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -8134,4 +8118,13 @@ L_8080194C:
     return;
     // 0x808019D0: nop
 
+;}
+RECOMP_FUNC void _chdummyjigsaw_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087408: syscall     567
+    recomp_syscall_handler(rdram, ctx, 0x80087408);
+    return;
+    // 0x8008740C: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

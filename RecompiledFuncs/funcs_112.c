@@ -2,28 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void gspropctrl_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800058: lw          $t6, 0x8($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0X8);
-    // 0x8080005C: lw          $t9, 0x10($a0)
-    ctx->r25 = MEM_W(ctx->r4, 0X10);
-    // 0x80800060: sll         $t7, $t6, 19
-    ctx->r15 = S32(ctx->r14 << 19);
-    // 0x80800064: andi        $t0, $t9, 0x7
-    ctx->r8 = ctx->r25 & 0X7;
-    // 0x80800068: sll         $t1, $t0, 2
-    ctx->r9 = S32(ctx->r8 << 2);
-    // 0x8080006C: srl         $t8, $t7, 30
-    ctx->r24 = S32(U32(ctx->r15) >> 30);
-    // 0x80800070: jr          $ra
-    // 0x80800074: addu        $v0, $t8, $t1
-    ctx->r2 = ADD32(ctx->r24, ctx->r9);
-    return;
-    // 0x80800074: addu        $v0, $t8, $t1
-    ctx->r2 = ADD32(ctx->r24, ctx->r9);
-;}
 RECOMP_FUNC void chfiregen_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4587,5 +4565,95 @@ RECOMP_FUNC void func_800C8E54(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800C8E80: nop
+
+;}
+RECOMP_FUNC void func_801112B0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x801112B0: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x801112B4: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x801112B8: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    // 0x801112BC: jal         0x800F53D0
+    // 0x801112C0: lw          $a0, 0x68($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X68);
+    func_800F53D0(rdram, ctx);
+        goto after_0;
+    // 0x801112C0: lw          $a0, 0x68($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X68);
+    after_0:
+    // 0x801112C4: sw          $v0, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r2;
+    // 0x801112C8: jal         0x80092BC4
+    // 0x801112CC: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    func_80092BC4(rdram, ctx);
+        goto after_1;
+    // 0x801112CC: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    after_1:
+    // 0x801112D0: beq         $v0, $zero, L_801112F0
+    if (ctx->r2 == 0) {
+        // 0x801112D4: lw          $t7, 0x20($sp)
+        ctx->r15 = MEM_W(ctx->r29, 0X20);
+            goto L_801112F0;
+    }
+    // 0x801112D4: lw          $t7, 0x20($sp)
+    ctx->r15 = MEM_W(ctx->r29, 0X20);
+    // 0x801112D8: jal         0x80092BD0
+    // 0x801112DC: lw          $a0, 0x1C($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X1C);
+    func_80092BD0(rdram, ctx);
+        goto after_2;
+    // 0x801112DC: lw          $a0, 0x1C($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X1C);
+    after_2:
+    // 0x801112E0: lui         $at, 0x4334
+    ctx->r1 = S32(0X4334 << 16);
+    // 0x801112E4: mtc1        $at, $f4
+    ctx->f4.u32l = ctx->r1;
+    // 0x801112E8: b           L_801112FC
+    // 0x801112EC: sub.s       $f2, $f0, $f4
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f2.fl = ctx->f0.fl - ctx->f4.fl;
+        goto L_801112FC;
+    // 0x801112EC: sub.s       $f2, $f0, $f4
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f2.fl = ctx->f0.fl - ctx->f4.fl;
+L_801112F0:
+    // 0x801112F0: jal         0x800F5F24
+    // 0x801112F4: lw          $a0, 0x68($t7)
+    ctx->r4 = MEM_W(ctx->r15, 0X68);
+    func_800F5F24(rdram, ctx);
+        goto after_3;
+    // 0x801112F4: lw          $a0, 0x68($t7)
+    ctx->r4 = MEM_W(ctx->r15, 0X68);
+    after_3:
+    // 0x801112F8: mov.s       $f2, $f0
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    ctx->f2.fl = ctx->f0.fl;
+L_801112FC:
+    // 0x801112FC: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80111300: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x80111304: mov.s       $f0, $f2
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    ctx->f0.fl = ctx->f2.fl;
+    // 0x80111308: jr          $ra
+    // 0x8011130C: nop
+
+    return;
+    // 0x8011130C: nop
 
 ;}

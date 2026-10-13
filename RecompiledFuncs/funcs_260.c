@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _glsplineDll_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800884D8: syscall     689
-    recomp_syscall_handler(rdram, ctx, 0x800884D8);
-    return;
-    // 0x800884DC: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_80800E24_chgameselect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7002,4 +6993,13 @@ RECOMP_FUNC void _bsbanbflip_end(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80082674: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _sumumbofx_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089850: syscall     797
+    recomp_syscall_handler(rdram, ctx, 0x80089850);
+    return;
+    // 0x80089854: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

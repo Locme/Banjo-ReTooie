@@ -2,58 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void suquiz_entrypoint_24(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800D38: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800D3C: lui         $t6, 0x8012
-    ctx->r14 = S32(0X8012 << 16);
-    // 0x80800D40: lw          $t6, 0x7614($t6)
-    ctx->r14 = MEM_W(ctx->r14, 0X7614);
-    // 0x80800D44: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800D48: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800D4C: addiu       $a0, $zero, 0x6E3
-    ctx->r4 = ADD32(0, 0X6E3);
-    // 0x80800D50: jal         0x800DA544
-    // 0x80800D54: sh          $a1, 0x34($t6)
-    MEM_H(0X34, ctx->r14) = ctx->r5;
-    func_800DA544(rdram, ctx);
-        goto after_0;
-    // 0x80800D54: sh          $a1, 0x34($t6)
-    MEM_H(0X34, ctx->r14) = ctx->r5;
-    after_0:
-    // 0x80800D58: jal         0x800DA524
-    // 0x80800D5C: addiu       $a0, $zero, 0x6EB
-    ctx->r4 = ADD32(0, 0X6EB);
-    func_800DA524(rdram, ctx);
-        goto after_1;
-    // 0x80800D5C: addiu       $a0, $zero, 0x6EB
-    ctx->r4 = ADD32(0, 0X6EB);
-    after_1:
-    // 0x80800D60: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80800D64: jal         0x800887D8
-    // 0x80800D68: addiu       $a1, $zero, 0x8A
-    ctx->r5 = ADD32(0, 0X8A);
-    _glcutDll_entrypoint_6(rdram, ctx);
-        goto after_2;
-    // 0x80800D68: addiu       $a1, $zero, 0x8A
-    ctx->r5 = ADD32(0, 0X8A);
-    after_2:
-    // 0x80800D6C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800D70: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800D74: jr          $ra
-    // 0x80800D78: nop
-
-    return;
-    // 0x80800D78: nop
-
-;}
 RECOMP_FUNC void _sccustom_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5110,4 +5058,20 @@ RECOMP_FUNC void dbskeleton_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800004: lh          $v0, 0x4($a0)
     ctx->r2 = MEM_H(ctx->r4, 0X4);
+;}
+RECOMP_FUNC void bssnowball_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800B30: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x80800B34: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(356, 0X1094) << 16);
+    // 0x80800B38: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x80800B3C: jr          $ra
+    // 0x80800B40: lw          $v0, 0x1094($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X1094));
+    return;
+    // 0x80800B40: lw          $v0, 0x1094($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X1094));
 ;}

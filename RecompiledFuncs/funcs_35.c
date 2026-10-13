@@ -2,20 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800A5BBC(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800A5BBC: lui         $t6, 0x8012
-    ctx->r14 = S32(0X8012 << 16);
-    // 0x800A5BC0: lw          $t6, 0x7100($t6)
-    ctx->r14 = MEM_W(ctx->r14, 0X7100);
-    // 0x800A5BC4: jr          $ra
-    // 0x800A5BC8: lbu         $v0, 0xA($t6)
-    ctx->r2 = MEM_BU(ctx->r14, 0XA);
-    return;
-    // 0x800A5BC8: lbu         $v0, 0xA($t6)
-    ctx->r2 = MEM_BU(ctx->r14, 0XA);
-;}
 RECOMP_FUNC void anctrl_setSubrange(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4619,4 +4605,40 @@ RECOMP_FUNC void _chmumbopad_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80086C6C: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void func_80803660_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80803660: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x80803664: sw          $ra, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r31;
+    // 0x80803668: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    // 0x8080366C: or          $t6, $a0, $zero
+    ctx->r14 = ctx->r4 | 0;
+    // 0x80803670: lw          $a0, 0x0($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X0);
+    // 0x80803674: addiu       $t7, $zero, 0x22
+    ctx->r15 = ADD32(0, 0X22);
+    // 0x80803678: sw          $t7, 0x10($sp)
+    MEM_W(0X10, ctx->r29) = ctx->r15;
+    // 0x8080367C: jal         0x8008A208
+    // 0x80803680: addiu       $a3, $t6, 0x4
+    ctx->r7 = ADD32(ctx->r14, 0X4);
+    _subaddiedialog_entrypoint_11(rdram, ctx);
+        goto after_0;
+    // 0x80803680: addiu       $a3, $t6, 0x4
+    ctx->r7 = ADD32(ctx->r14, 0X4);
+    after_0:
+    // 0x80803684: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    // 0x80803688: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x8080368C: jr          $ra
+    // 0x80803690: nop
+
+    return;
+    // 0x80803690: nop
+
 ;}

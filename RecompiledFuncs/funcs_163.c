@@ -2,92 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808006BC_chcactusofstrength(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808006BC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x808006C0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808006C4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x808006C8: lw          $t7, 0x50($a0)
-    ctx->r15 = MEM_W(ctx->r4, 0X50);
-    // 0x808006CC: beql        $t7, $zero, L_8080070C
-    if (ctx->r15 == 0) {
-        // 0x808006D0: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_8080070C;
-    }
-    goto skip_0;
-    // 0x808006D0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x808006D4: jal         0x800CEAD0
-    // 0x808006D8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    func_800CEAD0(rdram, ctx);
-        goto after_0;
-    // 0x808006D8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    after_0:
-    // 0x808006DC: beql        $v0, $zero, L_8080070C
-    if (ctx->r2 == 0) {
-        // 0x808006E0: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_8080070C;
-    }
-    goto skip_1;
-    // 0x808006E0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_1:
-    // 0x808006E4: jal         0x800CEAA8
-    // 0x808006E8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    func_800CEAA8(rdram, ctx);
-        goto after_1;
-    // 0x808006E8: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    after_1:
-    // 0x808006EC: beq         $v0, $zero, L_808006FC
-    if (ctx->r2 == 0) {
-        // 0x808006F0: or          $a0, $zero, $zero
-        ctx->r4 = 0 | 0;
-            goto L_808006FC;
-    }
-    // 0x808006F0: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    // 0x808006F4: jal         0x800CE88C
-    // 0x808006F8: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_800CE88C(rdram, ctx);
-        goto after_2;
-    // 0x808006F8: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_2:
-L_808006FC:
-    // 0x808006FC: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80800700: jal         0x80101FDC
-    // 0x80800704: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    func_80101FDC(rdram, ctx);
-        goto after_3;
-    // 0x80800704: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    after_3:
-    // 0x80800708: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_8080070C:
-    // 0x8080070C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800710: jr          $ra
-    // 0x80800714: nop
-
-    return;
-    // 0x80800714: nop
-
-;}
 RECOMP_FUNC void func_80801BA0_chtntmineshoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7656,4 +7570,30 @@ L_80802854:
     return;
     // 0x80802860: nop
 
+;}
+RECOMP_FUNC void func_800CC5F4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800CC5F4: lui         $t7, 0x8013
+    ctx->r15 = S32(0X8013 << 16);
+    // 0x800CC5F8: lw          $t7, -0x517C($t7)
+    ctx->r15 = MEM_W(ctx->r15, -0X517C);
+    // 0x800CC5FC: sll         $t6, $a0, 3
+    ctx->r14 = S32(ctx->r4 << 3);
+    // 0x800CC600: subu        $t6, $t6, $a0
+    ctx->r14 = SUB32(ctx->r14, ctx->r4);
+    // 0x800CC604: sll         $t6, $t6, 2
+    ctx->r14 = S32(ctx->r14 << 2);
+    // 0x800CC608: addu        $t8, $t6, $t7
+    ctx->r24 = ADD32(ctx->r14, ctx->r15);
+    // 0x800CC60C: lw          $v0, 0x0($t8)
+    ctx->r2 = MEM_W(ctx->r24, 0X0);
+    // 0x800CC610: srl         $t9, $v0, 9
+    ctx->r25 = S32(U32(ctx->r2) >> 9);
+    // 0x800CC614: jr          $ra
+    // 0x800CC618: or          $v0, $t9, $zero
+    ctx->r2 = ctx->r25 | 0;
+    return;
+    // 0x800CC618: or          $v0, $t9, $zero
+    ctx->r2 = ctx->r25 | 0;
 ;}

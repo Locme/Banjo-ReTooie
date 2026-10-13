@@ -2,42 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80803158_chklungo(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80803158: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x8080315C: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x80803160: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    // 0x80803164: or          $t6, $a0, $zero
-    ctx->r14 = ctx->r4 | 0;
-    // 0x80803168: lw          $a0, 0x0($a0)
-    ctx->r4 = MEM_W(ctx->r4, 0X0);
-    // 0x8080316C: addiu       $t7, $zero, 0xAB
-    ctx->r15 = ADD32(0, 0XAB);
-    // 0x80803170: sw          $t7, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->r15;
-    // 0x80803174: jal         0x8008A208
-    // 0x80803178: addiu       $a3, $t6, 0x4
-    ctx->r7 = ADD32(ctx->r14, 0X4);
-    _subaddiedialog_entrypoint_11(rdram, ctx);
-        goto after_0;
-    // 0x80803178: addiu       $a3, $t6, 0x4
-    ctx->r7 = ADD32(ctx->r14, 0X4);
-    after_0:
-    // 0x8080317C: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x80803180: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80803184: jr          $ra
-    // 0x80803188: nop
-
-    return;
-    // 0x80803188: nop
-
-;}
 RECOMP_FUNC void chlagoonentrygate_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4428,4 +4392,13 @@ RECOMP_FUNC void func_8080090C_bsvanswim(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800930: nop
 
+;}
+RECOMP_FUNC void _dbanim_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800879B0: syscall     645
+    recomp_syscall_handler(rdram, ctx, 0x800879B0);
+    return;
+    // 0x800879B4: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

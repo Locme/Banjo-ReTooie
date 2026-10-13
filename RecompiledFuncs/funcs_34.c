@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bareact_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80084F98: syscall     145
-    recomp_syscall_handler(rdram, ctx, 0x80084F98);
-    return;
-    // 0x80084F9C: addi        $t0, $zero, 0x14
-    ctx->r8 = ADD32(0, 0X14);
-;}
 RECOMP_FUNC void idflashbaddie_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -8265,4 +8256,18 @@ L_800C4E44:
     return;
     // 0x800C4E54: nop
 
+;}
+RECOMP_FUNC void func_800A5BBC(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800A5BBC: lui         $t6, 0x8012
+    ctx->r14 = S32(0X8012 << 16);
+    // 0x800A5BC0: lw          $t6, 0x7100($t6)
+    ctx->r14 = MEM_W(ctx->r14, 0X7100);
+    // 0x800A5BC4: jr          $ra
+    // 0x800A5BC8: lbu         $v0, 0xA($t6)
+    ctx->r2 = MEM_BU(ctx->r14, 0XA);
+    return;
+    // 0x800A5BC8: lbu         $v0, 0xA($t6)
+    ctx->r2 = MEM_BU(ctx->r14, 0XA);
 ;}

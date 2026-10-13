@@ -2,44 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800CF4_bskazfly(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800CF4: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800CF8: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800CFC: jal         0x80800128
-    // 0x80800D00: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_80800128_bskazfly(rdram, ctx);
-        goto after_0;
-    // 0x80800D00: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80800D04: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80800D08: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    // 0x80800D0C: jal         0x808009C8
-    // 0x80800D10: sw          $zero, 0x160($a0)
-    MEM_W(0X160, ctx->r4) = 0;
-    func_808009C8_bskazfly(rdram, ctx);
-        goto after_1;
-    // 0x80800D10: sw          $zero, 0x160($a0)
-    MEM_W(0X160, ctx->r4) = 0;
-    after_1:
-    // 0x80800D14: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800D18: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800D1C: jr          $ra
-    // 0x80800D20: nop
-
-    return;
-    // 0x80800D20: nop
-
-;}
 RECOMP_FUNC void func_80800180_chstatictorch(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4658,4 +4620,13 @@ RECOMP_FUNC void func_800BFAA4(uint8_t* rdram, recomp_context* ctx) {
 
     // 0x800BFACC: nop
 
+;}
+RECOMP_FUNC void _bskazmove_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083500: syscall     63
+    recomp_syscall_handler(rdram, ctx, 0x80083500);
+    return;
+    // 0x80083504: addi        $t0, $zero, 0x28
+    ctx->r8 = ADD32(0, 0X28);
 ;}

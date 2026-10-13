@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void yaw_getIdeal(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009C990: lw          $t6, 0xF8($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0XF8);
-    // 0x8009C994: jr          $ra
-    // 0x8009C998: lwc1        $f0, 0x4($t6)
-    ctx->f0.u32l = MEM_W(ctx->r14, 0X4);
-    return;
-    // 0x8009C998: lwc1        $f0, 0x4($t6)
-    ctx->f0.u32l = MEM_W(ctx->r14, 0X4);
-;}
 RECOMP_FUNC void func_800F059C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4740,4 +4728,13 @@ L_80803E00:
     return;
     // 0x80803E0C: nop
 
+;}
+RECOMP_FUNC void _chexploder_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086670: syscall     354
+    recomp_syscall_handler(rdram, ctx, 0x80086670);
+    return;
+    // 0x80086674: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

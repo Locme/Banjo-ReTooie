@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsbeggass_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800828E8: syscall     18
-    recomp_syscall_handler(rdram, ctx, 0x800828E8);
-    return;
-    // 0x800828EC: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void func_800BFFA0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4936,4 +4927,13 @@ L_801020CC:
     return;
     // 0x801020D8: nop
 
+;}
+RECOMP_FUNC void _bsmummove_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800838B0: syscall     78
+    recomp_syscall_handler(rdram, ctx, 0x800838B0);
+    return;
+    // 0x800838B4: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

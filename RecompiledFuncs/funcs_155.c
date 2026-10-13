@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chsabreman_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086378: syscall     314
-    recomp_syscall_handler(rdram, ctx, 0x80086378);
-    return;
-    // 0x8008637C: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void badronemem_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3560,4 +3551,42 @@ RECOMP_FUNC void glcutDll_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800540: sb          $a0, 0x75F6($at)
     MEM_B(0X75F6, ctx->r1) = ctx->r4;
+;}
+RECOMP_FUNC void func_808004A8_bsledge(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808004A8: addiu       $sp, $sp, -0x28
+    ctx->r29 = ADD32(ctx->r29, -0X28);
+    // 0x808004AC: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x808004B0: sw          $a0, 0x28($sp)
+    MEM_W(0X28, ctx->r29) = ctx->r4;
+    // 0x808004B4: jal         0x80800040
+    // 0x808004B8: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    func_80800040_bsledge(rdram, ctx);
+        goto after_0;
+    // 0x808004B8: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    after_0:
+    // 0x808004BC: lw          $a0, 0x28($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X28);
+    // 0x808004C0: jal         0x8009BA9C
+    // 0x808004C4: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    func_8009BA9C(rdram, ctx);
+        goto after_1;
+    // 0x808004C4: addiu       $a1, $sp, 0x1C
+    ctx->r5 = ADD32(ctx->r29, 0X1C);
+    after_1:
+    // 0x808004C8: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808004CC: addiu       $sp, $sp, 0x28
+    ctx->r29 = ADD32(ctx->r29, 0X28);
+    // 0x808004D0: jr          $ra
+    // 0x808004D4: nop
+
+    return;
+    // 0x808004D4: nop
+
 ;}

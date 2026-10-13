@@ -2,73 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800F371C(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F371C: lw          $t6, 0x0($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0X0);
-    // 0x800F3720: lw          $t7, 0x0($a1)
-    ctx->r15 = MEM_W(ctx->r5, 0X0);
-    // 0x800F3724: xor         $v0, $t6, $t7
-    ctx->r2 = ctx->r14 ^ ctx->r15;
-    // 0x800F3728: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x800F372C: beq         $v0, $zero, L_800F3774
-    if (ctx->r2 == 0) {
-        // 0x800F3730: nop
-    
-            goto L_800F3774;
-    }
-    // 0x800F3730: nop
-
-    // 0x800F3734: lw          $t8, 0x4($a0)
-    ctx->r24 = MEM_W(ctx->r4, 0X4);
-    // 0x800F3738: lw          $t9, 0x4($a1)
-    ctx->r25 = MEM_W(ctx->r5, 0X4);
-    // 0x800F373C: xor         $v0, $t8, $t9
-    ctx->r2 = ctx->r24 ^ ctx->r25;
-    // 0x800F3740: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x800F3744: beq         $v0, $zero, L_800F3774
-    if (ctx->r2 == 0) {
-        // 0x800F3748: nop
-    
-            goto L_800F3774;
-    }
-    // 0x800F3748: nop
-
-    // 0x800F374C: lw          $t0, 0x8($a0)
-    ctx->r8 = MEM_W(ctx->r4, 0X8);
-    // 0x800F3750: lw          $t1, 0x8($a1)
-    ctx->r9 = MEM_W(ctx->r5, 0X8);
-    // 0x800F3754: xor         $v0, $t0, $t1
-    ctx->r2 = ctx->r8 ^ ctx->r9;
-    // 0x800F3758: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x800F375C: beq         $v0, $zero, L_800F3774
-    if (ctx->r2 == 0) {
-        // 0x800F3760: nop
-    
-            goto L_800F3774;
-    }
-    // 0x800F3760: nop
-
-    // 0x800F3764: lw          $t2, 0xC($a0)
-    ctx->r10 = MEM_W(ctx->r4, 0XC);
-    // 0x800F3768: lw          $t3, 0xC($a1)
-    ctx->r11 = MEM_W(ctx->r5, 0XC);
-    // 0x800F376C: xor         $v0, $t2, $t3
-    ctx->r2 = ctx->r10 ^ ctx->r11;
-    // 0x800F3770: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-L_800F3774:
-    // 0x800F3774: jr          $ra
-    // 0x800F3778: nop
-
-    return;
-    // 0x800F3778: nop
-
-;}
 RECOMP_FUNC void func_801134F0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4367,4 +4300,16 @@ L_808003F8:
     return;
     // 0x8080040C: nop
 
+;}
+RECOMP_FUNC void suspline_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800218: sw          $a1, 0x4($sp)
+    MEM_W(0X4, ctx->r29) = ctx->r5;
+    // 0x8080021C: jr          $ra
+    // 0x80800220: sb          $a1, 0x8A($a0)
+    MEM_B(0X8A, ctx->r4) = ctx->r5;
+    return;
+    // 0x80800220: sb          $a1, 0x8A($a0)
+    MEM_B(0X8A, ctx->r4) = ctx->r5;
 ;}

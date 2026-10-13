@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chfactoryprop_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800861C8: syscall     287
-    recomp_syscall_handler(rdram, ctx, 0x800861C8);
-    return;
-    // 0x800861CC: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void gczoombox_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3465,4 +3456,13 @@ RECOMP_FUNC void func_80800E30_bsbswim(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800E78: nop
 
+;}
+RECOMP_FUNC void _badrone_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80084828: syscall     122
+    recomp_syscall_handler(rdram, ctx, 0x80084828);
+    return;
+    // 0x8008482C: addi        $t0, $zero, 0x20
+    ctx->r8 = ADD32(0, 0X20);
 ;}

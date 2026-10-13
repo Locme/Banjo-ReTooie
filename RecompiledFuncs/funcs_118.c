@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void ncpoducam_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800158: jr          $ra
-    // 0x8080015C: lh          $v0, 0x48($a0)
-    ctx->r2 = MEM_H(ctx->r4, 0X48);
-    return;
-    // 0x8080015C: lh          $v0, 0x48($a0)
-    ctx->r2 = MEM_H(ctx->r4, 0X48);
-;}
 RECOMP_FUNC void bsbswim_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7746,5 +7736,99 @@ RECOMP_FUNC void func_80800C78_baduo(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x80800CA4: nop
+
+;}
+RECOMP_FUNC void func_808021BC_chtrashcangame(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808021BC: addiu       $sp, $sp, -0x38
+    ctx->r29 = ADD32(ctx->r29, -0X38);
+    // 0x808021C0: sw          $s0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r16;
+    // 0x808021C4: or          $s0, $a0, $zero
+    ctx->r16 = ctx->r4 | 0;
+    // 0x808021C8: sw          $ra, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r31;
+    // 0x808021CC: addiu       $a0, $a0, 0x4
+    ctx->r4 = ADD32(ctx->r4, 0X4);
+    // 0x808021D0: sw          $a0, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r4;
+    // 0x808021D4: lui         $a1, 0x447A
+    ctx->r5 = S32(0X447A << 16);
+    // 0x808021D8: lui         $a2, 0xC47A
+    ctx->r6 = S32(0XC47A << 16);
+    // 0x808021DC: jal         0x800C6920
+    // 0x808021E0: or          $a3, $zero, $zero
+    ctx->r7 = 0 | 0;
+    func_800C6920(rdram, ctx);
+        goto after_0;
+    // 0x808021E0: or          $a3, $zero, $zero
+    ctx->r7 = 0 | 0;
+    after_0:
+    // 0x808021E4: swc1        $f0, 0x8($s0)
+    MEM_W(0X8, ctx->r16) = ctx->f0.u32l;
+    // 0x808021E8: lw          $a1, 0x24($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X24);
+    // 0x808021EC: jal         0x800EE7F8
+    // 0x808021F0: addiu       $a0, $s0, 0x18
+    ctx->r4 = ADD32(ctx->r16, 0X18);
+    func_800EE7F8(rdram, ctx);
+        goto after_1;
+    // 0x808021F0: addiu       $a0, $s0, 0x18
+    ctx->r4 = ADD32(ctx->r16, 0X18);
+    after_1:
+    // 0x808021F4: or          $a0, $s0, $zero
+    ctx->r4 = ctx->r16 | 0;
+    // 0x808021F8: jal         0x80102424
+    // 0x808021FC: addiu       $a1, $zero, 0x1
+    ctx->r5 = ADD32(0, 0X1);
+    func_80102424(rdram, ctx);
+        goto after_2;
+    // 0x808021FC: addiu       $a1, $zero, 0x1
+    ctx->r5 = ADD32(0, 0X1);
+    after_2:
+    // 0x80802200: mtc1        $zero, $f4
+    ctx->f4.u32l = 0;
+    // 0x80802204: jal         0x800F54E4
+    // 0x80802208: swc1        $f4, 0x58($s0)
+    MEM_W(0X58, ctx->r16) = ctx->f4.u32l;
+    func_800F54E4(rdram, ctx);
+        goto after_3;
+    // 0x80802208: swc1        $f4, 0x58($s0)
+    MEM_W(0X58, ctx->r16) = ctx->f4.u32l;
+    after_3:
+    // 0x8080220C: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    // 0x80802210: jal         0x800F5A00
+    // 0x80802214: addiu       $a1, $sp, 0x2C
+    ctx->r5 = ADD32(ctx->r29, 0X2C);
+    func_800F5A00(rdram, ctx);
+        goto after_4;
+    // 0x80802214: addiu       $a1, $sp, 0x2C
+    ctx->r5 = ADD32(ctx->r29, 0X2C);
+    after_4:
+    // 0x80802218: lw          $a0, 0x24($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X24);
+    // 0x8080221C: jal         0x800F1DF4
+    // 0x80802220: addiu       $a1, $sp, 0x2C
+    ctx->r5 = ADD32(ctx->r29, 0X2C);
+    func_800F1DF4(rdram, ctx);
+        goto after_5;
+    // 0x80802220: addiu       $a1, $sp, 0x2C
+    ctx->r5 = ADD32(ctx->r29, 0X2C);
+    after_5:
+    // 0x80802224: swc1        $f0, 0x48($s0)
+    MEM_W(0X48, ctx->r16) = ctx->f0.u32l;
+    // 0x80802228: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    // 0x8080222C: lw          $s0, 0x18($sp)
+    ctx->r16 = MEM_W(ctx->r29, 0X18);
+    // 0x80802230: addiu       $sp, $sp, 0x38
+    ctx->r29 = ADD32(ctx->r29, 0X38);
+    // 0x80802234: jr          $ra
+    // 0x80802238: nop
+
+    return;
+    // 0x80802238: nop
 
 ;}

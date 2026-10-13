@@ -2,73 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800D34_chmineprospector(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800D34: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x80800D38: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800D3C: addiu       $a1, $a0, 0x4
-    ctx->r5 = ADD32(ctx->r4, 0X4);
-    // 0x80800D40: lui         $a2, 0x8080
-    ctx->r6 = S32(RELOC_HI16(892, 0X1168) << 16);
-    // 0x80800D44: addiu       $a2, $a2, 0x1168
-    ctx->r6 = ADD32(ctx->r6, (int16_t)RELOC_LO16(892, 0X1168));
-    // 0x80800D48: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    // 0x80800D4C: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    // 0x80800D50: jal         0x80089D20
-    // 0x80800D54: lui         $a3, 0x3F00
-    ctx->r7 = S32(0X3F00 << 16);
-    _subaddieaudioquick_entrypoint_3(rdram, ctx);
-        goto after_0;
-    // 0x80800D54: lui         $a3, 0x3F00
-    ctx->r7 = S32(0X3F00 << 16);
-    after_0:
-    // 0x80800D58: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(892, 0XF10) << 16);
-    // 0x80800D5C: jal         0x800DC298
-    // 0x80800D60: lwc1        $f12, 0xF10($at)
-    ctx->f12.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(892, 0XF10));
-    func_800DC298(rdram, ctx);
-        goto after_1;
-    // 0x80800D60: lwc1        $f12, 0xF10($at)
-    ctx->f12.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(892, 0XF10));
-    after_1:
-    // 0x80800D64: beq         $v0, $zero, L_80800D7C
-    if (ctx->r2 == 0) {
-        // 0x80800D68: lw          $a0, 0x20($sp)
-        ctx->r4 = MEM_W(ctx->r29, 0X20);
-            goto L_80800D7C;
-    }
-    // 0x80800D68: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x80800D6C: lui         $a2, 0x8080
-    ctx->r6 = S32(RELOC_HI16(892, 0X1178) << 16);
-    // 0x80800D70: addiu       $a2, $a2, 0x1178
-    ctx->r6 = ADD32(ctx->r6, (int16_t)RELOC_LO16(892, 0X1178));
-    // 0x80800D74: jal         0x80089D18
-    // 0x80800D78: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    _subaddieaudioquick_entrypoint_2(rdram, ctx);
-        goto after_2;
-    // 0x80800D78: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    after_2:
-L_80800D7C:
-    // 0x80800D7C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800D80: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80800D84: jr          $ra
-    // 0x80800D88: nop
-
-    return;
-    // 0x80800D88: nop
-
-;}
 RECOMP_FUNC void _chcollballcontrol_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4299,4 +4232,20 @@ RECOMP_FUNC void baroll_applyIdeal(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8009C538: swc1        $f4, 0x0($v0)
     MEM_W(0X0, ctx->r2) = ctx->f4.u32l;
+;}
+RECOMP_FUNC void bsvan_entrypoint_14(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801638: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x8080163C: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(427, 0X1D70) << 16);
+    // 0x80801640: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x80801644: jr          $ra
+    // 0x80801648: lw          $v0, 0x1D70($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(427, 0X1D70));
+    return;
+    // 0x80801648: lw          $v0, 0x1D70($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(427, 0X1D70));
 ;}

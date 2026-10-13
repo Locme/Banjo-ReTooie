@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8009FE58(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009FE58: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8009FE5C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8009FE60: jal         0x800A2E18
-    // 0x8009FE64: nop
-
-    func_800A2E18(rdram, ctx);
-        goto after_0;
-    // 0x8009FE64: nop
-
-    after_0:
-    // 0x8009FE68: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8009FE6C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8009FE70: jr          $ra
-    // 0x8009FE74: nop
-
-    return;
-    // 0x8009FE74: nop
-
-;}
 RECOMP_FUNC void func_800FCF50(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4900,5 +4874,35 @@ L_8009CB38:
 
     return;
     // 0x8009CB40: nop
+
+;}
+RECOMP_FUNC void func_8009C128(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8009C128: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x8009C12C: or          $a3, $a0, $zero
+    ctx->r7 = ctx->r4 | 0;
+    // 0x8009C130: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8009C134: or          $a0, $a1, $zero
+    ctx->r4 = ctx->r5 | 0;
+    // 0x8009C138: jal         0x800EE7F8
+    // 0x8009C13C: lw          $a1, 0xE4($a3)
+    ctx->r5 = MEM_W(ctx->r7, 0XE4);
+    func_800EE7F8(rdram, ctx);
+        goto after_0;
+    // 0x8009C13C: lw          $a1, 0xE4($a3)
+    ctx->r5 = MEM_W(ctx->r7, 0XE4);
+    after_0:
+    // 0x8009C140: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x8009C144: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x8009C148: jr          $ra
+    // 0x8009C14C: nop
+
+    return;
+    // 0x8009C14C: nop
 
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gcmapDll_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80088108: syscall     672
-    recomp_syscall_handler(rdram, ctx, 0x80088108);
-    return;
-    // 0x8008810C: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void ncbapan_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3828,4 +3819,26 @@ L_8080098C:
     return;
     // 0x80800998: nop
 
+;}
+RECOMP_FUNC void gspropctrl_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800058: lw          $t6, 0x8($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0X8);
+    // 0x8080005C: lw          $t9, 0x10($a0)
+    ctx->r25 = MEM_W(ctx->r4, 0X10);
+    // 0x80800060: sll         $t7, $t6, 19
+    ctx->r15 = S32(ctx->r14 << 19);
+    // 0x80800064: andi        $t0, $t9, 0x7
+    ctx->r8 = ctx->r25 & 0X7;
+    // 0x80800068: sll         $t1, $t0, 2
+    ctx->r9 = S32(ctx->r8 << 2);
+    // 0x8080006C: srl         $t8, $t7, 30
+    ctx->r24 = S32(U32(ctx->r15) >> 30);
+    // 0x80800070: jr          $ra
+    // 0x80800074: addu        $v0, $t8, $t1
+    ctx->r2 = ADD32(ctx->r24, ctx->r9);
+    return;
+    // 0x80800074: addu        $v0, $t8, $t1
+    ctx->r2 = ADD32(ctx->r24, ctx->r9);
 ;}

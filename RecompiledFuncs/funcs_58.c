@@ -2,44 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800D50_bsbfly(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800D50: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800D54: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800D58: jal         0x80800128
-    // 0x80800D5C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_80800128_bsbfly(rdram, ctx);
-        goto after_0;
-    // 0x80800D5C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80800D60: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80800D64: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    // 0x80800D68: jal         0x80800A24
-    // 0x80800D6C: sw          $zero, 0x160($a0)
-    MEM_W(0X160, ctx->r4) = 0;
-    func_80800A24_bsbfly(rdram, ctx);
-        goto after_1;
-    // 0x80800D6C: sw          $zero, 0x160($a0)
-    MEM_W(0X160, ctx->r4) = 0;
-    after_1:
-    // 0x80800D70: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800D74: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800D78: jr          $ra
-    // 0x80800D7C: nop
-
-    return;
-    // 0x80800D7C: nop
-
-;}
 RECOMP_FUNC void func_80800320_chstarspinnerstar(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3525,4 +3487,16 @@ RECOMP_FUNC void _gsattract_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80088C6C: addi        $t0, $zero, 0x8
     ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void chsignpost_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1656, 0X2E0) << 16);
+    // 0x80800004: jr          $ra
+    // 0x80800008: addiu       $v0, $v0, 0x2E0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1656, 0X2E0));
+    return;
+    // 0x80800008: addiu       $v0, $v0, 0x2E0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1656, 0X2E0));
 ;}

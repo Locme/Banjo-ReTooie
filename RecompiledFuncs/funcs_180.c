@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bskazshock_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800754: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80800758: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(272, 0X7B4) << 16);
-    // 0x8080075C: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80800760: jr          $ra
-    // 0x80800764: lw          $v0, 0x7B4($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(272, 0X7B4));
-    return;
-    // 0x80800764: lw          $v0, 0x7B4($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(272, 0X7B4));
-;}
 RECOMP_FUNC void _bahitspline_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -2880,4 +2864,13 @@ RECOMP_FUNC void chmoley_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
 
     // 0x808009FC: nop
 
+;}
+RECOMP_FUNC void _chhumba_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086BE8: syscall     429
+    recomp_syscall_handler(rdram, ctx, 0x80086BE8);
+    return;
+    // 0x80086BEC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

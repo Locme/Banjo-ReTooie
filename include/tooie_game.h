@@ -14,6 +14,7 @@ namespace tooie {
     void register_overlays();
 
     // Called by the runtime when the game starts, before the entrypoint runs.
+    void start_debug_watch(uint8_t* rdram);
     void on_game_init(uint8_t* rdram, recomp_context* ctx);
 
     // Overlay bookkeeping (overlays.cpp). The game numbers overlays from 1.

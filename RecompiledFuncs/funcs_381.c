@@ -2,36 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800D2748(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800D2748: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800D274C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800D2750: jal         0x800D21D0
-    // 0x800D2754: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    func_800D21D0(rdram, ctx);
-        goto after_0;
-    // 0x800D2754: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    after_0:
-    // 0x800D2758: lw          $t6, 0x1C($sp)
-    ctx->r14 = MEM_W(ctx->r29, 0X1C);
-    // 0x800D275C: sb          $t6, 0x1($v0)
-    MEM_B(0X1, ctx->r2) = ctx->r14;
-    // 0x800D2760: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800D2764: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800D2768: jr          $ra
-    // 0x800D276C: nop
-
-    return;
-    // 0x800D276C: nop
-
-;}
 RECOMP_FUNC void fxstep_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4859,4 +4829,13 @@ L_80802744:
 
     // 0x8080275C: nop
 
+;}
+RECOMP_FUNC void _plcamera_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087908: syscall     639
+    recomp_syscall_handler(rdram, ctx, 0x80087908);
+    return;
+    // 0x8008790C: addi        $t0, $zero, 0x28
+    ctx->r8 = ADD32(0, 0X28);
 ;}

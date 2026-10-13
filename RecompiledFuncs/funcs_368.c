@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _dblight_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800879E0: syscall     647
-    recomp_syscall_handler(rdram, ctx, 0x800879E0);
-    return;
-    // 0x800879E4: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _chlagoonentrygate_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3825,4 +3816,14 @@ RECOMP_FUNC void func_800EA09C(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800EA0A4: lh          $v0, 0x2DC0($v0)
     ctx->r2 = MEM_H(ctx->r2, 0X2DC0);
+;}
+RECOMP_FUNC void func_800F4244(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800F4244: jr          $ra
+    // 0x800F4248: lw          $v0, 0x17C($a0)
+    ctx->r2 = MEM_W(ctx->r4, 0X17C);
+    return;
+    // 0x800F4248: lw          $v0, 0x17C($a0)
+    ctx->r2 = MEM_W(ctx->r4, 0X17C);
 ;}

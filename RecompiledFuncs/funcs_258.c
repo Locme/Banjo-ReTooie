@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsstonehead_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083BE8: syscall     92
-    recomp_syscall_handler(rdram, ctx, 0x80083BE8);
-    return;
-    // 0x80083BEC: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void bainvisible_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4632,4 +4623,13 @@ RECOMP_FUNC void bsfirstp_entrypoint_23(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80805118: lw          $v0, -0x4AC0($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(439, 0XB540));
+;}
+RECOMP_FUNC void _badata_entrypoint_19(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800846D8: syscall     118
+    recomp_syscall_handler(rdram, ctx, 0x800846D8);
+    return;
+    // 0x800846DC: addi        $t0, $zero, 0x4C
+    ctx->r8 = ADD32(0, 0X4C);
 ;}

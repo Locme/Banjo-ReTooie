@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chfpsgame_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800873C8: syscall     562
-    recomp_syscall_handler(rdram, ctx, 0x800873C8);
-    return;
-    // 0x800873CC: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _ncbafly_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6218,4 +6209,32 @@ L_808022FC:
     return;
     // 0x80802328: addiu       $sp, $sp, 0x38
     ctx->r29 = ADD32(ctx->r29, 0X38);
+;}
+RECOMP_FUNC void func_80800094_chminegrill2switches(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800094: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800098: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8080009C: addiu       $a1, $zero, 0xA26
+    ctx->r5 = ADD32(0, 0XA26);
+    // 0x808000A0: jal         0x80800000
+    // 0x808000A4: addiu       $a2, $zero, 0x200
+    ctx->r6 = ADD32(0, 0X200);
+    func_80800000_chminegrill2switches(rdram, ctx);
+        goto after_0;
+    // 0x808000A4: addiu       $a2, $zero, 0x200
+    ctx->r6 = ADD32(0, 0X200);
+    after_0:
+    // 0x808000A8: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808000AC: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808000B0: jr          $ra
+    // 0x808000B4: nop
+
+    return;
+    // 0x808000B4: nop
+
 ;}

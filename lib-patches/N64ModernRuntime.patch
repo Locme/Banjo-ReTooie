@@ -1,0 +1,109 @@
+diff --git a/librecomp/src/dp.cpp b/librecomp/src/dp.cpp
+index 97dbd8e..f4b4e13 100644
+--- a/librecomp/src/dp.cpp
++++ b/librecomp/src/dp.cpp
+@@ -1,4 +1,5 @@
+ #include "recomp.h"
++#include "ultramodern/ultramodern.hpp"
+ 
+ enum class RDPStatusBit {
+     XbusDmem = 0,
+@@ -39,6 +40,11 @@ extern "C" void osDpGetStatus_recomp(uint8_t* rdram, recomp_context* ctx) {
+ 
+ extern "C" void osDpSetStatus_recomp(uint8_t* rdram, recomp_context* ctx) {
+     update_bit(rdp_state, ctx->r4, RDPStatusBit::XbusDmem);
++    bool was_frozen = (rdp_state & (1U << (int)RDPStatusBit::Freeze)) != 0;
+     update_bit(rdp_state, ctx->r4, RDPStatusBit::Freeze);
++    bool frozen = (rdp_state & (1U << (int)RDPStatusBit::Freeze)) != 0;
++    if (frozen != was_frozen) {
++        ultramodern::set_dp_frozen(frozen);
++    }
+     update_bit(rdp_state, ctx->r4, RDPStatusBit::Flush);
+ }
+diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
+index 3b28af3..6c8fbf8 100644
+--- a/ultramodern/include/ultramodern/ultramodern.hpp
++++ b/ultramodern/include/ultramodern/ultramodern.hpp
+@@ -79,6 +79,8 @@ void set_main_thread();
+ bool is_game_thread();
+ void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
+ void send_si_message();
++// Called when the game sets or clears the RDP freeze bit (DPC_STATUS_FREEZE).
++void set_dp_frozen(bool frozen);
+ uint32_t get_speed_multiplier();
+ 
+ // Time
+diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
+index 090cc42..cf06057 100644
+--- a/ultramodern/src/events.cpp
++++ b/ultramodern/src/events.cpp
+@@ -261,12 +261,35 @@ void sp_complete() {
+     ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
+ }
+ 
++// While the game holds the RDP frozen (DPC_STATUS_FREEZE), a real RDP does not
++// process commands, so a display list submitted in that time cannot finish
++// until the game clears the bit. The host renders it straight away, so hold
++// back its completion message until then. Games that pace frames with the
++// freeze bit (Banjo-Tooie) otherwise see the completion too early and lose
++// track of the frame.
++static bool dp_frozen = false;
++static int dp_completions_held = 0;
++
+ void dp_complete() {
+     uint8_t* rdram = events_context.rdram;
+     std::lock_guard lock{ events_context.message_mutex };
++    if (dp_frozen) {
++        dp_completions_held++;
++        return;
++    }
+     ultramodern::enqueue_external_message(events_context.dp.mq, events_context.dp.msg, false, true);
+ }
+ 
++void ultramodern::set_dp_frozen(bool frozen) {
++    std::lock_guard lock{ events_context.message_mutex };
++    dp_frozen = frozen;
++    if (!frozen) {
++        for (; dp_completions_held > 0; dp_completions_held--) {
++            ultramodern::enqueue_external_message(events_context.dp.mq, events_context.dp.msg, false, true);
++        }
++    }
++}
++
+ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
+     ultramodern::set_native_thread_name("SP Task Thread");
+     ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
+diff --git a/ultramodern/src/threadqueue.cpp b/ultramodern/src/threadqueue.cpp
+index f9c0fa1..7b10a73 100644
+--- a/ultramodern/src/threadqueue.cpp
++++ b/ultramodern/src/threadqueue.cpp
+@@ -15,6 +15,9 @@ void ultramodern::thread_queue_insert(RDRAM_ARG PTR(PTR(OSThread)) queue_, PTR(O
+     PTR(OSThread)* cur = queue_to_ptr(PASS_RDRAM queue_);
+     OSThread* toadd = TO_PTR(OSThread, toadd_); 
+     debug_printf("[Thread Queue] Inserting thread %d into queue 0x%08X\n", toadd->id, (uintptr_t)queue_);
++    // A thread can only be in a queue once; inserting it again would link the
++    // list into a cycle.
++    thread_queue_remove(PASS_RDRAM queue_, toadd_);
+     while (*cur && TO_PTR(OSThread, *cur)->priority > toadd->priority) {
+         cur = &TO_PTR(OSThread, *cur)->next;
+     }
+@@ -43,14 +46,13 @@ PTR(OSThread) ultramodern::thread_queue_pop(RDRAM_ARG PTR(PTR(OSThread)) queue_)
+ bool ultramodern::thread_queue_remove(RDRAM_ARG PTR(PTR(OSThread)) queue_, PTR(OSThread) t_) {
+     debug_printf("[Thread Queue] Removing thread %d from queue 0x%08X\n", TO_PTR(OSThread, t_)->id, (uintptr_t)queue_);
+ 
+-    PTR(PTR(OSThread)) cur = queue_;
+-    while (cur != NULLPTR) {
+-        PTR(OSThread)* cur_ptr = queue_to_ptr(PASS_RDRAM queue_);
+-        if (*cur_ptr == t_) {
+-            *cur_ptr = TO_PTR(OSThread, *cur_ptr)->next;
++    PTR(OSThread)* cur = queue_to_ptr(PASS_RDRAM queue_);
++    while (*cur) {
++        if (*cur == t_) {
++            *cur = TO_PTR(OSThread, t_)->next;
+             return true;
+         }
+-        cur = TO_PTR(OSThread, *cur_ptr)->next;
++        cur = &TO_PTR(OSThread, *cur)->next;
+     }
+ 
+     return false;

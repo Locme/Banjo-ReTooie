@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsvan_entrypoint_14(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801638: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x8080163C: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(427, 0X1D70) << 16);
-    // 0x80801640: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80801644: jr          $ra
-    // 0x80801648: lw          $v0, 0x1D70($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(427, 0X1D70));
-    return;
-    // 0x80801648: lw          $v0, 0x1D70($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(427, 0X1D70));
-;}
 RECOMP_FUNC void func_80800148_chbouncycastle(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4907,4 +4891,20 @@ RECOMP_FUNC void _chfaircoinbox_entrypoint_2(uint8_t* rdram, recomp_context* ctx
     return;
     // 0x80087284: addi        $t0, $zero, 0x8
     ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void bskazglide_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808009EC: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x808009F0: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(244, 0XAE0) << 16);
+    // 0x808009F4: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x808009F8: jr          $ra
+    // 0x808009FC: lw          $v0, 0xAE0($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(244, 0XAE0));
+    return;
+    // 0x808009FC: lw          $v0, 0xAE0($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(244, 0XAE0));
 ;}

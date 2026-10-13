@@ -2,46 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void glintrosyncDll_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080018C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800190: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800194: jal         0x800343B0
-    // 0x80800198: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    osGetCount_recomp(rdram, ctx);
-        goto after_0;
-    // 0x80800198: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x8080019C: lui         $at, 0x8012
-    ctx->r1 = S32(0X8012 << 16);
-    // 0x808001A0: sw          $v0, 0x75D0($at)
-    MEM_W(0X75D0, ctx->r1) = ctx->r2;
-    // 0x808001A4: jal         0x80800000
-    // 0x808001A8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_80800000_glintrosyncDll(rdram, ctx);
-        goto after_1;
-    // 0x808001A8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x808001AC: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808001B0: lui         $at, 0x8012
-    ctx->r1 = S32(0X8012 << 16);
-    // 0x808001B4: sw          $v0, 0x75D4($at)
-    MEM_W(0X75D4, ctx->r1) = ctx->r2;
-    // 0x808001B8: jr          $ra
-    // 0x808001BC: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    return;
-    // 0x808001BC: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-;}
 RECOMP_FUNC void func_800A3410(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6383,4 +6343,13 @@ RECOMP_FUNC void func_800EE84C(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800EE888: swc1        $f18, 0x8($a0)
     MEM_W(0X8, ctx->r4) = ctx->f18.u32l;
+;}
+RECOMP_FUNC void _chfpsgame_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800873C8: syscall     562
+    recomp_syscall_handler(rdram, ctx, 0x800873C8);
+    return;
+    // 0x800873CC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

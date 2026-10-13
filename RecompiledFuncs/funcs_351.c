@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _suspline_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089D78: syscall     811
-    recomp_syscall_handler(rdram, ctx, 0x80089D78);
-    return;
-    // 0x80089D7C: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void cheggfire_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4829,4 +4820,13 @@ RECOMP_FUNC void _chcrusher_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80086AB4: addi        $t0, $zero, 0xC
     ctx->r8 = ADD32(0, 0XC);
+;}
+RECOMP_FUNC void _gcstatusDll_entrypoint_16(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088390: syscall     679
+    recomp_syscall_handler(rdram, ctx, 0x80088390);
+    return;
+    // 0x80088394: addi        $t0, $zero, 0x40
+    ctx->r8 = ADD32(0, 0X40);
 ;}

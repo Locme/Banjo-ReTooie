@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsstonehead_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083C28: syscall     92
-    recomp_syscall_handler(rdram, ctx, 0x80083C28);
-    return;
-    // 0x80083C2C: addi        $t0, $zero, 0x24
-    ctx->r8 = ADD32(0, 0X24);
-;}
 RECOMP_FUNC void _sudialog_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3078,4 +3069,16 @@ RECOMP_FUNC void func_800E9340(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800E93A8: nop
 
+;}
+RECOMP_FUNC void chlagoonbits_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080000C: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1052, 0X84C) << 16);
+    // 0x80800010: jr          $ra
+    // 0x80800014: addiu       $v0, $v0, 0x84C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1052, 0X84C));
+    return;
+    // 0x80800014: addiu       $v0, $v0, 0x84C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1052, 0X84C));
 ;}

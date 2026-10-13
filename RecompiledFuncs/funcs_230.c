@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsbflap_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80082928: syscall     20
-    recomp_syscall_handler(rdram, ctx, 0x80082928);
-    return;
-    // 0x8008292C: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void func_80800440_chrainbow(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3997,4 +3988,16 @@ L_800D75CC:
     return;
     // 0x800D75D8: nop
 
+;}
+RECOMP_FUNC void yaw_get(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8009C984: lw          $t6, 0xF8($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0XF8);
+    // 0x8009C988: jr          $ra
+    // 0x8009C98C: lwc1        $f0, 0x0($t6)
+    ctx->f0.u32l = MEM_W(ctx->r14, 0X0);
+    return;
+    // 0x8009C98C: lwc1        $f0, 0x0($t6)
+    ctx->f0.u32l = MEM_W(ctx->r14, 0X0);
 ;}

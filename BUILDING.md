@@ -47,9 +47,17 @@ reads or writes besides the generated C may be committed.
 2. Build N64Recomp and RSPRecomp from `lib/N64Recomp` and copy both binaries
    to the repository root.
 3. Link or copy `decompressed.us.z64` to the repository root.
-4. `python3 tools/recomp_loop.py`. It writes `overlays.us.txt`, the patched
+4. `python3 tools/recomp_loop.py [path/to/banjotooie_decompressed.elf]` (the
+   default is the one in `lib/bt-decomp`). It writes `overlays.us.txt`, the patched
    `banjotooie.us.elf` and the manual function list, then runs N64Recomp until
    it succeeds, adding any new jump targets to `extra_entries.us.txt`.
 5. `./RSPRecomp n_aspMain.us.toml`
 
 The tools need Python 3 with `pyelftools`.
+
+## Running
+
+Run the program from the folder that holds `assets\`. The first time, choose
+**Start Game** and pick your ROM. After that, `--game bt` starts the game
+straight away. An empty `portable.txt` next to the program keeps settings and
+saves in that folder.

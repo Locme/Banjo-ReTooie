@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _sujiggy_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8008A6C8: syscall     849
-    recomp_syscall_handler(rdram, ctx, 0x8008A6C8);
-    return;
-    // 0x8008A6CC: addi        $t0, $zero, 0x18
-    ctx->r8 = ADD32(0, 0X18);
-;}
 RECOMP_FUNC void _cadbfunc_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6310,4 +6301,13 @@ RECOMP_FUNC void choctopus_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8080078C: addiu       $v0, $v0, 0x998
     ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1028, 0X998));
+;}
+RECOMP_FUNC void _subaddie3d_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089830: syscall     796
+    recomp_syscall_handler(rdram, ctx, 0x80089830);
+    return;
+    // 0x80089834: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

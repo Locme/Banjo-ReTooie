@@ -2,63 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void suquiz_entrypoint_11(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080074C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800750: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800754: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800758: jal         0x800DA298
-    // 0x8080075C: addiu       $a0, $zero, 0x6B6
-    ctx->r4 = ADD32(0, 0X6B6);
-    func_800DA298(rdram, ctx);
-        goto after_0;
-    // 0x8080075C: addiu       $a0, $zero, 0x6B6
-    ctx->r4 = ADD32(0, 0X6B6);
-    after_0:
-    // 0x80800760: beql        $v0, $zero, L_80800780
-    if (ctx->r2 == 0) {
-        // 0x80800764: or          $v0, $zero, $zero
-        ctx->r2 = 0 | 0;
-            goto L_80800780;
-    }
-    goto skip_0;
-    // 0x80800764: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    skip_0:
-    // 0x80800768: jal         0x8080070C
-    // 0x8080076C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    suquiz_entrypoint_10(rdram, ctx);
-        goto after_1;
-    // 0x8080076C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x80800770: addiu       $t6, $v0, 0x1
-    ctx->r14 = ADD32(ctx->r2, 0X1);
-    // 0x80800774: b           L_80800780
-    // 0x80800778: sltu        $v0, $zero, $t6
-    ctx->r2 = 0 < ctx->r14 ? 1 : 0;
-        goto L_80800780;
-    // 0x80800778: sltu        $v0, $zero, $t6
-    ctx->r2 = 0 < ctx->r14 ? 1 : 0;
-    // 0x8080077C: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-L_80800780:
-    // 0x80800780: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800784: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800788: jr          $ra
-    // 0x8080078C: nop
-
-    return;
-    // 0x8080078C: nop
-
-;}
 RECOMP_FUNC void gcfrontend_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4098,4 +4041,13 @@ L_80804134:
     return;
     // 0x80804148: nop
 
+;}
+RECOMP_FUNC void _chhoopswoop_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085EF8: syscall     259
+    recomp_syscall_handler(rdram, ctx, 0x80085EF8);
+    return;
+    // 0x80085EFC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

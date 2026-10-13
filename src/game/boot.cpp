@@ -49,3 +49,11 @@ extern "C" void boot_osPiGetStatus(uint8_t* rdram, recomp_context* ctx) {
 extern "C" void func_8001DDC0(uint8_t* rdram, recomp_context* ctx) {
     ctx->r2 = (int32_t)osGetCount();
 }
+
+// u32 __osGetSR(void), core1's copy. Its one caller, the scheduler, treats a
+// cleared interrupt mask bit 5 (SR_IBIT5, 0x1000) as a pending reset and halts.
+// On the console every interrupt is unmasked while the game runs, so report
+// them all as enabled.
+extern "C" void __osGetSR_2(uint8_t* rdram, recomp_context* ctx) {
+    ctx->r2 = (int32_t)(ctx->status_reg | 0xFF01);
+}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsbwhirl_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80082DE0: syscall     30
-    recomp_syscall_handler(rdram, ctx, 0x80082DE0);
-    return;
-    // 0x80082DE4: addi        $t0, $zero, 0x30
-    ctx->r8 = ADD32(0, 0X30);
-;}
 RECOMP_FUNC void func_80800140_bstrexlarge(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5805,4 +5796,8 @@ L_800A2050:
     return;
     // 0x800A2054: nop
 
+;}
+RECOMP_FUNC void boot___osException(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
 ;}

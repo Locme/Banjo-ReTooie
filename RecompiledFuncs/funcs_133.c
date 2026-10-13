@@ -2,38 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8009B4D0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009B4D0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8009B4D4: or          $a3, $a0, $zero
-    ctx->r7 = ctx->r4 | 0;
-    // 0x8009B4D8: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8009B4DC: or          $a0, $a1, $zero
-    ctx->r4 = ctx->r5 | 0;
-    // 0x8009B4E0: lw          $a1, 0xC8($a3)
-    ctx->r5 = MEM_W(ctx->r7, 0XC8);
-    // 0x8009B4E4: jal         0x800EE7F8
-    // 0x8009B4E8: addiu       $a1, $a1, 0x28
-    ctx->r5 = ADD32(ctx->r5, 0X28);
-    func_800EE7F8(rdram, ctx);
-        goto after_0;
-    // 0x8009B4E8: addiu       $a1, $a1, 0x28
-    ctx->r5 = ADD32(ctx->r5, 0X28);
-    after_0:
-    // 0x8009B4EC: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8009B4F0: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8009B4F4: jr          $ra
-    // 0x8009B4F8: nop
-
-    return;
-    // 0x8009B4F8: nop
-
-;}
 RECOMP_FUNC void _bashoessuck_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5423,4 +5391,20 @@ L_800184D0:
     return;
     // 0x800184E4: nop
 
+;}
+RECOMP_FUNC void bstaxi_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080080C: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x80800810: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(392, 0X2188) << 16);
+    // 0x80800814: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x80800818: jr          $ra
+    // 0x8080081C: lw          $v0, 0x2188($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(392, 0X2188));
+    return;
+    // 0x8080081C: lw          $v0, 0x2188($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(392, 0X2188));
 ;}

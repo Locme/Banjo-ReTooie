@@ -56,6 +56,23 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)
 
+# Fixes to N64ModernRuntime that Banjo-Tooie needs (lib-patches/README.md).
+# Applied to the submodule checkout once; a second configure finds it applied.
+set(RUNTIME_PATCH ${CMAKE_SOURCE_DIR}/lib-patches/N64ModernRuntime.patch)
+execute_process(
+    COMMAND git apply --ignore-whitespace --reverse --check ${RUNTIME_PATCH}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime
+    RESULT_VARIABLE RUNTIME_PATCH_PRESENT OUTPUT_QUIET ERROR_QUIET)
+if (NOT RUNTIME_PATCH_PRESENT EQUAL 0)
+    execute_process(
+        COMMAND git apply --ignore-whitespace ${RUNTIME_PATCH}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime
+        RESULT_VARIABLE RUNTIME_PATCH_RESULT)
+    if (NOT RUNTIME_PATCH_RESULT EQUAL 0)
+        message(FATAL_ERROR "Could not apply ${RUNTIME_PATCH} to lib/N64ModernRuntime")
+    endif()
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
 
 target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
@@ -92,7 +109,9 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
 
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/debug_watch.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp

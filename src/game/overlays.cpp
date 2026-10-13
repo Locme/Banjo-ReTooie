@@ -62,6 +62,33 @@ namespace {
         ultramodern::error_handling::message_box(message);
         ultramodern::error_handling::quick_exit(__FILE__, __LINE__, __FUNCTION__);
     }
+
+    // The one-shot stub (ovl_entrypoint_alternate), built for thunks with the
+    // "unload after the call" flag. It sits at overlay + 0x10:
+    //     jal  <entry>
+    //     nop
+    //     jal  func_80081E30
+    //     nop
+    //     .word <the caller's $ra>
+    // func_80081E30 frees the overlay with ovl_unload(overlay, 1), keeping the
+    // entry's return values, and returns to the saved $ra. On the host the
+    // return address is implicit, so this calls the entry, then ovl_unload.
+    void call_one_shot_stub(uint8_t* rdram, recomp_context* ctx, gpr stub, uint32_t stub_word0) {
+        gpr entry = (gpr)(int32_t)(((uint32_t)stub & 0xF0000000) | ((stub_word0 & 0x03FFFFFF) << 2));
+        LOOKUP_FUNC(entry)(rdram, ctx);
+
+        gpr v0 = ctx->r2;
+        gpr v1 = ctx->r3;
+        fpr f0 = ctx->f0;
+        fpr f2 = ctx->f2;
+        ctx->r4 = stub - 0x10;
+        ctx->r5 = 1;
+        ovl_unload(rdram, ctx);
+        ctx->r2 = v0;
+        ctx->r3 = v1;
+        ctx->f0 = f0;
+        ctx->f2 = f2;
+    }
 }
 
 // Hook in func_80082088 before `lw $s5, 0x40($s5)`, which the config replaces
@@ -125,14 +152,20 @@ extern "C" void recomp_syscall_handler(uint8_t* rdram, recomp_context* ctx, int3
     gpr stub = (gpr)(int32_t)(((uint32_t)thunk & 0xF0000000) | ((word0 & 0x03FFFFFF) << 2));
     ctx->r8 = (int16_t)(MEM_W(4, thunk) & 0xFFFF);
 
-    // The stub (ovl_entrypoint, copied into the overlay header):
+    uint32_t stub_word0 = MEM_W(0, stub);
+    if ((stub_word0 >> 26) == 0x03) {
+        call_one_shot_stub(rdram, ctx, stub, stub_word0);
+        return;
+    }
+
+    // The usual stub (ovl_entrypoint, copied into the overlay header):
     //     lui  $t1, %hi(table)
     //     ori  $t1, $t1, %lo(table)
     //     add  $t2, $t0, $t1
     //     lw   $t3, 0($t2)
     //     jr   $t3
     //     sh   $zero, -6($t1)
-    uint32_t lui = MEM_W(0, stub);
+    uint32_t lui = stub_word0;
     uint32_t ori = MEM_W(4, stub);
     if ((lui >> 16) != 0x3C09 || (ori >> 16) != 0x3529) {
         fatal("Unsupported overlay entry stub", lui);

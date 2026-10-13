@@ -2,58 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80804A7C_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80804A7C: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x80804A80: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x80804A84: sw          $a1, 0x24($sp)
-    MEM_W(0X24, ctx->r29) = ctx->r5;
-    // 0x80804A88: sw          $a2, 0x28($sp)
-    MEM_W(0X28, ctx->r29) = ctx->r6;
-    // 0x80804A8C: jal         0x80100094
-    // 0x80804A90: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x80804A90: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x80804A94: mtc1        $zero, $f0
-    ctx->f0.u32l = 0;
-    // 0x80804A98: lw          $a0, 0x24($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X24);
-    // 0x80804A9C: addiu       $a1, $zero, 0x2A
-    ctx->r5 = ADD32(0, 0X2A);
-    // 0x80804AA0: swc1        $f0, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->f0.u32l;
-    // 0x80804AA4: lwc1        $f4, 0x1C($v0)
-    ctx->f4.u32l = MEM_W(ctx->r2, 0X1C);
-    // 0x80804AA8: mfc1        $a3, $f0
-    ctx->r7 = (int32_t)ctx->f0.u32l;
-    // 0x80804AAC: lui         $a2, 0x3F80
-    ctx->r6 = S32(0X3F80 << 16);
-    // 0x80804AB0: jal         0x800E0AFC
-    // 0x80804AB4: swc1        $f4, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->f4.u32l;
-    func_800E0AFC(rdram, ctx);
-        goto after_1;
-    // 0x80804AB4: swc1        $f4, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->f4.u32l;
-    after_1:
-    // 0x80804AB8: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x80804ABC: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80804AC0: jr          $ra
-    // 0x80804AC4: nop
-
-    return;
-    // 0x80804AC4: nop
-
-;}
 RECOMP_FUNC void func_808013D4_gcboundDll(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4706,4 +4654,13 @@ RECOMP_FUNC void func_80091EA0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80091EA4: addiu       $v0, $zero, 0x1
     ctx->r2 = ADD32(0, 0X1);
+;}
+RECOMP_FUNC void _gclevel_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088238: syscall     676
+    recomp_syscall_handler(rdram, ctx, 0x80088238);
+    return;
+    // 0x8008823C: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

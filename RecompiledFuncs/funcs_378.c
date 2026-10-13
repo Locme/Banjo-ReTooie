@@ -2,75 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800DD8_chstonepillar(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800DD8: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x80800DDC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800DE0: jal         0x80100094
-    // 0x80800DE4: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x80800DE4: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x80800DE8: sw          $v0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r2;
-    // 0x80800DEC: addiu       $a0, $zero, 0x9CD
-    ctx->r4 = ADD32(0, 0X9CD);
-    // 0x80800DF0: jal         0x800DA564
-    // 0x80800DF4: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    func_800DA564(rdram, ctx);
-        goto after_1;
-    // 0x80800DF4: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    after_1:
-    // 0x80800DF8: lw          $t6, 0x1C($sp)
-    ctx->r14 = MEM_W(ctx->r29, 0X1C);
-    // 0x80800DFC: lh          $v1, 0x2C($t6)
-    ctx->r3 = MEM_H(ctx->r14, 0X2C);
-    // 0x80800E00: xor         $v0, $v0, $v1
-    ctx->r2 = ctx->r2 ^ ctx->r3;
-    // 0x80800E04: sltiu       $v0, $v0, 0x1
-    ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x80800E08: beql        $v0, $zero, L_80800E24
-    if (ctx->r2 == 0) {
-        // 0x80800E0C: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_80800E24;
-    }
-    goto skip_0;
-    // 0x80800E0C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x80800E10: jal         0x800DA298
-    // 0x80800E14: addiu       $a0, $v1, 0x65C
-    ctx->r4 = ADD32(ctx->r3, 0X65C);
-    func_800DA298(rdram, ctx);
-        goto after_2;
-    // 0x80800E14: addiu       $a0, $v1, 0x65C
-    ctx->r4 = ADD32(ctx->r3, 0X65C);
-    after_2:
-    // 0x80800E18: sltiu       $t7, $v0, 0x1
-    ctx->r15 = ctx->r2 < 0X1 ? 1 : 0;
-    // 0x80800E1C: or          $v0, $t7, $zero
-    ctx->r2 = ctx->r15 | 0;
-    // 0x80800E20: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_80800E24:
-    // 0x80800E24: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80800E28: jr          $ra
-    // 0x80800E2C: nop
-
-    return;
-    // 0x80800E2C: nop
-
-;}
 RECOMP_FUNC void _mlwave_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4595,4 +4526,13 @@ L_800C53DC:
     return;
     // 0x800C53E8: nop
 
+;}
+RECOMP_FUNC void _chweather_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800859D8: syscall     185
+    recomp_syscall_handler(rdram, ctx, 0x800859D8);
+    return;
+    // 0x800859DC: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

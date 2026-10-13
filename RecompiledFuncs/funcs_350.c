@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void suspline_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800218: sw          $a1, 0x4($sp)
-    MEM_W(0X4, ctx->r29) = ctx->r5;
-    // 0x8080021C: jr          $ra
-    // 0x80800220: sb          $a1, 0x8A($a0)
-    MEM_B(0X8A, ctx->r4) = ctx->r5;
-    return;
-    // 0x80800220: sb          $a1, 0x8A($a0)
-    MEM_B(0X8A, ctx->r4) = ctx->r5;
-;}
 RECOMP_FUNC void func_80809CB4_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5281,4 +5269,13 @@ L_800A4FF4:
     return;
     // 0x800A5000: nop
 
+;}
+RECOMP_FUNC void _suspline_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089D78: syscall     811
+    recomp_syscall_handler(rdram, ctx, 0x80089D78);
+    return;
+    // 0x80089D7C: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

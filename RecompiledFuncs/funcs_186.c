@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chmumboskulls_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1352, 0XC0) << 16);
-    // 0x80800004: jr          $ra
-    // 0x80800008: addiu       $v0, $v0, 0xC0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1352, 0XC0));
-    return;
-    // 0x80800008: addiu       $v0, $v0, 0xC0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1352, 0XC0));
-;}
 RECOMP_FUNC void _dblight_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6136,4 +6124,16 @@ L_808000AC:
     return;
     // 0x808000B4: nop
 
+;}
+RECOMP_FUNC void yaw_getIdeal(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8009C990: lw          $t6, 0xF8($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0XF8);
+    // 0x8009C994: jr          $ra
+    // 0x8009C998: lwc1        $f0, 0x4($t6)
+    ctx->f0.u32l = MEM_W(ctx->r14, 0X4);
+    return;
+    // 0x8009C998: lwc1        $f0, 0x4($t6)
+    ctx->f0.u32l = MEM_W(ctx->r14, 0X4);
 ;}

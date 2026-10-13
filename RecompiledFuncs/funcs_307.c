@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gsmaker_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800825B0: syscall     2
-    recomp_syscall_handler(rdram, ctx, 0x800825B0);
-    return;
-    // 0x800825B4: addi        $t0, $zero, 0x34
-    ctx->r8 = ADD32(0, 0X34);
-;}
 RECOMP_FUNC void func_80800020_ncbasuck(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4201,4 +4192,22 @@ L_8080074C:
     return;
     // 0x80800774: nop
 
+;}
+RECOMP_FUNC void func_800C11F8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800C11F8: lbu         $t9, 0x7A($a0)
+    ctx->r25 = MEM_BU(ctx->r4, 0X7A);
+    // 0x800C11FC: sll         $t8, $a1, 5
+    ctx->r24 = S32(ctx->r5 << 5);
+    // 0x800C1200: andi        $t0, $t9, 0xFF1F
+    ctx->r8 = ctx->r25 & 0XFF1F;
+    // 0x800C1204: or          $t1, $t8, $t0
+    ctx->r9 = ctx->r24 | ctx->r8;
+    // 0x800C1208: jr          $ra
+    // 0x800C120C: sb          $t1, 0x7A($a0)
+    MEM_B(0X7A, ctx->r4) = ctx->r9;
+    return;
+    // 0x800C120C: sb          $t1, 0x7A($a0)
+    MEM_B(0X7A, ctx->r4) = ctx->r9;
 ;}

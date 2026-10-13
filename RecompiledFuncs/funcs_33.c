@@ -2,68 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800F5704(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800F5704: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x800F5708: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800F570C: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800F5710: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800F5714: addu        $a0, $a0, $t6
-    ctx->r4 = ADD32(ctx->r4, ctx->r14);
-    // 0x800F5718: jal         0x80084D40
-    // 0x800F571C: lw          $a0, 0x5490($a0)
-    ctx->r4 = MEM_W(ctx->r4, 0X5490);
-    _bahold_entrypoint_5(rdram, ctx);
-        goto after_0;
-    // 0x800F571C: lw          $a0, 0x5490($a0)
-    ctx->r4 = MEM_W(ctx->r4, 0X5490);
-    after_0:
-    // 0x800F5720: beq         $v0, $zero, L_800F5740
-    if (ctx->r2 == 0) {
-        // 0x800F5724: or          $a0, $v0, $zero
-        ctx->r4 = ctx->r2 | 0;
-            goto L_800F5740;
-    }
-    // 0x800F5724: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    // 0x800F5728: jal         0x80106790
-    // 0x800F572C: nop
-
-    func_80106790(rdram, ctx);
-        goto after_1;
-    // 0x800F572C: nop
-
-    after_1:
-    // 0x800F5730: lw          $v0, 0x6C($v0)
-    ctx->r2 = MEM_W(ctx->r2, 0X6C);
-    // 0x800F5734: sll         $t7, $v0, 11
-    ctx->r15 = S32(ctx->r2 << 11);
-    // 0x800F5738: b           L_800F5744
-    // 0x800F573C: srl         $v0, $t7, 20
-    ctx->r2 = S32(U32(ctx->r15) >> 20);
-        goto L_800F5744;
-    // 0x800F573C: srl         $v0, $t7, 20
-    ctx->r2 = S32(U32(ctx->r15) >> 20);
-L_800F5740:
-    // 0x800F5740: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-L_800F5744:
-    // 0x800F5744: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800F5748: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800F574C: jr          $ra
-    // 0x800F5750: nop
-
-    return;
-    // 0x800F5750: nop
-
-;}
 RECOMP_FUNC void _chcrate_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5315,4 +5253,13 @@ L_80800EF4:
     return;
     // 0x80800EFC: nop
 
+;}
+RECOMP_FUNC void _bareact_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80084F98: syscall     145
+    recomp_syscall_handler(rdram, ctx, 0x80084F98);
+    return;
+    // 0x80084F9C: addi        $t0, $zero, 0x14
+    ctx->r8 = ADD32(0, 0X14);
 ;}

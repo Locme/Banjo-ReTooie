@@ -2,64 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsbwhirl_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800638: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x8080063C: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x80800640: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    // 0x80800644: addiu       $a1, $zero, 0x23
-    ctx->r5 = ADD32(0, 0X23);
-    // 0x80800648: jal         0x8008CB3C
-    // 0x8080064C: lui         $a2, 0x3F80
-    ctx->r6 = S32(0X3F80 << 16);
-    baanim_playForDuration_loopSmooth(rdram, ctx);
-        goto after_0;
-    // 0x8080064C: lui         $a2, 0x3F80
-    ctx->r6 = S32(0X3F80 << 16);
-    after_0:
-    // 0x80800650: addiu       $t6, $zero, 0x2
-    ctx->r14 = ADD32(0, 0X2);
-    // 0x80800654: sw          $t6, 0x10($sp)
-    MEM_W(0X10, ctx->r29) = ctx->r14;
-    // 0x80800658: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x8080065C: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    // 0x80800660: addiu       $a2, $zero, 0x1
-    ctx->r6 = ADD32(0, 0X1);
-    // 0x80800664: jal         0x8009FFD8
-    // 0x80800668: addiu       $a3, $zero, 0x1
-    ctx->r7 = ADD32(0, 0X1);
-    func_8009FFD8(rdram, ctx);
-        goto after_1;
-    // 0x80800668: addiu       $a3, $zero, 0x1
-    ctx->r7 = ADD32(0, 0X1);
-    after_1:
-    // 0x8080066C: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x80800670: jal         0x8009B9B0
-    // 0x80800674: addiu       $a1, $zero, 0x0
-    ctx->r5 = ADD32(0, 0X0);
-    baphysics_set_target_horizontal_velocity(rdram, ctx);
-        goto after_2;
-    // 0x80800674: addiu       $a1, $zero, 0x0
-    ctx->r5 = ADD32(0, 0X0);
-    after_2:
-    // 0x80800678: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x8080067C: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80800680: jr          $ra
-    // 0x80800684: nop
-
-    return;
-    // 0x80800684: nop
-
-;}
 RECOMP_FUNC void _gcmapsects_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4775,4 +4717,13 @@ L_80800310:
     return;
     // 0x80800324: or          $v0, $t0, $zero
     ctx->r2 = ctx->r8 | 0;
+;}
+RECOMP_FUNC void _ncpod_entrypoint_18(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089550: syscall     783
+    recomp_syscall_handler(rdram, ctx, 0x80089550);
+    return;
+    // 0x80089554: addi        $t0, $zero, 0x48
+    ctx->r8 = ADD32(0, 0X48);
 ;}

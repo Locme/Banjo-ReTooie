@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bssnowball_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800CEC: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80800CF0: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(356, 0X10B4) << 16);
-    // 0x80800CF4: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80800CF8: jr          $ra
-    // 0x80800CFC: lw          $v0, 0x10B4($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X10B4));
-    return;
-    // 0x80800CFC: lw          $v0, 0x10B4($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(356, 0X10B4));
-;}
 RECOMP_FUNC void func_80801FE4_sucoasterfly(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5009,5 +4993,31 @@ RECOMP_FUNC void func_800D1804(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800D1820: nop
+
+;}
+RECOMP_FUNC void bsstonehead_entrypoint_36(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080132C: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80801330: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80801334: jal         0x80800000
+    // 0x80801338: nop
+
+    func_80800000_bsstonehead(rdram, ctx);
+        goto after_0;
+    // 0x80801338: nop
+
+    after_0:
+    // 0x8080133C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80801340: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80801344: jr          $ra
+    // 0x80801348: nop
+
+    return;
+    // 0x80801348: nop
 
 ;}

@@ -2,77 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801E28_chaliendad(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801E28: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x80801E2C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801E30: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    // 0x80801E34: jal         0x80100094
-    // 0x80801E38: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x80801E38: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    after_0:
-    // 0x80801E3C: bne         $v0, $zero, L_80801E70
-    if (ctx->r2 != 0) {
-        // 0x80801E40: lw          $a0, 0x20($sp)
-        ctx->r4 = MEM_W(ctx->r29, 0X20);
-            goto L_80801E70;
-    }
-    // 0x80801E40: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x80801E44: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    // 0x80801E48: jal         0x800897C0
-    // 0x80801E4C: addiu       $a2, $zero, 0x62
-    ctx->r6 = ADD32(0, 0X62);
-    _suexpression_entrypoint_7(rdram, ctx);
-        goto after_1;
-    // 0x80801E4C: addiu       $a2, $zero, 0x62
-    ctx->r6 = ADD32(0, 0X62);
-    after_1:
-    // 0x80801E50: sw          $v0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r2;
-    // 0x80801E54: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    // 0x80801E58: lui         $a1, 0x4270
-    ctx->r5 = S32(0X4270 << 16);
-    // 0x80801E5C: jal         0x800897E8
-    // 0x80801E60: lui         $a2, 0x4170
-    ctx->r6 = S32(0X4170 << 16);
-    _suexpression_entrypoint_12(rdram, ctx);
-        goto after_2;
-    // 0x80801E60: lui         $a2, 0x4170
-    ctx->r6 = S32(0X4170 << 16);
-    after_2:
-    // 0x80801E64: lw          $a0, 0x1C($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X1C);
-    // 0x80801E68: jal         0x80089810
-    // 0x80801E6C: addiu       $a1, $zero, 0x3E8
-    ctx->r5 = ADD32(0, 0X3E8);
-    _suexpression_entrypoint_17(rdram, ctx);
-        goto after_3;
-    // 0x80801E6C: addiu       $a1, $zero, 0x3E8
-    ctx->r5 = ADD32(0, 0X3E8);
-    after_3:
-L_80801E70:
-    // 0x80801E70: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801E74: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80801E78: jr          $ra
-    // 0x80801E7C: nop
-
-    return;
-    // 0x80801E7C: nop
-
-;}
 RECOMP_FUNC void cheggfire_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7074,4 +7003,13 @@ L_8011416C:
     return;
     // 0x80114180: nop
 
+;}
+RECOMP_FUNC void _chjujubagfx_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086C88: syscall     439
+    recomp_syscall_handler(rdram, ctx, 0x80086C88);
+    return;
+    // 0x80086C8C: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

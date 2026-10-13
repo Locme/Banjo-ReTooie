@@ -2,59 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808026F0_chboilerboss(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808026F0: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x808026F4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808026F8: jal         0x80100094
-    // 0x808026FC: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x808026FC: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x80802700: lbu         $t6, 0x59($v0)
-    ctx->r14 = MEM_BU(ctx->r2, 0X59);
-    // 0x80802704: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    // 0x80802708: beql        $t6, $zero, L_80802724
-    if (ctx->r14 == 0) {
-        // 0x8080270C: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_80802724;
-    }
-    goto skip_0;
-    // 0x8080270C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x80802710: jal         0x800856B8
-    // 0x80802714: sw          $v0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r2;
-    _capod_entrypoint_3(rdram, ctx);
-        goto after_1;
-    // 0x80802714: sw          $v0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r2;
-    after_1:
-    // 0x80802718: lw          $v1, 0x1C($sp)
-    ctx->r3 = MEM_W(ctx->r29, 0X1C);
-    // 0x8080271C: sb          $zero, 0x59($v1)
-    MEM_B(0X59, ctx->r3) = 0;
-    // 0x80802720: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_80802724:
-    // 0x80802724: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x80802728: jr          $ra
-    // 0x8080272C: nop
-
-    return;
-    // 0x8080272C: nop
-
-;}
 RECOMP_FUNC void basub_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4256,4 +4203,13 @@ L_80800A9C:
     return;
     // 0x80800AAC: nop
 
+;}
+RECOMP_FUNC void _chpowerhut_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086050: syscall     274
+    recomp_syscall_handler(rdram, ctx, 0x80086050);
+    return;
+    // 0x80086054: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

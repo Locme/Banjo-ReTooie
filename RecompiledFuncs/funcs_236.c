@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _subaddie3d_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089830: syscall     796
-    recomp_syscall_handler(rdram, ctx, 0x80089830);
-    return;
-    // 0x80089834: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void chhoney_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5463,4 +5454,41 @@ RECOMP_FUNC void ncba1p_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x808007E8: nop
 
+;}
+RECOMP_FUNC void func_808002E8_ncpod(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808002E8: addiu       $at, $zero, -0x1
+    ctx->r1 = ADD32(0, -0X1);
+    // 0x808002EC: bnel        $a1, $at, L_80800300
+    if (ctx->r5 != ctx->r1) {
+        // 0x808002F0: lhu         $t6, 0x12($a0)
+        ctx->r14 = MEM_HU(ctx->r4, 0X12);
+            goto L_80800300;
+    }
+    goto skip_0;
+    // 0x808002F0: lhu         $t6, 0x12($a0)
+    ctx->r14 = MEM_HU(ctx->r4, 0X12);
+    skip_0:
+    // 0x808002F4: jr          $ra
+    // 0x808002F8: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+    return;
+    // 0x808002F8: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+    // 0x808002FC: lhu         $t6, 0x12($a0)
+    ctx->r14 = MEM_HU(ctx->r4, 0X12);
+L_80800300:
+    // 0x80800300: srl         $t7, $t6, 1
+    ctx->r15 = S32(U32(ctx->r14) >> 1);
+    // 0x80800304: xor         $v1, $a1, $t7
+    ctx->r3 = ctx->r5 ^ ctx->r15;
+    // 0x80800308: sltiu       $v1, $v1, 0x1
+    ctx->r3 = ctx->r3 < 0X1 ? 1 : 0;
+    // 0x8080030C: jr          $ra
+    // 0x80800310: or          $v0, $v1, $zero
+    ctx->r2 = ctx->r3 | 0;
+    return;
+    // 0x80800310: or          $v0, $v1, $zero
+    ctx->r2 = ctx->r3 | 0;
 ;}

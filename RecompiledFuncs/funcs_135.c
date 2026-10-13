@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chbouncycastle_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1000, 0X930) << 16);
-    // 0x80800004: jr          $ra
-    // 0x80800008: addiu       $v0, $v0, 0x930
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1000, 0X930));
-    return;
-    // 0x80800008: addiu       $v0, $v0, 0x930
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1000, 0X930));
-;}
 RECOMP_FUNC void _ncba1p_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4304,4 +4292,13 @@ RECOMP_FUNC void _chbottlesfamily_entrypoint_0(uint8_t* rdram, recomp_context* c
     return;
     // 0x800864CC: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _fxsplash_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088AE8: syscall     722
+    recomp_syscall_handler(rdram, ctx, 0x80088AE8);
+    return;
+    // 0x80088AEC: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

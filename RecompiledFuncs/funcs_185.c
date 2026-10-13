@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800A940C(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800A940C: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x800A9410: lui         $v0, 0x8012
-    ctx->r2 = S32(0X8012 << 16);
-    // 0x800A9414: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x800A9418: jr          $ra
-    // 0x800A941C: lw          $v0, 0x76E8($v0)
-    ctx->r2 = MEM_W(ctx->r2, 0X76E8);
-    return;
-    // 0x800A941C: lw          $v0, 0x76E8($v0)
-    ctx->r2 = MEM_W(ctx->r2, 0X76E8);
-;}
 RECOMP_FUNC void func_80801D70_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6463,4 +6447,16 @@ RECOMP_FUNC void chmumbopadstatue_entrypoint_0(uint8_t* rdram, recomp_context* c
 
     // 0x8080009C: nop
 
+;}
+RECOMP_FUNC void chmumboskulls_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1352, 0XC0) << 16);
+    // 0x80800004: jr          $ra
+    // 0x80800008: addiu       $v0, $v0, 0xC0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1352, 0XC0));
+    return;
+    // 0x80800008: addiu       $v0, $v0, 0xC0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1352, 0XC0));
 ;}

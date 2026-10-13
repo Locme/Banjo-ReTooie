@@ -2,61 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800ADFE0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800ADFE0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800ADFE4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800ADFE8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800ADFEC: jal         0x800AE080
-    // 0x800ADFF0: lh          $a0, 0x1A($sp)
-    ctx->r4 = MEM_H(ctx->r29, 0X1A);
-    func_800AE080(rdram, ctx);
-        goto after_0;
-    // 0x800ADFF0: lh          $a0, 0x1A($sp)
-    ctx->r4 = MEM_H(ctx->r29, 0X1A);
-    after_0:
-    // 0x800ADFF4: lh          $t6, 0xC($v0)
-    ctx->r14 = MEM_H(ctx->r2, 0XC);
-    // 0x800ADFF8: beq         $t6, $zero, L_800AE008
-    if (ctx->r14 == 0) {
-        // 0x800ADFFC: nop
-    
-            goto L_800AE008;
-    }
-    // 0x800ADFFC: nop
-
-    // 0x800AE000: jal         0x800E0A70
-    // 0x800AE004: lh          $a0, 0xC($v0)
-    ctx->r4 = MEM_H(ctx->r2, 0XC);
-    func_800E0A70(rdram, ctx);
-        goto after_1;
-    // 0x800AE004: lh          $a0, 0xC($v0)
-    ctx->r4 = MEM_H(ctx->r2, 0XC);
-    after_1:
-L_800AE008:
-    // 0x800AE008: jal         0x8001B754
-    // 0x800AE00C: lh          $a0, 0x1A($sp)
-    ctx->r4 = MEM_H(ctx->r29, 0X1A);
-    func_8001B754(rdram, ctx);
-        goto after_2;
-    // 0x800AE00C: lh          $a0, 0x1A($sp)
-    ctx->r4 = MEM_H(ctx->r29, 0X1A);
-    after_2:
-    // 0x800AE010: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800AE014: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800AE018: jr          $ra
-    // 0x800AE01C: nop
-
-    return;
-    // 0x800AE01C: nop
-
-;}
 RECOMP_FUNC void func_8001210C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5663,4 +5608,16 @@ RECOMP_FUNC void func_808003D8_bscarry(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x808003F4: nop
 
+;}
+RECOMP_FUNC void subaddielink_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: sw          $zero, 0x4($a0)
+    MEM_W(0X4, ctx->r4) = 0;
+    // 0x80800004: jr          $ra
+    // 0x80800008: sw          $zero, 0x0($a0)
+    MEM_W(0X0, ctx->r4) = 0;
+    return;
+    // 0x80800008: sw          $zero, 0x0($a0)
+    MEM_W(0X0, ctx->r4) = 0;
 ;}
