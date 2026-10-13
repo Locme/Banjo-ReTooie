@@ -42,34 +42,16 @@ If the game crashes or freezes, see [`notes/reporting-crashes.md`](notes/reporti
 ## Settings
 
 Press **Esc** on the keyboard, or **Back** / **Select** on a controller, to open
-settings. There are five tabs: General, Graphics, Controls, Sound and Mods.
+settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
 
-- Graphics changes apply at once, with no Apply button. Aspect Ratio offers
-  4:3, Fill and Letterbox 16:9.
+- **General**: Back up saves, Save backups to keep, Timer save, Discord status,
+  Speed-up factor and Speed-up toggle.
+- **QOL**: Press Start Early to Skip Intro, Text speed and Level transitions.
+- **Cheats**: Enable cheats, which must be on for the cheat options and the
+  Warp tab to show. The Warp tab lists level warps and adds a Debug tab.
+- **Graphics**: changes apply at once, with no Apply button. Aspect Ratio offers
+  4:3, Fill and Letterbox 16:9. Graphics API needs a restart.
 - **F11** or **Alt+Enter** toggles fullscreen.
-- Graphics API needs a restart.
-- QOL has **Press Start Early to Skip Intro** (on by default), **Text speed** and **Level transitions**. General has **Back up saves**.
-
-Every menu option, with its default, is listed in [`notes/settings-guide.md`](notes/settings-guide.md).
-
-Every keyboard and controller shortcut is listed in [`notes/keys.md`](notes/keys.md).
-
-What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
-
-## Mods and texture packs
-
-Put mods in the `mods` folder next to the exe, then start the game. The Mods tab
-in settings turns each one on or off.
-
-- `.nrm` mods and `.rtz` texture packs load as they are.
-- An RT64 texture pack shipped as a `.zip` (one with an `rt64.json` inside, such
-  as BT Reloaded by GhostlyDark) is unpacked into a folder next to the zip the
-  first time the game starts. A big pack takes a while that once. The zip can
-  be deleted afterwards. If the zip changes, it is unpacked again.
-- Packs made only for GLideN64 (`.hts` / `.htc` cache files, or PNGs without an
-  `rt64.json`) can't be read.
-
-No texture pack is included with this port.
 
 ## How it works
 
