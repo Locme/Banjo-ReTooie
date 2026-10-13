@@ -223,7 +223,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.64 Classic jump sounds (Cut Content)
-- [ ] Done
+- [x] Done (General > Back-Port: Old Banjo sounds; CI green on 1abb9fe, T46)
 - [ ] Approved by L
 
 ### 4.68 Stop 'n' Swop without a Banjo-Kazooie save
