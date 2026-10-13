@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chmrsicecube_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086318: syscall     307
-    recomp_syscall_handler(rdram, ctx, 0x80086318);
-    return;
-    // 0x8008631C: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_808000B0_chbilldrillplate(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5430,4 +5421,18 @@ RECOMP_FUNC void func_8080066C_chmrsicecube(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x808006C0: nop
 
+;}
+RECOMP_FUNC void suquiz_entrypoint_26(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800DB4: lui         $t6, 0x8012
+    ctx->r14 = S32(0X8012 << 16);
+    // 0x80800DB8: lw          $t6, 0x7614($t6)
+    ctx->r14 = MEM_W(ctx->r14, 0X7614);
+    // 0x80800DBC: jr          $ra
+    // 0x80800DC0: lh          $v0, 0x34($t6)
+    ctx->r2 = MEM_H(ctx->r14, 0X34);
+    return;
+    // 0x80800DC0: lh          $v0, 0x34($t6)
+    ctx->r2 = MEM_H(ctx->r14, 0X34);
 ;}

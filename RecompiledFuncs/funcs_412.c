@@ -2,71 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800000_gcmapDll(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(2646, 0XF10) << 16);
-    // 0x80800004: addiu       $v1, $v0, 0xF10
-    ctx->r3 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2646, 0XF10));
-    // 0x80800008: lh          $t6, 0x0($v1)
-    ctx->r14 = MEM_H(ctx->r3, 0X0);
-    // 0x8080000C: lui         $t7, 0x8080
-    ctx->r15 = S32(RELOC_HI16(2646, 0XF10) << 16);
-    // 0x80800010: addiu       $t7, $t7, 0xF10
-    ctx->r15 = ADD32(ctx->r15, (int16_t)RELOC_LO16(2646, 0XF10));
-    // 0x80800014: beql        $t6, $zero, L_80800044
-    if (ctx->r14 == 0) {
-        // 0x80800018: or          $v0, $zero, $zero
-        ctx->r2 = 0 | 0;
-            goto L_80800044;
-    }
-    goto skip_0;
-    // 0x80800018: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    skip_0:
-    // 0x8080001C: lh          $v0, 0x0($t7)
-    ctx->r2 = MEM_H(ctx->r15, 0X0);
-L_80800020:
-    // 0x80800020: bnel        $a0, $v0, L_80800034
-    if (ctx->r4 != ctx->r2) {
-        // 0x80800024: lh          $v0, 0xE($v1)
-        ctx->r2 = MEM_H(ctx->r3, 0XE);
-            goto L_80800034;
-    }
-    goto skip_1;
-    // 0x80800024: lh          $v0, 0xE($v1)
-    ctx->r2 = MEM_H(ctx->r3, 0XE);
-    skip_1:
-    // 0x80800028: jr          $ra
-    // 0x8080002C: or          $v0, $v1, $zero
-    ctx->r2 = ctx->r3 | 0;
-    return;
-    // 0x8080002C: or          $v0, $v1, $zero
-    ctx->r2 = ctx->r3 | 0;
-    // 0x80800030: lh          $v0, 0xE($v1)
-    ctx->r2 = MEM_H(ctx->r3, 0XE);
-L_80800034:
-    // 0x80800034: addiu       $v1, $v1, 0xE
-    ctx->r3 = ADD32(ctx->r3, 0XE);
-    // 0x80800038: bne         $v0, $zero, L_80800020
-    if (ctx->r2 != 0) {
-        // 0x8080003C: nop
-    
-            goto L_80800020;
-    }
-    // 0x8080003C: nop
-
-    // 0x80800040: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-L_80800044:
-    // 0x80800044: jr          $ra
-    // 0x80800048: nop
-
-    return;
-    // 0x80800048: nop
-
-;}
 RECOMP_FUNC void cadbfunc_entrypoint_23(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4293,4 +4228,13 @@ L_80800094:
     return;
     // 0x80800098: nop
 
+;}
+RECOMP_FUNC void _subaddieaudioloop_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089D30: syscall     810
+    recomp_syscall_handler(rdram, ctx, 0x80089D30);
+    return;
+    // 0x80089D34: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

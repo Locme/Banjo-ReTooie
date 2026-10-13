@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void sumumbofx_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801054: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80801058: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8080105C: jal         0x800C8B84
-    // 0x80801060: lh          $a0, 0x5E($a0)
-    ctx->r4 = MEM_H(ctx->r4, 0X5E);
-    func_800C8B84(rdram, ctx);
-        goto after_0;
-    // 0x80801060: lh          $a0, 0x5E($a0)
-    ctx->r4 = MEM_H(ctx->r4, 0X5E);
-    after_0:
-    // 0x80801064: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801068: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8080106C: jr          $ra
-    // 0x80801070: nop
-
-    return;
-    // 0x80801070: nop
-
-;}
 RECOMP_FUNC void _bsbtrot_entrypoint_37(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -10139,4 +10113,13 @@ RECOMP_FUNC void func_80800888_chcheato(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x808008B4: addiu       $v0, $v0, 0x114A
     ctx->r2 = ADD32(ctx->r2, 0X114A);
+;}
+RECOMP_FUNC void _bskazstilt_entrypoint_26(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083730: syscall     71
+    recomp_syscall_handler(rdram, ctx, 0x80083730);
+    return;
+    // 0x80083734: addi        $t0, $zero, 0x68
+    ctx->r8 = ADD32(0, 0X68);
 ;}

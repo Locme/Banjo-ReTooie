@@ -2,54 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800450_subaddiefade(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800450: lw          $t6, 0x8($a1)
-    ctx->r14 = MEM_W(ctx->r5, 0X8);
-    // 0x80800454: lw          $t7, 0x0($a1)
-    ctx->r15 = MEM_W(ctx->r5, 0X0);
-    // 0x80800458: lw          $t9, 0x4($a1)
-    ctx->r25 = MEM_W(ctx->r5, 0X4);
-    // 0x8080045C: lui         $at, 0x4040
-    ctx->r1 = S32(0X4040 << 16);
-    // 0x80800460: addu        $t8, $t6, $t7
-    ctx->r24 = ADD32(ctx->r14, ctx->r15);
-    // 0x80800464: addu        $t0, $t8, $t9
-    ctx->r8 = ADD32(ctx->r24, ctx->r25);
-    // 0x80800468: mtc1        $t0, $f4
-    ctx->f4.u32l = ctx->r8;
-    // 0x8080046C: mtc1        $at, $f8
-    ctx->f8.u32l = ctx->r1;
-    // 0x80800470: cvt.s.w     $f6, $f4
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 4);
-    ctx->f6.fl = CVT_S_W(ctx->f4.u32l);
-    // 0x80800474: div.s       $f10, $f6, $f8
-    CHECK_FR(ctx, 10);
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 8);
-    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f8.fl); 
-    ctx->f10.fl = DIV_S(ctx->f6.fl, ctx->f8.fl);
-    // 0x80800478: trunc.w.s   $f16, $f10
-    CHECK_FR(ctx, 16);
-    CHECK_FR(ctx, 10);
-    ctx->f16.u32l = TRUNC_W_S(ctx->f10.fl);
-    // 0x8080047C: mfc1        $v0, $f16
-    ctx->r2 = (int32_t)ctx->f16.u32l;
-    // 0x80800480: nop
-
-    // 0x80800484: sw          $v0, 0x0($a0)
-    MEM_W(0X0, ctx->r4) = ctx->r2;
-    // 0x80800488: sw          $v0, 0x4($a0)
-    MEM_W(0X4, ctx->r4) = ctx->r2;
-    // 0x8080048C: jr          $ra
-    // 0x80800490: sw          $v0, 0x8($a0)
-    MEM_W(0X8, ctx->r4) = ctx->r2;
-    return;
-    // 0x80800490: sw          $v0, 0x8($a0)
-    MEM_W(0X8, ctx->r4) = ctx->r2;
-;}
 RECOMP_FUNC void func_8008C990(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6461,4 +6413,13 @@ L_80801C48:
     return;
     // 0x80801C74: addiu       $sp, $sp, 0x30
     ctx->r29 = ADD32(ctx->r29, 0X30);
+;}
+RECOMP_FUNC void _bsjump_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083290: syscall     52
+    recomp_syscall_handler(rdram, ctx, 0x80083290);
+    return;
+    // 0x80083294: addi        $t0, $zero, 0x30
+    ctx->r8 = ADD32(0, 0X30);
 ;}

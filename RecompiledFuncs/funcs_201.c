@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gczoombox_entrypoint_20(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087B80: syscall     654
-    recomp_syscall_handler(rdram, ctx, 0x80087B80);
-    return;
-    // 0x80087B84: addi        $t0, $zero, 0x50
-    ctx->r8 = ADD32(0, 0X50);
-;}
 RECOMP_FUNC void func_8009DF58(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3928,4 +3919,13 @@ L_80800E94:
     return;
     // 0x80800E9C: nop
 
+;}
+RECOMP_FUNC void _chlagoonbits_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80085FC0: syscall     268
+    recomp_syscall_handler(rdram, ctx, 0x80085FC0);
+    return;
+    // 0x80085FC4: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

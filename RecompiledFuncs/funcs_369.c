@@ -2,168 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808000B8_chtntblockage(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808000B8: addiu       $sp, $sp, -0x30
-    ctx->r29 = ADD32(ctx->r29, -0X30);
-    // 0x808000BC: sw          $s0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r16;
-    // 0x808000C0: addiu       $at, $zero, 0x5
-    ctx->r1 = ADD32(0, 0X5);
-    // 0x808000C4: or          $s0, $a0, $zero
-    ctx->r16 = ctx->r4 | 0;
-    // 0x808000C8: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x808000CC: beq         $a1, $at, L_808000F0
-    if (ctx->r5 == ctx->r1) {
-        // 0x808000D0: sw          $a2, 0x38($sp)
-        MEM_W(0X38, ctx->r29) = ctx->r6;
-            goto L_808000F0;
-    }
-    // 0x808000D0: sw          $a2, 0x38($sp)
-    MEM_W(0X38, ctx->r29) = ctx->r6;
-    // 0x808000D4: addiu       $at, $zero, 0x90
-    ctx->r1 = ADD32(0, 0X90);
-    // 0x808000D8: beq         $a1, $at, L_80800138
-    if (ctx->r5 == ctx->r1) {
-        // 0x808000DC: addiu       $at, $zero, 0x95
-        ctx->r1 = ADD32(0, 0X95);
-            goto L_80800138;
-    }
-    // 0x808000DC: addiu       $at, $zero, 0x95
-    ctx->r1 = ADD32(0, 0X95);
-    // 0x808000E0: beq         $a1, $at, L_80800148
-    if (ctx->r5 == ctx->r1) {
-        // 0x808000E4: nop
-    
-            goto L_80800148;
-    }
-    // 0x808000E4: nop
-
-    // 0x808000E8: b           L_80800170
-    // 0x808000EC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-        goto L_80800170;
-    // 0x808000EC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-L_808000F0:
-    // 0x808000F0: addiu       $a0, $sp, 0x24
-    ctx->r4 = ADD32(ctx->r29, 0X24);
-    // 0x808000F4: jal         0x800EE7F8
-    // 0x808000F8: addiu       $a1, $s0, 0x4
-    ctx->r5 = ADD32(ctx->r16, 0X4);
-    func_800EE7F8(rdram, ctx);
-        goto after_0;
-    // 0x808000F8: addiu       $a1, $s0, 0x4
-    ctx->r5 = ADD32(ctx->r16, 0X4);
-    after_0:
-    // 0x808000FC: addiu       $a0, $sp, 0x24
-    ctx->r4 = ADD32(ctx->r29, 0X24);
-    // 0x80800100: lw          $a1, 0x48($s0)
-    ctx->r5 = MEM_W(ctx->r16, 0X48);
-    // 0x80800104: jal         0x800EF1B8
-    // 0x80800108: lui         $a2, 0xC396
-    ctx->r6 = S32(0XC396 << 16);
-    func_800EF1B8(rdram, ctx);
-        goto after_1;
-    // 0x80800108: lui         $a2, 0xC396
-    ctx->r6 = S32(0XC396 << 16);
-    after_1:
-    // 0x8080010C: lui         $at, 0x42DC
-    ctx->r1 = S32(0X42DC << 16);
-    // 0x80800110: mtc1        $at, $f6
-    ctx->f6.u32l = ctx->r1;
-    // 0x80800114: lwc1        $f4, 0x28($sp)
-    ctx->f4.u32l = MEM_W(ctx->r29, 0X28);
-    // 0x80800118: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    // 0x8080011C: addiu       $a1, $sp, 0x24
-    ctx->r5 = ADD32(ctx->r29, 0X24);
-    // 0x80800120: sub.s       $f8, $f4, $f6
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 4);
-    CHECK_FR(ctx, 6);
-    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f6.fl); 
-    ctx->f8.fl = ctx->f4.fl - ctx->f6.fl;
-    // 0x80800124: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    // 0x80800128: jal         0x80086670
-    // 0x8080012C: swc1        $f8, 0x28($sp)
-    MEM_W(0X28, ctx->r29) = ctx->f8.u32l;
-    _chexploder_entrypoint_3(rdram, ctx);
-        goto after_2;
-    // 0x8080012C: swc1        $f8, 0x28($sp)
-    MEM_W(0X28, ctx->r29) = ctx->f8.u32l;
-    after_2:
-    // 0x80800130: b           L_80800170
-    // 0x80800134: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-        goto L_80800170;
-    // 0x80800134: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_80800138:
-    // 0x80800138: jal         0x80800184
-    // 0x8080013C: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    func_80800184_chtntblockage(rdram, ctx);
-        goto after_3;
-    // 0x8080013C: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    after_3:
-    // 0x80800140: b           L_80800170
-    // 0x80800144: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-        goto L_80800170;
-    // 0x80800144: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_80800148:
-    // 0x80800148: jal         0x808000A8
-    // 0x8080014C: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    func_808000A8_chtntblockage(rdram, ctx);
-        goto after_4;
-    // 0x8080014C: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    after_4:
-    // 0x80800150: or          $a0, $s0, $zero
-    ctx->r4 = ctx->r16 | 0;
-    // 0x80800154: jal         0x80085D28
-    // 0x80800158: or          $a1, $v0, $zero
-    ctx->r5 = ctx->r2 | 0;
-    _chtntdetonator_entrypoint_1(rdram, ctx);
-        goto after_5;
-    // 0x80800158: or          $a1, $v0, $zero
-    ctx->r5 = ctx->r2 | 0;
-    after_5:
-    // 0x8080015C: b           L_80800170
-    // 0x80800160: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-        goto L_80800170;
-    // 0x80800160: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-    // 0x80800164: b           L_80800170
-    // 0x80800168: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-        goto L_80800170;
-    // 0x80800168: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    // 0x8080016C: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_80800170:
-    // 0x80800170: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x80800174: lw          $s0, 0x18($sp)
-    ctx->r16 = MEM_W(ctx->r29, 0X18);
-    // 0x80800178: addiu       $sp, $sp, 0x30
-    ctx->r29 = ADD32(ctx->r29, 0X30);
-    // 0x8080017C: jr          $ra
-    // 0x80800180: nop
-
-    return;
-    // 0x80800180: nop
-
-;}
 RECOMP_FUNC void func_800D70F8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5942,4 +5780,13 @@ L_80800524:
     return;
     // 0x80800530: nop
 
+;}
+RECOMP_FUNC void _chbottlesparty_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086820: syscall     384
+    recomp_syscall_handler(rdram, ctx, 0x80086820);
+    return;
+    // 0x80086824: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

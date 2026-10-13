@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _fxsparkle_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800888C8: syscall     709
-    recomp_syscall_handler(rdram, ctx, 0x800888C8);
-    return;
-    // 0x800888CC: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void func_808006A4_bscrouch(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5884,4 +5875,16 @@ RECOMP_FUNC void bskazhatch_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800480: lw          $v0, 0x4E0($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(248, 0X4E0));
+;}
+RECOMP_FUNC void chpickups_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800054: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(700, 0X988) << 16);
+    // 0x80800058: jr          $ra
+    // 0x8080005C: addiu       $v0, $v0, 0x988
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(700, 0X988));
+    return;
+    // 0x8080005C: addiu       $v0, $v0, 0x988
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(700, 0X988));
 ;}

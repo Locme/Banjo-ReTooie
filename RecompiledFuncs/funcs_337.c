@@ -2,61 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void suexpression_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808003D8: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x808003DC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808003E0: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x808003E4: jal         0x80100094
-    // 0x808003E8: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    func_80100094(rdram, ctx);
-        goto after_0;
-    // 0x808003E8: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    after_0:
-    // 0x808003EC: beq         $v0, $zero, L_80800400
-    if (ctx->r2 == 0) {
-        // 0x808003F0: lw          $a0, 0x18($sp)
-        ctx->r4 = MEM_W(ctx->r29, 0X18);
-            goto L_80800400;
-    }
-    // 0x808003F0: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x808003F4: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    // 0x808003F8: jal         0x80100074
-    // 0x808003FC: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    func_80100074(rdram, ctx);
-        goto after_1;
-    // 0x808003FC: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    after_1:
-L_80800400:
-    // 0x80800400: lw          $t6, 0x18($sp)
-    ctx->r14 = MEM_W(ctx->r29, 0X18);
-    // 0x80800404: lbu         $t7, 0x95($t6)
-    ctx->r15 = MEM_BU(ctx->r14, 0X95);
-    // 0x80800408: andi        $t8, $t7, 0xFFF3
-    ctx->r24 = ctx->r15 & 0XFFF3;
-    // 0x8080040C: sb          $t8, 0x95($t6)
-    MEM_B(0X95, ctx->r14) = ctx->r24;
-    // 0x80800410: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800414: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800418: jr          $ra
-    // 0x8080041C: nop
-
-    return;
-    // 0x8080041C: nop
-
-;}
 RECOMP_FUNC void func_80801C7C_chquiz(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6698,4 +6643,13 @@ RECOMP_FUNC void func_808003F4_bskazpaddle(uint8_t* rdram, recomp_context* ctx) 
     return;
     // 0x80800444: nop
 
+;}
+RECOMP_FUNC void _sccustom_big_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A910: syscall     856
+    recomp_syscall_handler(rdram, ctx, 0x8008A910);
+    return;
+    // 0x8008A914: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

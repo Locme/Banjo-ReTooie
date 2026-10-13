@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsbtrot_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80082C00: syscall     29
-    recomp_syscall_handler(rdram, ctx, 0x80082C00);
-    return;
-    // 0x80082C04: addi        $t0, $zero, 0x20
-    ctx->r8 = ADD32(0, 0X20);
-;}
 RECOMP_FUNC void func_80800B44_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -2669,4 +2660,38 @@ L_80800438:
     return;
     // 0x80800454: addiu       $sp, $sp, 0x18
     ctx->r29 = ADD32(ctx->r29, 0X18);
+;}
+RECOMP_FUNC void bskazstilt_entrypoint_30(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808011AC: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x808011B0: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x808011B4: jal         0x80082FF0
+    // 0x808011B8: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    _bsdrone_entrypoint_2(rdram, ctx);
+        goto after_0;
+    // 0x808011B8: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x808011BC: jal         0x80800234
+    // 0x808011C0: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    func_80800234_bskazstilt(rdram, ctx);
+        goto after_1;
+    // 0x808011C0: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x808011C4: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808011C8: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808011CC: jr          $ra
+    // 0x808011D0: nop
+
+    return;
+    // 0x808011D0: nop
+
 ;}

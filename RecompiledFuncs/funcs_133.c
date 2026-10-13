@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bashoessuck_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085090: syscall     149
-    recomp_syscall_handler(rdram, ctx, 0x80085090);
-    return;
-    // 0x80085094: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void badeathmatch_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5407,4 +5398,13 @@ RECOMP_FUNC void bstaxi_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8080081C: lw          $v0, 0x2188($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(392, 0X2188));
+;}
+RECOMP_FUNC void _bsdronegoto_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800830D0: syscall     43
+    recomp_syscall_handler(rdram, ctx, 0x800830D0);
+    return;
+    // 0x800830D4: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

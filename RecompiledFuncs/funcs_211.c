@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chfactorylight_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086120: syscall     280
-    recomp_syscall_handler(rdram, ctx, 0x80086120);
-    return;
-    // 0x80086124: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_800AC638(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4024,4 +4015,20 @@ L_80800668:
     return;
     // 0x80800698: addiu       $sp, $sp, 0x68
     ctx->r29 = ADD32(ctx->r29, 0X68);
+;}
+RECOMP_FUNC void func_800D3FC0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800D3FC0: sll         $t6, $a0, 3
+    ctx->r14 = S32(ctx->r4 << 3);
+    // 0x800D3FC4: lui         $v0, 0x8012
+    ctx->r2 = S32(0X8012 << 16);
+    // 0x800D3FC8: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x800D3FCC: jr          $ra
+    // 0x800D3FD0: lhu         $v0, -0x4A42($v0)
+    ctx->r2 = MEM_HU(ctx->r2, -0X4A42);
+    return;
+    // 0x800D3FD0: lhu         $v0, -0x4A42($v0)
+    ctx->r2 = MEM_HU(ctx->r2, -0X4A42);
 ;}

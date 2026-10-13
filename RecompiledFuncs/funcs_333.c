@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chpowerhut_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086040: syscall     274
-    recomp_syscall_handler(rdram, ctx, 0x80086040);
-    return;
-    // 0x80086044: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void func_80801218_bsstatue(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4266,4 +4257,32 @@ RECOMP_FUNC void func_800F66F0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800F671C: addiu       $sp, $sp, 0x18
     ctx->r29 = ADD32(ctx->r29, 0X18);
+;}
+RECOMP_FUNC void gcdialogcamera_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800248: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x8080024C: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800250: or          $a1, $a0, $zero
+    ctx->r5 = ctx->r4 | 0;
+    // 0x80800254: jal         0x800856F8
+    // 0x80800258: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    _capod_entrypoint_11(rdram, ctx);
+        goto after_0;
+    // 0x80800258: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    after_0:
+    // 0x8080025C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80800260: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800264: jr          $ra
+    // 0x80800268: nop
+
+    return;
+    // 0x80800268: nop
+
 ;}

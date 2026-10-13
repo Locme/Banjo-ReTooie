@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _badata_entrypoint_23(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800846F8: syscall     118
-    recomp_syscall_handler(rdram, ctx, 0x800846F8);
-    return;
-    // 0x800846FC: addi        $t0, $zero, 0x5C
-    ctx->r8 = ADD32(0, 0X5C);
-;}
 RECOMP_FUNC void func_80014A88(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5706,5 +5697,50 @@ RECOMP_FUNC void func_80804140_chdiggerboss(uint8_t* rdram, recomp_context* ctx)
 
     return;
     // 0x808041E0: nop
+
+;}
+RECOMP_FUNC void func_8010545C(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8010545C: lui         $a0, 0x8013
+    ctx->r4 = S32(0X8013 << 16);
+    // 0x80105460: lw          $a0, 0x6EC0($a0)
+    ctx->r4 = MEM_W(ctx->r4, 0X6EC0);
+    // 0x80105464: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80105468: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8010546C: beql        $a0, $zero, L_80105488
+    if (ctx->r4 == 0) {
+        // 0x80105470: lw          $ra, 0x14($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X14);
+            goto L_80105488;
+    }
+    goto skip_0;
+    // 0x80105470: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    skip_0:
+    // 0x80105474: jal         0x800B32E4
+    // 0x80105478: nop
+
+    freelist_defrag(rdram, ctx);
+        goto after_0;
+    // 0x80105478: nop
+
+    after_0:
+    // 0x8010547C: lui         $at, 0x8013
+    ctx->r1 = S32(0X8013 << 16);
+    // 0x80105480: sw          $v0, 0x6EC0($at)
+    MEM_W(0X6EC0, ctx->r1) = ctx->r2;
+    // 0x80105484: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_80105488:
+    // 0x80105488: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x8010548C: jr          $ra
+    // 0x80105490: nop
+
+    return;
+    // 0x80105490: nop
 
 ;}

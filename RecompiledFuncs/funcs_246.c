@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800C6E58(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800C6E58: jr          $ra
-    // 0x800C6E5C: nop
-
-    return;
-    // 0x800C6E5C: nop
-
-;}
 RECOMP_FUNC void func_8080068C_chmonsterinterior(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5328,4 +5318,13 @@ L_80800450:
     return;
     // 0x80800468: nop
 
+;}
+RECOMP_FUNC void _inantab_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088F70: syscall     750
+    recomp_syscall_handler(rdram, ctx, 0x80088F70);
+    return;
+    // 0x80088F74: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

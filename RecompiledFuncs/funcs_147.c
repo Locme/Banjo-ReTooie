@@ -2,31 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801008_gcdialogexec(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801008: beq         $a0, $zero, L_80801018
-    if (ctx->r4 == 0) {
-        // 0x8080100C: addiu       $v1, $zero, 0xC8
-        ctx->r3 = ADD32(0, 0XC8);
-            goto L_80801018;
-    }
-    // 0x8080100C: addiu       $v1, $zero, 0xC8
-    ctx->r3 = ADD32(0, 0XC8);
-    // 0x80801010: jr          $ra
-    // 0x80801014: addiu       $v0, $zero, 0x1C
-    ctx->r2 = ADD32(0, 0X1C);
-    return;
-    // 0x80801014: addiu       $v0, $zero, 0x1C
-    ctx->r2 = ADD32(0, 0X1C);
-L_80801018:
-    // 0x80801018: jr          $ra
-    // 0x8080101C: or          $v0, $v1, $zero
-    ctx->r2 = ctx->r3 | 0;
-    return;
-    // 0x8080101C: or          $v0, $v1, $zero
-    ctx->r2 = ctx->r3 | 0;
-;}
 RECOMP_FUNC void func_80800024_chjollyroger(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4984,4 +4959,49 @@ L_8080018C:
     return;
     // 0x80800190: or          $v0, $v1, $zero
     ctx->r2 = ctx->r3 | 0;
+;}
+RECOMP_FUNC void idtwinklecolour_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080020C: sw          $a0, 0x0($sp)
+    MEM_W(0X0, ctx->r29) = ctx->r4;
+    // 0x80800210: sw          $a2, 0x8($sp)
+    MEM_W(0X8, ctx->r29) = ctx->r6;
+    // 0x80800214: lh          $t6, 0x1E($a3)
+    ctx->r14 = MEM_H(ctx->r7, 0X1E);
+    // 0x80800218: lh          $v0, 0x1C($a3)
+    ctx->r2 = MEM_H(ctx->r7, 0X1C);
+    // 0x8080021C: bnel        $t6, $v0, L_80800244
+    if (ctx->r14 != ctx->r2) {
+        // 0x80800220: addiu       $t0, $v0, 0x1
+        ctx->r8 = ADD32(ctx->r2, 0X1);
+            goto L_80800244;
+    }
+    goto skip_0;
+    // 0x80800220: addiu       $t0, $v0, 0x1
+    ctx->r8 = ADD32(ctx->r2, 0X1);
+    skip_0:
+    // 0x80800224: lh          $t7, 0x0($a1)
+    ctx->r15 = MEM_H(ctx->r5, 0X0);
+    // 0x80800228: lh          $v0, 0x1C($a3)
+    ctx->r2 = MEM_H(ctx->r7, 0X1C);
+    // 0x8080022C: sh          $t7, 0xE($a3)
+    MEM_H(0XE, ctx->r7) = ctx->r15;
+    // 0x80800230: lh          $t8, 0x2($a1)
+    ctx->r24 = MEM_H(ctx->r5, 0X2);
+    // 0x80800234: sh          $t8, 0x10($a3)
+    MEM_H(0X10, ctx->r7) = ctx->r24;
+    // 0x80800238: lh          $t9, 0x4($a1)
+    ctx->r25 = MEM_H(ctx->r5, 0X4);
+    // 0x8080023C: sh          $t9, 0x12($a3)
+    MEM_H(0X12, ctx->r7) = ctx->r25;
+    // 0x80800240: addiu       $t0, $v0, 0x1
+    ctx->r8 = ADD32(ctx->r2, 0X1);
+L_80800244:
+    // 0x80800244: jr          $ra
+    // 0x80800248: sh          $t0, 0x1C($a3)
+    MEM_H(0X1C, ctx->r7) = ctx->r8;
+    return;
+    // 0x80800248: sh          $t0, 0x1C($a3)
+    MEM_H(0X1C, ctx->r7) = ctx->r8;
 ;}

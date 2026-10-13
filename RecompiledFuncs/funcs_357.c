@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bskazstilt_entrypoint_30(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808011AC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x808011B0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808011B4: jal         0x80082FF0
-    // 0x808011B8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    _bsdrone_entrypoint_2(rdram, ctx);
-        goto after_0;
-    // 0x808011B8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x808011BC: jal         0x80800234
-    // 0x808011C0: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_80800234_bskazstilt(rdram, ctx);
-        goto after_1;
-    // 0x808011C0: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x808011C4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808011C8: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x808011CC: jr          $ra
-    // 0x808011D0: nop
-
-    return;
-    // 0x808011D0: nop
-
-;}
 RECOMP_FUNC void _subaddiedialog_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4142,4 +4108,14 @@ RECOMP_FUNC void func_800F0C68(uint8_t* rdram, recomp_context* ctx) {
     CHECK_FR(ctx, 0);
     NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f0.fl); 
     ctx->f0.fl = DIV_S(ctx->f8.fl, ctx->f0.fl);
+;}
+RECOMP_FUNC void func_800EE0F8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800EE0F8: jr          $ra
+    // 0x800EE0FC: sw          $a1, 0x10($a0)
+    MEM_W(0X10, ctx->r4) = ctx->r5;
+    return;
+    // 0x800EE0FC: sw          $a1, 0x10($a0)
+    MEM_W(0X10, ctx->r4) = ctx->r5;
 ;}

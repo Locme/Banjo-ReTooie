@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800FE8BC(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800FE8BC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800FE8C0: or          $a2, $a1, $zero
-    ctx->r6 = ctx->r5 | 0;
-    // 0x800FE8C4: or          $a1, $a0, $zero
-    ctx->r5 = ctx->r4 | 0;
-    // 0x800FE8C8: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800FE8CC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800FE8D0: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800FE8D4: jal         0x80087880
-    // 0x800FE8D8: addiu       $a0, $a0, 0x59C0
-    ctx->r4 = ADD32(ctx->r4, 0X59C0);
-    _cothemedll_entrypoint_5(rdram, ctx);
-        goto after_0;
-    // 0x800FE8D8: addiu       $a0, $a0, 0x59C0
-    ctx->r4 = ADD32(ctx->r4, 0X59C0);
-    after_0:
-    // 0x800FE8DC: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800FE8E0: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800FE8E4: jr          $ra
-    // 0x800FE8E8: nop
-
-    return;
-    // 0x800FE8E8: nop
-
-;}
 RECOMP_FUNC void _chnests_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5628,4 +5594,13 @@ L_80802A0C:
     return;
     // 0x80802A28: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void _idflashbaddie_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088DE0: syscall     741
+    recomp_syscall_handler(rdram, ctx, 0x80088DE0);
+    return;
+    // 0x80088DE4: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

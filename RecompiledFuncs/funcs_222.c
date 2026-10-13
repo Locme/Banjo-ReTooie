@@ -2,20 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void gcnewoption_entrypoint_36(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80802B14: lbu         $t7, 0x1C($a0)
-    ctx->r15 = MEM_BU(ctx->r4, 0X1C);
-    // 0x80802B18: ori         $t8, $t7, 0x10
-    ctx->r24 = ctx->r15 | 0X10;
-    // 0x80802B1C: jr          $ra
-    // 0x80802B20: sb          $t8, 0x1C($a0)
-    MEM_B(0X1C, ctx->r4) = ctx->r24;
-    return;
-    // 0x80802B20: sb          $t8, 0x1C($a0)
-    MEM_B(0X1C, ctx->r4) = ctx->r24;
-;}
 RECOMP_FUNC void _chcrusher_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6591,4 +6577,13 @@ RECOMP_FUNC void ncbadive_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800054: nop
 
+;}
+RECOMP_FUNC void _chbaddiesetup_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80086D78: syscall     449
+    recomp_syscall_handler(rdram, ctx, 0x80086D78);
+    return;
+    // 0x80086D7C: addi        $t0, $zero, 0x28
+    ctx->r8 = ADD32(0, 0X28);
 ;}

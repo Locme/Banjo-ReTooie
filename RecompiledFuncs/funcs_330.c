@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsdronesuckunder_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800044: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800048: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8080004C: jal         0x800961A0
-    // 0x80800050: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_800961A0(rdram, ctx);
-        goto after_0;
-    // 0x80800050: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x80800054: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800058: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8080005C: jr          $ra
-    // 0x80800060: nop
-
-    return;
-    // 0x80800060: nop
-
-;}
 RECOMP_FUNC void _bawandglow_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4002,4 +3976,13 @@ L_80801C30:
     return;
     // 0x80801C40: nop
 
+;}
+RECOMP_FUNC void _bsdronelook_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083128: syscall     45
+    recomp_syscall_handler(rdram, ctx, 0x80083128);
+    return;
+    // 0x8008312C: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

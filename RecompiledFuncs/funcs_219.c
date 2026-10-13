@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gcmapsects_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087F10: syscall     662
-    recomp_syscall_handler(rdram, ctx, 0x80087F10);
-    return;
-    // 0x80087F14: addi        $t0, $zero, 0x8
-    ctx->r8 = ADD32(0, 0X8);
-;}
 RECOMP_FUNC void func_80800800_chfactorycrusher(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4167,4 +4158,44 @@ L_80802788:
     return;
     // 0x80802794: nop
 
+;}
+RECOMP_FUNC void func_800D3EC8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800D3EC8: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800D3ECC: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800D3ED0: jal         0x800D3E14
+    // 0x800D3ED4: nop
+
+    func_800D3E14(rdram, ctx);
+        goto after_0;
+    // 0x800D3ED4: nop
+
+    after_0:
+    // 0x800D3ED8: beq         $v0, $zero, L_800D3EE8
+    if (ctx->r2 == 0) {
+        // 0x800D3EDC: lw          $ra, 0x14($sp)
+        ctx->r31 = MEM_W(ctx->r29, 0X14);
+            goto L_800D3EE8;
+    }
+    // 0x800D3EDC: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800D3EE0: b           L_800D3EEC
+    // 0x800D3EE4: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+        goto L_800D3EEC;
+    // 0x800D3EE4: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+L_800D3EE8:
+    // 0x800D3EE8: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D3EEC:
+    // 0x800D3EEC: jr          $ra
+    // 0x800D3EF0: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    return;
+    // 0x800D3EF0: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
 ;}

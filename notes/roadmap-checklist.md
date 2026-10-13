@@ -40,6 +40,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.22 Fit to window: fill / letterbox / 4:3, HUD 16:9
 - [ ] Done
 - [ ] Approved by L
+- Partial (2026-10-13): Fill works through Settings > Graphics > Aspect Ratio = Expand (RT64 widens the picture; the game's culling now widens with it, src/game/widescreen.cpp). 4:3 is Aspect Ratio = Original. The HUD stays in the middle 4:3. Not done: a Letterbox 16:9 choice, HUD pinned to the edges.
 
 ### 4.30 Cutscene audio sync and N64 intro pacing
 - [ ] Done

@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsbabykaz_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808014C8: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x808014CC: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(68, 0X17A0) << 16);
-    // 0x808014D0: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x808014D4: jr          $ra
-    // 0x808014D8: lw          $v0, 0x17A0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(68, 0X17A0));
-    return;
-    // 0x808014D8: lw          $v0, 0x17A0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(68, 0X17A0));
-;}
 RECOMP_FUNC void _cadbfunc_entrypoint_18(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7020,4 +7004,22 @@ L_800979B8:
     return;
     // 0x800979D4: nop
 
+;}
+RECOMP_FUNC void static_16_80097978(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80097978: lw          $t6, 0xA4($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0XA4);
+    // 0x8009797C: addiu       $t8, $zero, 0x1
+    ctx->r24 = ADD32(0, 0X1);
+    // 0x80097980: sllv        $t9, $t8, $a1
+    ctx->r25 = S32(ctx->r24 << (ctx->r5 & 31));
+    // 0x80097984: lw          $t7, 0x4($t6)
+    ctx->r15 = MEM_W(ctx->r14, 0X4);
+    // 0x80097988: jr          $ra
+    // 0x8009798C: and         $v0, $t7, $t9
+    ctx->r2 = ctx->r15 & ctx->r25;
+    return;
+    // 0x8009798C: and         $v0, $t7, $t9
+    ctx->r2 = ctx->r15 & ctx->r25;
 ;}

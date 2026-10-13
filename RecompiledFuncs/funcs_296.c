@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chfactorymaindoor_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087560: syscall     588
-    recomp_syscall_handler(rdram, ctx, 0x80087560);
-    return;
-    // 0x80087564: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_80802314_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4799,4 +4790,13 @@ RECOMP_FUNC void _bswalk_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800841D4: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _bsbtrot_entrypoint_30(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80082CB0: syscall     29
+    recomp_syscall_handler(rdram, ctx, 0x80082CB0);
+    return;
+    // 0x80082CB4: addi        $t0, $zero, 0x78
+    ctx->r8 = ADD32(0, 0X78);
 ;}

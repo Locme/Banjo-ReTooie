@@ -2,54 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800158_chfactorystationdoors(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800158: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(2340, 0X244) << 16);
-    // 0x8080015C: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800160: lwc1        $f12, 0x244($at)
-    ctx->f12.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(2340, 0X244));
-    // 0x80800164: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800168: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(2340, 0X248) << 16);
-    // 0x8080016C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800170: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    // 0x80800174: lwc1        $f14, 0x248($at)
-    ctx->f14.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(2340, 0X248));
-    // 0x80800178: jal         0x800DF500
-    // 0x8080017C: lui         $a2, 0x3F80
-    ctx->r6 = S32(0X3F80 << 16);
-    func_800DF500(rdram, ctx);
-        goto after_0;
-    // 0x8080017C: lui         $a2, 0x3F80
-    ctx->r6 = S32(0X3F80 << 16);
-    after_0:
-    // 0x80800180: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80800184: jal         0x80101870
-    // 0x80800188: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    func_80101870(rdram, ctx);
-        goto after_1;
-    // 0x80800188: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    after_1:
-    // 0x8080018C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800190: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800194: jr          $ra
-    // 0x80800198: nop
-
-    return;
-    // 0x80800198: nop
-
-;}
 RECOMP_FUNC void func_808016A4_chfactorymagnet(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5651,4 +5603,13 @@ RECOMP_FUNC void bsclimb_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x808007D8: nop
 
+;}
+RECOMP_FUNC void _ncpoddialog_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800895F0: syscall     784
+    recomp_syscall_handler(rdram, ctx, 0x800895F0);
+    return;
+    // 0x800895F4: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
 ;}

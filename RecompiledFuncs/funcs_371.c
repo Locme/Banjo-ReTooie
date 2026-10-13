@@ -2,117 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800914_chvolcanobits(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800914: addiu       $sp, $sp, -0x38
-    ctx->r29 = ADD32(ctx->r29, -0X38);
-    // 0x80800918: sw          $ra, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r31;
-    // 0x8080091C: sw          $s0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r16;
-    // 0x80800920: lw          $a2, 0x18($a0)
-    ctx->r6 = MEM_W(ctx->r4, 0X18);
-    // 0x80800924: or          $s0, $a0, $zero
-    ctx->r16 = ctx->r4 | 0;
-    // 0x80800928: bnel        $a2, $zero, L_80800954
-    if (ctx->r6 != 0) {
-        // 0x8080092C: or          $a0, $a2, $zero
-        ctx->r4 = ctx->r6 | 0;
-            goto L_80800954;
-    }
-    goto skip_0;
-    // 0x8080092C: or          $a0, $a2, $zero
-    ctx->r4 = ctx->r6 | 0;
-    skip_0:
-    // 0x80800930: jal         0x800C8A98
-    // 0x80800934: nop
-
-    func_800C8A98(rdram, ctx);
-        goto after_0;
-    // 0x80800934: nop
-
-    after_0:
-    // 0x80800938: sw          $v0, 0x18($s0)
-    MEM_W(0X18, ctx->r16) = ctx->r2;
-    // 0x8080093C: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    // 0x80800940: lui         $a1, 0x4348
-    ctx->r5 = S32(0X4348 << 16);
-    // 0x80800944: jal         0x800C8E54
-    // 0x80800948: lui         $a2, 0x4448
-    ctx->r6 = S32(0X4448 << 16);
-    func_800C8E54(rdram, ctx);
-        goto after_1;
-    // 0x80800948: lui         $a2, 0x4448
-    ctx->r6 = S32(0X4448 << 16);
-    after_1:
-    // 0x8080094C: lw          $a2, 0x18($s0)
-    ctx->r6 = MEM_W(ctx->r16, 0X18);
-    // 0x80800950: or          $a0, $a2, $zero
-    ctx->r4 = ctx->r6 | 0;
-L_80800954:
-    // 0x80800954: jal         0x800C8CB8
-    // 0x80800958: addiu       $a1, $s0, 0x4
-    ctx->r5 = ADD32(ctx->r16, 0X4);
-    func_800C8CB8(rdram, ctx);
-        goto after_2;
-    // 0x80800958: addiu       $a1, $s0, 0x4
-    ctx->r5 = ADD32(ctx->r16, 0X4);
-    after_2:
-    // 0x8080095C: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(1264, 0X10E0) << 16);
-    // 0x80800960: lwc1        $f12, 0x10E0($at)
-    ctx->f12.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1264, 0X10E0));
-    // 0x80800964: lui         $at, 0x3F80
-    ctx->r1 = S32(0X3F80 << 16);
-    // 0x80800968: mtc1        $at, $f14
-    ctx->f14.u32l = ctx->r1;
-    // 0x8080096C: jal         0x800DC178
-    // 0x80800970: nop
-
-    func_800DC178(rdram, ctx);
-        goto after_3;
-    // 0x80800970: nop
-
-    after_3:
-    // 0x80800974: lui         $a1, 0x8080
-    ctx->r5 = S32(RELOC_HI16(1264, 0X1100) << 16);
-    // 0x80800978: mfc1        $a2, $f0
-    ctx->r6 = (int32_t)ctx->f0.u32l;
-    // 0x8080097C: addiu       $a1, $a1, 0x1100
-    ctx->r5 = ADD32(ctx->r5, (int16_t)RELOC_LO16(1264, 0X1100));
-    // 0x80800980: jal         0x800F2F60
-    // 0x80800984: addiu       $a0, $sp, 0x2C
-    ctx->r4 = ADD32(ctx->r29, 0X2C);
-    func_800F2F60(rdram, ctx);
-        goto after_4;
-    // 0x80800984: addiu       $a0, $sp, 0x2C
-    ctx->r4 = ADD32(ctx->r29, 0X2C);
-    after_4:
-    // 0x80800988: lw          $a0, 0x18($s0)
-    ctx->r4 = MEM_W(ctx->r16, 0X18);
-    // 0x8080098C: jal         0x800C8E84
-    // 0x80800990: addiu       $a1, $sp, 0x2C
-    ctx->r5 = ADD32(ctx->r29, 0X2C);
-    func_800C8E84(rdram, ctx);
-        goto after_5;
-    // 0x80800990: addiu       $a1, $sp, 0x2C
-    ctx->r5 = ADD32(ctx->r29, 0X2C);
-    after_5:
-    // 0x80800994: lw          $ra, 0x1C($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X1C);
-    // 0x80800998: lw          $s0, 0x18($sp)
-    ctx->r16 = MEM_W(ctx->r29, 0X18);
-    // 0x8080099C: addiu       $sp, $sp, 0x38
-    ctx->r29 = ADD32(ctx->r29, 0X38);
-    // 0x808009A0: jr          $ra
-    // 0x808009A4: nop
-
-    return;
-    // 0x808009A4: nop
-
-;}
 RECOMP_FUNC void baanim_init(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5615,4 +5504,13 @@ RECOMP_FUNC void _scinfobar_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008A5EC: addi        $t0, $zero, 0x34
     ctx->r8 = ADD32(0, 0X34);
+;}
+RECOMP_FUNC void _bsbabykaz_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800827D0: syscall     14
+    recomp_syscall_handler(rdram, ctx, 0x800827D0);
+    return;
+    // 0x800827D4: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

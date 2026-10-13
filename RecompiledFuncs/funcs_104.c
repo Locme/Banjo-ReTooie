@@ -2,59 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8002D694(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8002D694: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8002D698: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8002D69C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x8002D6A0: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    // 0x8002D6A4: sw          $a2, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r6;
-    // 0x8002D6A8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x8002D6AC: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    // 0x8002D6B0: jal         0x8002CC9C
-    // 0x8002D6B4: lw          $a2, 0x20($sp)
-    ctx->r6 = MEM_W(ctx->r29, 0X20);
-    func_8002CC9C(rdram, ctx);
-        goto after_0;
-    // 0x8002D6B4: lw          $a2, 0x20($sp)
-    ctx->r6 = MEM_W(ctx->r29, 0X20);
-    after_0:
-    // 0x8002D6B8: b           L_8002D6C8
-    // 0x8002D6BC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-        goto L_8002D6C8;
-    // 0x8002D6BC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    // 0x8002D6C0: b           L_8002D6C8
-    // 0x8002D6C4: nop
-
-        goto L_8002D6C8;
-    // 0x8002D6C4: nop
-
-L_8002D6C8:
-    // 0x8002D6C8: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8002D6CC: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8002D6D0: jr          $ra
-    // 0x8002D6D4: nop
-
-    return;
-    // 0x8002D6D4: nop
-
-    // 0x8002D6D8: nop
-
-    // 0x8002D6DC: nop
-
-;}
 RECOMP_FUNC void func_808011DC_bswasher(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5438,4 +5385,16 @@ L_80800248:
     return;
     // 0x80800258: nop
 
+;}
+RECOMP_FUNC void chboilerboss_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800018: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(932, 0X2C9C) << 16);
+    // 0x8080001C: jr          $ra
+    // 0x80800020: addiu       $v0, $v0, 0x2C9C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(932, 0X2C9C));
+    return;
+    // 0x80800020: addiu       $v0, $v0, 0x2C9C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(932, 0X2C9C));
 ;}

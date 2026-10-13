@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void gcstatusDll_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808000E8: lui         $at, 0x8013
-    ctx->r1 = S32(0X8013 << 16);
-    // 0x808000EC: jr          $ra
-    // 0x808000F0: sb          $a0, -0x4BF1($at)
-    MEM_B(-0X4BF1, ctx->r1) = ctx->r4;
-    return;
-    // 0x808000F0: sb          $a0, -0x4BF1($at)
-    MEM_B(-0X4BF1, ctx->r1) = ctx->r4;
-;}
 RECOMP_FUNC void _gcnewoption_entrypoint_34(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3997,4 +3985,16 @@ L_80800518:
     return;
     // 0x80800524: addiu       $sp, $sp, 0x70
     ctx->r29 = ADD32(ctx->r29, 0X70);
+;}
+RECOMP_FUNC void func_800F9178(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800F9178: lui         $at, 0x8013
+    ctx->r1 = S32(0X8013 << 16);
+    // 0x800F917C: jr          $ra
+    // 0x800F9180: sb          $zero, 0x54FA($at)
+    MEM_B(0X54FA, ctx->r1) = 0;
+    return;
+    // 0x800F9180: sb          $zero, 0x54FA($at)
+    MEM_B(0X54FA, ctx->r1) = 0;
 ;}

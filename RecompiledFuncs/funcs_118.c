@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsbswim_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800DE8: sll         $t6, $a0, 2
-    ctx->r14 = S32(ctx->r4 << 2);
-    // 0x80800DEC: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(120, 0X1EB0) << 16);
-    // 0x80800DF0: addu        $v0, $v0, $t6
-    ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x80800DF4: jr          $ra
-    // 0x80800DF8: lw          $v0, 0x1EB0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(120, 0X1EB0));
-    return;
-    // 0x80800DF8: lw          $v0, 0x1EB0($v0)
-    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(120, 0X1EB0));
-;}
 RECOMP_FUNC void func_80802F00_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7830,5 +7814,37 @@ RECOMP_FUNC void func_808021BC_chtrashcangame(uint8_t* rdram, recomp_context* ct
 
     return;
     // 0x80802238: nop
+
+;}
+RECOMP_FUNC void func_80102950(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80102950: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80102954: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80102958: mtc1        $a1, $f12
+    ctx->f12.u32l = ctx->r5;
+    // 0x8010295C: jal         0x800136E4
+    // 0x80102960: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_800136E4(rdram, ctx);
+        goto after_0;
+    // 0x80102960: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x80102964: lw          $t6, 0x18($sp)
+    ctx->r14 = MEM_W(ctx->r29, 0X18);
+    // 0x80102968: swc1        $f0, 0x50($t6)
+    MEM_W(0X50, ctx->r14) = ctx->f0.u32l;
+    // 0x8010296C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80102970: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80102974: jr          $ra
+    // 0x80102978: nop
+
+    return;
+    // 0x80102978: nop
 
 ;}

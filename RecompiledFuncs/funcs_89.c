@@ -2995,88 +2995,6 @@ L_8080074C:
     // 0x80800758: nop
 
 ;}
-RECOMP_FUNC void func_800CA2A8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800CA2A8: mtc1        $zero, $f4
-    ctx->f4.u32l = 0;
-    // 0x800CA2AC: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800CA2B0: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800CA2B4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800CA2B8: mtc1        $a1, $f12
-    ctx->f12.u32l = ctx->r5;
-    // 0x800CA2BC: swc1        $f4, 0x110($a0)
-    MEM_W(0X110, ctx->r4) = ctx->f4.u32l;
-    // 0x800CA2C0: jal         0x800137F4
-    // 0x800CA2C4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_800137F4(rdram, ctx);
-        goto after_0;
-    // 0x800CA2C4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x800CA2C8: lw          $a1, 0x18($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X18);
-    // 0x800CA2CC: neg.s       $f6, $f0
-    CHECK_FR(ctx, 6);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f0.fl); 
-    ctx->f6.fl = -ctx->f0.fl;
-    // 0x800CA2D0: swc1        $f0, 0x120($a1)
-    MEM_W(0X120, ctx->r5) = ctx->f0.u32l;
-    // 0x800CA2D4: jal         0x80013788
-    // 0x800CA2D8: swc1        $f6, 0x114($a1)
-    MEM_W(0X114, ctx->r5) = ctx->f6.u32l;
-    func_80013788(rdram, ctx);
-        goto after_1;
-    // 0x800CA2D8: swc1        $f6, 0x114($a1)
-    MEM_W(0X114, ctx->r5) = ctx->f6.u32l;
-    after_1:
-    // 0x800CA2DC: lw          $a1, 0x18($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X18);
-    // 0x800CA2E0: neg.s       $f2, $f0
-    CHECK_FR(ctx, 2);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f0.fl); 
-    ctx->f2.fl = -ctx->f0.fl;
-    // 0x800CA2E4: lwc1        $f8, 0x120($a1)
-    ctx->f8.u32l = MEM_W(ctx->r5, 0X120);
-    // 0x800CA2E8: lwc1        $f10, 0xE8($a1)
-    ctx->f10.u32l = MEM_W(ctx->r5, 0XE8);
-    // 0x800CA2EC: swc1        $f2, 0x124($a1)
-    MEM_W(0X124, ctx->r5) = ctx->f2.u32l;
-    // 0x800CA2F0: swc1        $f2, 0x118($a1)
-    MEM_W(0X118, ctx->r5) = ctx->f2.u32l;
-    // 0x800CA2F4: mul.s       $f16, $f8, $f10
-    CHECK_FR(ctx, 16);
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 10);
-    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f10.fl); 
-    ctx->f16.fl = MUL_S(ctx->f8.fl, ctx->f10.fl);
-    // 0x800CA2F8: addiu       $a0, $a1, 0x11C
-    ctx->r4 = ADD32(ctx->r5, 0X11C);
-    // 0x800CA2FC: jal         0x800EF2A0
-    // 0x800CA300: swc1        $f16, 0x11C($a1)
-    MEM_W(0X11C, ctx->r5) = ctx->f16.u32l;
-    func_800EF2A0(rdram, ctx);
-        goto after_2;
-    // 0x800CA300: swc1        $f16, 0x11C($a1)
-    MEM_W(0X11C, ctx->r5) = ctx->f16.u32l;
-    after_2:
-    // 0x800CA304: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800CA308: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800CA30C: jr          $ra
-    // 0x800CA310: nop
-
-    return;
-    // 0x800CA310: nop
-
-;}
 RECOMP_FUNC void func_8080057C_chfactorytoxicpools(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3866,5 +3784,14 @@ RECOMP_FUNC void _gcdialogexec_entrypoint_9(uint8_t* rdram, recomp_context* ctx)
     recomp_syscall_handler(rdram, ctx, 0x80087E70);
     return;
     // 0x80087E74: addi        $t0, $zero, 0x24
+    ctx->r8 = ADD32(0, 0X24);
+;}
+RECOMP_FUNC void _bababykaz_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800844B8: syscall     112
+    recomp_syscall_handler(rdram, ctx, 0x800844B8);
+    return;
+    // 0x800844BC: addi        $t0, $zero, 0x24
     ctx->r8 = ADD32(0, 0X24);
 ;}

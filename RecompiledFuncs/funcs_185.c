@@ -2,56 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801D70_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801D70: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80801D74: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801D78: lui         $at, 0x4318
-    ctx->r1 = S32(0X4318 << 16);
-    // 0x80801D7C: mtc1        $at, $f2
-    ctx->f2.u32l = ctx->r1;
-    // 0x80801D80: lw          $v0, 0x188($a0)
-    ctx->r2 = MEM_W(ctx->r4, 0X188);
-    // 0x80801D84: lui         $at, 0x42E4
-    ctx->r1 = S32(0X42E4 << 16);
-    // 0x80801D88: mtc1        $at, $f12
-    ctx->f12.u32l = ctx->r1;
-    // 0x80801D8C: mtc1        $zero, $f0
-    ctx->f0.u32l = 0;
-    // 0x80801D90: mfc1        $a1, $f2
-    ctx->r5 = (int32_t)ctx->f2.u32l;
-    // 0x80801D94: mfc1        $a2, $f12
-    ctx->r6 = (int32_t)ctx->f12.u32l;
-    // 0x80801D98: swc1        $f2, 0xB8($v0)
-    MEM_W(0XB8, ctx->r2) = ctx->f2.u32l;
-    // 0x80801D9C: swc1        $f12, 0xBC($v0)
-    MEM_W(0XBC, ctx->r2) = ctx->f12.u32l;
-    // 0x80801DA0: swc1        $f0, 0xB4($v0)
-    MEM_W(0XB4, ctx->r2) = ctx->f0.u32l;
-    // 0x80801DA4: swc1        $f0, 0xC0($v0)
-    MEM_W(0XC0, ctx->r2) = ctx->f0.u32l;
-    // 0x80801DA8: jal         0x80084B00
-    // 0x80801DAC: swc1        $f0, 0xC4($v0)
-    MEM_W(0XC4, ctx->r2) = ctx->f0.u32l;
-    _baeggcursor_entrypoint_10(rdram, ctx);
-        goto after_0;
-    // 0x80801DAC: swc1        $f0, 0xC4($v0)
-    MEM_W(0XC4, ctx->r2) = ctx->f0.u32l;
-    after_0:
-    // 0x80801DB0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801DB4: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80801DB8: jr          $ra
-    // 0x80801DBC: nop
-
-    return;
-    // 0x80801DBC: nop
-
-;}
 RECOMP_FUNC void _plsu_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6459,4 +6409,13 @@ RECOMP_FUNC void chmumboskulls_entrypoint_0(uint8_t* rdram, recomp_context* ctx)
     return;
     // 0x80800008: addiu       $v0, $v0, 0xC0
     ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1352, 0XC0));
+;}
+RECOMP_FUNC void _dblight_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800879E8: syscall     647
+    recomp_syscall_handler(rdram, ctx, 0x800879E8);
+    return;
+    // 0x800879EC: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

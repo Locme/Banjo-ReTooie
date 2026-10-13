@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _sukickball_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089AD0: syscall     802
-    recomp_syscall_handler(rdram, ctx, 0x80089AD0);
-    return;
-    // 0x80089AD4: addi        $t0, $zero, 0x1C
-    ctx->r8 = ADD32(0, 0X1C);
-;}
 RECOMP_FUNC void func_80800000_chtemplebrokendoorpiece(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4920,5 +4911,108 @@ L_80800250:
 
     return;
     // 0x8080025C: nop
+
+;}
+RECOMP_FUNC void func_800D24E8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800D24E8: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x800D24EC: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800D24F0: sw          $a1, 0x24($sp)
+    MEM_W(0X24, ctx->r29) = ctx->r5;
+    // 0x800D24F4: sw          $a2, 0x28($sp)
+    MEM_W(0X28, ctx->r29) = ctx->r6;
+    // 0x800D24F8: jal         0x800D21D0
+    // 0x800D24FC: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    func_800D21D0(rdram, ctx);
+        goto after_0;
+    // 0x800D24FC: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x800D2500: lh          $t6, 0x4($v0)
+    ctx->r14 = MEM_H(ctx->r2, 0X4);
+    // 0x800D2504: lw          $a2, 0x28($sp)
+    ctx->r6 = MEM_W(ctx->r29, 0X28);
+    // 0x800D2508: lw          $a3, 0x20($sp)
+    ctx->r7 = MEM_W(ctx->r29, 0X20);
+    // 0x800D250C: bgez        $t6, L_800D2528
+    if (SIGNED(ctx->r14) >= 0) {
+        // 0x800D2510: or          $a0, $v0, $zero
+        ctx->r4 = ctx->r2 | 0;
+            goto L_800D2528;
+    }
+    // 0x800D2510: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    // 0x800D2514: or          $a0, $a3, $zero
+    ctx->r4 = ctx->r7 | 0;
+    // 0x800D2518: jal         0x800D2498
+    // 0x800D251C: lw          $a1, 0x24($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X24);
+    func_800D2498(rdram, ctx);
+        goto after_1;
+    // 0x800D251C: lw          $a1, 0x24($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X24);
+    after_1:
+    // 0x800D2520: b           L_800D2568
+    // 0x800D2524: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_800D2568;
+    // 0x800D2524: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_800D2528:
+    // 0x800D2528: lw          $t7, 0x24($sp)
+    ctx->r15 = MEM_W(ctx->r29, 0X24);
+    // 0x800D252C: sh          $a2, 0x6($a0)
+    MEM_H(0X6, ctx->r4) = ctx->r6;
+    // 0x800D2530: or          $a1, $a3, $zero
+    ctx->r5 = ctx->r7 | 0;
+    // 0x800D2534: sh          $t7, 0x4($a0)
+    MEM_H(0X4, ctx->r4) = ctx->r15;
+    // 0x800D2538: jal         0x800D22E0
+    // 0x800D253C: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_800D22E0(rdram, ctx);
+        goto after_2;
+    // 0x800D253C: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_2:
+    // 0x800D2540: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    // 0x800D2544: bne         $v0, $zero, L_800D2560
+    if (ctx->r2 != 0) {
+        // 0x800D2548: or          $v1, $v0, $zero
+        ctx->r3 = ctx->r2 | 0;
+            goto L_800D2560;
+    }
+    // 0x800D2548: or          $v1, $v0, $zero
+    ctx->r3 = ctx->r2 | 0;
+    // 0x800D254C: lh          $t8, 0x4($a0)
+    ctx->r24 = MEM_H(ctx->r4, 0X4);
+    // 0x800D2550: mtc1        $t8, $f4
+    ctx->f4.u32l = ctx->r24;
+    // 0x800D2554: nop
+
+    // 0x800D2558: cvt.s.w     $f6, $f4
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 4);
+    ctx->f6.fl = CVT_S_W(ctx->f4.u32l);
+    // 0x800D255C: swc1        $f6, 0x8($a0)
+    MEM_W(0X8, ctx->r4) = ctx->f6.u32l;
+L_800D2560:
+    // 0x800D2560: or          $v0, $v1, $zero
+    ctx->r2 = ctx->r3 | 0;
+    // 0x800D2564: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_800D2568:
+    // 0x800D2568: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x800D256C: jr          $ra
+    // 0x800D2570: nop
+
+    return;
+    // 0x800D2570: nop
 
 ;}

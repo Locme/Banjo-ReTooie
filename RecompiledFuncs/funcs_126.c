@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void susplinet_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800370: sll         $t6, $a1, 1
-    ctx->r14 = S32(ctx->r5 << 1);
-    // 0x80800374: addu        $t7, $a0, $t6
-    ctx->r15 = ADD32(ctx->r4, ctx->r14);
-    // 0x80800378: lh          $t8, 0x3E($t7)
-    ctx->r24 = MEM_H(ctx->r15, 0X3E);
-    // 0x8080037C: jr          $ra
-    // 0x80800380: addu        $v0, $t8, $a0
-    ctx->r2 = ADD32(ctx->r24, ctx->r4);
-    return;
-    // 0x80800380: addu        $v0, $t8, $a0
-    ctx->r2 = ADD32(ctx->r24, ctx->r4);
-;}
 RECOMP_FUNC void func_8009FFD8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7299,4 +7283,38 @@ L_8001BF78:
     return;
     // 0x8001BF7C: addiu       $sp, $sp, 0x20
     ctx->r29 = ADD32(ctx->r29, 0X20);
+;}
+RECOMP_FUNC void func_80800914_bskazpaddle(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800914: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800918: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x8080091C: jal         0x80800068
+    // 0x80800920: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    func_80800068_bskazpaddle(rdram, ctx);
+        goto after_0;
+    // 0x80800920: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    after_0:
+    // 0x80800924: jal         0x800839C8
+    // 0x80800928: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    _bsrest_entrypoint_16(rdram, ctx);
+        goto after_1;
+    // 0x80800928: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_1:
+    // 0x8080092C: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80800930: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800934: jr          $ra
+    // 0x80800938: nop
+
+    return;
+    // 0x80800938: nop
+
 ;}

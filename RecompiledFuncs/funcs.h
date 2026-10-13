@@ -4496,7 +4496,6 @@ void func_80800D18_bsbabykaz(uint8_t* rdram, recomp_context* ctx);
 void func_80101074(uint8_t* rdram, recomp_context* ctx);
 void _fxrain_entrypoint_4(uint8_t* rdram, recomp_context* ctx);
 void suspline_entrypoint_14(uint8_t* rdram, recomp_context* ctx);
-void func_800CA2A8(uint8_t* rdram, recomp_context* ctx);
 void func_8080057C_chfactorytoxicpools(uint8_t* rdram, recomp_context* ctx);
 void chmolehill_entrypoint_3(uint8_t* rdram, recomp_context* ctx);
 void _bskazmove_entrypoint_7(uint8_t* rdram, recomp_context* ctx);

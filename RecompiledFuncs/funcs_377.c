@@ -2,55 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800DC4D4(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800DC4D4: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800DC4D8: beq         $a0, $zero, L_800DC4F8
-    if (ctx->r4 == 0) {
-        // 0x800DC4DC: sw          $ra, 0x14($sp)
-        MEM_W(0X14, ctx->r29) = ctx->r31;
-            goto L_800DC4F8;
-    }
-    // 0x800DC4DC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800DC4E0: jal         0x80020760
-    // 0x800DC4E4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_80020760(rdram, ctx);
-        goto after_0;
-    // 0x800DC4E4: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x800DC4E8: beq         $v0, $zero, L_800DC4F8
-    if (ctx->r2 == 0) {
-        // 0x800DC4EC: lw          $a0, 0x18($sp)
-        ctx->r4 = MEM_W(ctx->r29, 0X18);
-            goto L_800DC4F8;
-    }
-    // 0x800DC4EC: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x800DC4F0: jal         0x80020A60
-    // 0x800DC4F4: nop
-
-    func_80020A60(rdram, ctx);
-        goto after_1;
-    // 0x800DC4F4: nop
-
-    after_1:
-L_800DC4F8:
-    // 0x800DC4F8: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800DC4FC: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800DC500: jr          $ra
-    // 0x800DC504: nop
-
-    return;
-    // 0x800DC504: nop
-
-;}
 RECOMP_FUNC void _gccubesearch_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4928,4 +4879,13 @@ L_80800E24:
     return;
     // 0x80800E2C: nop
 
+;}
+RECOMP_FUNC void _mlwave_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088FE0: syscall     754
+    recomp_syscall_handler(rdram, ctx, 0x80088FE0);
+    return;
+    // 0x80088FE4: addi        $t0, $zero, 0x20
+    ctx->r8 = ADD32(0, 0X20);
 ;}

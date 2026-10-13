@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chmermaidstatue_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80086238: syscall     292
-    recomp_syscall_handler(rdram, ctx, 0x80086238);
-    return;
-    // 0x8008623C: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void func_808011B4_chstatueboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4882,4 +4873,20 @@ L_80801F38:
     return;
     // 0x80801F40: nop
 
+;}
+RECOMP_FUNC void susplinet_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800370: sll         $t6, $a1, 1
+    ctx->r14 = S32(ctx->r5 << 1);
+    // 0x80800374: addu        $t7, $a0, $t6
+    ctx->r15 = ADD32(ctx->r4, ctx->r14);
+    // 0x80800378: lh          $t8, 0x3E($t7)
+    ctx->r24 = MEM_H(ctx->r15, 0X3E);
+    // 0x8080037C: jr          $ra
+    // 0x80800380: addu        $v0, $t8, $a0
+    ctx->r2 = ADD32(ctx->r24, ctx->r4);
+    return;
+    // 0x80800380: addu        $v0, $t8, $a0
+    ctx->r2 = ADD32(ctx->r24, ctx->r4);
 ;}

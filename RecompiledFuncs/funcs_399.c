@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chdinocoaster_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1072, 0X4E0) << 16);
-    // 0x80800004: jr          $ra
-    // 0x80800008: addiu       $v0, $v0, 0x4E0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1072, 0X4E0));
-    return;
-    // 0x80800008: addiu       $v0, $v0, 0x4E0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1072, 0X4E0));
-;}
 RECOMP_FUNC void func_800C71B0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6623,5 +6611,115 @@ L_808004E4:
 
     return;
     // 0x808004EC: nop
+
+;}
+RECOMP_FUNC void func_800D0820(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800D0820: sltiu       $at, $a0, 0x9
+    ctx->r1 = ctx->r4 < 0X9 ? 1 : 0;
+    // 0x800D0824: beq         $at, $zero, L_800D088C
+    if (ctx->r1 == 0) {
+        // 0x800D0828: addiu       $v0, $zero, -0x1
+        ctx->r2 = ADD32(0, -0X1);
+            goto L_800D088C;
+    }
+    // 0x800D0828: addiu       $v0, $zero, -0x1
+    ctx->r2 = ADD32(0, -0X1);
+    // 0x800D082C: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x800D0830: lui         $at, 0x8012
+    ctx->r1 = S32(0X8012 << 16);
+    // 0x800D0834: addu        $at, $at, $t6
+    gpr jr_addend_800D083C = ctx->r14;
+    ctx->r1 = ADD32(ctx->r1, ctx->r14);
+    // 0x800D0838: lw          $t6, 0x5A2C($at)
+    ctx->r14 = ADD32(ctx->r1, 0X5A2C);
+    // 0x800D083C: jr          $t6
+    // 0x800D0840: nop
+
+    switch (jr_addend_800D083C >> 2) {
+        case 0: goto L_800D0844; break;
+        case 1: goto L_800D084C; break;
+        case 2: goto L_800D0854; break;
+        case 3: goto L_800D085C; break;
+        case 4: goto L_800D0864; break;
+        case 5: goto L_800D086C; break;
+        case 6: goto L_800D0874; break;
+        case 7: goto L_800D087C; break;
+        case 8: goto L_800D0884; break;
+        default: switch_error(__func__, 0x800D083C, 0x80125A2C);
+    }
+    // 0x800D0840: nop
+
+L_800D0844:
+    // 0x800D0844: jr          $ra
+    // 0x800D0848: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0848: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D084C:
+    // 0x800D084C: jr          $ra
+    // 0x800D0850: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0850: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D0854:
+    // 0x800D0854: jr          $ra
+    // 0x800D0858: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0858: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D085C:
+    // 0x800D085C: jr          $ra
+    // 0x800D0860: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0860: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D0864:
+    // 0x800D0864: jr          $ra
+    // 0x800D0868: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0868: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D086C:
+    // 0x800D086C: jr          $ra
+    // 0x800D0870: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0870: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D0874:
+    // 0x800D0874: jr          $ra
+    // 0x800D0878: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0878: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D087C:
+    // 0x800D087C: jr          $ra
+    // 0x800D0880: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0880: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D0884:
+    // 0x800D0884: jr          $ra
+    // 0x800D0888: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+    return;
+    // 0x800D0888: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_800D088C:
+    // 0x800D088C: jr          $ra
+    // 0x800D0890: nop
+
+    return;
+    // 0x800D0890: nop
 
 ;}

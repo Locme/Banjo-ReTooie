@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bskazfly_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083370: syscall     57
-    recomp_syscall_handler(rdram, ctx, 0x80083370);
-    return;
-    // 0x80083374: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_808009C8_bsmum(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3965,5 +3956,57 @@ L_8080230C:
 
     return;
     // 0x80802318: nop
+
+;}
+RECOMP_FUNC void func_80802D14_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80802D14: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80802D18: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80802D1C: lw          $t6, 0x158($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0X158);
+    // 0x80802D20: bne         $t6, $zero, L_80802D38
+    if (ctx->r14 != 0) {
+        // 0x80802D24: nop
+    
+            goto L_80802D38;
+    }
+    // 0x80802D24: nop
+
+    // 0x80802D28: jal         0x80094A10
+    // 0x80802D2C: nop
+
+    func_80094A10(rdram, ctx);
+        goto after_0;
+    // 0x80802D2C: nop
+
+    after_0:
+    // 0x80802D30: b           L_80802D44
+    // 0x80802D34: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+        goto L_80802D44;
+    // 0x80802D34: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_80802D38:
+    // 0x80802D38: jal         0x800854F8
+    // 0x80802D3C: nop
+
+    _badeathmatch_entrypoint_0(rdram, ctx);
+        goto after_1;
+    // 0x80802D3C: nop
+
+    after_1:
+    // 0x80802D40: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+L_80802D44:
+    // 0x80802D44: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80802D48: jr          $ra
+    // 0x80802D4C: nop
+
+    return;
+    // 0x80802D4C: nop
 
 ;}

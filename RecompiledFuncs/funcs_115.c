@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bskazstilt_entrypoint_26(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083730: syscall     71
-    recomp_syscall_handler(rdram, ctx, 0x80083730);
-    return;
-    // 0x80083734: addi        $t0, $zero, 0x68
-    ctx->r8 = ADD32(0, 0X68);
-;}
 RECOMP_FUNC void func_800D91EC(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7735,4 +7726,16 @@ L_80800890:
     return;
     // 0x808008C8: nop
 
+;}
+RECOMP_FUNC void func_80800734_chpickups(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800734: mtc1        $zero, $f4
+    ctx->f4.u32l = 0;
+    // 0x80800738: jr          $ra
+    // 0x8080073C: swc1        $f4, 0x44($a0)
+    MEM_W(0X44, ctx->r4) = ctx->f4.u32l;
+    return;
+    // 0x8080073C: swc1        $f4, 0x44($a0)
+    MEM_W(0X44, ctx->r4) = ctx->f4.u32l;
 ;}

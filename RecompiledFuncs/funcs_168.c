@@ -2,69 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800E97C0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800E97C0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800E97C4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800E97C8: jal         0x800EA09C
-    // 0x800E97CC: nop
-
-    func_800EA09C(rdram, ctx);
-        goto after_0;
-    // 0x800E97CC: nop
-
-    after_0:
-    // 0x800E97D0: addiu       $at, $zero, 0x1
-    ctx->r1 = ADD32(0, 0X1);
-    // 0x800E97D4: beql        $v0, $at, L_800E97F8
-    if (ctx->r2 == ctx->r1) {
-        // 0x800E97D8: lw          $ra, 0x14($sp)
-        ctx->r31 = MEM_W(ctx->r29, 0X14);
-            goto L_800E97F8;
-    }
-    goto skip_0;
-    // 0x800E97D8: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    skip_0:
-    // 0x800E97DC: jal         0x800EA45C
-    // 0x800E97E0: nop
-
-    func_800EA45C(rdram, ctx);
-        goto after_1;
-    // 0x800E97E0: nop
-
-    after_1:
-    // 0x800E97E4: jal         0x800A5CFC
-    // 0x800E97E8: nop
-
-    func_800A5CFC(rdram, ctx);
-        goto after_2;
-    // 0x800E97E8: nop
-
-    after_2:
-    // 0x800E97EC: jal         0x800EA51C
-    // 0x800E97F0: nop
-
-    func_800EA51C(rdram, ctx);
-        goto after_3;
-    // 0x800E97F0: nop
-
-    after_3:
-    // 0x800E97F4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_800E97F8:
-    // 0x800E97F8: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800E97FC: jr          $ra
-    // 0x800E9800: nop
-
-    return;
-    // 0x800E9800: nop
-
-;}
 RECOMP_FUNC void func_808004CC_chminelight(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4271,4 +4208,20 @@ RECOMP_FUNC void func_800F5578(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800F55A0: nop
 
+;}
+RECOMP_FUNC void bsrest_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808004E0: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x808004E4: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(344, 0X910) << 16);
+    // 0x808004E8: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x808004EC: jr          $ra
+    // 0x808004F0: lw          $v0, 0x910($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(344, 0X910));
+    return;
+    // 0x808004F0: lw          $v0, 0x910($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(344, 0X910));
 ;}

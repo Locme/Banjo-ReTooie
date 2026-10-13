@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808011B4_bswasher(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808011B4: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x808011B8: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808011BC: jal         0x80085148
-    // 0x808011C0: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    _baspin_entrypoint_1(rdram, ctx);
-        goto after_0;
-    // 0x808011C0: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x808011C4: jal         0x808000F0
-    // 0x808011C8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_808000F0_bswasher(rdram, ctx);
-        goto after_1;
-    // 0x808011C8: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x808011CC: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808011D0: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x808011D4: jr          $ra
-    // 0x808011D8: nop
-
-    return;
-    // 0x808011D8: nop
-
-;}
 RECOMP_FUNC void func_80801658_chtntmineshoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7670,4 +7636,13 @@ RECOMP_FUNC void _sujiggy_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008A6CC: addi        $t0, $zero, 0x18
     ctx->r8 = ADD32(0, 0X18);
+;}
+RECOMP_FUNC void _cadbfunc_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800855F8: syscall     169
+    recomp_syscall_handler(rdram, ctx, 0x800855F8);
+    return;
+    // 0x800855FC: addi        $t0, $zero, 0x3C
+    ctx->r8 = ADD32(0, 0X3C);
 ;}

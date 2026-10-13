@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bsbabykaz_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800827F8: syscall     14
-    recomp_syscall_handler(rdram, ctx, 0x800827F8);
-    return;
-    // 0x800827FC: addi        $t0, $zero, 0x20
-    ctx->r8 = ADD32(0, 0X20);
-;}
 RECOMP_FUNC void func_80800110_basub(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6201,4 +6192,16 @@ L_800A9A98:
     return;
     // 0x800A9AA0: nop
 
+;}
+RECOMP_FUNC void chdinocoaster_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1072, 0X4E0) << 16);
+    // 0x80800004: jr          $ra
+    // 0x80800008: addiu       $v0, $v0, 0x4E0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1072, 0X4E0));
+    return;
+    // 0x80800008: addiu       $v0, $v0, 0x4E0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1072, 0X4E0));
 ;}

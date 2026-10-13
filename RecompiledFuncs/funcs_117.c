@@ -2,84 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8009BBB8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8009BBB8: addiu       $sp, $sp, -0x20
-    ctx->r29 = ADD32(ctx->r29, -0X20);
-    // 0x8009BBBC: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x8009BBC0: jal         0x8009BB5C
-    // 0x8009BBC4: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    func_8009BB5C(rdram, ctx);
-        goto after_0;
-    // 0x8009BBC4: sw          $a0, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x8009BBC8: lw          $a0, 0x20($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X20);
-    // 0x8009BBCC: jal         0x8009BB00
-    // 0x8009BBD0: swc1        $f0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->f0.u32l;
-    baphysics_get_target_horizontal_velocity(rdram, ctx);
-        goto after_1;
-    // 0x8009BBD0: swc1        $f0, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->f0.u32l;
-    after_1:
-    // 0x8009BBD4: lwc1        $f2, 0x1C($sp)
-    ctx->f2.u32l = MEM_W(ctx->r29, 0X1C);
-    // 0x8009BBD8: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x8009BBDC: lui         $at, 0x3F80
-    ctx->r1 = S32(0X3F80 << 16);
-    // 0x8009BBE0: c.lt.s      $f2, $f0
-    CHECK_FR(ctx, 2);
-    CHECK_FR(ctx, 0);
-    c1cs = ctx->f2.fl < ctx->f0.fl;
-    // 0x8009BBE4: addiu       $sp, $sp, 0x20
-    ctx->r29 = ADD32(ctx->r29, 0X20);
-    // 0x8009BBE8: bc1fl       L_8009BBFC
-    if (!c1cs) {
-        // 0x8009BBEC: mtc1        $at, $f12
-        ctx->f12.u32l = ctx->r1;
-            goto L_8009BBFC;
-    }
-    goto skip_0;
-    // 0x8009BBEC: mtc1        $at, $f12
-    ctx->f12.u32l = ctx->r1;
-    skip_0:
-    // 0x8009BBF0: b           L_8009BC00
-    // 0x8009BBF4: div.s       $f12, $f2, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 2);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f0.fl); 
-    ctx->f12.fl = DIV_S(ctx->f2.fl, ctx->f0.fl);
-        goto L_8009BC00;
-    // 0x8009BBF4: div.s       $f12, $f2, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 2);
-    CHECK_FR(ctx, 0);
-    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f0.fl); 
-    ctx->f12.fl = DIV_S(ctx->f2.fl, ctx->f0.fl);
-    // 0x8009BBF8: mtc1        $at, $f12
-    ctx->f12.u32l = ctx->r1;
-L_8009BBFC:
-    // 0x8009BBFC: nop
-
-L_8009BC00:
-    // 0x8009BC00: jr          $ra
-    // 0x8009BC04: mov.s       $f0, $f12
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 12);
-    ctx->f0.fl = ctx->f12.fl;
-    return;
-    // 0x8009BC04: mov.s       $f0, $f12
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 12);
-    ctx->f0.fl = ctx->f12.fl;
-;}
 RECOMP_FUNC void _bsblongleg_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3692,4 +3614,20 @@ RECOMP_FUNC void ncpoducam_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8080015C: lh          $v0, 0x48($a0)
     ctx->r2 = MEM_H(ctx->r4, 0X48);
+;}
+RECOMP_FUNC void bsbswim_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800DE8: sll         $t6, $a0, 2
+    ctx->r14 = S32(ctx->r4 << 2);
+    // 0x80800DEC: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(120, 0X1EB0) << 16);
+    // 0x80800DF0: addu        $v0, $v0, $t6
+    ctx->r2 = ADD32(ctx->r2, ctx->r14);
+    // 0x80800DF4: jr          $ra
+    // 0x80800DF8: lw          $v0, 0x1EB0($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(120, 0X1EB0));
+    return;
+    // 0x80800DF8: lw          $v0, 0x1EB0($v0)
+    ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(120, 0X1EB0));
 ;}

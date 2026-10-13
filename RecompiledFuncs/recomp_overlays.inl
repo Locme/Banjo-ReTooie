@@ -2649,7 +2649,6 @@ static FuncEntry section_16_core2_funcs[] = {
     { .func = func_800BD860, .offset = 0x0003C2A0, .rom_size = 0x000000E8 },
     { .func = func_80101074, .offset = 0x0007FAB4, .rom_size = 0x0000000C },
     { .func = _fxrain_entrypoint_4, .offset = 0x00007340, .rom_size = 0x00000008 },
-    { .func = func_800CA2A8, .offset = 0x00048CE8, .rom_size = 0x0000006C },
     { .func = _bskazmove_entrypoint_7, .offset = 0x00001F28, .rom_size = 0x00000008 },
     { .func = _gcmapsects_entrypoint_27, .offset = 0x00006A18, .rom_size = 0x00000008 },
     { .func = _ncba1p_entrypoint_3, .offset = 0x00007E20, .rom_size = 0x00000008 },

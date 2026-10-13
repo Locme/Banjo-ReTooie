@@ -2,69 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800E8C08(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800E8C08: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800E8C0C: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x800E8C10: andi        $a1, $a0, 0xFF
-    ctx->r5 = ctx->r4 & 0XFF;
-    // 0x800E8C14: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800E8C18: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800E8C1C: jal         0x800B32C0
-    // 0x800E8C20: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    freelist_erase(rdram, ctx);
-        goto after_0;
-    // 0x800E8C20: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    after_0:
-    // 0x800E8C24: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800E8C28: jal         0x800B3204
-    // 0x800E8C2C: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    freelist_used_count(rdram, ctx);
-        goto after_1;
-    // 0x800E8C2C: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    after_1:
-    // 0x800E8C30: bne         $v0, $zero, L_800E8C48
-    if (ctx->r2 != 0) {
-        // 0x800E8C34: lui         $a0, 0x8013
-        ctx->r4 = S32(0X8013 << 16);
-            goto L_800E8C48;
-    }
-    // 0x800E8C34: lui         $a0, 0x8013
-    ctx->r4 = S32(0X8013 << 16);
-    // 0x800E8C38: jal         0x800B3248
-    // 0x800E8C3C: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    freelist_free(rdram, ctx);
-        goto after_2;
-    // 0x800E8C3C: lw          $a0, -0x2980($a0)
-    ctx->r4 = MEM_W(ctx->r4, -0X2980);
-    after_2:
-    // 0x800E8C40: lui         $at, 0x8013
-    ctx->r1 = S32(0X8013 << 16);
-    // 0x800E8C44: sw          $zero, -0x2980($at)
-    MEM_W(-0X2980, ctx->r1) = 0;
-L_800E8C48:
-    // 0x800E8C48: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800E8C4C: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800E8C50: jr          $ra
-    // 0x800E8C54: nop
-
-    return;
-    // 0x800E8C54: nop
-
-;}
 RECOMP_FUNC void func_80806FAC_chgameselect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6717,4 +6654,13 @@ RECOMP_FUNC void func_800EDCEC(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800EDD1C: nop
 
+;}
+RECOMP_FUNC void _bsbkflamethrower_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800829A0: syscall     23
+    recomp_syscall_handler(rdram, ctx, 0x800829A0);
+    return;
+    // 0x800829A4: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

@@ -2,52 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800E14F8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800E14F8: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800E14FC: sw          $a2, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r6;
-    // 0x800E1500: sll         $t6, $a0, 5
-    ctx->r14 = S32(ctx->r4 << 5);
-    // 0x800E1504: lh          $v1, 0x22($sp)
-    ctx->r3 = MEM_H(ctx->r29, 0X22);
-    // 0x800E1508: subu        $t6, $t6, $a0
-    ctx->r14 = SUB32(ctx->r14, ctx->r4);
-    // 0x800E150C: lui         $t7, 0x8013
-    ctx->r15 = S32(0X8013 << 16);
-    // 0x800E1510: addiu       $t7, $t7, -0x3070
-    ctx->r15 = ADD32(ctx->r15, -0X3070);
-    // 0x800E1514: sll         $t6, $t6, 2
-    ctx->r14 = S32(ctx->r14 << 2);
-    // 0x800E1518: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800E151C: addu        $v0, $t6, $t7
-    ctx->r2 = ADD32(ctx->r14, ctx->r15);
-    // 0x800E1520: addiu       $a0, $v0, 0x34
-    ctx->r4 = ADD32(ctx->r2, 0X34);
-    // 0x800E1524: sb          $v1, 0x78($v0)
-    MEM_B(0X78, ctx->r2) = ctx->r3;
-    // 0x800E1528: jal         0x8001BBA0
-    // 0x800E152C: sll         $a2, $v1, 3
-    ctx->r6 = S32(ctx->r3 << 3);
-    rare_memcpy(rdram, ctx);
-        goto after_0;
-    // 0x800E152C: sll         $a2, $v1, 3
-    ctx->r6 = S32(ctx->r3 << 3);
-    after_0:
-    // 0x800E1530: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800E1534: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800E1538: jr          $ra
-    // 0x800E153C: nop
-
-    return;
-    // 0x800E153C: nop
-
-;}
 RECOMP_FUNC void func_8080305C_chklungo(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7134,4 +7088,13 @@ RECOMP_FUNC void func_800F48BC(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800F4920: nop
 
+;}
+RECOMP_FUNC void _sucoaster_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A0F8: syscall     829
+    recomp_syscall_handler(rdram, ctx, 0x8008A0F8);
+    return;
+    // 0x8008A0FC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

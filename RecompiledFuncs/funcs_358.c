@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800EE0F8(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800EE0F8: jr          $ra
-    // 0x800EE0FC: sw          $a1, 0x10($a0)
-    MEM_W(0X10, ctx->r4) = ctx->r5;
-    return;
-    // 0x800EE0FC: sw          $a1, 0x10($a0)
-    MEM_W(0X10, ctx->r4) = ctx->r5;
-;}
 RECOMP_FUNC void bsbtrot_entrypoint_44(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4215,4 +4205,16 @@ RECOMP_FUNC void bsride_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x808005B4: lw          $v0, 0xA70($v0)
     ctx->r2 = MEM_W(ctx->r2, (int16_t)RELOC_LO16(348, 0XA70));
+;}
+RECOMP_FUNC void chfactorybattery_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801884: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(2276, 0X1BF0) << 16);
+    // 0x80801888: jr          $ra
+    // 0x8080188C: addiu       $v0, $v0, 0x1BF0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2276, 0X1BF0));
+    return;
+    // 0x8080188C: addiu       $v0, $v0, 0x1BF0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2276, 0X1BF0));
 ;}

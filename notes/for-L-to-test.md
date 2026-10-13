@@ -57,3 +57,13 @@
   2. Watch the intro text starting Two years have passed
 - Look for: Are the letters clean, or do they overlap or get clipped?
 - Status: waiting for L
+
+## T8 Widescreen edges
+- Asked: 2026-10-13
+- Build: latest main
+- XBLA history: report §4.22
+- Steps:
+  1. Settings > Graphics: Aspect Ratio = Expand, in a 16:9 (or wider) window
+  2. Start a game and walk around Spiral Mountain and Jinjo Village, turning the camera
+- Look for: Does the picture fill the window without looking stretched? Do things pop in or vanish at the left and right edges while still on screen?
+- Status: waiting for L

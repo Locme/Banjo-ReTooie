@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8008C0C0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8008C0C0: jr          $ra
-    // 0x8008C0C4: lh          $v0, 0x18($a0)
-    ctx->r2 = MEM_H(ctx->r4, 0X18);
-    return;
-    // 0x8008C0C4: lh          $v0, 0x18($a0)
-    ctx->r2 = MEM_H(ctx->r4, 0X18);
-;}
 RECOMP_FUNC void func_8080029C_chmineprospector(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5502,4 +5492,13 @@ RECOMP_FUNC void func_800A61D4(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800A624C: nop
 
+;}
+RECOMP_FUNC void _bstaxi_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083DC8: syscall     96
+    recomp_syscall_handler(rdram, ctx, 0x80083DC8);
+    return;
+    // 0x80083DCC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

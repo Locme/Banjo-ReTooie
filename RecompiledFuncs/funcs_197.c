@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800240_chlagoonfish(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800240: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800244: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800248: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    // 0x8080024C: jal         0x80100074
-    // 0x80800250: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    func_80100074(rdram, ctx);
-        goto after_0;
-    // 0x80800250: or          $a2, $zero, $zero
-    ctx->r6 = 0 | 0;
-    after_0:
-    // 0x80800254: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800258: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8080025C: jr          $ra
-    // 0x80800260: nop
-
-    return;
-    // 0x80800260: nop
-
-;}
 RECOMP_FUNC void _bstnt_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4140,4 +4112,13 @@ L_808009E0:
 
     // 0x808009FC: nop
 
+;}
+RECOMP_FUNC void _fxsparkle_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800888C8: syscall     709
+    recomp_syscall_handler(rdram, ctx, 0x800888C8);
+    return;
+    // 0x800888CC: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

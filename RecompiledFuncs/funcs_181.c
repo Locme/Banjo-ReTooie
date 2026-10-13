@@ -2,70 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800668_gcmapDll(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800668: addiu       $sp, $sp, -0x28
-    ctx->r29 = ADD32(ctx->r29, -0X28);
-    // 0x8080066C: sw          $s2, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r18;
-    // 0x80800670: sw          $s1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r17;
-    // 0x80800674: or          $s2, $a2, $zero
-    ctx->r18 = ctx->r6 | 0;
-    // 0x80800678: sw          $ra, 0x24($sp)
-    MEM_W(0X24, ctx->r29) = ctx->r31;
-    // 0x8080067C: sw          $s0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r16;
-    // 0x80800680: sw          $a0, 0x28($sp)
-    MEM_W(0X28, ctx->r29) = ctx->r4;
-    // 0x80800684: blez        $a2, L_808006A8
-    if (SIGNED(ctx->r6) <= 0) {
-        // 0x80800688: or          $s1, $zero, $zero
-        ctx->r17 = 0 | 0;
-            goto L_808006A8;
-    }
-    // 0x80800688: or          $s1, $zero, $zero
-    ctx->r17 = 0 | 0;
-    // 0x8080068C: or          $s0, $a1, $zero
-    ctx->r16 = ctx->r5 | 0;
-L_80800690:
-    // 0x80800690: lh          $a0, 0x0($s0)
-    ctx->r4 = MEM_H(ctx->r16, 0X0);
-    // 0x80800694: jal         0x800BF744
-    // 0x80800698: lh          $a1, 0x2($s0)
-    ctx->r5 = MEM_H(ctx->r16, 0X2);
-    func_800BF744(rdram, ctx);
-        goto after_0;
-    // 0x80800698: lh          $a1, 0x2($s0)
-    ctx->r5 = MEM_H(ctx->r16, 0X2);
-    after_0:
-    // 0x8080069C: addiu       $s1, $s1, 0x1
-    ctx->r17 = ADD32(ctx->r17, 0X1);
-    // 0x808006A0: bne         $s1, $s2, L_80800690
-    if (ctx->r17 != ctx->r18) {
-        // 0x808006A4: addiu       $s0, $s0, 0x4
-        ctx->r16 = ADD32(ctx->r16, 0X4);
-            goto L_80800690;
-    }
-    // 0x808006A4: addiu       $s0, $s0, 0x4
-    ctx->r16 = ADD32(ctx->r16, 0X4);
-L_808006A8:
-    // 0x808006A8: lw          $ra, 0x24($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X24);
-    // 0x808006AC: lw          $s0, 0x18($sp)
-    ctx->r16 = MEM_W(ctx->r29, 0X18);
-    // 0x808006B0: lw          $s1, 0x1C($sp)
-    ctx->r17 = MEM_W(ctx->r29, 0X1C);
-    // 0x808006B4: lw          $s2, 0x20($sp)
-    ctx->r18 = MEM_W(ctx->r29, 0X20);
-    // 0x808006B8: jr          $ra
-    // 0x808006BC: addiu       $sp, $sp, 0x28
-    ctx->r29 = ADD32(ctx->r29, 0X28);
-    return;
-    // 0x808006BC: addiu       $sp, $sp, 0x28
-    ctx->r29 = ADD32(ctx->r29, 0X28);
-;}
 RECOMP_FUNC void func_80014ED4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5810,4 +5746,13 @@ L_800E0E60:
     return;
     // 0x800E0E90: addiu       $sp, $sp, 0x90
     ctx->r29 = ADD32(ctx->r29, 0X90);
+;}
+RECOMP_FUNC void _gctransitionDll_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800881A8: syscall     674
+    recomp_syscall_handler(rdram, ctx, 0x800881A8);
+    return;
+    // 0x800881AC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

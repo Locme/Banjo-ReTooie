@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chtoothyfish_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080160C: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1776, 0X1914) << 16);
-    // 0x80801610: jr          $ra
-    // 0x80801614: addiu       $v0, $v0, 0x1914
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1776, 0X1914));
-    return;
-    // 0x80801614: addiu       $v0, $v0, 0x1914
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1776, 0X1914));
-    // 0x80801618: nop
-
-    // 0x8080161C: nop
-
-;}
 RECOMP_FUNC void func_808001A8_gcboundDll(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4685,4 +4669,18 @@ L_80801F8C:
     return;
     // 0x80801FA8: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void ncbatarget_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800258: mtc1        $a1, $f12
+    ctx->f12.u32l = ctx->r5;
+    // 0x8080025C: lw          $t6, 0x58($a0)
+    ctx->r14 = MEM_W(ctx->r4, 0X58);
+    // 0x80800260: jr          $ra
+    // 0x80800264: swc1        $f12, 0xC($t6)
+    MEM_W(0XC, ctx->r14) = ctx->f12.u32l;
+    return;
+    // 0x80800264: swc1        $f12, 0xC($t6)
+    MEM_W(0XC, ctx->r14) = ctx->f12.u32l;
 ;}

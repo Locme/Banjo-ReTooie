@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void ncpoducam_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080013C: sw          $a1, 0x1C($a0)
-    MEM_W(0X1C, ctx->r4) = ctx->r5;
-    // 0x80800140: lhu         $t6, 0x12($a1)
-    ctx->r14 = MEM_HU(ctx->r5, 0X12);
-    // 0x80800144: srl         $t7, $t6, 1
-    ctx->r15 = S32(U32(ctx->r14) >> 1);
-    // 0x80800148: jr          $ra
-    // 0x8080014C: sw          $t7, 0x20($a0)
-    MEM_W(0X20, ctx->r4) = ctx->r15;
-    return;
-    // 0x8080014C: sw          $t7, 0x20($a0)
-    MEM_W(0X20, ctx->r4) = ctx->r15;
-;}
 RECOMP_FUNC void _chintrotext_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3298,4 +3282,16 @@ RECOMP_FUNC void chblackeye_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800DBC: addiu       $v0, $v0, 0x104C
     ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1796, 0X104C));
+;}
+RECOMP_FUNC void func_808001E4_glgamedata(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808001E4: sw          $a0, 0x0($sp)
+    MEM_W(0X0, ctx->r29) = ctx->r4;
+    // 0x808001E8: jr          $ra
+    // 0x808001EC: addiu       $v0, $zero, 0x4
+    ctx->r2 = ADD32(0, 0X4);
+    return;
+    // 0x808001EC: addiu       $v0, $zero, 0x4
+    ctx->r2 = ADD32(0, 0X4);
 ;}

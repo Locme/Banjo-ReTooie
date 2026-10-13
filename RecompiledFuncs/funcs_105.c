@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chboilerboss_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800018: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(932, 0X2C9C) << 16);
-    // 0x8080001C: jr          $ra
-    // 0x80800020: addiu       $v0, $v0, 0x2C9C
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(932, 0X2C9C));
-    return;
-    // 0x80800020: addiu       $v0, $v0, 0x2C9C
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(932, 0X2C9C));
-;}
 RECOMP_FUNC void func_800EC9F0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4713,4 +4701,54 @@ RECOMP_FUNC void _gcnewoption_entrypoint_4(uint8_t* rdram, recomp_context* ctx) 
     return;
     // 0x80087CBC: addi        $t0, $zero, 0x10
     ctx->r8 = ADD32(0, 0X10);
+;}
+RECOMP_FUNC void func_80800294_ch1pfreeze(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800294: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800298: addiu       $at, $zero, 0x4
+    ctx->r1 = ADD32(0, 0X4);
+    // 0x8080029C: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x808002A0: bne         $a1, $at, L_808002B8
+    if (ctx->r5 != ctx->r1) {
+        // 0x808002A4: sw          $a2, 0x20($sp)
+        MEM_W(0X20, ctx->r29) = ctx->r6;
+            goto L_808002B8;
+    }
+    // 0x808002A4: sw          $a2, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r6;
+    // 0x808002A8: jal         0x808002D0
+    // 0x808002AC: addiu       $a1, $zero, 0x4
+    ctx->r5 = ADD32(0, 0X4);
+    func_808002D0_ch1pfreeze(rdram, ctx);
+        goto after_0;
+    // 0x808002AC: addiu       $a1, $zero, 0x4
+    ctx->r5 = ADD32(0, 0X4);
+    after_0:
+    // 0x808002B0: b           L_808002C0
+    // 0x808002B4: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+        goto L_808002C0;
+    // 0x808002B4: addiu       $v0, $zero, 0x1
+    ctx->r2 = ADD32(0, 0X1);
+L_808002B8:
+    // 0x808002B8: b           L_808002C0
+    // 0x808002BC: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+        goto L_808002C0;
+    // 0x808002BC: or          $v0, $zero, $zero
+    ctx->r2 = 0 | 0;
+L_808002C0:
+    // 0x808002C0: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x808002C4: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x808002C8: jr          $ra
+    // 0x808002CC: nop
+
+    return;
+    // 0x808002CC: nop
+
 ;}

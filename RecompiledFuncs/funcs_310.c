@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chlagoonentrygate_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080013C: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1968, 0X150) << 16);
-    // 0x80800140: jr          $ra
-    // 0x80800144: addiu       $v0, $v0, 0x150
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1968, 0X150));
-    return;
-    // 0x80800144: addiu       $v0, $v0, 0x150
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1968, 0X150));
-    // 0x80800148: nop
-
-    // 0x8080014C: nop
-
-;}
 RECOMP_FUNC void _chdinofamilymother_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4401,4 +4385,13 @@ RECOMP_FUNC void _dbanim_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800879B4: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void _bswasher_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800843C0: syscall     109
+    recomp_syscall_handler(rdram, ctx, 0x800843C0);
+    return;
+    // 0x800843C4: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

@@ -2,62 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801998_chpotogoldgame(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801998: addiu       $sp, $sp, -0x28
-    ctx->r29 = ADD32(ctx->r29, -0X28);
-    // 0x8080199C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x808019A0: or          $a1, $a0, $zero
-    ctx->r5 = ctx->r4 | 0;
-    // 0x808019A4: jal         0x800EE88C
-    // 0x808019A8: addiu       $a0, $sp, 0x18
-    ctx->r4 = ADD32(ctx->r29, 0X18);
-    func_800EE88C(rdram, ctx);
-        goto after_0;
-    // 0x808019A8: addiu       $a0, $sp, 0x18
-    ctx->r4 = ADD32(ctx->r29, 0X18);
-    after_0:
-    // 0x808019AC: addiu       $a0, $sp, 0x18
-    ctx->r4 = ADD32(ctx->r29, 0X18);
-    // 0x808019B0: jal         0x800F1EA4
-    // 0x808019B4: addiu       $a1, $sp, 0x24
-    ctx->r5 = ADD32(ctx->r29, 0X24);
-    func_800F1EA4(rdram, ctx);
-        goto after_1;
-    // 0x808019B4: addiu       $a1, $sp, 0x24
-    ctx->r5 = ADD32(ctx->r29, 0X24);
-    after_1:
-    // 0x808019B8: lui         $at, 0x4290
-    ctx->r1 = S32(0X4290 << 16);
-    // 0x808019BC: mtc1        $at, $f6
-    ctx->f6.u32l = ctx->r1;
-    // 0x808019C0: lwc1        $f4, 0x24($sp)
-    ctx->f4.u32l = MEM_W(ctx->r29, 0X24);
-    // 0x808019C4: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808019C8: addiu       $sp, $sp, 0x28
-    ctx->r29 = ADD32(ctx->r29, 0X28);
-    // 0x808019CC: div.s       $f8, $f4, $f6
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 4);
-    CHECK_FR(ctx, 6);
-    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f6.fl); 
-    ctx->f8.fl = DIV_S(ctx->f4.fl, ctx->f6.fl);
-    // 0x808019D0: trunc.w.s   $f10, $f8
-    CHECK_FR(ctx, 10);
-    CHECK_FR(ctx, 8);
-    ctx->f10.u32l = TRUNC_W_S(ctx->f8.fl);
-    // 0x808019D4: mfc1        $v0, $f10
-    ctx->r2 = (int32_t)ctx->f10.u32l;
-    // 0x808019D8: jr          $ra
-    // 0x808019DC: nop
-
-    return;
-    // 0x808019DC: nop
-
-;}
 RECOMP_FUNC void func_808004A4_chdragonbrothers(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5821,4 +5765,13 @@ L_808001B4:
     return;
     // 0x808001C0: nop
 
+;}
+RECOMP_FUNC void _basub_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800851E0: syscall     154
+    recomp_syscall_handler(rdram, ctx, 0x800851E0);
+    return;
+    // 0x800851E4: addi        $t0, $zero, 0x30
+    ctx->r8 = ADD32(0, 0X30);
 ;}

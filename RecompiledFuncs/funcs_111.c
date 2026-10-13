@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void ncbapan_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800108: jr          $ra
-    // 0x8080010C: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    return;
-    // 0x8080010C: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-;}
 RECOMP_FUNC void func_800F26B0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3841,4 +3831,16 @@ RECOMP_FUNC void gspropctrl_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800074: addu        $v0, $t8, $t1
     ctx->r2 = ADD32(ctx->r24, ctx->r9);
+;}
+RECOMP_FUNC void chfiregen_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801014: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(1588, 0X196C) << 16);
+    // 0x80801018: jr          $ra
+    // 0x8080101C: addiu       $v0, $v0, 0x196C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1588, 0X196C));
+    return;
+    // 0x8080101C: addiu       $v0, $v0, 0x196C
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1588, 0X196C));
 ;}

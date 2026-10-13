@@ -2,82 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800008_batranslate(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800008: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8080000C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800010: sw          $a1, 0x1C($sp)
-    MEM_W(0X1C, ctx->r29) = ctx->r5;
-    // 0x80800014: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800018: jal         0x80092B04
-    // 0x8080001C: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    func_80092B04(rdram, ctx);
-        goto after_0;
-    // 0x8080001C: or          $a1, $zero, $zero
-    ctx->r5 = 0 | 0;
-    after_0:
-    // 0x80800020: jal         0x800B27E0
-    // 0x80800024: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    func_800B27E0(rdram, ctx);
-        goto after_1;
-    // 0x80800024: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    after_1:
-    // 0x80800028: jal         0x80087A10
-    // 0x8080002C: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    _dbskeleton_entrypoint_1(rdram, ctx);
-        goto after_2;
-    // 0x8080002C: or          $a0, $v0, $zero
-    ctx->r4 = ctx->r2 | 0;
-    after_2:
-    // 0x80800030: mfc1        $a1, $f0
-    ctx->r5 = (int32_t)ctx->f0.u32l;
-    // 0x80800034: jal         0x800EF334
-    // 0x80800038: lw          $a0, 0x1C($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X1C);
-    func_800EF334(rdram, ctx);
-        goto after_3;
-    // 0x80800038: lw          $a0, 0x1C($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X1C);
-    after_3:
-    // 0x8080003C: jal         0x8009C984
-    // 0x80800040: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    yaw_get(rdram, ctx);
-        goto after_4;
-    // 0x80800040: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_4:
-    // 0x80800044: lw          $a1, 0x1C($sp)
-    ctx->r5 = MEM_W(ctx->r29, 0X1C);
-    // 0x80800048: mfc1        $a2, $f0
-    ctx->r6 = (int32_t)ctx->f0.u32l;
-    // 0x8080004C: jal         0x800EF934
-    // 0x80800050: or          $a0, $a1, $zero
-    ctx->r4 = ctx->r5 | 0;
-    func_800EF934(rdram, ctx);
-        goto after_5;
-    // 0x80800050: or          $a0, $a1, $zero
-    ctx->r4 = ctx->r5 | 0;
-    after_5:
-    // 0x80800054: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800058: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8080005C: jr          $ra
-    // 0x80800060: nop
-
-    return;
-    // 0x80800060: nop
-
-;}
 RECOMP_FUNC void func_80800190_chmoley(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7393,5 +7317,52 @@ L_80802724:
 
     return;
     // 0x8080272C: nop
+
+;}
+RECOMP_FUNC void basub_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800544: lw          $v0, 0x130($a0)
+    ctx->r2 = MEM_W(ctx->r4, 0X130);
+    // 0x80800548: mtc1        $zero, $f2
+    ctx->f2.u32l = 0;
+    // 0x8080054C: lwc1        $f4, 0x4($v0)
+    ctx->f4.u32l = MEM_W(ctx->r2, 0X4);
+    // 0x80800550: c.lt.s      $f2, $f4
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 4);
+    c1cs = ctx->f2.fl < ctx->f4.fl;
+    // 0x80800554: nop
+
+    // 0x80800558: bc1fl       L_8080056C
+    if (!c1cs) {
+        // 0x8080055C: mov.s       $f0, $f2
+        CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    ctx->f0.fl = ctx->f2.fl;
+            goto L_8080056C;
+    }
+    goto skip_0;
+    // 0x8080055C: mov.s       $f0, $f2
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    ctx->f0.fl = ctx->f2.fl;
+    skip_0:
+    // 0x80800560: jr          $ra
+    // 0x80800564: lwc1        $f0, 0x0($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, 0X0);
+    return;
+    // 0x80800564: lwc1        $f0, 0x0($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, 0X0);
+    // 0x80800568: mov.s       $f0, $f2
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    ctx->f0.fl = ctx->f2.fl;
+L_8080056C:
+    // 0x8080056C: jr          $ra
+    // 0x80800570: nop
+
+    return;
+    // 0x80800570: nop
 
 ;}

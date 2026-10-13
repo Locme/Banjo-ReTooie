@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _subaddieaudioloop_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089D30: syscall     810
-    recomp_syscall_handler(rdram, ctx, 0x80089D30);
-    return;
-    // 0x80089D34: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _sumultiscore_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6924,5 +6915,19 @@ L_80804070:
 
     return;
     // 0x80804078: nop
+
+;}
+RECOMP_FUNC void func_80107C00(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80107C00: lui         $at, 0x8013
+    ctx->r1 = S32(0X8013 << 16);
+    // 0x80107C04: jr          $ra
+    // 0x80107C08: lwc1        $f0, 0x6F10($at)
+    ctx->f0.u32l = MEM_W(ctx->r1, 0X6F10);
+    return;
+    // 0x80107C08: lwc1        $f0, 0x6F10($at)
+    ctx->f0.u32l = MEM_W(ctx->r1, 0X6F10);
+    // 0x80107C0C: nop
 
 ;}

@@ -2,64 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80801348_bsbansack(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801348: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8080134C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801350: jal         0x808002D4
-    // 0x80801354: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_808002D4_bsbansack(rdram, ctx);
-        goto after_0;
-    // 0x80801354: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80801358: lui         $a2, 0x3F99
-    ctx->r6 = S32(0X3F99 << 16);
-    // 0x8080135C: ori         $a2, $a2, 0x999A
-    ctx->r6 = ctx->r6 | 0X999A;
-    // 0x80801360: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80801364: jal         0x8008CCBC
-    // 0x80801368: addiu       $a1, $zero, 0x28C
-    ctx->r5 = ADD32(0, 0X28C);
-    baanim_playForDuration_onceSmooth(rdram, ctx);
-        goto after_1;
-    // 0x80801368: addiu       $a1, $zero, 0x28C
-    ctx->r5 = ADD32(0, 0X28C);
-    after_1:
-    // 0x8080136C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    // 0x80801370: jal         0x800845D8
-    // 0x80801374: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    _babounce_entrypoint_4(rdram, ctx);
-        goto after_2;
-    // 0x80801374: addiu       $a1, $zero, 0x1
-    ctx->r5 = ADD32(0, 0X1);
-    after_2:
-    // 0x80801378: jal         0x80801178
-    // 0x8080137C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_80801178_bsbansack(rdram, ctx);
-        goto after_3;
-    // 0x8080137C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_3:
-    // 0x80801380: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80801384: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80801388: jr          $ra
-    // 0x8080138C: nop
-
-    return;
-    // 0x8080138C: nop
-
-;}
 RECOMP_FUNC void func_80800000_chdinofamilymother(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -7169,4 +7111,29 @@ L_80800C48:
     return;
     // 0x80800C50: nop
 
+;}
+RECOMP_FUNC void func_80801008_gcdialogexec(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80801008: beq         $a0, $zero, L_80801018
+    if (ctx->r4 == 0) {
+        // 0x8080100C: addiu       $v1, $zero, 0xC8
+        ctx->r3 = ADD32(0, 0XC8);
+            goto L_80801018;
+    }
+    // 0x8080100C: addiu       $v1, $zero, 0xC8
+    ctx->r3 = ADD32(0, 0XC8);
+    // 0x80801010: jr          $ra
+    // 0x80801014: addiu       $v0, $zero, 0x1C
+    ctx->r2 = ADD32(0, 0X1C);
+    return;
+    // 0x80801014: addiu       $v0, $zero, 0x1C
+    ctx->r2 = ADD32(0, 0X1C);
+L_80801018:
+    // 0x80801018: jr          $ra
+    // 0x8080101C: or          $v0, $v1, $zero
+    ctx->r2 = ctx->r3 | 0;
+    return;
+    // 0x8080101C: or          $v0, $v1, $zero
+    ctx->r2 = ctx->r3 | 0;
 ;}

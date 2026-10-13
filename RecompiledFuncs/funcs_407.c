@@ -2,120 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_8080237C_chcollballcontrol(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080237C: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(1840, 0X4BBC) << 16);
-    // 0x80802380: lwc1        $f2, 0x4BBC($at)
-    ctx->f2.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1840, 0X4BBC));
-    // 0x80802384: lwc1        $f0, 0x4($a0)
-    ctx->f0.u32l = MEM_W(ctx->r4, 0X4);
-    // 0x80802388: lui         $at, 0x8080
-    ctx->r1 = S32(RELOC_HI16(1840, 0X4BC0) << 16);
-    // 0x8080238C: c.lt.s      $f0, $f2
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 2);
-    c1cs = ctx->f0.fl < ctx->f2.fl;
-    // 0x80802390: nop
-
-    // 0x80802394: bc1f        L_808023A4
-    if (!c1cs) {
-        // 0x80802398: nop
-    
-            goto L_808023A4;
-    }
-    // 0x80802398: nop
-
-    // 0x8080239C: jr          $ra
-    // 0x808023A0: addiu       $v0, $zero, 0x2
-    ctx->r2 = ADD32(0, 0X2);
-    return;
-    // 0x808023A0: addiu       $v0, $zero, 0x2
-    ctx->r2 = ADD32(0, 0X2);
-L_808023A4:
-    // 0x808023A4: lwc1        $f12, 0x4BC0($at)
-    ctx->f12.u32l = MEM_W(ctx->r1, (int16_t)RELOC_LO16(1840, 0X4BC0));
-    // 0x808023A8: c.lt.s      $f12, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    c1cs = ctx->f12.fl < ctx->f0.fl;
-    // 0x808023AC: nop
-
-    // 0x808023B0: bc1fl       L_808023C4
-    if (!c1cs) {
-        // 0x808023B4: lwc1        $f0, 0xC($a0)
-        ctx->f0.u32l = MEM_W(ctx->r4, 0XC);
-            goto L_808023C4;
-    }
-    goto skip_0;
-    // 0x808023B4: lwc1        $f0, 0xC($a0)
-    ctx->f0.u32l = MEM_W(ctx->r4, 0XC);
-    skip_0:
-    // 0x808023B8: jr          $ra
-    // 0x808023BC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    return;
-    // 0x808023BC: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    // 0x808023C0: lwc1        $f0, 0xC($a0)
-    ctx->f0.u32l = MEM_W(ctx->r4, 0XC);
-L_808023C4:
-    // 0x808023C4: c.lt.s      $f0, $f2
-    CHECK_FR(ctx, 0);
-    CHECK_FR(ctx, 2);
-    c1cs = ctx->f0.fl < ctx->f2.fl;
-    // 0x808023C8: nop
-
-    // 0x808023CC: bc1fl       L_808023E0
-    if (!c1cs) {
-        // 0x808023D0: c.lt.s      $f12, $f0
-        CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    c1cs = ctx->f12.fl < ctx->f0.fl;
-            goto L_808023E0;
-    }
-    goto skip_1;
-    // 0x808023D0: c.lt.s      $f12, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    c1cs = ctx->f12.fl < ctx->f0.fl;
-    skip_1:
-    // 0x808023D4: jr          $ra
-    // 0x808023D8: addiu       $v0, $zero, 0x3
-    ctx->r2 = ADD32(0, 0X3);
-    return;
-    // 0x808023D8: addiu       $v0, $zero, 0x3
-    ctx->r2 = ADD32(0, 0X3);
-    // 0x808023DC: c.lt.s      $f12, $f0
-    CHECK_FR(ctx, 12);
-    CHECK_FR(ctx, 0);
-    c1cs = ctx->f12.fl < ctx->f0.fl;
-L_808023E0:
-    // 0x808023E0: addiu       $v0, $zero, -0x1
-    ctx->r2 = ADD32(0, -0X1);
-    // 0x808023E4: bc1f        L_808023F4
-    if (!c1cs) {
-        // 0x808023E8: nop
-    
-            goto L_808023F4;
-    }
-    // 0x808023E8: nop
-
-    // 0x808023EC: jr          $ra
-    // 0x808023F0: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-    return;
-    // 0x808023F0: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_808023F4:
-    // 0x808023F4: jr          $ra
-    // 0x808023F8: nop
-
-    return;
-    // 0x808023F8: nop
-
-;}
 RECOMP_FUNC void babuzz_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5091,4 +4977,13 @@ L_800C6B48:
     return;
     // 0x800C6B74: addiu       $sp, $sp, 0x38
     ctx->r29 = ADD32(ctx->r29, 0X38);
+;}
+RECOMP_FUNC void _subaddiejoy_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089BB0: syscall     805
+    recomp_syscall_handler(rdram, ctx, 0x80089BB0);
+    return;
+    // 0x80089BB4: addi        $t0, $zero, 0x4
+    ctx->r8 = ADD32(0, 0X4);
 ;}

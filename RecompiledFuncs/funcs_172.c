@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_808001E4_glgamedata(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x808001E4: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    // 0x808001E8: jr          $ra
-    // 0x808001EC: addiu       $v0, $zero, 0x4
-    ctx->r2 = ADD32(0, 0X4);
-    return;
-    // 0x808001EC: addiu       $v0, $zero, 0x4
-    ctx->r2 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void func_808005AC_chintroticker(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5020,5 +5008,27 @@ RECOMP_FUNC void func_800BAAE4(uint8_t* rdram, recomp_context* ctx) {
 
     return;
     // 0x800BAB18: nop
+
+;}
+RECOMP_FUNC void func_80800030_bssub(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800030: lui         $at, 0x4396
+    ctx->r1 = S32(0X4396 << 16);
+    // 0x80800034: mtc1        $at, $f4
+    ctx->f4.u32l = ctx->r1;
+    // 0x80800038: swc1        $f12, 0x0($sp)
+    MEM_W(0X0, ctx->r29) = ctx->f12.u32l;
+    // 0x8080003C: mul.s       $f0, $f14, $f4
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 14);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f14.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f0.fl = MUL_S(ctx->f14.fl, ctx->f4.fl);
+    // 0x80800040: jr          $ra
+    // 0x80800044: nop
+
+    return;
+    // 0x80800044: nop
 
 ;}

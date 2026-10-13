@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _ncbafly_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800892D8: syscall     771
-    recomp_syscall_handler(rdram, ctx, 0x800892D8);
-    return;
-    // 0x800892DC: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void bskazjump_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6237,4 +6228,13 @@ RECOMP_FUNC void func_80800094_chminegrill2switches(uint8_t* rdram, recomp_conte
     return;
     // 0x808000B4: nop
 
+;}
+RECOMP_FUNC void _gcboundDll_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087ED0: syscall     661
+    recomp_syscall_handler(rdram, ctx, 0x80087ED0);
+    return;
+    // 0x80087ED4: addi        $t0, $zero, 0xC
+    ctx->r8 = ADD32(0, 0XC);
 ;}

@@ -2,57 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void susplinet_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080013C: lh          $t6, 0x30($a0)
-    ctx->r14 = MEM_H(ctx->r4, 0X30);
-    // 0x80800140: lh          $t7, 0x4E($a0)
-    ctx->r15 = MEM_H(ctx->r4, 0X4E);
-    // 0x80800144: lwc1        $f4, 0x44($a0)
-    ctx->f4.u32l = MEM_W(ctx->r4, 0X44);
-    // 0x80800148: addu        $v1, $a0, $t6
-    ctx->r3 = ADD32(ctx->r4, ctx->r14);
-    // 0x8080014C: sll         $t8, $t7, 1
-    ctx->r24 = S32(ctx->r15 << 1);
-    // 0x80800150: addu        $t9, $v1, $t8
-    ctx->r25 = ADD32(ctx->r3, ctx->r24);
-    // 0x80800154: lh          $t0, -0x2($t9)
-    ctx->r8 = MEM_H(ctx->r25, -0X2);
-    // 0x80800158: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    // 0x8080015C: mtc1        $t0, $f6
-    ctx->f6.u32l = ctx->r8;
-    // 0x80800160: nop
-
-    // 0x80800164: cvt.s.w     $f8, $f6
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 6);
-    ctx->f8.fl = CVT_S_W(ctx->f6.u32l);
-    // 0x80800168: c.le.s      $f8, $f4
-    CHECK_FR(ctx, 8);
-    CHECK_FR(ctx, 4);
-    c1cs = ctx->f8.fl <= ctx->f4.fl;
-    // 0x8080016C: nop
-
-    // 0x80800170: bc1f        L_8080017C
-    if (!c1cs) {
-        // 0x80800174: nop
-    
-            goto L_8080017C;
-    }
-    // 0x80800174: nop
-
-    // 0x80800178: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_8080017C:
-    // 0x8080017C: jr          $ra
-    // 0x80800180: nop
-
-    return;
-    // 0x80800180: nop
-
-;}
 RECOMP_FUNC void _gsmaker_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6702,4 +6651,32 @@ RECOMP_FUNC void _baflameline_entrypoint_6(uint8_t* rdram, recomp_context* ctx) 
     return;
     // 0x80084B8C: addi        $t0, $zero, 0x18
     ctx->r8 = ADD32(0, 0X18);
+;}
+RECOMP_FUNC void func_800CB9B4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800CB9B4: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800CB9B8: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800CB9BC: lui         $a0, 0x8013
+    ctx->r4 = S32(0X8013 << 16);
+    // 0x800CB9C0: jal         0x80087EC0
+    // 0x800CB9C4: addiu       $a0, $a0, -0x5180
+    ctx->r4 = ADD32(ctx->r4, -0X5180);
+    _gcboundDll_entrypoint_1(rdram, ctx);
+        goto after_0;
+    // 0x800CB9C4: addiu       $a0, $a0, -0x5180
+    ctx->r4 = ADD32(ctx->r4, -0X5180);
+    after_0:
+    // 0x800CB9C8: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800CB9CC: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x800CB9D0: jr          $ra
+    // 0x800CB9D4: nop
+
+    return;
+    // 0x800CB9D4: nop
+
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _bssnowball_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80083A40: syscall     87
-    recomp_syscall_handler(rdram, ctx, 0x80083A40);
-    return;
-    // 0x80083A44: addi        $t0, $zero, 0x14
-    ctx->r8 = ADD32(0, 0X14);
-;}
 RECOMP_FUNC void func_80016B30(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4549,4 +4540,16 @@ RECOMP_FUNC void func_800D2748(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800D276C: nop
 
+;}
+RECOMP_FUNC void fxstep_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8080055C: sw          $a1, 0x14($a0)
+    MEM_W(0X14, ctx->r4) = ctx->r5;
+    // 0x80800560: jr          $ra
+    // 0x80800564: sw          $a2, 0x18($a0)
+    MEM_W(0X18, ctx->r4) = ctx->r6;
+    return;
+    // 0x80800564: sw          $a2, 0x18($a0)
+    MEM_W(0X18, ctx->r4) = ctx->r6;
 ;}

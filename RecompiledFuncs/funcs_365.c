@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _idlight_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80088CF8: syscall     735
-    recomp_syscall_handler(rdram, ctx, 0x80088CF8);
-    return;
-    // 0x80088CFC: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _chlagoonufoint_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6274,5 +6265,31 @@ L_808002C8:
 
     return;
     // 0x808002D0: nop
+
+;}
+RECOMP_FUNC void func_80800928_bsbanshack(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800928: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x8080092C: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800930: jal         0x80800164
+    // 0x80800934: nop
+
+    func_80800164_bsbanshack(rdram, ctx);
+        goto after_0;
+    // 0x80800934: nop
+
+    after_0:
+    // 0x80800938: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x8080093C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800940: jr          $ra
+    // 0x80800944: nop
+
+    return;
+    // 0x80800944: nop
 
 ;}

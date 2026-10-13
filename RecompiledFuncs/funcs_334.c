@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void gcdialogcamera_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800248: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8080024C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800250: or          $a1, $a0, $zero
-    ctx->r5 = ctx->r4 | 0;
-    // 0x80800254: jal         0x800856F8
-    // 0x80800258: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    _capod_entrypoint_11(rdram, ctx);
-        goto after_0;
-    // 0x80800258: or          $a0, $zero, $zero
-    ctx->r4 = 0 | 0;
-    after_0:
-    // 0x8080025C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800260: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800264: jr          $ra
-    // 0x80800268: nop
-
-    return;
-    // 0x80800268: nop
-
-;}
 RECOMP_FUNC void func_800F66BC(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -13034,4 +13006,16 @@ L_80800160:
     return;
     // 0x80800168: nop
 
+;}
+RECOMP_FUNC void chtemplelobbydoor_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(2192, 0X3A0) << 16);
+    // 0x80800004: jr          $ra
+    // 0x80800008: addiu       $v0, $v0, 0x3A0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2192, 0X3A0));
+    return;
+    // 0x80800008: addiu       $v0, $v0, 0x3A0
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(2192, 0X3A0));
 ;}

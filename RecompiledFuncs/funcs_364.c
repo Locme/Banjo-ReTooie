@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chpumproomgrill_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(992, 0XE0) << 16);
-    // 0x80800004: jr          $ra
-    // 0x80800008: addiu       $v0, $v0, 0xE0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(992, 0XE0));
-    return;
-    // 0x80800008: addiu       $v0, $v0, 0xE0
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(992, 0XE0));
-;}
 RECOMP_FUNC void bskazpaddle_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4577,4 +4565,13 @@ L_80803E80:
     return;
     // 0x80803E90: addiu       $sp, $sp, 0x20
     ctx->r29 = ADD32(ctx->r29, 0X20);
+;}
+RECOMP_FUNC void _idlight_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80088CF8: syscall     735
+    recomp_syscall_handler(rdram, ctx, 0x80088CF8);
+    return;
+    // 0x80088CFC: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

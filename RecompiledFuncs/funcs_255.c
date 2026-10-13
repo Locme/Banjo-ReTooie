@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _subaddievolume_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089FA8: syscall     819
-    recomp_syscall_handler(rdram, ctx, 0x80089FA8);
-    return;
-    // 0x80089FAC: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void func_80800BE0_chfactorysparkroom(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4112,4 +4103,13 @@ RECOMP_FUNC void chcrusher_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80800AFC: addiu       $v0, $v0, 0xD20
     ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1624, 0XD20));
+;}
+RECOMP_FUNC void _subaddiedialog_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008A1D0: syscall     830
+    recomp_syscall_handler(rdram, ctx, 0x8008A1D0);
+    return;
+    // 0x8008A1D4: addi        $t0, $zero, 0x10
+    ctx->r8 = ADD32(0, 0X10);
 ;}

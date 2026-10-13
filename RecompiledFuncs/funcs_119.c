@@ -2,38 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80102950(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80102950: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80102954: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80102958: mtc1        $a1, $f12
-    ctx->f12.u32l = ctx->r5;
-    // 0x8010295C: jal         0x800136E4
-    // 0x80102960: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    func_800136E4(rdram, ctx);
-        goto after_0;
-    // 0x80102960: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80102964: lw          $t6, 0x18($sp)
-    ctx->r14 = MEM_W(ctx->r29, 0X18);
-    // 0x80102968: swc1        $f0, 0x50($t6)
-    MEM_W(0X50, ctx->r14) = ctx->f0.u32l;
-    // 0x8010296C: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80102970: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80102974: jr          $ra
-    // 0x80102978: nop
-
-    return;
-    // 0x80102978: nop
-
-;}
 RECOMP_FUNC void func_800A32EC(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5514,4 +5482,13 @@ RECOMP_FUNC void _sumole_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x80089A4C: addi        $t0, $zero, 0x3C
     ctx->r8 = ADD32(0, 0X3C);
+;}
+RECOMP_FUNC void _glgamestore_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800884B8: syscall     688
+    recomp_syscall_handler(rdram, ctx, 0x800884B8);
+    return;
+    // 0x800884BC: addi        $t0, $zero, 0x8
+    ctx->r8 = ADD32(0, 0X8);
 ;}

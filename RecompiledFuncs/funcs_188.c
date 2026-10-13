@@ -2,34 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800000_chclockworkmouse(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800000: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800004: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800008: addiu       $a0, $zero, 0xA37
-    ctx->r4 = ADD32(0, 0XA37);
-    // 0x8080000C: jal         0x800DA564
-    // 0x80800010: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    func_800DA564(rdram, ctx);
-        goto after_0;
-    // 0x80800010: addiu       $a1, $zero, 0x3
-    ctx->r5 = ADD32(0, 0X3);
-    after_0:
-    // 0x80800014: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800018: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x8080001C: jr          $ra
-    // 0x80800020: nop
-
-    return;
-    // 0x80800020: nop
-
-;}
 RECOMP_FUNC void baspin_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5720,5 +5692,39 @@ RECOMP_FUNC void func_808006D0_bsbansnooze(uint8_t* rdram, recomp_context* ctx) 
 
     return;
     // 0x808006F4: nop
+
+;}
+RECOMP_FUNC void func_800FE8BC(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800FE8BC: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800FE8C0: or          $a2, $a1, $zero
+    ctx->r6 = ctx->r5 | 0;
+    // 0x800FE8C4: or          $a1, $a0, $zero
+    ctx->r5 = ctx->r4 | 0;
+    // 0x800FE8C8: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    // 0x800FE8CC: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800FE8D0: lui         $a0, 0x8013
+    ctx->r4 = S32(0X8013 << 16);
+    // 0x800FE8D4: jal         0x80087880
+    // 0x800FE8D8: addiu       $a0, $a0, 0x59C0
+    ctx->r4 = ADD32(ctx->r4, 0X59C0);
+    _cothemedll_entrypoint_5(rdram, ctx);
+        goto after_0;
+    // 0x800FE8D8: addiu       $a0, $a0, 0x59C0
+    ctx->r4 = ADD32(ctx->r4, 0X59C0);
+    after_0:
+    // 0x800FE8DC: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800FE8E0: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x800FE8E4: jr          $ra
+    // 0x800FE8E8: nop
+
+    return;
+    // 0x800FE8E8: nop
 
 ;}

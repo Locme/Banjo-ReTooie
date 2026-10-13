@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chnests_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800F50: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(752, 0X1278) << 16);
-    // 0x80800F54: jr          $ra
-    // 0x80800F58: addiu       $v0, $v0, 0x1278
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(752, 0X1278));
-    return;
-    // 0x80800F58: addiu       $v0, $v0, 0x1278
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(752, 0X1278));
-;}
 RECOMP_FUNC void badrone_entrypoint_24(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4701,4 +4689,20 @@ L_8080015C:
     return;
     // 0x80800174: addiu       $sp, $sp, 0xA0
     ctx->r29 = ADD32(ctx->r29, 0XA0);
+;}
+RECOMP_FUNC void ncpod_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800548: sw          $a1, 0x8($a0)
+    MEM_W(0X8, ctx->r4) = ctx->r5;
+    // 0x8080054C: lhu         $t6, 0x12($a1)
+    ctx->r14 = MEM_HU(ctx->r5, 0X12);
+    // 0x80800550: srl         $t7, $t6, 1
+    ctx->r15 = S32(U32(ctx->r14) >> 1);
+    // 0x80800554: jr          $ra
+    // 0x80800558: sw          $t7, 0xC($a0)
+    MEM_W(0XC, ctx->r4) = ctx->r15;
+    return;
+    // 0x80800558: sw          $t7, 0xC($a0)
+    MEM_W(0XC, ctx->r4) = ctx->r15;
 ;}

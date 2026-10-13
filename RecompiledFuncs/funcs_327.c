@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _gczoombox_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80087AF8: syscall     654
-    recomp_syscall_handler(rdram, ctx, 0x80087AF8);
-    return;
-    // 0x80087AFC: addi        $t0, $zero, 0xC
-    ctx->r8 = ADD32(0, 0XC);
-;}
 RECOMP_FUNC void func_80800148_chtransparencypot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6420,5 +6411,59 @@ L_80101D40:
 
     return;
     // 0x80101D48: nop
+
+;}
+RECOMP_FUNC void func_800A5550(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800A5550: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x800A5554: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800A5558: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    // 0x800A555C: sw          $a1, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r5;
+    // 0x800A5560: lhu         $a0, 0x1A($a1)
+    ctx->r4 = MEM_HU(ctx->r5, 0X1A);
+    // 0x800A5564: srl         $t7, $a0, 5
+    ctx->r15 = S32(U32(ctx->r4) >> 5);
+    // 0x800A5568: jal         0x800A93E4
+    // 0x800A556C: or          $a0, $t7, $zero
+    ctx->r4 = ctx->r15 | 0;
+    func_800A93E4(rdram, ctx);
+        goto after_0;
+    // 0x800A556C: or          $a0, $t7, $zero
+    ctx->r4 = ctx->r15 | 0;
+    after_0:
+    // 0x800A5570: jal         0x80110014
+    // 0x800A5574: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    func_80110014(rdram, ctx);
+        goto after_1;
+    // 0x800A5574: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    after_1:
+    // 0x800A5578: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    // 0x800A557C: lw          $a1, 0x18($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X18);
+    // 0x800A5580: jal         0x800893A8
+    // 0x800A5584: lw          $a2, 0x1C($sp)
+    ctx->r6 = MEM_W(ctx->r29, 0X1C);
+    _ncbaspline_entrypoint_5(rdram, ctx);
+        goto after_2;
+    // 0x800A5584: lw          $a2, 0x1C($sp)
+    ctx->r6 = MEM_W(ctx->r29, 0X1C);
+    after_2:
+    // 0x800A5588: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800A558C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x800A5590: jr          $ra
+    // 0x800A5594: nop
+
+    return;
+    // 0x800A5594: nop
 
 ;}

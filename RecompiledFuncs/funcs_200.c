@@ -2,40 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void bsstonehead_entrypoint_32(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80801288: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x8080128C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80801290: jal         0x800839B8
-    // 0x80801294: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    _bsrest_entrypoint_14(rdram, ctx);
-        goto after_0;
-    // 0x80801294: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    after_0:
-    // 0x80801298: jal         0x80800000
-    // 0x8080129C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    func_80800000_bsstonehead(rdram, ctx);
-        goto after_1;
-    // 0x8080129C: lw          $a0, 0x18($sp)
-    ctx->r4 = MEM_W(ctx->r29, 0X18);
-    after_1:
-    // 0x808012A0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x808012A4: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x808012A8: jr          $ra
-    // 0x808012AC: nop
-
-    return;
-    // 0x808012AC: nop
-
-;}
 RECOMP_FUNC void mlwave_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4014,4 +3980,13 @@ RECOMP_FUNC void _bsvan_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008415C: addi        $t0, $zero, 0x1C
     ctx->r8 = ADD32(0, 0X1C);
+;}
+RECOMP_FUNC void _gczoombox_entrypoint_20(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087B80: syscall     654
+    recomp_syscall_handler(rdram, ctx, 0x80087B80);
+    return;
+    // 0x80087B84: addi        $t0, $zero, 0x50
+    ctx->r8 = ADD32(0, 0X50);
 ;}

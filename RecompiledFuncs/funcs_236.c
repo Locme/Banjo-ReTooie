@@ -2,20 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chhoney_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800F60: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1668, 0X10D8) << 16);
-    // 0x80800F64: jr          $ra
-    // 0x80800F68: addiu       $v0, $v0, 0x10D8
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1668, 0X10D8));
-    return;
-    // 0x80800F68: addiu       $v0, $v0, 0x10D8
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1668, 0X10D8));
-    // 0x80800F6C: nop
-
-;}
 RECOMP_FUNC void func_808007DC_cheggclockwork(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5491,4 +5477,38 @@ L_80800300:
     return;
     // 0x80800310: or          $v0, $v1, $zero
     ctx->r2 = ctx->r3 | 0;
+;}
+RECOMP_FUNC void func_808047E8_chstoneballcontrol(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808047E8: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x808047EC: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x808047F0: jal         0x80100094
+    // 0x808047F4: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    func_80100094(rdram, ctx);
+        goto after_0;
+    // 0x808047F4: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    after_0:
+    // 0x808047F8: jal         0x800BD09C
+    // 0x808047FC: lw          $a0, 0x0($v0)
+    ctx->r4 = MEM_W(ctx->r2, 0X0);
+    func_800BD09C(rdram, ctx);
+        goto after_1;
+    // 0x808047FC: lw          $a0, 0x0($v0)
+    ctx->r4 = MEM_W(ctx->r2, 0X0);
+    after_1:
+    // 0x80804800: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x80804804: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80804808: jr          $ra
+    // 0x8080480C: nop
+
+    return;
+    // 0x8080480C: nop
+
 ;}

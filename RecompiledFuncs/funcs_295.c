@@ -2,16 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void gspropctrl_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800050: jr          $ra
-    // 0x80800054: sw          $a1, 0xC($a0)
-    MEM_W(0XC, ctx->r4) = ctx->r5;
-    return;
-    // 0x80800054: sw          $a1, 0xC($a0)
-    MEM_W(0XC, ctx->r4) = ctx->r5;
-;}
 RECOMP_FUNC void func_8080014C_ch1pfreeze(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -5913,4 +5903,13 @@ L_8080015C:
     return;
     // 0x80800164: nop
 
+;}
+RECOMP_FUNC void _chfactorymaindoor_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80087560: syscall     588
+    recomp_syscall_handler(rdram, ctx, 0x80087560);
+    return;
+    // 0x80087564: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

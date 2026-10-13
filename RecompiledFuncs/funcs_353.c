@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chevilmumbo_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80803980: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1676, 0X4544) << 16);
-    // 0x80803984: jr          $ra
-    // 0x80803988: addiu       $v0, $v0, 0x4544
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1676, 0X4544));
-    return;
-    // 0x80803988: addiu       $v0, $v0, 0x4544
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1676, 0X4544));
-;}
 RECOMP_FUNC void baroll_resetAngularVelocity(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4467,4 +4455,62 @@ RECOMP_FUNC void func_800A9420(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800A945C: sltiu       $v0, $v0, 0x1
     ctx->r2 = ctx->r2 < 0X1 ? 1 : 0;
+;}
+RECOMP_FUNC void func_80800000_cheggclockwork(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800000: addiu       $sp, $sp, -0x18
+    ctx->r29 = ADD32(ctx->r29, -0X18);
+    // 0x80800004: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x80800008: sw          $a0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r4;
+    // 0x8080000C: jal         0x80100094
+    // 0x80800010: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    func_80100094(rdram, ctx);
+        goto after_0;
+    // 0x80800010: or          $a1, $zero, $zero
+    ctx->r5 = 0 | 0;
+    after_0:
+    // 0x80800014: lw          $t6, 0x18($sp)
+    ctx->r14 = MEM_W(ctx->r29, 0X18);
+    // 0x80800018: lh          $a0, 0x3A($v0)
+    ctx->r4 = MEM_H(ctx->r2, 0X3A);
+    // 0x8080001C: addiu       $a1, $zero, 0x4D
+    ctx->r5 = ADD32(0, 0X4D);
+    // 0x80800020: jal         0x800F7BC8
+    // 0x80800024: lw          $a2, 0x0($t6)
+    ctx->r6 = MEM_W(ctx->r14, 0X0);
+    func_800F7BC8(rdram, ctx);
+        goto after_1;
+    // 0x80800024: lw          $a2, 0x0($t6)
+    ctx->r6 = MEM_W(ctx->r14, 0X0);
+    after_1:
+    // 0x80800028: jal         0x808007B4
+    // 0x8080002C: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    func_808007B4_cheggclockwork(rdram, ctx);
+        goto after_2;
+    // 0x8080002C: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_2:
+    // 0x80800030: jal         0x8008A388
+    // 0x80800034: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    _suegg_entrypoint_2(rdram, ctx);
+        goto after_3;
+    // 0x80800034: lw          $a0, 0x18($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X18);
+    after_3:
+    // 0x80800038: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x8080003C: addiu       $sp, $sp, 0x18
+    ctx->r29 = ADD32(ctx->r29, 0X18);
+    // 0x80800040: jr          $ra
+    // 0x80800044: nop
+
+    return;
+    // 0x80800044: nop
+
 ;}

@@ -2,18 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void chcrusher_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080005C: lui         $v0, 0x8080
-    ctx->r2 = S32(RELOC_HI16(1624, 0XB98) << 16);
-    // 0x80800060: jr          $ra
-    // 0x80800064: addiu       $v0, $v0, 0xB98
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1624, 0XB98));
-    return;
-    // 0x80800064: addiu       $v0, $v0, 0xB98
-    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(1624, 0XB98));
-;}
 RECOMP_FUNC void chghostdoor_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4068,4 +4056,38 @@ RECOMP_FUNC void _suquiz_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8008A7CC: addi        $t0, $zero, 0x8
     ctx->r8 = ADD32(0, 0X8);
+;}
+RECOMP_FUNC void func_80800C20_bsbtrot(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800C20: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x80800C24: sw          $ra, 0x1C($sp)
+    MEM_W(0X1C, ctx->r29) = ctx->r31;
+    // 0x80800C28: addiu       $t6, $zero, 0x86
+    ctx->r14 = ADD32(0, 0X86);
+    // 0x80800C2C: sw          $t6, 0x10($sp)
+    MEM_W(0X10, ctx->r29) = ctx->r14;
+    // 0x80800C30: addiu       $a1, $zero, 0x26
+    ctx->r5 = ADD32(0, 0X26);
+    // 0x80800C34: addiu       $a2, $zero, 0x26
+    ctx->r6 = ADD32(0, 0X26);
+    // 0x80800C38: jal         0x80800000
+    // 0x80800C3C: addiu       $a3, $zero, 0x29B
+    ctx->r7 = ADD32(0, 0X29B);
+    func_80800000_bsbtrot(rdram, ctx);
+        goto after_0;
+    // 0x80800C3C: addiu       $a3, $zero, 0x29B
+    ctx->r7 = ADD32(0, 0X29B);
+    after_0:
+    // 0x80800C40: lw          $ra, 0x1C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X1C);
+    // 0x80800C44: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x80800C48: jr          $ra
+    // 0x80800C4C: nop
+
+    return;
+    // 0x80800C4C: nop
+
 ;}

@@ -2,22 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void ncpod_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800548: sw          $a1, 0x8($a0)
-    MEM_W(0X8, ctx->r4) = ctx->r5;
-    // 0x8080054C: lhu         $t6, 0x12($a1)
-    ctx->r14 = MEM_HU(ctx->r5, 0X12);
-    // 0x80800550: srl         $t7, $t6, 1
-    ctx->r15 = S32(U32(ctx->r14) >> 1);
-    // 0x80800554: jr          $ra
-    // 0x80800558: sw          $t7, 0xC($a0)
-    MEM_W(0XC, ctx->r4) = ctx->r15;
-    return;
-    // 0x80800558: sw          $t7, 0xC($a0)
-    MEM_W(0XC, ctx->r4) = ctx->r15;
-;}
 RECOMP_FUNC void chjinjo_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4125,4 +4109,14 @@ RECOMP_FUNC void _chquiz_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800877DC: addi        $t0, $zero, 0x0
     ctx->r8 = ADD32(0, 0X0);
+;}
+RECOMP_FUNC void gspropctrl_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800050: jr          $ra
+    // 0x80800054: sw          $a1, 0xC($a0)
+    MEM_W(0XC, ctx->r4) = ctx->r5;
+    return;
+    // 0x80800054: sw          $a1, 0xC($a0)
+    MEM_W(0XC, ctx->r4) = ctx->r5;
 ;}

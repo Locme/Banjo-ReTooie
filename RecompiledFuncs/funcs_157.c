@@ -2,79 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_800FCF50(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x800FCF50: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x800FCF54: lui         $v1, 0x8012
-    ctx->r3 = S32(0X8012 << 16);
-    // 0x800FCF58: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x800FCF5C: addiu       $v1, $v1, 0x3DE0
-    ctx->r3 = ADD32(ctx->r3, 0X3DE0);
-    // 0x800FCF60: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-    // 0x800FCF64: addiu       $a1, $zero, 0x30
-    ctx->r5 = ADD32(0, 0X30);
-L_800FCF68:
-    // 0x800FCF68: lh          $t6, 0x0($v1)
-    ctx->r14 = MEM_H(ctx->r3, 0X0);
-    // 0x800FCF6C: bnel        $a0, $t6, L_800FCF88
-    if (ctx->r4 != ctx->r14) {
-        // 0x800FCF70: addiu       $v0, $v0, 0x1
-        ctx->r2 = ADD32(ctx->r2, 0X1);
-            goto L_800FCF88;
-    }
-    goto skip_0;
-    // 0x800FCF70: addiu       $v0, $v0, 0x1
-    ctx->r2 = ADD32(ctx->r2, 0X1);
-    skip_0:
-    // 0x800FCF74: jal         0x800DA298
-    // 0x800FCF78: addiu       $a0, $v0, 0x53E
-    ctx->r4 = ADD32(ctx->r2, 0X53E);
-    func_800DA298(rdram, ctx);
-        goto after_0;
-    // 0x800FCF78: addiu       $a0, $v0, 0x53E
-    ctx->r4 = ADD32(ctx->r2, 0X53E);
-    after_0:
-    // 0x800FCF7C: b           L_800FCF98
-    // 0x800FCF80: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-        goto L_800FCF98;
-    // 0x800FCF80: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x800FCF84: addiu       $v0, $v0, 0x1
-    ctx->r2 = ADD32(ctx->r2, 0X1);
-L_800FCF88:
-    // 0x800FCF88: bne         $v0, $a1, L_800FCF68
-    if (ctx->r2 != ctx->r5) {
-        // 0x800FCF8C: addiu       $v1, $v1, 0x2
-        ctx->r3 = ADD32(ctx->r3, 0X2);
-            goto L_800FCF68;
-    }
-    // 0x800FCF8C: addiu       $v1, $v1, 0x2
-    ctx->r3 = ADD32(ctx->r3, 0X2);
-    // 0x800FCF90: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-    // 0x800FCF94: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-L_800FCF98:
-    // 0x800FCF98: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x800FCF9C: jr          $ra
-    // 0x800FCFA0: nop
-
-    return;
-    // 0x800FCFA0: nop
-
-    // 0x800FCFA4: nop
-
-    // 0x800FCFA8: nop
-
-    // 0x800FCFAC: nop
-
-;}
 RECOMP_FUNC void _chcollballcontrol_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4905,4 +4832,974 @@ RECOMP_FUNC void func_8009C128(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x8009C14C: nop
 
+;}
+RECOMP_FUNC void mlspline_entrypoint_8(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x808009AC: addiu       $sp, $sp, -0x48
+    ctx->r29 = ADD32(ctx->r29, -0X48);
+    // 0x808009B0: sw          $ra, 0x3C($sp)
+    MEM_W(0X3C, ctx->r29) = ctx->r31;
+    // 0x808009B4: sw          $a2, 0x50($sp)
+    MEM_W(0X50, ctx->r29) = ctx->r6;
+    // 0x808009B8: addiu       $t7, $a1, -0x1
+    ctx->r15 = ADD32(ctx->r5, -0X1);
+    // 0x808009BC: mtc1        $zero, $f14
+    ctx->f14.u32l = 0;
+    // 0x808009C0: sdc1        $f28, 0x30($sp)
+    CHECK_FR(ctx, 28);
+    SD(ctx->f28.u64, 0X30, ctx->r29);
+    // 0x808009C4: sdc1        $f26, 0x28($sp)
+    CHECK_FR(ctx, 26);
+    SD(ctx->f26.u64, 0X28, ctx->r29);
+    // 0x808009C8: sdc1        $f24, 0x20($sp)
+    CHECK_FR(ctx, 24);
+    SD(ctx->f24.u64, 0X20, ctx->r29);
+    // 0x808009CC: sdc1        $f22, 0x18($sp)
+    CHECK_FR(ctx, 22);
+    SD(ctx->f22.u64, 0X18, ctx->r29);
+    // 0x808009D0: sdc1        $f20, 0x10($sp)
+    CHECK_FR(ctx, 20);
+    SD(ctx->f20.u64, 0X10, ctx->r29);
+    // 0x808009D4: sw          $a1, 0x4C($sp)
+    MEM_W(0X4C, ctx->r29) = ctx->r5;
+    // 0x808009D8: sw          $t7, 0x40($sp)
+    MEM_W(0X40, ctx->r29) = ctx->r15;
+    // 0x808009DC: lui         $a2, 0x3F80
+    ctx->r6 = S32(0X3F80 << 16);
+    // 0x808009E0: jal         0x800F0D50
+    // 0x808009E4: sw          $a3, 0x54($sp)
+    MEM_W(0X54, ctx->r29) = ctx->r7;
+    func_800F0D50(rdram, ctx);
+        goto after_0;
+    // 0x808009E4: sw          $a3, 0x54($sp)
+    MEM_W(0X54, ctx->r29) = ctx->r7;
+    after_0:
+    // 0x808009E8: lw          $t8, 0x40($sp)
+    ctx->r24 = MEM_W(ctx->r29, 0X40);
+    // 0x808009EC: lw          $v1, 0x4C($sp)
+    ctx->r3 = MEM_W(ctx->r29, 0X4C);
+    // 0x808009F0: lw          $a2, 0x50($sp)
+    ctx->r6 = MEM_W(ctx->r29, 0X50);
+    // 0x808009F4: mtc1        $t8, $f4
+    ctx->f4.u32l = ctx->r24;
+    // 0x808009F8: lw          $a3, 0x54($sp)
+    ctx->r7 = MEM_W(ctx->r29, 0X54);
+    // 0x808009FC: addiu       $a1, $zero, 0x3
+    ctx->r5 = ADD32(0, 0X3);
+    // 0x80800A00: cvt.s.w     $f6, $f4
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 4);
+    ctx->f6.fl = CVT_S_W(ctx->f4.u32l);
+    // 0x80800A04: mul.s       $f2, $f0, $f6
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 6);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f6.fl); 
+    ctx->f2.fl = MUL_S(ctx->f0.fl, ctx->f6.fl);
+    // 0x80800A08: trunc.w.s   $f8, $f2
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 2);
+    ctx->f8.u32l = TRUNC_W_S(ctx->f2.fl);
+    // 0x80800A0C: mfc1        $v0, $f8
+    ctx->r2 = (int32_t)ctx->f8.u32l;
+    // 0x80800A10: nop
+
+    // 0x80800A14: mtc1        $v0, $f10
+    ctx->f10.u32l = ctx->r2;
+    // 0x80800A18: or          $a0, $v0, $zero
+    ctx->r4 = ctx->r2 | 0;
+    // 0x80800A1C: slti        $at, $v0, 0x3
+    ctx->r1 = SIGNED(ctx->r2) < 0X3 ? 1 : 0;
+    // 0x80800A20: cvt.s.w     $f4, $f10
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 10);
+    ctx->f4.fl = CVT_S_W(ctx->f10.u32l);
+    // 0x80800A24: bne         $v0, $zero, L_80800AE0
+    if (ctx->r2 != 0) {
+        // 0x80800A28: sub.s       $f20, $f2, $f4
+        CHECK_FR(ctx, 20);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f20.fl = ctx->f2.fl - ctx->f4.fl;
+            goto L_80800AE0;
+    }
+    // 0x80800A28: sub.s       $f20, $f2, $f4
+    CHECK_FR(ctx, 20);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f20.fl = ctx->f2.fl - ctx->f4.fl;
+    // 0x80800A2C: beq         $at, $zero, L_80800DB8
+    if (ctx->r1 == 0) {
+        // 0x80800A30: sll         $a1, $a0, 2
+        ctx->r5 = S32(ctx->r4 << 2);
+            goto L_80800DB8;
+    }
+    // 0x80800A30: sll         $a1, $a0, 2
+    ctx->r5 = S32(ctx->r4 << 2);
+    // 0x80800A34: lui         $at, 0x4040
+    ctx->r1 = S32(0X4040 << 16);
+    // 0x80800A38: mtc1        $at, $f26
+    ctx->f26.u32l = ctx->r1;
+    // 0x80800A3C: lui         $at, 0x4080
+    ctx->r1 = S32(0X4080 << 16);
+    // 0x80800A40: mtc1        $at, $f24
+    ctx->f24.u32l = ctx->r1;
+    // 0x80800A44: lui         $at, 0x3FC0
+    ctx->r1 = S32(0X3FC0 << 16);
+    // 0x80800A48: mtc1        $at, $f22
+    ctx->f22.u32l = ctx->r1;
+    // 0x80800A4C: lui         $at, 0x4090
+    ctx->r1 = S32(0X4090 << 16);
+    // 0x80800A50: mtc1        $at, $f18
+    ctx->f18.u32l = ctx->r1;
+    // 0x80800A54: lui         $at, 0x3F00
+    ctx->r1 = S32(0X3F00 << 16);
+    // 0x80800A58: mtc1        $at, $f16
+    ctx->f16.u32l = ctx->r1;
+    // 0x80800A5C: addu        $v1, $a2, $a1
+    ctx->r3 = ADD32(ctx->r6, ctx->r5);
+    // 0x80800A60: addu        $v0, $a3, $a1
+    ctx->r2 = ADD32(ctx->r7, ctx->r5);
+L_80800A64:
+    // 0x80800A64: lwc1        $f2, 0x0($v1)
+    ctx->f2.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800A68: lwc1        $f12, 0xC($v1)
+    ctx->f12.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800A6C: lwc1        $f0, 0x18($v1)
+    ctx->f0.u32l = MEM_W(ctx->r3, 0X18);
+    // 0x80800A70: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800A74: sub.s       $f6, $f2, $f12
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f6.fl = ctx->f2.fl - ctx->f12.fl;
+    // 0x80800A78: slti        $at, $a0, 0x3
+    ctx->r1 = SIGNED(ctx->r4) < 0X3 ? 1 : 0;
+    // 0x80800A7C: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800A80: sub.s       $f10, $f0, $f2
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f10.fl = ctx->f0.fl - ctx->f2.fl;
+    // 0x80800A84: mul.s       $f8, $f6, $f18
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 18);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f18.fl); 
+    ctx->f8.fl = MUL_S(ctx->f6.fl, ctx->f18.fl);
+    // 0x80800A88: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800A8C: mul.s       $f4, $f22, $f10
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 22);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f22.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f4.fl = MUL_S(ctx->f22.fl, ctx->f10.fl);
+    // 0x80800A90: add.s       $f6, $f8, $f4
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f6.fl = ctx->f8.fl + ctx->f4.fl;
+    // 0x80800A94: mul.s       $f10, $f6, $f20
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f10.fl = MUL_S(ctx->f6.fl, ctx->f20.fl);
+    // 0x80800A98: nop
+
+    // 0x80800A9C: mul.s       $f8, $f24, $f12
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f8.fl = MUL_S(ctx->f24.fl, ctx->f12.fl);
+    // 0x80800AA0: sub.s       $f4, $f8, $f0
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f0.fl); 
+    ctx->f4.fl = ctx->f8.fl - ctx->f0.fl;
+    // 0x80800AA4: mul.s       $f6, $f26, $f2
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f6.fl = MUL_S(ctx->f26.fl, ctx->f2.fl);
+    // 0x80800AA8: sub.s       $f8, $f4, $f6
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 6);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f6.fl); 
+    ctx->f8.fl = ctx->f4.fl - ctx->f6.fl;
+    // 0x80800AAC: add.s       $f4, $f10, $f8
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f4.fl = ctx->f10.fl + ctx->f8.fl;
+    // 0x80800AB0: swc1        $f4, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f4.u32l;
+    // 0x80800AB4: lwc1        $f6, -0x4($v0)
+    ctx->f6.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800AB8: sub.s       $f4, $f12, $f2
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f4.fl = ctx->f12.fl - ctx->f2.fl;
+    // 0x80800ABC: mul.s       $f10, $f6, $f20
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f10.fl = MUL_S(ctx->f6.fl, ctx->f20.fl);
+    // 0x80800AC0: swc1        $f10, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f10.u32l;
+    // 0x80800AC4: mul.s       $f6, $f16, $f4
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 16);
+    CHECK_FR(ctx, 4);
+    NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f4.fl); 
+    ctx->f6.fl = MUL_S(ctx->f16.fl, ctx->f4.fl);
+    // 0x80800AC8: lwc1        $f8, -0x4($v0)
+    ctx->f8.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800ACC: add.s       $f10, $f8, $f6
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 6);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f6.fl); 
+    ctx->f10.fl = ctx->f8.fl + ctx->f6.fl;
+    // 0x80800AD0: bne         $at, $zero, L_80800A64
+    if (ctx->r1 != 0) {
+        // 0x80800AD4: swc1        $f10, -0x4($v0)
+        MEM_W(-0X4, ctx->r2) = ctx->f10.u32l;
+            goto L_80800A64;
+    }
+    // 0x80800AD4: swc1        $f10, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f10.u32l;
+    // 0x80800AD8: b           L_80800DBC
+    // 0x80800ADC: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+        goto L_80800DBC;
+    // 0x80800ADC: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+L_80800AE0:
+    // 0x80800AE0: addiu       $a0, $v0, -0x1
+    ctx->r4 = ADD32(ctx->r2, -0X1);
+    // 0x80800AE4: multu       $a0, $a1
+    result = U64(U32(ctx->r4)) * U64(U32(ctx->r5)); lo = S32(result >> 0); hi = S32(result >> 32);
+    // 0x80800AE8: addiu       $t2, $a0, 0x2
+    ctx->r10 = ADD32(ctx->r4, 0X2);
+    // 0x80800AEC: or          $v0, $a3, $zero
+    ctx->r2 = ctx->r7 | 0;
+    // 0x80800AF0: lui         $at, 0x3F00
+    ctx->r1 = S32(0X3F00 << 16);
+    // 0x80800AF4: addiu       $t3, $a0, 0x3
+    ctx->r11 = ADD32(ctx->r4, 0X3);
+    // 0x80800AF8: mflo        $t0
+    ctx->r8 = lo;
+    // 0x80800AFC: sll         $t1, $t0, 2
+    ctx->r9 = S32(ctx->r8 << 2);
+    // 0x80800B00: bne         $v1, $t2, L_80800B6C
+    if (ctx->r3 != ctx->r10) {
+        // 0x80800B04: addu        $a2, $a2, $t1
+        ctx->r6 = ADD32(ctx->r6, ctx->r9);
+            goto L_80800B6C;
+    }
+    // 0x80800B04: addu        $a2, $a2, $t1
+    ctx->r6 = ADD32(ctx->r6, ctx->r9);
+    // 0x80800B08: mtc1        $at, $f16
+    ctx->f16.u32l = ctx->r1;
+    // 0x80800B0C: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    // 0x80800B10: or          $v1, $a2, $zero
+    ctx->r3 = ctx->r6 | 0;
+    // 0x80800B14: lwc1        $f26, 0x0($v1)
+    ctx->f26.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800B18: lwc1        $f24, 0xC($v1)
+    ctx->f24.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800B1C: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800B20: sub.s       $f26, $f24, $f26
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 26);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f26.fl); 
+    ctx->f26.fl = ctx->f24.fl - ctx->f26.fl;
+    // 0x80800B24: mul.s       $f28, $f26, $f16
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 16);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f16.fl); 
+    ctx->f28.fl = MUL_S(ctx->f26.fl, ctx->f16.fl);
+    // 0x80800B28: beql        $a0, $a1, L_80800B5C
+    if (ctx->r4 == ctx->r5) {
+        // 0x80800B2C: addiu       $v1, $v1, 0x4
+        ctx->r3 = ADD32(ctx->r3, 0X4);
+            goto L_80800B5C;
+    }
+    goto skip_0;
+    // 0x80800B2C: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    skip_0:
+    // 0x80800B30: swc1        $f28, 0x0($v0)
+    MEM_W(0X0, ctx->r2) = ctx->f28.u32l;
+L_80800B34:
+    // 0x80800B34: lwc1        $f26, 0x4($v1)
+    ctx->f26.u32l = MEM_W(ctx->r3, 0X4);
+    // 0x80800B38: lwc1        $f24, 0x10($v1)
+    ctx->f24.u32l = MEM_W(ctx->r3, 0X10);
+    // 0x80800B3C: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800B40: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800B44: sub.s       $f26, $f24, $f26
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 26);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f26.fl); 
+    ctx->f26.fl = ctx->f24.fl - ctx->f26.fl;
+    // 0x80800B48: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800B4C: mul.s       $f28, $f26, $f16
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 16);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f16.fl); 
+    ctx->f28.fl = MUL_S(ctx->f26.fl, ctx->f16.fl);
+    // 0x80800B50: bnel        $a0, $a1, L_80800B34
+    if (ctx->r4 != ctx->r5) {
+        // 0x80800B54: swc1        $f28, 0x0($v0)
+        MEM_W(0X0, ctx->r2) = ctx->f28.u32l;
+            goto L_80800B34;
+    }
+    goto skip_1;
+    // 0x80800B54: swc1        $f28, 0x0($v0)
+    MEM_W(0X0, ctx->r2) = ctx->f28.u32l;
+    skip_1:
+    // 0x80800B58: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+L_80800B5C:
+    // 0x80800B5C: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800B60: swc1        $f28, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f28.u32l;
+    // 0x80800B64: b           L_80800DBC
+    // 0x80800B68: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+        goto L_80800DBC;
+    // 0x80800B68: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+L_80800B6C:
+    // 0x80800B6C: bne         $v1, $t3, L_80800C90
+    if (ctx->r3 != ctx->r11) {
+        // 0x80800B70: or          $a0, $zero, $zero
+        ctx->r4 = 0 | 0;
+            goto L_80800C90;
+    }
+    // 0x80800B70: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    // 0x80800B74: lui         $at, 0x40A0
+    ctx->r1 = S32(0X40A0 << 16);
+    // 0x80800B78: mtc1        $at, $f28
+    ctx->f28.u32l = ctx->r1;
+    // 0x80800B7C: lui         $at, 0x4040
+    ctx->r1 = S32(0X4040 << 16);
+    // 0x80800B80: mtc1        $at, $f26
+    ctx->f26.u32l = ctx->r1;
+    // 0x80800B84: lui         $at, 0x3FC0
+    ctx->r1 = S32(0X3FC0 << 16);
+    // 0x80800B88: mtc1        $at, $f22
+    ctx->f22.u32l = ctx->r1;
+    // 0x80800B8C: lui         $at, 0x4090
+    ctx->r1 = S32(0X4090 << 16);
+    // 0x80800B90: mtc1        $at, $f18
+    ctx->f18.u32l = ctx->r1;
+    // 0x80800B94: lui         $at, 0x3F00
+    ctx->r1 = S32(0X3F00 << 16);
+    // 0x80800B98: mtc1        $at, $f16
+    ctx->f16.u32l = ctx->r1;
+    // 0x80800B9C: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    // 0x80800BA0: or          $v1, $a2, $zero
+    ctx->r3 = ctx->r6 | 0;
+    // 0x80800BA4: or          $v0, $a3, $zero
+    ctx->r2 = ctx->r7 | 0;
+    // 0x80800BA8: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800BAC: lwc1        $f24, 0x0($v1)
+    ctx->f24.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800BB0: lwc1        $f12, 0xC($v1)
+    ctx->f12.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800BB4: beq         $a0, $a1, L_80800C30
+    if (ctx->r4 == ctx->r5) {
+        // 0x80800BB8: lwc1        $f14, 0x18($v1)
+        ctx->f14.u32l = MEM_W(ctx->r3, 0X18);
+            goto L_80800C30;
+    }
+    // 0x80800BB8: lwc1        $f14, 0x18($v1)
+    ctx->f14.u32l = MEM_W(ctx->r3, 0X18);
+L_80800BBC:
+    // 0x80800BBC: sub.s       $f10, $f14, $f24
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 14);
+    CHECK_FR(ctx, 24);
+    NAN_CHECK(ctx->f14.fl); NAN_CHECK(ctx->f24.fl); 
+    ctx->f10.fl = ctx->f14.fl - ctx->f24.fl;
+    // 0x80800BC0: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800BC4: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800BC8: sub.s       $f8, $f12, $f14
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f8.fl = ctx->f12.fl - ctx->f14.fl;
+    // 0x80800BCC: mul.s       $f6, $f22, $f10
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 22);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f22.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f6.fl = MUL_S(ctx->f22.fl, ctx->f10.fl);
+    // 0x80800BD0: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800BD4: mul.s       $f8, $f8, $f18
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 18);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f18.fl); 
+    ctx->f8.fl = MUL_S(ctx->f8.fl, ctx->f18.fl);
+    // 0x80800BD8: add.s       $f4, $f24, $f24
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 24);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f24.fl); 
+    ctx->f4.fl = ctx->f24.fl + ctx->f24.fl;
+    // 0x80800BDC: mul.s       $f2, $f28, $f12
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f28.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f2.fl = MUL_S(ctx->f28.fl, ctx->f12.fl);
+    // 0x80800BE0: nop
+
+    // 0x80800BE4: mul.s       $f0, $f26, $f14
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f0.fl = MUL_S(ctx->f26.fl, ctx->f14.fl);
+    // 0x80800BE8: add.s       $f6, $f8, $f6
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 6);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f6.fl); 
+    ctx->f6.fl = ctx->f8.fl + ctx->f6.fl;
+    // 0x80800BEC: sub.s       $f2, $f4, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f4.fl - ctx->f2.fl;
+    // 0x80800BF0: mul.s       $f6, $f6, $f20
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f6.fl = MUL_S(ctx->f6.fl, ctx->f20.fl);
+    // 0x80800BF4: add.s       $f0, $f2, $f0
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f0.fl); 
+    ctx->f0.fl = ctx->f2.fl + ctx->f0.fl;
+    // 0x80800BF8: add.s       $f0, $f6, $f0
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f0.fl); 
+    ctx->f0.fl = ctx->f6.fl + ctx->f0.fl;
+    // 0x80800BFC: mul.s       $f10, $f16, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 16);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = MUL_S(ctx->f16.fl, ctx->f10.fl);
+    // 0x80800C00: swc1        $f0, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f0.u32l;
+    // 0x80800C04: lwc1        $f0, -0x4($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800C08: mul.s       $f0, $f0, $f20
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f0.fl = MUL_S(ctx->f0.fl, ctx->f20.fl);
+    // 0x80800C0C: swc1        $f0, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f0.u32l;
+    // 0x80800C10: lwc1        $f0, -0x4($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800C14: add.s       $f10, $f0, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = ctx->f0.fl + ctx->f10.fl;
+    // 0x80800C18: swc1        $f10, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f10.u32l;
+    // 0x80800C1C: lwc1        $f24, 0x0($v1)
+    ctx->f24.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800C20: lwc1        $f12, 0xC($v1)
+    ctx->f12.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800C24: lwc1        $f14, 0x18($v1)
+    ctx->f14.u32l = MEM_W(ctx->r3, 0X18);
+    // 0x80800C28: bne         $a0, $a1, L_80800BBC
+    if (ctx->r4 != ctx->r5) {
+        // 0x80800C2C: nop
+    
+            goto L_80800BBC;
+    }
+    // 0x80800C2C: nop
+
+L_80800C30:
+    // 0x80800C30: sub.s       $f10, $f14, $f24
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 14);
+    CHECK_FR(ctx, 24);
+    NAN_CHECK(ctx->f14.fl); NAN_CHECK(ctx->f24.fl); 
+    ctx->f10.fl = ctx->f14.fl - ctx->f24.fl;
+    // 0x80800C34: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800C38: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800C3C: sub.s       $f8, $f12, $f14
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f8.fl = ctx->f12.fl - ctx->f14.fl;
+    // 0x80800C40: mul.s       $f6, $f22, $f10
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 22);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f22.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f6.fl = MUL_S(ctx->f22.fl, ctx->f10.fl);
+    // 0x80800C44: add.s       $f4, $f24, $f24
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 24);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f24.fl); 
+    ctx->f4.fl = ctx->f24.fl + ctx->f24.fl;
+    // 0x80800C48: mul.s       $f8, $f8, $f18
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 18);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f18.fl); 
+    ctx->f8.fl = MUL_S(ctx->f8.fl, ctx->f18.fl);
+    // 0x80800C4C: add.s       $f6, $f8, $f6
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 6);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f6.fl); 
+    ctx->f6.fl = ctx->f8.fl + ctx->f6.fl;
+    // 0x80800C50: mul.s       $f2, $f28, $f12
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f28.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f2.fl = MUL_S(ctx->f28.fl, ctx->f12.fl);
+    // 0x80800C54: sub.s       $f2, $f4, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f4.fl - ctx->f2.fl;
+    // 0x80800C58: mul.s       $f0, $f26, $f14
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f0.fl = MUL_S(ctx->f26.fl, ctx->f14.fl);
+    // 0x80800C5C: add.s       $f0, $f2, $f0
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f0.fl); 
+    ctx->f0.fl = ctx->f2.fl + ctx->f0.fl;
+    // 0x80800C60: mul.s       $f6, $f6, $f20
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f6.fl = MUL_S(ctx->f6.fl, ctx->f20.fl);
+    // 0x80800C64: add.s       $f0, $f6, $f0
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 0);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f0.fl); 
+    ctx->f0.fl = ctx->f6.fl + ctx->f0.fl;
+    // 0x80800C68: mul.s       $f10, $f16, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 16);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = MUL_S(ctx->f16.fl, ctx->f10.fl);
+    // 0x80800C6C: swc1        $f0, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f0.u32l;
+    // 0x80800C70: lwc1        $f0, -0x4($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800C74: mul.s       $f0, $f0, $f20
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f0.fl = MUL_S(ctx->f0.fl, ctx->f20.fl);
+    // 0x80800C78: swc1        $f0, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f0.u32l;
+    // 0x80800C7C: lwc1        $f0, -0x4($v0)
+    ctx->f0.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800C80: add.s       $f10, $f0, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 0);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f0.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = ctx->f0.fl + ctx->f10.fl;
+    // 0x80800C84: swc1        $f10, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f10.u32l;
+    // 0x80800C88: b           L_80800DBC
+    // 0x80800C8C: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+        goto L_80800DBC;
+    // 0x80800C8C: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+L_80800C90:
+    // 0x80800C90: lui         $at, 0x40A0
+    ctx->r1 = S32(0X40A0 << 16);
+    // 0x80800C94: mtc1        $at, $f28
+    ctx->f28.u32l = ctx->r1;
+    // 0x80800C98: lui         $at, 0x4080
+    ctx->r1 = S32(0X4080 << 16);
+    // 0x80800C9C: mtc1        $at, $f24
+    ctx->f24.u32l = ctx->r1;
+    // 0x80800CA0: lui         $at, 0x3FC0
+    ctx->r1 = S32(0X3FC0 << 16);
+    // 0x80800CA4: mtc1        $at, $f22
+    ctx->f22.u32l = ctx->r1;
+    // 0x80800CA8: lui         $at, 0x4090
+    ctx->r1 = S32(0X4090 << 16);
+    // 0x80800CAC: mtc1        $at, $f18
+    ctx->f18.u32l = ctx->r1;
+    // 0x80800CB0: lui         $at, 0x3F00
+    ctx->r1 = S32(0X3F00 << 16);
+    // 0x80800CB4: mtc1        $at, $f16
+    ctx->f16.u32l = ctx->r1;
+    // 0x80800CB8: or          $v1, $a2, $zero
+    ctx->r3 = ctx->r6 | 0;
+    // 0x80800CBC: or          $v0, $a3, $zero
+    ctx->r2 = ctx->r7 | 0;
+    // 0x80800CC0: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800CC4: lwc1        $f14, 0x0($v1)
+    ctx->f14.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800CC8: beq         $a0, $a1, L_80800D50
+    if (ctx->r4 == ctx->r5) {
+        // 0x80800CCC: lwc1        $f26, 0x24($v1)
+        ctx->f26.u32l = MEM_W(ctx->r3, 0X24);
+            goto L_80800D50;
+    }
+    // 0x80800CCC: lwc1        $f26, 0x24($v1)
+    ctx->f26.u32l = MEM_W(ctx->r3, 0X24);
+L_80800CD0:
+    // 0x80800CD0: sub.s       $f12, $f26, $f14
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f12.fl = ctx->f26.fl - ctx->f14.fl;
+    // 0x80800CD4: lwc1        $f10, 0xC($v1)
+    ctx->f10.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800CD8: lwc1        $f8, 0x18($v1)
+    ctx->f8.u32l = MEM_W(ctx->r3, 0X18);
+    // 0x80800CDC: addiu       $a0, $a0, 0x1
+    ctx->r4 = ADD32(ctx->r4, 0X1);
+    // 0x80800CE0: mul.s       $f12, $f22, $f12
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 22);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f22.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f12.fl = MUL_S(ctx->f22.fl, ctx->f12.fl);
+    // 0x80800CE4: sub.s       $f6, $f10, $f8
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f6.fl = ctx->f10.fl - ctx->f8.fl;
+    // 0x80800CE8: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800CEC: mul.s       $f10, $f28, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f28.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = MUL_S(ctx->f28.fl, ctx->f10.fl);
+    // 0x80800CF0: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800CF4: mul.s       $f6, $f6, $f18
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 18);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f18.fl); 
+    ctx->f6.fl = MUL_S(ctx->f6.fl, ctx->f18.fl);
+    // 0x80800CF8: add.s       $f4, $f14, $f14
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 14);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f14.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f4.fl = ctx->f14.fl + ctx->f14.fl;
+    // 0x80800CFC: mul.s       $f2, $f24, $f8
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f2.fl = MUL_S(ctx->f24.fl, ctx->f8.fl);
+    // 0x80800D00: add.s       $f12, $f6, $f12
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f12.fl = ctx->f6.fl + ctx->f12.fl;
+    // 0x80800D04: sub.s       $f10, $f4, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = ctx->f4.fl - ctx->f10.fl;
+    // 0x80800D08: mul.s       $f12, $f12, $f20
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f12.fl = MUL_S(ctx->f12.fl, ctx->f20.fl);
+    // 0x80800D0C: add.s       $f2, $f10, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f10.fl + ctx->f2.fl;
+    // 0x80800D10: sub.s       $f2, $f2, $f26
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 26);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f26.fl); 
+    ctx->f2.fl = ctx->f2.fl - ctx->f26.fl;
+    // 0x80800D14: add.s       $f2, $f12, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f12.fl + ctx->f2.fl;
+    // 0x80800D18: sub.s       $f8, $f8, $f14
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f8.fl = ctx->f8.fl - ctx->f14.fl;
+    // 0x80800D1C: swc1        $f2, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f2.u32l;
+    // 0x80800D20: lwc1        $f2, -0x4($v0)
+    ctx->f2.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800D24: mul.s       $f8, $f16, $f8
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 16);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f8.fl = MUL_S(ctx->f16.fl, ctx->f8.fl);
+    // 0x80800D28: nop
+
+    // 0x80800D2C: mul.s       $f2, $f2, $f20
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f2.fl = MUL_S(ctx->f2.fl, ctx->f20.fl);
+    // 0x80800D30: swc1        $f2, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f2.u32l;
+    // 0x80800D34: lwc1        $f2, -0x4($v0)
+    ctx->f2.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800D38: add.s       $f8, $f2, $f8
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f8.fl = ctx->f2.fl + ctx->f8.fl;
+    // 0x80800D3C: swc1        $f8, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f8.u32l;
+    // 0x80800D40: lwc1        $f14, 0x0($v1)
+    ctx->f14.u32l = MEM_W(ctx->r3, 0X0);
+    // 0x80800D44: lwc1        $f26, 0x24($v1)
+    ctx->f26.u32l = MEM_W(ctx->r3, 0X24);
+    // 0x80800D48: bne         $a0, $a1, L_80800CD0
+    if (ctx->r4 != ctx->r5) {
+        // 0x80800D4C: nop
+    
+            goto L_80800CD0;
+    }
+    // 0x80800D4C: nop
+
+L_80800D50:
+    // 0x80800D50: sub.s       $f12, $f26, $f14
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 26);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f26.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f12.fl = ctx->f26.fl - ctx->f14.fl;
+    // 0x80800D54: lwc1        $f10, 0xC($v1)
+    ctx->f10.u32l = MEM_W(ctx->r3, 0XC);
+    // 0x80800D58: lwc1        $f8, 0x18($v1)
+    ctx->f8.u32l = MEM_W(ctx->r3, 0X18);
+    // 0x80800D5C: add.s       $f4, $f14, $f14
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 14);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f14.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f4.fl = ctx->f14.fl + ctx->f14.fl;
+    // 0x80800D60: mul.s       $f12, $f22, $f12
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 22);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f22.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f12.fl = MUL_S(ctx->f22.fl, ctx->f12.fl);
+    // 0x80800D64: addiu       $v0, $v0, 0x4
+    ctx->r2 = ADD32(ctx->r2, 0X4);
+    // 0x80800D68: sub.s       $f6, $f10, $f8
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f6.fl = ctx->f10.fl - ctx->f8.fl;
+    // 0x80800D6C: mul.s       $f10, $f28, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 28);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f28.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = MUL_S(ctx->f28.fl, ctx->f10.fl);
+    // 0x80800D70: addiu       $v1, $v1, 0x4
+    ctx->r3 = ADD32(ctx->r3, 0X4);
+    // 0x80800D74: mul.s       $f6, $f6, $f18
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 18);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f18.fl); 
+    ctx->f6.fl = MUL_S(ctx->f6.fl, ctx->f18.fl);
+    // 0x80800D78: sub.s       $f10, $f4, $f10
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 4);
+    CHECK_FR(ctx, 10);
+    NAN_CHECK(ctx->f4.fl); NAN_CHECK(ctx->f10.fl); 
+    ctx->f10.fl = ctx->f4.fl - ctx->f10.fl;
+    // 0x80800D7C: mul.s       $f2, $f24, $f8
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 24);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f24.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f2.fl = MUL_S(ctx->f24.fl, ctx->f8.fl);
+    // 0x80800D80: add.s       $f12, $f6, $f12
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 6);
+    CHECK_FR(ctx, 12);
+    NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f12.fl); 
+    ctx->f12.fl = ctx->f6.fl + ctx->f12.fl;
+    // 0x80800D84: sub.s       $f8, $f8, $f14
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 14);
+    NAN_CHECK(ctx->f8.fl); NAN_CHECK(ctx->f14.fl); 
+    ctx->f8.fl = ctx->f8.fl - ctx->f14.fl;
+    // 0x80800D88: mul.s       $f12, $f12, $f20
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f12.fl = MUL_S(ctx->f12.fl, ctx->f20.fl);
+    // 0x80800D8C: add.s       $f2, $f10, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 10);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f10.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f10.fl + ctx->f2.fl;
+    // 0x80800D90: mul.s       $f8, $f16, $f8
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 16);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f16.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f8.fl = MUL_S(ctx->f16.fl, ctx->f8.fl);
+    // 0x80800D94: sub.s       $f2, $f2, $f26
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 26);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f26.fl); 
+    ctx->f2.fl = ctx->f2.fl - ctx->f26.fl;
+    // 0x80800D98: add.s       $f2, $f12, $f2
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 12);
+    CHECK_FR(ctx, 2);
+    NAN_CHECK(ctx->f12.fl); NAN_CHECK(ctx->f2.fl); 
+    ctx->f2.fl = ctx->f12.fl + ctx->f2.fl;
+    // 0x80800D9C: swc1        $f2, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f2.u32l;
+    // 0x80800DA0: lwc1        $f2, -0x4($v0)
+    ctx->f2.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800DA4: mul.s       $f2, $f2, $f20
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 20);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f20.fl); 
+    ctx->f2.fl = MUL_S(ctx->f2.fl, ctx->f20.fl);
+    // 0x80800DA8: swc1        $f2, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f2.u32l;
+    // 0x80800DAC: lwc1        $f2, -0x4($v0)
+    ctx->f2.u32l = MEM_W(ctx->r2, -0X4);
+    // 0x80800DB0: add.s       $f8, $f2, $f8
+    CHECK_FR(ctx, 8);
+    CHECK_FR(ctx, 2);
+    CHECK_FR(ctx, 8);
+    NAN_CHECK(ctx->f2.fl); NAN_CHECK(ctx->f8.fl); 
+    ctx->f8.fl = ctx->f2.fl + ctx->f8.fl;
+    // 0x80800DB4: swc1        $f8, -0x4($v0)
+    MEM_W(-0X4, ctx->r2) = ctx->f8.u32l;
+L_80800DB8:
+    // 0x80800DB8: lw          $ra, 0x3C($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X3C);
+L_80800DBC:
+    // 0x80800DBC: ldc1        $f20, 0x10($sp)
+    CHECK_FR(ctx, 20);
+    ctx->f20.u64 = LD(ctx->r29, 0X10);
+    // 0x80800DC0: ldc1        $f22, 0x18($sp)
+    CHECK_FR(ctx, 22);
+    ctx->f22.u64 = LD(ctx->r29, 0X18);
+    // 0x80800DC4: ldc1        $f24, 0x20($sp)
+    CHECK_FR(ctx, 24);
+    ctx->f24.u64 = LD(ctx->r29, 0X20);
+    // 0x80800DC8: ldc1        $f26, 0x28($sp)
+    CHECK_FR(ctx, 26);
+    ctx->f26.u64 = LD(ctx->r29, 0X28);
+    // 0x80800DCC: ldc1        $f28, 0x30($sp)
+    CHECK_FR(ctx, 28);
+    ctx->f28.u64 = LD(ctx->r29, 0X30);
+    // 0x80800DD0: jr          $ra
+    // 0x80800DD4: addiu       $sp, $sp, 0x48
+    ctx->r29 = ADD32(ctx->r29, 0X48);
+    return;
+    // 0x80800DD4: addiu       $sp, $sp, 0x48
+    ctx->r29 = ADD32(ctx->r29, 0X48);
 ;}

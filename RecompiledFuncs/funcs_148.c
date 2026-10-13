@@ -2,51 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void idtwinklecolour_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x8080020C: sw          $a0, 0x0($sp)
-    MEM_W(0X0, ctx->r29) = ctx->r4;
-    // 0x80800210: sw          $a2, 0x8($sp)
-    MEM_W(0X8, ctx->r29) = ctx->r6;
-    // 0x80800214: lh          $t6, 0x1E($a3)
-    ctx->r14 = MEM_H(ctx->r7, 0X1E);
-    // 0x80800218: lh          $v0, 0x1C($a3)
-    ctx->r2 = MEM_H(ctx->r7, 0X1C);
-    // 0x8080021C: bnel        $t6, $v0, L_80800244
-    if (ctx->r14 != ctx->r2) {
-        // 0x80800220: addiu       $t0, $v0, 0x1
-        ctx->r8 = ADD32(ctx->r2, 0X1);
-            goto L_80800244;
-    }
-    goto skip_0;
-    // 0x80800220: addiu       $t0, $v0, 0x1
-    ctx->r8 = ADD32(ctx->r2, 0X1);
-    skip_0:
-    // 0x80800224: lh          $t7, 0x0($a1)
-    ctx->r15 = MEM_H(ctx->r5, 0X0);
-    // 0x80800228: lh          $v0, 0x1C($a3)
-    ctx->r2 = MEM_H(ctx->r7, 0X1C);
-    // 0x8080022C: sh          $t7, 0xE($a3)
-    MEM_H(0XE, ctx->r7) = ctx->r15;
-    // 0x80800230: lh          $t8, 0x2($a1)
-    ctx->r24 = MEM_H(ctx->r5, 0X2);
-    // 0x80800234: sh          $t8, 0x10($a3)
-    MEM_H(0X10, ctx->r7) = ctx->r24;
-    // 0x80800238: lh          $t9, 0x4($a1)
-    ctx->r25 = MEM_H(ctx->r5, 0X4);
-    // 0x8080023C: sh          $t9, 0x12($a3)
-    MEM_H(0X12, ctx->r7) = ctx->r25;
-    // 0x80800240: addiu       $t0, $v0, 0x1
-    ctx->r8 = ADD32(ctx->r2, 0X1);
-L_80800244:
-    // 0x80800244: jr          $ra
-    // 0x80800248: sh          $t0, 0x1C($a3)
-    MEM_H(0X1C, ctx->r7) = ctx->r8;
-    return;
-    // 0x80800248: sh          $t0, 0x1C($a3)
-    MEM_H(0X1C, ctx->r7) = ctx->r8;
-;}
 RECOMP_FUNC void seqdefine_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4122,4 +4077,64 @@ L_800B59BC:
     return;
     // 0x800B59DC: addiu       $sp, $sp, 0x30
     ctx->r29 = ADD32(ctx->r29, 0X30);
+;}
+RECOMP_FUNC void func_800C0F8C(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x800C0F8C: addiu       $sp, $sp, -0x20
+    ctx->r29 = ADD32(ctx->r29, -0X20);
+    // 0x800C0F90: sw          $ra, 0x14($sp)
+    MEM_W(0X14, ctx->r29) = ctx->r31;
+    // 0x800C0F94: sw          $a0, 0x20($sp)
+    MEM_W(0X20, ctx->r29) = ctx->r4;
+    // 0x800C0F98: jal         0x800EA34C
+    // 0x800C0F9C: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    func_800EA34C(rdram, ctx);
+        goto after_0;
+    // 0x800C0F9C: or          $a0, $zero, $zero
+    ctx->r4 = 0 | 0;
+    after_0:
+    // 0x800C0FA0: addiu       $t6, $zero, 0x2
+    ctx->r14 = ADD32(0, 0X2);
+    // 0x800C0FA4: lui         $at, 0x8013
+    ctx->r1 = S32(0X8013 << 16);
+    // 0x800C0FA8: jal         0x8001A0A8
+    // 0x800C0FAC: sw          $t6, -0x7500($at)
+    MEM_W(-0X7500, ctx->r1) = ctx->r14;
+    func_8001A0A8(rdram, ctx);
+        goto after_1;
+    // 0x800C0FAC: sw          $t6, -0x7500($at)
+    MEM_W(-0X7500, ctx->r1) = ctx->r14;
+    after_1:
+    // 0x800C0FB0: jal         0x80014F00
+    // 0x800C0FB4: sw          $v0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r2;
+    func_80014F00(rdram, ctx);
+        goto after_2;
+    // 0x800C0FB4: sw          $v0, 0x18($sp)
+    MEM_W(0X18, ctx->r29) = ctx->r2;
+    after_2:
+    // 0x800C0FB8: lw          $a0, 0x20($sp)
+    ctx->r4 = MEM_W(ctx->r29, 0X20);
+    // 0x800C0FBC: lw          $a1, 0x18($sp)
+    ctx->r5 = MEM_W(ctx->r29, 0X18);
+    // 0x800C0FC0: jal         0x800C0BC0
+    // 0x800C0FC4: or          $a2, $v0, $zero
+    ctx->r6 = ctx->r2 | 0;
+    func_800C0BC0(rdram, ctx);
+        goto after_3;
+    // 0x800C0FC4: or          $a2, $v0, $zero
+    ctx->r6 = ctx->r2 | 0;
+    after_3:
+    // 0x800C0FC8: lw          $ra, 0x14($sp)
+    ctx->r31 = MEM_W(ctx->r29, 0X14);
+    // 0x800C0FCC: addiu       $sp, $sp, 0x20
+    ctx->r29 = ADD32(ctx->r29, 0X20);
+    // 0x800C0FD0: jr          $ra
+    // 0x800C0FD4: nop
+
+    return;
+    // 0x800C0FD4: nop
+
 ;}

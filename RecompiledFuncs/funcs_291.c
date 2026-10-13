@@ -2,32 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80803CA0_chgameselect(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80803CA0: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80803CA4: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80803CA8: jal         0x800FC660
-    // 0x80803CAC: addiu       $a0, $zero, 0x10
-    ctx->r4 = ADD32(0, 0X10);
-    func_800FC660(rdram, ctx);
-        goto after_0;
-    // 0x80803CAC: addiu       $a0, $zero, 0x10
-    ctx->r4 = ADD32(0, 0X10);
-    after_0:
-    // 0x80803CB0: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80803CB4: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80803CB8: jr          $ra
-    // 0x80803CBC: nop
-
-    return;
-    // 0x80803CBC: nop
-
-;}
 RECOMP_FUNC void func_808022E0_gcnewoption(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3859,4 +3833,13 @@ RECOMP_FUNC void func_800A380C(uint8_t* rdram, recomp_context* ctx) {
     return;
     // 0x800A381C: swc1        $f4, 0x38($t6)
     MEM_W(0X38, ctx->r14) = ctx->f4.u32l;
+;}
+RECOMP_FUNC void _suautobaddies_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80089FB0: syscall     820
+    recomp_syscall_handler(rdram, ctx, 0x80089FB0);
+    return;
+    // 0x80089FB4: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}

@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _suautobaddies_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80089FB0: syscall     820
-    recomp_syscall_handler(rdram, ctx, 0x80089FB0);
-    return;
-    // 0x80089FB4: addi        $t0, $zero, 0x0
-    ctx->r8 = ADD32(0, 0X0);
-;}
 RECOMP_FUNC void _gcmapsects_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -4994,4 +4985,16 @@ L_8008C1A8:
     return;
     // 0x8008C1B4: nop
 
+;}
+RECOMP_FUNC void chnests_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80800F50: lui         $v0, 0x8080
+    ctx->r2 = S32(RELOC_HI16(752, 0X1278) << 16);
+    // 0x80800F54: jr          $ra
+    // 0x80800F58: addiu       $v0, $v0, 0x1278
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(752, 0X1278));
+    return;
+    // 0x80800F58: addiu       $v0, $v0, 0x1278
+    ctx->r2 = ADD32(ctx->r2, (int16_t)RELOC_LO16(752, 0X1278));
 ;}

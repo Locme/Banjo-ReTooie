@@ -2,15 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void _chlagoonbits_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80085FC0: syscall     268
-    recomp_syscall_handler(rdram, ctx, 0x80085FC0);
-    return;
-    // 0x80085FC4: addi        $t0, $zero, 0x4
-    ctx->r8 = ADD32(0, 0X4);
-;}
 RECOMP_FUNC void bsmummove_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -3653,4 +3644,14 @@ L_808002B8:
     return;
     // 0x808002C8: addiu       $sp, $sp, 0x28
     ctx->r29 = ADD32(ctx->r29, 0X28);
+;}
+RECOMP_FUNC void func_8008C0C0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x8008C0C0: jr          $ra
+    // 0x8008C0C4: lh          $v0, 0x18($a0)
+    ctx->r2 = MEM_H(ctx->r4, 0X18);
+    return;
+    // 0x8008C0C4: lh          $v0, 0x18($a0)
+    ctx->r2 = MEM_H(ctx->r4, 0X18);
 ;}

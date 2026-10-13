@@ -2,24 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void static_16_80097978(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80097978: lw          $t6, 0xA4($a0)
-    ctx->r14 = MEM_W(ctx->r4, 0XA4);
-    // 0x8009797C: addiu       $t8, $zero, 0x1
-    ctx->r24 = ADD32(0, 0X1);
-    // 0x80097980: sllv        $t9, $t8, $a1
-    ctx->r25 = S32(ctx->r24 << (ctx->r5 & 31));
-    // 0x80097984: lw          $t7, 0x4($t6)
-    ctx->r15 = MEM_W(ctx->r14, 0X4);
-    // 0x80097988: jr          $ra
-    // 0x8009798C: and         $v0, $t7, $t9
-    ctx->r2 = ctx->r15 & ctx->r25;
-    return;
-    // 0x8009798C: and         $v0, $t7, $t9
-    ctx->r2 = ctx->r15 & ctx->r25;
-;}
 RECOMP_FUNC void static_304_80800324(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;

@@ -89,6 +89,9 @@ ignored = [
     # unless interrupt mask bit 5 is set, which the runtime never sets.
     # Implemented in src/game/boot.cpp.
     "__osGetSR_2",
+    # Builds a camera's culling planes. Implemented in src/game/widescreen.cpp
+    # so culling widens with the picture (Aspect Ratio: Expand).
+    "func_800CA2A8",
     # Templates copied into each loaded overlay header, never executed in place.
     "ovl_entrypoint",
     "ovl_entrypoint_alternate",

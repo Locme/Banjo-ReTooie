@@ -2,68 +2,6 @@
 #include "tooie_hooks.h"
 #include "funcs.h"
 
-RECOMP_FUNC void func_80800224_chstatuebossbits(uint8_t* rdram, recomp_context* ctx) {
-    uint64_t hi = 0, lo = 0, result = 0;
-    int c1cs = 0;
-    // 0x80800224: addiu       $sp, $sp, -0x18
-    ctx->r29 = ADD32(ctx->r29, -0X18);
-    // 0x80800228: addiu       $at, $zero, 0x40
-    ctx->r1 = ADD32(0, 0X40);
-    // 0x8080022C: sw          $ra, 0x14($sp)
-    MEM_W(0X14, ctx->r29) = ctx->r31;
-    // 0x80800230: sw          $a0, 0x18($sp)
-    MEM_W(0X18, ctx->r29) = ctx->r4;
-    // 0x80800234: bne         $a1, $at, L_80800258
-    if (ctx->r5 != ctx->r1) {
-        // 0x80800238: sw          $a2, 0x20($sp)
-        MEM_W(0X20, ctx->r29) = ctx->r6;
-            goto L_80800258;
-    }
-    // 0x80800238: sw          $a2, 0x20($sp)
-    MEM_W(0X20, ctx->r29) = ctx->r6;
-    // 0x8080023C: jal         0x80800270
-    // 0x80800240: nop
-
-    func_80800270_chstatuebossbits(rdram, ctx);
-        goto after_0;
-    // 0x80800240: nop
-
-    after_0:
-    // 0x80800244: lw          $t6, 0x18($sp)
-    ctx->r14 = MEM_W(ctx->r29, 0X18);
-    // 0x80800248: jal         0x800FFA88
-    // 0x8080024C: lw          $a0, 0x0($t6)
-    ctx->r4 = MEM_W(ctx->r14, 0X0);
-    func_800FFA88(rdram, ctx);
-        goto after_1;
-    // 0x8080024C: lw          $a0, 0x0($t6)
-    ctx->r4 = MEM_W(ctx->r14, 0X0);
-    after_1:
-    // 0x80800250: b           L_80800260
-    // 0x80800254: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-        goto L_80800260;
-    // 0x80800254: addiu       $v0, $zero, 0x1
-    ctx->r2 = ADD32(0, 0X1);
-L_80800258:
-    // 0x80800258: b           L_80800260
-    // 0x8080025C: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-        goto L_80800260;
-    // 0x8080025C: or          $v0, $zero, $zero
-    ctx->r2 = 0 | 0;
-L_80800260:
-    // 0x80800260: lw          $ra, 0x14($sp)
-    ctx->r31 = MEM_W(ctx->r29, 0X14);
-    // 0x80800264: addiu       $sp, $sp, 0x18
-    ctx->r29 = ADD32(ctx->r29, 0X18);
-    // 0x80800268: jr          $ra
-    // 0x8080026C: nop
-
-    return;
-    // 0x8080026C: nop
-
-;}
 RECOMP_FUNC void _bahitspline_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
@@ -6676,4 +6614,13 @@ L_800DD2DC:
     return;
     // 0x800DD2E4: nop
 
+;}
+RECOMP_FUNC void _bskazfly_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
+    uint64_t hi = 0, lo = 0, result = 0;
+    int c1cs = 0;
+    // 0x80083370: syscall     57
+    recomp_syscall_handler(rdram, ctx, 0x80083370);
+    return;
+    // 0x80083374: addi        $t0, $zero, 0x0
+    ctx->r8 = ADD32(0, 0X0);
 ;}
