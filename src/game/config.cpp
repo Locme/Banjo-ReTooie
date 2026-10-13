@@ -90,7 +90,7 @@ void tooie::init_config() {
         tooie::free_camera_option,
         "Free camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
-        false);
+        true);
     qol.add_enum_option(
         tooie::free_camera_speed_option,
         "Free camera speed",

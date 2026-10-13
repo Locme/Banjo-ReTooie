@@ -197,7 +197,7 @@ namespace {
 bool tooie::free_camera::enabled() {
     // TOOIE_FREE_CAMERA=1 turns it on for headless tests without touching the settings.
     static const bool forced = std::getenv("TOOIE_FREE_CAMERA") != nullptr;
-    return forced || option<bool>(tooie::free_camera_option, false);
+    return forced || option<bool>(tooie::free_camera_option, true);
 }
 
 extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
