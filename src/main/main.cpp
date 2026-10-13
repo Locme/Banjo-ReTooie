@@ -644,6 +644,20 @@ int main(int argc, char** argv) {
     const std::filesystem::path app_folder = tooie::resolve_app_folder();
     recomp::register_config_path(app_folder);
     tooie::install_crash_handler(app_folder);
+#ifdef _WIN32
+    // The Windows build has no console, so keep what the game and the runtime
+    // print (errors before an abort, among others) in logs/console.log.
+    if (GetConsoleWindow() == nullptr) {
+        std::filesystem::path console_log = app_folder / "logs" / "console.log";
+        std::error_code ec;
+        std::filesystem::resize_file(console_log, 0, ec); // start empty; both streams append
+        if (_wfreopen(console_log.c_str(), L"a", stderr) != nullptr) {
+            setvbuf(stderr, nullptr, _IONBF, 0);
+        }
+        _wfreopen(console_log.c_str(), L"a", stdout);
+        setvbuf(stdout, nullptr, _IONBF, 0);
+    }
+#endif
 
     // Register supported games and patches
     for (const auto& game : supported_games) {
