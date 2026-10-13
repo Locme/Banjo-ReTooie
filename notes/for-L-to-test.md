@@ -218,7 +218,7 @@
   1. Settings (Esc) > QOL > Free camera = On
   2. In a level, turn the camera with the right stick, then walk with the left stick
   3. Hold the right stick down at the lowest tilt, then up at the highest
-  4. Click the right stick a few times (near, normal, far), then press D-pad up for first person
+  4. Click the right stick for first person and again to leave it
   5. Walk next to walls, swim and fly
 - Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
 - Status: waiting for L

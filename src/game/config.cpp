@@ -106,18 +106,8 @@ void tooie::init_config() {
         "Free camera: invert up/down",
         "Reverses which way the right stick tilts the free camera.",
         false);
-    qol.add_enum_option(
-        tooie::first_person_button_option,
-        "First person button",
-        "With the free camera on, clicking the right stick steps the camera distance (near, normal, far), so first person (C-up) moves to this button.",
-        {
-            {tooie::FirstPersonButton::Off, "Off", "Off"},
-            {tooie::FirstPersonButton::DpadUp, "D-pad up", "D-pad up"},
-            {tooie::FirstPersonButton::LeftStick, "Left stick click", "Left stick click"},
-        },
-        tooie::FirstPersonButton::DpadUp);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
-                                   &tooie::free_camera_invert_y_option, &tooie::first_person_button_option }) {
+                                   &tooie::free_camera_invert_y_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(

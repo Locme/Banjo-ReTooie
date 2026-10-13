@@ -19,18 +19,11 @@
 // game's camera logic is left as it was and only the picture moves.
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#ifdef _WIN32
-#include "SDL.h"
-#else
-#include "SDL2/SDL.h"
-#endif
 
 #include "recomp.h"
 #include "funcs.h"
@@ -84,14 +77,6 @@ namespace {
     constexpr float max_zoom = 1.6f;
     // Zoom change per degree of stick tilt beyond a limit.
     constexpr float zoom_rate = 1.0f / 40.0f;
-    // Distances the right stick click steps through: near, normal, far (as in the XBLA port).
-    constexpr float zoom_steps[] = { 0.6f, 1.0f, 1.45f };
-
-    constexpr uint16_t button_c_up = 0x0008;
-    constexpr uint16_t button_d_up = 0x0800;
-
-    // Right stick clicks not yet acted on (pad thread to game thread).
-    std::atomic<int> pending_clicks{0};
 
     // Camera line test flags and radius, as the game's camera uses them (func_80113640).
     constexpr uint32_t sweep_flags = 0x820020;
@@ -152,36 +137,6 @@ namespace {
         if (v > stick_deadzone) return (v - stick_deadzone) / (1.0f - stick_deadzone);
         if (v < -stick_deadzone) return (v + stick_deadzone) / (1.0f - stick_deadzone);
         return 0.0f;
-    }
-
-    // Whether any connected game controller has this button down.
-    bool pad_button_held(SDL_GameControllerButton which) {
-        for (int i = 0; i < SDL_NumJoysticks(); i++) {
-            if (!SDL_IsGameController(i)) {
-                continue;
-            }
-            // Already open elsewhere: SDL hands back the same handle and counts the reference.
-            SDL_GameController* pad = SDL_GameControllerOpen(i);
-            if (pad == nullptr) {
-                continue;
-            }
-            const bool down = SDL_GameControllerGetButton(pad, which) != 0;
-            SDL_GameControllerClose(pad);
-            if (down) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // The next distance step after the current zoom.
-    float next_zoom_step(float zoom) {
-        for (float step : zoom_steps) {
-            if (step > zoom + 0.05f) {
-                return step;
-            }
-        }
-        return zoom_steps[0];
     }
 
     // func_800FAB50(from, to, normal_out, flags, radius on the stack): a swept line test that moves
@@ -245,37 +200,6 @@ bool tooie::free_camera::enabled() {
     return forced || option<bool>(tooie::free_camera_option, false);
 }
 
-void tooie::free_camera::apply_buttons(uint16_t* buttons) {
-    static bool was_clicked = false;
-    if (!enabled()) {
-        was_clicked = false;
-        return;
-    }
-    bool clicked = pad_button_held(SDL_CONTROLLER_BUTTON_RIGHTSTICK);
-    // The pad script's "rs" stands for the right stick click in headless runs.
-    if (tooie::debug::get_scripted_right_click()) {
-        clicked = true;
-    }
-    if (clicked) {
-        // R3 is bound to C-up by default; it is the distance button now.
-        *buttons &= ~button_c_up;
-        if (!was_clicked) {
-            pending_clicks.fetch_add(1);
-        }
-    }
-    was_clicked = clicked;
-
-    const auto fp = static_cast<tooie::FirstPersonButton>(
-        option<uint32_t>(tooie::first_person_button_option, (uint32_t)tooie::FirstPersonButton::DpadUp));
-    if (fp == tooie::FirstPersonButton::DpadUp && (*buttons & button_d_up)) {
-        *buttons &= ~button_d_up;
-        *buttons |= button_c_up;
-    }
-    else if (fp == tooie::FirstPersonButton::LeftStick && pad_button_held(SDL_CONTROLLER_BUTTON_LEFTSTICK)) {
-        *buttons |= button_c_up;
-    }
-}
-
 extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_FREECAM_LOG") != nullptr;
     static auto last_log = std::chrono::steady_clock::now();
@@ -332,10 +256,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     // is the free camera's, not C buttons.
     recompinput::set_right_analog_suppressed(on && gameplay && !paused);
 
-    // Clicks outside normal play (first person, cutscenes) do nothing.
-    if (!(on && gameplay && !paused)) {
-        pending_clicks.store(0);
-    }
     if (!on || !gameplay || map != state.map) {
         state.active = false;
         state.map = map;
@@ -343,8 +263,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
     bool blocked = false;
     if (on && gameplay && !paused) {
-        const int clicks = pending_clicks.exchange(0);
-        if (!state.active && (stick_x != 0.0f || stick_y != 0.0f || clicks > 0)) {
+        if (!state.active && (stick_x != 0.0f || stick_y != 0.0f)) {
             state.active = true;
             state.yaw = rot[1];
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
@@ -352,9 +271,6 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.zoom = 1.0f;
         }
         if (state.active) {
-            for (int i = 0; i < clicks; i++) {
-                state.zoom = next_zoom_step(state.zoom);
-            }
             const auto speed = std::min<uint32_t>(option<uint32_t>(tooie::free_camera_speed_option, 1), 2);
             const float sx = option<bool>(tooie::free_camera_invert_x_option, false) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
@@ -426,8 +342,8 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
     if (log && now - last_log >= std::chrono::milliseconds(250)) {
         last_log = now;
-        std::printf("[freecam] aspect %.3f map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f elev %.1f view %.1f zoom %.2f wall %d\n",
-            valid_ptr(camera) ? read_float(rdram, camera + 0xE8) : 0.0f, map, mode, updating, paused, submode, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2],
+        std::printf("[freecam] map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f elev %.1f view %.1f zoom %.2f wall %d\n",
+            map, mode, updating, paused, submode, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2],
             banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked);
         std::fflush(stdout);
     }

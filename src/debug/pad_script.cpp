@@ -8,7 +8,7 @@
 //     Held for hold_ms (default 150).
 //   * Stick: x=<-1..1>, y=<-1..1>, mixed freely with buttons.
 //   * Right stick: rx=<-1..1>, ry=<-1..1> (read by the free camera, which
-//     sees the right stick itself rather than as C buttons); rs clicks it.
+//     sees the right stick itself rather than as C buttons).
 //   * `quit` ends the program.
 // Scripted input is added to player 1's real input, so a script and a person
 // can share the controller.
@@ -25,7 +25,6 @@
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_tiptoe.h"
-#include "tooie_free_camera.h"
 #include "recompinput/profiles.h"
 
 namespace {
@@ -37,7 +36,6 @@ namespace {
         std::optional<float> y;
         std::optional<float> rx;
         std::optional<float> ry;
-        bool right_click;
         bool quit;
     };
 
@@ -87,15 +85,12 @@ bool tooie::debug::parse_pad_script(const char* script) {
             fprintf(stderr, "[pad] bad step '%s'\n", text.c_str());
             return false;
         }
-        Step step{ (uint32_t)std::strtoul(fields[0].c_str(), nullptr, 10), 150, 0, {}, {}, {}, {}, false, false };
+        Step step{ (uint32_t)std::strtoul(fields[0].c_str(), nullptr, 10), 150, 0, {}, {}, {}, {}, false };
         if (fields.size() == 3) {
             step.hold_ms = (uint32_t)std::strtoul(fields[2].c_str(), nullptr, 10);
         }
         for (const std::string& action : split(fields[1], ',')) {
-            if (action == "rs") {
-                step.right_click = true;
-            }
-            else if (action == "quit") {
+            if (action == "quit") {
                 step.quit = true;
             }
             else if (action.rfind("rx=", 0) == 0) {
@@ -182,22 +177,6 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
-        tooie::free_camera::apply_buttons(buttons_out);
     }
     return ok;
-}
-
-bool tooie::debug::get_scripted_right_click() {
-    if (steps.empty()) {
-        return false;
-    }
-    std::call_once(started_flag, []() { started = std::chrono::steady_clock::now(); });
-    uint32_t now_ms = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - started).count();
-    for (const Step& step : steps) {
-        if (step.right_click && now_ms >= step.start_ms && now_ms < step.start_ms + step.hold_ms) {
-            return true;
-        }
-    }
-    return false;
 }
