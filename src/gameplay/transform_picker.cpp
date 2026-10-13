@@ -20,8 +20,7 @@ namespace {
     constexpr gpr player_table = (int32_t)0x80135490;
     constexpr gpr game_state_addr = (int32_t)0x80127630;
 
-    // Clockwork Kazooie (0x11) is left out: it crashes the player update when the area has no entry for
-    // the partner form (segfault, headless), and the fix needs a hook in the generated code.
+    // Clockwork Kazooie (0x11) needs the missing-partner-entry hook on func_800F8A5C (banjotooie.us.toml).
     // The row's entries; the index is the saved value, 0 is Off.
     struct Form {
         const char* name;
@@ -43,6 +42,7 @@ namespace {
         { "T-Rex (small)", 0x12 },
         { "T-Rex (large)", 0x13 },
         { "Banjo-Kazooie (BK)", 0x1 },
+        { "Clockwork Kazooie", 0x11 },   // last, so saved choices keep their index
     };
     constexpr uint32_t form_count = sizeof(forms) / sizeof(forms[0]);
 

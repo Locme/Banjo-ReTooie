@@ -302,7 +302,7 @@
 - Steps:
   1. Esc > Cheats > Enable cheats on, then Transformation: pick Bee
   2. The area reloads. Try a few more forms (Washing machine, Van, Snowball, Submarine, T-Rex) in different areas
-- Checked headless: Mumbo, Bee, Stony and Kazooie show and hold in Spiral Mountain. The others are untested. Clockwork Kazooie is not offered (it crashes).
+- Checked headless: Mumbo, Bee, Stony and Kazooie show and hold in Spiral Mountain. The others are untested. Clockwork Kazooie was added later (crash fixed) and holds in Spiral Mountain.
 - Look for: Does the new form show and play right after the reload? Which forms crash or look wrong, and where? Does pausing and leaving the area keep the form?
 - Status: waiting for L
 

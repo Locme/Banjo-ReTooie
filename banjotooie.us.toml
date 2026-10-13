@@ -372,3 +372,13 @@ text = "tooie_set_fov(rdram, ctx);"
 func = "func_8010FC38"
 before_vram = 0x8010FC38
 text = "tooie_camera_controller_step(rdram, ctx);"
+
+# --- Missing partner entry (Clockwork Kazooie crash) ------------------------
+# func_800F8A5C(form) returns the map where the area's player entry for that
+# form was left: func_800F88A0(form)->+0x22. With no entry (0) it read through
+# a null pointer, e.g. as Clockwork Kazooie (bababykaz_entrypoint_5 asks for
+# Banjo's entry). Return map 0 instead, as the XBLA port's fix does.
+[[patches.hook]]
+func = "func_800F8A5C"
+before_vram = 0x800F8A6C
+text = "if (ctx->r2 == 0) { ctx->r29 = ADD32(ctx->r29, 0x18); return; }"

@@ -4697,6 +4697,7 @@ RECOMP_FUNC void func_800F8A5C(uint8_t* rdram, recomp_context* ctx) {
     // 0x800F8A68: nop
 
     after_0:
+    if (ctx->r2 == 0) { ctx->r29 = ADD32(ctx->r29, 0x18); return; }
     // 0x800F8A6C: lw          $ra, 0x14($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x800F8A70: lh          $v0, 0x22($v0)
