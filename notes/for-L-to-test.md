@@ -369,3 +369,13 @@
   4. Do the same on D3D12 and Vulkan (Graphics API, needs a restart)
 - Look for: Does each change show at once, with no restart? With the pattern on, can you set Brightness so box 1 just vanishes and box 2 just shows? Do the colourblind filters make reds and greens (or blues and yellows) easier to tell apart? Does 16-bit colour show the N64's fine dither in the sky, and do the CRT lines look right at your screen size? Anything black, wrong colours or a crash on D3D12? I could only run Vulkan here.
 - Status: waiting for L
+
+## T38 Black squares: frame rate on or off
+- Asked: 2026-10-13 20:42 UTC
+- Build: your current build
+- Steps:
+  1. Go to Witchyworld's Cave of Horrors (Warp tab) and stand in front of the middle cell, then walk toward it, for about a minute at your usual 170 fps
+  2. Press Esc > Graphics and set Frame rate to Original
+  3. Do the same minute again
+- Look for: Do the black squares show up at 170 fps but never at Original?
+- Status: waiting for L
