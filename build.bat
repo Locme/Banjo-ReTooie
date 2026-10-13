@@ -27,11 +27,11 @@ copy /y build-cmake\BanjoTooieN64Recomp.exe . >nul
 copy /y build-cmake\*.dll . >nul
 echo.
 echo Built BanjoTooieN64Recomp.exe in %CD%
-pause
+if not defined NOPAUSE pause
 exit /b 0
 
 :fail
 echo.
 echo The build failed. The messages above say where.
-pause
+if not defined NOPAUSE pause
 exit /b 1
