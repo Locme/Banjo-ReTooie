@@ -378,4 +378,6 @@
   2. Press Esc > Graphics and set Frame rate to Original
   3. Do the same minute again
 - Look for: Do the black squares show up at 170 fps but never at Original?
-- Status: waiting for L
+- Status: answered 2026-10-13 22:00 UTC
+- L's result: Frame rate Original fixes it: the squares only come with the in-between frames (170 fps)
+
