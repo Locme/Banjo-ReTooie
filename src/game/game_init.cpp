@@ -1,5 +1,6 @@
 #include "tooie_game.h"
 #include "tooie_cheats.h"
+#include "tooie_discord.h"
 #include "tooie_watchdog.h"
 
 extern "C" void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);
@@ -14,4 +15,5 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* ctx) {
     start_debug_watch(rdram);
     tooie::watchdog::start();
     tooie::cheats::start(rdram);
+    tooie::discord::start(rdram);
 }

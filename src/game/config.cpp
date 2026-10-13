@@ -5,6 +5,7 @@
 #include "recompinput/recompinput.h"
 #include "librecomp/game.hpp"
 #include "tooie_cheats.h"
+#include "tooie_discord.h"
 
 void tooie::init_config() {
     std::filesystem::path app_dir = recomp::get_config_path();
@@ -21,6 +22,11 @@ void tooie::init_config() {
         tooie::save_backups_option,
         "Back up saves",
         "Copies your save file into the save_backups folder whenever it changes.",
+        true);
+    general.add_bool_option(
+        tooie::discord::presence_option,
+        "Discord status",
+        "Shows the level you are playing in your Discord status while Discord is running.",
         true);
     general.add_number_option(
         tooie::save_backups_keep_option,
