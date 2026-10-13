@@ -20,6 +20,30 @@ index 97dbd8e..f4b4e13 100644
 +    }
      update_bit(rdp_state, ctx->r4, RDPStatusBit::Flush);
  }
+diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
+index 2f22456..005332a 100644
+--- a/ultramodern/include/ultramodern/config.hpp
++++ b/ultramodern/include/ultramodern/config.hpp
+@@ -11,6 +11,9 @@ namespace ultramodern {
+         enum class Resolution {
+             Original,
+             Original2x,
++            R720p,
++            R1080p,
++            R2160p,
+             Auto,
+             OptionCount
+         };
+@@ -88,6 +91,9 @@ namespace ultramodern {
+         NLOHMANN_JSON_SERIALIZE_ENUM(ultramodern::renderer::Resolution, {
+             {ultramodern::renderer::Resolution::Original, "Original"},
+             {ultramodern::renderer::Resolution::Original2x, "Original2x"},
++            {ultramodern::renderer::Resolution::R720p, "720p"},
++            {ultramodern::renderer::Resolution::R1080p, "1080p"},
++            {ultramodern::renderer::Resolution::R2160p, "2160p"},
+             {ultramodern::renderer::Resolution::Auto, "Auto"},
+         });
+ 
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
 index 3b28af3..a320746 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp

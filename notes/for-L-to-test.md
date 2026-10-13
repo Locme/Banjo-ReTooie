@@ -443,4 +443,11 @@
   2. Load a file, press C-up for first person and turn with the left stick. Try a small and a full push
   3. Try Hold R (turn with and without R held), and the Slow and Fast speeds
 - Look for: Is turning slower but still smooth, with no stick range where nothing happens? Does R do anything else in first person that this gets in the way of? Breegull Blaster sections weren't tested.
+
+## T45 Resolution 720p, 1080p, 4K
+- Asked: 2026-10-13 22:40 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Settings (Esc) > Graphics > Resolution: pick 720p, then 1080p, then 4K, then Auto
+- Look for: Does the picture get sharper with each step (4K may be slow on weaker GPUs)? Does your choice stay after a restart? The window size itself does not change; this is the resolution the game is drawn at.
 - Status: waiting for L

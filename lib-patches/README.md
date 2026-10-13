@@ -24,6 +24,10 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Live graphics settings** (`recompui/src/config/ui_config_tab_graphics.cpp`):
   every graphics option applies and saves as soon as it changes, so the
   Apply button is no longer needed (handoff 4.10).
+* **Fixed resolutions** (same file, `recompui/src/renderer/rt64_render_context.cpp`, and
+  `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): the Resolution row
+  offers 720p, 1080p and 4K (RT64 manual multipliers 3x, 4.5x and 9x of the N64's 240 lines)
+  before Auto, which stays last (L, 2026-10-13). Saved as "720p", "1080p", "2160p".
 * **Letterbox 16:9** (same file): the Aspect Ratio row offers RT64's manual
   aspect (16:9 with bars) as "Letterbox 16:9"; the other two are labelled
   "4:3" and "Fill" (handoff 4.22).
