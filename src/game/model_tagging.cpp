@@ -199,10 +199,12 @@ namespace {
     }
 
     // Second word pair of gEXMatrixGroup, NOPUSH, model view stack.
-    uint32_t group_params(uint32_t mode, uint32_t components, uint32_t order) {
+    // vertices: whether RT64 also blends vertex positions that the game
+    // rewrites itself each frame (Banjo bends his joints on the CPU).
+    uint32_t group_params(uint32_t mode, uint32_t components, uint32_t order, uint32_t vertices = component_skip) {
         uint32_t c = components;
         return (mode << 2) | (c << 3) | (c << 5) | (c << 7) | (c << 9) | (c << 11) |
-            (component_skip << 13) | (component_auto << 15) | (order << 17) |
+            (vertices << 13) | (component_auto << 15) | (order << 17) |
             (component_skip << 22) | (component_auto << 24);
     }
 
@@ -450,7 +452,8 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
             }
             uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
-            put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear), 0);
+            uint32_t vertices = snap ? component_skip : component_interpolate;
+            put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear, vertices), 0);
             cursor += 16;
         }
         else if (tagged) {

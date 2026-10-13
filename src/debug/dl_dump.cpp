@@ -86,7 +86,12 @@ namespace {
                 case 0x01: {
                     uint32_t count = (w0 >> 12) & 0xFF;
                     uint32_t last = (w0 >> 1) & 0x7F;
-                    std::fprintf(out, "%*s%06X VTX n=%u v0=%u src=%08X (%08X)\n", depth * 2, pad, phys, count, last - count, w1, resolve(w1));
+                    uint32_t src = resolve(w1);
+                    uint32_t hash = 2166136261u;
+                    for (uint32_t i = 0; i < count * 16; i += 4) {
+                        hash = (hash ^ word(src + i)) * 16777619u;
+                    }
+                    std::fprintf(out, "%*s%06X VTX n=%u v0=%u src=%08X (%08X) hash=%08X\n", depth * 2, pad, phys, count, last - count, w1, src, hash);
                     break;
                 }
                 case 0xDA: {
