@@ -27,6 +27,16 @@ namespace tooie {
     // App-data root (app_data.cpp): the exe's folder when writable (migrating the old per-user
     // folder once), else the runtime's default location.
     std::filesystem::path resolve_app_folder();
+
+    // Save backups (save_backup.cpp): at launch and every 120 s, copies the save file to
+    // save_backups/<date-time>/ if it changed, keeping the newest N (General tab settings).
+    inline const std::string save_backups_option = "save_backups";
+    inline const std::string save_backups_keep_option = "save_backups_keep";
+    void start_save_backups();
+
+    // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
+    // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.
+    void install_crash_handler(const std::filesystem::path& app_folder);
 }
 
 #endif

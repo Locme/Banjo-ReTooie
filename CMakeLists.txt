@@ -113,12 +113,14 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/crash_handler.cpp
     ${CMAKE_SOURCE_DIR}/src/game/debug_watch.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp
 )
@@ -208,7 +210,7 @@ if (WIN32)
     )
 
     target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_SOURCE_DIR}/icons/app.rc)
-    target_link_libraries(BanjoTooieN64Recomp PRIVATE SDL2 Winmm.lib)
+    target_link_libraries(BanjoTooieN64Recomp PRIVATE SDL2 Winmm.lib Dbghelp.lib)
 endif()
 
 if (APPLE)

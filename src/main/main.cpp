@@ -640,7 +640,9 @@ int main(int argc, char** argv) {
     recompui::register_primary_font("InterVariable.ttf", "Inter Variable");
 
     // Register configuration path.
-    recomp::register_config_path(tooie::resolve_app_folder());
+    const std::filesystem::path app_folder = tooie::resolve_app_folder();
+    recomp::register_config_path(app_folder);
+    tooie::install_crash_handler(app_folder);
 
     // Register supported games and patches
     for (const auto& game : supported_games) {
@@ -654,6 +656,8 @@ int main(int argc, char** argv) {
     recompinput::players::set_single_player_mode(true);
 
     tooie::init_config();
+
+    tooie::start_save_backups();
 
     recompui::register_launcher_init_callback(on_launcher_init);
 
