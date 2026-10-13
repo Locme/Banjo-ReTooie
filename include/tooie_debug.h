@@ -10,6 +10,8 @@ namespace tooie::debug {
     bool get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out);
     // The right stick set by the pad script's rx=/ry= steps at this moment, if any.
     bool get_scripted_right_stick(float* x_out, float* y_out);
+    // Whether the pad script holds the right stick click ("rs") at this moment.
+    bool get_scripted_right_click();
     // Map warps (see src/debug/warp.cpp). The request is issued on the game
     // thread at the start of the next frame.
     void request_warp(uint16_t map, uint8_t exit);
