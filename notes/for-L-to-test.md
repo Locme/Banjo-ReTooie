@@ -513,3 +513,13 @@
   3. Turn it off and collect another one
 - Look for: With it on, does Banjo do BK's dance (fist pumps, Kazooie pops out at the end) under Tooie's black bars, and does the game carry on normally afterwards? Is it the right dance as you remember it from BK? Does any other item (Cheato page, Jinjo, Glowbo) wrongly get the dance too? Only checked here by starting the pose without a real Jiggy.
 - Status: waiting for L
+
+## T52 Game Frame Rate (Original / 30 FPS / 60 FPS)
+- Asked: 2026-10-13 23:40 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > Graphics: turn on Frame rate overlay
+  2. Play somewhere busy at Game Frame Rate = Original and watch the "Game ... fps" line
+  3. Switch Game Frame Rate to 30 FPS, then 60 FPS, and play the same spot
+- Look for: Does the Game line now sit at 30 at Original and 30 FPS (it used to flip 28/32 because it was counted over a quarter second), and at 60 with 60 FPS? Does 60 FPS feel smoother without anything running too fast (Banjo moved at the same speed here; timers, animations, enemies, music sync and minigames are untested)? Does any place hitch or go slow-motion at 30 or 60?
+- Status: waiting for L
