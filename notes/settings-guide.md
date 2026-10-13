@@ -39,7 +39,12 @@ framework, not from this port's code, so it is not described here.
 - **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
   click on a controller, nothing on the keyboard. Rebind it in the Controls tab
   under Hotkeys. The game still sees every button as usual.
-- **Speed-Up**: see Cheats below.
+
+## Controls: Cheats
+
+- **Speed-Up**: the speed-up key. Default: F2 on the keyboard, nothing on a
+  controller. Rebind it in the Controls tab under Cheats. It only works while
+  **Enable cheats** and **Speed-up** are on in the Cheats tab (see Cheats below).
 
 ## Graphics: Aspect Ratio
 

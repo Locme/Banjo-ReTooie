@@ -16,7 +16,7 @@ index 0000000..56f8df6
 +    void log_controller_buttons(SDL_GameController* controller);
 +}
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..48d97af 100644
+index f5ed6c0..922f0ec 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
 @@ -37,10 +37,18 @@ namespace recompinput {
@@ -39,11 +39,14 @@ index f5ed6c0..48d97af 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +135,7 @@ namespace recompinput {
+@@ -127,6 +135,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
 +    bool get_game_input_is_hotkey(GameInput input);
++    // The Controls tab heading a hotkey is listed under. Default: "Hotkeys".
++    const std::string& get_game_input_section(GameInput input);
++    void set_game_input_section(GameInput input, const std::string& section);
  
      const std::string& get_game_input_enum_name(GameInput input);
  }
@@ -218,13 +221,25 @@ index 03ed871..20cf022 100644
              }
          }
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
-index c6786e6..4cb4136 100644
+index c6786e6..60450ac 100644
 --- a/recompinput/src/input_types.cpp
 +++ b/recompinput/src/input_types.cpp
-@@ -81,6 +81,18 @@ bool get_game_input_is_menu(GameInput input) {
+@@ -81,6 +81,30 @@ bool get_game_input_is_menu(GameInput input) {
  #undef DEFINE_INPUT
  }
  
++static std::unordered_map<GameInput, std::string> game_input_sections = {};
++
++const std::string& get_game_input_section(GameInput input) {
++    static const std::string default_section = "Hotkeys";
++    auto it = game_input_sections.find(input);
++    return it == game_input_sections.end() ? default_section : it->second;
++}
++
++void set_game_input_section(GameInput input, const std::string& section) {
++    game_input_sections[input] = section;
++}
++
 +bool get_game_input_is_hotkey(GameInput input) {
 +#define DEFINE_INPUT(name, value, readable) case GameInput::name: return true;
 +
@@ -241,18 +256,29 @@ index c6786e6..4cb4136 100644
      return game_input_enum_names.at(static_cast<size_t>(input));
  }
 diff --git a/recompui/src/config/ui_config_page_controls.cpp b/recompui/src/config/ui_config_page_controls.cpp
-index f379a6f..b82e81c 100644
+index f379a6f..7687717 100644
 --- a/recompui/src/config/ui_config_page_controls.cpp
 +++ b/recompui/src/config/ui_config_page_controls.cpp
-@@ -206,6 +206,11 @@ void ConfigPageControls::create_game_input_contexts() {
+@@ -206,6 +206,22 @@ void ConfigPageControls::create_game_input_contexts() {
  
          if (recompinput::get_game_input_is_menu(input)) {
              game_input_sections.menu.contexts.push_back(input_ctx);
 +        } else if (recompinput::get_game_input_is_hotkey(input)) {
++            // Hotkeys are grouped by their section name; "Hotkeys" (the default) comes first.
++            const std::string& section_name = recompinput::get_game_input_section(input);
 +            if (game_input_sections.other.empty()) {
 +                game_input_sections.other.emplace_back("Hotkeys");
 +            }
-+            game_input_sections.other.front().contexts.push_back(input_ctx);
++            GameInputSection* section = nullptr;
++            for (auto& existing : game_input_sections.other) {
++                if (existing.name == section_name) {
++                    section = &existing;
++                }
++            }
++            if (section == nullptr) {
++                section = &game_input_sections.other.emplace_back(section_name);
++            }
++            section->contexts.push_back(input_ctx);
          } else {
              game_input_sections.n64.contexts.push_back(input_ctx);
          }

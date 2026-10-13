@@ -44,7 +44,7 @@ namespace {
         }
     }
 
-    // Whether any keyboard key or controller button bound to Speed-Up (Controls tab, Hotkeys) is held.
+    // Whether any keyboard key or controller button bound to Speed-Up (Controls tab, Cheats section) is held.
     bool key_down() {
         // Pressing the key to bind it in the Controls tab should not switch the speed-up on.
         if (recompinput::binding::is_binding()) {
@@ -153,6 +153,8 @@ namespace {
 
 void tooie::speedup::register_input() {
     recompinput::set_game_input_name(speed_up_input, "Speed-Up");
+    // Listed in the Controls tab under its own "Cheats" heading, apart from the other hotkeys.
+    recompinput::set_game_input_section(speed_up_input, "Cheats");
     recompinput::set_game_input_description(speed_up_input,
         "Runs the game faster while held (or switches it on and off, with Speed-up toggle on). "
         "Works only while Enable cheats and Speed-up are on in the Cheats tab.");
@@ -162,7 +164,7 @@ void tooie::speedup::register_input() {
 
 void tooie::speedup::add_options(recomp::config::Config& cheats, const std::string& master_option) {
     cheats.add_bool_option(enabled_option, "Speed-up",
-        "Lets the Speed-Up key (F2 unless changed under Hotkeys in the Controls tab) run the game faster. Off means the key does nothing.",
+        "Lets the Speed-Up key (F2 unless changed in the Cheats section of the Controls tab) run the game faster. Off means the key does nothing.",
         true);
     cheats.add_number_option(factor_option, "Speed-up factor",
         "How much faster the game runs while the speed-up is active.",

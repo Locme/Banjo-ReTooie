@@ -31,7 +31,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   `recompinput/src/input_types.cpp`, `recompui/src/config/ui_config_page_controls.cpp`):
   adds `SPEED_UP` and `TIPTOE` game inputs in a new hotkey group, so the speed-up and tiptoe keys can be
   bound like any other input. The Controls tab lists hotkeys under their own
-  "Hotkeys" heading. Name, description and default (F2) are set by
+  "Hotkeys" heading, or under another heading a game picks with
+  `set_game_input_section` (Speed-Up is under "Cheats"). Name, description and default (F2) are set by
   `src/game/speedup.cpp`.
 * **Back buttons** (`recompinput/src/extra_buttons.cpp`, `recompinput/src/input_events.cpp`,
   `recompinput/src/input_state.cpp`): many pads (DirectInput and generic HID

@@ -8,7 +8,7 @@ namespace recomp::config {
 }
 
 // Speed-up key (src/game/speedup.cpp): hold the Speed-Up key (default F2, rebindable in the
-// Controls tab under Hotkeys) to run the game at 2x/3x/4x. It scales the N64ModernRuntime game
+// Controls tab, Cheats section) to run the game at 2x/3x/4x. It scales the N64ModernRuntime game
 // clock (ultramodern::set_speed_multiplier), so the VI, timers and audio all stay in step. With
 // the toggle option on, the key switches it on and off instead. The options live in the Cheats tab
 // and the key only works while "Enable cheats" and "Speed-up" are both on.
