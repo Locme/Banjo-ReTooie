@@ -54,6 +54,8 @@ Every menu option, with its default, is listed in [`notes/settings-guide.md`](no
 
 Every keyboard and controller shortcut is listed in [`notes/keys.md`](notes/keys.md).
 
+What changed, newest first, is in [`notes/changelog.md`](notes/changelog.md).
+
 ## Mods and texture packs
 
 Put mods in the `mods` folder next to the exe, then start the game. The Mods tab
