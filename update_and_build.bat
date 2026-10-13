@@ -75,6 +75,9 @@ call :build
 if not errorlevel 1 goto :done
 
 echo.
+echo The errors, without the warnings around them:
+powershell -NoProfile -Command "Select-String -Path build-log.txt -Pattern 'error:','error [A-Z]+[0-9]+','FAILED:','CMake Error' | Select-Object -First 20 | ForEach-Object { $_.Line }"
+echo.
 echo ============================================================
 echo  The build FAILED twice, so this update has a real error.
 echo  Your game in the Release folder was NOT changed and still works.
