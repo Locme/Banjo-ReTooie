@@ -16,6 +16,8 @@ void tooie_overlay_unloading(uint8_t* rdram, recomp_context* ctx);
 void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
+void tooie_flag_get_enter(uint8_t* rdram, recomp_context* ctx);
+void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_hud_element_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_dialogue_timer_advanced(uint8_t* rdram, recomp_context* ctx);

@@ -167,3 +167,13 @@
   3. Watch a cutscene that fades to black
 - Look for: Are the wipes clearly faster on Fast and nearly gone on Instant? Does anything look cut off or flash? Do cutscene fades keep their normal speed?
 - Status: waiting for L
+
+## T19 Cheato cheats
+- Asked: 2026-10-13 18:50 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.70
+- Steps:
+  1. Esc > Cheats, turn on Enable cheats, then switch on one Cheato row at a time (try SUPERBANJO, FEATHERS, HOMING)
+  2. Load a file and play a little, then switch the row off again
+- Look for: Does each code do what its name says while on, and stop when off? Does a code you typed in the Code Chamber stay on after the row is switched off? The flag numbers are the N64 ones from the decomp, so any row that does nothing is worth telling me.
+- Status: waiting for L

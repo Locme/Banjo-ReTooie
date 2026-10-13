@@ -102,7 +102,21 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
 
     if (log && std::chrono::steady_clock::now() - last_log >= std::chrono::milliseconds(100)) {
         last_log = std::chrono::steady_clock::now();
-        std::printf("[player] state %u vy %.1f buttons %04x\n", cur, vy, buttons);
+        uint32_t hv_bits = rd_word(rdram, physics + 0x3C); // target horizontal velocity
+        float hv;
+        std::memcpy(&hv, &hv_bits, sizeof(hv));
+        uint32_t av_bits = rd_word(rdram, physics + 0x38); // horizontal velocity
+        float av;
+        std::memcpy(&av, &av_bits, sizeof(av));
+        uint32_t tr = rd_word(rdram, player + 0x140);
+        float pos[3] = {0, 0, 0};
+        if (valid_ptr(tr)) {
+            for (int k = 0; k < 3; k++) {
+                uint32_t b = rd_word(rdram, tr + 4 * k);
+                std::memcpy(&pos[k], &b, 4);
+            }
+        }
+        std::printf("[player] state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f\n", cur, vy, buttons, hv, av, pos[0], pos[1], pos[2]);
         std::fflush(stdout);
     }
 }

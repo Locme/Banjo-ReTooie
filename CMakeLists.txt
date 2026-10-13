@@ -159,6 +159,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/discord.cpp
     ${CMAKE_SOURCE_DIR}/src/game/speedup.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp

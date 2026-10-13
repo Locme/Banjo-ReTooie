@@ -54,3 +54,14 @@ while cheats are on.
 - **Infinite feathers**: red and gold feathers have no limit.
 - **Infinite Glowbos**: Glowbos have no limit.
 - **Infinite ice keys**: ice keys have no limit.
+- **Levitate**: hold D-pad down to float upwards.
+- **Infinite jumps**: press A again in mid-air to jump again, and hold A to keep
+  rising.
+- **Cheato: FEATHERS, EGGS, FALLPROOF, HONEYBACK, JUKEBOX, GETJIGGY,
+  SUPERBANJO, SUPERBADDY, HONEYKING, NESTKING and HOMING**: the game's own
+  Cheato codes, switched on directly without the Code Chamber. Turning one off
+  only undoes what this setting switched on, so a code you typed in the game
+  stays on. Close the game with them off if you do not want them in your
+  save.
+- **Unlock all moves**: every move counts as learned. Your save file is not
+  changed.

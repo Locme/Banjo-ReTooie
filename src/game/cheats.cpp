@@ -44,6 +44,18 @@ namespace {
           "Hold D-pad down to float upwards.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_infinite_jumps", "Infinite jumps",
           "Press A again in mid-air to jump again, and hold it to keep rising.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_feathers", "Cheato: FEATHERS", "The game's FEATHERS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_eggs", "Cheato: EGGS", "The game's EGGS code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_fallproof", "Cheato: FALLPROOF", "The game's FALLPROOF code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_honeyback", "Cheato: HONEYBACK", "The game's HONEYBACK code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_jukebox", "Cheato: JUKEBOX", "The game's JUKEBOX code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_getjiggy", "Cheato: GETJIGGY", "The game's GETJIGGY code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_superbanjo", "Cheato: SUPERBANJO", "The game's SUPERBANJO code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_superbaddy", "Cheato: SUPERBADDY", "The game's SUPERBADDY code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_honeyking", "Cheato: HONEYKING", "The game's HONEYKING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_nestking", "Cheato: NESTKING", "The game's NESTKING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_homing", "Cheato: HOMING", "The game's HOMING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);
     constexpr size_t item_count = 20;
