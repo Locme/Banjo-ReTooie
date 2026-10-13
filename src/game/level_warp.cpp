@@ -1,8 +1,8 @@
 // Level warp (handoff 4.80).
 //
-// A "Debug" tab in the menu lists the places in level_warp_places.inc,
-// grouped by area. The tab shows only while General > Debug tab is on (L's
-// choice, 2026-10-13), and F9 only works then too. Picking one closes the menu and asks for the warp, which
+// A "Warp" tab in the menu lists the places in level_warp_places.inc,
+// grouped by area. The tab shows only while Cheats > Enable cheats and
+// Cheats > Warp tab are both on, and F9 only works then too. Picking one closes the menu and asks for the warp, which
 // src/debug/warp.cpp issues on the game thread at the start of the next frame
 // with the game's own map change (the usual wipe and title card). Warping to
 // the map you are in does nothing. F9 repeats the last warp.
@@ -150,7 +150,7 @@ void tooie::level_warp::create_tab() {
     // The saved values are known once the configs load.
     cheats.set_load_callback([] { show_tab(debug_tab_on()); });
 
-    recompui::config::create_tab("Debug", tab_id, create_contents);
+    recompui::config::create_tab("Warp", tab_id, create_contents);
     show_tab(false);
 }
 

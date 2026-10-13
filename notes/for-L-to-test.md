@@ -84,7 +84,7 @@
 - Steps:
   1. Start the game
   2. Press Start while the Rare, Nintendo and Dolby logos show
-- Look for: Does it jump straight to the file select with the jigsaw wipe? With Settings > QOL > Press Start Early to Skip Intro off, do the logos play through?
+- Look for: Does it jump straight to the file select with the jigsaw wipe? With Settings > QOL > Press Start Early in Intro off, do the logos play through?
 - Status: waiting for L
 
 ## T11 HUD at the screen edges

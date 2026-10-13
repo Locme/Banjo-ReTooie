@@ -62,7 +62,7 @@ void tooie::init_config() {
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(
         tooie::quick_start_option,
-        "Press Start Early to Skip Intro",
+        "Press Start Early in Intro",
         "Press Start during the logos and title flight to go straight to the file select.",
         true);
     qol.add_enum_option(
