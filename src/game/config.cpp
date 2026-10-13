@@ -117,8 +117,8 @@ void tooie::init_config() {
     qol.add_bool_option(
         tooie::draw_distance_option,
         "Extended draw distance",
-        "Draws far scenery and characters about 5x further away than the original.",
-        true);
+        "Keeps characters and objects that are already loaded drawn much further away than the original.",
+        false);
     qol.add_enum_option(
         tooie::talon_trot::mode_option,
         "Talon Trot",

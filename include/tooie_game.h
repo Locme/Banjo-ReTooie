@@ -64,9 +64,8 @@ namespace tooie {
 
     // High-detail models always (src/gameplay/high_detail_models.cpp), QOL tab.
     inline const std::string high_detail_models_option = "high_detail_models";
-    // Extended draw distance (src/display/draw_distance.cpp). Called each frame from tooie_warp_tick.
+    // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";
-    void draw_distance_tick(uint8_t* rdram);
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.
     inline const std::string fov_offset_option = "fov_offset";
     inline const std::string cutscene_fov_offset_option = "cutscene_fov_offset";

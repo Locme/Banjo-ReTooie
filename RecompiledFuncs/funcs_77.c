@@ -5112,6 +5112,7 @@ RECOMP_FUNC void func_800BFAD0(uint8_t* rdram, recomp_context* ctx) {
     // 0x800BFAF4: sw          $v0, 0x24($sp)
     MEM_W(0X24, ctx->r29) = ctx->r2;
     after_1:
+    tooie_model_draw_distance(rdram, ctx);
     // 0x800BFAF8: mtc1        $v0, $f4
     ctx->f4.u32l = ctx->r2;
     // 0x800BFAFC: jal         0x800DF428

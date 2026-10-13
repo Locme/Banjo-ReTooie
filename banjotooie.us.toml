@@ -382,3 +382,16 @@ text = "tooie_camera_controller_step(rdram, ctx);"
 func = "func_800F8A5C"
 before_vram = 0x800F8A6C
 text = "if (ctx->r2 == 0) { ctx->r29 = ADD32(ctx->r29, 0x18); return; }"
+
+# --- Extended draw distance, 4.26 (src/display/draw_distance.cpp) ----------
+# func_800D2F20 has just returned the model draw distance in $v0 (grid cell
+# size x 4); the callers pass it to func_800DF428.
+[[patches.hook]]
+func = "func_800BFAD0"
+before_vram = 0x800BFAF8
+text = "tooie_model_draw_distance(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80101970"
+before_vram = 0x80101A10
+text = "tooie_model_draw_distance(rdram, ctx);"

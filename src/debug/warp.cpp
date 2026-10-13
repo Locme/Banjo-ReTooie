@@ -107,7 +107,6 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);
-    tooie::draw_distance_tick(rdram);
     tooie::cutscene_skip_tick(rdram);
     tooie::player_cheats::tick(rdram, ctx);
     tooie::talon_trot::tick(rdram, ctx);

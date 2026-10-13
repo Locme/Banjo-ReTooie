@@ -3059,6 +3059,7 @@ L_80101A08:
     // 0x80101A0C: nop
 
     after_4:
+    tooie_model_draw_distance(rdram, ctx);
     // 0x80101A10: mtc1        $v0, $f10
     ctx->f10.u32l = ctx->r2;
     // 0x80101A14: nop
