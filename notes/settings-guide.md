@@ -23,7 +23,7 @@ framework, not from this port's code, so it is not described here.
 
 ## QOL
 
-- **Skip intro logos**: press Start during the logos and title flight to go
+- **Press Start Early to Skip Intro**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
   page at a time). Menus are not affected. Default: 1x.
