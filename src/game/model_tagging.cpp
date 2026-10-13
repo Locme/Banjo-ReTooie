@@ -662,9 +662,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
 
     // On the game select screen the portraits and the hand shake by a random
     // small turn every game frame; blended, the shake turns into a slow wobble.
-    // Its models are drawn at the game's own rate instead, as is everything
-    // on the first frame after a camera cut.
-    const bool snap = (cut && !overlay) || tooie::debug::current_map(rdram) == game_select_map;
+    // Their places are drawn at the game's own rate instead, as is everything
+    // on the first frame after a camera cut. Their bones (the hand waving)
+    // are still blended, see below.
+    const bool game_select = !overlay && tooie::debug::current_map(rdram) == game_select_map;
+    const bool snap = (cut && !overlay) || game_select;
 
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
@@ -673,6 +675,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Shadows (see ShadowScan): a model matrix multiplied into the projection,
     // then segment 5 and the calls that load the bones from it.
     std::vector<uint32_t> shadow(commands.size(), 0);
+    // Game select: the same models are left as the game draws them, place
+    // (and shake) in the projection, and only their bones get an id, set
+    // with segment 5.
+    std::vector<uint32_t> bones_group(commands.size(), 0);
     std::vector<uint32_t> shadow_base(commands.size(), 0);
     std::vector<uint32_t> restore(commands.size(), 0);
     {
@@ -772,38 +778,40 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     m[r][k] = matrix_element(rdram, shadow_matrix, r, k);
                 }
             }
-            for (uint32_t n = 0; n < scan.bones; n++) {
-                for (int r = 0; r < 4; r++) {
-                    for (int k = 0; k < 4; k++) {
-                        bone[r][k] = matrix_element(rdram, bones + n * 64, r, k);
+            if (!game_select) {
+                for (uint32_t n = 0; n < scan.bones; n++) {
+                    for (int r = 0; r < 4; r++) {
+                        for (int k = 0; k < 4; k++) {
+                            bone[r][k] = matrix_element(rdram, bones + n * 64, r, k);
+                        }
                     }
-                }
-                for (int r = 0; r < 4; r++) {
-                    for (int k = 0; k < 4; k++) {
-                        product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
+                    for (int r = 0; r < 4; r++) {
+                        for (int k = 0; k < 4; k++) {
+                            product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
+                        }
                     }
+                    write_matrix(rdram, cursor + n * 64, product);
                 }
-                write_matrix(rdram, cursor + n * 64, product);
+                put(rdram, start + (uint32_t)segment_command * 8, commands[segment_command].w0, cursor);
+                if (scan.base_vertices) {
+                    // The modelview before the model gets the same treatment, and
+                    // is put back before the next matrix.
+                    for (int r = 0; r < 4; r++) {
+                        for (int k = 0; k < 4; k++) {
+                            bone[r][k] = matrix_element(rdram, base, r, k);
+                        }
+                    }
+                    for (int r = 0; r < 4; r++) {
+                        for (int k = 0; k < 4; k++) {
+                            product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
+                        }
+                    }
+                    shadow_base[i] = cursor + scan.bones * 64;
+                    write_matrix(rdram, shadow_base[i], product);
+                    restore[next_matrix] = base;
+                }
+                cursor += bytes;
             }
-            put(rdram, start + (uint32_t)segment_command * 8, commands[segment_command].w0, cursor);
-            if (scan.base_vertices) {
-                // The modelview before the model gets the same treatment, and
-                // is put back before the next matrix.
-                for (int r = 0; r < 4; r++) {
-                    for (int k = 0; k < 4; k++) {
-                        bone[r][k] = matrix_element(rdram, base, r, k);
-                    }
-                }
-                for (int r = 0; r < 4; r++) {
-                    for (int k = 0; k < 4; k++) {
-                        product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
-                    }
-                }
-                shadow_base[i] = cursor + scan.bones * 64;
-                write_matrix(rdram, shadow_base[i], product);
-                restore[next_matrix] = base;
-            }
-            cursor += bytes;
 
             // Which copy this is: the nearest of last frame's copies of the
             // same model, as in pass 2, so one appearing or vanishing does
@@ -814,7 +822,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             used.resize(last.size(), false);
             int best = -1;
             float best_distance = teleport_distance * teleport_distance;
-            for (size_t n = 0; n < last.size() && !snap; n++) {
+            for (size_t n = 0; n < last.size() && !(game_select ? cut : snap); n++) {
                 if (used[n]) {
                     continue;
                 }
@@ -840,7 +848,12 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 copy.instance = next_instance++;
             }
             now_copies[key].push_back(copy);
-            shadow[i] = make_id(key, copy.instance, camera_generation);
+            if (game_select) {
+                bones_group[segment_command] = make_id(key, copy.instance, camera_generation);
+            }
+            else {
+                shadow[i] = make_id(key, copy.instance, camera_generation);
+            }
         }
         last_copies = std::move(now_copies);
     }
@@ -859,6 +872,29 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     uint32_t p = start;
     for (size_t index = 0; index < commands.size(); index++, p += 8) {
         const Command& c = commands[index];
+        if (bones_group[index] != 0) {
+            // Game select: one id for the bones the model's lists load from
+            // segment 5, matched in load order, set with the segment.
+            if (cursor + 40 > limit) {
+                break;
+            }
+            uint32_t list = cursor;
+            if (!enabled) {
+                put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
+                cursor += 8;
+                enabled = true;
+            }
+            uint32_t components = cut ? component_skip : component_interpolate;
+            put(rdram, cursor, group_word0(), bones_group[index]);
+            put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear), 0);
+            put(rdram, cursor + 16, c.w0, c.w1);
+            put(rdram, cursor + 24, op_enddl << 24, 0);
+            cursor += 32;
+            put(rdram, p, op_dl << 24, list);
+            tagged = true;
+            bones_tagged++;
+            continue;
+        }
         if ((c.w0 >> 24) != op_mtx) {
             continue;
         }

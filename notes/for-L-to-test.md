@@ -536,3 +536,12 @@
   4. Turn Noclip off
 - Look for: Do you rise and sink while held and stay at that height when you let go? Do you pass through walls, floors and ceilings? When you switch it off, do you fall normally? If you rebound LT/RT in Controls, the buttons follow the N64 Z and R bindings.
 - Status: waiting for L
+
+## T54 Save Game Select smoothness
+- Asked: 2026-10-13 23:55 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Frame rate at your usual 170 fps
+  2. Open the Save Game Select screen and watch the hand waving in picture 1, and the pictures
+- Look for: Does the hand's wave look smooth now? The pictures' small shake should stay quick and crisp, as before (it is drawn at the game's own rate on purpose). Anything stretched or jumping?
+- Status: waiting for L
