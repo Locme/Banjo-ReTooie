@@ -138,3 +138,245 @@ index e08b02c..f71b2cb 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
+diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
+index 2970e71..64dc36f 100644
+--- a/src/hle/rt64_state.cpp
++++ b/src/hle/rt64_state.cpp
+@@ -820,7 +820,7 @@ namespace RT64 {
+         const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
+         const bool renderToRDRAM = extendedRenderToRAMSet ? (extended.renderToRAM != 0) : ext.emulatorConfig->framebuffer.renderToRAM;
+         const bool warningsEnabled = ext.userConfig->developerMode;
+-        const bool linearFiltering = !ext.userConfig->threePointFiltering;
++        const bool linearFiltering = !ext.userConfig->threePointFiltering || !PictureFiltersThreePoint();
+         const size_t callTileCount = workload.drawData.callTiles.size();
+         for (size_t t = 0; t < callTileCount; t++) {
+             DrawCallTile &callTile = workload.drawData.callTiles[t];
+diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
+index b4ff4e9..7753d4e 100644
+--- a/src/render/rt64_vi_renderer.cpp
++++ b/src/render/rt64_vi_renderer.cpp
+@@ -4,10 +4,35 @@
+ 
+ #include "rt64_vi_renderer.h"
+ 
++#include <algorithm>
++#include <cmath>
++#include <mutex>
++
+ #include "shared/rt64_hlsl.h"
+ #include "shared/rt64_video_interface.h"
+ 
+ namespace RT64 {
++    namespace {
++        std::mutex pictureFiltersMutex;
++        PictureFilters pictureFilters;
++    }
++
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, bool dither16, bool threePointFiltering) {
++        const std::scoped_lock lock(pictureFiltersMutex);
++        pictureFilters.brightness = brightness;
++        pictureFilters.brightnessPattern = brightnessPattern;
++        pictureFilters.colourblindMode = colourblindMode;
++        pictureFilters.colourblindStrength = colourblindStrength;
++        pictureFilters.crt = crt;
++        pictureFilters.dither16 = dither16;
++        pictureFilters.threePointFiltering = threePointFiltering;
++    }
++
++    bool PictureFiltersThreePoint() {
++        const std::scoped_lock lock(pictureFiltersMutex);
++        return pictureFilters.threePointFiltering;
++    }
++
+     // VIRenderer
+ 
+     VIRenderer::VIRenderer() { }
+@@ -78,6 +103,22 @@ namespace RT64 {
+         pushConstants.textureResolution = { float(p.textureWidth), float(p.textureHeight) };
+         pushConstants.gamma = p.vi->gamma();
+ 
++        PictureFilters filters;
++        {
++            const std::scoped_lock lock(pictureFiltersMutex);
++            filters = pictureFilters;
++        }
++
++        pushConstants.brightnessGamma = 1.0f / (1.0f + 0.08f * float(std::clamp(filters.brightness, -5, 5)));
++        pushConstants.brightnessPattern = filters.brightnessPattern ? 1 : 0;
++        pushConstants.colourblindMode = filters.colourblindMode;
++        pushConstants.colourblindStrength = std::clamp(filters.colourblindStrength, 0.0f, 1.0f);
++        pushConstants.crt = filters.crt ? 1 : 0;
++        pushConstants.dither16 = filters.dither16 ? 1 : 0;
++        pushConstants.padding0 = 0;
++        pushConstants.sdResolution = hlslpp::float2(p.vi->fbSize());
++        pushConstants.windowResolution = { float(p.swapChain->getWidth()), float(p.swapChain->getHeight()) };
++
+         p.commandList->setPipeline(shader->pipeline.get());
+         p.commandList->setGraphicsPipelineLayout(shader->pipelineLayout.get());
+         p.commandList->setGraphicsDescriptorSet(descriptorSet->get(), 0);
+diff --git a/src/render/rt64_vi_renderer.h b/src/render/rt64_vi_renderer.h
+index 8a3782a..c8f319a 100644
+--- a/src/render/rt64_vi_renderer.h
++++ b/src/render/rt64_vi_renderer.h
+@@ -11,6 +11,27 @@
+ #include "rt64_shader_library.h"
+ 
+ namespace RT64 {
++    // Banjo-Tooie: filters applied to the final picture as the VI draws it to the window.
++    struct PictureFilters {
++        // Brightness steps, -5 to +5: out = in^(1 / (1 + 0.08 * step)), so black and white stay put.
++        int brightness = 0;
++        // Draws ten grey boxes (2% to 20%) over the picture to set the brightness by.
++        bool brightnessPattern = false;
++        // 0 off, 1 deuteranopia, 2 protanopia, 3 tritanopia (daltonization), with a strength of 0 to 1.
++        uint32_t colourblindMode = 0;
++        float colourblindStrength = 1.0f;
++        // 240 scanlines with an aperture grille.
++        bool crt = false;
++        // 5 bits per channel with the N64's dither pattern.
++        bool dither16 = false;
++        // Off: textures are smoothed with plain bilinear filtering instead of the N64's 3-point filter.
++        bool threePointFiltering = true;
++    };
++
++    // Plain arguments, so the game can declare it without RT64's headers.
++    void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, bool dither16, bool threePointFiltering);
++    bool PictureFiltersThreePoint();
++
+     struct VIRenderer {
+         std::unique_ptr<VideoInterfaceDescriptorSet> descriptorSet;
+         const RenderSampler *descriptorSetSampler = nullptr;
+diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
+index 3f33475..6d13a70 100644
+--- a/src/shaders/VideoInterfacePS.hlsl
++++ b/src/shaders/VideoInterfacePS.hlsl
+@@ -32,10 +32,105 @@ float4 PixelAntialiasing(float2 uv) {
+     return SampleInput(uvTexspace / gConstants.textureResolution);
+ }
+ 
++//
++// Banjo-Tooie picture filters (RT64::SetPictureFilters). uv covers the VI picture from 0 to 1.
++//
++
++// Daltonization (Fidaner, Lin and Ozguven): the colours a deficient eye can't tell apart are moved
++// into the channels it can still see.
++float3 Daltonize(float3 rgb, uint mode, float strength) {
++    const float3x3 RGBtoLMS = float3x3(
++        17.8824f, 43.5161f, 4.11935f,
++        3.45565f, 27.1554f, 3.86714f,
++        0.0299566f, 0.184309f, 1.46709f);
++    const float3x3 LMStoRGB = float3x3(
++        0.0809444479f, -0.130504409f, 0.116721066f,
++        -0.0102485335f, 0.0540193266f, -0.113614708f,
++        -0.000365296938f, -0.00412161469f, 0.693511405f);
++    float3x3 simulate;
++    if (mode == 1) {
++        // Deuteranopia: no M cones.
++        simulate = float3x3(1.0f, 0.0f, 0.0f, 0.494207f, 0.0f, 1.24827f, 0.0f, 0.0f, 1.0f);
++    }
++    else if (mode == 2) {
++        // Protanopia: no L cones.
++        simulate = float3x3(0.0f, 2.02344f, -2.52581f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
++    }
++    else {
++        // Tritanopia: no S cones.
++        simulate = float3x3(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, -0.395913f, 0.801109f, 0.0f);
++    }
++
++    const float3 seen = mul(LMStoRGB, mul(simulate, mul(RGBtoLMS, rgb)));
++    const float3 lost = rgb - seen;
++    const float3 shifted = float3(0.0f, 0.7f * lost.r + lost.g, 0.7f * lost.r + lost.b);
++    return saturate(rgb + shifted * strength);
++}
++
++// The N64's 16-bit colour: each channel is cut to 5 bits after adding the RDP's magic square dither.
++float3 Dither16(float3 rgb, float2 uv) {
++    const uint2 pixel = uint2(uv * gConstants.sdResolution);
++    const uint MagicSquare[16] = { 0, 6, 1, 7, 4, 2, 5, 3, 3, 5, 2, 4, 7, 1, 6, 0 };
++    const float dither = float(MagicSquare[(pixel.y & 3) * 4 + (pixel.x & 3)]);
++    return min(floor((rgb * 255.0f + dither) / 8.0f), 31.0f) / 31.0f;
++}
++
++// 240 scanlines and an aperture grille (vertical red, green and blue stripes, 3 window pixels wide).
++float3 Crt(float3 rgb, float2 uv, float4 pos) {
++    const float scan = frac(uv.y * 240.0f);
++    const float scanline = lerp(0.55f, 1.0f, sin(scan * 3.14159265f));
++    const uint stripe = uint(pos.x) % 3;
++    const float3 mask = (stripe == 0) ? float3(1.0f, 0.7f, 0.7f) : ((stripe == 1) ? float3(0.7f, 1.0f, 0.7f) : float3(0.7f, 0.7f, 1.0f));
++    return saturate(rgb * scanline * mask * 1.35f);
++}
++
++// Ten boxes from 2% to 20% grey on black, across the middle of the window. With the brightness right,
++// the first just vanishes and the second just shows.
++bool BrightnessPattern(float4 pos, out float3 rgb) {
++    const float2 uv = pos.xy / gConstants.windowResolution;
++    rgb = float3(0.0f, 0.0f, 0.0f);
++    if ((uv.y < 0.38f) || (uv.y > 0.62f)) {
++        return false;
++    }
++
++    const float x = (uv.x - 0.1f) / 0.8f;
++    const float y = (uv.y - 0.38f) / 0.24f;
++    if ((x >= 0.0f) && (x < 1.0f) && (y > 0.2f) && (y < 0.8f)) {
++        const float cell = x * 10.0f;
++        if (frac(cell) > 0.15f) {
++            rgb = (floor(cell) + 1.0f) * 0.02f;
++        }
++    }
++
++    return true;
++}
++
++float4 ApplyPictureFilters(float4 color, float2 uv, float4 pos) {
++    if (gConstants.dither16 != 0) {
++        color.rgb = Dither16(color.rgb, uv);
++    }
++
++    if (gConstants.colourblindMode != 0) {
++        color.rgb = Daltonize(color.rgb, gConstants.colourblindMode, gConstants.colourblindStrength);
++    }
++
++    if (gConstants.crt != 0) {
++        color.rgb = Crt(color.rgb, uv, pos);
++    }
++
++    float3 patternColor;
++    if ((gConstants.brightnessPattern != 0) && BrightnessPattern(pos, patternColor)) {
++        color.rgb = patternColor;
++    }
++
++    color.rgb = pow(max(color.rgb, 0.0f), gConstants.brightnessGamma);
++    return color;
++}
++
+ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
+ #ifdef PIXEL_ANTIALIASING
+-    return PixelAntialiasing(uv);
++    return ApplyPictureFilters(PixelAntialiasing(uv), uv, pos);
+ #else
+-    return SampleInput((uv / gConstants.textureResolution) * gConstants.videoResolution);
++    return ApplyPictureFilters(SampleInput((uv / gConstants.textureResolution) * gConstants.videoResolution), uv, pos);
+ #endif
+ }
+\ No newline at end of file
+diff --git a/src/shared/rt64_video_interface.h b/src/shared/rt64_video_interface.h
+index b51cf09..a2b8354 100644
+--- a/src/shared/rt64_video_interface.h
++++ b/src/shared/rt64_video_interface.h
+@@ -13,6 +13,16 @@ namespace interop {
+         float2 videoResolution;
+         float2 textureResolution;
+         float gamma;
++        // Banjo-Tooie picture filters (see RT64::SetPictureFilters).
++        float brightnessGamma;
++        uint brightnessPattern;
++        uint colourblindMode;
++        float colourblindStrength;
++        uint crt;
++        uint dither16;
++        uint padding0;
++        float2 sdResolution;
++        float2 windowResolution;
+     };
+ #ifdef HLSL_CPU
+ };

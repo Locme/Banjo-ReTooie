@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Graphics: Brightness with a test pattern, Colourblind filters, and Retro N64 16-bit colour, CRT and a 3-point filtering switch.
 - Controller support now comes from SDL 3 (through sdl2-compat): back buttons work on more pads, including 8BitDo Pro 2, Pro 3, Ultimate 2 Wireless and Ultimate 3.
 - Talon Trot can be a toggle (QOL, on by default): let go of Z and Banjo keeps trotting until you press Z or C-left.
 - Controller back buttons that SDL doesn't name can now be bound in Controls (they show as L4, R4, L5, R5).

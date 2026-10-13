@@ -52,9 +52,17 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `RT64::RequestScreenshot(callback)`. The next presented frame's game image is
   copied to a read-back buffer before the UI is drawn over it, converted to
   RGBA8 and handed to the callback (handoff 4.83, `src/game/screenshot.cpp`).
+* **Picture filters** (`src/render/rt64_vi_renderer.cpp`, `.h`,
+  `src/shaders/VideoInterfacePS.hlsl`, `src/shared/rt64_video_interface.h`,
+  `src/hle/rt64_state.cpp`): adds `RT64::SetPictureFilters(...)`. The VI pass
+  that draws the picture into the window also applies brightness (with a test
+  pattern), a colourblind filter, N64 16-bit colour and CRT scanlines, and the
+  N64 3-point texture filter can be switched to bilinear live (handoff 4.25,
+  4.40, 4.41, `src/display/picture_filters.cpp`). Screenshots are taken before
+  this pass, so they don't show these filters.
 
 To change it: edit the files in `lib/rt64`, then
-`git -C lib/rt64 diff > lib-patches/rt64.patch`.
+`git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`.
 
 ## plume.patch
 

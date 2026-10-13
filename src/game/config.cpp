@@ -10,6 +10,7 @@
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_picture_filters.h"
 #include "tooie_speedup.h"
 
 void tooie::init_config() {
@@ -142,7 +143,7 @@ void tooie::init_config() {
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
 
-    recompui::config::create_graphics_tab();
+    tooie::picture_filters::add_options(recompui::config::create_graphics_tab());
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
     tooie::cheats::create_tab();
@@ -150,4 +151,5 @@ void tooie::init_config() {
     recompui::config::create_mods_tab();
 
     recompui::config::finalize();
+    tooie::picture_filters::apply();
 }

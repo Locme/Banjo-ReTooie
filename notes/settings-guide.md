@@ -66,6 +66,25 @@ Sets how the picture fits the window. Default: Fill.
 
 Graphics changes apply at once. Graphics API needs a restart.
 
+## Graphics: picture filters
+
+- **Brightness**: -5 to +5. Brightens or darkens the dark and middle tones;
+  black and white stay as they are. Default: 0.
+- **Brightness test pattern**: shows ten grey boxes (2% to 20%) over the game.
+  Close the menu and set Brightness so the first box just disappears and the
+  second is just visible, then turn the pattern off. Default: off.
+- **Colourblind filter**: Off, Deuteranopia, Protanopia (both red-green) or
+  Tritanopia (blue-yellow). It moves the colours you can't tell apart into ones
+  you can. **Colourblind filter strength** (0% to 100%) shows when a filter is
+  on. Default: Off, 100%.
+- **Retro: N64 3-point filtering**: the N64's own texture smoothing. Off uses
+  plain bilinear smoothing. Default: on.
+- **Retro: N64 16-bit colour**: the N64's 16-bit colour with its dither pattern,
+  at the game's original resolution. Default: off.
+- **Retro: CRT**: 240 scanlines and the stripes of a CRT TV. Default: off.
+
+F12 screenshots are taken before these filters, so they don't show them.
+
 ## Cheats
 
 Cheats are in their own tab. Turn on **Enable cheats** first. Every cheat below
