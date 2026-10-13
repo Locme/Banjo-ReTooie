@@ -7,7 +7,8 @@
 // Each dump goes to dl_<ms>.txt in the working directory: one line per
 // command, following branches into called display lists (segments resolved),
 // with matrices, vertex loads and segment changes spelled out and runs of
-// triangles collapsed. hide_hud.cpp's first mark (after the 3D scene) calls
+// triangles collapsed (TOOIE_DLDUMP_ALL=1 also prints every matrix in full
+// and every other command raw). hide_hud.cpp's first mark (after the 3D scene) calls
 // tooie::dl_dump::scene_end; model_tagging.cpp knows where the frame starts.
 
 #include <chrono>
@@ -48,6 +49,7 @@ namespace {
         FILE* out;
         uint32_t segments[16] = {};
         int tris = 0;
+        bool all = std::getenv("TOOIE_DLDUMP_ALL") != nullptr;
 
         uint32_t resolve(uint32_t addr) {
             if ((addr & 0x80000000) != 0) {
@@ -58,6 +60,15 @@ namespace {
 
         uint32_t word(uint32_t phys) {
             return (uint32_t)MEM_W(0, (int32_t)(0x80000000 | phys));
+        }
+
+        // One element of an N64 fixed point matrix (row-major, s15.16).
+        float matrix_element(uint32_t src, int row, int col) {
+            uint32_t index = row * 4 + col;
+            uint32_t shift = (index & 1) ? 0 : 16;
+            int16_t whole = (int16_t)(word(src + (index / 2) * 4) >> shift);
+            uint16_t fraction = (uint16_t)(word(src + 0x20 + (index / 2) * 4) >> shift);
+            return (float)(((int32_t)whole << 16) | fraction) / 65536.0f;
         }
 
         void flush_tris(int depth) {
@@ -99,7 +110,16 @@ namespace {
                     uint32_t src = resolve(w1);
                     std::fprintf(out, "%*s%06X MTX %s%s%s src=%08X (%08X) t=%d,%d,%d\n", depth * 2, pad, phys,
                         (params & 4) ? "PROJ" : "MV", (params & 2) ? " LOAD" : " MUL", (params & 1) ? " PUSH" : "",
-                        w1, src, (int16_t)(word(src + 0x18) >> 16), (int16_t)(word(src + 0x1C) >> 16) ,(int16_t)(word(src + 0x1C) & 0xFFFF));
+                        w1, src, (int16_t)(word(src + 0x18) >> 16), (int16_t)(word(src + 0x18) & 0xFFFF), (int16_t)(word(src + 0x1C) >> 16));
+                    if (all) {
+                        for (int row = 0; row < 4; row++) {
+                            std::fprintf(out, "%*s    [", depth * 2, pad);
+                            for (int col = 0; col < 4; col++) {
+                                std::fprintf(out, " %10.4f", matrix_element(src, row, col));
+                            }
+                            std::fprintf(out, " ]\n");
+                        }
+                    }
                     break;
                 }
                 case 0xD8:
@@ -135,6 +155,9 @@ namespace {
                     std::fprintf(out, "%*s%06X TIMG %08X\n", depth * 2, pad, phys, w1);
                     break;
                 default:
+                    if (all) {
+                        std::fprintf(out, "%*s%06X %08X %08X\n", depth * 2, pad, phys, w0, w1);
+                    }
                     break;
                 }
             }

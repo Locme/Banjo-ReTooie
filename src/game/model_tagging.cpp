@@ -19,7 +19,9 @@
 // distance gets a new id, so it is not smeared across the jump. Matrices
 // outside a model, such as the camera's, keep RT64's automatic matching.
 // On the game select screen every matrix is drawn as the game left it (see
-// below), so the portraits shake as they do at 30 fps.
+// below), so the portraits shake as they do at 30 fps. Character shadows,
+// which the game places through the projection matrix, are rewritten to
+// place their bones instead (see ShadowScan).
 //
 // The small lists live in RDRAM above the game's 8 MB (which RT64 reads
 // without its extended addressing) in four rotating slots, so a slot is never
@@ -193,6 +195,67 @@ namespace {
         }
         return true;
     }
+
+    void write_matrix(uint8_t* rdram, uint32_t phys, const float m[4][4]) {
+        gpr mtx = kseg0(phys);
+        for (int i = 0; i < 16; i++) {
+            float scaled = std::min(std::max(m[i / 4][i % 4] * 65536.0f, -2147483648.0f), 2147483520.0f);
+            int32_t value = (int32_t)std::lround(scaled);
+            MEM_H(2 * i, mtx) = (int16_t)(value >> 16);
+            MEM_H(32 + 2 * i, mtx) = (int16_t)(value & 0xFFFF);
+        }
+    }
+
+    // Shadows. The game draws a character's shadow as a flattened copy of a
+    // small shadow model: it multiplies the flattening and the character's
+    // place into the projection matrix, points segment 5 at the shadow's bone
+    // matrices, and calls the shadow's geometry, which loads each bone from
+    // segment 5. RT64 blends only a frame's first projection and copies that
+    // to the rest, so the place in the projection would move at the game's
+    // own rate and the bones, hidden inside the geometry lists, would be
+    // matched to each other by guesswork. Instead the shadow's matrix is
+    // multiplied into copies of the bones and the projection is left alone;
+    // the bones are then ordinary matrices, blended in the order the geometry
+    // loads them under one id.
+    struct ShadowScan {
+        uint8_t* rdram;
+        uint32_t bones = 0;
+        int budget = 4096;
+
+        // Walks one list; false if it does anything other than load bones
+        // from segment 5.
+        bool walk(uint32_t phys, uint32_t segments[16], int depth) {
+            for (; budget > 0; budget--, phys += 8) {
+                uint32_t w0 = word(rdram, phys);
+                uint32_t w1 = word(rdram, phys + 4);
+                uint32_t op = w0 >> 24;
+                if (op == op_mtx) {
+                    uint32_t params = (w0 & 0xFF) ^ 1;
+                    if ((params & (mtx_projection | mtx_load)) != mtx_load || (w1 >> 24) != 5 || (w1 & 0x3F) != 0) {
+                        return false;
+                    }
+                    bones = std::max(bones, (w1 & 0xFFFFFF) / 64 + 1);
+                }
+                else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
+                    segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
+                }
+                else if (op == op_dl) {
+                    uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
+                        ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                    if (depth > 8 || target == 0 || !walk(target, segments, depth + 1)) {
+                        return false;
+                    }
+                    if (((w0 >> 16) & 0xFF) != 0) {
+                        return true;
+                    }
+                }
+                else if (op == op_enddl) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
 
     uint32_t group_word0() {
         return (rt64_extended_opcode << 24) | g_ex_matrixgroup_v1;
@@ -399,13 +462,88 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     // on the first frame after a camera cut.
     const bool snap = cut || tooie::debug::current_map(rdram) == game_select_map;
 
-    // Pass 3: wrap the matrix loads.
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
     uint32_t limit = cursor + slot_size;
+
+    // Shadows (see ShadowScan): a model matrix multiplied into the projection,
+    // then segment 5 and the calls that load the bones from it.
+    std::vector<bool> shadow(commands.size(), false);
+    {
+        uint32_t segments[16] = {};
+        for (size_t i = 0; i < commands.size(); i++) {
+            const Command& c = commands[i];
+            uint32_t op = c.w0 >> 24;
+            if (op == op_moveword && ((c.w0 >> 16) & 0xFF) == moveword_segment) {
+                segments[((c.w0 & 0xFFFF) / 4) & 0xF] = c.w1 & 0x1FFFFFFF;
+                continue;
+            }
+            if (op != op_mtx || (((c.w0 & 0xFF) ^ 1) & (mtx_projection | mtx_load)) != mtx_projection) {
+                continue;
+            }
+            uint32_t local[16];
+            std::copy(segments, segments + 16, local);
+            ShadowScan scan{rdram};
+            size_t segment_command = 0;
+            bool ok = true;
+            for (size_t j = i + 1; j < commands.size() && ok; j++) {
+                uint32_t w0 = commands[j].w0;
+                uint32_t w1 = commands[j].w1;
+                uint32_t jop = w0 >> 24;
+                if (jop == op_mtx) {
+                    break;
+                }
+                if (jop == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
+                    uint32_t seg = ((w0 & 0xFFFF) / 4) & 0xF;
+                    local[seg] = w1 & 0x1FFFFFFF;
+                    if (seg == 5) {
+                        segment_command = j;
+                    }
+                }
+                else if (jop == op_dl) {
+                    uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
+                        ((local[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                    ok = segment_command != 0 && target != 0 && scan.walk(target, local, 0);
+                }
+            }
+            uint32_t bytes = scan.bones * 64;
+            if (!ok || segment_command == 0 || scan.bones == 0 || cursor + bytes + 64 > limit) {
+                continue;
+            }
+            float m[4][4];
+            float bone[4][4];
+            float product[4][4];
+            uint32_t shadow_matrix = commands[i].w1 & 0x1FFFFFFF;
+            uint32_t bones = commands[segment_command].w1 & 0x1FFFFFFF;
+            for (int r = 0; r < 4; r++) {
+                for (int k = 0; k < 4; k++) {
+                    m[r][k] = matrix_element(rdram, shadow_matrix, r, k);
+                }
+            }
+            for (uint32_t n = 0; n < scan.bones; n++) {
+                for (int r = 0; r < 4; r++) {
+                    for (int k = 0; k < 4; k++) {
+                        bone[r][k] = matrix_element(rdram, bones + n * 64, r, k);
+                    }
+                }
+                for (int r = 0; r < 4; r++) {
+                    for (int k = 0; k < 4; k++) {
+                        product[r][k] = bone[r][0] * m[0][k] + bone[r][1] * m[1][k] + bone[r][2] * m[2][k] + bone[r][3] * m[3][k];
+                    }
+                }
+                write_matrix(rdram, cursor + n * 64, product);
+            }
+            put(rdram, start + (uint32_t)segment_command * 8, commands[segment_command].w0, cursor);
+            cursor += bytes;
+            shadow[i] = true;
+        }
+    }
+
+    // Pass 3: wrap the matrix loads.
     bool enabled = false;
     bool tagged = false;
     bool camera_tagged = false;
+    uint32_t shadows = 0;
     std::unordered_map<uint32_t, uint32_t> repeats;
     uint32_t p = start;
     for (size_t index = 0; index < commands.size(); index++, p += 8) {
@@ -421,6 +559,28 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
         // The perspective camera gets an id that changes at each cut, so RT64
         // does not blend the camera across it.
         bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera;
+        if (shadow[index]) {
+            // Replaces the projection multiply: one id for all the shadow's
+            // bones, matched in load order and blended element by element
+            // (they are flat, so they cannot be split into turn and scale).
+            if (cursor + 40 > limit) {
+                break;
+            }
+            uint32_t list = cursor;
+            if (!enabled) {
+                put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
+                cursor += 8;
+                enabled = true;
+            }
+            uint32_t components = snap ? component_skip : component_interpolate;
+            put(rdram, cursor, group_word0(), make_id(0x534844, shadows++, camera_generation));
+            put(rdram, cursor + 8, group_params(interpolate_simple, components, order_linear), 0);
+            put(rdram, cursor + 16, op_enddl << 24, 0);
+            cursor += 24;
+            put(rdram, p, op_dl << 24, list);
+            tagged = true;
+            continue;
+        }
         if (!tag && !tagged && !tag_camera) {
             continue;
         }
