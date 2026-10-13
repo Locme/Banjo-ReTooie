@@ -1,4 +1,5 @@
 #include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -89,6 +90,57 @@ namespace {
         }
     }
 
+    // The last C++ exception thrown, kept so a crash from an uncaught one (std::terminate, which MSVC turns
+    // into abort() on threads other than main) can say what it was.
+    char last_cpp_exception[600];
+
+    // MSVC throws C++ exceptions as SEH exception 0xE06D7363. Its parameters point at the thrown object
+    // and its ThrowInfo, whose catchable-type list names every type the object can be caught as.
+    LONG WINAPI note_cpp_exception(EXCEPTION_POINTERS* ep) {
+        const EXCEPTION_RECORD* rec = ep->ExceptionRecord;
+        if (rec->ExceptionCode != 0xE06D7363 || rec->NumberParameters < 4) {
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
+        __try {
+            const void* object = reinterpret_cast<const void*>(rec->ExceptionInformation[1]);
+            const uint8_t* throw_info = reinterpret_cast<const uint8_t*>(rec->ExceptionInformation[2]);
+            const uint8_t* image = reinterpret_cast<const uint8_t*>(rec->ExceptionInformation[3]);
+            // ThrowInfo: attributes, pmfnUnwind, pForwardCompat, pCatchableTypeArray (32-bit image offsets).
+            const int32_t* types = reinterpret_cast<const int32_t*>(image + reinterpret_cast<const int32_t*>(throw_info)[3]);
+            int count = types[0];
+            const char* first_name = "?";
+            bool is_std_exception = false;
+            for (int i = 0; i < count; i++) {
+                // CatchableType: properties, pType (TypeDescriptor offset), ...; the name is at TypeDescriptor + 16.
+                const int32_t* catchable = reinterpret_cast<const int32_t*>(image + types[1 + i]);
+                const char* name = reinterpret_cast<const char*>(image + catchable[1] + 16);
+                if (i == 0) {
+                    first_name = name;
+                }
+                if (std::strcmp(name, ".?AVexception@std@@") == 0) {
+                    is_std_exception = true;
+                }
+            }
+            std::snprintf(last_cpp_exception, sizeof(last_cpp_exception), "%s: %s", first_name,
+                is_std_exception ? static_cast<const std::exception*>(object)->what() : "(not a std::exception)");
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+    // The calling thread's stack, one function per line, for the crash log.
+    void append_backtrace() {
+        void* frames[48];
+        USHORT n = CaptureStackBackTrace(0, 48, frames, nullptr);
+        for (USHORT i = 0; i < n; i++) {
+            char name[400];
+            describe_address(frames[i], name, sizeof(name));
+            char line[460];
+            std::snprintf(line, sizeof(line), "    %2u %s", i, name);
+            append_log_line(line);
+        }
+    }
+
     void write_crash(const char* reason, EXCEPTION_POINTERS* ep) {
         if (crashing.test_and_set()) {
             return;
@@ -120,6 +172,11 @@ namespace {
             ep && ep->ExceptionRecord ? static_cast<unsigned long>(ep->ExceptionRecord->ExceptionCode) : 0ul,
             dumped ? dump_name : "not written");
         append_log_line(line);
+        if (last_cpp_exception[0] != '\0') {
+            std::snprintf(line, sizeof(line), "    last C++ exception thrown: %s", last_cpp_exception);
+            append_log_line(line);
+        }
+        append_backtrace();
         // The crash is recorded, so the marker no longer means "died silently".
         remove_marker();
     }
@@ -147,6 +204,7 @@ namespace {
 
     void install_handlers() {
         SetUnhandledExceptionFilter(unhandled_exception_filter);
+        AddVectoredExceptionHandler(1, note_cpp_exception);
         std::signal(SIGABRT, on_abort);
         _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
         std::set_terminate(on_terminate);
