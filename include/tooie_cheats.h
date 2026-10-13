@@ -14,6 +14,10 @@ namespace tooie::cheats {
 
     // True when the master switch is on. Anything that records progress or achievements should check it.
     bool enabled();
+
+    // True when this cheat's option (for example "cheat_levitate") is on and the master switch is on.
+    // Cheap enough to call every frame from the game thread.
+    bool is_on(const char* option);
 }
 
 #endif

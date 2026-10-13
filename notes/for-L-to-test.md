@@ -138,3 +138,14 @@
   3. Open the pause menu and the file select with each setting
 - Look for: Does text print faster at 2x and 4x, and appear a page at a time on Instant? Do the pauses after commas and full stops shrink too? Are menus unchanged? Does the change apply without restarting?
 - Status: waiting for L
+
+## T15 Levitate and Infinite jumps cheats
+- Asked: 2026-10-13 18:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.73 and §4.79
+- Steps:
+  1. Esc > Cheats, turn on Enable cheats, then Levitate. Load a file, hold D-pad down
+  2. Turn Levitate off and Infinite jumps on. Jump, then press A again in the air several times, then hold A
+  3. Compare the two. Also try it as Kazooie flutter, and in water and as a transformation
+- Look for: Does Levitate lift you smoothly while D-pad down is held, and stop when released? Does each extra A press in the air jump again, and does holding A keep you rising? Does it stay off when the master switch is off? Do you want to keep both or drop Levitate?
+- Status: waiting for L

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <variant>
 
@@ -38,11 +39,20 @@ namespace {
           "Glowbos have no limit.", { 8, -1, -1, -1, -1, -1 } },
         { "infinite_ice_keys", "Infinite ice keys",
           "Ice keys have no limit.", { 19, -1, -1, -1, -1, -1 } },
+        // These two change the player's movement (src/gameplay/player_cheats.cpp), not the item table.
+        { "cheat_levitate", "Levitate",
+          "Hold D-pad down to float upwards.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_infinite_jumps", "Infinite jumps",
+          "Press A again in mid-air to jump again, and hold it to keep rising.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);
     constexpr size_t item_count = 20;
 
     std::once_flag start_once;
+
+    // Whether each cheat is on right now (master switch included), published by the apply loop so the
+    // game thread can read it every frame without touching the config.
+    std::array<std::atomic<bool>, cheat_count> active{};
 
     bool option_on(const std::string& id) {
         try {
@@ -78,6 +88,7 @@ namespace {
 
             for (size_t c = 0; c < cheat_count; c++) {
                 const bool on = master && option_on(cheat_list[c].option);
+                active[c] = on;
                 for (int idx : cheat_list[c].items) {
                     if (idx < 0) {
                         continue;
@@ -134,4 +145,13 @@ void tooie::cheats::start(uint8_t* rdram) {
 
 bool tooie::cheats::enabled() {
     return option_on(enabled_option);
+}
+
+bool tooie::cheats::is_on(const char* option) {
+    for (size_t c = 0; c < cheat_count; c++) {
+        if (std::string_view(cheat_list[c].option) == option) {
+            return active[c];
+        }
+    }
+    return false;
 }
