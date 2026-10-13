@@ -28,7 +28,7 @@ namespace {
 
     bool enabled() {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::draw_distance_option));
+            return std::get<bool>(recompui::config::get_graphics_config().get_option_value(tooie::draw_distance_option));
         } catch (...) {
             return false;
         }

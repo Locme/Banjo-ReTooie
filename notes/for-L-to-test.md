@@ -291,7 +291,7 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.26
 - Steps:
-  1. Settings (Esc) > QOL > Extended draw distance = On (it is now off by default)
+  1. Settings (Esc) > Graphics > Extended Draw Distance = On (it is now off by default)
   2. Walk around Spiral Mountain and Jinjo Village, then a big area (Mayahem Temple, Witchyworld)
   3. Switch the option Off and On while looking
 - Look for: Are feathers, eggs and enemies all there again with it On? Do far-away characters stay drawn longer instead of popping in? Any slowdown?
@@ -325,9 +325,9 @@
 - Build: latest Windows CI build from main
 - XBLA history: report §4.24
 - Steps:
-  1. Settings (Esc) > QOL > Field of view = +20 (default 0, range -10 to +30)
+  1. Settings (Esc) > Graphics > Field of View = +20 (default 0, range -10 to +30)
   2. Walk around Spiral Mountain, then change the value while playing
-  3. Watch a cutscene; set Cutscene field of view to +10 and watch one again
+  3. Watch a cutscene; set Cutscene Field of View to +10 and watch one again
 - Look for: Does the view get wider during play and change as soon as you move the slider? Do cutscenes stay as they were until you change the cutscene setting? Is anything missing at the screen edges, or do the HUD icons look wrong?
 - Status: waiting for L
 

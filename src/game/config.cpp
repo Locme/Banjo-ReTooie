@@ -1,4 +1,7 @@
 #include <filesystem>
+#include <fstream>
+
+#include <json/json.hpp>
 
 #include "tooie_game.h"
 #include "recompui/config.h"
@@ -14,6 +17,47 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_picture_filters.h"
 #include "tooie_speedup.h"
+
+namespace {
+    // Options that moved from the QOL tab to Graphics (L, 2026-10-13): carry a value saved in qol.json
+    // over once, unless graphics.json already has one. Extended draw distance is not carried over, so
+    // it starts off after its fix whatever the broken first version saved.
+    void move_saved_options_to_graphics() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        std::ifstream qol_file(dir / "qol.json");
+        if (!qol_file) {
+            return;
+        }
+        nlohmann::json qol_json = nlohmann::json::parse(qol_file, nullptr, false);
+        if (!qol_json.is_object()) {
+            return;
+        }
+        nlohmann::json graphics_json;
+        if (std::ifstream graphics_file(dir / "graphics.json"); graphics_file) {
+            graphics_json = nlohmann::json::parse(graphics_file, nullptr, false);
+        }
+        recomp::config::Config& graphics = recompui::config::get_graphics_config();
+        bool changed = false;
+        for (const std::string* id : { &tooie::high_detail_models_option, &tooie::fov_offset_option,
+                                       &tooie::cutscene_fov_offset_option }) {
+            if (!qol_json.contains(*id) || (graphics_json.is_object() && graphics_json.contains(*id))) {
+                continue;
+            }
+            const nlohmann::json& value = qol_json[*id];
+            if (value.is_boolean()) {
+                graphics.set_option_value(*id, value.get<bool>());
+            } else if (value.is_number()) {
+                graphics.set_option_value(*id, value.get<double>());
+            } else {
+                continue;
+            }
+            changed = true;
+        }
+        if (changed) {
+            graphics.save_config();
+        }
+    }
+}
 
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
@@ -115,11 +159,6 @@ void tooie::init_config() {
                                    &tooie::free_camera_invert_y_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
-    qol.add_bool_option(
-        tooie::draw_distance_option,
-        "Extended draw distance",
-        "Keeps characters and objects that are already loaded drawn much further away than the original.",
-        false);
     qol.add_enum_option(
         tooie::talon_trot::mode_option,
         "Talon Trot",
@@ -139,16 +178,6 @@ void tooie::init_config() {
             {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
         },
         tooie::canary_mary::Mode::Fair);
-    qol.add_number_option(
-        tooie::fov_offset_option,
-        "Field of view",
-        "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
-        -10, 30, 1, 0, false, 0);
-    qol.add_number_option(
-        tooie::cutscene_fov_offset_option,
-        "Cutscene field of view",
-        "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
-        -10, 20, 1, 0, false, 0);
     qol.add_bool_option(
         tooie::cutscene_skip_option,
         "Skip boss intros",
@@ -162,7 +191,25 @@ void tooie::init_config() {
         "Always High-Detail Models",
         "Models that switch to a simpler version far away always use the detailed one.",
         true);
+<<<<<<< Updated upstream
     tooie::frame_overlay::add_option(graphics);
+=======
+    graphics.add_bool_option(
+        tooie::draw_distance_option,
+        "Extended Draw Distance",
+        "Keeps characters and objects that are already loaded drawn much further away than the original.",
+        false);
+    graphics.add_number_option(
+        tooie::fov_offset_option,
+        "Field of View",
+        "Degrees added to the normal gameplay camera's field of view. Higher shows more around Banjo.",
+        -10, 30, 1, 0, false, 0);
+    graphics.add_number_option(
+        tooie::cutscene_fov_offset_option,
+        "Cutscene Field of View",
+        "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
+        -10, 20, 1, 0, false, 0);
+>>>>>>> Stashed changes
 
     recompui::config::create_controls_tab();
     recompui::config::create_sound_tab();
@@ -171,5 +218,6 @@ void tooie::init_config() {
     recompui::config::create_mods_tab();
 
     recompui::config::finalize();
+    move_saved_options_to_graphics();
     tooie::picture_filters::apply();
 }

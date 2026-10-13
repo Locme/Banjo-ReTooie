@@ -52,7 +52,7 @@ namespace {
 
     int offset(const std::string& id) {
         try {
-            return (int)std::get<double>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(id));
+            return (int)std::get<double>(recompui::config::get_graphics_config().get_option_value(id));
         } catch (...) {
             return 0;
         }
