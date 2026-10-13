@@ -494,6 +494,50 @@ index 4fdf81f..e460eb9 100644
              return config;
          }
      }
+diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
+index e289e9e..e2e38f5 100644
+--- a/recompui/src/elements/ui_select.cpp
++++ b/recompui/src/elements/ui_select.cpp
+@@ -272,6 +272,12 @@ namespace recompui {
+                 }
+ 
+                 selected_option_index = index;
++                // While the list is open, moving through it with a pad or the arrow keys changes the
++                // selection one entry at a time. The change is only reported once the list closes.
++                if (is_open) {
++                    change_pending = true;
++                    break;
++                }
+                 for (const auto &callback : change_callbacks) {
+                     callback(options[index], selected_option_index);
+                 }
+@@ -286,6 +292,14 @@ namespace recompui {
+                     arrow->set_rotation(180.0f);
+                 } else {
+                     arrow->set_rotation(0.0f);
++                    if (change_pending) {
++                        change_pending = false;
++                        if (selected_option_index >= 0 && selected_option_index < (int)options.size()) {
++                            for (const auto &callback : change_callbacks) {
++                                callback(options[selected_option_index], selected_option_index);
++                            }
++                        }
++                    }
+                 }
+             }
+             queue_update();
+diff --git a/recompui/src/elements/ui_select.h b/recompui/src/elements/ui_select.h
+index cc4932c..4a6808c 100644
+--- a/recompui/src/elements/ui_select.h
++++ b/recompui/src/elements/ui_select.h
+@@ -52,6 +52,7 @@ namespace recompui {
+         std::vector<SelectOption> options;
+         std::vector<Option*> option_elements;
+         bool is_open = false;
++        bool change_pending = false;
+ 
+         Style hover_style;
+         Style focus_style;
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
 index a7954c7..f91b291 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp

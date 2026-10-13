@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Transformation drop-down: moving through the list with a controller or the arrow keys no longer applies every entry on the way; the pick applies when you confirm.
 - F7 turns on an interpolation check: models whose blend between frames looks wrong turn red for a moment and are logged.
 - Dust, feathers and other particles are blended again above Original (they were drawn at 30 fps).
 - Above Original frame rate, a cutscene's black bars coming in no longer blend the picture's shape (likely cause of the brief squash in ultrawide, not yet tested).

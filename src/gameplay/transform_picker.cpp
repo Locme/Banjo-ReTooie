@@ -83,6 +83,7 @@ void tooie::transform_picker::add_options(recomp::config::Config& cheats, const 
             if (idx == nullptr || *idx >= form_count || (was != nullptr && *was == *idx)) {
                 return;
             }
+            fprintf(stderr, "[transform] picker changed to entry %u\n", *idx);
             // Off goes back to the normal form, but only when something was picked before.
             if (*idx == 0) {
                 if (was != nullptr && *was > 0) {
