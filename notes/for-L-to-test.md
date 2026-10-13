@@ -262,4 +262,14 @@
   2. Load a file and enter or leave a level, or use the Warp tab
   3. Watch the Jiggy-shaped wipe that opens the picture
 - Look for: Does the Jiggy hole grow until the whole wide screen is clear, with no black left at the sides when it disappears?
+
+## T28 Controller back buttons
+- Asked: 2026-10-13 19:50 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Plug in the controller with back buttons, start the game and open Esc > Controls
+  2. Click a binding slot (for example Z) and press a back button
+  3. Load a file and check the back button does what you bound
+  4. Open logs/console.log and find the "Controller added" lines: they name the controller and list which back buttons it reports
+- Look for: Does the slot show L4, R4, L5 or R5 (or a Steam-style icon for the fifth one) when you press a back button? If nothing happens, what is the controller's name and model, and what do the "Controller added" lines say?
 - Status: waiting for L

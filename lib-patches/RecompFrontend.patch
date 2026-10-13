@@ -1,3 +1,20 @@
+diff --git a/recompinput/include/recompinput/extra_buttons.h b/recompinput/include/recompinput/extra_buttons.h
+new file mode 100644
+index 0000000..56f8df6
+--- /dev/null
++++ b/recompinput/include/recompinput/extra_buttons.h
+@@ -0,0 +1,11 @@
++#pragma once
++
++#include "SDL.h"
++
++namespace recompinput {
++    // Back buttons that SDL's controller mapping leaves out (raw joystick buttons
++    // with no mapped meaning) are offered as the paddle buttons the pad lacks.
++    int extra_button_for_raw_button(SDL_GameController* controller, int raw_button);
++    bool get_controller_button(SDL_GameController* controller, SDL_GameControllerButton button);
++    void log_controller_buttons(SDL_GameController* controller);
++}
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
 index f5ed6c0..48d97af 100644
 --- a/recompinput/include/recompinput/input_types.h
@@ -29,6 +46,176 @@ index f5ed6c0..48d97af 100644
  
      const std::string& get_game_input_enum_name(GameInput input);
  }
+diff --git a/recompinput/src/extra_buttons.cpp b/recompinput/src/extra_buttons.cpp
+new file mode 100644
+index 0000000..0ea95f1
+--- /dev/null
++++ b/recompinput/src/extra_buttons.cpp
+@@ -0,0 +1,93 @@
++#include <cstdio>
++#include <iterator>
++
++#include "recompinput/extra_buttons.h"
++
++// Buttons a pad's back buttons can stand in for, in order, when SDL's mapping
++// doesn't report them itself.
++static constexpr SDL_GameControllerButton extra_buttons[] = {
++    SDL_CONTROLLER_BUTTON_PADDLE1,
++    SDL_CONTROLLER_BUTTON_PADDLE2,
++    SDL_CONTROLLER_BUTTON_PADDLE3,
++    SDL_CONTROLLER_BUTTON_PADDLE4,
++    SDL_CONTROLLER_BUTTON_MISC1,
++};
++
++static bool raw_button_is_mapped(SDL_GameController* controller, int raw_button) {
++    for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++) {
++        SDL_GameControllerButtonBind bind = SDL_GameControllerGetBindForButton(controller, (SDL_GameControllerButton)b);
++        if (bind.bindType == SDL_CONTROLLER_BINDTYPE_BUTTON && bind.value.button == raw_button) {
++            return true;
++        }
++    }
++    for (int a = 0; a < SDL_CONTROLLER_AXIS_MAX; a++) {
++        SDL_GameControllerButtonBind bind = SDL_GameControllerGetBindForAxis(controller, (SDL_GameControllerAxis)a);
++        if (bind.bindType == SDL_CONTROLLER_BINDTYPE_BUTTON && bind.value.button == raw_button) {
++            return true;
++        }
++    }
++    return false;
++}
++
++// Pairs the pad's unmapped raw buttons, in order, with the extra buttons its
++// mapping doesn't have. Returns the raw button standing in for `button`, or -1.
++static int raw_button_for_extra_button(SDL_GameController* controller, SDL_GameControllerButton button) {
++    SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controller);
++    int num_raw = joystick != nullptr ? SDL_JoystickNumButtons(joystick) : 0;
++    size_t slot = 0;
++    for (int raw = 0; raw < num_raw; raw++) {
++        if (raw_button_is_mapped(controller, raw)) {
++            continue;
++        }
++        while (slot < std::size(extra_buttons) && SDL_GameControllerHasButton(controller, extra_buttons[slot])) {
++            slot++;
++        }
++        if (slot >= std::size(extra_buttons)) {
++            return -1;
++        }
++        if (extra_buttons[slot] == button) {
++            return raw;
++        }
++        slot++;
++    }
++    return -1;
++}
++
++int recompinput::extra_button_for_raw_button(SDL_GameController* controller, int raw_button) {
++    for (SDL_GameControllerButton button : extra_buttons) {
++        if (!SDL_GameControllerHasButton(controller, button) && raw_button_for_extra_button(controller, button) == raw_button) {
++            return button;
++        }
++    }
++    return -1;
++}
++
++bool recompinput::get_controller_button(SDL_GameController* controller, SDL_GameControllerButton button) {
++    if (SDL_GameControllerGetButton(controller, button)) {
++        return true;
++    }
++    if (!SDL_GameControllerHasButton(controller, button)) {
++        int raw = raw_button_for_extra_button(controller, button);
++        if (raw >= 0) {
++            return SDL_JoystickGetButton(SDL_GameControllerGetJoystick(controller), raw) != 0;
++        }
++    }
++    return false;
++}
++
++void recompinput::log_controller_buttons(SDL_GameController* controller) {
++    SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controller);
++    printf("  Name: %s, type %d, %d raw buttons\n", SDL_GameControllerName(controller),
++        (int)SDL_GameControllerGetType(controller), joystick != nullptr ? SDL_JoystickNumButtons(joystick) : 0);
++    for (SDL_GameControllerButton button : extra_buttons) {
++        if (SDL_GameControllerHasButton(controller, button)) {
++            printf("  Reports %s\n", SDL_GameControllerGetStringForButton(button));
++        }
++        else {
++            int raw = raw_button_for_extra_button(controller, button);
++            if (raw >= 0) {
++                printf("  Raw button %d stands in for %s\n", raw, SDL_GameControllerGetStringForButton(button));
++            }
++        }
++    }
++}
+diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
+index c76a1dc..69e65f7 100644
+--- a/recompinput/src/input_events.cpp
++++ b/recompinput/src/input_events.cpp
+@@ -1,6 +1,7 @@
+ #include "recompinput/recompinput.h"
+ #include "recompinput/input_binding.h"
+ #include "recompinput/input_events.h"
++#include "recompinput/extra_buttons.h"
+ #include "recompinput/profiles.h"
+ #include "recompui/config.h"
+ #include "ultramodern/ultramodern.hpp"
+@@ -79,6 +80,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+             printf("  Instance ID: %d\n", SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)));
+             printf("  Path: %s\n", SDL_JoystickPath(SDL_GameControllerGetJoystick(controller)));
+             recompinput::add_controller_state(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)), controller);
++            recompinput::log_controller_buttons(controller);
+ 
+             if (SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_GYRO) && SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_ACCEL)) {
+                 SDL_GameControllerSetSensorEnabled(controller, SDL_SensorType::SDL_SENSOR_GYRO, SDL_TRUE);
+@@ -151,6 +153,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+             queue_if_enabled(event);
+         }
+         break;
++    case SDL_EventType::SDL_JOYBUTTONDOWN:
++        // Back buttons the controller mapping leaves out only arrive as raw joystick buttons.
++        if (binding::is_binding() && binding::is_controller_being_bound(event->jbutton.which) &&
++            binding::get_scanning_device() == InputDevice::Controller) {
++            SDL_GameController* controller = SDL_GameControllerFromInstanceID(event->jbutton.which);
++            if (controller != nullptr) {
++                int extra_button = recompinput::extra_button_for_raw_button(controller, event->jbutton.button);
++                if (extra_button >= 0) {
++                    binding::set_scanned_input({ InputType::ControllerDigital, extra_button });
++                }
++            }
++        }
++        else {
++            queue_if_enabled(event);
++        }
++        break;
+     case SDL_EventType::SDL_CONTROLLERAXISMOTION:
+         if (binding::is_controller_being_bound(event->caxis.which)) {
+             GameInput scanning_game_input = binding::get_scanning_game_input();
+diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
+index 03ed871..20cf022 100644
+--- a/recompinput/src/input_state.cpp
++++ b/recompinput/src/input_state.cpp
+@@ -7,6 +7,7 @@
+ #include "recompinput/input_state.h"
+ #include "recompinput/input_binding.h"
+ #include "recompinput/players.h"
++#include "recompinput/extra_buttons.h"
+ #include "recompui/config.h"
+ 
+ using namespace recompinput;
+@@ -142,13 +143,13 @@ bool controller_button_state(int controller_num, int32_t input_id) {
+             std::lock_guard lock{ InputState.controllers_mutex };
+             if (recompinput::players::is_single_player_mode()) {
+                 for (const auto &controller : InputState.detected_controllers) {
+-                    ret |= SDL_GameControllerGetButton(controller, button);
++                    ret |= recompinput::get_controller_button(controller, button);
+                 }
+             }
+             else {
+                 auto &player = recompinput::players::get_player(controller_num);
+                 if (player.controller != nullptr) {
+-                    ret |= SDL_GameControllerGetButton(player.controller, button);
++                    ret |= recompinput::get_controller_button(player.controller, button);
+                 }
+             }
+         }
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
 index c6786e6..4cb4136 100644
 --- a/recompinput/src/input_types.cpp

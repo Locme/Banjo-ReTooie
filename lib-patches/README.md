@@ -33,6 +33,14 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   bound like any other input. The Controls tab lists hotkeys under their own
   "Hotkeys" heading. Name, description and default (F2) are set by
   `src/game/speedup.cpp`.
+* **Back buttons** (`recompinput/src/extra_buttons.cpp`, `recompinput/src/input_events.cpp`,
+  `recompinput/src/input_state.cpp`): many pads (DirectInput and generic HID
+  ones) report their back buttons only as raw joystick buttons that SDL's
+  controller mapping leaves out, so the Controls tab never saw them. Unmapped
+  raw buttons now stand in, in order, for the paddle buttons the pad doesn't
+  report (Paddle 1 to 4, then Misc 1), both when binding and in play. Each
+  controller's name, raw button count and back buttons are logged when it is
+  added.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

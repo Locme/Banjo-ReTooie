@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-13
 
+- Controller back buttons that SDL doesn't name can now be bound in Controls (they show as L4, R4, L5, R5).
 - Fixed the Jiggy level wipe ending early in wide pictures: it now opens the whole screen.
 - Fixed Banjo's limbs coming apart when the frame rate is above Original.
 - Texture packs can be dropped into the mods folder as a .zip.
