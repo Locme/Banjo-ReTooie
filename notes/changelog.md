@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-10-13
 
 - Above Original frame rate, a cutscene's black bars coming in no longer blend the picture's shape (likely cause of the brief squash in ultrawide, not yet tested).
+- Fine aim: the first-person view turns slower, always or while R is held (QOL).
 - Canary Mary races: Fair (default), Easy or Original in QOL (works once the game code is regenerated with its hooks).
 - Graphics: Frame rate overlay shows frame rate, frame time, the worst frame, GPU time and frame interpolation figures in the top left corner.
 - Graphics: Brightness with a test pattern, Colourblind filters, and Retro N64 16-bit colour, CRT and a 3-point filtering switch.

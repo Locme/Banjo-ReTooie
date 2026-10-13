@@ -15,6 +15,7 @@
 #include "tooie_talon_trot.h"
 #include "tooie_canary_mary.h"
 #include "tooie_frame_overlay.h"
+#include "tooie_fine_aim.h"
 #include "tooie_picture_filters.h"
 #include "tooie_speedup.h"
 
@@ -214,6 +215,27 @@ void tooie::init_config() {
             {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
         },
         tooie::canary_mary::Mode::Fair);
+    qol.add_enum_option(
+        tooie::fine_aim::mode_option,
+        "Fine aim",
+        "Turns the first-person view (C-up) slower with the left stick, for aiming eggs. <recomp-color primary>Hold R</recomp-color> slows it only while R is held.",
+        {
+            {tooie::fine_aim::Mode::Off, "Off", "Off"},
+            {tooie::fine_aim::Mode::HoldR, "Hold R", "Hold R"},
+            {tooie::fine_aim::Mode::Always, "Always", "Always"},
+        },
+        tooie::fine_aim::Mode::Off);
+    qol.add_enum_option(
+        tooie::fine_aim::speed_option,
+        "Fine aim speed",
+        "How fast the view turns with fine aim: 25%, 40% or 60% of the normal speed.",
+        {
+            {tooie::fine_aim::Speed::Slow, "Slow", "25%"},
+            {tooie::fine_aim::Speed::Medium, "Medium", "40%"},
+            {tooie::fine_aim::Speed::Fast, "Fast", "60%"},
+        },
+        tooie::fine_aim::Speed::Medium);
+    qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     qol.add_bool_option(
         tooie::cutscene_skip_option,
         "Skip boss intros",

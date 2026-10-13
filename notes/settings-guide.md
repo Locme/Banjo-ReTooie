@@ -37,6 +37,9 @@ framework, not from this port's code, so it is not described here.
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.
   Default: Fair.
+- **Fine aim**: Off, Hold R or Always. In first person (C-up) the left stick
+  turns the view slower, for aiming eggs. **Fine aim speed**: 25%, 40% or 60%
+  of the normal speed. Default: Off, 40%.
 - **Free camera**: the right stick turns the camera smoothly around Banjo and
   tilts it, instead of the game's stepped camera swings. Push it on past the
   top or bottom of the tilt to move the camera in or out. Clicking the right

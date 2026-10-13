@@ -29,6 +29,7 @@
 #include "tooie_game.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
+#include "tooie_fine_aim.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
 
@@ -110,6 +111,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::cutscene_skip_tick(rdram);
     tooie::player_cheats::tick(rdram, ctx);
     tooie::talon_trot::tick(rdram, ctx);
+    tooie::fine_aim::tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
 

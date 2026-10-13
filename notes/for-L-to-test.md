@@ -433,4 +433,14 @@
   3. Watch the first moment of the scene
   4. Do it once more with Frame rate at Original
 - Look for: Does the picture keep its shape as the scene starts, or does it still squash or stretch for a moment (and at which frame rate setting)?
+
+## T44 Fine aim
+- Asked: 2026-10-13 22:31 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.57
+- Steps:
+  1. Esc > QOL > Fine aim = Always, Fine aim speed = Medium
+  2. Load a file, press C-up for first person and turn with the left stick. Try a small and a full push
+  3. Try Hold R (turn with and without R held), and the Slow and Fast speeds
+- Look for: Is turning slower but still smooth, with no stick range where nothing happens? Does R do anything else in first person that this gets in the way of? Breegull Blaster sections weren't tested.
 - Status: waiting for L
