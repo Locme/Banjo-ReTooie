@@ -17,11 +17,14 @@ on a controller.
   (F2) is active. Range 2 to 4. Default: 3.
 - **Speed-up toggle**: press F2 to switch the speed-up on and off, instead of
   holding it. Default: off.
-- **Skip intro logos**: press Start during the logos and title flight to go
-  straight to the file select. Default: on.
 
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.
+
+## QOL
+
+- **Skip intro logos**: press Start during the logos and title flight to go
+  straight to the file select. Default: on.
 
 ## Graphics: Aspect Ratio
 

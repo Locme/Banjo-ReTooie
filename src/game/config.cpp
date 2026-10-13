@@ -45,11 +45,6 @@ void tooie::init_config() {
         "Speed-up toggle",
         "Press F2 to switch the speed-up on and off instead of holding it.",
         false);
-    general.add_bool_option(
-        tooie::quick_start_option,
-        "Skip intro logos",
-        "Press Start during the logos and title flight to go straight to the file select.",
-        true);
     general.add_enum_option(
         tooie::text_speed_option,
         "Text speed",
@@ -61,6 +56,13 @@ void tooie::init_config() {
             {tooie::TextSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TextSpeed::Normal);
+
+    recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
+    qol.add_bool_option(
+        tooie::quick_start_option,
+        "Skip intro logos",
+        "Press Start during the logos and title flight to go straight to the file select.",
+        true);
 
     recompui::config::create_graphics_tab();
     recompui::config::create_controls_tab();

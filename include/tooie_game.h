@@ -39,6 +39,7 @@ namespace tooie {
     void start_save_backups();
 
     // Quick start (quick_start.cpp): Start during the boot logos goes to the file select.
+    inline const std::string qol_tab_id = "qol";
     inline const std::string quick_start_option = "quick_start";
     void quick_start_note_input(uint16_t buttons);
     void quick_start_tick(uint8_t* rdram);
