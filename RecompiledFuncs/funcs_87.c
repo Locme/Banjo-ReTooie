@@ -2098,6 +2098,7 @@ L_800D2F80:
     ctx->f2.fl = MUL_S(ctx->f18.fl, ctx->f16.fl);
     // 0x800D302C: nop
 
+    tooie_cell_draw_distance(rdram, ctx);
     // 0x800D3030: mul.s       $f8, $f2, $f2
     CHECK_FR(ctx, 8);
     CHECK_FR(ctx, 2);

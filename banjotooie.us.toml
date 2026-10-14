@@ -581,3 +581,19 @@ text = "tooie_run_anim_file(rdram, ctx);"
 func = "func_8008BEB4"
 before_vram = 0x8008BFE8
 text = "tooie_run_anim_file(rdram, ctx);"
+
+# Extended draw distance, world grid cells (src/display/draw_distance.cpp).
+# func_800D3104 gathers the cells around the camera to draw (props such as
+# notes, eggs and feathers live in them): $f20 = 4.0 is the gather radius in
+# cells (times the camera factor func_800E42C0).
+[[patches.hook]]
+func = "func_800D3104"
+before_vram = 0x800D326C
+text = "tooie_cell_draw_radius(rdram, ctx);"
+
+# func_800D2F44 tests one cell: $f2 is the distance its centre must be within
+# (cell size x 4 x D_80125B00 x camera factor).
+[[patches.hook]]
+func = "func_800D2F44"
+before_vram = 0x800D3030
+text = "tooie_cell_draw_distance(rdram, ctx);"

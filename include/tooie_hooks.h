@@ -47,6 +47,9 @@ void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance (src/display/draw_distance.cpp): $v0 holds func_800D2F20's model draw distance.
 void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
+// Extended draw distance: $f20 is func_800D3104's cell gather radius, $f2 func_800D2F44's cell distance.
+void tooie_cell_draw_radius(uint8_t* rdram, recomp_context* ctx);
+void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.
 void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_set_fov(uint8_t* rdram, recomp_context* ctx);

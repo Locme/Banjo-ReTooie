@@ -4039,6 +4039,7 @@ L_800D3264:
     ctx->r1 = S32(0X4080 << 16);
     // 0x800D3268: mtc1        $at, $f20
     ctx->f20.u32l = ctx->r1;
+    tooie_cell_draw_radius(rdram, ctx);
     // 0x800D326C: addiu       $s2, $sp, 0x80
     ctx->r18 = ADD32(ctx->r29, 0X80);
     // 0x800D3270: addiu       $s0, $sp, 0x98
