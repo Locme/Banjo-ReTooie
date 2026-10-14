@@ -69,6 +69,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- Achievements: Down on a controller or the arrow keys now moves through the list and scrolls it (T117).
 - Settings search: every settings tab (General, QOL, Graphics, Sound, Cheats) has a Search box at the top that filters that tab's options by name and description as you type. It searches one tab at a time and needs a keyboard or mouse to type.
 - Graphics tab: section headings (Display, Picture and effects, Lighting water and fog, Colour grading, Game view, Anti-aliasing and scaling, Frame rate and overlay). Game Frame Rate and the Frame rate overlay rows moved to the end, under their own heading.
 - Graphics > Texture upscaling: the description now says what each option uses (2x is one pass of an xBR-style edge filter, 4x is two passes).

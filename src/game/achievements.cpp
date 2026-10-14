@@ -36,6 +36,7 @@
 #include "recompui/config.h"
 #include "elements/ui_container.h"
 #include "elements/ui_label.h"
+#include "elements/ui_pseudo_border.h"
 #include "elements/ui_scroll_container.h"
 
 #include "tooie_achievements.h"
@@ -200,6 +201,31 @@ namespace {
         return on;
     }
 
+    // One achievement in the list. It can take focus, so a controller or the arrow keys move
+    // through the list, and the list scrolls to keep the focused entry in view.
+    class Entry : public recompui::Container {
+    public:
+        Entry(recompui::ResourceId rid, recompui::Element* parent)
+            : Container(rid, parent, recompui::FlexDirection::Column, recompui::JustifyContent::FlexStart,
+                        recompui::Events(recompui::EventType::Focus)) {
+            enable_focus();
+            set_position(recompui::Position::Relative);
+            set_padding(6.0f);
+            recompui::get_current_context().create_element<recompui::FocusBorder>(this, false);
+        }
+    protected:
+        std::string_view get_type_name() override { return "AchievementEntry"; }
+        void process_event(const recompui::Event& e) override {
+            if (e.type == recompui::EventType::Focus) {
+                const bool active = std::get<recompui::EventFocus>(e.variant).active;
+                set_style_enabled(recompui::focus_state, active);
+                if (active) {
+                    scroll_into_view();
+                }
+            }
+        }
+    };
+
     void create_contents(recompui::ContextId context, recompui::Element* parent) {
         using namespace recompui;
         ScrollContainer* scroll = context.create_element<ScrollContainer>(parent, ScrollDirection::Vertical);
@@ -208,7 +234,8 @@ namespace {
         scroll->set_padding(16.0f);
 
         Container* list = context.create_element<Container>(scroll, FlexDirection::Column, JustifyContent::FlexStart);
-        list->set_gap(12.0f);
+        list->set_gap(6.0f);
+        list->set_as_navigation_container(NavigationType::Vertical);
 
         nlohmann::json done;
         {
@@ -230,7 +257,7 @@ namespace {
             std::to_string(points) + " of " + std::to_string(total) + " G", LabelStyle::Large);
 
         for (const Achievement& a : achievement_list) {
-            Container* entry = context.create_element<Container>(list, FlexDirection::Column, JustifyContent::FlexStart);
+            Entry* entry = context.create_element<Entry>(list);
             entry->set_gap(2.0f);
             std::string status;
             if (done.contains(a.id) && done[a.id].is_string()) {

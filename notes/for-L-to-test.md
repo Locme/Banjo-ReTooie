@@ -1237,3 +1237,12 @@
 - Look for: A tight glow right around bright things plus a wide soft one, stronger than before at the same number. It eases in, so bright textures don't flicker between glowing and not. Strongly coloured things (pure red or blue) glow less than white. Too much at 100?
 - Status: waiting for L
 
+
+## T117 Achievements list scrolls with Down (from your 10:48 list)
+- Asked: 2026-10-14 11:10 UTC
+- Build: your local build of main from 2026-10-14 11:10 UTC or later
+- Steps:
+  1. Esc > Achievements
+  2. Press Down on the controller (or the arrow key) until the last achievement
+- Look for: Does a highlight move from one achievement to the next, and does the list scroll so the highlighted one stays on screen?
+- Status: waiting for L
