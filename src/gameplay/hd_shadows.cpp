@@ -135,10 +135,10 @@ namespace {
         const float z = load_float(rdram, actor + 0xC);
         const float scale = load_float(rdram, actor + 0x38);
 
-        // The actor's model, as its draw callbacks (func_801015D0, func_801017D0) find it; only its size is used here.
-        ctx->r4 = (int32_t)MEM_W(0, actor);
-        func_801039E4(rdram, ctx);
-        const gpr model = (int32_t)(uint32_t)ctx->r2;
+        // The model the actor's own draw used; only its size is used here. Looking it up again with
+        // func_801039E4 fetched it from the model cache a second time this frame, and the cache then
+        // let go of models still on screen (eggs, notes and other objects vanished).
+        const gpr model = (int32_t)drawn;
         if (model == 0 || scale <= 0.0f) {
             count(NoModel);
             return;
