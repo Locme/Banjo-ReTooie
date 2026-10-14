@@ -1366,3 +1366,13 @@
   3. Also try a deep lake where the camera follows Banjo under (Jolly Roger's Lagoon)
 - Look for: Under water the 3D world turns a lighter blue and far things fade into a light blue haze, getting stronger all the way to 100; it goes when Banjo comes up
 - Status: waiting for L
+
+## T129 Underwater distortion, tint and haze on D3D12 (no more coloured blob grid)
+- Asked: 2026-10-14 16:29 UTC
+- Build: main @ 076ce62 (also covers T128)
+- Steps:
+  1. Graphics: keep D3D12, Underwater tint 25, haze 15, distortion 30
+  2. Spiral Mountain: dive where your blob screenshot was (Banjo at 1178, -377, 471) and in the moat
+  3. Also turn on Water reflections and look at a pool from above
+- Look for: The 3D world shows through, light blue and gently wobbling, with no grid of coloured blobs and no flat dark blue screen; reflections show the scenery
+- Status: waiting for L
