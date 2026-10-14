@@ -353,13 +353,16 @@ index c89956e..e781099 100644
              check_buttons(profile_index_kb);
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..9c12cff 100644
+index 38b84f5..20c3031 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
-@@ -133,6 +133,11 @@ namespace recompui {
+@@ -133,6 +133,14 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
++        // Adds a Search tab that finds options in every other tab. Call it after all other tabs are created.
++        void create_search_tab();
++
 +        // Puts a small heading above the option with this ID in its tab. Options after it belong to the
 +        // group until the next heading.
 +        void set_option_group(const std::string &option_id, const std::string &title);
@@ -369,15 +372,123 @@ index 38b84f5..9c12cff 100644
          void open();
          bool close();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..3821b46 100644
+index 6c84c05..ac5d7fb 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
-@@ -1,3 +1,4 @@
+@@ -1,7 +1,13 @@
++#include <memory>
 +#include <unordered_map>
  #include "recompui/config.h"
  #include "elements/ui_modal.h"
  #include "elements/ui_icon_button.h"
-@@ -121,6 +122,17 @@ namespace recompui {
+ #include "ui_config_page_options_menu.h"
++#include "elements/ui_container.h"
++#include "elements/ui_label.h"
++#include "elements/ui_scroll_container.h"
++#include "elements/ui_text_input.h"
+ #include "recompinput/profiles.h"
+ #include "util/file.h"
+ #include "librecomp/game.hpp"
+@@ -38,6 +44,98 @@ namespace recompui {
+         throw std::runtime_error("No config with ID '" + id + "' has been added to the config modal.");
+     }
+ 
++    void config::create_search_tab() {
++        create_tab("Search", "search", [](recompui::ContextId context, Element *parent) {
++            parent->set_display(Display::Block);
++            parent->set_padding(16.0f);
++            auto search_row = context.create_element<Container>(parent, FlexDirection::Row, JustifyContent::FlexStart);
++            search_row->set_align_items(AlignItems::Center);
++            search_row->set_gap(8.0f);
++            search_row->set_margin_bottom(8.0f);
++            context.create_element<Label>(search_row, "Search all settings", LabelStyle::Small);
++            auto input = context.create_element<TextInput>(search_row);
++            input->set_width(50.0f, Unit::Percent);
++            auto *scroll = context.create_element<ScrollContainer>(parent, ScrollDirection::Vertical);
++            scroll->set_height(90.0f, Unit::Percent);
++            auto *list = context.create_element<Container>(scroll, FlexDirection::Column, JustifyContent::FlexStart);
++            list->set_gap(8.0f);
++
++            // One hidden row for every option of every other tab; searching only shows and hides them.
++            struct Row {
++                Container *box;
++                ConfigOptionElement *element;
++                recomp::config::Config *config;
++                size_t index;
++                std::string text;
++            };
++            auto rows = std::make_shared<std::vector<Row>>();
++            auto lower = [](std::string s) {
++                for (char &c : s) {
++                    c = (char)std::tolower((unsigned char)c);
++                }
++                return s;
++            };
++            for (auto &entry : configs) {
++                recomp::config::Config *cfg = &entry.second;
++                if (entry.first == "search") {
++                    continue;
++                }
++                const std::string tab_id = entry.first;
++                auto set_value = [tab_id](const std::string &option_id, recomp::config::ConfigValueVariant value) {
++                    recomp::config::Config &c = config::get_config(tab_id);
++                    c.set_option_value(option_id, value);
++                    if (c.requires_confirmation && tab_id == config::graphics::id) {
++                        c.save_config();
++                    }
++                };
++                auto no_hover = [](const std::string &) {};
++                auto schema = cfg->get_config_schema();
++                for (size_t i = 0; i < schema.options.size(); i++) {
++                    const auto &option = schema.options[i];
++                    auto *box = context.create_element<Container>(list, FlexDirection::Column, JustifyContent::FlexStart);
++                    box->set_display(Display::None);
++                    context.create_element<Label>(box, cfg->name + " tab", LabelStyle::Annotation);
++                    ConfigOptionElement *element = nullptr;
++                    switch (option.type) {
++                        case recomp::config::ConfigOptionType::Enum:
++                            element = context.create_element<ConfigOptionEnum>(box, option.id, i, cfg, set_value, no_hover);
++                            break;
++                        case recomp::config::ConfigOptionType::Number:
++                            element = context.create_element<ConfigOptionNumber>(box, option.id, i, cfg, set_value, no_hover);
++                            break;
++                        case recomp::config::ConfigOptionType::String:
++                            element = context.create_element<ConfigOptionString>(box, option.id, i, cfg, set_value, no_hover);
++                            break;
++                        case recomp::config::ConfigOptionType::Bool:
++                            element = context.create_element<ConfigOptionBool>(box, option.id, i, cfg, set_value, no_hover);
++                            break;
++                        default:
++                            break;
++                    }
++                    if (element == nullptr) {
++                        continue;
++                    }
++                    context.create_element<Label>(box, option.description, LabelStyle::Annotation);
++                    rows->push_back({ box, element, cfg, i, lower(option.name + " " + option.description + " " + cfg->name) });
++                }
++            }
++
++            input->add_text_changed_callback([rows, lower](const std::string &text) {
++                const std::string needle = lower(text);
++                for (Row &row : *rows) {
++                    const bool show = !needle.empty() && row.text.find(needle) != std::string::npos &&
++                        !row.config->is_config_option_hidden(row.index);
++                    if (show) {
++                        row.element->update_value();
++                        row.element->update_hidden();
++                        row.element->update_disabled();
++                    }
++                    row.box->set_display(show ? Display::Flex : Display::None);
++                }
++            });
++        });
++    }
++
+     void config::create_tab(
+         const std::string &name,
+         const std::string &id,
+@@ -121,6 +219,17 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -396,7 +507,7 @@ index 6c84c05..3821b46 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..0c7023e 100644
+index 86428c9..e9d03ad 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -88,13 +88,17 @@ void ConfigOptionElement::process_event(const Event &e) {
@@ -404,7 +515,7 @@ index 86428c9..0c7023e 100644
  
  void ConfigOptionElement::update_hidden() {
 -    if (config->is_config_option_hidden(option_index)) {
-+    const bool hidden = config->is_config_option_hidden(option_index) || !search_match;
++    const bool hidden = config->is_config_option_hidden(option_index);
 +    if (hidden) {
          set_display(Display::None);
          set_enabled(false);
@@ -413,7 +524,7 @@ index 86428c9..0c7023e 100644
          set_enabled(true);
      }
 +    if (group_heading != nullptr) {
-+        group_heading->set_display((hidden || search_active) ? Display::None : Display::Block);
++        group_heading->set_display(hidden ? Display::None : Display::Block);
 +    }
  }
  
@@ -511,7 +622,7 @@ index 86428c9..0c7023e 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..31f2266 100644
+index 0561657..be581b0 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -522,15 +633,12 @@ index 0561657..31f2266 100644
  #include "elements/ui_text_input.h"
  #include "elements/ui_slider.h"
  #include "elements/ui_toggle.h"
-@@ -42,12 +43,19 @@ namespace recompui {
+@@ -42,12 +43,16 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
 +        // The group heading shown above this option (hidden together with it).
 +        Element *group_heading = nullptr;
-+        // Settings search: an option that does not match the search text is hidden, and so are the headings.
-+        bool search_match = true;
-+        bool search_active = false;
          const std::string &get_option_id() { return option_id; }
      };
  
@@ -570,7 +678,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..47132b0 100644
+index 6ba64e2..3ba871a 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,6 @@
@@ -591,27 +699,7 @@ index 6ba64e2..47132b0 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -174,6 +180,19 @@ void ConfigPageOptionsMenu::render_config_options() {
-         body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
- 
-         config_option_elements.clear();
-+        // Settings search: filters this tab's options by name and description as you type.
-+        {
-+            auto search_row = context.create_element<Container>(body_left_scroll, FlexDirection::Row, JustifyContent::FlexStart);
-+            search_row->set_align_items(AlignItems::Center);
-+            search_row->set_gap(8.0f);
-+            search_row->set_margin_bottom(8.0f);
-+            context.create_element<Label>(search_row, "Search", LabelStyle::Small);
-+            auto search_input = context.create_element<TextInput>(search_row);
-+            search_input->set_width(60.0f, Unit::Percent);
-+            search_input->add_text_changed_callback([this](const std::string &text) {
-+                this->apply_search(text);
-+            });
-+        }
-         bound_on_option_hover = [this](const std::string &option_id) {
-             this->on_option_hover(option_id);
-         };
-@@ -183,6 +202,14 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -183,6 +189,14 @@ void ConfigPageOptionsMenu::render_config_options() {
          auto schema = config->get_config_schema();
          for (size_t i = 0; i < schema.options.size(); i++) {
              auto &config_option = schema.options[i];
@@ -626,7 +714,7 @@ index 6ba64e2..47132b0 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +260,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +247,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -634,44 +722,6 @@ index 6ba64e2..47132b0 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -240,6 +268,25 @@ void ConfigPageOptionsMenu::render_config_options() {
-     }
- }
- 
-+void ConfigPageOptionsMenu::apply_search(const std::string &text) {
-+    auto lower = [](std::string s) {
-+        for (char &c : s) {
-+            c = (char)std::tolower((unsigned char)c);
-+        }
-+        return s;
-+    };
-+    const std::string needle = lower(text);
-+    auto schema = config->get_config_schema();
-+    for (size_t i = 0; i < config_option_elements.size() && i < schema.options.size(); i++) {
-+        ConfigOptionElement *element = config_option_elements[i];
-+        const auto &option = schema.options[i];
-+        element->search_active = !needle.empty();
-+        element->search_match = needle.empty() || lower(option.name).find(needle) != std::string::npos ||
-+            lower(option.description).find(needle) != std::string::npos;
-+        element->update_hidden();
-+    }
-+}
-+
- void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {
-     if (description_container) {
-         description_option_id = option_id;
-diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..df392bb 100644
---- a/recompui/src/config/ui_config_page_options_menu.h
-+++ b/recompui/src/config/ui_config_page_options_menu.h
-@@ -25,6 +25,7 @@ namespace recompui {
-         set_option_value_t bound_set_option_value;
- 
-         void render_config_options();
-+    void apply_search(const std::string &text);
-         void render_confirmation_footer();
-         void on_option_hover(const std::string &option_id);
-         void on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value);
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
 index 4fdf81f..c4aaa9b 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp

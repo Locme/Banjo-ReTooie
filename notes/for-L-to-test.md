@@ -1054,9 +1054,9 @@
 - Status: waiting for L
 
 ## T99 Settings menu tidy-up
-- Do: Open Settings (Esc). Go through General, QOL, Graphics and Cheats. In Graphics open the Resolution row. In the Warp tab (Cheats > Warp tab) hold Down on a controller. Type in the Search box at the top of a tab.
-- Look for: section headings in each tab; Cheato codes are in Cheats again; Resolution lists 3x (720p), 4.5x (1080p), 6x (1440p) and 9x (4K); Field of View and Game Frame Rate apply as soon as you change them (Apply stays grey); the Warp list scrolls with the selection; Search filters that tab's rows; Texture upscaling's description says it uses an xBR-style filter.
-- Not done: search covers one tab at a time; controller scrolling was only checked with the keyboard.
+- Do: Open Settings (Esc). Go through General, QOL, Graphics and Cheats. In Graphics open the Resolution row. In the Warp tab (Cheats > Warp tab) hold Down on a controller. Open the Search tab and type a word (for example shadow or speed).
+- Look for: section headings in each tab; Cheato codes are in Cheats again; Resolution lists 3x (720p), 4.5x (1080p), 6x (1440p) and 9x (4K); Field of View and Game Frame Rate apply as soon as you change them (Apply stays grey); the Warp list scrolls with the selection; Search shows matching options from every tab and you can change them there; each Cheato code in Cheats has a fuller description; Texture upscaling's description says it uses an xBR-style filter.
+- Not done: controller scrolling was only checked with the keyboard; the Cheato descriptions were written from the game's own cheat names, so check them against what each code does.
 - Status: waiting for L
 
 ## T100 Crash in play (10:33 dump) and the boot crash

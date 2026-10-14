@@ -71,6 +71,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 - Achievements: Down on a controller or the arrow keys now moves through the list and scrolls it (T117).
 - Settings search: every settings tab (General, QOL, Graphics, Sound, Cheats) has a Search box at the top that filters that tab's options by name and description as you type. It searches one tab at a time and needs a keyboard or mouse to type.
+- Settings search: a Search tab finds options in every tab (name, description or tab name); you can change them right there. It needs a keyboard or mouse to type. The per-tab search boxes are gone.
+- Cheats: each Cheato code now says what it does in detail (the "from wiki pages" line is gone).
 - Graphics tab: section headings (Display, Picture and effects, Lighting water and fog, Colour grading, Game view, Anti-aliasing and scaling, Frame rate and overlay). Game Frame Rate and the Frame rate overlay rows moved to the end, under their own heading.
 - Graphics > Texture upscaling: the description now says what each option uses (2x is one pass of an xBR-style edge filter, 4x is two passes).
 - Menus: moving the selection down a list with a controller or the arrow keys now scrolls the list with it (the Warp list used to keep the selection out of view).

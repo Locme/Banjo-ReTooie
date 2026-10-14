@@ -364,6 +364,7 @@ void tooie::init_config() {
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();
     tooie::achievements::create_tab();
+    recompui::config::create_search_tab();
     recompui::config::create_mods_tab();
 
     // Work-in-progress features (L, 2026-10-13), shown with General > WIP tab.
