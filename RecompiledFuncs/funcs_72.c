@@ -4650,8 +4650,8 @@ L_800D6F08:
     ctx->r30 = ADD32(0, 0X5);
     // 0x800D6F10: lui         $s1, 0x8013
     ctx->r17 = S32(0X8013 << 16);
-    // 0x800D6F14: addiu       $s1, $s1, -0x4800
-    ctx->r17 = ADD32(ctx->r17, -0X4800);
+    // 0x800D6F14: addiu       $s1, $s1, 0x7E90
+    if (tooie_more_memory()) ctx->r17 = ADD32(ctx->r17, 0X7E90); else ctx->r17 = ADD32(ctx->r17, -0X4800);
     // 0x800D6F18: addiu       $s7, $zero, 0x7
     ctx->r23 = ADD32(0, 0X7);
     // 0x800D6F1C: addiu       $s6, $zero, 0x6

@@ -114,11 +114,11 @@ RECOMP_FUNC void func_8001E7E0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
     // 0x8001E7E0: jr          $ra
-    // 0x8001E7E4: lui         $v0, 0x8040
-    ctx->r2 = S32(0X8040 << 16);
+    // 0x8001E7E4: lui         $v0, 0x80E0
+    if (tooie_more_memory()) ctx->r2 = S32(0X80E0 << 16); else ctx->r2 = S32(0X8040 << 16);
     return;
-    // 0x8001E7E4: lui         $v0, 0x8040
-    ctx->r2 = S32(0X8040 << 16);
+    // 0x8001E7E4: lui         $v0, 0x80E0
+    if (tooie_more_memory()) ctx->r2 = S32(0X80E0 << 16); else ctx->r2 = S32(0X8040 << 16);
 ;}
 RECOMP_FUNC void fxgenlist_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;

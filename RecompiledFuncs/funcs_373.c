@@ -1868,8 +1868,8 @@ RECOMP_FUNC void func_800D61B4(uint8_t* rdram, recomp_context* ctx) {
     int c1cs = 0;
     // 0x800D61B4: lui         $t6, 0x8013
     ctx->r14 = S32(0X8013 << 16);
-    // 0x800D61B8: addiu       $t6, $t6, -0x4800
-    ctx->r14 = ADD32(ctx->r14, -0X4800);
+    // 0x800D61B8: addiu       $t6, $t6, 0x7E90
+    if (tooie_more_memory()) ctx->r14 = ADD32(ctx->r14, 0X7E90); else ctx->r14 = ADD32(ctx->r14, -0X4800);
     // 0x800D61BC: subu        $t7, $a0, $t6
     ctx->r15 = SUB32(ctx->r4, ctx->r14);
     // 0x800D61C0: addiu       $at, $zero, 0xC
@@ -1927,8 +1927,8 @@ L_800D620C:
     ctx->r8 = MEM_H(ctx->r7, 0X0);
     // 0x800D6218: lui         $t2, 0x8013
     ctx->r10 = S32(0X8013 << 16);
-    // 0x800D621C: addiu       $t2, $t2, -0x4800
-    ctx->r10 = ADD32(ctx->r10, -0X4800);
+    // 0x800D621C: addiu       $t2, $t2, 0x7E90
+    if (tooie_more_memory()) ctx->r10 = ADD32(ctx->r10, 0X7E90); else ctx->r10 = ADD32(ctx->r10, -0X4800);
     // 0x800D6220: sll         $t1, $t0, 2
     ctx->r9 = S32(ctx->r8 << 2);
     // 0x800D6224: subu        $t1, $t1, $t0

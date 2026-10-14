@@ -31,6 +31,7 @@
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 #include "tooie_api_restart.h"
+#include "tooie_more_memory.h"
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
@@ -179,6 +180,11 @@ void tooie::init_config() {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_wip_tab();
         });
+    general.add_bool_option(
+        tooie::more_memory::option,
+        "More game memory",
+        "Gives the game a bigger memory heap and bigger buffers for drawing and animations, so scenes crowded with characters do not crash. Takes effect the next time the game starts.",
+        true);
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");

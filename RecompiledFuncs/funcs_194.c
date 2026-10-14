@@ -494,8 +494,8 @@ RECOMP_FUNC void func_800D7050(uint8_t* rdram, recomp_context* ctx) {
     ctx->r14 = SUB32(ctx->r14, ctx->r4);
     // 0x800D7060: lui         $t7, 0x8013
     ctx->r15 = S32(0X8013 << 16);
-    // 0x800D7064: addiu       $t7, $t7, -0x4800
-    ctx->r15 = ADD32(ctx->r15, -0X4800);
+    // 0x800D7064: addiu       $t7, $t7, 0x7E90
+    if (tooie_more_memory()) ctx->r15 = ADD32(ctx->r15, 0X7E90); else ctx->r15 = ADD32(ctx->r15, -0X4800);
     // 0x800D7068: sll         $t6, $t6, 2
     ctx->r14 = S32(ctx->r14 << 2);
     // 0x800D706C: addu        $v0, $t6, $t7
@@ -525,8 +525,8 @@ L_800D7094:
     ctx->r14 = SUB32(ctx->r14, ctx->r4);
     // 0x800D7098: lui         $t7, 0x8013
     ctx->r15 = S32(0X8013 << 16);
-    // 0x800D709C: addiu       $t7, $t7, -0x4800
-    ctx->r15 = ADD32(ctx->r15, -0X4800);
+    // 0x800D709C: addiu       $t7, $t7, 0x7E90
+    if (tooie_more_memory()) ctx->r15 = ADD32(ctx->r15, 0X7E90); else ctx->r15 = ADD32(ctx->r15, -0X4800);
     // 0x800D70A0: sll         $t6, $t6, 2
     ctx->r14 = S32(ctx->r14 << 2);
     // 0x800D70A4: addu        $v0, $t6, $t7

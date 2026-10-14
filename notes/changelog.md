@@ -60,6 +60,10 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Shoot Em Up!, 20 targets in the shooting games (009573c). Untested on PC (T83).
 - All Beaten Up and Calamari Bonanza counters (965eb06). Untested on PC (T83).
 
+### Stability
+
+- General > More game memory (on by default): a bigger game heap (2.8 MB to 12.8 MB), about 4x the per-frame display list, matrix and vertex buffers, and room for 240 animation files and 1023 animations instead of 130 and 135, so scenes crowded with characters no longer crash. Takes effect at the next start. Untested on PC (T122).
+
 ### Tools and build
 
 - Two Windows builds: Any 64-bit PC (2008 and up) and Optimized for newer CPUs (2013 and up), with three update scripts (e49f23c, 3a25fe3). Untested on PC (T78).

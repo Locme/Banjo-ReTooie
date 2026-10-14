@@ -633,8 +633,8 @@ RECOMP_FUNC void func_800D731C(uint8_t* rdram, recomp_context* ctx) {
     result = U64(U32(ctx->r2)) * U64(U32(ctx->r5)); lo = S32(result >> 0); hi = S32(result >> 32);
     // 0x800D733C: lui         $a0, 0x8013
     ctx->r4 = S32(0X8013 << 16);
-    // 0x800D7340: addiu       $a0, $a0, -0x4800
-    ctx->r4 = ADD32(ctx->r4, -0X4800);
+    // 0x800D7340: addiu       $a0, $a0, 0x7E90
+    if (tooie_more_memory()) ctx->r4 = ADD32(ctx->r4, 0X7E90); else ctx->r4 = ADD32(ctx->r4, -0X4800);
     // 0x800D7344: addiu       $at, $zero, 0x2
     ctx->r1 = ADD32(0, 0X2);
     // 0x800D7348: mflo        $t6

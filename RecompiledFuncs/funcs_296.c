@@ -4306,8 +4306,8 @@ RECOMP_FUNC void func_800D6060(uint8_t* rdram, recomp_context* ctx) {
     ctx->r6 = 0 | 0;
     // 0x800D6080: lui         $t1, 0x8013
     ctx->r9 = S32(0X8013 << 16);
-    // 0x800D6084: addiu       $t1, $t1, -0x4800
-    ctx->r9 = ADD32(ctx->r9, -0X4800);
+    // 0x800D6084: addiu       $t1, $t1, 0x7E90
+    if (tooie_more_memory()) ctx->r9 = ADD32(ctx->r9, 0X7E90); else ctx->r9 = ADD32(ctx->r9, -0X4800);
     // 0x800D6088: addiu       $t0, $zero, 0xC
     ctx->r8 = ADD32(0, 0XC);
     // 0x800D608C: addu        $v0, $a1, $a2
@@ -4446,8 +4446,8 @@ L_800D6138:
 L_800D6140:
     // 0x800D6140: lui         $t1, 0x8013
     ctx->r9 = S32(0X8013 << 16);
-    // 0x800D6144: addiu       $t1, $t1, -0x4800
-    ctx->r9 = ADD32(ctx->r9, -0X4800);
+    // 0x800D6144: addiu       $t1, $t1, 0x7E90
+    if (tooie_more_memory()) ctx->r9 = ADD32(ctx->r9, 0X7E90); else ctx->r9 = ADD32(ctx->r9, -0X4800);
     // 0x800D6148: bgez        $a3, L_800D6158
     if (SIGNED(ctx->r7) >= 0) {
         // 0x800D614C: addiu       $t0, $zero, 0xC

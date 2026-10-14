@@ -872,12 +872,12 @@ RECOMP_FUNC void func_800D66AC(uint8_t* rdram, recomp_context* ctx) {
     int c1cs = 0;
     // 0x800D66AC: lui         $v1, 0x8013
     ctx->r3 = S32(0X8013 << 16);
-    // 0x800D66B0: lui         $v0, 0x8013
-    ctx->r2 = S32(0X8013 << 16);
-    // 0x800D66B4: addiu       $v0, $v0, -0x41A0
-    ctx->r2 = ADD32(ctx->r2, -0X41A0);
-    // 0x800D66B8: addiu       $v1, $v1, -0x4800
-    ctx->r3 = ADD32(ctx->r3, -0X4800);
+    // 0x800D66B0: lui         $v0, 0x8014
+    if (tooie_more_memory()) ctx->r2 = S32(0X8014 << 16); else ctx->r2 = S32(0X8013 << 16);
+    // 0x800D66B4: addiu       $v0, $v0, -0x5170
+    if (tooie_more_memory()) ctx->r2 = ADD32(ctx->r2, -0X5170); else ctx->r2 = ADD32(ctx->r2, -0X41A0);
+    // 0x800D66B8: addiu       $v1, $v1, 0x7E90
+    if (tooie_more_memory()) ctx->r3 = ADD32(ctx->r3, 0X7E90); else ctx->r3 = ADD32(ctx->r3, -0X4800);
 L_800D66BC:
     // 0x800D66BC: lbu         $t1, 0xF($v1)
     ctx->r9 = MEM_BU(ctx->r3, 0XF);

@@ -2391,12 +2391,12 @@ RECOMP_FUNC void func_800D5804(uint8_t* rdram, recomp_context* ctx) {
     ctx->r3 = 0 | 0;
     // 0x800D5820: lui         $t6, 0x8013
     ctx->r14 = S32(0X8013 << 16);
-    // 0x800D5824: lw          $t6, -0x4BB0($t6)
-    ctx->r14 = MEM_W(ctx->r14, -0X4BB0);
+    // 0x800D5824: lw          $t6, 0x7AD0($t6)
+    if (tooie_more_memory()) ctx->r14 = MEM_W(ctx->r14, 0X7AD0); else ctx->r14 = MEM_W(ctx->r14, -0X4BB0);
     // 0x800D5828: lui         $a1, 0x8013
     ctx->r5 = S32(0X8013 << 16);
-    // 0x800D582C: addiu       $a1, $a1, -0x4BB0
-    ctx->r5 = ADD32(ctx->r5, -0X4BB0);
+    // 0x800D582C: addiu       $a1, $a1, 0x7AD0
+    if (tooie_more_memory()) ctx->r5 = ADD32(ctx->r5, 0X7AD0); else ctx->r5 = ADD32(ctx->r5, -0X4BB0);
     // 0x800D5830: beq         $a0, $t6, L_800D5858
     if (ctx->r4 == ctx->r14) {
         // 0x800D5834: nop
@@ -2464,8 +2464,8 @@ L_800D586C:
     ctx->r4 = MEM_W(ctx->r29, 0X20);
     // 0x800D5878: lui         $a1, 0x8013
     ctx->r5 = S32(0X8013 << 16);
-    // 0x800D587C: addiu       $a1, $a1, -0x4BB0
-    ctx->r5 = ADD32(ctx->r5, -0X4BB0);
+    // 0x800D587C: addiu       $a1, $a1, 0x7AD0
+    if (tooie_more_memory()) ctx->r5 = ADD32(ctx->r5, 0X7AD0); else ctx->r5 = ADD32(ctx->r5, -0X4BB0);
     // 0x800D5880: lw          $v1, 0x1C($sp)
     ctx->r3 = MEM_W(ctx->r29, 0X1C);
     // 0x800D5884: beq         $v0, $a0, L_800D5898

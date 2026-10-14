@@ -80,6 +80,9 @@ void tooie_mix_rate_queue_length(uint8_t* rdram, recomp_context* ctx);
 void tooie_mix_rate_frame_size(uint8_t* rdram, recomp_context* ctx);
 void tooie_mix_rate_pitch_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
+// More game memory (src/game/more_memory.cpp): nonzero to use the bigger heap, frame buffers and
+// animation caches (hand edits in the generated code, banjotooie.us.toml).
+int tooie_more_memory(void);
 
 #ifdef __cplusplus
 }

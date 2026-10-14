@@ -502,7 +502,7 @@ namespace {
         return rdram[(addr - 0x80000000u) ^ 3u];
     }
     bool is_ram(uint32_t addr) {
-        return addr >= 0x80000000u && addr < 0x80800000u;
+        return addr >= 0x80000000u && addr < 0x81000000u;
     }
 
     // The PlayerState behind an attacker collision object, or 0 when the attacker is not a player.

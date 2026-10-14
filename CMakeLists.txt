@@ -233,6 +233,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/game/cic.cpp
     ${CMAKE_SOURCE_DIR}/src/game/config.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/more_memory.cpp
     ${CMAKE_SOURCE_DIR}/src/game/crash_handler.cpp
     ${CMAKE_SOURCE_DIR}/src/game/debug_watch.cpp
     ${CMAKE_SOURCE_DIR}/src/game/discord.cpp

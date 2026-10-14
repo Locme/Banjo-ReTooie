@@ -104,11 +104,11 @@ namespace {
     // Player 0's current state (see src/gameplay/fine_aim.cpp), 0 when there is no player.
     uint32_t player_state(uint8_t* rdram) {
         const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
-        if (player < 0x80000000u || player >= 0x80800000u) {
+        if (player < 0x80000000u || player >= 0x81000000u) {
             return 0;
         }
         const uint32_t block = (uint32_t)MEM_W(0x120, (int32_t)player);
-        if (block < 0x80000000u || block >= 0x80800000u) {
+        if (block < 0x80000000u || block >= 0x81000000u) {
             return 0;
         }
         return (uint32_t)MEM_W(4, (int32_t)block);
@@ -122,7 +122,7 @@ namespace {
     }
 
     bool valid_pointer(uint32_t address) {
-        return (address >= 0x80000000u) && (address < 0x80800000u);
+        return (address >= 0x80000000u) && (address < 0x81000000u);
     }
 
     // Banjo's position (PlayerState +0xE4 points at it), false when there is no player.

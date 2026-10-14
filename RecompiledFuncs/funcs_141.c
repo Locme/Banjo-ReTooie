@@ -2513,14 +2513,14 @@ RECOMP_FUNC void func_800D6C64(uint8_t* rdram, recomp_context* ctx) {
     ctx->r14 = SUB32(ctx->r14, ctx->r2);
     // 0x800D6C8C: lui         $t7, 0x8013
     ctx->r15 = S32(0X8013 << 16);
-    // 0x800D6C90: addiu       $t7, $t7, -0x4800
-    ctx->r15 = ADD32(ctx->r15, -0X4800);
+    // 0x800D6C90: addiu       $t7, $t7, 0x7E90
+    if (tooie_more_memory()) ctx->r15 = ADD32(ctx->r15, 0X7E90); else ctx->r15 = ADD32(ctx->r15, -0X4800);
     // 0x800D6C94: sll         $t6, $t6, 2
     ctx->r14 = S32(ctx->r14 << 2);
     // 0x800D6C98: lui         $s1, 0x8013
     ctx->r17 = S32(0X8013 << 16);
-    // 0x800D6C9C: addiu       $s1, $s1, -0x4800
-    ctx->r17 = ADD32(ctx->r17, -0X4800);
+    // 0x800D6C9C: addiu       $s1, $s1, 0x7E90
+    if (tooie_more_memory()) ctx->r17 = ADD32(ctx->r17, 0X7E90); else ctx->r17 = ADD32(ctx->r17, -0X4800);
     // 0x800D6CA0: addu        $s0, $t6, $t7
     ctx->r16 = ADD32(ctx->r14, ctx->r15);
     // 0x800D6CA4: lw          $v0, 0x8($s0)

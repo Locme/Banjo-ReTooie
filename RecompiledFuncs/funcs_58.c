@@ -1793,14 +1793,14 @@ L_808000E8:
 RECOMP_FUNC void func_8001E830(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    // 0x8001E830: lui         $v0, 0x2C
-    ctx->r2 = S32(0X2C << 16);
+    // 0x8001E830: lui         $v0, 0xCC
+    if (tooie_more_memory()) ctx->r2 = S32(0XCC << 16); else ctx->r2 = S32(0X2C << 16);
     // 0x8001E834: jr          $ra
-    // 0x8001E838: ori         $v0, $v0, 0x8800
-    ctx->r2 = ctx->r2 | 0X8800;
+    // 0x8001E838: ori         $v0, $v0, 0x4800
+    if (tooie_more_memory()) ctx->r2 = ctx->r2 | 0X4800; else ctx->r2 = ctx->r2 | 0X8800;
     return;
-    // 0x8001E838: ori         $v0, $v0, 0x8800
-    ctx->r2 = ctx->r2 | 0X8800;
+    // 0x8001E838: ori         $v0, $v0, 0x4800
+    if (tooie_more_memory()) ctx->r2 = ctx->r2 | 0X4800; else ctx->r2 = ctx->r2 | 0X8800;
     // 0x8001E83C: nop
 
 ;}

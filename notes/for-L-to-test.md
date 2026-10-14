@@ -1275,6 +1275,14 @@
   1. Graphics: HD Shadows On, Extended Draw Distance On
   2. Play Mayahem Temple and Witchyworld, turning the camera around
 - Look for: No torn geometry, exploding models or crash. Far objects or extra shadows may now be left out in very busy views, as the game's own drawing comes first. If something still breaks, send the crashes.log or console lines starting with "[gfx]".
+
+## T122 More game memory
+- Asked: 2026-10-14 11:20 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. General > Developer: More game memory is on (the default). Start the game and play a few areas, including a busy one (Witchyworld, Grunty Industries).
+  2. Switch it off, restart the game, and play the same areas.
+- Look for: no crashes, slowdowns or missing models with it on, and the game plays as before with it off. Save states (if you use them) still load.
 - Status: waiting for L
 
 

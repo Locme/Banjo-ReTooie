@@ -47,7 +47,8 @@
 namespace {
     using namespace std::chrono_literals;
 
-    constexpr size_t rdram_size = 8 * 1024 * 1024;
+    // The game's memory up to the top of its heap (0x80E00000, raised from 0x80400000 in banjotooie.us.toml).
+    constexpr size_t rdram_size = 0xE00000;
     constexpr auto save_input = recompinput::GameInput::SAVE_STATE;
     constexpr auto load_input = recompinput::GameInput::LOAD_STATE;
     // The game-state block: +0x12 is set while a map change is pending.

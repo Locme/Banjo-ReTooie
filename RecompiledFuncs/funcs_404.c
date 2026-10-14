@@ -5711,8 +5711,8 @@ L_800D7288:
     ctx->r5 = MEM_W(ctx->r29, 0X2C);
     // 0x800D729C: lui         $t7, 0x8013
     ctx->r15 = S32(0X8013 << 16);
-    // 0x800D72A0: addiu       $t7, $t7, -0x4800
-    ctx->r15 = ADD32(ctx->r15, -0X4800);
+    // 0x800D72A0: addiu       $t7, $t7, 0x7E90
+    if (tooie_more_memory()) ctx->r15 = ADD32(ctx->r15, 0X7E90); else ctx->r15 = ADD32(ctx->r15, -0X4800);
     // 0x800D72A4: sll         $t6, $a1, 2
     ctx->r14 = S32(ctx->r5 << 2);
     // 0x800D72A8: subu        $t6, $t6, $a1

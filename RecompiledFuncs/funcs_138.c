@@ -2228,8 +2228,8 @@ RECOMP_FUNC void func_800D6254(uint8_t* rdram, recomp_context* ctx) {
     ctx->r9 = ADD32(0, 0XC);
     // 0x800D6270: lui         $t0, 0x8013
     ctx->r8 = S32(0X8013 << 16);
-    // 0x800D6274: addiu       $t0, $t0, -0x4800
-    ctx->r8 = ADD32(ctx->r8, -0X4800);
+    // 0x800D6274: addiu       $t0, $t0, 0x7E90
+    if (tooie_more_memory()) ctx->r8 = ADD32(ctx->r8, 0X7E90); else ctx->r8 = ADD32(ctx->r8, -0X4800);
     // 0x800D6278: addu        $a1, $v0, $v1
     ctx->r5 = ADD32(ctx->r2, ctx->r3);
 L_800D627C:

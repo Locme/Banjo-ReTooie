@@ -73,7 +73,7 @@ namespace {
     }
 
     bool valid_ptr(gpr p) {
-        return (uint32_t)p >= 0x80000000u && (uint32_t)p < 0x80800000u;
+        return (uint32_t)p >= 0x80000000u && (uint32_t)p < 0x81000000u;
     }
 
     float read_float(uint8_t* rdram, gpr addr) {

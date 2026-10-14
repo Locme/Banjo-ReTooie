@@ -106,6 +106,407 @@ ignored = [
     "ovl_entrypoint_alternate",
 ]
 
+# --- Bigger game heap (func_8001E7E0, func_8001E830) -------------------------
+# These three sections (heap, frame buffers, animation caches) are switched by
+# General > More game memory: the generated code holds both values at each
+# patched instruction, "if (tooie_more_memory()) <patched> else <original>"
+# (hand edits, src/game/more_memory.cpp). Redo them after regenerating.
+# The game's heap ends at the top func_8001E7E0 returns (0x80400000) and is
+# func_8001E830 bytes long (0x2C8800), so it spans 0x80137800-0x80400000 and the
+# rest of the 8 MB Expansion Pak sits unused. Too many actors at once run it
+# out and heap_alloc_sided crashes. Raise the top to 0x80E00000
+# (below the 44.1 kHz audio buffers at 0x80E00000 and the model tagging lists at
+# 0x80F00000, src/gameplay/mix_rate.cpp and src/game/model_tagging.cpp) and make
+# it 0xCC4800 long, so it starts at 0x8013B800: the 16 KB below it holds the
+# bigger animation caches (below). Everything stays below 16 MB, which
+# RT64 addresses (24-bit segment offsets).
+
+# lui $v0, 0x8040 -> lui $v0, 0x80E0
+[[patches.instruction]]
+func = "func_8001E7E0"
+vram = 0x8001E7E4
+value = 0x3C0280E0
+
+# lui $v0, 0x2C -> lui $v0, 0xCC
+[[patches.instruction]]
+func = "func_8001E830"
+vram = 0x8001E830
+value = 0x3C0200CC
+
+# ori $v0, $v0, 0x8800 -> ori $v0, $v0, 0x4800 (0xCC4800)
+[[patches.instruction]]
+func = "func_8001E830"
+vram = 0x8001E838
+value = 0x34424800
+
+# --- Bigger frame buffers for display lists, matrices and vertices (func_8001A3A0)
+# The game builds each frame's display list, matrices and vertices in two pairs
+# of fixed heap buffers: 0x76C0 bytes of display list (3800 commands), 0x12C00
+# of matrices and 0x1AE0 of vertices. Nothing checks the end, so a crowded scene
+# (many characters at once) writes past them into the next heap block and a later
+# heap_alloc_sided crashes. Make them 0x20000, 0x42C00 and 0x6B80 (about 4x),
+# about 0.7 MB more out of the 10 MB the bigger heap above adds.
+
+# addiu $a0, $zero, 0x76C0 -> lui $a0, 0x2 (display list, both buffers)
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A3BC
+value = 0x3C040002
+
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A3CC
+value = 0x3C040002
+
+# lui $a0, 0x1 -> lui $a0, 0x4 (with ori 0x2C00: matrices, both buffers)
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A3D4
+value = 0x3C040004
+
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A3E8
+value = 0x3C040004
+
+# addiu $a0, $zero, 0x1AE0 -> addiu $a0, $zero, 0x6B80 (vertices, both buffers)
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A404
+value = 0x24046B80
+
+[[patches.instruction]]
+func = "func_8001A3A0"
+vram = 0x8001A414
+value = 0x24046B80
+
+# --- Bigger animation caches (func_800D56C4 to func_800D731C) ----------------
+# Two fixed caches hold the animations in use. Animation files: 130 slots
+# (ids at 0x8012B6E0, use counts at 0x8012B658, pointers at 0x8012B450;
+# func_800D5AB4 gives -1 once 0x82 are loaded). Animations: a sorted table of
+# 12-byte entries at 0x8012B800 with room for 136 (0x8012BE60 ends it,
+# func_800D66AC clears it; func_800D674C refuses a new one once 0x87 are
+# loaded). A full cache makes func_800D674C return NULL, which the caller reads
+# at once (func_800E0414 crashes): a crowded scene (many characters at once)
+# loads more than that. Move them into the 16 KB below the bigger heap, which
+# the lui 0x8013 already in each use reaches (0x80137800 = 0x8013 << 16 +
+# 0x7800): ids 0x80137800, use counts 0x801379E0, pointers 0x80137AD0 (240
+# slots each, the count is a byte), table 0x80137E90 (1024 entries, to
+# 0x8013AE90). Raise the limits to 0xF0 and 0x3FF. Every use was found by
+# tracking lui 0x8013 to an offset inside the old arrays.
+
+# addiu       $t1, $t1, 0x7E90
+[[patches.instruction]]
+func = "func_800D6060"
+vram = 0x800D6084
+value = 0x25297E90
+
+# addiu       $t1, $t1, 0x7E90
+[[patches.instruction]]
+func = "func_800D6060"
+vram = 0x800D6144
+value = 0x25297E90
+
+# addiu       $t6, $t6, 0x7E90
+[[patches.instruction]]
+func = "func_800D61B4"
+vram = 0x800D61B8
+value = 0x25CE7E90
+
+# addiu       $t2, $t2, 0x7E90
+[[patches.instruction]]
+func = "func_800D61B4"
+vram = 0x800D621C
+value = 0x254A7E90
+
+# addiu       $t0, $t0, 0x7E90
+[[patches.instruction]]
+func = "func_800D6254"
+vram = 0x800D6274
+value = 0x25087E90
+
+# addiu       $t8, $t8, 0x7E90
+[[patches.instruction]]
+func = "func_800D62E4"
+vram = 0x800D6310
+value = 0x27187E90
+
+# addiu       $v1, $v1, 0x7E90
+[[patches.instruction]]
+func = "func_800D66AC"
+vram = 0x800D66B8
+value = 0x24637E90
+
+# lw          $t8, 0x7E90($t8)
+[[patches.instruction]]
+func = "func_800D674C"
+vram = 0x800D6780
+value = 0x8F187E90
+
+# addiu       $t2, $t2, 0x7E90
+[[patches.instruction]]
+func = "func_800D674C"
+vram = 0x800D67B8
+value = 0x254A7E90
+
+# addiu       $t4, $t4, 0x7E90
+[[patches.instruction]]
+func = "func_800D674C"
+vram = 0x800D688C
+value = 0x258C7E90
+
+# addiu       $t1, $t1, 0x7E90
+[[patches.instruction]]
+func = "func_800D674C"
+vram = 0x800D6938
+value = 0x25297E90
+
+# lw          $t8, 0x7E90($t8)
+[[patches.instruction]]
+func = "func_800D6B0C"
+vram = 0x800D6B40
+value = 0x8F187E90
+
+# addiu       $t2, $t2, 0x7E90
+[[patches.instruction]]
+func = "func_800D6B0C"
+vram = 0x800D6B70
+value = 0x254A7E90
+
+# addiu       $t8, $t8, 0x7E90
+[[patches.instruction]]
+func = "func_800D6B0C"
+vram = 0x800D6BDC
+value = 0x27187E90
+
+# addiu       $t7, $t7, 0x7E90
+[[patches.instruction]]
+func = "func_800D6C64"
+vram = 0x800D6C90
+value = 0x25EF7E90
+
+# addiu       $s1, $s1, 0x7E90
+[[patches.instruction]]
+func = "func_800D6C64"
+vram = 0x800D6C9C
+value = 0x26317E90
+
+# addiu       $a1, $a1, 0x7E90
+[[patches.instruction]]
+func = "func_800D6CEC"
+vram = 0x800D6D14
+value = 0x24A57E90
+
+# addiu       $s3, $s3, 0x7E90
+[[patches.instruction]]
+func = "func_800D6D68"
+vram = 0x800D6DA4
+value = 0x26737E90
+
+# addiu       $s1, $s1, 0x7E90
+[[patches.instruction]]
+func = "func_800D6E54"
+vram = 0x800D6F14
+value = 0x26317E90
+
+# addiu       $t7, $t7, 0x7E90
+[[patches.instruction]]
+func = "func_800D7050"
+vram = 0x800D7064
+value = 0x25EF7E90
+
+# addiu       $t7, $t7, 0x7E90
+[[patches.instruction]]
+func = "func_800D7050"
+vram = 0x800D709C
+value = 0x25EF7E90
+
+# lhu         $v0, 0x7E9A($v0)
+[[patches.instruction]]
+func = "func_800D7138"
+vram = 0x800D7168
+value = 0x94427E9A
+
+# addiu       $t7, $t7, 0x7E90
+[[patches.instruction]]
+func = "func_800D7184"
+vram = 0x800D7198
+value = 0x25EF7E90
+
+# addiu       $t4, $t4, 0x7E90
+[[patches.instruction]]
+func = "func_800D7184"
+vram = 0x800D71C8
+value = 0x258C7E90
+
+# addiu       $t7, $t7, 0x7E90
+[[patches.instruction]]
+func = "func_800D725C"
+vram = 0x800D72A0
+value = 0x25EF7E90
+
+# addiu       $a0, $a0, 0x7E90
+[[patches.instruction]]
+func = "func_800D731C"
+vram = 0x800D7340
+value = 0x24847E90
+
+# lui         $v0, 0x8014
+[[patches.instruction]]
+func = "func_800D66AC"
+vram = 0x800D66B0
+value = 0x3C028014
+
+# addiu       $v0, $v0, -0x5170
+[[patches.instruction]]
+func = "func_800D66AC"
+vram = 0x800D66B4
+value = 0x2442AE90
+
+# sltiu       $at, $t9, 0x3FF
+[[patches.instruction]]
+func = "func_800D674C"
+vram = 0x800D68D8
+value = 0x2F2103FF
+
+# addiu       $a1, $a1, 0x7AD0
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D5728
+value = 0x24A57AD0
+
+# lw          $t6, 0x7AD0($t6)
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D56EC
+value = 0x8DCE7AD0
+
+# addiu       $a1, $a1, 0x7AD0
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D56F4
+value = 0x24A57AD0
+
+# addiu       $t2, $t2, 0x79E0
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D5738
+value = 0x254A79E0
+
+# addiu       $a1, $a1, 0x7AD0
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D5788
+value = 0x24A57AD0
+
+# lbu         $t6, 0x79E0($t6)
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D579C
+value = 0x91CE79E0
+
+# addiu       $t0, $t0, 0x7800
+[[patches.instruction]]
+func = "func_800D56C4"
+vram = 0x800D57B4
+value = 0x25087800
+
+# lw          $t6, 0x7AD0($t6)
+[[patches.instruction]]
+func = "func_800D5804"
+vram = 0x800D5824
+value = 0x8DCE7AD0
+
+# addiu       $a1, $a1, 0x7AD0
+[[patches.instruction]]
+func = "func_800D5804"
+vram = 0x800D582C
+value = 0x24A57AD0
+
+# addiu       $a1, $a1, 0x7AD0
+[[patches.instruction]]
+func = "func_800D5804"
+vram = 0x800D587C
+value = 0x24A57AD0
+
+# lh          $t6, 0x7800($t6)
+[[patches.instruction]]
+func = "func_800D5A04"
+vram = 0x800D5A1C
+value = 0x85CE7800
+
+# addiu       $a1, $a1, 0x7800
+[[patches.instruction]]
+func = "func_800D5A04"
+vram = 0x800D5A24
+value = 0x24A57800
+
+# lh          $t6, 0x7800($t6)
+[[patches.instruction]]
+func = "func_800D5AB4"
+vram = 0x800D5ACC
+value = 0x85CE7800
+
+# addiu       $a1, $a1, 0x7800
+[[patches.instruction]]
+func = "func_800D5AB4"
+vram = 0x800D5AD4
+value = 0x24A57800
+
+# addiu       $t8, $t8, 0x79E0
+[[patches.instruction]]
+func = "func_800D5B34"
+vram = 0x800D5B74
+value = 0x271879E0
+
+# lw          $v0, 0x7AD0($v0)
+[[patches.instruction]]
+func = "func_800D5B34"
+vram = 0x800D5BA0
+value = 0x8C427AD0
+
+# sb          $t4, 0x79E0($at)
+[[patches.instruction]]
+func = "func_800D5B34"
+vram = 0x800D5D2C
+value = 0xA02C79E0
+
+# sw          $a3, 0x7AD0($at)
+[[patches.instruction]]
+func = "func_800D5B34"
+vram = 0x800D5D40
+value = 0xAC277AD0
+
+# sh          $t6, 0x7800($at)
+[[patches.instruction]]
+func = "func_800D5B34"
+vram = 0x800D5D54
+value = 0xA42E7800
+
+# lh          $t6, 0x7800($t6)
+[[patches.instruction]]
+func = "func_800D5FE8"
+vram = 0x800D6000
+value = 0x85CE7800
+
+# addiu       $a1, $a1, 0x7800
+[[patches.instruction]]
+func = "func_800D5FE8"
+vram = 0x800D6008
+value = 0x24A57800
+
+# lw          $v0, 0x7AD0($v0)
+[[patches.instruction]]
+func = "func_800D5FE8"
+vram = 0x800D6050
+value = 0x8C427AD0
+
+# addiu       $at, $zero, 0xF0
+[[patches.instruction]]
+func = "func_800D5AB4"
+vram = 0x800D5B08
+value = 0x240100F0
+
 # --- Overlay relocation (func_80082088) -------------------------------------
 # It reads the PI status register and the per-overlay relocation key straight
 # from the cartridge (uncached ROM at 0xB0000040 + 4 * overlay index, inside

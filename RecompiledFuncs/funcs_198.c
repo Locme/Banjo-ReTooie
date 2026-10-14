@@ -5052,8 +5052,8 @@ RECOMP_FUNC void func_800D7138(uint8_t* rdram, recomp_context* ctx) {
     ctx->r2 = S32(0X8013 << 16);
     // 0x800D7164: addu        $v0, $v0, $t6
     ctx->r2 = ADD32(ctx->r2, ctx->r14);
-    // 0x800D7168: lhu         $v0, -0x47F6($v0)
-    ctx->r2 = MEM_HU(ctx->r2, -0X47F6);
+    // 0x800D7168: lhu         $v0, 0x7E9A($v0)
+    if (tooie_more_memory()) ctx->r2 = MEM_HU(ctx->r2, 0X7E9A); else ctx->r2 = MEM_HU(ctx->r2, -0X47F6);
     // 0x800D716C: srl         $t7, $v0, 12
     ctx->r15 = S32(U32(ctx->r2) >> 12);
     // 0x800D7170: b           L_800D717C

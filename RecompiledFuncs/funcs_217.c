@@ -3708,12 +3708,12 @@ RECOMP_FUNC void func_800D5A04(uint8_t* rdram, recomp_context* ctx) {
     // 0x800D5A18: slt         $at, $v0, $v1
     ctx->r1 = SIGNED(ctx->r2) < SIGNED(ctx->r3) ? 1 : 0;
     skip_0:
-    // 0x800D5A1C: lh          $t6, -0x4920($t6)
-    ctx->r14 = MEM_H(ctx->r14, -0X4920);
+    // 0x800D5A1C: lh          $t6, 0x7800($t6)
+    if (tooie_more_memory()) ctx->r14 = MEM_H(ctx->r14, 0X7800); else ctx->r14 = MEM_H(ctx->r14, -0X4920);
     // 0x800D5A20: lui         $a1, 0x8013
     ctx->r5 = S32(0X8013 << 16);
-    // 0x800D5A24: addiu       $a1, $a1, -0x4920
-    ctx->r5 = ADD32(ctx->r5, -0X4920);
+    // 0x800D5A24: addiu       $a1, $a1, 0x7800
+    if (tooie_more_memory()) ctx->r5 = ADD32(ctx->r5, 0X7800); else ctx->r5 = ADD32(ctx->r5, -0X4920);
     // 0x800D5A28: beql        $a0, $t6, L_800D5A54
     if (ctx->r4 == ctx->r14) {
         // 0x800D5A2C: slt         $at, $v0, $v1

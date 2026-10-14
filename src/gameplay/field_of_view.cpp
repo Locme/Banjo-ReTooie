@@ -40,7 +40,7 @@ namespace {
     } modes[max_cameras];
 
     bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x80800000u;
+        return p >= 0x80000000u && p < 0x81000000u;
     }
 
     uint32_t read_word(uint8_t* rdram, uint32_t addr) {

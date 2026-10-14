@@ -42,7 +42,7 @@ namespace {
     }
 
     bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x80800000u;
+        return p >= 0x80000000u && p < 0x81000000u;
     }
 
     bool log_on() {

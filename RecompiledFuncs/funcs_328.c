@@ -727,8 +727,8 @@ RECOMP_FUNC void func_800D6D68(uint8_t* rdram, recomp_context* ctx) {
     ctx->r18 = 0 | 0;
     // 0x800D6DA0: addiu       $s6, $s6, -0x419E
     ctx->r22 = ADD32(ctx->r22, -0X419E);
-    // 0x800D6DA4: addiu       $s3, $s3, -0x4800
-    ctx->r19 = ADD32(ctx->r19, -0X4800);
+    // 0x800D6DA4: addiu       $s3, $s3, 0x7E90
+    if (tooie_more_memory()) ctx->r19 = ADD32(ctx->r19, 0X7E90); else ctx->r19 = ADD32(ctx->r19, -0X4800);
     // 0x800D6DA8: addiu       $s0, $s0, -0x41A0
     ctx->r16 = ADD32(ctx->r16, -0X41A0);
     // 0x800D6DAC: addiu       $s4, $zero, 0xC

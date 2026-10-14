@@ -128,7 +128,7 @@ namespace {
     // he moves per second of game time.
     bool banjo_position(uint8_t* rdram, float out[3]) {
         auto word = [&](uint32_t addr) { return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)); };
-        auto valid = [](uint32_t p) { return p >= 0x80000000u && p < 0x80800000u; };
+        auto valid = [](uint32_t p) { return p >= 0x80000000u && p < 0x81000000u; };
         uint32_t player = word(0x80135490);
         uint32_t transform = valid(player) ? word(player + 0xE4) : 0;
         if (!valid(transform)) {
