@@ -907,3 +907,14 @@
   3. Turn HD Shadows Off and On a few times, then try a transformation or two
 - Look for: With it On, does the shadow match Banjo's full shape (Kazooie, backpack, arms) and pose? Does it switch at once? Does it ever flicker or go missing? Checked headless only.
 - Status: waiting for L
+
+## T88 Water reflections
+- Asked: 2026-10-14 06:50 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45 (XBLA's reflections didn't work on your PC)
+- Steps:
+  1. Esc > Graphics: set "Water reflections" to 60, then 100
+  2. Look at water from different heights: the Spiral Mountain pool, Jolly Roger's Lagoon, the Glitter Gulch Mine water, and any lake
+  3. Press F6 until "Effect view: water": red is what counts as water, yellow is where it reflects
+- Look for: Banjo and the scenery mirrored in the water, with gentle ripples. Is anything that isn't water lighting up red or yellow (shadows, glass, smoke)? Any flicker at the screen edges? Frame rate fine?
+- Status: waiting for L

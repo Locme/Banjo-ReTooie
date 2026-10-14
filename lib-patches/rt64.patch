@@ -350,10 +350,10 @@ index 5a331aa..87ecc21 100644
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..be4d991 100644
+index 69a82ac..7e6af88 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,50 @@ namespace RT64 {
+@@ -659,6 +659,52 @@ namespace RT64 {
          }
      };
  
@@ -385,6 +385,7 @@ index 69a82ac..be4d991 100644
 +        uint32_t gBloom;
 +        uint32_t gColor;
 +        uint32_t gAdapted;
++        uint32_t gWater;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -393,6 +394,7 @@ index 69a82ac..be4d991 100644
 +            builder.addImmutableSampler(3, linearSampler);
 +            gColor = builder.addTexture(4);
 +            gAdapted = builder.addTexture(5);
++            gWater = builder.addTexture(6);
 +            builder.end();
 +
 +            if (device != nullptr) {
@@ -405,7 +407,7 @@ index 69a82ac..be4d991 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..c5cbaf4 100644
+index 9fae0d4..f1682c8 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -416,7 +418,62 @@ index 9fae0d4..c5cbaf4 100644
  
  #include "../include/rt64_extended_gbi.h"
  
-@@ -1250,6 +1251,8 @@ namespace RT64 {
+@@ -12,6 +13,7 @@
+ #include "gbi/rt64_f3d.h"
+ #include "shared/rt64_framebuffer_params.h"
+ #include "shared/rt64_raster_params.h"
++#include "shared/rt64_blender.h"
+ 
+ #include "rt64_descriptor_sets.h"
+ #include "rt64_render_worker.h"
+@@ -465,12 +467,45 @@ namespace RT64 {
+         return true;
+     }
+     
++    void FramebufferRenderer::submitWaterMask(RenderWorker *worker, const Framebuffer &framebuffer, const RenderTargetDrawCall &targetDrawCall) {
++        // Banjo-Tooie: the water's draws again, into the scene effects' water mask, each writing its own
++        // depth (RasterPS with waterMask set), depth tested against the finished 3D world.
++        RenderTarget *colorTarget = targetDrawCall.fbStorage->colorTarget;
++        RenderTarget *depthTarget = targetDrawCall.fbStorage->depthTarget;
++        BeginSceneWaterMask(worker, colorTarget, depthTarget);
++        worker->commandList->setGraphicsPipelineLayout(rendererPipelineLayout);
++        worker->commandList->setGraphicsDescriptorSet(descCommonSet->get(), 0);
++        worker->commandList->setGraphicsDescriptorSet(descTextureSet->get(), 1);
++        worker->commandList->setGraphicsDescriptorSet(descTextureSet->get(), 2);
++        worker->commandList->setGraphicsDescriptorSet(framebuffer.descDummyFbSet->get(), 3);
++        worker->commandList->setViewports(framebuffer.viewport);
++        worker->commandList->setVertexBuffers(0, indexedVertexViews.data(), uint32_t(indexedVertexViews.size()), vertexInputSlots.data());
++        worker->commandList->setIndexBuffer(&indexBufferView);
++
++        interop::RasterParams rasterParams = {};
++        rasterParams.waterMask = 1;
++        for (uint32_t i : targetDrawCall.waterInstances) {
++            const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
++            const auto &triangles = drawCall.triangles;
++            if (triangles.scissor.isEmpty() || (triangles.pipeline == nullptr)) {
++                continue;
++            }
++            worker->commandList->setScissors(triangles.scissor);
++            worker->commandList->setPipeline(triangles.pipeline);
++            rasterParams.renderIndex = i;
++            rasterParams.screenScale = triangles.screenScale;
++            rasterParams.screenOffset = triangles.screenOffset;
++            worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++            worker->commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
++        }
++    }
++
+     void FramebufferRenderer::submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState) {
+         InstanceDrawCall::Type previousCallType = InstanceDrawCall::Type::Unknown;
+         bool previousVertexTestZ = false;
+         const RenderPipeline *previousPipeline = nullptr;
+         RenderRect previousScissor;
+-        interop::RasterParams rasterParams;
++        interop::RasterParams rasterParams = {};
+         RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
+         RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
+ 
+@@ -1250,6 +1285,8 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -425,7 +482,7 @@ index 9fae0d4..c5cbaf4 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1297,6 +1300,13 @@ namespace RT64 {
+@@ -1297,6 +1334,16 @@ namespace RT64 {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
                  submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
@@ -433,22 +490,26 @@ index 9fae0d4..c5cbaf4 100644
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
 +                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
++                    if (!targetDrawCall.waterInstances.empty() && SceneWaterWanted()) {
++                        submitWaterMask(worker, framebuffer, targetDrawCall);
++                    }
 +                    RecordSceneEffects(worker, colorTarget, depthTarget, targetDrawCall.sceneEffectsProjection, shaderLibrary);
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                }
              }
          }
      }
-@@ -1408,6 +1418,8 @@ namespace RT64 {
+@@ -1408,6 +1455,9 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
++        targetDrawCall.waterInstances.clear();
 +        bool drewPerspective = false;
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1468,19 @@ namespace RT64 {
+@@ -1456,6 +1506,19 @@ namespace RT64 {
                  continue;
              }
  
@@ -468,7 +529,26 @@ index 9fae0d4..c5cbaf4 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1758,6 +1783,9 @@ namespace RT64 {
+@@ -1747,6 +1810,18 @@ namespace RT64 {
+ #           endif
+                 {
+                     rasterScene.instanceIndices.push_back(instanceIndex);
++
++                    // Banjo-Tooie: water is a translucent surface of the 3D world (alpha blended, depth tested,
++                    // no depth write, not a decal) made of several triangles; the shader keeps only flat
++                    // surfaces lying over something further down.
++                    const interop::OtherMode om = call.shaderDesc.otherMode;
++                    if ((proj.type == Projection::Type::Perspective) && fbPair.depthWrite && (targetDrawCall.sceneEffectsAfter < 0) &&
++                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                        (call.callDesc.triangleCount >= 4) && om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) &&
++                        (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om))
++                    {
++                        targetDrawCall.waterInstances.push_back(instanceIndex);
++                    }
+                 }
+ 
+                 instanceDrawCallVector.push_back(instanceDrawCall);
+@@ -1758,6 +1833,9 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -479,10 +559,10 @@ index 9fae0d4..c5cbaf4 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..abcd2be 100644
+index 3add9c3..d40e00d 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,10 @@ namespace RT64 {
+@@ -48,6 +48,13 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -490,9 +570,20 @@ index 3add9c3..abcd2be 100644
 +        // nowhere when negative, with the 3D world's projection.
 +        int32_t sceneEffectsAfter = -1;
 +        interop::float4x4 sceneEffectsProjection;
++        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
++        // scene effects' water mask.
++        std::vector<uint32_t> waterInstances;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
+@@ -165,6 +172,7 @@ namespace RT64 {
+         void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
+         bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
+         void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
++        void submitWaterMask(RenderWorker *worker, const Framebuffer &framebuffer, const RenderTargetDrawCall &targetDrawCall);
+         void addFramebuffer(const DrawParams &p);
+         void endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled);
+         void recordSetup(RenderWorker *worker, std::vector<BufferUploader *> bufferUploaders, RSPProcessor *rspProcessor, VertexProcessor *vertexProcessor, const OutputBuffers *outputBuffers, bool rtEnabled);
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
 index 0000000..4396d39
@@ -698,10 +789,10 @@ index 0000000..e400499
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..53cd740
+index 0000000..78c2677
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,467 @@
 +//
 +// RT64
 +//
@@ -743,6 +834,18 @@ index 0000000..53cd740
 +            const RenderTexture *sceneSetBloom = nullptr;
 +            const RenderTexture *sceneSetColor = nullptr;
 +            const RenderTexture *sceneSetAdapted = nullptr;
++            const RenderTexture *sceneSetWater = nullptr;
++            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
++            // framebuffer renderer into this target, at the scene's size and sample count.
++            std::unique_ptr<RenderTexture> waterTexture;
++            std::unique_ptr<RenderTextureView> waterTextureView;
++            std::unique_ptr<RenderFramebuffer> waterFramebuffer;
++            const RenderTexture *waterFramebufferDepth = nullptr;
++            uint32_t waterWidth = 0;
++            uint32_t waterHeight = 0;
++            uint32_t waterSamples = 0;
++            RenderFormat waterFormat = RenderFormat::UNKNOWN;
++            bool waterDrawn = false;
 +            // Eye adaptation: the measured brightness [0], the adapted one [1] and a copy of last frame's [2].
 +            std::unique_ptr<RenderTexture> luminanceTexture[3];
 +            std::unique_ptr<RenderFramebuffer> luminanceFramebuffer[3];
@@ -754,6 +857,7 @@ index 0000000..53cd740
 +            std::vector<std::unique_ptr<RenderFramebuffer>> retiredFramebuffers;
 +            std::vector<std::unique_ptr<SmaaDescriptorSet>> retiredSets;
 +            std::vector<std::unique_ptr<SceneEffectsDescriptorSet>> retiredSceneSets;
++            std::vector<std::unique_ptr<RenderTextureView>> retiredViews;
 +
 +            void retire() {
 +                for (int i = 0; i < 2; i++) {
@@ -778,6 +882,34 @@ index 0000000..53cd740
 +                resources = std::make_unique<Resources>();
 +            }
 +            return *resources;
++        }
++
++        // The water mask target, matching the scene's color target (so the game's own pipelines can draw
++        // into it) with the scene's depth target attached.
++        void ensureWaterTarget(RenderWorker *worker, Resources &res, RenderTarget *colorTarget, RenderTarget *depthTarget) {
++            const uint32_t samples = colorTarget->multisampling.sampleCount;
++            if ((res.waterTexture != nullptr) && (res.waterWidth == colorTarget->width) && (res.waterHeight == colorTarget->height) &&
++                (res.waterSamples == samples) && (res.waterFormat == colorTarget->format) && (res.waterFramebufferDepth == depthTarget->texture.get()))
++            {
++                return;
++            }
++            if (res.waterTexture != nullptr) {
++                res.retired.emplace_back(std::move(res.waterTexture));
++                res.retiredFramebuffers.emplace_back(std::move(res.waterFramebuffer));
++                res.retiredViews.emplace_back(std::move(res.waterTextureView));
++            }
++            RenderClearValue clearValue = RenderClearValue::Color(RenderColor(0.0f, 0.0f, 0.0f, 0.0f), colorTarget->format);
++            res.waterTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
++            res.waterTexture->setName("Scene Effects Water Mask");
++            res.waterTextureView = res.waterTexture->createTextureView(RenderTextureViewDesc::Texture2D(colorTarget->format));
++            const RenderTexture *attachment = res.waterTexture.get();
++            res.waterFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&attachment, 1, depthTarget->texture.get()));
++            res.waterWidth = colorTarget->width;
++            res.waterHeight = colorTarget->height;
++            res.waterSamples = samples;
++            res.waterFormat = colorTarget->format;
++            res.waterFramebufferDepth = depthTarget->texture.get();
++            res.waterDrawn = false;
 +        }
 +    }
 +
@@ -841,6 +973,30 @@ index 0000000..53cd740
 +        effectsSettings.outlines = outlines;
 +    }
 +
++    void SetSceneWaterReflections(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.waterReflections = strength;
++    }
++
++    bool SceneWaterWanted() {
++        const std::scoped_lock lock(effectsMutex);
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.view == 4);
++    }
++
++    RenderFramebuffer *BeginSceneWaterMask(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget) {
++        Resources &res = resourcesFor(worker);
++        RenderCommandList *commandList = worker->commandList.get();
++        ensureWaterTarget(worker, res, colorTarget, depthTarget);
++        commandList->barriers(RenderBarrierStage::GRAPHICS, {
++            RenderTextureBarrier(res.waterTexture.get(), RenderTextureLayout::COLOR_WRITE),
++            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)
++        });
++        commandList->setFramebuffer(res.waterFramebuffer.get());
++        commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++        res.waterDrawn = true;
++        return res.waterFramebuffer.get();
++    }
++
 +    SceneEffectsSettings GetSceneEffects() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return effectsSettings;
@@ -850,7 +1006,7 @@ index 0000000..53cd740
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -906,7 +1062,7 @@ index 0000000..53cd740
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -1053,8 +1209,14 @@ index 0000000..53cd740
 +        // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
 +        const RenderTexture *color = (source != nullptr) ? source : res.bloomTexture[0].get();
 +        const RenderTexture *adapted = res.luminanceTexture[1].get();
++        // The water mask is always bound; the shader reads it only when it was drawn this frame.
++        ensureWaterTarget(worker, res, colorTarget, depthTarget);
++        const bool waterDrawn = res.waterDrawn;
++        res.waterDrawn = false;
++        RenderTexture *water = res.waterTexture.get();
++        constants.water = { (waterDrawn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, waterDrawn ? 1.0f : 0.0f, 0.0f, 0.0f };
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[0].get()) ||
-+            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted)) {
++            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water)) {
 +            if (res.sceneSet != nullptr) {
 +                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
 +            }
@@ -1068,13 +1230,16 @@ index 0000000..53cd740
 +            res.sceneSet->setTexture(res.sceneSet->gAdapted, adapted, RenderTextureLayout::SHADER_READ);
 +            res.sceneSetColor = color;
 +            res.sceneSetAdapted = adapted;
++            res.sceneSet->setTexture(res.sceneSet->gWater, water, RenderTextureLayout::SHADER_READ, res.waterTextureView.get());
++            res.sceneSetWater = water;
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +            RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
 +            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ)
++            RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ),
++            RenderTextureBarrier(water, RenderTextureLayout::SHADER_READ)
 +        });
 +
 +        commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
@@ -1097,10 +1262,10 @@ index 0000000..53cd740
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2debcb3
+index 0000000..ef69eff
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,80 @@
 +//
 +// RT64
 +//
@@ -1115,7 +1280,7 @@ index 0000000..2debcb3
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light, underwater tint, heat haze) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light, underwater tint, heat haze, water reflections) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -1134,6 +1299,7 @@ index 0000000..2debcb3
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
++        float waterReflections = 0.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -1157,7 +1323,15 @@ index 0000000..2debcb3
 +    void SetSceneUnderwater(float tint, float haze);
 +    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance.
 +    void SetSceneHeatHaze(float strength);
-+    // Debug views (0 none, 1 the effects alone as grey, 2 depth: near white, far dark, sky blue, 3 normals),
++    // Water reflections (0 off, 1 strongest) on the game's water surfaces, which the framebuffer renderer
++    // redraws into a mask (BeginSceneWaterMask) before the pass.
++    void SetSceneWaterReflections(float strength);
++    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
++    bool SceneWaterWanted();
++    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
++    // the caller then redraws the water's draw calls into it with RasterParams.waterMask set.
++    RenderFramebuffer *BeginSceneWaterMask(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget);
++    // Debug views (0 none, 1 the effects alone as grey, 2 depth: near white, far dark, sky blue, 3 normals, 4 water mask),
 +    // and F8 compare (the effects only on the left half).
 +    void SetSceneEffectsView(uint32_t view, bool compare);
 +    SceneEffectsSettings GetSceneEffects();
@@ -1986,12 +2160,31 @@ index 0000000..c5916ed
 +
 +    return float4(rgb, color.a);
 +}
+diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
+index e7895c3..257dd95 100644
+--- a/src/shaders/RasterPS.hlsl
++++ b/src/shaders/RasterPS.hlsl
+@@ -261,6 +261,14 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+         resultColor = lerp(resultColor, highlightColor, highlightColor.a);
+     }
+     
++    // Banjo-Tooie: redrawn into the water mask, the surface's depth (24 bits over rgb) instead of its colour.
++    if (gConstants.waterMask != 0) {
++        const uint depthBits = uint(saturate(vertexPosition.z) * 16777215.0f);
++        resultColor = float4(float((depthBits >> 16) & 0xFF), float((depthBits >> 8) & 0xFF), float(depthBits & 0xFF), 255.0f) / 255.0f;
++        resultAlpha = 1.0f;
++        return true;
++    }
++
+ #ifdef DYNAMIC_RENDER_PARAMS
+     if (FrParams.viewUbershaders) {
+         resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..cbe29b0
+index 0000000..649a019
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,307 @@
+@@ -0,0 +1,424 @@
 +//
 +// RT64
 +//
@@ -2013,6 +2206,11 @@ index 0000000..cbe29b0
 +SamplerState LinearSampler : register(s3);
 +Texture2D<float4> gColor : register(t4);
 +Texture2D<float> gAdapted : register(t5);
++#ifdef MULTISAMPLING
++Texture2DMS<float4> gWater : register(t6);
++#else
++Texture2D<float4> gWater : register(t6);
++#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -2114,6 +2312,102 @@ index 0000000..cbe29b0
 +    return gColor.Load(int3(from, 0)).rgb;
 +}
 +
++// Water: the water mask holds each water pixel's own depth (24 bits over rgb, a = 1), redrawn from the
++// game's translucent surfaces. False where there is no water.
++bool LoadWater(int2 pixel, out float depth) {
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    const float4 m = gWater.Load(pixel, 0);
++#else
++    const float4 m = gWater.Load(int3(pixel, 0));
++#endif
++    const uint3 b = uint3(round(m.rgb * 255.0f));
++    depth = float((b.r << 16) | (b.g << 8) | b.b) / 16777215.0f;
++    return m.a > 0.5f;
++}
++
++// How much a water pixel reflects (0 to 1): only flat surfaces facing up, lying over something further
++// down (so shadows and decals on the ground don't count), fading in from the shore. Gives the surface's
++// view-space position and normal.
++float WaterAmount(int2 pixel, float sceneDepth, out float3 surface, out float3 normal) {
++    float depth;
++    surface = 0.0f;
++    normal = float3(0.0f, 1.0f, 0.0f);
++    if (!LoadWater(pixel, depth)) {
++        return 0.0f;
++    }
++    surface = ViewPosition(pixel, depth);
++    float dRight, dDown;
++    const bool right = LoadWater(pixel + int2(1, 0), dRight);
++    const bool down = LoadWater(pixel + int2(0, 1), dDown);
++    float dLeft, dUp;
++    const float3 px = right ? ViewPosition(pixel + int2(1, 0), dRight) - surface :
++        (LoadWater(pixel - int2(1, 0), dLeft) ? surface - ViewPosition(pixel - int2(1, 0), dLeft) : float3(1.0f, 0.0f, 0.0f));
++    const float3 py = down ? ViewPosition(pixel + int2(0, 1), dDown) - surface :
++        (LoadWater(pixel - int2(0, 1), dUp) ? surface - ViewPosition(pixel - int2(0, 1), dUp) : float3(0.0f, 0.0f, 1.0f));
++    normal = normalize(cross(px, py));
++    if (dot(normal, -surface) < 0.0f) {
++        normal = -normal;
++    }
++    const float flat = saturate((normal.y - 0.35f) * 4.0f);
++    const float below = (sceneDepth >= 0.99999f) ? 1e6f : -ViewPosition(pixel, sceneDepth).z;
++    const float gap = saturate((below - -surface.z - 2.0f) / 20.0f);
++    return flat * gap;
++}
++
++// The reflection off a water pixel: a ray marched across the screen against the scene's depth. What it
++// hits is reflected; a ray leaving through the sky reflects the sky; anything else fades out.
++float4 WaterReflection(float3 surface, float3 normal) {
++    // Ripples: the normal wobbles with the surface's position and time.
++    const float t = gConstants.view.z;
++    const float2 ripple = float2(sin(surface.x * 0.05f + t * 1.7f) + sin(surface.z * 0.08f - t * 2.3f),
++        sin(surface.z * 0.06f + t * 1.3f) + sin(surface.x * 0.07f + t * 2.9f)) * 0.012f;
++    const float3 n = normalize(normal + float3(ripple.x, 0.0f, ripple.y));
++    const float3 v = normalize(surface);
++    const float3 r = reflect(v, n);
++    if (r.z > 0.0f && surface.z + r.z * 1e4f > -1.0f) {
++        // Heading back past the camera.
++        return 0.0f;
++    }
++
++    const float2 size = gConstants.projection.zw;
++    const float stepLength = max(-surface.z * 0.03f, 4.0f);
++    float travelled = 0.0f;
++    [loop] for (int i = 1; i <= 32; i++) {
++        travelled += stepLength * (1.0f + float(i) * 0.15f);
++        const float3 p = surface + r * travelled;
++        if (p.z > -1.0f) {
++            break;
++        }
++        const float2 ndc = float2(p.x * gConstants.projection.x / -p.z, p.y * gConstants.projection.y / -p.z);
++        const float2 screen = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++        if (any(screen < 0.0f) || any(screen >= size)) {
++            break;
++        }
++        const int2 at = int2(screen);
++        const float d = LoadDepth(at);
++        const float edge = saturate(min(min(screen.x, size.x - screen.x), min(screen.y, size.y - screen.y)) / (size.y * 0.08f));
++        if (d >= 0.99999f) {
++            // The sky: keep going while it stays sky, but remember it.
++            if (i == 32) {
++                return float4(gColor.Load(int3(at, 0)).rgb, edge);
++            }
++            continue;
++        }
++        const float sceneZ = -ViewPosition(at, d).z;
++        const float behind = -p.z - sceneZ;
++        if (behind > 0.0f) {
++            // Hit something, as long as the ray didn't pass far behind it.
++            return (behind < stepLength * (2.0f + float(i) * 0.3f)) ? float4(gColor.Load(int3(at, 0)).rgb, edge) : 0.0f;
++        }
++    }
++    // Left the screen: reflect the sky if that's where the ray went.
++    const float3 p = surface + r * travelled;
++    const float2 ndc = float2(p.x * gConstants.projection.x / max(-p.z, 1.0f), p.y * gConstants.projection.y / max(-p.z, 1.0f));
++    const int2 at = clamp(int2(float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size), int2(0, 0), int2(size) - 1);
++    return (LoadDepth(at) >= 0.99999f) ? float4(gColor.Load(int3(at, 0)).rgb, 0.5f) : 0.0f;
++}
++
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
 +// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
 +// they are.
@@ -2207,6 +2501,13 @@ index 0000000..cbe29b0
 +    }
 +
 +    // Debug views of the depth: distance (near white, far dark, sky blue) and the normals from it.
++    if (gConstants.view.x > 3.5f) {
++        float3 surface, normal;
++        const float amount = (gConstants.water.y > 0.5f) ? WaterAmount(pixel, depth, surface, normal) : 0.0f;
++        float waterDepth;
++        const bool isWater = (gConstants.water.y > 0.5f) && LoadWater(pixel, waterDepth);
++        return float4(isWater ? float3(1.0f, amount, 0.2f) : float3(0.15f, 0.15f, 0.15f), 0.0f);
++    }
 +    if (gConstants.view.x > 1.5f) {
 +        if (depth >= 0.99999f) {
 +            return float4(0.3f, 0.5f, 1.0f, 0.0f);
@@ -2227,7 +2528,7 @@ index 0000000..cbe29b0
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f)) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f)) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -2287,6 +2588,15 @@ index 0000000..cbe29b0
 +    if (redraw) {
 +        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) :
 +            (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
++        if (gConstants.water.x > 0.0f) {
++            float3 surface, normal;
++            const float amount = WaterAmount(pixel, depth, surface, normal);
++            if (amount > 0.0f) {
++                const float4 reflection = WaterReflection(surface, normal);
++                const float fresnel = 0.25f + 0.75f * pow(1.0f - saturate(dot(-normalize(surface), normal)), 3.0f);
++                scene = lerp(scene, reflection.rgb, saturate(gConstants.water.x * amount * fresnel * reflection.a));
++            }
++        }
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
 +        }
@@ -2532,12 +2842,27 @@ index 0000000..93ea5da
 +#ifdef HLSL_CPU
 +};
 +#endif
+diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
+index 0a5c332..54c2c83 100644
+--- a/src/shared/rt64_raster_params.h
++++ b/src/shared/rt64_raster_params.h
+@@ -11,7 +11,9 @@ namespace interop {
+ #endif
+     struct RasterParams {
+         uint renderIndex;
+-        uint3 padding;
++        // Banjo-Tooie: 1 while redrawing water into the scene effects' water mask (the draw outputs its depth).
++        uint waterMask;
++        uint2 padding;
+         float2 screenScale;
+         float2 screenOffset;
+     };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..89b0ee1
+index 0000000..367249e
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,45 @@
 +//
 +// RT64
 +//
@@ -2563,10 +2888,12 @@ index 0000000..89b0ee1
 +        float4 fog;
 +        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
-+        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals), 1 to draw the effects only
++        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), 1 to draw the effects only
 +        // on the left half of the picture (F8 compare), a time in seconds, then the heat haze (0 off,
 +        // 1 strongest).
 +        float4 view;
++        // Water reflections strength (0 off), 1 when the water mask was drawn this frame, then unused.
++        float4 water;
 +        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), eye adaptation strength
 +        // (0 off, 1 strongest), then the underwater haze (0 to 1).
 +        float4 bloom;

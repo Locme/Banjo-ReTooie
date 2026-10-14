@@ -47,6 +47,7 @@ namespace RT64 {
     void SetSceneRimLight(float strength);
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength);
+    void SetSceneWaterReflections(float strength);
 }
 
 namespace {
@@ -139,6 +140,7 @@ namespace {
         { &tooie::picture_filters::underwater_haze_option, 0.0 },
         { &tooie::picture_filters::heat_haze_option, 0.0 },
         { &tooie::picture_filters::underwater_distortion_option, 0.0 },
+        { &tooie::picture_filters::water_reflections_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -164,6 +166,7 @@ namespace {
             graphics.update_option_value(underwater_haze_option, 15.0);
             graphics.update_option_value(heat_haze_option, 50.0);
             graphics.update_option_value(underwater_distortion_option, 30.0);
+            graphics.update_option_value(water_reflections_option, 60.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -215,6 +218,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0) * 0.6f, bloom_threshold);
@@ -410,6 +414,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "While under water, things further away fade into a blue haze. Works with Underwater tint above 0.",
         0, 100, 5, 0, false, 15);
     graphics.add_number_option(
+        water_reflections_option,
+        "Water reflections",
+        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         underwater_distortion_option,
         "Underwater distortion",
         "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
@@ -480,7 +489,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

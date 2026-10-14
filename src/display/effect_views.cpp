@@ -3,11 +3,11 @@
 // F6 steps through the debug views of RT64's scene effects pass (lib-patches/rt64.patch,
 // SceneEffectsPS.hlsl): the effects alone (ambient occlusion and outlines as grey, rim light lighter,
 // fog blue, sky magenta), the depth (near white, far dark, sky blue), the normals worked out from the
-// depth, then off. F8 draws the picture effects (the scene effects pass and the photo grade pass:
+// depth, the water mask (red where the game draws water, yellow where it reflects), then off. F8 draws the picture effects (the scene effects pass and the photo grade pass:
 // sharpening, contrast, saturation, vignette, grain) only on the left half, with the original on the
 // right and a line between. SMAA and the Retro filters aren't split.
 //
-// Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-3> starts in that view; TOOIE_FX_COMPARE=1 starts with
+// Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-4> starts in that view; TOOIE_FX_COMPARE=1 starts with
 // the compare on.
 
 #include <atomic>
@@ -36,12 +36,13 @@ namespace {
     using namespace std::chrono_literals;
 
     constexpr auto poll_interval = 10ms;
-    constexpr uint32_t view_count = 4;
+    constexpr uint32_t view_count = 5;
     const char* const view_names[view_count] = {
         "Effect view off",
         "Effect view: effects alone",
         "Effect view: depth",
         "Effect view: normals",
+        "Effect view: water (red, yellow where it reflects)",
     };
 
     std::once_flag started;
