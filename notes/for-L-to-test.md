@@ -594,3 +594,14 @@
   4. Set it back to Original: the D-pad cheats (Fly anywhere, Split up anywhere) work again
 - Look for: Does Banjo run at full speed with the D-pad and the stick take over when pushed? Do LB + D-pad act as the C-buttons? Headless the D-pad ran Banjo at full tilt and LB + up reached the game as C-up.
 - Status: waiting for L
+
+## T59 Speed-up key
+- Asked: 2026-10-14 01:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.21
+- Steps:
+  1. Esc > Cheats: Enable cheats, Speed-up on, Speed-up factor 3
+  2. In a level, hold F2 (bind a pad button under Controls > Cheats if you like)
+  3. Turn Speed-up toggle on and tap F2 instead
+- Look for: Does the game run 3x while held, with a "Speed-up x3" note, and "Speed-up off" when you let go? Headless it ran 180 frames a second instead of 60. Cutscenes speed up too for now; tell me if you want them kept at normal speed like the XBLA version.
+- Status: waiting for L

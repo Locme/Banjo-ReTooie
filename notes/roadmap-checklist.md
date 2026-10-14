@@ -138,7 +138,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.21 Speed-up key (F2)
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.24 Field of view and cutscene field of view
