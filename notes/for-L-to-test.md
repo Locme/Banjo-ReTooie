@@ -1564,3 +1564,12 @@
   2. Send the session log afterwards, even if nothing went wrong
 - Look for: Does the game keep running where it used to close with "Unhandled jump target ... in n_aspMain"? If the sound glitches, the log now has "[audio] A sound task failed" and maybe "[audio] A sound list changed between being queued and playing"; those lines tell me the cause. Does the sound recover after a glitch?
 - Status: waiting for L
+
+## T148 Effect debug view list scrolls with a controller
+- Asked: 2026-10-14 23:05 UTC
+- Build: main @ 8519906
+- Steps:
+  1. Open the menu with the controller, Graphics, down to Debug > Effect debug view
+  2. Open the list and hold down on the D-pad or stick to the bottom (Only: texture upscaling), then back up
+- Look for: The list scrolls so the highlighted entry stays on screen all the way down and back up
+- Status: waiting for L
