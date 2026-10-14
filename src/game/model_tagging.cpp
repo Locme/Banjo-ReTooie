@@ -996,6 +996,41 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         last_drawings = std::move(drawings);
     }
 
+    // A bone is named by the list it draws next, but some bones swap their
+    // list from frame to frame (Banjo's face: eyes open, half shut, shut).
+    // Such a bone's name changes, so RT64 found nothing to blend it with and
+    // it popped. A bone whose name was not drawn last frame, coming straight
+    // after the bone it followed last frame, takes the id of the bone that
+    // came next then, if that one is gone now: the same bone with a new list.
+    struct Sequence {
+        std::vector<std::pair<uint32_t, uint32_t>> bones; // name, id
+        std::unordered_map<uint32_t, size_t> where;
+    };
+    static std::unordered_map<uint64_t, Sequence> last_sequences;
+    std::unordered_map<uint64_t, Sequence> sequences;
+    std::unordered_map<uint64_t, size_t> sequence_cursor;
+    if (cut && !overlay) {
+        last_sequences.clear();
+    }
+    auto bone_name = [&](size_t index) {
+        int b = commands[index].block;
+        return make_id(make_id(blocks[b].model, blocks[b].instance, bone_id[index]), repeat_slot[index], 0);
+    };
+    auto copy_key = [&](int b) {
+        return ((uint64_t)blocks[b].model << 32) | blocks[b].instance;
+    };
+    // The names drawn this frame, by copy.
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, bool>> names_now;
+    if (!overlay) {
+        for (size_t index = 0; index < commands.size(); index++) {
+            const Command& c = commands[index];
+            int b = c.block;
+            if ((c.w0 >> 24) == op_mtx && b >= 0 && blocks[b].model != 0 && (((c.w0 & 0xFF) ^ 1) & mtx_projection) == 0) {
+                names_now[copy_key(b)][bone_name(index)] = true;
+            }
+        }
+    }
+
     // Pass 3: wrap the matrix loads.
     uint32_t bones_tagged = 0;
     uint32_t shadows_tagged = 0;
@@ -1098,6 +1133,26 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 // A list drawn twice in a model (both hands, say) gets a second id
                 // (see repeat_slot).
                 id = make_id(key, repeat_slot[index], camera_generation);
+                uint32_t name = bone_name(index);
+                uint64_t copy = copy_key(b);
+                auto last_found = last_sequences.find(copy);
+                if (last_found != last_sequences.end()) {
+                    const Sequence& last = last_found->second;
+                    auto cursor = sequence_cursor.find(copy);
+                    size_t next = cursor != sequence_cursor.end() ? cursor->second + 1 : 0;
+                    auto at = last.where.find(name);
+                    if (at != last.where.end()) {
+                        sequence_cursor[copy] = at->second;
+                        id = last.bones[at->second].second;
+                    }
+                    else if (next < last.bones.size() && names_now[copy].count(last.bones[next].first) == 0) {
+                        sequence_cursor[copy] = next;
+                        id = last.bones[next].second;
+                    }
+                }
+                Sequence& sequence = sequences[copy];
+                sequence.where[name] = sequence.bones.size();
+                sequence.bones.push_back({name, id});
                 if (log_ids) {
                     ids_now[blocks[b].model].push_back(id);
                 }
@@ -1277,6 +1332,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         for (auto it = tracks.begin(); it != tracks.end();) {
             it = it->second.seen ? std::next(it) : tracks.erase(it);
         }
+    }
+
+    if (!overlay) {
+        last_sequences = std::move(sequences);
     }
 
     if (log_ids && !overlay) {
