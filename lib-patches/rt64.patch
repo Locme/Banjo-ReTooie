@@ -33,7 +33,7 @@ index 79dfc38..a826526 100644
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..34f6201 100644
+index 3227ab1..85934cf 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,90 @@
@@ -136,7 +136,47 @@ index 3227ab1..34f6201 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -339,7 +419,51 @@ namespace RT64 {
+@@ -115,6 +195,7 @@ namespace RT64 {
+         }
+ 
+         RenderTarget *colorTarget = nullptr;
++        RenderTexture *photoDepthTexture = nullptr;
+         int32_t framesToPresent = 1;
+         bool lockedWorkloadMutex = false;
+         InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
+@@ -212,6 +293,31 @@ namespace RT64 {
+                     colorTarget = nullptr;
+                 }
+ 
++                // Banjo-Tooie: photo mode's depth of field reads the scene's depth, the render target of the
++                // game's depth buffer, copied to a color target with RT64's own depth-to-color copy (which
++                // also takes the closest of an MSAA pixel's samples).
++                const PhotoGradeSettings photoSettings = GetPhotoGrade();
++                if ((colorTarget != nullptr) && photoSettings.enabled && (photoSettings.dofStrength > 0.0f) && (photoSettings.depthAddress != 0)) {
++                    Framebuffer *depthFb = fbManager.find(photoSettings.depthAddress);
++                    if (depthFb != nullptr) {
++                        RenderTargetKey depthTargetKey(depthFb->addressStart, depthFb->width, depthFb->siz, Framebuffer::Type::Depth);
++                        RenderTarget &depthTarget = targetManager.get(depthTargetKey, true);
++                        if (!depthTarget.isEmpty() && (depthTarget.width == colorTarget->width) && (depthTarget.height == colorTarget->height)) {
++                            if ((photoDepthTarget == nullptr) || (photoDepthTarget->multisampling.sampleCount != targetManager.multisampling.sampleCount)) {
++                                photoDepthTarget = std::make_unique<RenderTarget>(photoSettings.depthAddress, Framebuffer::Type::Color, targetManager.multisampling, targetManager.usesHDR);
++                            }
++
++                            RenderWorkerExecution workerExecution(ext.presentGraphicsWorker);
++                            if ((photoDepthTarget->texture == nullptr) || (photoDepthTarget->width != depthTarget.width) || (photoDepthTarget->height != depthTarget.height)) {
++                                photoDepthTarget->setupColor(ext.presentGraphicsWorker, depthTarget.width, depthTarget.height);
++                            }
++                            photoDepthTarget->copyFromTarget(ext.presentGraphicsWorker, &depthTarget, 0, 0, depthTarget.width, depthTarget.height, ext.shaderLibrary);
++                            photoDepthTarget->resolveTarget(ext.presentGraphicsWorker, ext.shaderLibrary);
++                            photoDepthTexture = photoDepthTarget->getResolvedTexture();
++                        }
++                    }
++                }
++
+                 if (!present.paused && (viHistory.top().vi != present.screenVI)) {
+                     viHistory.pushVI(present.screenVI, viFb->width);
+                 }
+@@ -339,7 +445,52 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -156,7 +196,8 @@ index 3227ab1..34f6201 100644
 +                    }
 +
 +                    renderParams.texture = photoGradeRenderer->apply(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
-+                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, screenshotPending);
++                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, screenshotPending,
++                        ((colorTarget != nullptr) && (renderParams.textureWidth == colorTarget->width)) ? photoDepthTexture : nullptr);
 +                }
                  
 +                // Copy the game image for a pending screenshot, before any UI is drawn.
@@ -188,7 +229,7 @@ index 3227ab1..34f6201 100644
                  commandList->setFramebuffer(swapChainFramebuffer);
                  commandList->clearColor();
  
-@@ -367,6 +491,10 @@ namespace RT64 {
+@@ -367,6 +518,10 @@ namespace RT64 {
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                      ext.presentGraphicsWorker->wait();
                  }
@@ -199,7 +240,7 @@ index 3227ab1..34f6201 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +530,15 @@ namespace RT64 {
+@@ -402,6 +557,15 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
                  presentProfiler.logAndRestart();
@@ -216,7 +257,7 @@ index 3227ab1..34f6201 100644
          }
      }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..541d088 100644
+index e08b02c..e814ec0 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,8 +4,13 @@
@@ -260,12 +301,14 @@ index e08b02c..541d088 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -52,6 +77,8 @@ namespace RT64 {
+@@ -52,6 +77,10 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
 +        std::unique_ptr<SmaaRenderer> smaaRenderer;
 +        std::unique_ptr<PhotoGradeRenderer> photoGradeRenderer;
++        // Banjo-Tooie: the scene's depth copied to a color target for photo mode's depth of field.
++        std::unique_ptr<RenderTarget> photoDepthTarget;
          std::unique_ptr<Inspector> inspector;
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
@@ -328,10 +371,10 @@ index 69a82ac..d0f2f49 100644
          uint32_t gSampler;
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..ebcfc87
+index 0000000..01ff814
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,106 @@
 +//
 +// RT64
 +//
@@ -356,7 +399,20 @@ index 0000000..ebcfc87
 +        const std::scoped_lock lock(gradeMutex);
 +        const float cropAspect = gradeSettings.cropAspect;
 +        const bool grid = gradeSettings.grid;
-+        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid };
++        const float dofStrength = gradeSettings.dofStrength;
++        const uint32_t depthAddress = gradeSettings.depthAddress;
++        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress };
++    }
++
++    void SetPhotoDepthOfField(float strength, uint32_t depthAddress) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.dofStrength = strength;
++        gradeSettings.depthAddress = depthAddress;
++    }
++
++    PhotoGradeSettings GetPhotoGrade() {
++        const std::scoped_lock lock(gradeMutex);
++        return gradeSettings;
 +    }
 +
 +    void SetPhotoFrame(float cropAspect, bool grid) {
@@ -366,7 +422,7 @@ index 0000000..ebcfc87
 +    }
 +
 +    RenderTexture *PhotoGradeRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot)
++        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth)
 +    {
 +        PhotoGradeSettings settings;
 +        {
@@ -393,9 +449,9 @@ index 0000000..ebcfc87
 +                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
 +        }
 +
-+        // Every slot gets a texture; the pass only reads the first.
++        // Every slot gets a texture; the pass reads the first, and the second for depth of field.
 +        descriptorSet->setTexture(descriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
-+        descriptorSet->setTexture(descriptorSet->gTexture1, input, RenderTextureLayout::SHADER_READ);
++        descriptorSet->setTexture(descriptorSet->gTexture1, (depth != nullptr) ? depth : input, RenderTextureLayout::SHADER_READ);
 +        descriptorSet->setTexture(descriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
 +
 +        interop::PhotoGradeCB constants;
@@ -404,10 +460,12 @@ index 0000000..ebcfc87
 +        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
 +        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, 0.0f, 0.0f };
++        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f };
 +
 +        RenderTextureBarrier barriers[] = {
 +            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(outputTexture.get(), RenderTextureLayout::COLOR_WRITE)
++            RenderTextureBarrier(outputTexture.get(), RenderTextureLayout::COLOR_WRITE),
++            RenderTextureBarrier((depth != nullptr) ? depth : input, RenderTextureLayout::SHADER_READ)
 +        };
 +
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
@@ -425,10 +483,10 @@ index 0000000..ebcfc87
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..5a382aa
+index 0000000..c386e54
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,54 @@
 +//
 +// RT64
 +//
@@ -452,6 +510,8 @@ index 0000000..5a382aa
 +        float grain = 0.0f;
 +        float cropAspect = 0.0f;
 +        bool grid = false;
++        float dofStrength = 0.0f;
++        uint32_t depthAddress = 0;
 +    };
 +
 +    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
@@ -459,6 +519,12 @@ index 0000000..5a382aa
 +    // The crop frame (width / height, 0 for none; outside it is shaded) and the rule-of-thirds grid.
 +    // The grid is left out of the frame a screenshot is taken from.
 +    void SetPhotoFrame(float cropAspect, bool grid);
++
++    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
++    // depthAddress is the game's depth buffer in RDRAM, whose render target gives the scene's depth.
++    void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
++    // The depth of field strength and depth buffer address last set (strength 0 while photo mode is off).
++    PhotoGradeSettings GetPhotoGrade();
 +
 +    struct PhotoGradeRenderer {
 +        std::unique_ptr<RenderTexture> outputTexture;
@@ -469,8 +535,10 @@ index 0000000..5a382aa
 +
 +        // Records the pass and returns the graded image, or the input itself when the filters are off.
 +        // forScreenshot leaves the grid out.
++        // depth, when not null, holds the scene's depth as RT64's depth-to-color copy writes it (an RGBA16
++        // depth value per pixel) at the input's size.
 +        RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot);
++            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth);
 +    };
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
@@ -917,10 +985,10 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..6728bf2
+index 0000000..5806445
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,181 @@
 +//
 +// RT64
 +//
@@ -931,6 +999,8 @@ index 0000000..6728bf2
 +// only the frame) and the rule-of-thirds grid inside it.
 +
 +#include "shared/rt64_photo_grade.h"
++
++#include "Depth.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<PhotoGradeCB> gConstants : register(b0);
 +
@@ -994,12 +1064,68 @@ index 0000000..6728bf2
 +    return rgb;
 +}
 +
++// The scene's depth at a pixel: gTexture1 holds RT64's depth-to-color copy, an N64 16-bit depth value
++// packed as RGBA 5551. Returned as a distance (the game's near plane taken as 10 and far as 10000), so
++// blur grows evenly with how far something is from the focus.
++float SceneDistance(int2 pixel) {
++    const float4 c = gTexture1.Load(int3(pixel, 0));
++    const uint r = uint(round(saturate(c.r) * 255.0f)) >> 3;
++    const uint g = uint(round(saturate(c.g) * 255.0f)) >> 3;
++    const uint b = uint(round(saturate(c.b) * 255.0f)) >> 3;
++    const uint a = (c.a > 0.5f) ? 1u : 0u;
++    const float z = Depth16ToFloat((r << 11) | (g << 6) | (b << 1) | a);
++    const float n = 10.0f;
++    const float f = 10000.0f;
++    return (n * f) / max(f - z * (f - n), 1e-3f);
++}
++
++// Depth of field: the nearest thing in a small box at the middle of the picture is in focus, and the
++// picture blurs more the further a pixel's distance is from it (in either direction), up to a radius
++// set by the strength. A golden-angle spiral of taps gathers the blur.
++float3 DepthOfField(float2 uv, float3 sharp, int2 pixel) {
++    const float2 size = gConstants.rtMetrics.zw;
++    float focus = 1e9f;
++    [unroll] for (int y = -2; y <= 2; y++) {
++        [unroll] for (int x = -2; x <= 2; x++) {
++            focus = min(focus, SceneDistance(int2(size * 0.5f) + int2(x, y) * int(max(1.0f, size.y / 90.0f))));
++        }
++    }
++
++    const float distance = SceneDistance(pixel);
++    const float maxRadius = gConstants.dof.x * size.y / 60.0f;
++    const float coc = saturate(abs(distance - focus) / max(focus, 1.0f)) * maxRadius;
++    if (coc < 0.75f) {
++        return sharp;
++    }
++
++    const int taps = 32;
++    float3 sum = sharp;
++    float weight = 1.0f;
++    [loop] for (int i = 1; i <= taps; i++) {
++        const float t = float(i) / float(taps);
++        const float angle = float(i) * 2.39996323f;
++        const float2 offset = float2(cos(angle), sin(angle)) * sqrt(t) * coc;
++        const int2 tapPixel = clamp(pixel + int2(round(offset)), int2(0, 0), int2(size) - 1);
++        // A sharp thing in front of the focus doesn't bleed into the blurred background behind it.
++        const float tapDistance = SceneDistance(tapPixel);
++        const float tapCoc = saturate(abs(tapDistance - focus) / max(focus, 1.0f)) * maxRadius;
++        const float w = (tapDistance < distance) ? saturate(tapCoc / max(coc, 1e-3f)) : 1.0f;
++        sum += gTexture0.Load(int3(tapPixel, 0)).rgb * w;
++        weight += w;
++    }
++
++    return sum / weight;
++}
++
 +float Hash(float2 p) {
 +    return frac(sin(dot(p, float2(12.9898f, 78.233f))) * 43758.5453f);
 +}
 +
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    float4 color = gTexture0.SampleLevel(PointSampler, uv, 0);
++    if ((gConstants.dof.x > 0.0f) && (gConstants.dof.y > 0.5f)) {
++        color.rgb = DepthOfField(uv, color.rgb, int2(pos.xy));
++    }
 +    float3 rgb = Look(saturate(color.rgb), uint(gConstants.effects.w + 0.5f));
 +    rgb *= exp2(gConstants.tone.x);
 +    rgb = Contrast(rgb, 1.0f + gConstants.tone.y);
@@ -1245,10 +1371,10 @@ index 3f33475..cb122d1 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..6aab648
+index 0000000..054df19
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,26 @@
 +//
 +// RT64
 +//
@@ -1269,6 +1395,8 @@ index 0000000..6aab648
 +        float4 effects;
 +        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid.
 +        float4 frame;
++        // Depth of field strength (0 off, 1 strongest), then 1 when the depth texture holds this frame's depth.
++        float4 dof;
 +    };
 +#ifdef HLSL_CPU
 +};

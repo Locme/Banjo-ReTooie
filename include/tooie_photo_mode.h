@@ -23,6 +23,7 @@ namespace tooie::photo_mode {
     inline const std::string grain_option = "photo_grain";
     inline const std::string crop_option = "photo_crop";
     inline const std::string grid_option = "photo_grid";
+    inline const std::string dof_option = "photo_dof";
 
     // Adds photo mode's filter rows to the QOL tab (used only while photo mode is on).
     void add_options(recomp::config::Config& qol);

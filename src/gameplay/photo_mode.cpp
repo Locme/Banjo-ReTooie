@@ -74,6 +74,7 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_photo_grade.h (from lib-patches/rt64.patch).
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetPhotoFrame(float cropAspect, bool grid);
+    void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
 }
 
 namespace {
@@ -224,12 +225,17 @@ namespace {
         return crop < std::size(crop_aspects) ? crop_aspects[crop] : 0.0f;
     }
 
-    void apply_filters(bool on) {
+    // The game's depth buffer pointer (decomp func_8001A0A8), for depth of field.
+    constexpr gpr depth_buffer_ptr = (int32_t)0x8007BCC4;
+
+    void apply_filters(bool on, uint32_t depth_address = 0) {
         if (!on) {
             RT64::SetPhotoGrade(false, 0, 0, 0, 0, 0, 0, 0);
             RT64::SetPhotoFrame(0.0f, false);
+            RT64::SetPhotoDepthOfField(0.0f, 0);
             return;
         }
+        RT64::SetPhotoDepthOfField((float)qol_value<double>(tooie::photo_mode::dof_option, 0.0) / 100.0f, depth_address);
         RT64::SetPhotoFrame(crop_value(), qol_value<bool>(tooie::photo_mode::grid_option, false));
         RT64::SetPhotoGrade(true,
             qol_value<uint32_t>(tooie::photo_mode::look_option, 0),
@@ -374,6 +380,9 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {6, "9_16", "9:16"},
         },
         0u);
+    qol.add_number_option(dof_option, "Photo depth of field",
+        "Blurs what is nearer or further than the middle of photo mode's picture, which stays sharp. 0 is off.",
+        0, 100, 5, 0, false, 0);
     qol.add_bool_option(grid_option, "Photo grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
 }
@@ -468,7 +477,8 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         tooie::toast::show(players_hidden ? "Banjo hidden" : "Banjo shown");
     }
 
-    apply_filters(true);
+    // RT64 keys framebuffers by physical address.
+    apply_filters(true, (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu);
 
     const float scale = speed_scales[speed.load()];
     const float dt = read_float(rdram, (uint32_t)delta_time_addr);

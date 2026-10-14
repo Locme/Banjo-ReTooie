@@ -665,3 +665,14 @@
   4. Fire an egg and check it goes where you look. Try QOL > "Mouse and gyro aim: invert up/down"
 - Look for: Does the mouse feel right at some setting? Is gyro drift a problem when the pad is still (set Gyro Sensitivity to 0 to turn it off)? While Mouse Sensitivity is above 0 the cursor is locked to the window while you play.
 - Status: waiting for L
+
+## T65 Photo mode depth of field
+- Asked: 2026-10-14 02:15 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > QOL: set "Photo depth of field" to about 60
+  2. In a level, press the Photo Mode key (F10)
+  3. Point the middle of the picture at Banjo (QOL > Photo grid helps): Banjo should be sharp, the background blurred. Point it at something far away and the near things blur instead
+  4. Press A for a screenshot and check it has the blur too
+- Look for: Is the blur amount right at 100? Any flicker, dark edges, or a sharp halo around Banjo against the blurred background?
+- Status: waiting for L
