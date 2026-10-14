@@ -309,6 +309,7 @@ RECOMP_FUNC void bsjig_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
     // 0x8080047C: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_7:
+    tooie_jiggy_dance_init(rdram, ctx);
     // 0x80800480: jal         0x8009F308
     // 0x80800484: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;

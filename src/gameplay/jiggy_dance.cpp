@@ -9,6 +9,11 @@
 // own sequence, with Tooie's jingle, camera and Jiggy count. Only the animation in the player's own
 // ROM is used.
 //
+// The swap is made in the state's init (banjotooie.us.toml hooks bsjig_entrypoint_9 right after it
+// starts 0x282). It used to be made from the per-frame tick on seeing the state change, which worked
+// for the test interrupt but never on a real Jiggy (L, 2026-10-14). Why the tick missed it is not
+// known; the init runs on every way into the state.
+//
 // Debug: TOOIE_JIGGY_DANCE=1 forces it on; TOOIE_JIGGY_DANCE_TEST=<ms> raises interrupt 0x35 that
 // long after the game starts (the celebration without a Jiggy); TOOIE_JIGGY_DANCE_LOG=1 logs it.
 
@@ -22,6 +27,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 
+#include "tooie_hooks.h"
 #include "tooie_jiggy_dance.h"
 
 namespace {
@@ -137,12 +143,21 @@ void tooie::jiggy_dance::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
-    if (state == celebrate_state && last_state != celebrate_state && chosen(now)) {
-        play_bk_jig(rdram, ctx, player);
-        if (log_on()) {
-            std::printf("[jiggy dance] Jiggy pose started (from state 0x%X): playing BK's jig\n", last_state);
-            std::fflush(stdout);
-        }
+    if (state == celebrate_state && last_state != celebrate_state && log_on()) {
+        std::printf("[jiggy dance] tick saw the Jiggy pose (from state 0x%X)\n", last_state);
+        std::fflush(stdout);
     }
     last_state = state;
+}
+
+extern "C" void tooie_jiggy_dance_init(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t player = (uint32_t)ctx->r16;
+    const bool on = valid_ptr(player) && chosen(Clock::now());
+    if (on) {
+        play_bk_jig(rdram, ctx, player);
+    }
+    if (log_on()) {
+        std::printf("[jiggy dance] Jiggy pose init: %s\n", on ? "playing BK's jig" : "Tooie's pose");
+        std::fflush(stdout);
+    }
 }

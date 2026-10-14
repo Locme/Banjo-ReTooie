@@ -58,6 +58,8 @@ void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f20 is func_800D3104's cell gather radius, $f2 func_800D2F44's cell distance.
 void tooie_cell_draw_radius(uint8_t* rdram, recomp_context* ctx);
 void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx);
+// Back-Port: Get Jiggy animation (src/gameplay/jiggy_dance.cpp): bsjig's Jiggy pose init has just started animation 0x282; $s0 is the player.
+void tooie_jiggy_dance_init(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f12 is an actor's own draw distance (func_80101970), about to be set.
 void tooie_actor_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.

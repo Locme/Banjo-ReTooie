@@ -1072,3 +1072,10 @@ text = "tooie_ach_octopus_frozen(rdram, ctx);"
 func = "func_80101970"
 before_vram = 0x801019CC
 text = "tooie_actor_draw_distance(rdram, ctx);"
+
+# Back-Port: Get Jiggy animation (src/gameplay/jiggy_dance.cpp). bsjig's init for
+# state 0x34 (the Jiggy pose) has just started animation 0x282; $s0 is the player.
+[[patches.hook]]
+func = "bsjig_entrypoint_9"
+before_vram = 0x80800480
+text = "tooie_jiggy_dance_init(rdram, ctx);"

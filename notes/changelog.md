@@ -81,6 +81,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- Back-Port: Get Jiggy animation now switches the dance inside the Jiggy pose's own start, since it never played on a real Jiggy before (T51).
 - Extended Draw Distance also reaches objects that set their own short draw distance, such as Jolly Roger's Doubloons (T30).
 - Graphics: MS Anti-Aliasing is now in the Anti-aliasing and scaling section, above SMAA.
 - Achievements: Down on a controller or the arrow keys now moves through the list and scrolls it (T117).

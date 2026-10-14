@@ -505,14 +505,14 @@
 - Status: waiting for L
 
 ## T51 Back-Port: Get Jiggy animation
-- Asked: 2026-10-13 23:25 UTC
-- Build: latest Windows CI build from main
+- Asked: 2026-10-13 23:25 UTC; 2026-10-14 20:35 UTC L: it never played on a real Jiggy, so the swap now happens inside the pose's own start
+- Build: your local build of main from 2026-10-14 20:35 UTC or later
 - Steps:
   1. Esc > General: Back-Port: Get Jiggy animation on
   2. Collect a Jiggy (as Banjo and Kazooie)
   3. Turn it off and collect another one
 - Look for: With it on, does Banjo do BK's dance (fist pumps, Kazooie pops out at the end) under Tooie's black bars, and does the game carry on normally afterwards? Is it the right dance as you remember it from BK? Does any other item (Cheato page, Jinjo, Glowbo) wrongly get the dance too? Only checked here by starting the pose without a real Jiggy.
-- Status: waiting for L
+- Status: failed 2026-10-14 (never triggered); fix waiting for L
 
 ## T52 Game Frame Rate (Original / 30 FPS / 60 FPS)
 - Asked: 2026-10-13 23:40 UTC
