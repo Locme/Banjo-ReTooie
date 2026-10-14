@@ -1576,7 +1576,7 @@
 
 ## T149 Manual tags round 2: highlight fixed, custom blend mode, Save and Unsave Tags, Debug keys unbound
 - Asked: 2026-10-14 23:03 UTC
-- Build: main @ 2cdb5bc
+- Build: main @ 6787f75
 - Steps:
   1. Controls > Debug: every key there starts unbound; bind Pick Model, Tag Model, Save Tags, Unsave Tag (and any other debug key you use)
   2. Pick Banjo: the whole model goes green with nothing else drawn wrong, in default, snap or vertex alike
