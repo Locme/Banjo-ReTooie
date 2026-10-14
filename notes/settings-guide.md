@@ -120,9 +120,11 @@ F12 screenshots are taken before these filters, so they don't show them.
 - **Always High-Detail Models**: models that switch to a simpler version far
   away always use the detailed one, and Banjo always uses his close-up model
   (with his necklace and belt buckle). Applies at once. Default: on.
-- **HD Shadows**: the player's shadow is shaped like the full model on screen,
-  with its pose, instead of the game's simpler shadow model. Works in every
-  transformation. Applies at once. Default: off.
+- **HD Shadows**: shadows are shaped like the full model on screen, with its
+  pose. The player's uses the on-screen model instead of the game's simpler
+  shadow model (works in every transformation); enemies and NPCs, which have
+  no shadow on N64, get one too (up to 12 per frame, straight down onto the
+  floor). Applies at once. Default: off.
 
 ## Graphics: Game Frame Rate
 

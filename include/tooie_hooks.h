@@ -42,6 +42,9 @@ void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx);
 void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx);
 // HD shadows (src/gameplay/hd_shadows.cpp): func_800A6250 has the shadow model at $sp+0x1C8 and the on-screen model at $sp+0x1C4.
 void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
+// Same file: func_80101808's entry ($a1 is the draw callback) and just after it draws the actor ($s0) model.
+void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
+void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance (src/display/draw_distance.cpp): $v0 holds func_800D2F20's model draw distance.
 void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.

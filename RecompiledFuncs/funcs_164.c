@@ -2128,6 +2128,7 @@ RECOMP_FUNC void _bskazstill_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80101808(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_actor_draw_begin(rdram, ctx);
     // 0x80101808: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x8010180C: sw          $s0, 0x20($sp)
@@ -2190,6 +2191,7 @@ RECOMP_FUNC void func_80101808(uint8_t* rdram, recomp_context* ctx) {
     // 0x80101858: lw          $a3, 0x2C($sp)
     ctx->r7 = MEM_W(ctx->r29, 0X2C);
     after_4:
+    tooie_actor_shadow(rdram, ctx);
     // 0x8010185C: lw          $ra, 0x24($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X24);
     // 0x80101860: lw          $s0, 0x20($sp)

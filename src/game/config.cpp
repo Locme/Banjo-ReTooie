@@ -311,7 +311,7 @@ void tooie::init_config() {
     graphics.add_bool_option(
         tooie::hd_shadows_option,
         "HD Shadows",
-        "The player's shadow is shaped like the full model on screen, with its pose, instead of the game's simpler shadow model.",
+        "Shadows are shaped like the full model on screen, with its pose. Covers the player (instead of the game's simpler shadow model) and enemies and NPCs, which have none on N64.",
         false);
     tooie::frame_overlay::add_option(graphics);
     tooie::game_frame_rate::add_option(graphics);

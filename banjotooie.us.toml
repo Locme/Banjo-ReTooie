@@ -418,6 +418,18 @@ func = "func_800A6250"
 before_vram = 0x800A62C0
 text = "tooie_player_shadow_model(rdram, ctx);"
 
+# The generic actor draw func_80101808(actor, draw callback): its entry, and
+# just after func_800DE448 has drawn the actor ($s0 still holds it).
+[[patches.hook]]
+func = "func_80101808"
+before_vram = 0x80101808
+text = "tooie_actor_draw_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80101808"
+before_vram = 0x8010185C
+text = "tooie_actor_shadow(rdram, ctx);"
+
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
 [[patches.hook]]
