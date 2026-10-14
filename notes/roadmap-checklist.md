@@ -191,6 +191,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.51 HD shadows
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: claimed by the Second Opus helper thread (L picked it). Banjo's N64 shadow is already model-shaped; this gives other characters the same instead of the round blob.
 
 ### 4.53 Canary Mary rubber banding
 - [x] Done
