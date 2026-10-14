@@ -14,7 +14,7 @@
 // Standing still, B goes through at once (the claw swipe).
 //
 // Debug: TOOIE_RUN_HOLD=<from ms>:<to ms>[,...] acts as Run held between those times after the first pad
-// read (headless); TOOIE_RUN_LOG=1 logs form, state, animation, speed and animation duration 4 times
+// read (headless); TOOIE_RUN_LOG=1 logs form, state, animation, speed, animation duration and sprint blend 10 times
 // a second; TOOIE_RUN_REBIND=<SDL scancode> rebinds Run on the keyboard as the Controls tab does.
 
 #include <algorithm>
@@ -89,6 +89,10 @@ namespace {
 
     // How much faster than the normal run.
     constexpr float sprint_scale = 1.5f;
+    // The sprint eases in and out over this long (speed, step rate and pose together; L 2026-10-14:
+    // starting and stopping were too sudden). The pose steps through blend_levels sprint files.
+    constexpr float blend_seconds = 0.35f;
+    constexpr int blend_levels = 8;
     // Letting go of a shared Run/B button sooner than this is a tap: B is passed on.
     constexpr auto tap_time = 200ms;
     // How long a passed-on tap holds B down, so the game sees the press.
@@ -217,11 +221,11 @@ namespace {
         std::vector<Key> keys;
     };
 
-    // Banjo's run (animation 0xC; Banjo alone uses it too): body leant 22 degrees forward (bone 3),
+    // Banjo's run (animation 0xC; Banjo alone uses it too): body leant 17 degrees forward (bone 3),
     // legs (chains 6-10 and 20-24) stride 40% further, arms (chains 12-16 and 26-30) swing 15% less
-    // (L 2026-10-14: arms flailed too much at 40% more, wanted more lean).
+    // (L 2026-10-14: arms flailed too much at 40% more; 12 degrees leant too little, 22 too much).
     const std::vector<Rule> banjo_rules = {
-        { 3, 0, 1.0f, 22.0f },
+        { 3, 0, 1.0f, 17.0f },
         { 6, 0, 1.4f, 0.0f }, { 6, 1, 1.4f, 0.0f }, { 6, 2, 1.4f, 0.0f },
         { 8, 0, 1.4f, 0.0f }, { 8, 1, 1.4f, 0.0f }, { 8, 2, 1.4f, 0.0f },
         { 10, 0, 1.4f, 0.0f }, { 10, 1, 1.4f, 0.0f }, { 10, 2, 1.4f, 0.0f },
@@ -387,12 +391,14 @@ namespace {
 
     struct Built {
         uint32_t source = 0;
+        int level = 0;
         uint32_t vram = 0;
     };
 
-    // The sprint file for the run animation `index`, made from the run file at `file` the first time.
-    uint32_t sprint_file(uint8_t* rdram, uint32_t index, uint32_t file) {
-        static Built built[4];
+    // The sprint file for the run animation `index` at blend `level` (1 to blend_levels, the full
+    // sprint), made from the run file at `file` the first time.
+    uint32_t sprint_file(uint8_t* rdram, uint32_t index, uint32_t file, int level) {
+        static Built built[4 * blend_levels];
         static uint32_t built_generation = 0;
         if (built_generation != tune_generation) {
             built_generation = tune_generation;
@@ -401,7 +407,7 @@ namespace {
             }
         }
         for (const Built& b : built) {
-            if (b.source == index && b.vram != 0) {
+            if (b.source == index && b.level == level && b.vram != 0) {
                 return b.vram;
             }
         }
@@ -414,7 +420,13 @@ namespace {
         if (rules == nullptr) {
             rules = index == 0xA6 ? &kazooie_rules : &banjo_rules;
         }
-        apply_rules(tracks, *rules, start);
+        const float w = (float)level / blend_levels;
+        std::vector<Rule> blended = *rules;
+        for (Rule& r : blended) {
+            r.scale = 1.0f + (r.scale - 1.0f) * w;
+            r.offset *= w;
+        }
+        apply_rules(tracks, blended, start);
         uint32_t size = 8;
         for (const Track& t : tracks) {
             size += 4 + 4 * (uint32_t)t.keys.size();
@@ -441,13 +453,13 @@ namespace {
         }
         for (Built& b : built) {
             if (b.vram == 0) {
-                b = { index, vram };
+                b = { index, level, vram };
                 break;
             }
         }
         if (log_on()) {
-            std::printf("[run] sprint animation made from 0x%X: %zu tracks, %zu rules, at 0x%08X\n",
-                index, tracks.size(), rules->size(), vram);
+            std::printf("[run] sprint animation made from 0x%X (blend %d/%d): %zu tracks, %zu rules, at 0x%08X\n",
+                index, level, blend_levels, tracks.size(), rules->size(), vram);
             std::fflush(stdout);
         }
         return vram;
@@ -478,6 +490,8 @@ namespace {
     // The player's animation struct and the run animation the sprint replaces, while it plays.
     std::atomic<uint32_t> sprint_anim_struct{0};
     std::atomic<uint32_t> sprint_source{0};
+    // How far into the sprint, 0 (normal run) to 1, eased in and out by tick().
+    std::atomic<float> sprint_blend{0.0f};
 
     std::mutex input_mutex;
     // Input side, under input_mutex.
@@ -498,6 +512,14 @@ namespace {
     uint32_t saved_duration = 0;
     uint32_t sprint_speed_bits = 0;
     uint32_t sprint_duration_bits = 0;
+    Clock::time_point last_tick{};
+
+    // 1 + (sprint_scale - 1) at full sprint, eased.
+    float blend_factor() {
+        const float w = sprint_blend.load();
+        const float eased = w * w * (3.0f - 2.0f * w);
+        return 1.0f + (sprint_scale - 1.0f) * eased;
+    }
 
     recomp_context call_context(recomp_context* ctx, uint32_t a0) {
         recomp_context call = *ctx;
@@ -605,7 +627,7 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
 
     if (log_on()) {
         static auto last = Clock::now();
-        if (Clock::now() - last > 250ms) {
+        if (Clock::now() - last > 100ms) {
             last = Clock::now();
             const uint32_t physics = rd_word(rdram, player + 0xC8);
             float target = 0, vx = 0, vz = 0;
@@ -628,8 +650,8 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
                     map[i] = as_float(rd_word(rdram, block + 0x24 + 4 * i));
                 }
             }
-            std::printf("[run] form 0x%X state %u anim 0x%X target %.1f speed %.1f duration %.3f (map %.0f-%.0f to %.3f-%.3f) held %d\n",
-                form, state, index, target, std::sqrt(vx * vx + vz * vz), duration, map[0], map[1], map[2], map[3], (int)run_held.load());
+            std::printf("[run] form 0x%X state %u anim 0x%X target %.1f speed %.1f duration %.3f (map %.0f-%.0f to %.3f-%.3f) held %d blend %.2f\n",
+                form, state, index, target, std::sqrt(vx * vx + vz * vz), duration, map[0], map[1], map[2], map[3], (int)run_held.load(), sprint_blend.load());
             std::fflush(stdout);
         }
     }
@@ -639,10 +661,25 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         cadence_set = false;
         return;
     }
-    const bool want = rf != nullptr && state == rf->run_state && index == rf->run_anim && run_held.load();
-    // The sprint animation plays in place of the run while the sprint is on.
-    sprint_anim_struct = want && ctrl != 0 ? ctrl + anctrl_animation : 0;
-    sprint_source = want && rf != nullptr ? rf->run_anim : 0;
+    const bool running = rf != nullptr && state == rf->run_state && index == rf->run_anim;
+    const bool want = running && run_held.load();
+    // Ease toward the sprint while it is wanted and back to the run when not; out of the run the
+    // game plays another animation, so the blend starts again from nothing.
+    const auto now = Clock::now();
+    const float dt = last_tick == Clock::time_point{} ? 0.0f
+        : std::min(std::chrono::duration<float>(now - last_tick).count(), 0.1f);
+    last_tick = now;
+    float blend = sprint_blend.load();
+    if (!running) {
+        blend = 0.0f;
+    } else {
+        blend = std::clamp(blend + (want ? dt : -dt) / blend_seconds, 0.0f, 1.0f);
+    }
+    sprint_blend = blend;
+    // The sprint animation plays in place of the run while any of the sprint is on.
+    const bool sprinting = running && blend > 0.0f;
+    sprint_anim_struct = sprinting && ctrl != 0 ? ctrl + anctrl_animation : 0;
+    sprint_source = sprinting ? rf->run_anim : 0;
     // TOOIE_RUN_ANIM_TEST=1: standing still plays the sprint animation on the spot, to look at it.
     static const bool in_place = std::getenv("TOOIE_RUN_ANIM_TEST") != nullptr;
     if (in_place && rf != nullptr && ctrl != 0 && state == rf->idle_state) {
@@ -661,23 +698,25 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         }
         sprint_anim_struct = ctrl + anctrl_animation;
         sprint_source = rf->run_anim;
+        sprint_blend = 1.0f;
     }
     const uint32_t cur_speed = rd_word(rdram, anim + map_top_speed);
     const uint32_t cur_duration = rd_word(rdram, anim + map_top_duration);
-    if (want) {
+    if (sprinting) {
         // The run animation's duration follows the speed linearly from map_top_speed down to
         // map_top_duration. Stretching that end to the sprint speed, with the duration shortened as
         // much, keeps Banjo's steps the same length as in the normal run. The game may set the map
-        // again (a new run), so it is checked every frame.
+        // again (a new run), so it is checked every frame; the stretch follows the blend.
         if (!cadence_set || cur_speed != sprint_speed_bits || cur_duration != sprint_duration_bits) {
             saved_speed = cur_speed;
             saved_duration = cur_duration;
-            sprint_speed_bits = as_bits(as_float(cur_speed) * sprint_scale);
-            sprint_duration_bits = as_bits(as_float(cur_duration) / sprint_scale);
-            wr_word(rdram, anim + map_top_speed, sprint_speed_bits);
-            wr_word(rdram, anim + map_top_duration, sprint_duration_bits);
-            cadence_set = true;
         }
+        const float f = blend_factor();
+        sprint_speed_bits = as_bits(as_float(saved_speed) * f);
+        sprint_duration_bits = as_bits(as_float(saved_duration) / f);
+        wr_word(rdram, anim + map_top_speed, sprint_speed_bits);
+        wr_word(rdram, anim + map_top_duration, sprint_duration_bits);
+        cadence_set = true;
     } else if (cadence_set) {
         if (cur_speed == sprint_speed_bits && cur_duration == sprint_duration_bits) {
             wr_word(rdram, anim + map_top_speed, saved_speed);
@@ -689,7 +728,7 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
 
 // Hooked at the entry of baphysics_set_target_horizontal_velocity($a0 = PlayerState, $a1 = speed).
 extern "C" void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx) {
-    if (!run_held.load()) {
+    if (sprint_blend.load() <= 0.0f) {
         return;
     }
     const uint32_t player = rd_word(rdram, player_table);
@@ -703,7 +742,7 @@ extern "C" void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx) {
     uint32_t bits = (uint32_t)ctx->r5;
     float speed;
     std::memcpy(&speed, &bits, sizeof(speed));
-    speed *= sprint_scale;
+    speed *= blend_factor();
     std::memcpy(&bits, &speed, sizeof(bits));
     ctx->r5 = (int32_t)bits;
 }
@@ -722,7 +761,13 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     if (anim != sprint_anim_struct.load() || index != sprint_source.load()) {
         return;
     }
-    const uint32_t sprint = sprint_file(rdram, index, file);
+    // The pose eases in with the same curve as the speed.
+    const float w = sprint_blend.load();
+    const int level = (int)std::lround(w * w * (3.0f - 2.0f * w) * blend_levels);
+    if (level <= 0) {
+        return;
+    }
+    const uint32_t sprint = sprint_file(rdram, index, file, std::min(level, blend_levels));
     if (sprint != 0) {
         ctx->r2 = (gpr)(int32_t)sprint;
     }
