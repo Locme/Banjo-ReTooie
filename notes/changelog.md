@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## Since 2026-10-13 23:00 UTC (L away)
 
+- Field of View and Cutscene Field of View apply as you move the slider, without pressing Apply.
 Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 

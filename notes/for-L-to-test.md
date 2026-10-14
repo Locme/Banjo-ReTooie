@@ -1052,3 +1052,13 @@
   4. Make a save state and load it
 - Look for: Do music and sounds play at the same pitch and speed as Original, with a bit more clarity in the high notes? Any crackle, wrong pitch, or broken echo? Does sound still work after loading the save state?
 - Status: waiting for L
+
+## T98 Field of View without Apply
+- Asked: 2026-10-14 09:45 UTC
+- Build: main after 0896c5b (next Windows CI build)
+- Steps:
+  1. In a level, open the menu (Esc) and go to Graphics
+  2. Move the Field of View slider, then the Cutscene Field of View slider, without pressing Apply
+  3. Close the menu
+- Look for: Does the view widen or narrow straight away, and does the setting stay after a restart?
+- Status: waiting for L
