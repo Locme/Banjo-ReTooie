@@ -4181,3 +4181,43 @@ index b51cf09..a2b8354 100644
      };
  #ifdef HLSL_CPU
  };
+diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
+index dccaa87..4440507 100644
+--- a/src/hle/rt64_interpreter.cpp
++++ b/src/hle/rt64_interpreter.cpp
+@@ -32,10 +32,16 @@ namespace RT64 {
+         const uint32_t maskedTextAddress = textAddress & AddressMask;
+         const uint32_t maskedDataAddress = dataAddress & AddressMask;
+         if ((UCode.textAddress != maskedTextAddress) || (UCode.dataAddress != maskedDataAddress)) {
+-            hleGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
+-            if (hleGBI != nullptr) {
++            // Banjo-Tooie: a microcode that isn't in the database used to leave hleGBI null, and the
++            // next display list crashed reading its command table. Keep the last known one instead.
++            GBI *foundGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
++            if (foundGBI != nullptr) {
++                hleGBI = foundGBI;
+                 state->rsp->setGBI(hleGBI);
+             }
++            else {
++                fprintf(stderr, "[rt64] Unknown microcode (text 0x%06X, data 0x%06X); keeping the previous one.\n", maskedTextAddress, maskedDataAddress);
++            }
+ 
+             UCode.textAddress = maskedTextAddress;
+             UCode.dataAddress = maskedDataAddress;
+@@ -154,7 +160,15 @@ namespace RT64 {
+     }
+ 
+     void Interpreter::processDisplayLists(uint32_t dlStartAdddress, DisplayList *dlStart) {
+-        assert(hleGBI != nullptr);
++        // Banjo-Tooie: no microcode recognised yet, so there is nothing to run the list with.
++        if (hleGBI == nullptr) {
++            static bool reported = false;
++            if (!reported) {
++                fprintf(stderr, "[rt64] Display list skipped: no known microcode loaded.\n");
++                reported = true;
++            }
++            return;
++        }
+ 
+         state->dlCpuProfiler.start();
+ 

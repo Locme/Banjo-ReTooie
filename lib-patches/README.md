@@ -85,6 +85,10 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 ## rt64.patch
 
+* **Unknown microcode guard** (`src/hle/rt64_interpreter.cpp`): a graphics task whose microcode
+  isn't in RT64's database left the interpreter with no command table, and the next display list
+  crashed (L's 2026-10-14 10:33 dump). It now keeps the last known microcode and logs
+  "[rt64] Unknown microcode (text, data)" to console.log; with none known yet, lists are skipped.
 * **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`): adds
   `RT64::RequestScreenshot(callback)`. The next presented frame's game image is
   copied to a read-back buffer before the UI is drawn over it, converted to
