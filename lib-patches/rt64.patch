@@ -1265,10 +1265,10 @@ index 0000000..e400499
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3b4afdf
+index 0000000..464a81c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,561 @@
+@@ -0,0 +1,562 @@
 +//
 +// RT64
 +//
@@ -1323,7 +1323,8 @@ index 0000000..3b4afdf
 +            uint32_t waterSamples = 0;
 +            RenderFormat waterFormat = RenderFormat::UNKNOWN;
 +            bool waterDrawn = false;
-+            // Eye adaptation: the measured brightness [0], the adapted one [1] and a copy of last frame's [2].
++            // Eye adaptation: the measured brightness [0], the adapted one [1] (with this frame's measured one
++            // beside it) and a copy of last frame's [2].
 +            std::unique_ptr<RenderTexture> luminanceTexture[3];
 +            std::unique_ptr<RenderFramebuffer> luminanceFramebuffer[3];
 +            std::unique_ptr<SmaaDescriptorSet> measureSet;
@@ -1679,7 +1680,7 @@ index 0000000..3b4afdf
 +
 +        if (res.luminanceTexture[0] == nullptr) {
 +            for (int i = 0; i < 3; i++) {
-+                res.luminanceTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(1, 1, RenderFormat::R32_FLOAT));
++                res.luminanceTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(1, 1, RenderFormat::R32G32_FLOAT));
 +                res.luminanceTexture[i]->setName("Scene Effects Luminance");
 +                const RenderTexture *texture = res.luminanceTexture[i].get();
 +                res.luminanceFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
@@ -1715,7 +1716,7 @@ index 0000000..3b4afdf
 +                res.measureSetTexture = source;
 +            }
 +
-+            // About 63% of the way to the new brightness each second.
++            // The time step as a rate (63% of the way each second); BloomPS.hlsl makes it quicker or slower.
 +            const auto now = std::chrono::steady_clock::now();
 +            const float seconds = std::min(std::chrono::duration<float>(now - res.lastAdapt).count(), 0.25f);
 +            res.lastAdapt = now;
@@ -1932,7 +1933,7 @@ index 0000000..b7009d0
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary);
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..3f754b8 100644
+index d1c5273..d1a10a8 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -40,7 +40,27 @@
@@ -2102,7 +2103,7 @@ index d1c5273..3f754b8 100644
 +            layoutBuilder.end();
 +            createPass(bloom, SMAA_BLOBS(BloomPS), RenderTarget::colorBufferFormat(usesHDR));
 +            // The same passes measuring and adapting the scene's brightness, into one-pixel float targets.
-+            createPass(luminance, SMAA_BLOBS(BloomPS), RenderFormat::R32_FLOAT);
++            createPass(luminance, SMAA_BLOBS(BloomPS), RenderFormat::R32G32_FLOAT);
 +#       undef SMAA_BLOBS
 +        }
 +
@@ -2782,10 +2783,10 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/BloomPS.hlsl b/src/shaders/BloomPS.hlsl
 new file mode 100644
-index 0000000..c55fa85
+index 0000000..82574f9
 --- /dev/null
 +++ b/src/shaders/BloomPS.hlsl
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,69 @@
 +//
 +// RT64
 +//
@@ -2819,11 +2820,16 @@ index 0000000..c55fa85
 +        return float4(exp(sum / 256.0f), 0.0f, 0.0f, 1.0f);
 +    }
 +    else if (pass == 4) {
-+        // The adapted brightness moves towards the measured one (gTexture0) from where it was (gTexture1).
++        // The adapted brightness moves towards the measured one (gTexture0) from where it was (gTexture1);
++        // the measured one is kept beside it.
 +        const float measured = gTexture0.Load(int3(0, 0, 0)).r;
 +        const float previous = gTexture1.Load(int3(0, 0, 0)).r;
-+        const float adapted = (previous > 0.0f) ? lerp(previous, measured, gConstants.params.w) : measured;
-+        return float4(adapted, 0.0f, 0.0f, 1.0f);
++        // Like eyes, getting used to the light is quick (half a second) and to the dark slow (four seconds), so
++        // the fades between areas barely move it; a black screen (a fade, a cut) doesn't move it at all.
++        const float seconds = -log(max(1.0f - gConstants.params.w, 1e-4f));
++        const float rate = (measured < 0.03f) ? 0.0f : (1.0f - exp(-seconds * ((measured > previous) ? 2.0f : 0.25f)));
++        const float adapted = (previous > 0.0f) ? lerp(previous, measured, rate) : measured;
++        return float4(adapted, measured, 0.0f, 1.0f);
 +    }
 +    if (pass == 0) {
 +        float3 color = 0.0f;
@@ -3318,10 +3324,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2c633d7
+index 0000000..873e808
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,583 @@
+@@ -0,0 +1,592 @@
 +//
 +// RT64
 +//
@@ -3342,7 +3348,7 @@ index 0000000..2c633d7
 +Texture2D<float4> gBloom : register(t2);
 +SamplerState LinearSampler : register(s3);
 +Texture2D<float4> gColor : register(t4);
-+Texture2D<float> gAdapted : register(t5);
++Texture2D<float2> gAdapted : register(t5);
 +#ifdef MULTISAMPLING
 +Texture2DMS<float4> gWater : register(t6);
 +#else
@@ -3352,10 +3358,19 @@ index 0000000..2c633d7
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
 +float3 Adapt(float3 color) {
-+    const float adapted = max(gAdapted.Load(int3(0, 0, 0)), 0.002f);
-+    const float exposure = lerp(1.0f, clamp(0.3f / adapted, 0.5f, 2.5f), gConstants.bloom.z);
++    const float2 brightness = max(gAdapted.Load(int3(0, 0, 0)), 0.002f);
++    const float adapted = brightness.x;
++    const float measured = brightness.y;
++    // Like eyes: coming out into the light the picture is too bright for a moment and settles, going into the
++    // dark it is too dark for a moment and opens up. Once settled a dark place stays a little brighter and a
++    // glaring one a little darker than the game draws them, so the look of a level is kept.
++    const float moment = (measured < 0.03f) ? 1.0f : clamp(pow(measured / adapted, 0.7f), 0.35f, 3.0f);
++    const float settled = clamp(pow(0.3f / adapted, 0.25f), 0.8f, 1.4f);
++    const float exposure = lerp(1.0f, moment * settled, gConstants.bloom.z);
 +    const float3 c = saturate(color);
-+    return c * exposure / (1.0f + c * (exposure - 1.0f));
++    // Half a curve that keeps black and white where they are, half a straight scale, so a bright moment can
++    // glare out to white and a dark one dims the highlights too.
++    return lerp(c * exposure / (1.0f + c * (exposure - 1.0f)), saturate(c * exposure), 0.5f);
 +}
 +
 +// Underwater: the scene turns light blue and fades into a blue haze with distance (the sky is all haze).

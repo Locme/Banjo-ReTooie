@@ -1127,3 +1127,15 @@
   3. If you can, try with V-Sync or a frame cap on and off in your GPU driver
 - Look for: The first line ends with "input N ms", and Full has an "Input latency" line under the frame time. Does the number go down when the frame rate goes up, and up when the game stutters? A value near 2 to 3 frame times is normal. Does it feel like it matches how responsive the game feels? It leaves out your monitor's and controller's own delay.
 - Status: waiting for L
+
+## T106 Eye adaptation (from your 09:15 list)
+- Asked: 2026-10-14 10:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Eye adaptation 100, everything else as you like
+  2. Spiral Mountain: walk from daylight into the tunnel behind the waterfall and stand there a few seconds, then walk back out into the light
+  3. Go through a few doors or level entrances
+- Look for: Going in, the tunnel is darker for a moment and opens up over a few seconds. Coming out, the daylight glares for a moment and settles in about half a second. No glare after a fade or door. Out in the open with nothing changing it should look close to Off.
+- Status: waiting for L
+

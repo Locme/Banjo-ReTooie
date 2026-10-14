@@ -608,7 +608,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         eye_adaptation_option,
         "Eye adaptation",
-        "Dark places slowly brighten and very bright ones tone down, over about a second, like your eyes adjusting. Black stays black and white stays white. The HUD isn't changed. 0 is off.",
+        "Like your eyes adjusting: coming out into daylight glares for a moment, going into a cave is dark for a few seconds and then opens up. Once settled, dark places stay a little brighter and very bright ones a little darker. Fades between areas don't set it off. The HUD isn't changed. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         cutscene_dof_option,
