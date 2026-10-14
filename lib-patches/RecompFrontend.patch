@@ -991,11 +991,55 @@ index cf2a311..486e08d 100644
              break;
          case EventType::Update:
              break;
+diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
+index 4517152..36aae6b 100644
+--- a/recompui/src/elements/ui_element.cpp
++++ b/recompui/src/elements/ui_element.cpp
+@@ -520,6 +520,10 @@ float Element::get_scroll_top() {
+     return base->GetScrollTop();
+ }
+ 
++void Element::set_scroll_top(float top) {
++    base->SetScrollTop(top);
++}
++
+ float Element::get_client_left() {
+     return base->GetClientLeft();
+ }
+diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
+index 34eec3f..1680b5f 100644
+--- a/recompui/src/elements/ui_element.h
++++ b/recompui/src/elements/ui_element.h
+@@ -141,6 +141,7 @@ public:
+     float get_offset_top();
+     float get_scroll_left();
+     float get_scroll_top();
++    void set_scroll_top(float top);
+     float get_client_left();
+     float get_client_top();
+     float get_client_width();
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
-index e289e9e..e2e38f5 100644
+index e289e9e..d79a4a1 100644
 --- a/recompui/src/elements/ui_select.cpp
 +++ b/recompui/src/elements/ui_select.cpp
-@@ -272,6 +272,12 @@ namespace recompui {
+@@ -2,6 +2,7 @@
+ #include "ui_pseudo_border.h"
+ #include "ui_label.h"
+ 
++#include <algorithm>
+ #include <cassert>
+ 
+ namespace recompui {
+@@ -182,6 +183,8 @@ namespace recompui {
+         selectbox_element.set_border_width(theme::border::width);
+         selectbox_element.set_border_radius(theme::border::radius_sm);
+         selectbox_element.set_border_color(theme::color::BorderSoft);
++        // A list taller than the window is cut to fit it: let it scroll, so entries past the edge can be reached.
++        selectbox_element.set_overflow_y(Overflow::Auto);
+ 
+         Element selectvalue_element = get_element_with_tag_name(select_element_selectvalue);
+         selectvalue_element.set_display(Display::Block);
+@@ -272,6 +275,14 @@ namespace recompui {
                  }
  
                  selected_option_index = index;
@@ -1003,13 +1047,18 @@ index e289e9e..e2e38f5 100644
 +                // selection one entry at a time. The change is only reported once the list closes.
 +                if (is_open) {
 +                    change_pending = true;
++                    // A pad or the arrow keys can move past the part of a long list on screen: follow them.
++                    scroll_frames = 3;
 +                    break;
 +                }
                  for (const auto &callback : change_callbacks) {
                      callback(options[index], selected_option_index);
                  }
-@@ -286,6 +292,14 @@ namespace recompui {
+@@ -284,10 +295,23 @@ namespace recompui {
+                 is_open = is_now_open;
+                 if (is_open) {
                      arrow->set_rotation(180.0f);
++                    scroll_frames = 3;
                  } else {
                      arrow->set_rotation(0.0f);
 +                    if (change_pending) {
@@ -1022,16 +1071,55 @@ index e289e9e..e2e38f5 100644
 +                    }
                  }
              }
++            if (is_open && scroll_frames > 0) {
++                scroll_frames--;
++                keep_selection_visible();
++            }
              queue_update();
+             break;
+         }
+@@ -297,6 +321,28 @@ namespace recompui {
+         }
+     }
+ 
++    void Select::keep_selection_visible() {
++        if (selected_option_index < 0 || selected_option_index >= (int)option_elements.size()) {
++            return;
++        }
++        Element box = get_element_with_tag_name(select_element_selectbox);
++        const float view = box.get_client_height();
++        if (view <= 0.0f) {
++            return;
++        }
++        // The list's padding, kept clear above and below the entry.
++        constexpr float margin = 8.0f;
++        Option *option = option_elements[selected_option_index];
++        const float top = option->get_offset_top();
++        const float bottom = top + option->get_client_height();
++        const float scroll = box.get_scroll_top();
++        if (top - margin < scroll) {
++            box.set_scroll_top(std::max(0.0f, top - margin));
++        } else if (bottom + margin > scroll + view) {
++            box.set_scroll_top(bottom + margin - view);
++        }
++    }
++
+     void Select::add_change_callback(std::function<void(SelectOption& option, int option_index)> callback) {
+         change_callbacks.emplace_back(callback);
+     }
 diff --git a/recompui/src/elements/ui_select.h b/recompui/src/elements/ui_select.h
-index cc4932c..4a6808c 100644
+index cc4932c..4140c08 100644
 --- a/recompui/src/elements/ui_select.h
 +++ b/recompui/src/elements/ui_select.h
-@@ -52,6 +52,7 @@ namespace recompui {
+@@ -52,6 +52,11 @@ namespace recompui {
          std::vector<SelectOption> options;
          std::vector<Option*> option_elements;
          bool is_open = false;
 +        bool change_pending = false;
++        // Frames left in which to scroll the open list to the selected entry (its height is only known
++        // once the list has been laid out).
++        int scroll_frames = 0;
++        void keep_selection_visible();
  
          Style hover_style;
          Style focus_style;

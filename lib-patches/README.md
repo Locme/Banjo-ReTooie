@@ -97,6 +97,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   option with more than 6 entries is drawn as a drop-down (the menu's Select
   element) instead of a row of tabs, which ran together. Used by the Cheats
   tab's Transformation row.
+* **Long drop-down lists scroll** (`recompui/src/elements/ui_select.{h,cpp}`,
+  `recompui/src/elements/ui_element.{h,cpp}`): a list taller than the window is
+  cut to fit it and now scrolls, and moving through it with a pad or the arrow
+  keys scrolls it to keep the picked entry in view. Before, entries past the
+  window edge could be picked but not seen (Graphics > Effect debug view).
 * **Split controllers** (`recompinput/include/recompinput/input_state.h`,
   `recompinput/src/input_state.cpp`, `recompinput/src/profiles.cpp`): single player mode
   sends every pad to every N64 controller. `set_split_controllers(true)` makes N64
