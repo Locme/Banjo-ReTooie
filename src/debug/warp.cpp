@@ -32,6 +32,7 @@
 #include "tooie_fine_aim.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
+#include "tooie_music_player.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
@@ -117,6 +118,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::fine_aim::tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
+    tooie::music_player::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);

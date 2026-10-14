@@ -212,7 +212,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.61 Music player
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.62 Skip boss intros

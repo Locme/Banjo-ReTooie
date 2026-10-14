@@ -5,6 +5,7 @@
 
 #include "tooie_game.h"
 #include "tooie_classic_sounds.h"
+#include "tooie_music_player.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
@@ -294,7 +295,7 @@ void tooie::init_config() {
     tooie::smaa::add_option(graphics);
 
     recompui::config::create_controls_tab();
-    recompui::config::create_sound_tab();
+    tooie::music_player::add_options(recompui::config::create_sound_tab());
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();
     recompui::config::create_mods_tab();

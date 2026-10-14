@@ -571,3 +571,14 @@
   4. Check the Cheato codes in the Code Chamber
 - Look for: Is anything still locked? Tell me which door or path, and I'll find its switch. Headless I only checked that the game reads the 134 switches as set and that the area reloads.
 - Status: waiting for L
+
+## T57 Music player
+- Asked: 2026-10-14 01:10 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Load a save and stand anywhere, e.g. Spiral Mountain
+  2. Esc > Sound > Music player: pick a song (Jolly's jukebox songs by name, then Track 0 to 159)
+  3. Pick another one, then Level music
+  4. Pick a song again and go through a door to another area
+- Look for: Does the level's music fade out and the song start? Does Level music bring the area's music back? Does going to another area end the song (the row goes back to Level music)? The names come from the decomp's jukebox switch names, so tell me any that are wrong. Some tracks are short jingles: the game brings its own music back after them.
+- Status: waiting for L
