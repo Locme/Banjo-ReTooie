@@ -68,6 +68,7 @@
 #include "tooie_game.h"
 #include "tooie_hide_hud.h"
 #include "tooie_photo_mode.h"
+#include "tooie_picture_filters.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
 
@@ -231,7 +232,8 @@ namespace {
 
     void apply_filters(bool on, uint32_t depth_address = 0) {
         if (!on) {
-            RT64::SetPhotoGrade(false, 0, 0, 0, 0, 0, 0, 0);
+            // The game's own picture settings (Graphics tab) come back.
+            tooie::picture_filters::apply();
             RT64::SetPhotoFrame(0.0f, false);
             RT64::SetPhotoDepthOfField(0.0f, 0);
             return;

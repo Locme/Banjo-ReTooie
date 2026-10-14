@@ -274,10 +274,12 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.35 Shader effects suite (AO, GI, fog, reflections, light shafts, sharpening, colour grading)
 - [ ] Done
 - [ ] Approved by L
+- Partial (2026-10-14, T66): Graphics > Sharpening (contrast-adaptive), Contrast and Colour saturation, drawn by the photo grade RT64 pass (lib-patches/rt64.patch, PhotoGradePS.hlsl) during play; photo mode takes over its filters while on and the Graphics ones come back after. The scene depth is now reachable in RT64's present pass (photo depth of field, 4.82), which AO, fog and water-only reflections need next; the catch is that the N64 draws the HUD into the same picture, so depth effects must avoid HUD pixels. Code: src/display/picture_filters.cpp.
 
 ### 4.36 Bloom, toon outlines, rim light, cutscene DoF, vignette and grain, 16-bit effects
 - [ ] Done
 - [ ] Approved by L
+- Partial (2026-10-14, T66): Graphics > Vignette and Film grain during play (same pass as 4.35). 16-bit colour is 4.40 (Graphics > Retro). Bloom, outlines, rim light and cutscene DoF not started.
 
 ### 4.37 Eye adaptation
 - [ ] Done

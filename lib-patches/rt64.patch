@@ -371,10 +371,10 @@ index 69a82ac..d0f2f49 100644
          uint32_t gSampler;
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..01ff814
+index 0000000..e1150a0
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,122 @@
 +//
 +// RT64
 +//
@@ -401,7 +401,13 @@ index 0000000..01ff814
 +        const bool grid = gradeSettings.grid;
 +        const float dofStrength = gradeSettings.dofStrength;
 +        const uint32_t depthAddress = gradeSettings.depthAddress;
-+        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress };
++        const float sharpen = gradeSettings.sharpen;
++        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress, sharpen };
++    }
++
++    void SetSharpening(float strength) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.sharpen = strength;
 +    }
 +
 +    void SetPhotoDepthOfField(float strength, uint32_t depthAddress) {
@@ -430,7 +436,17 @@ index 0000000..01ff814
 +            settings = gradeSettings;
 +        }
 +
-+        if (!settings.enabled || (input == nullptr) || (width == 0) || (height == 0) || (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR))) {
++        if (!settings.enabled) {
++            // Only the sharpening, if that.
++            const float sharpen = settings.sharpen;
++            settings = PhotoGradeSettings();
++            settings.sharpen = sharpen;
++            if (sharpen <= 0.0f) {
++                return input;
++            }
++        }
++
++        if ((input == nullptr) || (width == 0) || (height == 0) || (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR))) {
 +            return input;
 +        }
 +
@@ -460,7 +476,7 @@ index 0000000..01ff814
 +        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
 +        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, 0.0f, 0.0f };
-+        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, 0.0f };
++        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, settings.sharpen };
 +
 +        RenderTextureBarrier barriers[] = {
 +            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
@@ -483,10 +499,10 @@ index 0000000..01ff814
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..c386e54
+index 0000000..e403425
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,54 @@
+@@ -0,0 +1,59 @@
 +//
 +// RT64
 +//
@@ -512,6 +528,7 @@ index 0000000..c386e54
 +        bool grid = false;
 +        float dofStrength = 0.0f;
 +        uint32_t depthAddress = 0;
++        float sharpen = 0.0f;
 +    };
 +
 +    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
@@ -523,6 +540,10 @@ index 0000000..c386e54
 +    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
 +    // depthAddress is the game's depth buffer in RDRAM, whose render target gives the scene's depth.
 +    void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
++    // Sharpening (0 off, 1 strongest), a contrast-adaptive sharpen drawn in the same pass. It is kept
++    // apart from the filters above, which photo mode and the game's picture settings take turns to set.
++    void SetSharpening(float strength);
++
 +    // The depth of field strength and depth buffer address last set (strength 0 while photo mode is off).
 +    PhotoGradeSettings GetPhotoGrade();
 +
@@ -985,10 +1006,10 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..5806445
+index 0000000..d2190f9
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,200 @@
 +//
 +// RT64
 +//
@@ -1117,12 +1138,31 @@ index 0000000..5806445
 +    return sum / weight;
 +}
 +
++// Contrast-adaptive sharpening: each pixel is pushed away from its four neighbours, less where the
++// neighbourhood already has strong contrast, so edges don't ring and flat areas don't gain noise.
++float3 Sharpen(int2 pixel, float3 center, float amount) {
++    const int2 maxPixel = int2(gConstants.rtMetrics.zw) - 1;
++    const float3 north = saturate(gTexture0.Load(int3(clamp(pixel + int2(0, -1), int2(0, 0), maxPixel), 0)).rgb);
++    const float3 south = saturate(gTexture0.Load(int3(clamp(pixel + int2(0, 1), int2(0, 0), maxPixel), 0)).rgb);
++    const float3 west = saturate(gTexture0.Load(int3(clamp(pixel + int2(-1, 0), int2(0, 0), maxPixel), 0)).rgb);
++    const float3 east = saturate(gTexture0.Load(int3(clamp(pixel + int2(1, 0), int2(0, 0), maxPixel), 0)).rgb);
++    const float3 c = saturate(center);
++    const float3 lowest = min(c, min(min(north, south), min(west, east)));
++    const float3 highest = max(c, max(max(north, south), max(west, east)));
++    const float3 room = sqrt(saturate(min(lowest, 1.0f - highest) / max(highest, 1e-4f)));
++    const float3 weight = -room * lerp(0.125f, 0.2f, amount);
++    return saturate((c + (north + south + west + east) * weight) / (1.0f + 4.0f * weight));
++}
++
 +float Hash(float2 p) {
 +    return frac(sin(dot(p, float2(12.9898f, 78.233f))) * 43758.5453f);
 +}
 +
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    float4 color = gTexture0.SampleLevel(PointSampler, uv, 0);
++    if (gConstants.dof.w > 0.0f) {
++        color.rgb = Sharpen(int2(pos.xy), color.rgb, gConstants.dof.w);
++    }
 +    if ((gConstants.dof.x > 0.0f) && (gConstants.dof.y > 0.5f)) {
 +        color.rgb = DepthOfField(uv, color.rgb, int2(pos.xy));
 +    }
@@ -1371,10 +1411,10 @@ index 3f33475..cb122d1 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..054df19
+index 0000000..84fa600
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,27 @@
 +//
 +// RT64
 +//
@@ -1395,7 +1435,8 @@ index 0000000..054df19
 +        float4 effects;
 +        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid.
 +        float4 frame;
-+        // Depth of field strength (0 off, 1 strongest), then 1 when the depth texture holds this frame's depth.
++        // Depth of field strength (0 off, 1 strongest), 1 when the depth texture holds this frame's depth, 1 for
++        // an HDR colour buffer, then the sharpening (0 off, 1 strongest).
 +        float4 dof;
 +    };
 +#ifdef HLSL_CPU

@@ -677,3 +677,15 @@
   5. Set QOL > "Photo tilt" to 15: the picture turns clockwise; -15 turns it the other way
 - Look for: Is the blur amount right at 100? Any flicker, dark edges, or a sharp halo around Banjo against the blurred background?
 - Status: waiting for L
+
+## T66 Sharpening, contrast, saturation, vignette and film grain while playing
+- Asked: 2026-10-14 02:25 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.35 (sharpening, colour grading) and §4.36 (vignette, grain)
+- Steps:
+  1. Esc > Graphics, scroll to the new rows: Sharpening, Contrast, Colour saturation, Vignette, Film grain
+  2. Set Sharpening to 60 and look at grass and rock textures: they should look crisper, without bright halos on edges
+  3. Try the others; each changes the picture at once
+  4. With some set, press F10 for photo mode, then leave it: the Graphics settings come back afterwards
+- Look for: Is sharpening too strong at 100? Does anything look wrong on the HUD or text?
+- Status: waiting for L

@@ -109,6 +109,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
   turns it on only while photo mode is on. `RT64::SetPhotoFrame(...)` adds the crop frame and grid, and
   `RT64::SetPhotoDepthOfField(strength, depthAddress)` adds depth of field: the present pass finds the
   game's depth buffer at that address, copies it to colour (`copyFromTarget`) and the photo pass reads it.
+  `RT64::SetSharpening(strength)` adds a contrast-adaptive sharpen to the same pass, kept apart from the
+  filters so it applies in and out of photo mode; with the filters off the pass runs for it alone.
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files

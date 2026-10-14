@@ -21,11 +21,15 @@
 
 #include "recompui/config.h"
 
+#include "tooie_photo_mode.h"
 #include "tooie_picture_filters.h"
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_vi_renderer.h (from lib-patches/rt64.patch).
     void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
+    // lib/rt64/src/render/rt64_photo_grade.h.
+    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
+    void SetSharpening(float strength);
 }
 
 namespace {
@@ -58,6 +62,16 @@ void tooie::picture_filters::apply() {
         value<bool>(crt_option, false),
         value<uint32_t>(dither16_option, (uint32_t)Colour16::Off),
         value<bool>(three_point_option, true));
+
+    RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
+    if (!tooie::photo_mode::active()) {
+        const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
+        const float saturation = (float)(value<double>(saturation_option, 0.0) / 100.0);
+        const float vignette = (float)(value<double>(vignette_option, 0.0) / 100.0);
+        const float grain = (float)(value<double>(grain_option, 0.0) / 100.0);
+        const bool any = (contrast != 0.0f) || (saturation != 0.0f) || (vignette != 0.0f) || (grain != 0.0f);
+        RT64::SetPhotoGrade(any, 0, 0.0f, contrast, saturation, 0.0f, vignette, grain);
+    }
 }
 
 void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
@@ -112,8 +126,35 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Draws 240 scanlines and the stripes of a CRT TV's aperture grille over the picture.",
         false);
 
+    graphics.add_number_option(
+        sharpen_option,
+        "Sharpening",
+        "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        contrast_option,
+        "Contrast",
+        "More or less difference between the dark and light parts of the picture. 0 leaves it as it is.",
+        -50, 50, 5, 0, false, 0);
+    graphics.add_number_option(
+        saturation_option,
+        "Colour saturation",
+        "Stronger or paler colours. 0 leaves them as they are.",
+        -100, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        vignette_option,
+        "Vignette",
+        "Darkens the corners of the picture. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        grain_option,
+        "Film grain",
+        "Adds moving film grain over the picture. 0 is off.",
+        0, 100, 5, 0, false, 0);
+
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
-                                   &three_point_option, &dither16_option, &crt_option }) {
+                                   &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
+                                   &saturation_option, &vignette_option, &grain_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {
