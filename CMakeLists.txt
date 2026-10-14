@@ -497,6 +497,12 @@ target_sources(BanjoTooieN64Recomp PRIVATE ${GENERATED_NRM_SOURCES})
 
 target_sources(BanjoTooieN64Recomp PRIVATE ${SOURCES})
 
+# The menus load assets/ (styles, fonts, icons) from the working directory, and the game moves to
+# its own folder when that has none, so the exe in the build folder also runs on its own.
+add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:BanjoTooieN64Recomp>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/recompcontrollerdb.txt" $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+
 # Release builds stamp their version from the environment (set by CI).
 if (DEFINED ENV{TOOIE_VERSION})
     target_compile_definitions(BanjoTooieN64Recomp PRIVATE "TOOIE_VERSION=\"$ENV{TOOIE_VERSION}\"")
