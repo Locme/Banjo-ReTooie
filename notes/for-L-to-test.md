@@ -1493,7 +1493,7 @@
 ## T141 Talking heads and blinking at 30 a second above 30 FPS
 - Asked: 2026-10-14 21:30 UTC
 - Build: your local build of main
-- Commits: 1661ffb (talking heads), 0242e1f (blinking)
+- Commits: 4c7c6f1 (talking heads), d398d4c (blinking)
 - Steps:
   1. Graphics: Game Frame Rate Unlocked (Experimental), then 60 FPS
   2. Talk to a character so the talking-head box opens; watch the mouth and the blinking in the portrait
