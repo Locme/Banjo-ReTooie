@@ -308,7 +308,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.82 Photo mode
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-14: first part built (T60). The Photo Mode key (F10, or the controller's Share/Misc button; bindable under Controls > Hotkeys) freezes the game by scaling its delta time (0x8012C760), hides the HUD and the area name, and flies the camera: left stick moves, right stick looks, Z/R down/up, L faster, A screenshot, D-pad up HUD, D-pad down orbit Banjo (Z/R closer/further), D-pad left/right zoom (the field of view, via tooie_set_fov), Start frozen / 1/8 / 1/4, B back. Code: src/gameplay/photo_mode.cpp, camera written from the free camera's hook. Verified headless in Spiral Mountain. Not built yet: camera collision, filters and the D-pad list, depth of field, crop and grid, hiding Banjo.
+- 2026-10-14: first part built (T60). The Photo Mode key (F10, or the controller's Share/Misc button; bindable under Controls > Hotkeys) freezes the game by scaling its delta time (0x8012C760), hides the HUD and the area name, and flies the camera: left stick moves, right stick looks, Z/R down/up, L faster, A screenshot, D-pad up HUD, D-pad down orbit Banjo (Z/R closer/further), D-pad left/right zoom (the field of view, via tooie_set_fov), Start frozen / 1/8 / 1/4, B back. Code: src/gameplay/photo_mode.cpp, camera written from the free camera's hook. Verified headless in Spiral Mountain. Camera collision (QOL > Photo mode camera collision, on): moves are swept with the game's camera line test and slide along what they hit; in orbit the line from Banjo pulls the camera in. Not built yet: filters and the D-pad list, depth of field, crop and grid, hiding Banjo.
 
 ### 4.85 Achievements pop-up
 - [ ] Done

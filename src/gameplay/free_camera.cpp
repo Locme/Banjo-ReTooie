@@ -142,7 +142,7 @@ namespace {
 
     // func_800FAB50(from, to, normal_out, flags, radius on the stack): a swept line test that moves
     // `to` back to where it first hits. Runs it on scratch space below the hook's stack frame.
-    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3]) {
+    bool sweep(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float* normal = nullptr) {
         recomp_context saved = *ctx;
         const uint32_t sp = ((uint32_t)ctx->r29 - 0x80) & ~0xFu;
         const uint32_t from_addr = sp + 0x20;
@@ -164,6 +164,9 @@ namespace {
         if (hit) {
             for (int i = 0; i < 3; i++) {
                 to[i] = read_float(rdram, to_addr + 4 * i);
+                if (normal != nullptr) {
+                    normal[i] = read_float(rdram, normal_addr + 4 * i);
+                }
             }
         }
         *ctx = saved;
@@ -216,7 +219,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const uint32_t camera = read_word(rdram, ctl + ctl_camera);
-    if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, camera)) {
+    if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, ctx, camera)) {
         state.active = false;
         return;
     }
@@ -352,4 +355,8 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked);
         std::fflush(stdout);
     }
+}
+
+bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float normal[3]) {
+    return sweep(rdram, ctx, from, to, normal);
 }

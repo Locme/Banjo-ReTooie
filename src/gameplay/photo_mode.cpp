@@ -24,6 +24,10 @@
 //   Start           frozen, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
 //
+// Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
+// camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
+// rest of the move slides along it. In orbit the line from Banjo to the camera pulls it in instead.
+//
 // Headless test hook: TOOIE_PHOTO=<on ms>:<off ms> enters and leaves photo mode at those times after
 // the game loop first runs. TOOIE_PHOTO_LOG=1 logs the photo camera.
 
@@ -45,11 +49,14 @@
 #endif
 
 #include "recomp.h"
+#include "recompui/config.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
 #include "recompinput/input_state.h"
 #include "recompinput/profiles.h"
 #include "tooie_debug.h"
+#include "tooie_free_camera.h"
+#include "tooie_game.h"
 #include "tooie_hide_hud.h"
 #include "tooie_photo_mode.h"
 #include "tooie_screenshot.h"
@@ -91,6 +98,8 @@ namespace {
     constexpr float orbit_height = 60.0f;
     constexpr float min_orbit = 100.0f, max_orbit = 6000.0f;
     // Zoom: the field of view is multiplied by this, changed by this much per second.
+    // How far the camera keeps off a surface it hit.
+    constexpr float surface_gap = 2.0f;
     constexpr float min_fov_scale = 0.2f, max_fov_scale = 2.0f, fov_rate = 0.8f;
 
     std::once_flag started;
@@ -180,6 +189,47 @@ namespace {
         if (d > 180.0f) d -= 360.0f;
         if (d < -180.0f) d += 360.0f;
         return d;
+    }
+
+    bool collision_on() {
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::photo_mode_collision_option));
+        } catch (...) {
+            return true;
+        }
+    }
+
+    // Moves the camera from `pos` by `delta`, stopping at what it hits and sliding along it.
+    void move_with_collision(uint8_t* rdram, recomp_context* ctx, float pos[3], const float delta[3]) {
+        float to[3] = { pos[0] + delta[0], pos[1] + delta[1], pos[2] + delta[2] };
+        if (delta[0] == 0.0f && delta[1] == 0.0f && delta[2] == 0.0f) {
+            return;
+        }
+        float normal[3] = { 0, 0, 0 };
+        float want[3] = { to[0], to[1], to[2] };
+        if (!tooie::free_camera::sweep_line(rdram, ctx, pos, to, normal)) {
+            std::memcpy(pos, want, sizeof(want));
+            return;
+        }
+        // Lift off the surface a little, so the next test does not start touching it.
+        for (int i = 0; i < 3; i++) {
+            to[i] += normal[i] * surface_gap;
+        }
+        // Slide: what is left of the move, without the part going into the surface.
+        float rest[3] = { want[0] - to[0], want[1] - to[1], want[2] - to[2] };
+        const float into = rest[0] * normal[0] + rest[1] * normal[1] + rest[2] * normal[2];
+        if (into < 0.0f) {
+            for (int i = 0; i < 3; i++) {
+                rest[i] -= into * normal[i];
+            }
+        }
+        float slide[3] = { to[0] + rest[0], to[1] + rest[1], to[2] + rest[2] };
+        if (tooie::free_camera::sweep_line(rdram, ctx, to, slide, normal)) {
+            for (int i = 0; i < 3; i++) {
+                slide[i] += normal[i] * surface_gap;
+            }
+        }
+        std::memcpy(pos, slide, sizeof(slide));
     }
 
     float deadzone(float v) {
@@ -321,7 +371,7 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
     write_float(rdram, (uint32_t)delta_time_addr, scale > 0.0f ? dt * scale : frozen_delta);
 }
 
-bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
+bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32_t camera) {
     if (!is_active) {
         return false;
     }
@@ -406,17 +456,31 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
     const float sp = std::sin(cam.pitch * deg), cp = std::cos(cam.pitch * deg);
     const float forward[3] = { -sy * cp, sp, -cy * cp };
     const float right[3] = { cy, 0.0f, -sy };
+    const bool collide = collision_on();
     if (cam.orbit) {
         cam.distance = std::clamp(cam.distance + rise * speed_now * dt, min_orbit, max_orbit);
         for (int i = 0; i < 3; i++) {
             cam.pos[i] = cam.pivot[i] - forward[i] * cam.distance;
         }
+        if (collide) {
+            float normal[3];
+            tooie::free_camera::sweep_line(rdram, ctx, cam.pivot, cam.pos, normal);
+        }
     }
     else {
+        float delta[3];
         for (int i = 0; i < 3; i++) {
-            cam.pos[i] += (forward[i] * move_y + right[i] * move_x) * speed_now * dt;
+            delta[i] = (forward[i] * move_y + right[i] * move_x) * speed_now * dt;
         }
-        cam.pos[1] += rise * speed_now * dt;
+        delta[1] += rise * speed_now * dt;
+        if (collide) {
+            move_with_collision(rdram, ctx, cam.pos, delta);
+        }
+        else {
+            for (int i = 0; i < 3; i++) {
+                cam.pos[i] += delta[i];
+            }
+        }
     }
 
     for (int i = 0; i < 3; i++) {

@@ -29,7 +29,7 @@ namespace tooie::photo_mode {
 
     // From the camera controller hook (tooie_free_camera) with the viewport camera; returns true
     // when photo mode placed the camera.
-    bool place_camera(uint8_t* rdram, uint32_t camera);
+    bool place_camera(uint8_t* rdram, recomp_context* ctx, uint32_t camera);
 }
 
 #endif
