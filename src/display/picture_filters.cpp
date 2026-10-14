@@ -317,7 +317,12 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
-    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0), (float)value<double>(outline_thickness_option, 1.0));
+    // Thickness was 1 to 4 before the slider went to 200 (25 is the old 1).
+    double thickness = value<double>(outline_thickness_option, 25.0);
+    if (thickness < 10.0) {
+        thickness *= 25.0;
+    }
+    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0), (float)(thickness / 25.0));
     const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
@@ -568,8 +573,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         outline_thickness_option,
         "Toon outline thickness",
-        "How thick the toon outlines are, from 1 (thin) to 4 (thick). They keep the same thickness at any resolution.",
-        1, 4, 1, 0, false, 1);
+        "How thick the toon outlines are: 25 is a thin line, 100 a heavy one and 200 a very bold cartoon line. They keep the same thickness at any resolution.",
+        10, 200, 5, 0, false, 25);
     graphics.add_number_option(
         rim_light_option,
         "Rim light",

@@ -1317,4 +1317,11 @@
   2. Play a few minutes in Mayahem Temple and Spiral Mountain, near Klungo, nests, honeycombs and enemies
   3. Turn HD Shadows Off and On a few times
 - Look for: Any crash, object vanishing (honeycombs, eggs, enemies), or the image getting brighter in patches? Enemy shadows should be dark and shaped like the enemy. Checked headless: crashed within a minute before the fix, ran 40 minutes after it in Spiral Mountain, and 2 minutes in Mayahem Temple.
+
+## T124 Toon outline thickness goes to 200
+- Asked: 2026-10-14 11:40 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Graphics: Toon outlines 100, then Toon outline thickness 25, 100, 200
+- Look for: 25 is the old thin line, 100 the old thickest, 200 a bold cartoon line twice that. Thin things like posts keep their line attached. A saved thickness of 1 to 4 carries over as 25 to 100.
 - Status: waiting for L

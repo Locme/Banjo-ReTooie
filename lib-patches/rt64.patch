@@ -1378,7 +1378,7 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..77aebe6
+index 0000000..10bfd1b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,680 @@
@@ -1573,7 +1573,7 @@ index 0000000..77aebe6
 +    void SetSceneOutlines(float outlines, float thickness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.outlines = outlines;
-+        effectsSettings.outlineThickness = std::clamp(thickness, 1.0f, 4.0f);
++        effectsSettings.outlineThickness = std::clamp(thickness, 0.25f, 8.0f);
 +    }
 +
 +    void SetSceneWaterReflections(float strength) {
@@ -1737,7 +1737,7 @@ index 0000000..77aebe6
 +        constants.view = { float(settings.view), settings.compare ? 1.0f : 0.0f, seconds, settings.heatHaze };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2],
-+            (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * std::floor(settings.outlineThickness - 1.0f)) : 0.0f };
++            (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * (std::round(settings.outlineThickness * 4.0f) - 1.0f)) : 0.0f };
 +
 +        constants.bloom = { settings.bloom, settings.depthOfFieldOnBanjo ? -settings.depthOfField : settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
 +
@@ -3599,10 +3599,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..d602601
+index 0000000..f251243
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,650 @@
+@@ -0,0 +1,657 @@
 +//
 +// RT64
 +//
@@ -4155,8 +4155,10 @@ index 0000000..d602601
 +    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
 +    // and along creases, where the surface folds away on both sides (ridges, the top edge of a cliff).
 +    if (gConstants.fogColor.w > 0.0f) {
-+        const float thickness = floor((gConstants.fogColor.w - 1e-3f) * 0.5f) + 1.0f;
-+        const float strength = gConstants.fogColor.w - 2.0f * (thickness - 1.0f);
++        // Packed as strength + 2 * (quarters of thickness - 1).
++        const float quarters = floor((gConstants.fogColor.w - 1e-3f) * 0.5f) + 1.0f;
++        const float strength = gConstants.fogColor.w - 2.0f * (quarters - 1.0f);
++        const float thickness = quarters * 0.25f;
 +        const float distance = -ViewPosition(pixel, depth).z;
 +        // About one pixel per 540 rows for each step of thickness, so the lines keep their weight at higher
 +        // resolutions.
@@ -4170,6 +4172,11 @@ index 0000000..d602601
 +            const int2 offset = (i < 4) ? direction * step : direction * max(1, int(round(float(step) * 0.7f)));
 +            const float neighbour = -ViewPositionAt(pixel + offset).z;
 +            jump = max(jump, (neighbour - distance) / distance);
++            // Thick lines also look half as far, so thin things (posts, leaves) don't get a detached line.
++            if (step >= 4) {
++                const float near = -ViewPositionAt(pixel + offset / 2).z;
++                jump = max(jump, (near - distance) / distance);
++            }
 +        }
 +        float edge = saturate((jump - 0.05f) * 8.0f);
 +        // Creases: both neighbours across the pixel further away than a straight surface would put them.
