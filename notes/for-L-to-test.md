@@ -1386,3 +1386,14 @@
   3. Also turn on Water reflections and look at a pool from above
 - Look for: The 3D world shows through, light blue and gently wobbling, with no grid of coloured blobs and no flat dark blue screen; reflections show the scenery
 - Status: waiting for L
+
+## T131 Skip cutscenes with Start instead of X
+- Asked: 2026-10-14 16:45 UTC
+- Build: main @ (this commit)
+- Steps:
+  1. QOL: keep "Skip boss intros" on; turn "Skip other cutscenes" on too
+  2. Warp to Chilly Willy (or any boss) and press Start during the intro
+  3. Talk to any NPC and press Start during the conversation
+  4. Press X during a cutscene, and Start during normal play
+- Look for: Start shows "Skipping cutscene" and fast-forwards to the end without opening the pause menu; X no longer skips; Start in normal play still opens the pause menu
+- Status: waiting for L

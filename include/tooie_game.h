@@ -82,7 +82,7 @@ namespace tooie {
     bool in_letterboxed_scene();
     // Headless settings script, TOOIE_SET (src/debug/settings_script.cpp).
     void start_settings_script();
-    // Skip cutscenes with B (src/gameplay/cutscene_skip.cpp), QOL tab.
+    // Skip cutscenes with Start (src/gameplay/cutscene_skip.cpp), QOL tab.
     inline const std::string cutscene_skip_option = "cutscene_skip_all";
     inline const std::string cutscene_skip_other_option = "cutscene_skip_other";
     void cutscene_skip_tick(uint8_t* rdram);

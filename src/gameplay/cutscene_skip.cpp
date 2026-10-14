@@ -1,17 +1,19 @@
-// Skip cutscenes with B (handoff 4.62, "Skip boss intros").
+// Skip cutscenes with Start (handoff 4.62, "Skip boss intros").
 //
 // Boss intros run for a minute or more and wait on dialogue, and the game will
 // not skip them. Two QOL toggles (L): "Skip boss intros" (on) for letterboxed
 // scenes in a boss's map, and "Skip other cutscenes" (off) for every other
 // letterboxed scene, NPC conversations included. With the matching toggle on,
-// pressing B while such a scene is on screen (tooie::in_letterboxed_scene, from the FOV
+// pressing Start while such a scene is on screen (tooie::in_letterboxed_scene, from the FOV
 // setter) fast-forwards it: the game clock runs at 16x (as the speed-up key
 // does) and A is tapped for the player every few frames so the dialogue pages
 // along. Both stop as soon as the gameplay camera is back, after a map change
 // that lands in gameplay, or after a safety limit. During the skip the
-// player's own A and B are kept from the game.
+// player's own A, B and Start are kept from the game, and the Start press
+// that begins a skip is not passed on, so it does not open the pause menu.
+// (Was B until L asked for Start, 2026-10-14.)
 //
-// Headless: Chilly Willy's intro (warp 12C:0) with one B press reaches the
+// Headless: Chilly Willy's intro (warp 12C:0) with one Start press reaches the
 // fight in about 18 s of real time; with A held it took about 60 s. The boss
 // fight camera is not letterboxed, so the skip ends there.
 // TOOIE_CUTSCENE_LOG=1 logs scene and gameplay changes.
@@ -33,6 +35,7 @@
 namespace {
     constexpr uint16_t button_a = 0x8000;
     constexpr uint16_t button_b = 0x4000;
+    constexpr uint16_t button_start = 0x1000;
     constexpr uint32_t skip_speed = 16;
     // Real time a skip may last at most.
     constexpr auto skip_limit = std::chrono::seconds(45);
@@ -119,18 +122,22 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
 
 void tooie::cutscene_skip_apply(uint16_t* buttons) {
     const uint16_t now = *buttons;
-    const bool b_pressed = (now & button_b) && !(last_buttons & button_b);
+    const bool start_pressed = (now & button_start) && !(last_buttons & button_start);
     last_buttons = now;
 
     if (skipping) {
         // Tap A: held for two reads, released for two.
-        *buttons &= (uint16_t)~(button_a | button_b);
+        *buttons &= (uint16_t)~(button_a | button_b | button_start);
         if ((polls++ / 2) % 2 == 0) {
             *buttons |= button_a;
         }
         return;
     }
-    if (scene_on && b_pressed) {
-        skip_requested = true;
+    if (scene_on && (now & button_start)) {
+        // Start skips here instead of reaching the game (no pause menu).
+        *buttons &= (uint16_t)~button_start;
+        if (start_pressed) {
+            skip_requested = true;
+        }
     }
 }

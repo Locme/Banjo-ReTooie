@@ -221,12 +221,12 @@ void tooie::init_config() {
     qol.add_bool_option(
         tooie::cutscene_skip_option,
         "Skip boss intros",
-        "Press B during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
+        "Press Start during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
         true);
     qol.add_bool_option(
         tooie::cutscene_skip_other_option,
         "Skip other cutscenes",
-        "Press B during any other cutscene to fast-forward through it and its dialogue. This includes conversations, so a stray B skips them.",
+        "Press Start during any other cutscene to fast-forward through it and its dialogue. This includes conversations, so a stray Start skips them.",
         false);
     qol.add_bool_option(
         tooie::free_camera_option,
