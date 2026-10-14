@@ -49,6 +49,7 @@ namespace RT64 {
     void SetSceneHeatHaze(float strength);
     void SetSceneWaterReflections(float strength);
     void SetSceneBounceLight(float strength);
+    void SetSceneWaterWaves(float strength, float speed);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
 }
@@ -145,6 +146,7 @@ namespace {
         { &tooie::picture_filters::underwater_distortion_option, 0.0 },
         { &tooie::picture_filters::water_reflections_option, 0.0 },
         { &tooie::picture_filters::bounce_light_option, 0.0 },
+        { &tooie::picture_filters::water_waves_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -173,6 +175,7 @@ namespace {
             graphics.update_option_value(underwater_distortion_option, 30.0);
             graphics.update_option_value(water_reflections_option, 60.0);
             graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
+            graphics.update_option_value(water_waves_option, 50.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -227,6 +230,7 @@ void tooie::picture_filters::apply() {
     const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
+    RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
@@ -443,6 +447,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        water_waves_option,
+        "Water waves",
+        "Waves roll across the game's water: the water seen through bends with them, and their slopes catch the light. Drawn on the picture, so Banjo still floats at the same height. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        wave_speed_option,
+        "Water wave speed",
+        "How fast the water waves move, in percent. 100 is normal.",
+        25, 200, 5, 0, false, 100);
+    graphics.add_number_option(
         underwater_distortion_option,
         "Underwater distortion",
         "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
@@ -513,7 +527,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

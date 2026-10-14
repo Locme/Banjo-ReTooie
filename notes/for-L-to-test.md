@@ -1020,4 +1020,13 @@
   2. Go to Klungo in Mayahem Temple and to a few enemies (Grublins, Ugger) in bright places
   3. Turn HD Shadows Off and On a few times
 - Look for: With it On, does each enemy and NPC cast a shadow shaped like its model, on the floor below it? Any shadow floating, doubled with an old blob shadow, flickering, or cut off at a screen edge? Does the frame rate stay smooth with many enemies on screen? Checked headless at Klungo only.
+
+## T95 Water waves
+- Asked: 2026-10-14 07:27 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.46 (not built on XBLA)
+- Steps:
+  1. Esc > Graphics: set "Water waves" to 50, then 100; try "Water wave speed" 50 and 200
+  2. Look at calm water: the Spiral Mountain pool behind the waterfall, Jolly Roger's Lagoon, Cloud Cuckooland's pools
+- Look for: Waves roll across the water in one main direction, the water seen through bends with them, and their slopes catch the light. Do they stay put on the water when you turn the camera (they shouldn't slide with it)? Too strong, too busy, or shimmering far away?
 - Status: waiting for L

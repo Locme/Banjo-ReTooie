@@ -307,8 +307,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - Partial (2026-10-14, T80): F6 steps through the scene effects pass's views (effects alone, depth: near white, far dark, sky blue, normals, off) and F8 splits the picture (scene effects and photo grade passes on the left half, original on the right, a white line between); src/display/effect_views.cpp, lib-patches/rt64.patch. The volumetric view has nothing to show (no volumetrics built). F3 per-effect GPU times not started (the frame rate overlay is another thread's).
 
 ### 4.46 Real-time water waves (requested 2026-10-13, not built)
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-14 (T95): Graphics > Water waves (0-100, default off; Enhanced preset 50) and Water wave speed (25-200%). Route 2 of the handoff, as an RT64 normal-map pass rather than moving vertices: in the scene effects pass, on the water mask's flat surfaces (4.45), four travelling waves (mostly one way, wavelengths 230 to 51 units) over the world's x and z give a normal; the water seen through bends with it, slopes facing the light brighten and the others darken, with a glint, and water reflections use the same waves. World x and z come from RT64's view matrix (its inverse, sent with the pass), so the waves stay in place as the camera turns. Small waves fade out with distance. Collision is untouched and the surface doesn't move, so Banjo floats as before (risk f). Checked headless in the Spiral Mountain pool behind the waterfall with F8 compare.
 
 ### 4.47 3D grass (requested 2026-10-13, not built)
 - [ ] Done

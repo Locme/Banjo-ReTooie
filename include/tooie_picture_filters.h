@@ -49,6 +49,8 @@ namespace tooie::picture_filters {
     inline const std::string water_reflections_option = "water_reflections";
     inline const std::string bounce_light_option = "bounce_light";
     inline const std::string texture_upscale_option = "texture_upscale";
+    inline const std::string water_waves_option = "water_waves";
+    inline const std::string wave_speed_option = "water_wave_speed";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
