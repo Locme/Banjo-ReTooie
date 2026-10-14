@@ -1397,3 +1397,14 @@
   4. Press X during a cutscene, and Start during normal play
 - Look for: Start shows "Skipping cutscene" and fast-forwards to the end without opening the pause menu; X no longer skips; Start in normal play still opens the pause menu
 - Status: waiting for L
+
+## T132 Game Frame Rate 120 / Unlocked go above 60 (retest of T122)
+- Asked: 2026-10-14 16:45 UTC
+- Build: your local build of main
+- Commit: 23d8c23
+- Steps:
+  1. Graphics: Frame rate overlay on (F3), Interpolation Off, Game Frame Rate 120 FPS (Experimental); play a minute in Spiral Mountain
+  2. Same with Unlocked (Experimental)
+  3. Listen to the music and sound effects in both
+- Look for: Does the overlay's "Game ... fps" line now reach about 120 (and above with Unlocked) instead of staying at 60? Is it still slow motion at 120? Do music and sound play smoothly, without gaps or crackles (headless, Unlocked had some gaps while the software renderer kept the CPU busy)? A 60 Hz monitor still only shows 60 pictures a second.
+- Status: waiting for L
