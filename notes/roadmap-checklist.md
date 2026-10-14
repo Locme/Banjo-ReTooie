@@ -60,7 +60,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.30 Cutscene audio sync and N64 intro pacing
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-14 05:55: claimed by the Second Opus helper thread.
+- 2026-10-14: not needed on N64 (L: audio sync only affects the XBLA version). Dropped.
 
 ### 4.52 Text speed
 - [x] Done
