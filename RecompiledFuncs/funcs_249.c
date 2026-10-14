@@ -966,6 +966,7 @@ RECOMP_FUNC void bstrexsmall_entrypoint_15(uint8_t* rdram, recomp_context* ctx) 
 RECOMP_FUNC void func_8080156C_gczoombox(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_portrait_step_skip(rdram, ctx)) { return; }
     // 0x8080156C: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80801570: sw          $ra, 0x1C($sp)

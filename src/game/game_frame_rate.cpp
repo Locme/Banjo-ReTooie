@@ -48,6 +48,7 @@
 #include <cstring>
 #include <deque>
 #include <mutex>
+#include <unordered_map>
 #include <variant>
 
 #include "recomp.h"
@@ -442,6 +443,30 @@ extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     (void)ctx;
     demo_frames = 2;
+}
+
+// Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
+// portrait's mouth (+0x1CF, following the mouth pattern at +0xF0 indexed by
+// +0x1D0) and its blink one step per game frame, so above 30 FPS the heads
+// talked and blinked 2 to 8 times too fast. At 60, 120 and Unlocked it now
+// runs only once per 1/30 s of game time for each box (game time is added up
+// per box address); Original and 30 FPS are unchanged.
+extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
+    static std::mutex portrait_mutex;
+    static std::unordered_map<uint32_t, float> portrait_time;
+    constexpr float step = 1.0f / 30.0f;
+    std::lock_guard lock{ portrait_mutex };
+    if (locked_vis() != 1) {
+        portrait_time.clear();
+        return 0;
+    }
+    float& t = portrait_time[(uint32_t)ctx->r4];
+    t += read_float(rdram, delta_time_addr);
+    if (t < step - 0.001f) {
+        return 1;
+    }
+    t = std::min(t - step, step);
+    return 0;
 }
 
 void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {

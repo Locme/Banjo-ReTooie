@@ -723,6 +723,14 @@ func = "func_8001443C"
 before_vram = 0x8001454C
 text = "if (tooie_scheduler_vi_skip(rdram, ctx)) { ctx->r31 = MEM_W(ctx->r29, 0X24); goto L_800146CC; }"
 
+# func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
+# per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
+# game time has gone by for that box.
+[[patches.hook]]
+func = "func_8080156C_gczoombox"
+before_vram = 0x8080156C
+text = "if (tooie_portrait_step_skip(rdram, ctx)) { return; }"
+
 # func_8001608C replays a recorded time step (0x80016110 calls func_800D8FA0
 # with it): attract demos, the game select screen and the intro story cutscenes.
 # They run a fixed number of frames, so while one plays the game keeps its own
