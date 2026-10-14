@@ -330,16 +330,6 @@ void tooie::init_config() {
         "Cutscene Field of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
-    // The field of view applies as the slider moves, without Apply (L, 2026-10-14):
-    // the game reads the saved value each time it sets a camera's field of view.
-    for (const std::string* id : { &tooie::fov_offset_option, &tooie::cutscene_fov_offset_option }) {
-        graphics.add_option_change_callback(*id,
-            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-                if (context == recomp::config::OptionChangeContext::Temporary) {
-                    recompui::config::get_graphics_config().save_config();
-                }
-            });
-    }
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);

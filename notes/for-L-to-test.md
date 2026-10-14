@@ -1053,16 +1053,6 @@
 - Look for: Do music and sounds play at the same pitch and speed as Original, with a bit more clarity in the high notes? Any crackle, wrong pitch, or broken echo? Does sound still work after loading the save state?
 - Status: waiting for L
 
-## T98 Field of View without Apply
-- Asked: 2026-10-14 09:45 UTC
-- Build: main after 0896c5b (next Windows CI build)
-- Steps:
-  1. In a level, open the menu (Esc) and go to Graphics
-  2. Move the Field of View slider, then the Cutscene Field of View slider, without pressing Apply
-  3. Close the menu
-- Look for: Does the view widen or narrow straight away, and does the setting stay after a restart?
-- Status: waiting for L
-
 ## T99 Settings menu tidy-up
 - Do: Open Settings (Esc). Go through General, QOL, Graphics and Cheats. In Graphics open the Resolution row. In the Warp tab (Cheats > Warp tab) hold Down on a controller. Type in the Search box at the top of a tab.
 - Look for: section headings in each tab; Cheato codes are in Cheats again; Resolution lists 3x (720p), 4.5x (1080p), 6x (1440p) and 9x (4K); Field of View and Game Frame Rate apply as soon as you change them (Apply stays grey); the Warp list scrolls with the selection; Search filters that tab's rows; Texture upscaling's description says it uses an xBR-style filter.
