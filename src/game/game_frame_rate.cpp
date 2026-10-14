@@ -107,6 +107,9 @@ namespace {
         }
     }
 
+    // Game frames stepped so far (tooie_frame_step_done).
+    std::atomic<uint32_t> game_frames_stepped{ 0 };
+
     // Game frames left in which an attract demo counts as playing. Set by the
     // demo replay, counted down by each frame's time step.
     std::atomic<int> demo_frames{ 0 };
@@ -340,6 +343,7 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
 // above 60 FPS, put in the finer ones.
 extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    game_frames_stepped++;
     if (!fine.pending) {
         return;
     }
@@ -445,28 +449,73 @@ extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
     demo_frames = 2;
 }
 
+// Some animations step once per game frame instead of by the delta time, so
+// above 30 FPS they ran 2 to 8 times too fast. At 60, 120 and Unlocked these
+// gates let each one step only once per 1/30 s of game time, counted for each
+// object (by address) and once per game frame however often it is called.
+// Original and 30 FPS are unchanged.
+namespace {
+    struct Gate {
+        uint32_t frame;
+        float time;
+        bool run;
+    };
+
+    class StepGate {
+    public:
+        // True when the object at this address should skip its step this frame.
+        bool skip(uint8_t* rdram, uint32_t address) {
+            std::lock_guard lock{ mutex };
+            if (locked_vis() != 1) {
+                gates.clear();
+                return false;
+            }
+            uint32_t frame = game_frames_stepped.load();
+            auto found = gates.find(address);
+            if (found == gates.end()) {
+                if (gates.size() > 4096) {
+                    gates.clear();
+                }
+                found = gates.emplace(address, Gate{ frame, 0.0f, true }).first;
+                return false;
+            }
+            Gate& g = found->second;
+            if (g.frame == frame) {
+                return !g.run;
+            }
+            g.frame = frame;
+            g.time += read_float(rdram, delta_time_addr);
+            g.run = g.time >= step - 0.001f;
+            if (g.run) {
+                g.time = std::min(g.time - step, step);
+            }
+            return !g.run;
+        }
+
+    private:
+        static constexpr float step = 1.0f / 30.0f;
+        std::mutex mutex;
+        std::unordered_map<uint32_t, Gate> gates;
+    };
+
+    StepGate portrait_gate;
+    StepGate blink_gate;
+}
+
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
 // portrait's mouth (+0x1CF, following the mouth pattern at +0xF0 indexed by
-// +0x1D0) and its blink one step per game frame, so above 30 FPS the heads
-// talked and blinked 2 to 8 times too fast. At 60, 120 and Unlocked it now
-// runs only once per 1/30 s of game time for each box (game time is added up
-// per box address); Original and 30 FPS are unchanged.
+// +0x1D0) and its blink one step per game frame ($a0 = the box).
 extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
-    static std::mutex portrait_mutex;
-    static std::unordered_map<uint32_t, float> portrait_time;
-    constexpr float step = 1.0f / 30.0f;
-    std::lock_guard lock{ portrait_mutex };
-    if (locked_vis() != 1) {
-        portrait_time.clear();
-        return 0;
-    }
-    float& t = portrait_time[(uint32_t)ctx->r4];
-    t += read_float(rdram, delta_time_addr);
-    if (t < step - 0.001f) {
-        return 1;
-    }
-    t = std::min(t - step, step);
-    return 0;
+    return portrait_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+// Character blinking: func_80101A50 runs an object's blink ($a0, state in the
+// bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
+// the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the
+// eyelid frame to the model's texture slots 1 and 2 (func_800DF744); a skipped
+// frame jumps there, so the eyes still show.
+extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
+    return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
 void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {

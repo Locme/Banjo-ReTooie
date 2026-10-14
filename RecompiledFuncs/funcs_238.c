@@ -2801,6 +2801,7 @@ RECOMP_FUNC void func_80101A50(uint8_t* rdram, recomp_context* ctx) {
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x80101A54: sw          $ra, 0x14($sp)
     MEM_W(0X14, ctx->r29) = ctx->r31;
+    if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }
     // 0x80101A58: lw          $t6, 0x7C($a0)
     ctx->r14 = MEM_W(ctx->r4, 0X7C);
     // 0x80101A5C: or          $a2, $a0, $zero

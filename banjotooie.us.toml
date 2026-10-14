@@ -725,11 +725,20 @@ text = "if (tooie_scheduler_vi_skip(rdram, ctx)) { ctx->r31 = MEM_W(ctx->r29, 0X
 
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
-# game time has gone by for that box.
+# game time has gone by for that box (src/game/game_frame_rate.cpp).
 [[patches.hook]]
 func = "func_8080156C_gczoombox"
 before_vram = 0x8080156C
 text = "if (tooie_portrait_step_skip(rdram, ctx)) { return; }"
+
+# func_80101A50 steps an object's blink (random start, eyelid frame 0-3-0) once
+# per game frame, then sets the eye texture slots. Above 30 FPS the step is
+# skipped (straight to setting the slots, $a2 = the object) until 1/30 s of
+# game time has gone by for that object.
+[[patches.hook]]
+func = "func_80101A50"
+before_vram = 0x80101A58
+text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
 
 # func_8001608C replays a recorded time step (0x80016110 calls func_800D8FA0
 # with it): attract demos, the game select screen and the intro story cutscenes.
