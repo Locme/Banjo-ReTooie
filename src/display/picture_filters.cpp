@@ -17,6 +17,8 @@
 //   scanlines and an aperture grille.
 // The Graphics tab normally waits for Apply; these save and apply as they change.
 
+#include <atomic>
+#include <cstdlib>
 #include <variant>
 
 #include "recompui/config.h"
@@ -30,6 +32,8 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetSharpening(float strength);
+    // lib/rt64/src/render/rt64_scene_effects.h.
+    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
 }
 
 namespace {
@@ -39,6 +43,14 @@ namespace {
     }
 
     bool created = false;
+
+    // The game's depth buffer pointer (decomp func_8001A0A8).
+    constexpr gpr depth_buffer_ptr = (int32_t)0x8007BCC4;
+    // Ambient occlusion's reach in world units (Banjo is about 150 tall).
+    // Test aid: TOOIE_AO_RADIUS overrides it.
+    const float ambient_occlusion_radius = std::getenv("TOOIE_AO_RADIUS") ? (float)std::atof(std::getenv("TOOIE_AO_RADIUS")) : 200.0f;
+    std::atomic<float> ambient_occlusion{0.0f};
+    std::atomic<uint32_t> depth_address{0};
 
     template <typename T>
     T value(const std::string& id, T fallback) {
@@ -64,6 +76,8 @@ void tooie::picture_filters::apply() {
         value<bool>(three_point_option, true));
 
     RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
+    ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
+    RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
     if (!tooie::photo_mode::active()) {
         const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
         const float saturation = (float)(value<double>(saturation_option, 0.0) / 100.0);
@@ -71,6 +85,15 @@ void tooie::picture_filters::apply() {
         const float grain = (float)(value<double>(grain_option, 0.0) / 100.0);
         const bool any = (contrast != 0.0f) || (saturation != 0.0f) || (vignette != 0.0f) || (grain != 0.0f);
         RT64::SetPhotoGrade(any, 0, 0.0f, contrast, saturation, 0.0f, vignette, grain);
+    }
+}
+
+void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    // RT64 keys framebuffers by physical address.
+    const uint32_t address = (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu;
+    if (depth_address.exchange(address) != address) {
+        RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, address);
     }
 }
 
@@ -132,6 +155,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        ambient_occlusion_option,
+        "Ambient occlusion",
+        "Soft shading where surfaces meet: in corners, under ledges and around things standing on the ground. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         contrast_option,
         "Contrast",
         "More or less difference between the dark and light parts of the picture. 0 leaves it as it is.",
@@ -154,7 +182,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
-                                   &saturation_option, &vignette_option, &grain_option }) {
+                                   &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {

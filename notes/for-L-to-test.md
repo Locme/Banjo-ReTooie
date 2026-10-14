@@ -689,3 +689,15 @@
   4. With some set, press F10 for photo mode, then leave it: the Graphics settings come back afterwards
 - Look for: Is sharpening too strong at 100? Does anything look wrong on the HUD or text?
 - Status: waiting for L
+
+## T67 Ambient occlusion
+- Asked: 2026-10-14 02:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.35 (AO had band lines and a disk around Bottles' glow on XBLA)
+- Steps:
+  1. Esc > Graphics: set "Ambient occlusion" to 100 to see it clearly
+  2. Walk around Spiral Mountain and Jinjo Village: corners, the bottom of walls and posts, and the ground around Banjo should get soft shading
+  3. Check the HUD, text boxes and the pause menu are not shaded
+  4. Set it back to 0 and compare. Watch the frame rate with it on
+- Look for: Any lines, flicker or dark outlines around Banjo against far away scenery? Is 100 too strong or too weak? Any slowdown?
+- Status: waiting for L

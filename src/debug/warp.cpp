@@ -41,6 +41,7 @@
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
+#include "tooie_picture_filters.h"
 
 namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
@@ -124,6 +125,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::talon_trot::tick(rdram, ctx);
     tooie::fine_aim::tick(rdram, ctx);
     tooie::motion_aim::tick(rdram, ctx);
+    tooie::picture_filters::tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
     tooie::music_player::tick(rdram, ctx);

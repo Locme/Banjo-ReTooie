@@ -111,6 +111,13 @@ To change it: edit the files in `lib/RecompFrontend`, then
   game's depth buffer at that address, copies it to colour (`copyFromTarget`) and the photo pass reads it.
   `RT64::SetSharpening(strength)` adds a contrast-adaptive sharpen to the same pass, kept apart from the
   filters so it applies in and out of photo mode; with the filters off the pass runs for it alone.
+* **Scene effects** (`src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`,
+  `src/shaders/SceneEffectsPS.hlsl`, `src/render/rt64_framebuffer_renderer.cpp`, `.h`,
+  `src/render/rt64_shader_library.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetSceneEffects(ao, radius,
+  depthAddress)`. The framebuffer renderer splits its raster scenes at the first projection that isn't a
+  perspective one after the 3D world, and in the framebuffer whose depth target is at `depthAddress` it
+  draws a full-screen pass there (ambient occlusion from the depth target), so the HUD drawn after it is
+  left alone.
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files

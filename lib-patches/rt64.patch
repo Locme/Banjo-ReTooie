@@ -1,17 +1,18 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..a826526 100644
+index 79dfc38..81800a8 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -389,6 +389,8 @@ set (SOURCES
+@@ -389,6 +389,9 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_smaa.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_photo_grade.cpp"
++    "${PROJECT_SOURCE_DIR}/src/render/rt64_scene_effects.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -548,6 +550,20 @@ build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/Textu
+@@ -548,6 +551,25 @@ build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/Textu
  build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/TextureResolveSamples8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSRegular.hlsl")
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSPixel.hlsl" "-D PIXEL_ANTIALIASING")
@@ -29,6 +30,11 @@ index 79dfc38..a826526 100644
 +target_include_directories(rt64 PRIVATE ${RT64_SMAA_DIR})
 +# Banjo-Tooie: photo mode's filters.
 +build_pixel_shader(rt64 "src/shaders/PhotoGradePS.hlsl")
++# Banjo-Tooie: screen-space effects over the 3D world (ambient occlusion).
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects2XPS.hlsl" "-D SAMPLES_2X")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects4XPS.hlsl" "-D SAMPLES_4X")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects8XPS.hlsl" "-D SAMPLES_8X")
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
@@ -369,6 +375,95 @@ index 69a82ac..d0f2f49 100644
      struct VideoInterfaceDescriptorSet : RenderDescriptorSetBase {
          uint32_t gInput;
          uint32_t gSampler;
+diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
+index 9fae0d4..c5cbaf4 100644
+--- a/src/render/rt64_framebuffer_renderer.cpp
++++ b/src/render/rt64_framebuffer_renderer.cpp
+@@ -3,6 +3,7 @@
+ //
+ 
+ #include "rt64_framebuffer_renderer.h"
++#include "rt64_scene_effects.h"
+ 
+ #include "../include/rt64_extended_gbi.h"
+ 
+@@ -1250,6 +1251,8 @@ namespace RT64 {
+ 
+         bool depthState = false;
+         worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
++        const bool drawSceneEffects = (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
++        int32_t rasterScenesDrawn = 0;
+         for (const auto &pair : targetDrawCall.sceneIndices) {
+ #       if RT_ENABLED
+             if (pair.second) {
+@@ -1297,6 +1300,13 @@ namespace RT64 {
+                 const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
+                 submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
+                 submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
++
++                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
++                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
++                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
++                    RecordSceneEffects(worker, colorTarget, depthTarget, targetDrawCall.sceneEffectsProjection, shaderLibrary);
++                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
++                }
+             }
+         }
+     }
+@@ -1408,6 +1418,8 @@ namespace RT64 {
+         };
+ 
+         targetDrawCall.rasterScenes.clear();
++        targetDrawCall.sceneEffectsAfter = -1;
++        bool drewPerspective = false;
+ 
+ #   if RT_ENABLED
+         RaytracingScene rtScene;
+@@ -1456,6 +1468,19 @@ namespace RT64 {
+                 continue;
+             }
+ 
++            // Banjo-Tooie: the first projection that isn't a perspective one after the 3D world (the HUD)
++            // starts a new raster scene, so screen-space effects can go in between.
++            if (proj.type == Projection::Type::Perspective) {
++                if (fbPair.depthWrite && (targetDrawCall.sceneEffectsAfter < 0) && (proj.gameCallCount > 0)) {
++                    drewPerspective = true;
++                    targetDrawCall.sceneEffectsProjection = drawData.modProjTransforms[proj.transformsIndex];
++                }
++            }
++            else if (drewPerspective && (targetDrawCall.sceneEffectsAfter < 0)) {
++                checkRasterScene(rasterScene);
++                targetDrawCall.sceneEffectsAfter = int32_t(targetDrawCall.rasterScenes.size());
++            }
++
+ #       if RT_ENABLED
+             // TODO: Move heuristics of RT proj elsewhere?
+             // TODO: Use detected scenes logic instead.
+@@ -1758,6 +1783,9 @@ namespace RT64 {
+         checkRtScene(rtScene);
+ #   endif
+         checkRasterScene(rasterScene);
++        if (drewPerspective && (targetDrawCall.sceneEffectsAfter < 0)) {
++            targetDrawCall.sceneEffectsAfter = int32_t(targetDrawCall.rasterScenes.size());
++        }
+     }
+ 
+     void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
+diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
+index 3add9c3..abcd2be 100644
+--- a/src/render/rt64_framebuffer_renderer.h
++++ b/src/render/rt64_framebuffer_renderer.h
+@@ -48,6 +48,10 @@ namespace RT64 {
+         RenderFramebufferStorage *fbStorage = nullptr;
+         std::vector<RasterScene> rasterScenes;
+         std::vector<SceneIndexPair> sceneIndices;
++        // Banjo-Tooie: the screen-space effects go after this many raster scenes (the 3D world's), or
++        // nowhere when negative, with the 3D world's projection.
++        int32_t sceneEffectsAfter = -1;
++        interop::float4x4 sceneEffectsProjection;
+ #   if RT_ENABLED
+         std::vector<RaytracingScene> rtScenes;
+ #   endif
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
 index 0000000..e1150a0
@@ -562,11 +657,143 @@ index 0000000..e403425
 +            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth);
 +    };
 +};
+diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
+new file mode 100644
+index 0000000..567eafa
+--- /dev/null
++++ b/src/render/rt64_scene_effects.cpp
+@@ -0,0 +1,84 @@
++//
++// RT64
++//
++
++#include "rt64_scene_effects.h"
++
++#include <cmath>
++#include <cstdlib>
++#include <mutex>
++
++#include "shared/rt64_scene_effects.h"
++
++#include "rt64_render_target.h"
++
++namespace RT64 {
++    namespace {
++        // Test aid: TOOIE_SCENE_FX_VIEW=1 shows the effects alone as grey.
++        const bool debugView = (std::getenv("TOOIE_SCENE_FX_VIEW") != nullptr);
++        std::mutex effectsMutex;
++        SceneEffectsSettings effectsSettings;
++    }
++
++    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.ambientOcclusion = ambientOcclusion;
++        effectsSettings.ambientOcclusionRadius = radius;
++        effectsSettings.depthAddress = depthAddress;
++    }
++
++    SceneEffectsSettings GetSceneEffects() {
++        const std::scoped_lock lock(effectsMutex);
++        return effectsSettings;
++    }
++
++    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
++        const SceneEffectsSettings settings = GetSceneEffects();
++        return (settings.ambientOcclusion > 0.0f) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (depthTarget->addressForName == settings.depthAddress);
++    }
++
++    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
++        const interop::float4x4 &projection, const ShaderLibrary *shaderLibrary)
++    {
++        const SceneEffectsSettings settings = GetSceneEffects();
++
++        // The game's matrices are row-vector (clip = v * M), so w = -z comes from m[2][3]; take the
++        // transposed terms if the matrix is the other way round.
++        const float (&m)[4][4] = projection.m;
++        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
++        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
++            // Not a perspective projection after all (the game can briefly set others).
++            return;
++        }
++        interop::SceneEffectsCB constants;
++        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
++        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
++        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, 0.0f };
++
++        if (depthTarget->targetCopyDescSet == nullptr) {
++            depthTarget->targetCopyDescSet = std::make_unique<RenderTargetCopyDescriptorSet>(worker->device);
++            depthTarget->targetCopyDescSet->setTexture(depthTarget->targetCopyDescSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
++        }
++
++        colorTarget->setupColorFramebuffer(worker);
++        worker->commandList->barriers(RenderBarrierStage::GRAPHICS, {
++            RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
++            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ)
++        });
++
++        worker->commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
++        worker->commandList->setViewports(RenderViewport(0.0f, 0.0f, float(colorTarget->width), float(colorTarget->height)));
++        worker->commandList->setScissors(RenderRect(0, 0, colorTarget->width, colorTarget->height));
++        worker->commandList->setPipeline(shaderLibrary->sceneEffects.pipeline.get());
++        worker->commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
++        worker->commandList->setGraphicsDescriptorSet(depthTarget->targetCopyDescSet->get(), 0);
++        worker->commandList->setGraphicsPushConstants(0, &constants);
++        worker->commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++        worker->commandList->drawInstanced(3, 1, 0, 0);
++
++        worker->commandList->barriers(RenderBarrierStage::GRAPHICS, {
++            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)
++        });
++    }
++};
+diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
+new file mode 100644
+index 0000000..bd679cd
+--- /dev/null
++++ b/src/render/rt64_scene_effects.h
+@@ -0,0 +1,36 @@
++//
++// RT64
++//
++
++#pragma once
++
++#include "shared/rt64_hlsl.h"
++
++#include "rt64_render_worker.h"
++#include "rt64_shader_library.h"
++
++namespace RT64 {
++    struct RenderTarget;
++
++    // Banjo-Tooie: screen-space effects drawn over the 3D world after its last perspective draw and
++    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
++    struct SceneEffectsSettings {
++        float ambientOcclusion = 0.0f;
++        float ambientOcclusionRadius = 60.0f;
++        uint32_t depthAddress = 0;
++    };
++
++    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
++    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
++    SceneEffectsSettings GetSceneEffects();
++
++    // Whether the effects should be drawn into a framebuffer with this depth target.
++    bool SceneEffectsWanted(const RenderTarget *depthTarget);
++
++    // Draws the effects into the color target from the depth target, during a framebuffer's drawing.
++    // Leaves the color target ready for color writes and the depth target ready for depth writes, with
++    // no framebuffer set. projection is the 3D world's projection; when it isn't a perspective one
++    // nothing is drawn.
++    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
++        const interop::float4x4 &projection, const ShaderLibrary *shaderLibrary);
++};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..eb580ac 100644
+index d1c5273..67b46eb 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,6 +40,16 @@
+@@ -40,6 +40,20 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -580,10 +807,14 @@ index d1c5273..eb580ac 100644
 +#include "shaders/SmaaWeightsUltraPS.hlsl.spirv.h"
 +#include "shaders/SmaaBlendPS.hlsl.spirv.h"
 +#include "shaders/PhotoGradePS.hlsl.spirv.h"
++#include "shaders/SceneEffectsPS.hlsl.spirv.h"
++#include "shaders/SceneEffects2XPS.hlsl.spirv.h"
++#include "shaders/SceneEffects4XPS.hlsl.spirv.h"
++#include "shaders/SceneEffects8XPS.hlsl.spirv.h"
  #include "shaders/TextureDecodeCS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
-@@ -86,6 +96,16 @@
+@@ -86,6 +100,20 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -597,10 +828,14 @@ index d1c5273..eb580ac 100644
 +#   include "shaders/SmaaWeightsUltraPS.hlsl.dxil.h"
 +#   include "shaders/SmaaBlendPS.hlsl.dxil.h"
 +#   include "shaders/PhotoGradePS.hlsl.dxil.h"
++#   include "shaders/SceneEffectsPS.hlsl.dxil.h"
++#   include "shaders/SceneEffects2XPS.hlsl.dxil.h"
++#   include "shaders/SceneEffects4XPS.hlsl.dxil.h"
++#   include "shaders/SceneEffects8XPS.hlsl.dxil.h"
  #   include "shaders/TextureDecodeCS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
-@@ -131,6 +151,16 @@
+@@ -131,6 +159,20 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -614,19 +849,24 @@ index d1c5273..eb580ac 100644
 +#   include "shaders/SmaaWeightsUltraPS.hlsl.metal.h"
 +#   include "shaders/SmaaBlendPS.hlsl.metal.h"
 +#   include "shaders/PhotoGradePS.hlsl.metal.h"
++#   include "shaders/SceneEffectsPS.hlsl.metal.h"
++#   include "shaders/SceneEffects2XPS.hlsl.metal.h"
++#   include "shaders/SceneEffects4XPS.hlsl.metal.h"
++#   include "shaders/SceneEffects8XPS.hlsl.metal.h"
  #   include "shaders/TextureDecodeCS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
-@@ -148,6 +178,8 @@
+@@ -148,6 +190,9 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
 +#include "shared/rt64_smaa.h"
 +#include "shared/rt64_photo_grade.h"
++#include "shared/rt64_scene_effects.h"
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -569,6 +601,59 @@ namespace RT64 {
+@@ -569,6 +614,59 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -686,12 +926,69 @@ index d1c5273..eb580ac 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
+@@ -832,6 +930,52 @@ namespace RT64 {
+             }
+         }
+ 
++        // Banjo-Tooie: screen-space effects over the 3D world, reading the depth target at the main targets'
++        // sample count and blending into the color target as dst * a + rgb.
++        {
++            RenderTargetCopyDescriptorSet descriptorSet;
++            layoutBuilder.begin();
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::SceneEffectsCB), RenderShaderStageFlag::PIXEL);
++            layoutBuilder.end();
++            sceneEffects.pipelineLayout = layoutBuilder.create(device);
++
++            std::unique_ptr<RenderShader> pixelShader;
++            switch (multisampling.sampleCount) {
++            case RenderSampleCount::COUNT_2:
++                pixelShader = device->createShader(CREATE_SHADER_INPUTS(SceneEffects2XPSBlobDXIL, SceneEffects2XPSBlobSPIRV, SceneEffects2XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            case RenderSampleCount::COUNT_4:
++                pixelShader = device->createShader(CREATE_SHADER_INPUTS(SceneEffects4XPSBlobDXIL, SceneEffects4XPSBlobSPIRV, SceneEffects4XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            case RenderSampleCount::COUNT_8:
++                pixelShader = device->createShader(CREATE_SHADER_INPUTS(SceneEffects8XPSBlobDXIL, SceneEffects8XPSBlobSPIRV, SceneEffects8XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            default:
++                pixelShader = device->createShader(CREATE_SHADER_INPUTS(SceneEffectsPSBlobDXIL, SceneEffectsPSBlobSPIRV, SceneEffectsPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            }
++
++            RenderBlendDesc blendDesc;
++            blendDesc.blendEnabled = true;
++            blendDesc.srcBlend = RenderBlend::ONE;
++            blendDesc.dstBlend = RenderBlend::SRC_ALPHA;
++            blendDesc.blendOp = RenderBlendOperation::ADD;
++            blendDesc.srcBlendAlpha = RenderBlend::ZERO;
++            blendDesc.dstBlendAlpha = RenderBlend::ONE;
++            blendDesc.blendOpAlpha = RenderBlendOperation::ADD;
++
++            RenderGraphicsPipelineDesc pipelineDesc;
++            pipelineDesc.pipelineLayout = sceneEffects.pipelineLayout.get();
++            pipelineDesc.renderTargetBlend[0] = blendDesc;
++            pipelineDesc.renderTargetFormat[0] = RenderTarget::colorBufferFormat(usesHDR);
++            pipelineDesc.renderTargetCount = 1;
++            pipelineDesc.vertexShader = fullScreenVertexShader.get();
++            pipelineDesc.pixelShader = pixelShader.get();
++            pipelineDesc.multisampling = multisampling;
++            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
++        }
++
+         // Post process.
+         {
+             PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..0541889 100644
+index 641f3ec..feb0112 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -53,6 +53,12 @@ namespace RT64 {
+@@ -51,8 +51,16 @@ namespace RT64 {
+         ShaderRecord rtCopyDepthToColor;
+         ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
++        // Banjo-Tooie: screen-space effects over the 3D world, at the main targets' sample count.
++        ShaderRecord sceneEffects;
          ShaderRecord textureDecode;
          ShaderRecord textureCopy;
 +        // Banjo-Tooie: SMAA passes, one per preset (low, medium, high, ultra) for the first two.
@@ -1210,6 +1507,110 @@ index 0000000..d2190f9
 +
 +    return float4(rgb, color.a);
 +}
+diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
+new file mode 100644
+index 0000000..d90e000
+--- /dev/null
++++ b/src/shaders/SceneEffectsPS.hlsl
+@@ -0,0 +1,98 @@
++//
++// RT64
++//
++// Banjo-Tooie: screen-space effects over the 3D world, drawn after its last perspective draw and before
++// the HUD, with only the scene's depth as input. The output is blended as dst * a + rgb, so ambient
++// occlusion darkens with a.
++
++#include "shared/rt64_scene_effects.h"
++
++[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
++
++#if defined(SAMPLES_8X) || defined(SAMPLES_4X) || defined(SAMPLES_2X)
++#   define MULTISAMPLING
++Texture2DMS<float> gInput : register(t1);
++#else
++Texture2D<float> gInput : register(t1);
++#endif
++
++float LoadDepth(int2 pixel) {
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    return gInput.Load(pixel, 0);
++#else
++    return gInput.Load(int3(pixel, 0));
++#endif
++}
++
++// The view-space position at a pixel (the camera looks along -z).
++float3 ViewPosition(int2 pixel, float depth) {
++    const float4 t = gConstants.depthTerms;
++    // RT64 keeps the projected z itself as the depth (flat surfaces stay flat this way).
++    const float ndcZ = depth;
++    const float z = (t.y - ndcZ * t.w) / (ndcZ * t.z - t.x);
++    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
++    return float3(ndc.x * -z / gConstants.projection.x, ndc.y * -z / gConstants.projection.y, z);
++}
++
++float3 ViewPositionAt(int2 pixel) {
++    return ViewPosition(pixel, LoadDepth(pixel));
++}
++
++float AmbientOcclusion(int2 pixel, float depth) {
++    const float3 center = ViewPosition(pixel, depth);
++    const float3 left = ViewPositionAt(pixel + int2(-1, 0)), right = ViewPositionAt(pixel + int2(1, 0));
++    const float3 up = ViewPositionAt(pixel + int2(0, -1)), down = ViewPositionAt(pixel + int2(0, 1));
++    // The smaller step on each axis, so edges don't bend the normal.
++    const float3 dx = (abs(right.z - center.z) < abs(center.z - left.z)) ? (right - center) : (center - left);
++    const float3 dy = (abs(down.z - center.z) < abs(center.z - up.z)) ? (down - center) : (center - up);
++    float3 normal = normalize(cross(dx, dy));
++    if (dot(normal, -center) < 0.0f) {
++        normal = -normal;
++    }
++
++    const float radius = gConstants.ambientOcclusion.y;
++    const float distance = max(-center.z, 1.0f);
++    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 2.0f, gConstants.projection.w * 0.08f);
++
++    // A 4x4 pattern of rotations spreads the samples between neighbouring pixels.
++    const uint2 cell = uint2(pixel) & 3u;
++    const float rotation = float((cell.x * 4u + cell.y) * 7u % 16u) * (6.2831853f / 16.0f);
++
++    const int samples = 12;
++    float occlusion = 0.0f;
++    [loop] for (int i = 0; i < samples; i++) {
++        const float t = (float(i) + 0.5f) / float(samples);
++        const float angle = float(i) * 2.39996323f + rotation;
++        const int2 samplePixel = pixel + int2(round(float2(cos(angle), sin(angle)) * sqrt(t) * radiusPixels));
++        const float sampleDepth = LoadDepth(samplePixel);
++        if (sampleDepth >= 0.99999f) {
++            continue;
++        }
++        const float3 v = ViewPosition(samplePixel, sampleDepth) - center;
++        const float lengthSquared = dot(v, v);
++        const float falloff = saturate(1.0f - lengthSquared / (radius * radius));
++        occlusion += max(0.0f, dot(normal, v) * rsqrt(max(lengthSquared, 1e-4f)) - 0.1f) * falloff;
++    }
++
++    return saturate(1.0f - gConstants.ambientOcclusion.x * 2.5f * occlusion / float(samples));
++}
++
++float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
++    const int2 pixel = int2(pos.xy);
++    const float depth = LoadDepth(pixel);
++    if (depth >= 0.99999f) {
++        return (gConstants.ambientOcclusion.z > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 0.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
++    }
++
++    float keep = 1.0f;
++    if (gConstants.ambientOcclusion.x > 0.0f) {
++        keep *= AmbientOcclusion(pixel, depth);
++    }
++
++    if (gConstants.ambientOcclusion.z > 0.5f) {
++        return float4(keep, keep, keep, 0.0f);
++    }
++
++    return float4(0.0f, 0.0f, 0.0f, keep);
++}
 diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
 new file mode 100644
 index 0000000..d6b151f
@@ -1438,6 +1839,37 @@ index 0000000..84fa600
 +        // Depth of field strength (0 off, 1 strongest), 1 when the depth texture holds this frame's depth, 1 for
 +        // an HDR colour buffer, then the sharpening (0 off, 1 strongest).
 +        float4 dof;
++    };
++#ifdef HLSL_CPU
++};
++#endif
+diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
+new file mode 100644
+index 0000000..1b4958c
+--- /dev/null
++++ b/src/shared/rt64_scene_effects.h
+@@ -0,0 +1,25 @@
++//
++// RT64
++//
++
++#pragma once
++
++#include "shared/rt64_hlsl.h"
++
++#ifdef HLSL_CPU
++namespace interop {
++#endif
++    // Banjo-Tooie: screen-space effects drawn over the 3D world before the HUD (SceneEffectsPS.hlsl).
++    struct SceneEffectsCB {
++        // The projection's depth terms: ndc z = (a * z + b) / (c * z + d) for a view-space z.
++        float4 depthTerms;
++        // The projection's x and y scales, then the target's width and height.
++        float4 projection;
++        // Ambient occlusion strength (0 off, 1 strongest), its radius in world units, 1 to show the effects
++        // alone as grey (a test view), then unused.
++        // The depth is the projected z / w, in [0, 1] over the 3D world.
++        float4 ambientOcclusion;
 +    };
 +#ifdef HLSL_CPU
 +};
