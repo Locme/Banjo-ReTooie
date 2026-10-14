@@ -329,7 +329,7 @@ void tooie::init_config() {
         true);
     graphics.add_bool_option(
         tooie::hd_shadows_option,
-        "HD Shadows",
+        "HD Shadows (Experimental)",
         "Shadows are shaped like the full model on screen, with its pose. Covers the player (instead of the game's simpler shadow model) and enemies and NPCs, which have none on N64.",
         false);
     graphics.add_bool_option(
