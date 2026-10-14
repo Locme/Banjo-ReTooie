@@ -122,6 +122,9 @@ namespace {
 
         Container* list = context.create_element<Container>(scroll, FlexDirection::Column, JustifyContent::FlexStart);
         list->set_gap(8.0f);
+        // Down goes down and Right goes right: the list steps through the areas, and each area's buttons
+        // (which wrap onto several lines) are reached by where they are on screen.
+        list->set_as_navigation_container(NavigationType::Vertical);
 
         Container* row = nullptr;
         const char* group = nullptr;
@@ -133,6 +136,7 @@ namespace {
                 row = context.create_element<Container>(list, FlexDirection::Row, JustifyContent::FlexStart);
                 row->set_flex_wrap(FlexWrap::Wrap);
                 row->set_gap(8.0f);
+                row->set_as_navigation_container(NavigationType::Auto);
             }
             Button* button = context.create_element<Button>(row, place.name, ButtonStyle::Secondary, ButtonSize::Medium);
             button->add_pressed_callback([place]() {
