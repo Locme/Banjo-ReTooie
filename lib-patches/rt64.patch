@@ -573,7 +573,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..1b4dfe7 100644
+index 9fae0d4..5766cae 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -685,39 +685,51 @@ index 9fae0d4..1b4dfe7 100644
              }
          }
      }
-@@ -1408,6 +1475,10 @@ namespace RT64 {
+@@ -1408,6 +1475,14 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
-+        bool drewPerspective = false;
++        // The 3D world is open from its first perspective projection to the next projection that isn't one; it
++        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
++        // his 2D glow), so the effects go after the last of them, not before the HUD's 3D models.
++        bool worldOpen = false;
++        int32_t worldEnd = -1;
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1527,20 @@ namespace RT64 {
+@@ -1456,6 +1531,28 @@ namespace RT64 {
                  continue;
              }
  
-+            // Banjo-Tooie: the first projection that isn't a perspective one after the 3D world (the HUD)
-+            // starts a new raster scene, so screen-space effects can go in between.
++            // Banjo-Tooie: a projection that isn't a perspective one after the 3D world starts a new raster
++            // scene, so screen-space effects can go in between.
 +            if (proj.type == Projection::Type::Perspective) {
-+                if (fbPair.depthWrite && (targetDrawCall.sceneEffectsAfter < 0) && (proj.gameCallCount > 0)) {
-+                    drewPerspective = true;
-+                    targetDrawCall.sceneEffectsDrawData = &drawData;
-+                    targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
++                if (fbPair.depthWrite && (proj.gameCallCount > 0)) {
++                    if (targetDrawCall.sceneEffectsDrawData == nullptr) {
++                        worldOpen = true;
++                        targetDrawCall.sceneEffectsDrawData = &drawData;
++                        targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
++                    }
++                    else if (!worldOpen && (targetDrawCall.sceneEffectsDrawData == &drawData) &&
++                        (matrixDifference(drawData.projTransforms[proj.transformsIndex], drawData.projTransforms[targetDrawCall.sceneEffectsTransformsIndex]) < 1e-4f))
++                    {
++                        worldOpen = true;
++                    }
 +                }
 +            }
-+            else if (drewPerspective && (targetDrawCall.sceneEffectsAfter < 0)) {
++            else if (worldOpen) {
 +                checkRasterScene(rasterScene);
-+                targetDrawCall.sceneEffectsAfter = int32_t(targetDrawCall.rasterScenes.size());
++                worldEnd = int32_t(targetDrawCall.rasterScenes.size());
++                worldOpen = false;
 +            }
 +
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1832,18 @@ namespace RT64 {
+@@ -1747,6 +1844,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -726,7 +738,7 @@ index 9fae0d4..1b4dfe7 100644
 +                    // no depth write, not a decal) made of several triangles; the shader keeps only flat
 +                    // surfaces lying over something further down.
 +                    const interop::OtherMode om = call.shaderDesc.otherMode;
-+                    if ((proj.type == Projection::Type::Perspective) && fbPair.depthWrite && (targetDrawCall.sceneEffectsAfter < 0) &&
++                    if ((proj.type == Projection::Type::Perspective) && fbPair.depthWrite && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        (call.callDesc.triangleCount >= 4) && om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) &&
 +                        (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om))
@@ -736,13 +748,14 @@ index 9fae0d4..1b4dfe7 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1855,9 @@ namespace RT64 {
+@@ -1758,6 +1867,10 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
-+        if (drewPerspective && (targetDrawCall.sceneEffectsAfter < 0)) {
-+            targetDrawCall.sceneEffectsAfter = int32_t(targetDrawCall.rasterScenes.size());
++        if (worldOpen) {
++            worldEnd = int32_t(targetDrawCall.rasterScenes.size());
 +        }
++        targetDrawCall.sceneEffectsAfter = worldEnd;
      }
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {

@@ -1139,3 +1139,13 @@
 - Look for: Going in, the tunnel is darker for a moment and opens up over a few seconds. Coming out, the daylight glares for a moment and settles in about half a second. No glare after a fade or door. Out in the open with nothing changing it should look close to Off.
 - Status: waiting for L
 
+## T107 Glow around Bottles takes the effects (from your 09:15 list)
+- Asked: 2026-10-14 11:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Go to Bottles' ghost by his house in Spiral Mountain (where your photo was taken)
+  2. Graphics: Fog 50, Bloom 50; then photo mode (F10) with Depth of field 40 and a filter, as in your photo
+- Look for: The glow and Bottles now get the same fog, bloom and depth of field as the scenery around them (a blurred glow when the focus is elsewhere). The HUD still gets none of it. Tell me if anything else in the world now looks wrong, as the effects are now applied after any later 3D drawing with the world's camera, not before it.
+- Status: waiting for L
+
