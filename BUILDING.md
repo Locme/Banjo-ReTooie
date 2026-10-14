@@ -19,13 +19,36 @@ The easy path is to double-click `build.bat`. It finds Visual Studio and the
 Clang tools, fetches the submodules and builds. It stops with a message if
 something is missing.
 
+There are two Windows builds, each in its own `Release` subfolder:
+
+| Build | `build.bat` argument | CMake option | Folder |
+| --- | --- | --- | --- |
+| Any 64-bit PC, 2008 and up (the default) | `compatible` | `-DTOOIE_CPU=compatible` | `Release\Any 64-bit PC (2008 and up)` |
+| Optimized for newer CPUs, 2013 and up (AVX2, will not start on older CPUs) | `modern` | `-DTOOIE_CPU=modern` | `Release\Optimized for newer CPUs (2013 and up)` |
+
+`build.bat` alone makes the first one; `build.bat modern` makes the second. Each
+has its own build folder (`build-cmake-compatible`, `build-cmake-modern`), so
+building one does not touch the other.
+
+To update from GitHub and build, use `update_and_build.bat` (both builds),
+`update_and_build_any_pc_2008.bat` (only the 2008 and up build) or
+`update_and_build_newer_cpu_2013.bat` (only the 2013 and up build). If the new
+code does not build, the game that failed is left as it was and the output is
+saved in `build-log.txt`.
+
+Saves, settings and mods used to sit directly in `Release\`. The first time a
+build fills a new folder, it copies the saves, the settings files, `mods` and
+`save_backups` from `Release\` into it if the folder does not have them yet. It
+never moves or deletes the old files. `build-cmake` from older versions is no
+longer used and can be deleted.
+
 To build by hand, open an "x64 Native Tools Command Prompt for VS 2022" (or
 the version you have) and run:
 
 ```bat
 git clone --recursive https://github.com/Locme/Banjo-Tooie-N64-Recomp.git
 cd Banjo-Tooie-N64-Recomp
-cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions"
+cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTOOIE_CPU=compatible -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions"
 cmake --build build-cmake --target BanjoTooieN64Recomp
 ```
 
@@ -33,11 +56,12 @@ If you use a normal Command Prompt instead, replace both `clang-cl` names with
 the full path, `"C:\Program Files\Microsoft Visual Studio\2022\<edition>\VC\Tools\Llvm\x64\bin\clang-cl.exe"`
 (adjust the path to your install).
 
-`build.bat` puts the finished game in the `Release` folder: the exe, its DLLs,
-`assets\` and `recompcontrollerdb.txt`. Run `Release\BanjoTooieN64Recomp.exe`.
+`build.bat` puts the finished game in its `Release` subfolder (see the table
+above): the exe, its DLLs, `assets\`, `recompcontrollerdb.txt` and
+`built_from.txt`. Run `BanjoTooieN64Recomp.exe` from there.
 If you build by hand, the program is `build-cmake\BanjoTooieN64Recomp.exe`;
 run it from a folder that holds `assets\` and `recompcontrollerdb.txt` (copy
-them from the repository, or run from `Release` after `build.bat`).
+them from the repository, or run from a `Release` subfolder after `build.bat`).
 
 ### Troubleshooting
 

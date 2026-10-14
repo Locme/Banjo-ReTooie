@@ -821,3 +821,14 @@
   2. Dive in the Spiral Mountain pool, then swim in Jolly Roger's Lagoon and Atlantis
 - Look for: The 3D turns light blue with a blue haze in the distance while under water, and goes back when you surface. Does it switch on and off at the right moments (for example with the camera above the water while Banjo is under)? The HUD should stay as it is.
 - Status: waiting for L
+
+## T78 The two Windows builds and the three update scripts
+- Asked: 2026-10-14 05:50 UTC
+- Build: main, after this change
+- Steps:
+  1. Double-click update_and_build_any_pc_2008.bat. When it ends, open Release\Any 64-bit PC (2008 and up) and start the game there
+  2. Double-click update_and_build_newer_cpu_2013.bat. When it ends, open Release\Optimized for newer CPUs (2013 and up) and start the game there
+  3. Double-click update_and_build.bat (builds both)
+  4. Check that your saves and settings are in both new folders, and that the files in Release itself are still there
+- Look for: Does each script finish with a message that names the folder? Are your save and settings in both new folders? Is the second one faster, and does it start on your PC? Anything left in Release that vanished? I could only check the scripts for typos here; none of them has been run on Windows.
+- Status: waiting for L

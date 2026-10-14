@@ -1,7 +1,7 @@
 # Reporting a crash or a freeze
 
 When the game crashes or freezes, send the logs from the folder that holds the
-exe you ran. For a local build from `build.bat` that is `Release\`.
+exe you ran. For a local build from `build.bat` that is the folder under `Release\` you ran it from (`Any 64-bit PC (2008 and up)` or `Optimized for newer CPUs (2013 and up)`).
 
 1. Open the folder with `BanjoTooieN64Recomp.exe`, then open `logs\`.
 2. Drag these files into the thread:
@@ -15,7 +15,7 @@ exe you ran. For a local build from `build.bat` that is `Release\`.
    - `hangs.log`: freezes of 5 seconds or more, written by the watchdog.
    - the newest `crash_*.dmp` file, if there is one. The game keeps only the
      newest 5 dumps (about 40 MB each) and deletes older ones at start.
-3. Keep `Release\BanjoTooieN64Recomp.pdb` next to the exe. Without it, crash
+3. Keep `BanjoTooieN64Recomp.pdb` next to the exe. Without it, crash
    logs show addresses instead of function names.
 
 Only the files in `logs\` and the newest `.dmp` are needed. Nothing else in the

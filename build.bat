@@ -1,8 +1,35 @@
 @echo off
 rem One-click Windows build. Needs Visual Studio 2022 or newer with the C++ workload and
 rem "C++ Clang tools for Windows", and Git. See BUILDING.md.
+rem
+rem   build.bat                 any 64-bit PC from 2008 and up   (same as "compatible")
+rem   build.bat compatible      Release\Any 64-bit PC (2008 and up)
+rem   build.bat modern          Release\Optimized for newer CPUs (2013 and up)
+rem
+rem "modern" is built for AVX2 CPUs (Intel Haswell and AMD Excavator, 2013 and up) and will not
+rem start on older ones. Each build has its own folder (build-cmake-compatible, build-cmake-modern),
+rem so building one never throws away the other.
 setlocal
 cd /d "%~dp0"
+
+set "VARIANT=%~1"
+if "%VARIANT%"=="" set "VARIANT=compatible"
+if /i "%VARIANT%"=="compatible" goto :set_compatible
+if /i "%VARIANT%"=="modern" goto :set_modern
+echo Unknown build "%VARIANT%". Use "compatible" or "modern".
+goto :fail
+
+:set_compatible
+set "VARIANT=compatible"
+set "OUT=Release\Any 64-bit PC (2008 and up)"
+goto :variant_ok
+
+:set_modern
+set "VARIANT=modern"
+set "OUT=Release\Optimized for newer CPUs (2013 and up)"
+
+:variant_ok
+set "BUILD=build-cmake-%VARIANT%"
 
 set VSWHERE="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if not exist %VSWHERE% (
@@ -36,29 +63,46 @@ rem Use forward slashes so CMake takes the path as is.
 set "CLANG_CL=%CLANG_CL:\=/%"
 
 rem A cache from an earlier failed configure keeps the old compiler setting.
-if exist build-cmake\CMakeCache.txt (
-    findstr /c:"%CLANG_CL%" build-cmake\CMakeCache.txt >nul || (
-        echo Clearing the old CMake cache in build-cmake.
-        del /q build-cmake\CMakeCache.txt
-        rmdir /s /q build-cmake\CMakeFiles 2>nul
+if exist "%BUILD%\CMakeCache.txt" (
+    findstr /c:"%CLANG_CL%" "%BUILD%\CMakeCache.txt" >nul || (
+        echo Clearing the old CMake cache in %BUILD%.
+        del /q "%BUILD%\CMakeCache.txt"
+        rmdir /s /q "%BUILD%\CMakeFiles" 2>nul
     )
 )
 
 git submodule update --init --recursive || goto :fail
 
-cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_COMPILER="%CLANG_CL%" -DCMAKE_CXX_COMPILER="%CLANG_CL%" -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions" || goto :fail
-cmake --build build-cmake --target BanjoTooieN64Recomp || goto :fail
+echo Building: %VARIANT%
+cmake -S . -B "%BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DTOOIE_CPU=%VARIANT% -DCMAKE_C_COMPILER="%CLANG_CL%" -DCMAKE_CXX_COMPILER="%CLANG_CL%" -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions" || goto :fail
+cmake --build "%BUILD%" --target BanjoTooieN64Recomp || goto :fail
 
-rem Gather everything the game needs to run into the Release folder.
-if not exist Release mkdir Release
-copy /y build-cmake\BanjoTooieN64Recomp.exe Release >nul || goto :fail
-copy /y build-cmake\*.dll Release >nul || goto :fail
-if exist build-cmake\BanjoTooieN64Recomp.pdb copy /y build-cmake\BanjoTooieN64Recomp.pdb Release >nul
-copy /y recompcontrollerdb.txt Release >nul || goto :fail
-xcopy /e /i /y /q assets Release\assets >nul || goto :fail
+rem Gather everything the game needs to run into its Release folder.
+if not exist "%OUT%" mkdir "%OUT%"
+copy /y "%BUILD%\BanjoTooieN64Recomp.exe" "%OUT%" >nul || goto :fail
+copy /y "%BUILD%\*.dll" "%OUT%" >nul || goto :fail
+if exist "%BUILD%\BanjoTooieN64Recomp.pdb" copy /y "%BUILD%\BanjoTooieN64Recomp.pdb" "%OUT%" >nul
+copy /y recompcontrollerdb.txt "%OUT%" >nul || goto :fail
+xcopy /e /i /y /q assets "%OUT%\assets" >nul || goto :fail
+git rev-parse --short HEAD > "%OUT%\built_from.txt" 2>nul
+
+call :migrate
 echo.
-echo Built BanjoTooieN64Recomp.exe in %CD%\Release
+echo Built BanjoTooieN64Recomp.exe in:
+echo   %CD%\%OUT%
 if not defined NOPAUSE pause
+exit /b 0
+
+rem Saves, settings and mods used to sit straight in Release\. Copy them (never move or delete)
+rem into this build's folder, only what it does not have yet, so the old files stay where they were.
+:migrate
+if not exist "Release\" exit /b 0
+for %%f in ("Release\*.json") do if not exist "%OUT%\%%~nxf" copy "%%f" "%OUT%\" >nul
+for %%f in (portable.txt migrated_from.txt) do if exist "Release\%%f" if not exist "%OUT%\%%f" copy "Release\%%f" "%OUT%\" >nul
+for %%d in (saves save_backups mods mod_config) do if exist "Release\%%d\" robocopy "Release\%%d" "%OUT%\%%d" /e /xc /xn /xo /njh /njs /ndl /nfl /np >nul
+echo.
+echo Your saves, settings and mods from the old Release folder were copied here if this
+echo folder did not have them yet. The old files are still in Release, untouched.
 exit /b 0
 
 :fail

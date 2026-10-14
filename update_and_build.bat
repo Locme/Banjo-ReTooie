@@ -1,20 +1,34 @@
 @echo off
-rem Pull the latest main (with submodules), then build the Windows version.
+rem Pull the latest main (with submodules), then build the Windows versions.
+rem
+rem   update_and_build.bat                      both builds (the two wrappers below pick one)
+rem   update_and_build_any_pc_2008.bat          only Release\Any 64-bit PC (2008 and up)
+rem   update_and_build_newer_cpu_2013.bat       only Release\Optimized for newer CPUs (2013 and up)
+rem
 rem Same toolchain as the GitHub Actions build. Needs Git and Visual Studio 2022
 rem with the C++ workload and "C++ Clang tools for Windows". See BUILDING.md.
 rem
 rem It repairs what usually breaks a build by itself: half-applied submodule
 rem patches, a stale build folder and an update that cannot fast-forward. If the
-rem new code itself does not build, the game in Release\ is left as it was and
+rem new code itself does not build, the games in Release\ are left as they were and
 rem the full output is saved in build-log.txt to send in.
 setlocal
+
+rem Which builds to make: compatible, modern or both (the default).
+set "WHICH=both"
+if /i "%~1"=="compatible" set "WHICH=compatible"
+if /i "%~1"=="modern" set "WHICH=modern"
+if /i "%~1"=="--from-copy" (
+    if /i "%~3"=="compatible" set "WHICH=compatible"
+    if /i "%~3"=="modern" set "WHICH=modern"
+)
 
 rem git pull can replace this file while cmd is still reading it, so run from a temporary copy.
 if /i not "%~1"=="--from-copy" (
     rem A fresh name each run: a newer version may start while an older copy is still running.
     for /f %%r in ("%RANDOM%%RANDOM%") do (
         copy /y "%~f0" "%TEMP%\tooie_update_and_build_%%r.bat" >nul
-        call "%TEMP%\tooie_update_and_build_%%r.bat" --from-copy "%~dp0"
+        call "%TEMP%\tooie_update_and_build_%%r.bat" --from-copy "%~dp0" %WHICH%
     )
     exit /b
 )
@@ -54,7 +68,7 @@ rem If the update changed this script, start the new version (the copy running n
 fc /b "%~f0" "%~2update_and_build.bat" >nul 2>&1
 if errorlevel 1 (
     echo update_and_build.bat was updated. Starting the new version...
-    call "%~2update_and_build.bat"
+    call "%~2update_and_build.bat" %WHICH%
     exit /b
 )
 
@@ -65,37 +79,54 @@ git submodule foreach --recursive --quiet "git reset -q --hard && git clean -q -
 call :retry git submodule update --init --recursive --force || goto :fail
 
 set NOPAUSE=1
-call :build
-if not errorlevel 1 goto :done
+if /i "%WHICH%"=="modern" goto :only_modern
 
-echo.
-echo The build failed. Trying once more from a clean build folder...
-if exist build-cmake rmdir /s /q build-cmake
-call :build
-if not errorlevel 1 goto :done
+call :build_variant compatible || goto :failed
+if /i "%WHICH%"=="compatible" goto :done
 
+:only_modern
+call :build_variant modern || goto :failed
+goto :done
+
+:failed
 echo.
 echo The errors, without the warnings around them:
 powershell -NoProfile -Command "Select-String -Path build-log.txt -Pattern 'error:','error [A-Z]+[0-9]+','FAILED:','CMake Error' | Select-Object -First 20 | ForEach-Object { $_.Line }"
 echo.
 echo ============================================================
 echo  The build FAILED twice, so this update has a real error.
-echo  Your game in the Release folder was NOT changed and still works.
+echo  The game that failed to build was NOT changed and still works.
+echo  A build that finished before it, if any, is already updated.
 echo  Send build-log.txt from this folder in the project so it can be fixed.
 echo ============================================================
 pause
 exit /b 1
 
 :done
-git rev-parse --short HEAD > Release\built_from.txt 2>nul
 echo.
-echo Update and build finished.
+echo Update and build finished. The games are in the Release folder:
+if /i not "%WHICH%"=="modern" echo   Release\Any 64-bit PC (2008 and up)
+if /i not "%WHICH%"=="compatible" echo   Release\Optimized for newer CPUs (2013 and up)
+echo Saves, settings and mods from the old Release folder were copied into them, and the old ones are untouched.
 pause
 exit /b 0
 
-rem Runs build.bat, showing its output and saving it to build-log.txt.
+rem Builds one variant (compatible or modern): once, then once more from a clean build folder.
+:build_variant
+set "V=%~1"
+echo.
+echo Building the %V% version...
+call :build %V%
+if not errorlevel 1 exit /b 0
+echo.
+echo The build failed. Trying once more from a clean build folder...
+if exist "build-cmake-%V%" rmdir /s /q "build-cmake-%V%"
+call :build %V%
+exit /b %errorlevel%
+
+rem Runs build.bat for one variant, showing its output and saving it to build-log.txt.
 :build
-powershell -NoProfile -ExecutionPolicy Bypass -Command "cmd /c 'build.bat 2>&1' | Tee-Object -FilePath build-log.txt; exit $LASTEXITCODE"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "cmd /c 'build.bat %~1 2>&1' | Tee-Object -FilePath build-log.txt; exit $LASTEXITCODE"
 exit /b %errorlevel%
 
 rem Runs a git command up to 3 times, for network hiccups.
@@ -111,6 +142,6 @@ exit /b %errorlevel%
 :fail
 echo.
 echo Update FAILED before the build started. The messages above say where.
-echo Your game in the Release folder was not changed.
+echo Your games in the Release folder were not changed.
 pause
 exit /b 1

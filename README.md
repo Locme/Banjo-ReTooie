@@ -29,12 +29,15 @@ for the feature roadmap and [`BUILDING.md`](BUILDING.md) for how to build.
 ## Running
 
 You need your own legally obtained Banjo-Tooie (US) ROM. On Windows, `build.bat`
-(or `update_and_build.bat`) leaves the finished game in the `Release` folder; run
-`Release\BanjoTooieN64Recomp.exe`. The first time you
+(or `update_and_build.bat`) leaves the finished game in a `Release` subfolder:
+`Release\Any 64-bit PC (2008 and up)` works on any 64-bit PC from 2008 on, and
+`Release\Optimized for newer CPUs (2013 and up)` is faster but needs a CPU from
+2013 or newer. See [`BUILDING.md`](BUILDING.md). Run `BanjoTooieN64Recomp.exe` in
+the folder you want. The first time you
 start the game, choose **Start Game** in the launcher and pick the ROM file;
 it is remembered afterwards. To skip the launcher and go straight into the
 game, start the exe with `--game bt`. Settings and saves are kept next to the
-exe (in `Release` after `build.bat`) when that folder is writable; otherwise they
+exe (in its `Release` subfolder after `build.bat`) when that folder is writable; otherwise they
 go to your user profile.
 
 If the game crashes or freezes, see [`notes/reporting-crashes.md`](notes/reporting-crashes.md) for which logs to send.
