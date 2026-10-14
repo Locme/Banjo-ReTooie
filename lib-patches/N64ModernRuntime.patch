@@ -1,3 +1,32 @@
+diff --git a/librecomp/include/librecomp/overlays.hpp b/librecomp/include/librecomp/overlays.hpp
+index 35703bd..7095517 100644
+--- a/librecomp/include/librecomp/overlays.hpp
++++ b/librecomp/include/librecomp/overlays.hpp
+@@ -6,6 +6,8 @@
+ #include <string>
+ #include <unordered_map>
+ #include <span>
++#include <utility>
++#include <vector>
+ #include "sections.h"
+ 
+ namespace recomp {
+@@ -32,6 +34,15 @@ namespace recomp {
+         void read_patch_data(uint8_t* rdram, gpr patch_data_address);
+ 
+         void init_overlays();
++
++        // Banjo-Tooie save states: which overlays are loaded where, so a restored RDRAM finds its functions.
++        struct OverlayState {
++            std::vector<std::pair<int32_t, size_t>> loaded_sections; // RAM address, section table index
++            std::unordered_map<int32_t, recomp_func_t*> func_map;
++            std::vector<int32_t> section_addresses;
++        };
++        void save_overlay_state(OverlayState& state);
++        void load_overlay_state(const OverlayState& state);
+         const std::unordered_map<uint32_t, uint16_t>& get_vrom_to_section_map();
+         uint32_t get_section_ram_addr(uint16_t code_section_index);
+         std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/dp.cpp b/librecomp/src/dp.cpp
 index 97dbd8e..f4b4e13 100644
 --- a/librecomp/src/dp.cpp
@@ -20,6 +49,35 @@ index 97dbd8e..f4b4e13 100644
 +    }
      update_bit(rdp_state, ctx->r4, RDPStatusBit::Flush);
  }
+diff --git a/librecomp/src/overlays.cpp b/librecomp/src/overlays.cpp
+index 8c8e5d1..3599f5a 100644
+--- a/librecomp/src/overlays.cpp
++++ b/librecomp/src/overlays.cpp
+@@ -271,6 +271,24 @@ extern "C" void unload_overlays(int32_t ram_addr, uint32_t size) {
+     }
+ }
+ 
++void recomp::overlays::save_overlay_state(OverlayState& state) {
++    state.loaded_sections.clear();
++    for (const LoadedSection& s : loaded_sections) {
++        state.loaded_sections.emplace_back(s.loaded_ram_addr, s.section_table_index);
++    }
++    state.func_map = func_map;
++    state.section_addresses.assign(section_addresses, section_addresses + sections_info.total_num_sections);
++}
++
++void recomp::overlays::load_overlay_state(const OverlayState& state) {
++    loaded_sections.clear();
++    for (const auto& [ram, index] : state.loaded_sections) {
++        loaded_sections.emplace_back(ram, index);
++    }
++    func_map = state.func_map;
++    std::copy(state.section_addresses.begin(), state.section_addresses.end(), section_addresses);
++}
++
+ void recomp::overlays::init_overlays() {
+     func_map.clear();
+     section_addresses = (int32_t *)calloc(sections_info.total_num_sections, sizeof(int32_t));
 diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
 index 2f22456..005332a 100644
 --- a/ultramodern/include/ultramodern/config.hpp
@@ -45,15 +103,55 @@ index 2f22456..005332a 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..a320746 100644
+index 3b28af3..e7186c6 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
-@@ -79,7 +79,15 @@ void set_main_thread();
+@@ -2,6 +2,8 @@
+ #define __ultramodern_HPP__
+ 
+ #include <thread>
++#include <utility>
++#include <vector>
+ #include <cassert>
+ #include <stdexcept>
+ #include <span>
+@@ -79,7 +81,46 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
 +// Called when the game sets or clears the RDP freeze bit (DPC_STATUS_FREEZE).
 +void set_dp_frozen(bool frozen);
++// Banjo-Tooie save states: waits (up to timeout_ms) until no RSP or display list task is running or
++// queued, so RDRAM can be replaced. Returns false on a timeout.
++bool wait_for_tasks_idle(int timeout_ms);
++
++// Banjo-Tooie save states: every live game thread and where it waits. A snapshot can only be restored
++// while each thread waits where it did when the snapshot was taken, since threads are host threads.
++struct GameThreadState {
++    PTR(OSThread) thread;
++    UltraThreadContext* context;
++    PTR(PTR(OSThread)) queue;
++    bool operator==(const GameThreadState&) const = default;
++};
++std::vector<GameThreadState> get_game_thread_states(RDRAM_ARG1);
++// The RDP freeze state and the display list completions held back by it, read and put back.
++std::pair<bool, int> get_dp_hold_state();
++void set_dp_hold_state(std::pair<bool, int> state);
++// The framebuffers the VI shows now and next, read and put back.
++std::pair<PTR(void), PTR(void)> get_vi_framebuffers();
++void set_vi_framebuffers(std::pair<PTR(void), PTR(void)> framebuffers);
++// Messages from host threads (RSP, RDP, VI, timers) not yet put in their queues, read and put back.
++struct ExternalMessage {
++    PTR(OSMesgQueue) mq;
++    OSMesg mesg;
++    bool jam;
++    bool requeue_if_blocked;
++};
++std::vector<ExternalMessage> get_external_messages();
++void set_external_messages(const std::vector<ExternalMessage>& messages);
++// The head of the queue of threads ready to run, which is kept outside RDRAM, read and put back.
++PTR(OSThread) get_running_queue_head();
++void set_running_queue_head(PTR(OSThread) head);
  uint32_t get_speed_multiplier();
 +// Changes the game speed at runtime (1 = normal). The game clock continues smoothly from its current value.
 +void set_speed_multiplier(uint32_t multiplier);
@@ -65,7 +163,7 @@ index 3b28af3..a320746 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..f192faf 100644
+index 090cc42..895c554 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -190,7 +190,7 @@ void vi_thread_func() {
@@ -89,7 +187,7 @@ index 090cc42..f192faf 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -261,12 +261,35 @@ void sp_complete() {
+@@ -261,12 +261,70 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -100,6 +198,19 @@ index 090cc42..f192faf 100644
 +// freeze bit (Banjo-Tooie) otherwise see the completion too early and lose
 +// track of the frame.
 +static bool dp_frozen = false;
++// RSP and display list tasks sent and not yet finished (save states wait for none).
++static std::atomic_int tasks_in_flight = 0;
++
++bool ultramodern::wait_for_tasks_idle(int timeout_ms) {
++    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
++    while (tasks_in_flight.load() != 0) {
++        if (std::chrono::steady_clock::now() >= deadline) {
++            return false;
++        }
++        std::this_thread::sleep_for(std::chrono::microseconds(200));
++    }
++    return true;
++}
 +static int dp_completions_held = 0;
 +
  void dp_complete() {
@@ -112,6 +223,28 @@ index 090cc42..f192faf 100644
      ultramodern::enqueue_external_message(events_context.dp.mq, events_context.dp.msg, false, true);
  }
  
++std::pair<bool, int> ultramodern::get_dp_hold_state() {
++    std::lock_guard lock{ events_context.message_mutex };
++    return { dp_frozen, dp_completions_held };
++}
++
++void ultramodern::set_dp_hold_state(std::pair<bool, int> state) {
++    std::lock_guard lock{ events_context.message_mutex };
++    dp_frozen = state.first;
++    dp_completions_held = state.second;
++}
++
++std::pair<PTR(void), PTR(void)> ultramodern::get_vi_framebuffers() {
++    std::lock_guard lock{ events_context.message_mutex };
++    return { events_context.vi.get_cur_state()->framebuffer, events_context.vi.get_next_state()->framebuffer };
++}
++
++void ultramodern::set_vi_framebuffers(std::pair<PTR(void), PTR(void)> framebuffers) {
++    std::lock_guard lock{ events_context.message_mutex };
++    events_context.vi.get_cur_state()->framebuffer = framebuffers.first;
++    events_context.vi.get_next_state()->framebuffer = framebuffers.second;
++}
++
 +void ultramodern::set_dp_frozen(bool frozen) {
 +    std::lock_guard lock{ events_context.message_mutex };
 +    dp_frozen = frozen;
@@ -125,11 +258,82 @@ index 090cc42..f192faf 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
+@@ -290,6 +348,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+ 
+         // Tell the game that the RSP has completed
+         sp_complete();
++        tasks_in_flight--;
+     }
+ }
+ 
+@@ -374,6 +433,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+                 [[maybe_unused]] auto renderer_end = std::chrono::high_resolution_clock::now();
+ 
+                 dp_complete();
++                tasks_in_flight--;
+                 // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
+                 ultramodern::extensions::on_displaylist_parsed(displaylist);
+                 ultramodern::extensions::on_displaylist_completed(displaylist);
+@@ -561,6 +621,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+     OSTask* task = TO_PTR(OSTask, task_);
+ 
+     // Send gfx tasks to the graphics action queue
++    tasks_in_flight++;
+     if (task->t.type == M_GFXTASK) {
+         events_context.action_queue.enqueue(SpTaskAction{ *task });
+     }
+diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
+index 961de3d..f92de2b 100644
+--- a/ultramodern/src/mesgqueue.cpp
++++ b/ultramodern/src/mesgqueue.cpp
+@@ -20,6 +20,27 @@ void ultramodern::enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool
+ 
+ bool do_send(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, bool jam, bool block);
+ 
++std::vector<ultramodern::ExternalMessage> ultramodern::get_external_messages() {
++    std::vector<ExternalMessage> messages;
++    QueuedMessage m;
++    while (external_messages.try_dequeue(m)) {
++        messages.push_back({ m.mq, m.mesg, m.jam, m.requeue_if_blocked });
++    }
++    for (const ExternalMessage& e : messages) {
++        external_messages.enqueue({ e.mq, e.mesg, e.jam, e.requeue_if_blocked });
++    }
++    return messages;
++}
++
++void ultramodern::set_external_messages(const std::vector<ExternalMessage>& messages) {
++    QueuedMessage m;
++    while (external_messages.try_dequeue(m)) {
++    }
++    for (const ExternalMessage& e : messages) {
++        external_messages.enqueue({ e.mq, e.mesg, e.jam, e.requeue_if_blocked });
++    }
++}
++
+ void dequeue_external_messages(RDRAM_ARG1) {
+     QueuedMessage to_send;
+     std::vector<QueuedMessage> requeued_messages{};
 diff --git a/ultramodern/src/threadqueue.cpp b/ultramodern/src/threadqueue.cpp
-index f9c0fa1..7b10a73 100644
+index f9c0fa1..2b838bd 100644
 --- a/ultramodern/src/threadqueue.cpp
 +++ b/ultramodern/src/threadqueue.cpp
-@@ -15,6 +15,9 @@ void ultramodern::thread_queue_insert(RDRAM_ARG PTR(PTR(OSThread)) queue_, PTR(O
+@@ -4,6 +4,14 @@
+ 
+ static PTR(OSThread) running_queue_impl = NULLPTR;
+ 
++PTR(OSThread) ultramodern::get_running_queue_head() {
++    return running_queue_impl;
++}
++
++void ultramodern::set_running_queue_head(PTR(OSThread) head) {
++    running_queue_impl = head;
++}
++
+ static PTR(OSThread)* queue_to_ptr(RDRAM_ARG PTR(PTR(OSThread)) queue) {
+     if (queue == ultramodern::running_queue) {
+         return &running_queue_impl;
+@@ -15,6 +23,9 @@ void ultramodern::thread_queue_insert(RDRAM_ARG PTR(PTR(OSThread)) queue_, PTR(O
      PTR(OSThread)* cur = queue_to_ptr(PASS_RDRAM queue_);
      OSThread* toadd = TO_PTR(OSThread, toadd_); 
      debug_printf("[Thread Queue] Inserting thread %d into queue 0x%08X\n", toadd->id, (uintptr_t)queue_);
@@ -139,7 +343,7 @@ index f9c0fa1..7b10a73 100644
      while (*cur && TO_PTR(OSThread, *cur)->priority > toadd->priority) {
          cur = &TO_PTR(OSThread, *cur)->next;
      }
-@@ -43,14 +46,13 @@ PTR(OSThread) ultramodern::thread_queue_pop(RDRAM_ARG PTR(PTR(OSThread)) queue_)
+@@ -43,14 +54,13 @@ PTR(OSThread) ultramodern::thread_queue_pop(RDRAM_ARG PTR(PTR(OSThread)) queue_)
  bool ultramodern::thread_queue_remove(RDRAM_ARG PTR(PTR(OSThread)) queue_, PTR(OSThread) t_) {
      debug_printf("[Thread Queue] Removing thread %d from queue 0x%08X\n", TO_PTR(OSThread, t_)->id, (uintptr_t)queue_);
  
@@ -159,6 +363,57 @@ index f9c0fa1..7b10a73 100644
      }
  
      return false;
+diff --git a/ultramodern/src/threads.cpp b/ultramodern/src/threads.cpp
+index 812c556..b64dd16 100644
+--- a/ultramodern/src/threads.cpp
++++ b/ultramodern/src/threads.cpp
+@@ -2,6 +2,9 @@
+ #include <thread>
+ #include <cassert>
+ #include <string>
++#include <algorithm>
++#include <mutex>
++#include <vector>
+ 
+ #include "ultramodern/ultra64.h"
+ #include "ultramodern/ultramodern.hpp"
+@@ -34,6 +37,23 @@ thread_local bool is_main_thread = false;
+ thread_local bool is_game_thread = false;
+ thread_local PTR(OSThread) thread_self = NULLPTR;
+ 
++// Every thread osCreateThread has made (Banjo-Tooie save states).
++static std::mutex created_threads_mutex;
++static std::vector<PTR(OSThread)> created_threads;
++
++std::vector<ultramodern::GameThreadState> ultramodern::get_game_thread_states(RDRAM_ARG1) {
++    std::lock_guard lock{ created_threads_mutex };
++    std::vector<GameThreadState> states;
++    for (PTR(OSThread) t_ : created_threads) {
++        OSThread* t = TO_PTR(OSThread, t_);
++        if (t->context == nullptr) {
++            continue;
++        }
++        states.push_back({ t_, t->context, t->queue });
++    }
++    return states;
++}
++
+ void ultramodern::set_main_thread() {
+     ::is_game_thread = true;
+     is_main_thread = true;
+@@ -259,6 +279,12 @@ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_f
+     // Pass the context as an argument to the thread function to ensure that it can't get cleared before the thread captures its value.
+     UltraThreadContext* context = new UltraThreadContext{};
+     t->context = context;
++    {
++        std::lock_guard lock{ created_threads_mutex };
++        if (std::find(created_threads.begin(), created_threads.end(), t_) == created_threads.end()) {
++            created_threads.push_back(t_);
++        }
++    }
+     context->host_thread = std::thread{_thread_func, PASS_RDRAM t_, entrypoint, arg, t->context};
+ 
+     // Wait until the thread is initialized to indicate that it's ready to be started.
 diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
 index 276301b..36885c1 100644
 --- a/ultramodern/src/timer.cpp

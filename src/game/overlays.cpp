@@ -43,6 +43,17 @@ namespace {
 
     // Code address of each currently mapped overlay, by overlay index.
     std::unordered_map<uint32_t, int32_t> mapped_overlays;
+}
+
+std::unordered_map<uint32_t, int32_t> tooie::mapped_overlays() {
+    return ::mapped_overlays;
+}
+
+void tooie::set_mapped_overlays(const std::unordered_map<uint32_t, int32_t>& overlays) {
+    ::mapped_overlays = overlays;
+}
+
+namespace {
 
     void unmap_overlay(uint32_t overlay_index) {
         auto it = mapped_overlays.find(overlay_index);

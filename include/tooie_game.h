@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <filesystem>
+#include <unordered_map>
 
 #include "recomp.h"
 
@@ -20,6 +21,9 @@ namespace tooie {
 
     // Overlay bookkeeping (overlays.cpp). The game numbers overlays from 1.
     bool overlay_section(uint32_t overlay_index, uint32_t& rom_addr, uint32_t& size);
+    // Where each overlay's code is mapped, by overlay index (save states keep and restore it).
+    std::unordered_map<uint32_t, int32_t> mapped_overlays();
+    void set_mapped_overlays(const std::unordered_map<uint32_t, int32_t>& overlays);
 
     // How much wider than 4:3 RT64 draws the picture: 1 unless Aspect Ratio is
     // Expand and the window is wider than 4:3 (widescreen.cpp).

@@ -266,8 +266,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ## Long
 
 ### 4.14 Save states
-- [ ] Done
+- [x] Done (T63)
 - [ ] Approved by L
+- 2026-10-14: Insert saves, Home loads (Controls > Hotkeys > Save State / Load State). One slot in memory, in a level. A save copies all 8 MB of RDRAM, the game thread's registers and the runtime state that goes with it (overlay tables, RDP freeze, VI framebuffers, pending host messages, ready-thread queue head; lib-patches/N64ModernRuntime.patch) at the start of the game's frame update, after any RSP or display list task finishes. A load needs every game thread waiting on the same queue as at the save and the same stack; it retries for up to 300 frames. A load from another area warps back there first: loading straight across areas hung the game headless. Checked headless: 6 loads in a row in Spiral Mountain, and a load from Mayahem Temple, with play carrying on after. Not checked: sound after a load.
 
 ### 4.35 Shader effects suite (AO, GI, fog, reflections, light shafts, sharpening, colour grading)
 - [ ] Done

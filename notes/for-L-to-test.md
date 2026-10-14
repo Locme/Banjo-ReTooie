@@ -641,3 +641,15 @@
   3. Outside the frame should be darkened, with rule-of-thirds lines inside it. Press A for a screenshot
 - Look for: The saved screenshot holds only the frame (no dark sides) and no grid lines. Leaving photo mode removes the frame and grid.
 - Status: waiting for L
+
+## T63 Save states
+- Asked: 2026-10-14 01:50 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.14
+- Steps:
+  1. In a level, press Insert. "State saved" shows
+  2. Run around, lose some health or collect something, then press Home. "State loaded" shows and you're back where you saved
+  3. Press Home a few more times in a row
+  4. Go into another area and press Home: the game should take you back to the saved area, then load
+- Look for: Does the music and sound carry on normally after a load? Any freeze or crash? The keys can be changed under Controls > Hotkeys. The slot is lost when the game closes.
+- Status: waiting for L

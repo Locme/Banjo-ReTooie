@@ -4,6 +4,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_hide_hud.h"
 #include "tooie_photo_mode.h"
+#include "tooie_save_state.h"
 #include "tooie_level_warp.h"
 #include "tooie_screenshot.h"
 #include "tooie_speedup.h"
@@ -27,5 +28,6 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* ctx) {
     tooie::level_warp::start();
     tooie::hide_hud::start();
     tooie::photo_mode::start();
+    tooie::save_state::start();
     tooie::frame_overlay::start();
 }

@@ -9,6 +9,7 @@
 #include "tooie_control_scheme.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
+#include "tooie_save_state.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
@@ -106,6 +107,7 @@ void tooie::init_config() {
     tooie::speedup::register_input();
     tooie::input::register_input();
     tooie::photo_mode::register_input();
+    tooie::save_state::register_input();
 
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {

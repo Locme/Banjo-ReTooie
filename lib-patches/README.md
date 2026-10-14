@@ -15,6 +15,14 @@ so the submodules stay pinned to their upstream commits.
   unfreezes it. The host renders at once, so the runtime now holds the "RDP
   done" message until the freeze is cleared. Without this the game lost track
   of its frames and stopped on the first one.
+* **Save state support** (`librecomp/src/overlays.cpp`, `ultramodern/src/events.cpp`,
+  `ultramodern/src/threads.cpp`, `ultramodern/src/threadqueue.cpp`, `ultramodern/src/mesgqueue.cpp`):
+  ways to read and put back the runtime state that goes with RDRAM, for save states
+  (handoff 4.14, `src/gameplay/save_state.cpp`): the loaded overlay table, the RDP
+  freeze and its held completions, the VI framebuffers, the messages host threads
+  have sent but the game hasn't taken, the head of the ready-thread queue, and a list
+  of the game threads with the queue each waits on. `wait_for_tasks_idle` waits until
+  no RSP or display list task is running, since those read and write RDRAM.
 
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
@@ -56,6 +64,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   sends every pad to every N64 controller. `set_split_controllers(true)` makes N64
   controller N read only the Nth pad, and keeps the keyboard on controller 1. Used by
   Bottles' Revenge (handoff 4.77) so player 2's pad drives controller 2.
+* **Save State and Load State keys** (`recompinput/include/recompinput/input_types.h`): two more
+  game hotkeys, `SAVE_STATE` (Insert) and `LOAD_STATE` (Home), named by `src/gameplay/save_state.cpp`.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
