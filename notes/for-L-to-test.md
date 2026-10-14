@@ -1489,3 +1489,14 @@
   4. Screenshot (F12) each broken one and say which view it is
 - Look for: Each view shows only that one effect (at your setting, or a default strength if it's off), and every other effect is gone. Report what looks wrong in each
 - Status: waiting for L
+
+## T141 Talking heads and blinking at 30 a second above 30 FPS
+- Asked: 2026-10-14 21:30 UTC
+- Build: your local build of main
+- Commits: 1661ffb (talking heads), 0242e1f (blinking)
+- Steps:
+  1. Graphics: Game Frame Rate Unlocked (Experimental), then 60 FPS
+  2. Talk to a character so the talking-head box opens; watch the mouth and the blinking in the portrait
+  3. Watch a character's eyes in the world for a while (Bottles, Jamjars, Mumbo, villagers)
+- Look for: Do the portrait mouths and blinks now move at the same speed as with Original? Do characters in the world blink as often and as fast as with Original? If one character still blinks too fast, tell me which one: it uses its own blink code.
+- Status: waiting for L
