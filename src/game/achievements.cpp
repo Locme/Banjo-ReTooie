@@ -10,14 +10,17 @@
 // nothing is awarded until the game is restarted (flags a cheat set would otherwise count later).
 // A save that already has the progress unlocks the achievement when it is loaded.
 //
-// Achievements whose XBLA rule counts events (enemies beaten with given attacks, octopi frozen, minigame
-// targets shot) are listed but not tracked yet.
+// Achievements whose XBLA rule counts events are counted here: targets in the shooting games (from
+// their HUD counters), enemies beaten with given attacks and Inky octopi frozen (from hooks in
+// banjotooie.us.toml). Counts are kept with the unlocks and shown in the tab.
 
 #include <cstdio>
 #include <cstdlib>
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <atomic>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -67,10 +70,10 @@ namespace {
             {0x1E1}},                       // FLAG_1E1_PHYSICAL_CCL_RainbowSpawned
         {"all_beaten_up", "All Beaten Up", 20,
             "Kill any 20 bad guys with any of these attacks: Mumbo's wand, your Pants Attack or the Daddy T-Rex.",
-            {}},
+            {}, {}, {}, true},             // counted by tooie_ach_enemy_hit
         {"calamari_bonanza", "Calamari Bonanza", 20,
             "Don't be suckered! You'll have to freeze every single octopi.",
-            {}},
+            {}, {}, {}, true},             // counted by tooie_ach_octopus_frozen
         {"hatch_the_future", "Hatch the Future", 20,
             "Separate our heroes for the first time, or hatch a Banjo-Kazooie Stop 'N' Swop Egg with Heggy.",
             {0x4F5, 0x3E4, 0x3E6, 0x3E7}},  // FLAG_4F5_FTT_SPLIT_UP, Stop 'n' Swop eggs hatched (blue, pink, yellow)
@@ -103,9 +106,25 @@ namespace {
 
     const std::string tab_id = "achievements";
 
-    // Shoot Em Up! needs 20 targets over any number of games; the running count is kept with the unlocks.
-    constexpr int shoot_goal = 20;
-    const char* const shoot_count_key = "shoot_em_up_count";
+    // Counted achievements: the running count is kept with the unlocks under "<id>_count".
+    struct Counted {
+        const char* id;
+        int goal;
+    };
+    const Counted counted_list[] = {
+        {"shoot_em_up", 20},       // targets in the shooting games, over any number of games
+        {"all_beaten_up", 20},     // enemies beaten with Mumbo's wand, the washing machine or Daddy T-Rex
+        {"calamari_bonanza", 4},   // the four Inky octopi in Atlantis, each frozen once
+    };
+
+    const Counted* counted_of(const char* id) {
+        for (const Counted& c : counted_list) {
+            if (std::string(c.id) == id) {
+                return &c;
+            }
+        }
+        return nullptr;
+    }
 
     std::mutex unlocked_mutex;
     // Achievement id -> when it was unlocked (local time, "YYYY-MM-DD HH:MM").
@@ -216,10 +235,10 @@ namespace {
             std::string status;
             if (done.contains(a.id) && done[a.id].is_string()) {
                 status = "Unlocked " + done[a.id].get<std::string>();
-            } else if (a.counted) {
-                const int count = done.contains(shoot_count_key) && done[shoot_count_key].is_number_integer()
-                    ? done[shoot_count_key].get<int>() : 0;
-                status = "Locked (" + std::to_string(count) + " of " + std::to_string(shoot_goal) + ")";
+            } else if (const Counted* c = a.counted ? counted_of(a.id) : nullptr) {
+                const std::string key = std::string(a.id) + "_count";
+                const int count = done.contains(key) && done[key].is_number_integer() ? done[key].get<int>() : 0;
+                status = "Locked (" + std::to_string(count) + " of " + std::to_string(c->goal) + ")";
             } else if (!a.tracked()) {
                 status = "Locked (not tracked yet)";
             } else {
@@ -321,7 +340,63 @@ namespace {
     }
 
     int frame_counter = 0;
-    bool cheats_seen = false;
+    std::atomic<bool> cheats_seen = false;
+
+    bool counting_allowed() {
+        if (tooie::cheats::enabled()) {
+            cheats_seen = true;
+        }
+        return !cheats_seen && loaded && tooie::debug::can_warp();
+    }
+
+    void unlock_message(const Achievement& a) {
+        tooie::toast::show(std::string("Achievement unlocked: ") + a.name + " (" + std::to_string(a.points) + " G)");
+    }
+
+    // Adds one to a counted achievement, unlocking it at its goal. Pass a key to count each thing once
+    // (kept under "<id>_seen").
+    void add_count(const char* id, const std::string& once_key = "") {
+        const Counted* c = counted_of(id);
+        if (c == nullptr) {
+            return;
+        }
+        const std::string count_key = std::string(id) + "_count";
+        bool earned = false;
+        int count = 0;
+        {
+            std::lock_guard lock{unlocked_mutex};
+            if (!once_key.empty()) {
+                nlohmann::json& seen = unlocked[std::string(id) + "_seen"];
+                if (!seen.is_array()) {
+                    seen = nlohmann::json::array();
+                }
+                for (const auto& k : seen) {
+                    if (k == once_key) {
+                        return;
+                    }
+                }
+                seen.push_back(once_key);
+            }
+            count = unlocked.value(count_key, 0) + 1;
+            unlocked[count_key] = count;
+            if (count >= c->goal && !unlocked.contains(id)) {
+                unlocked[id] = now_text();
+                earned = true;
+            }
+            save();
+        }
+        if (log_on()) {
+            std::printf("[achievements] %s %d of %d%s%s\n", id, count, c->goal, once_key.empty() ? "" : " ", once_key.c_str());
+            std::fflush(stdout);
+        }
+        if (earned) {
+            for (const Achievement& a : achievement_list) {
+                if (std::string(a.id) == id) {
+                    unlock_message(a);
+                }
+            }
+        }
+    }
 }
 
 void tooie::achievements::create_tab() {
@@ -330,30 +405,9 @@ void tooie::achievements::create_tab() {
 }
 
 void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
-    if (tooie::cheats::enabled()) {
-        cheats_seen = true;
-    }
-    if (!cheats_seen && loaded && tooie::debug::can_warp()) {
+    if (counting_allowed()) {
         if (shooting_tick(rdram) > 0) {
-            bool earned = false;
-            int count = 0;
-            {
-                std::lock_guard lock{unlocked_mutex};
-                count = unlocked.value(shoot_count_key, 0) + 1;
-                unlocked[shoot_count_key] = count;
-                if (count >= shoot_goal && !unlocked.contains("shoot_em_up")) {
-                    unlocked["shoot_em_up"] = now_text();
-                    earned = true;
-                }
-                save();
-            }
-            if (log_on()) {
-                std::printf("[achievements] target shot, %d so far\n", count);
-                std::fflush(stdout);
-            }
-            if (earned) {
-                tooie::toast::show("Achievement unlocked: Shoot Em Up! (15 G)");
-            }
+            add_count("shoot_em_up");
         }
     }
 
@@ -402,10 +456,100 @@ void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
             unlocked[a.id] = now_text();
             save();
         }
-        tooie::toast::show(std::string("Achievement unlocked: ") + a.name + " (" + std::to_string(a.points) + " G)");
+        unlock_message(a);
         if (log_on()) {
             std::printf("[achievements] unlocked %s\n", a.id);
             std::fflush(stdout);
         }
     }
+}
+
+namespace {
+    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
+        return *(uint32_t*)(rdram + (addr - 0x80000000u));
+    }
+    uint16_t read_half(uint8_t* rdram, uint32_t addr) {
+        return *(uint16_t*)(rdram + ((addr - 0x80000000u) ^ 2u));
+    }
+    uint8_t read_byte(uint8_t* rdram, uint32_t addr) {
+        return rdram[(addr - 0x80000000u) ^ 3u];
+    }
+    bool is_ram(uint32_t addr) {
+        return addr >= 0x80000000u && addr < 0x80800000u;
+    }
+
+    // The PlayerState behind an attacker collision object, or 0 when the attacker is not a player.
+    // Marker 0 is the player; its index is the halfword at +0x1A shifted right by 5, and the
+    // PlayerState pointers start at 0x80135490.
+    uint32_t attacking_player(uint8_t* rdram, uint32_t attacker) {
+        if (!is_ram(attacker) || (read_word(rdram, attacker + 0x24) >> 22) != 0) {
+            return 0;
+        }
+        const uint32_t index = read_half(rdram, attacker + 0x1A) >> 5;
+        if (index > 3) {
+            return 0;
+        }
+        const uint32_t player = read_word(rdram, 0x80135490u + 4 * index);
+        return is_ram(player) ? player : 0;
+    }
+
+    // Transformation (+0xA0 -> +0x29) and current state (+0x120 -> +4) of a PlayerState.
+    uint8_t transformation(uint8_t* rdram, uint32_t player) {
+        const uint32_t block = read_word(rdram, player + 0xA0);
+        return is_ram(block) ? read_byte(rdram, block + 0x29) : 0;
+    }
+    uint32_t player_state(uint8_t* rdram, uint32_t player) {
+        const uint32_t block = read_word(rdram, player + 0x120);
+        return is_ram(block) ? read_word(rdram, block + 4) : 0;
+    }
+}
+
+// All Beaten Up: hook in func_80108F08, the hit handler of most enemies, just before it reports the
+// hit (func_800EB210). Kind 2 is a defeat. The hit code's low half is the hit table column: 30 is the
+// washing machine's laundry (the "Pants Attack"), 14 Daddy T-Rex's attack. Mumbo's wand has no
+// column of its own, so a defeat by the player as Mumbo (transformation 0xD) in his attack state
+// (0xF7) counts, and so does any defeat by the player as Daddy T-Rex (transformation 0x13).
+extern "C" void tooie_ach_enemy_hit(uint8_t* rdram, recomp_context* ctx) {
+    if (!counting_allowed()) {
+        return;
+    }
+    const uint32_t sp = (uint32_t)ctx->r29;
+    if (read_word(rdram, sp + 0x8C) != 2) {
+        return;
+    }
+    const uint32_t column = read_word(rdram, sp + 0xA8) & 0xFFFF;
+    bool counts = column == 30 || column == 14;
+    if (!counts) {
+        const uint32_t player = attacking_player(rdram, read_word(rdram, sp + 0xA4));
+        if (player != 0) {
+            const uint8_t form = transformation(rdram, player);
+            counts = form == 0x13 || (form == 0xD && player_state(rdram, player) == 0xF7);
+        }
+    }
+    if (counts) {
+        add_count("all_beaten_up");
+    }
+}
+
+// Calamari Bonanza: hook in func_80800428_choctopus where an Inky octopus that wasn't frozen starts
+// to freeze (an Ice Egg or Submarine Banjo's ping). Each one counts once, known by its map and spot
+// (Inkies don't move).
+extern "C" void tooie_ach_octopus_frozen(uint8_t* rdram, recomp_context* ctx) {
+    if (!counting_allowed()) {
+        return;
+    }
+    const uint32_t actor = (uint32_t)ctx->r16;
+    if (!is_ram(actor)) {
+        return;
+    }
+    char key[64];
+    float pos[3];
+    for (int i = 0; i < 3; i++) {
+        const uint32_t bits = read_word(rdram, actor + 4 + 4 * i);
+        std::memcpy(&pos[i], &bits, sizeof(float));
+    }
+    // Rounded to 50 units, so the same Inky always gives the same key.
+    std::snprintf(key, sizeof(key), "%X:%d,%d,%d", tooie::debug::current_map(rdram),
+        (int)std::lround(pos[0] / 50.0f), (int)std::lround(pos[1] / 50.0f), (int)std::lround(pos[2] / 50.0f));
+    add_count("calamari_bonanza", key);
 }

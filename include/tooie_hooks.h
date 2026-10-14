@@ -28,6 +28,9 @@ void tooie_dialogue_timer_advanced(uint8_t* rdram, recomp_context* ctx);
 // Hide HUD (src/game/hide_hud.cpp): marks between the 2D draw calls of func_800A73F4.
 void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index);
 void tooie_scene_begin(uint8_t* rdram, recomp_context* ctx);
+// Achievements (src/game/achievements.cpp): an enemy hit in func_80108F08, an Inky starting to freeze.
+void tooie_ach_enemy_hit(uint8_t* rdram, recomp_context* ctx);
+void tooie_ach_octopus_frozen(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_frame(uint8_t* rdram, recomp_context* ctx);
 void tooie_transition_anim_length(uint8_t* rdram, recomp_context* ctx);
 void tooie_distance_probe(uint8_t* rdram, recomp_context* ctx, int squared);
