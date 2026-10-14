@@ -521,7 +521,7 @@
   1. Esc > Graphics: turn on Frame rate overlay
   2. Play somewhere busy at Game Frame Rate = Original and watch the "Game ... fps" line
   3. Switch Game Frame Rate to 30 FPS, then 60 FPS, and play the same spot
-- Look for: Does the Game line now sit at 30 at Original and 30 FPS (it used to flip 28/32 because it was counted over a quarter second), and at 60 with 60 FPS? Does 60 FPS feel smoother without anything running too fast (Banjo moved at the same speed here; timers, animations, enemies, music sync and minigames are untested)? Does any place hitch or go slow-motion at 30 or 60?
+- Look for: Does the Game line now sit at 30 at Original and 30 FPS (it used to flip 28/32 because it was counted over a quarter second), and at 60 with 60 FPS? Does 60 FPS feel smoother without anything running too fast (Banjo moved at the same speed here and the title intro kept its length; story cutscenes such as Klungo, signs, the file select screen, timers, animations, enemies, music sync and minigames are untested)? Does any place hitch or go slow-motion at 30 or 60?
 - Status: waiting for L
 
 ## T53 Noclip
