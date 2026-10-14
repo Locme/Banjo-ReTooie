@@ -288,7 +288,7 @@
 - Status: waiting for L
 
 ## T30 Extended draw distance
-- Asked: 2026-10-13 20:40 UTC, fixed 22:20 UTC (the first version made feathers, eggs and enemies vanish); 2026-10-14 the toggle now applies at once (before, it did nothing until Apply), and notes, eggs and other placed objects now also draw as far as characters
+- Asked: 2026-10-13 20:40 UTC, fixed 22:20 UTC (the first version made feathers, eggs and enemies vanish); 2026-10-14 the toggle now applies at once (before, it did nothing until Apply), and notes, eggs and other placed objects now also draw as far as characters; 19:50 UTC Doubloons and other objects with their own short draw distance reach further too
 - Build: your local build of main from 2026-10-14 10:00 UTC or later
 - XBLA history: report §4.26
 - Steps:

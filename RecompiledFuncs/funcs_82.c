@@ -2997,6 +2997,7 @@ L_801019BC:
     // 0x801019C8: lw          $t1, 0x0($t0)
     ctx->r9 = MEM_W(ctx->r8, 0X0);
     skip_0:
+    tooie_actor_draw_distance(rdram, ctx);
     // 0x801019CC: jal         0x800DF428
     // 0x801019D0: nop
 

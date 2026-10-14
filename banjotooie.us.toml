@@ -1065,3 +1065,10 @@ text = "tooie_ach_enemy_hit(rdram, ctx);"
 func = "func_80800428_choctopus"
 before_vram = 0x808004A8
 text = "tooie_ach_octopus_frozen(rdram, ctx);"
+
+# func_80101970 draws an actor with its own draw distance when its data gives
+# one (Jolly Roger's Doubloons: 3000) instead of func_800D2F20's: $f12 holds it.
+[[patches.hook]]
+func = "func_80101970"
+before_vram = 0x801019CC
+text = "tooie_actor_draw_distance(rdram, ctx);"

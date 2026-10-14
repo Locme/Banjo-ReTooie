@@ -13,7 +13,8 @@
 // the returned value in $v0 to the per-map value from retroben's Xenia "Draw
 // Distance Hack": 10400 in Terrydactyland (0x112) and Hailfire Peaks' icy side
 // (0x128), 12800 on the lava side (0x127), 21504 in Cloud Cuckooland (0x136),
-// 25600 elsewhere.
+// 25600 elsewhere. Actors with a draw distance of their own (Doubloons) are
+// scaled the same way.
 //
 // Props (notes, eggs, feathers, honeycombs and other placed objects) are kept
 // in those grid cells and only drawn for cells near the camera, a second limit
@@ -76,6 +77,18 @@ extern "C" void tooie_cell_draw_radius(uint8_t* rdram, recomp_context* ctx) {
 
 extern "C" void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx) {
     ctx->f2.fl *= distance_scale(rdram);
+}
+
+// Actors whose data sets their own draw distance (func_80101970 passes it instead of
+// func_800D2F20's; Jolly Roger's Doubloons use 3000) reach as much further as the rest,
+// up to the map's extended distance.
+extern "C" void tooie_actor_draw_distance(uint8_t* rdram, recomp_context* ctx) {
+    const float own = ctx->f12.fl;
+    const float scale = distance_scale(rdram);
+    if (own <= 0.0f || scale <= 1.0f) {
+        return;
+    }
+    ctx->f12.fl = std::max(own, std::min(own * scale, (float)extended_distance(MEM_HU(0, current_map_addr))));
 }
 
 extern "C" void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx) {
