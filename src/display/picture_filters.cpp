@@ -45,7 +45,7 @@ namespace RT64 {
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
     void SetSceneOutlines(float outlines, float thickness);
     void SetSceneBloom(float bloom, float threshold);
-    void SetSceneDepthOfField(float strength);
+    void SetSceneDepthOfField(float strength, bool onBanjo);
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
     void SetSceneUnderwater(float tint, float haze);
@@ -76,7 +76,9 @@ namespace {
     std::atomic<float> ambient_occlusion{0.0f};
     std::atomic<uint32_t> depth_address{0};
     std::atomic<float> cutscene_dof{0.0f};
-    std::atomic<bool> cutscene_dof_on{false};
+    std::atomic<float> gameplay_dof{0.0f};
+    // What was last sent: 0 none, 1 the cutscene one, 2 the gameplay one (-1 to send again).
+    std::atomic<int> dof_sent{-1};
     std::atomic<float> underwater_tint{0.25f};
     std::atomic<float> underwater_haze{0.15f};
     std::atomic<float> heat_haze{0.0f};
@@ -227,6 +229,7 @@ namespace {
         { &tooie::picture_filters::outlines_option, 0.0 },
         { &tooie::picture_filters::bloom_option, 0.0 },
         { &tooie::picture_filters::cutscene_dof_option, 0.0 },
+        { &tooie::picture_filters::gameplay_dof_option, 0.0 },
         { &tooie::picture_filters::eye_adaptation_option, 0.0 },
         { &tooie::picture_filters::rim_light_option, 0.0 },
         { &tooie::picture_filters::underwater_tint_option, 0.0 },
@@ -298,6 +301,7 @@ void tooie::picture_filters::apply() {
         value<bool>(three_point_option, true));
 
     cutscene_dof = (float)(value<double>(cutscene_dof_option, 0.0) / 100.0);
+    gameplay_dof = (float)(value<double>(gameplay_dof_option, 0.0) / 100.0);
     underwater_tint = (float)(value<double>(underwater_tint_option, 25.0) / 100.0);
     underwater_haze = (float)(value<double>(underwater_haze_option, 15.0) / 100.0);
     underwater_sent = -1.0f;
@@ -305,8 +309,7 @@ void tooie::picture_filters::apply() {
     heat_haze_sent = -1.0f;
     underwater_distortion = (float)(value<double>(underwater_distortion_option, 30.0) / 100.0);
     // The next frame sets it again for the scene playing then.
-    cutscene_dof_on = false;
-    RT64::SetSceneDepthOfField(0.0f);
+    dof_sent = -1;
     RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
     ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
     RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
@@ -448,11 +451,13 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetSceneHeatHaze(heat);
     }
 
-    // Depth of field only in letterboxed scenes.
-    const bool dof_on = (cutscene_dof > 0.0f) && tooie::in_letterboxed_scene();
-    if (dof_on != cutscene_dof_on) {
-        cutscene_dof_on = dof_on;
-        RT64::SetSceneDepthOfField(dof_on ? cutscene_dof.load() : 0.0f);
+    // The cutscene depth of field in letterboxed scenes, focused on the middle of the picture; the gameplay one
+    // otherwise, focused on Banjo and gentler.
+    const bool letterboxed = tooie::in_letterboxed_scene();
+    const int dof = (letterboxed && (cutscene_dof > 0.0f)) ? 1 : ((!letterboxed && (gameplay_dof > 0.0f)) ? 2 : 0);
+    if (dof != dof_sent) {
+        dof_sent = dof;
+        RT64::SetSceneDepthOfField((dof == 1) ? cutscene_dof.load() : ((dof == 2) ? gameplay_dof.load() * 0.6f : 0.0f), dof == 2);
     }
 }
 
@@ -629,6 +634,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        gameplay_dof_option,
+        "Depth of field",
+        "While you play, Banjo stays in focus and what is well in front of or behind him blurs, more the further it is. In first person the middle of the picture is in focus. Gentler than the cutscene one at the same number. The HUD stays sharp. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         fog_option,
         "Fog",
         "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
@@ -673,7 +683,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option,
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
                                    &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });

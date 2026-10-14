@@ -1308,10 +1308,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5dfaf75
+index 0000000..773e4db
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,643 @@
+@@ -0,0 +1,644 @@
 +//
 +// RT64
 +//
@@ -1465,9 +1465,10 @@ index 0000000..5dfaf75
 +        effectsSettings.bloomThreshold = threshold;
 +    }
 +
-+    void SetSceneDepthOfField(float strength) {
++    void SetSceneDepthOfField(float strength, bool onBanjo) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.depthOfField = strength;
++        effectsSettings.depthOfFieldOnBanjo = onBanjo;
 +    }
 +
 +    void SetSceneEyeAdaptation(float strength) {
@@ -1632,7 +1633,7 @@ index 0000000..5dfaf75
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2],
 +            (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * std::floor(settings.outlineThickness - 1.0f)) : 0.0f };
 +
-+        constants.bloom = { settings.bloom, settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
++        constants.bloom = { settings.bloom, settings.depthOfFieldOnBanjo ? -settings.depthOfField : settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
 +
 +        // The waves' own clock, so changing their speed doesn't make them jump.
 +        static auto waveClock = std::chrono::steady_clock::now();
@@ -1957,10 +1958,10 @@ index 0000000..5dfaf75
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..7279a98
+index 0000000..1684c4a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +//
 +// RT64
 +//
@@ -1996,6 +1997,7 @@ index 0000000..7279a98
 +        float bloom = 0.0f;
 +        float bloomThreshold = 0.7f;
 +        float depthOfField = 0.0f;
++        bool depthOfFieldOnBanjo = false;
 +        float eyeAdaptation = 0.0f;
 +        float rimLight = 0.0f;
 +        float underwaterTint = 0.0f;
@@ -2024,7 +2026,7 @@ index 0000000..7279a98
 +    // than the threshold (0 to 1).
 +    void SetSceneBloom(float bloom, float threshold);
 +    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
-+    void SetSceneDepthOfField(float strength);
++    void SetSceneDepthOfField(float strength, bool onBanjo = false);
 +    // Eye adaptation (0 off, 1 strongest): dark scenes brighten and bright ones tone down over about a second.
 +    void SetSceneEyeAdaptation(float strength);
 +    // Rim light (0 off, 1 strongest): a soft light along the edges of nearby characters and objects.
@@ -3487,10 +3489,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6f819a4
+index 0000000..d602601
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,629 @@
+@@ -0,0 +1,650 @@
 +//
 +// RT64
 +//
@@ -3907,16 +3909,37 @@ index 0000000..6f819a4
 +    return gConstants.ambientOcclusion.w * edge * (0.25f + 0.75f * fresnel) * notUp * near;
 +}
 +
-+// Depth of field: the nearest thing in a small box at the middle of the picture is in focus, and the
-+// picture blurs more the further a pixel's distance is from it, up to a radius set by the strength.
-+float3 DepthOfField(int2 pixel, float distance, float strength) {
++// Banjo's distance in front of the camera (his middle, a little above his feet), or 0 when there is no Banjo:
++// his world position taken back through the view-to-world rows.
++float BanjoDistance() {
++    if (gConstants.rippleAge.w < -1e8f) {
++        return 0.0f;
++    }
++    const float3 a = gConstants.worldX.xyz, b = gConstants.worldY.xyz, c = gConstants.worldZ.xyz;
++    const float3 d = float3(gConstants.rippleX.w - gConstants.worldX.w, gConstants.rippleAge.w + 50.0f - gConstants.worldY.w,
++        gConstants.rippleZ.w - gConstants.worldZ.w);
++    const float det = dot(a, cross(b, c));
++    if (abs(det) < 1e-8f) {
++        return 0.0f;
++    }
++    const float3 v = (d.x * cross(b, c) + d.y * cross(c, a) + d.z * cross(a, b)) / det;
++    return -v.z;
++}
++
++// Depth of field: the nearest thing in a small box at the middle of the picture is in focus (or Banjo, for the
++// gameplay one, unless he is too close to the camera, as in first person), and the picture blurs more the
++// further a pixel's distance is from it, up to a radius set by the strength.
++float3 DepthOfField(int2 pixel, float distance, float strength, bool onBanjo) {
 +    const float2 size = gConstants.projection.zw;
-+    const int spacing = int(max(1.0f, size.y / 90.0f));
-+    float focus = 1e9f;
-+    [unroll] for (int y = -2; y <= 2; y++) {
-+        [unroll] for (int x = -2; x <= 2; x++) {
-+            const int2 probe = int2(size * 0.5f) + int2(x, y) * spacing;
-+            focus = min(focus, -ViewPositionAt(probe).z);
++    float focus = onBanjo ? BanjoDistance() : 0.0f;
++    if (focus < 80.0f) {
++        const int spacing = int(max(1.0f, size.y / 90.0f));
++        focus = 1e9f;
++        [unroll] for (int y = -2; y <= 2; y++) {
++            [unroll] for (int x = -2; x <= 2; x++) {
++                const int2 probe = int2(size * 0.5f) + int2(x, y) * spacing;
++                focus = min(focus, -ViewPositionAt(probe).z);
++            }
 +        }
 +    }
 +
@@ -3991,7 +4014,7 @@ index 0000000..6f819a4
 +    }
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
-+    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.view.x < 0.5f);
++    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
 +    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f)) && (gConstants.view.x < 0.5f);
 +
@@ -4002,7 +4025,7 @@ index 0000000..6f819a4
 +            return float4(1.0f, 0.0f, 1.0f, 0.0f);
 +        }
 +        if (redraw) {
-+            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) : gColor.Load(int3(pixel, 0)).rgb;
++            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, abs(gConstants.bloom.y), gConstants.bloom.y < 0.0f) : gColor.Load(int3(pixel, 0)).rgb;
 +            if (gConstants.bloom.z > 0.0f) {
 +                scene = Adapt(scene);
 +            }
@@ -4073,7 +4096,7 @@ index 0000000..6f819a4
 +    }
 +
 +    if (redraw) {
-+        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) :
++        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, abs(gConstants.bloom.y), gConstants.bloom.y < 0.0f) :
 +            (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
 +        if (gConstants.water.z > 0.0f) {
 +            // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
@@ -4471,7 +4494,7 @@ index 0a5c332..54c2c83 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..375c383
+index 0000000..25f771e
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,59 @@
@@ -4508,7 +4531,7 @@ index 0000000..375c383
 +        // Water reflections strength (0 off), 1 when the water mask was drawn this frame, bounce light (0 off,
 +        // 1 strongest), then the water waves' strength (0 off, 1 strongest).
 +        float4 water;
-+        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), eye adaptation strength
++        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest; negative: focused on Banjo), eye adaptation strength
 +        // (0 off, 1 strongest), then the underwater haze (0 to 1).
 +        float4 bloom;
 +        // A view-space position's world x and z: dot(position, xyz) + w. Lets the water waves stay in place.

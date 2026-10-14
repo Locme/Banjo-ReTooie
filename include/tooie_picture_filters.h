@@ -41,6 +41,7 @@ namespace tooie::picture_filters {
     inline const std::string outline_thickness_option = "toon_outline_thickness";
     inline const std::string bloom_option = "bloom";
     inline const std::string cutscene_dof_option = "cutscene_dof";
+    inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
     inline const std::string underwater_tint_option = "underwater_tint";

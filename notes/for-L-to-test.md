@@ -1246,3 +1246,14 @@
   2. Press Down on the controller (or the arrow key) until the last achievement
 - Look for: Does a highlight move from one achievement to the next, and does the list scroll so the highlighted one stays on screen?
 - Status: waiting for L
+
+## T118 Depth of field while playing (from your 09:15 list)
+- Asked: 2026-10-14 12:20 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: the new Depth of field 50, then 100 (Cutscene depth of field is separate and unchanged)
+  2. Spiral Mountain: run around, zoom the camera in and out, then C-up for first person
+- Look for: Banjo stays sharp and the far cliffs and anything close to the camera blur, more the further they are from him. In first person the middle of the picture is in focus instead. Cutscenes still use the cutscene setting.
+- Status: waiting for L
+
