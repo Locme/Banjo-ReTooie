@@ -842,3 +842,13 @@
   3. Press F6 a few times: effects alone, depth, normals, then off.
 - Look for: The split line sits in the middle and the right half matches the game with the effects off. The views change on each F6 press with a toast naming them.
 - Status: waiting for L
+
+## T82 Heat haze
+- Asked: 2026-10-14 05:57 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Esc > Graphics: set "Heat haze" to 50, then try 100
+  2. Go to Hailfire Peaks' lava side and inside the volcano
+- Look for: The air shimmers, more in the distance, while Banjo and near things stay steady. Is it too strong, or too fast? It should not show on the icy side.
+- Status: waiting for L

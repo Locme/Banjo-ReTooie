@@ -46,6 +46,7 @@ namespace RT64 {
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
     void SetSceneUnderwater(float tint, float haze);
+    void SetSceneHeatHaze(float strength);
 }
 
 namespace {
@@ -67,6 +68,15 @@ namespace {
     std::atomic<bool> cutscene_dof_on{false};
     std::atomic<float> underwater_tint{0.25f};
     std::atomic<float> underwater_haze{0.15f};
+    std::atomic<float> heat_haze{0.0f};
+    float heat_haze_sent = -1.0f;
+
+    // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
+    // inside the volcano.
+    bool by_lava(uint8_t* rdram) {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        return (map == 0x127) || (map == 0x129) || (map == 0x12B) || (map == 0x133);
+    }
     // How far into the underwater look (0 above water, 1 under), eased over a fifth of a second.
     float underwater_amount = 0.0f;
     float underwater_sent = -1.0f;
@@ -126,6 +136,7 @@ namespace {
         { &tooie::picture_filters::rim_light_option, 0.0 },
         { &tooie::picture_filters::underwater_tint_option, 0.0 },
         { &tooie::picture_filters::underwater_haze_option, 0.0 },
+        { &tooie::picture_filters::heat_haze_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -149,6 +160,7 @@ namespace {
             graphics.update_option_value(sharpen_option, 30.0);
             graphics.update_option_value(underwater_tint_option, 25.0);
             graphics.update_option_value(underwater_haze_option, 15.0);
+            graphics.update_option_value(heat_haze_option, 50.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -183,6 +195,8 @@ void tooie::picture_filters::apply() {
     underwater_tint = (float)(value<double>(underwater_tint_option, 25.0) / 100.0);
     underwater_haze = (float)(value<double>(underwater_haze_option, 15.0) / 100.0);
     underwater_sent = -1.0f;
+    heat_haze = (float)(value<double>(heat_haze_option, 0.0) / 100.0);
+    heat_haze_sent = -1.0f;
     // The next frame sets it again for the scene playing then.
     cutscene_dof_on = false;
     RT64::SetSceneDepthOfField(0.0f);
@@ -269,6 +283,12 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     if (underwater_amount != underwater_sent) {
         underwater_sent = underwater_amount;
         RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);
+    }
+
+    const float heat = by_lava(rdram) ? heat_haze.load() : 0.0f;
+    if (heat != heat_haze_sent) {
+        heat_haze_sent = heat;
+        RT64::SetSceneHeatHaze(heat);
     }
 
     // Depth of field only in letterboxed scenes.
@@ -385,6 +405,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "While under water, things further away fade into a blue haze. Works with Underwater tint above 0.",
         0, 100, 5, 0, false, 15);
     graphics.add_number_option(
+        heat_haze_option,
+        "Heat haze",
+        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers, more in the distance. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         bloom_option,
         "Bloom",
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
@@ -445,7 +470,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
