@@ -1058,3 +1058,13 @@
 - Look for: section headings in each tab; Cheato codes are in Cheats again; Resolution lists 3x (720p), 4.5x (1080p), 6x (1440p) and 9x (4K); Field of View and Game Frame Rate apply as soon as you change them (Apply stays grey); the Warp list scrolls with the selection; Search filters that tab's rows; Texture upscaling's description says it uses an xBR-style filter.
 - Not done: search covers one tab at a time; controller scrolling was only checked with the keyboard.
 - Status: waiting for L
+
+## T100 Crash in play (10:33 dump) and the boot crash
+- Asked: 2026-10-14 10:00 UTC
+- Build: your own build from main (ac1c6ec or later)
+- Steps:
+  1. Start the game 5 times in a row; each start should reach the title.
+  2. Play as you did around 10:33 (whatever you were doing when it crashed).
+  3. Afterwards, open logs/console.log next to the exe and search for "[rt64]".
+- Look for: No crash at start or in play. If console.log has an "[rt64] Unknown microcode" line, send it: it says which graphics code the game used, so the picture glitch it may cause can be fixed too.
+- Status: waiting for L
