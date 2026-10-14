@@ -1336,3 +1336,13 @@
   3. Also look over Fog, Depth of field and Ambient occlusion in a couple of places
 - Look for: Rings spread from where Banjo is (not behind him), a big splash ring when he jumps in, a V-shaped wake with a little foam behind him while he swims, and a small ring bobbing round him when he stops. No rings when he walks on dry land. The effects were reading the depth about twice too far, so fog may now start a little further out and focus sits right on Banjo.
 - Status: waiting for L
+
+## T126 Exploding models and black flashes (frame read race)
+- Asked: 2026-10-14 14:11 UTC
+- Build: main @ e895a40
+- Steps:
+  1. Build main at e895a40 or later
+  2. Load a save that starts in Jinjo Village, and play a while in Jinjo Village and Mayahem Temple with your usual settings (HD Shadows on)
+  3. Warp to Cloud Cuckooland from the menu and spin the camera for a minute
+- Look for: Do models still explode into giant shapes, and does the screen still flash black?
+- Status: waiting for L
