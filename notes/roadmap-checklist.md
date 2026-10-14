@@ -329,6 +329,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.85 Achievements pop-up
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: owned by the Super Opus 64 helper thread (XBLA achievement back-port and pop-ups).
 
 ### 4.88 Asset dump and replacement
 - [ ] Done
