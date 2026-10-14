@@ -280,6 +280,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/hud_edges.cpp
     ${CMAKE_SOURCE_DIR}/src/game/model_tagging.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/interp_check.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/interp_tags.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/wide_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp

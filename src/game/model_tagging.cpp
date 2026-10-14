@@ -40,6 +40,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iterator>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -50,7 +51,9 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_hooks.h"
 #include "tooie_interp_check.h"
+#include "tooie_interp_tags.h"
 #include "tooie_model_tagging.h"
+#include "tooie_toast.h"
 
 namespace {
     constexpr uint32_t op_vtx = 0x01;
@@ -195,6 +198,45 @@ namespace {
 
     // gEXMatrixGroup's projection flag.
     constexpr uint32_t group_projection = 1 << 1;
+
+    // A model's print: FNV-1a over the commands of its first list and the
+    // lists that one calls (addresses left out, since a model is loaded
+    // somewhere else each time; vertex indices, geometry and combiner words
+    // kept), so the same model prints the same in every run.
+    uint32_t model_print(uint8_t* rdram, uint32_t first) {
+        uint32_t hash = 0x811C9DC5u;
+        auto mix = [&](uint32_t v) {
+            for (int i = 0; i < 4; i++) {
+                hash = (hash ^ ((v >> (8 * i)) & 0xFF)) * 0x01000193u;
+            }
+        };
+        int budget = 160;
+        std::function<void(uint32_t, int)> walk = [&](uint32_t phys, int depth) {
+            for (; budget > 0; budget--, phys += 8) {
+                uint32_t w0 = word(rdram, phys);
+                uint32_t w1 = word(rdram, phys + 4);
+                uint32_t op = w0 >> 24;
+                mix(w0);
+                bool address = op == op_vtx || op == op_dl || op == op_mtx || op == op_moveword || op == 0xDC || op == 0xFD || op == 0xFE || op == op_setcimg || op == 0x04;
+                if (!address) {
+                    mix(w1);
+                }
+                if (op == op_dl) {
+                    if ((w1 & 0x80000000) != 0 && depth < 3) {
+                        walk(w1 & 0x1FFFFFFF, depth + 1);
+                    }
+                    if (((w0 >> 16) & 0xFF) != 0) {
+                        return;
+                    }
+                }
+                else if (op == op_enddl) {
+                    return;
+                }
+            }
+        };
+        walk(first, 0);
+        return hash == 0 ? 1 : hash;
+    }
 
     struct Camera {
         float pos[3];
@@ -389,6 +431,12 @@ namespace {
         size_t texture_command = SIZE_MAX;
         // Index of its SEG 1 command (its vertices).
         size_t vertex_command = SIZE_MAX;
+        // Its first list as a physical address, and the model's print: a hash
+        // of that list's commands (segment-relative, so the same in every
+        // run), for the manual tags (tooie_interp_tags.h).
+        uint32_t first_phys = 0;
+        uint32_t print = 0;
+        int tag_mode = 0;
         // Matrix ids given this frame (filled in pass 3).
         std::vector<uint32_t> ids;
     };
@@ -498,6 +546,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     }
     // F8 blend modes (interp_check.cpp) for finding what blends wrong on a real PC.
     const int blend_mode = tooie::interp_check::blend_mode();
+    static const bool log_ids = std::getenv("TOOIE_TAG_LOG") != nullptr;
+    // Manual tags: the Pick Model and Tag Model keys, read once per scene.
+    const bool pick_now = !overlay && tooie::interp_tags::take_pick();
+    const bool tag_now = !overlay && tooie::interp_tags::take_tag();
     if (!interpolation_on() || end <= start || blend_mode == 1) {
         if (!overlay) {
             stat_models = 0;
@@ -520,12 +572,16 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     bool have_camera = false;
     bool shadow_buffer = false;
     Camera camera;
+    std::array<uint32_t, 16> segments{};
     for (uint32_t p = start; p < end; p += 8) {
         uint32_t w0 = word(rdram, p);
         uint32_t w1 = word(rdram, p + 4);
         uint32_t op = w0 >> 24;
         if (op == op_setcimg) {
             shadow_buffer = (w0 & cimg_size_mask) == cimg_size_8b;
+        }
+        if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment) {
+            segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
         }
         if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 4) {
             blocks.emplace_back();
@@ -563,6 +619,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
         else if (op == op_dl && current >= 0 && blocks[current].first_list == 0) {
             blocks[current].first_list = w1;
+            blocks[current].first_phys = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
+                ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
         }
         else if (op == op_enddl || (op == op_dl && ((w0 >> 16) & 0xFF) != 0)) {
             break;
@@ -587,12 +645,114 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
     }
 
+    // Manual tags (tooie_interp_tags.h): each model's print, and its tag.
+    const bool tags_wanted = !overlay && (tooie::interp_tags::any() || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids);
+    if (tags_wanted) {
+        for (Block& block : blocks) {
+            if (block.model != 0 && block.first_phys != 0) {
+                block.print = model_print(rdram, block.first_phys);
+                block.tag_mode = tooie::interp_tags::mode_of(block.print);
+                if (log_ids && block.tag_mode != tooie::interp_tags::mode_default) {
+                    static std::unordered_map<uint32_t, int> logged;
+                    if (logged[block.print] != block.tag_mode) {
+                        logged[block.print] = block.tag_mode;
+                        std::fprintf(stderr, "[interp-tags] model %08X drawn as %s\n", block.print, tooie::interp_tags::mode_name(block.tag_mode));
+                    }
+                }
+                if (log_ids) {
+                    // Headless: each print once, with where it was seen.
+                    static std::unordered_set<uint32_t> printed;
+                    if (printed.insert(block.print).second) {
+                        std::fprintf(stderr, "[print] model %08X list %08X map %X at %.0f,%.0f,%.0f (%u matrices)\n", block.print, block.first_phys,
+                            tooie::debug::current_map(rdram), block.pos[0], block.pos[1], block.pos[2], block.matrices);
+                    }
+                }
+            }
+        }
+    }
+
     // A camera cut: the camera jumps or turns sharply in one game frame, or
     // the picture changes shape. Blending across it would slide everything
     // (characters placed for the new shot included) through the in-between
     // frames. A shape change comes with a new viewport, which RT64 does not
     // blend, so a blended projection would squash or stretch the picture for
     // an in-between frame (the black bars of a cutscene coming in, say).
+    if (pick_now) {
+        // The models on screen, nearest the middle of the picture first (by
+        // the angle from the camera's facing); the pick steps through them.
+        struct Candidate {
+            uint32_t print;
+            float cosine;
+            const Block* block;
+        };
+        std::vector<Candidate> candidates;
+        for (const Block& block : blocks) {
+            if (block.model == 0 || block.matrices == 0 || block.shadow || block.print == 0 || !block.have_pos) {
+                continue;
+            }
+            bool seen = false;
+            for (const Candidate& c : candidates) {
+                seen = seen || c.print == block.print;
+            }
+            if (seen) {
+                continue;
+            }
+            float cosine = 1.0f;
+            if (have_camera) {
+                float d[3];
+                float length = 0.0f;
+                for (int k = 0; k < 3; k++) {
+                    d[k] = block.pos[k] - camera.pos[k];
+                    length += d[k] * d[k];
+                }
+                length = std::sqrt(length);
+                cosine = 0.0f;
+                for (int k = 0; k < 3; k++) {
+                    cosine += length > 1e-3f ? d[k] * camera.forward[k] / length : 0.0f;
+                }
+            }
+            candidates.push_back({block.print, cosine, &block});
+        }
+        std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) { return a.cosine > b.cosine; });
+        if (candidates.empty()) {
+            tooie::toast::show("No model to pick");
+        } else {
+            size_t next = 0;
+            uint32_t current_pick = tooie::interp_tags::picked();
+            for (size_t i = 0; i < candidates.size(); i++) {
+                if (candidates[i].print == current_pick) {
+                    next = (i + 1) % candidates.size();
+                }
+            }
+            const Candidate& c = candidates[next];
+            char note[96];
+            std::snprintf(note, sizeof(note), " map %X at %.0f,%.0f,%.0f (%u matrices)", tooie::debug::current_map(rdram),
+                c.block->pos[0], c.block->pos[1], c.block->pos[2], c.block->matrices);
+            tooie::interp_tags::set_picked(c.print, note);
+            char text[128];
+            std::snprintf(text, sizeof(text), "Picked model %08X (%zu of %zu): %s", c.print, next + 1, candidates.size(),
+                tooie::interp_tags::mode_name(tooie::interp_tags::mode_of(c.print)));
+            tooie::toast::show(text);
+            std::printf("[interp-tags] picked %08X:%s\n", c.print, note);
+        }
+    }
+    if (tag_now) {
+        uint32_t current_pick = tooie::interp_tags::picked();
+        if (current_pick == 0) {
+            tooie::toast::show("Pick a model first (Pick Model key)");
+        } else {
+            int mode = tooie::interp_tags::step_picked();
+            char text[96];
+            std::snprintf(text, sizeof(text), "Model %08X: %s (saved)", current_pick, tooie::interp_tags::mode_name(mode));
+            tooie::toast::show(text);
+            for (Block& block : blocks) {
+                if (block.print == current_pick) {
+                    block.tag_mode = mode;
+                }
+            }
+        }
+    }
+
     bool cut = false;
     if (have_camera) {
         if (had_camera) {
@@ -1134,7 +1294,6 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     bool camera_tagged = false;
     // Headless aid: TOOIE_TAG_LOG=1 logs how many of each big model's ids
     // carry over from the last frame.
-    static const bool log_ids = std::getenv("TOOIE_TAG_LOG") != nullptr;
     std::unordered_map<uint32_t, std::vector<uint32_t>> ids_now;
     uint32_t p = start;
     for (size_t index = 0; index < commands.size(); index++, p += 8) {
@@ -1168,7 +1327,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         int b = c.block;
         uint32_t params = (c.w0 & 0xFF) ^ 1;
         bool projection = (params & mtx_projection) != 0;
-        bool model = b >= 0 && blocks[b].model != 0 && !projection;
+        // A model tagged "untagged" is left to RT64's own matching.
+        bool model = b >= 0 && blocks[b].model != 0 && !projection && blocks[b].tag_mode != tooie::interp_tags::mode_untagged;
         bool particle = particle_id[index] != 0;
         bool tag = model || particle || (snap && !projection && !overlay);
         // The perspective camera gets an id that changes at each cut, so RT64
@@ -1250,7 +1410,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             else {
                 id = unique_id(make_id(0, camera_generation, (uint32_t)index));
             }
-            uint32_t components = snap ? component_skip : component_interpolate;
+            // The model's manual tag (interp_tags.txt): snap draws it at the
+            // game's rate, vertex blends its vertex positions too.
+            const int tag_mode = model ? blocks[b].tag_mode : tooie::interp_tags::mode_default;
+            const bool model_snap = snap || tag_mode == tooie::interp_tags::mode_snap;
+            uint32_t components = model_snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
             // A particle's quad is rebuilt each frame; only its place blends.
             // Vertex blending is off: RT64 blends vertex positions by index
@@ -1258,7 +1422,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             // and models whose vertex set changes with the view (the sky
             // dome's parts) then tear for a game frame (L, 2026-10-14, F8
             // bisect). Blend mode 2 turns it back on for comparison.
-            uint32_t vertices = snap || particle || blend_mode != 2 ? component_skip : component_interpolate;
+            uint32_t vertices = model_snap || particle || (blend_mode != 2 && tag_mode != tooie::interp_tags::mode_vertex) ?
+                component_skip : component_interpolate;
             // A shadow's bones are flat, so they cannot be split into turn and
             // scale (that put spikes in the shadow between frames): blended
             // element by element, as the game's own shadows are.
@@ -1336,12 +1501,17 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         return extent;
     };
 
-    if (!overlay && tooie::interp_check::enabled()) {
+    const uint32_t picked_print = overlay ? 0 : tooie::interp_tags::picked();
+    if (!overlay && (tooie::interp_check::enabled() || picked_print != 0)) {
         // Flag the copies whose blend will look wrong: a sudden jump (smeared
         // over the in-between frames), or bones RT64 cannot pair with last
         // frame's (drawn at the game's rate). Flagged copies are tinted red
-        // for a moment and logged.
-        check_frame++;
+        // for a moment and logged. The picked model (manual tags) is drawn
+        // green the same way, its textures kept.
+        const bool checking = tooie::interp_check::enabled();
+        if (checking) {
+            check_frame++;
+        }
         // The segments as the top-level list leaves them at each model.
         std::vector<std::array<uint32_t, 16>> block_segments(blocks.size());
         {
@@ -1358,9 +1528,36 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         for (auto& [key, track] : tracks) {
             track.seen = false;
         }
+        // Draws a model from a copy of its vertices coloured rgb (most
+        // characters are coloured by their vertices rather than textures).
+        auto recolor = [&](size_t bi, uint32_t rgb) {
+            const Block& block = blocks[bi];
+            if (block.vertex_command == SIZE_MAX) {
+                return;
+            }
+            uint32_t vertices = commands[block.vertex_command].w1 & 0x1FFFFFFF;
+            uint32_t bytes = std::min<uint32_t>(vertex_extent(rdram, commands, block_segments[bi], bi), 0x8000);
+            if (bytes != 0 && cursor + bytes <= limit) {
+                for (uint32_t offset = 0; offset < bytes; offset += 16) {
+                    for (uint32_t w = 0; w < 12; w += 4) {
+                        MEM_W(0, kseg0(cursor + offset + w)) = MEM_W(0, kseg0(vertices + offset + w));
+                    }
+                    uint32_t color = (uint32_t)MEM_W(0, kseg0(vertices + offset + 12));
+                    MEM_W(0, kseg0(cursor + offset + 12)) = (int32_t)(rgb | (color & 0xFF));
+                }
+                put(rdram, start + (uint32_t)block.vertex_command * 8, commands[block.vertex_command].w0, cursor);
+                cursor += bytes;
+            }
+        };
         for (size_t bi = 0; bi < blocks.size(); bi++) {
             Block& block = blocks[bi];
             if (block.model == 0 || block.matrices == 0) {
+                continue;
+            }
+            if (picked_print != 0 && block.print == picked_print && !block.shadow) {
+                recolor(bi, 0x00FF0000);
+            }
+            if (!checking) {
                 continue;
             }
             uint64_t key = ((uint64_t)block.model << 32) | block.instance;
@@ -1409,25 +1606,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 if (block.texture_command != SIZE_MAX) {
                     put(rdram, start + (uint32_t)block.texture_command * 8, commands[block.texture_command].w0, tint_texture);
                 }
-                // Most characters are coloured by their vertices rather than
-                // textures: draw them from a red copy.
-                uint32_t vertices = commands[block.vertex_command].w1 & 0x1FFFFFFF;
-                uint32_t bytes = std::min<uint32_t>(vertex_extent(rdram, commands, block_segments[bi], bi), 0x8000);
-                if (bytes != 0 && cursor + bytes <= limit) {
-                    for (uint32_t offset = 0; offset < bytes; offset += 16) {
-                        for (uint32_t w = 0; w < 12; w += 4) {
-                            MEM_W(0, kseg0(cursor + offset + w)) = MEM_W(0, kseg0(vertices + offset + w));
-                        }
-                        uint32_t color = (uint32_t)MEM_W(0, kseg0(vertices + offset + 12));
-                        MEM_W(0, kseg0(cursor + offset + 12)) = (int32_t)(0xFF000000 | (color & 0xFF));
-                    }
-                    put(rdram, start + (uint32_t)block.vertex_command * 8, commands[block.vertex_command].w0, cursor);
-                    cursor += bytes;
-                }
+                recolor(bi, 0xFF000000);
             }
         }
-        for (auto it = tracks.begin(); it != tracks.end();) {
-            it = it->second.seen ? std::next(it) : tracks.erase(it);
+        if (checking) {
+            for (auto it = tracks.begin(); it != tracks.end();) {
+                it = it->second.seen ? std::next(it) : tracks.erase(it);
+            }
         }
     }
 
@@ -1486,6 +1671,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     stat_scenes.fetch_add(1, std::memory_order_relaxed);
     tooie::frame_overlay::note_scene_done();
     tooie::interp_check::start();
+    tooie::interp_tags::start();
     if (tooie::interp_check::enabled()) {
         static bool filled = false;
         if (!filled) {

@@ -1533,3 +1533,14 @@
   3. Walk around for a few minutes
 - Look for: Eggs, notes, boxes and characters stay on screen; nothing pops out and back
 - Status: waiting for L
+
+## T145 Manual interpolation tags: pick a model with F11, tag it with F4
+- Asked: 2026-10-14 22:14 UTC
+- Build: main @ next push
+- Steps:
+  1. Above Original frame rate, stand near a model (the CCL sky dome, a character) and press F11: it turns green and a toast names it; F11 again steps to the next model on screen
+  2. Press F4: the toast says the model's new tag (snap, vertex, untagged, back to default) and the game writes interp_tags.txt next to the save files
+  3. Tag the sky dome snap and the model that tore before; check that the tag changes what you see at once, and that it is still applied after a restart
+  4. Send interp_tags.txt here when a set of tags looks right, to be built in as the default
+- Look for: The highlight follows the picked model (the backpack and textured parts go dark green), F4 steps the tag live, and the file lists each tag with the map and position it was made in
+- Status: waiting for L

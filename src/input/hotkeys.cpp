@@ -43,6 +43,10 @@ void tooie::hotkeys::register_inputs() {
         "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list.", SDL_SCANCODE_F5, "Debug");
     add(GameInput::WARP_AGAIN, "Warp Again",
         "Warps to the last place picked in the Warp tab. Works while the Warp tab is on in the Cheats tab.", SDL_SCANCODE_F9, "Debug");
+    add(GameInput::PICK_MODEL, "Pick Model",
+        "Steps a green highlight through the models on screen, nearest the middle first, for tagging how one blends between game frames.", SDL_SCANCODE_F11, "Debug");
+    add(GameInput::TAG_MODEL, "Tag Model",
+        "Steps the picked model's blend between game frames: default, snap, vertex, untagged. Saved to interp_tags.txt next to the save files.", SDL_SCANCODE_F4, "Debug");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {
