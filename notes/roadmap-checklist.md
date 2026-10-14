@@ -10,8 +10,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ## Short
 
 ### 4.2 One-click build and update scripts
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-14: build.bat (finds Visual Studio with the Clang tools, builds into Release) and update_and_build.bat (pulls, restarts itself when the update changed it, repairs common build breaks, lists the error lines on a failure) are on main and are what L builds with. Dependencies are pinned as submodules plus lib-patches/.
 
 ### 4.5 Quick start (Start skips the intro)
 - [x] Done
