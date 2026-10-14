@@ -24,6 +24,12 @@ so the submodules stay pinned to their upstream commits.
   of the game threads with the queue each waits on. `wait_for_tasks_idle` waits until
   no RSP or display list task is running, since those read and write RDRAM.
 
+* **Sound task failure** (`ultramodern/src/events.cpp`, `ultramodern/include/ultramodern/ultramodern.hpp`):
+  a sound (audio) task whose microcode stops on a bad command list ("Unhandled jump target ... in
+  n_aspMain") used to end the game. That sound frame is now skipped and logged, and the game and its
+  sound carry on. `set_audio_task_check` lets the game look at a sound task just before it runs
+  (`src/game/audio_task_check.cpp` logs a list that changed after it was queued).
+
 * **VI start-up crash** (`ultramodern/src/events.cpp`): the game can start before the VI thread's
   first tick, so no mode was set yet and `update_vi` read a null `OSViMode` (a segfault on "VI Thread"
   in about 1 in 4 to 1 in 30 boots). The VI thread now falls back to the dummy mode, and swaps the VI

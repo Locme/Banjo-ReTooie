@@ -105,7 +105,7 @@ index 2f22456..41b1e8b 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..13883ab 100644
+index 3b28af3..130e992 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
 @@ -2,6 +2,8 @@
@@ -129,7 +129,7 @@ index 3b28af3..13883ab 100644
  
  // Thread scheduling.
  void check_running_queue(RDRAM_ARG1);
-@@ -79,7 +86,49 @@ void set_main_thread();
+@@ -79,7 +86,51 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
@@ -172,6 +172,8 @@ index 3b28af3..13883ab 100644
 +// VIs sent per 60th of a second (1 = 60 a second, 2 = 120). Game time and audio are unchanged.
 +uint32_t get_vi_rate_multiplier();
 +void set_vi_rate_multiplier(uint32_t multiplier);
++// Called on the SP task thread just before an audio task runs, so the game can check its inputs.
++void set_audio_task_check(void (*check)(uint8_t* rdram, const OSTask* task));
 +// Game time since start. This runs at get_speed_multiplier() times real time.
 +std::chrono::microseconds game_time_now();
 +// Converts a game time into the real time it will occur at with the current game speed.
@@ -180,7 +182,7 @@ index 3b28af3..13883ab 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..7c28827 100644
+index 090cc42..8bad5b8 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,4 +1,5 @@
@@ -281,7 +283,7 @@ index 090cc42..7c28827 100644
                  // Send a message to the VI queue, and do not set it to be requeued if the queue was full for the same reason as the VI message above.
                  ultramodern::enqueue_external_message(events_context.ai.mq, events_context.ai.msg, false, false);
              }
-@@ -261,12 +296,73 @@ void sp_complete() {
+@@ -261,12 +296,79 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -352,10 +354,39 @@ index 090cc42..7c28827 100644
 +    }
 +}
 +
++static void (*audio_task_check)(uint8_t* rdram, const OSTask* task) = nullptr;
++
++void ultramodern::set_audio_task_check(void (*check)(uint8_t* rdram, const OSTask* task)) {
++    audio_task_check = check;
++}
++
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -290,6 +386,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -283,13 +385,28 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+             return;
+         }
+ 
++        if (task->t.type == M_AUDTASK && audio_task_check != nullptr) {
++            audio_task_check(rdram, task);
++        }
++
+         if (!ultramodern::rsp::run_task(PASS_RDRAM task)) {
+-            fprintf(stderr, "Failed to execute task type: %" PRIu32 "\n", task->t.type);
+-            ULTRAMODERN_QUICK_EXIT();
++            // A failed audio task (a bad sound command list) used to end the game. Skip that sound frame
++            // instead: the next task reloads the microcode's state, so sound carries on after a short glitch.
++            if (task->t.type == M_AUDTASK) {
++                static unsigned failed_audio_tasks = 0;
++                failed_audio_tasks++;
++                if (failed_audio_tasks <= 20) {
++                    fprintf(stderr, "[audio] A sound task failed (%u so far); skipped that sound frame instead of exiting.\n", failed_audio_tasks);
++                }
++            } else {
++                fprintf(stderr, "Failed to execute task type: %" PRIu32 "\n", task->t.type);
++                ULTRAMODERN_QUICK_EXIT();
++            }
+         }
  
          // Tell the game that the RSP has completed
          sp_complete();
@@ -363,7 +394,7 @@ index 090cc42..7c28827 100644
      }
  }
  
-@@ -359,21 +456,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -359,21 +476,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
          if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
              // Determine the action type and act on it
              if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
@@ -405,7 +436,7 @@ index 090cc42..7c28827 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,8 +673,37 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,8 +693,37 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue

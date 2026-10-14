@@ -3834,6 +3834,7 @@ L_80800860:
 RECOMP_FUNC void func_80013D94(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_audio_list_queued(rdram, ctx);
     // 0x80013D94: lui         $v1, 0x8008
     ctx->r3 = S32(0X8008 << 16);
     // 0x80013D98: addiu       $v1, $v1, -0x7100
