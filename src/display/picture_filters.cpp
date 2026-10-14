@@ -50,6 +50,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
+    void SetSceneLightShafts(float strength);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
 }
@@ -147,6 +148,7 @@ namespace {
         { &tooie::picture_filters::water_reflections_option, 0.0 },
         { &tooie::picture_filters::bounce_light_option, 0.0 },
         { &tooie::picture_filters::water_waves_option, 0.0 },
+        { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -176,6 +178,7 @@ namespace {
             graphics.update_option_value(water_reflections_option, 60.0);
             graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
             graphics.update_option_value(water_waves_option, 50.0);
+            graphics.update_option_value(light_shafts_option, 40.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -230,6 +233,7 @@ void tooie::picture_filters::apply() {
     const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
+    RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
@@ -467,6 +471,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        light_shafts_option,
+        "Light shafts",
+        "Sunlight streams through gaps between trees, cliffs and buildings where they stand against a bright sky. Indoors and under night skies there is none. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         bloom_option,
         "Bloom",
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
@@ -527,7 +536,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

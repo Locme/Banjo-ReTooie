@@ -471,7 +471,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..ee12adc 100644
+index 9fae0d4..740c1c6 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -546,7 +546,7 @@ index 9fae0d4..ee12adc 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1297,6 +1334,16 @@ namespace RT64 {
+@@ -1297,6 +1334,23 @@ namespace RT64 {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
                  submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
@@ -557,23 +557,31 @@ index 9fae0d4..ee12adc 100644
 +                    if (!targetDrawCall.waterInstances.empty() && SceneWaterWanted()) {
 +                        submitWaterMask(worker, framebuffer, targetDrawCall);
 +                    }
-+                    RecordSceneEffects(worker, colorTarget, depthTarget, targetDrawCall.sceneEffectsProjection, targetDrawCall.sceneEffectsView, shaderLibrary);
++                    // The projection the processor adjusted, or the game's own when it didn't run.
++                    const DrawData *effectsData = targetDrawCall.sceneEffectsDrawData;
++                    const uint32_t effectsIndex = targetDrawCall.sceneEffectsTransformsIndex;
++                    if ((effectsData != nullptr) && (effectsIndex < effectsData->viewTransforms.size())) {
++                        const interop::float4x4 &effectsProjection = (effectsIndex < effectsData->modProjTransforms.size()) ?
++                            effectsData->modProjTransforms[effectsIndex] : effectsData->projTransforms[effectsIndex];
++                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsData->viewTransforms[effectsIndex], shaderLibrary);
++                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                }
              }
          }
      }
-@@ -1408,6 +1455,9 @@ namespace RT64 {
+@@ -1408,6 +1462,10 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
++        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
 +        bool drewPerspective = false;
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1506,20 @@ namespace RT64 {
+@@ -1456,6 +1514,20 @@ namespace RT64 {
                  continue;
              }
  
@@ -582,8 +590,8 @@ index 9fae0d4..ee12adc 100644
 +            if (proj.type == Projection::Type::Perspective) {
 +                if (fbPair.depthWrite && (targetDrawCall.sceneEffectsAfter < 0) && (proj.gameCallCount > 0)) {
 +                    drewPerspective = true;
-+                    targetDrawCall.sceneEffectsProjection = drawData.modProjTransforms[proj.transformsIndex];
-+                    targetDrawCall.sceneEffectsView = drawData.viewTransforms[proj.transformsIndex];
++                    targetDrawCall.sceneEffectsDrawData = &drawData;
++                    targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
 +                }
 +            }
 +            else if (drewPerspective && (targetDrawCall.sceneEffectsAfter < 0)) {
@@ -594,7 +602,7 @@ index 9fae0d4..ee12adc 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1811,18 @@ namespace RT64 {
+@@ -1747,6 +1819,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -613,7 +621,7 @@ index 9fae0d4..ee12adc 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1834,9 @@ namespace RT64 {
+@@ -1758,6 +1842,9 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -624,25 +632,27 @@ index 9fae0d4..ee12adc 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..6088166 100644
+index 3add9c3..87c4eab 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,14 @@ namespace RT64 {
+@@ -48,6 +48,16 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
 +        // Banjo-Tooie: the screen-space effects go after this many raster scenes (the 3D world's), or
 +        // nowhere when negative, with the 3D world's projection.
 +        int32_t sceneEffectsAfter = -1;
-+        interop::float4x4 sceneEffectsProjection;
-+        interop::float4x4 sceneEffectsView;
++        // The 3D world's draw data and projection; its matrices are looked up when the effects are recorded,
++        // after the projection processor has filled them.
++        const DrawData *sceneEffectsDrawData = nullptr;
++        uint32_t sceneEffectsTransformsIndex = 0;
 +        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
 +        // scene effects' water mask.
 +        std::vector<uint32_t> waterInstances;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -165,6 +173,7 @@ namespace RT64 {
+@@ -165,6 +175,7 @@ namespace RT64 {
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
          void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
@@ -1140,10 +1150,10 @@ index 0000000..e400499
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c4d1248
+index 0000000..97d0d91
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,514 @@
+@@ -0,0 +1,534 @@
 +//
 +// RT64
 +//
@@ -1341,6 +1351,11 @@ index 0000000..c4d1248
 +        effectsSettings.waveSpeed = speed;
 +    }
 +
++    void SetSceneLightShafts(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.lightShafts = strength;
++    }
++
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || (effectsSettings.view == 4);
@@ -1369,7 +1384,7 @@ index 0000000..c4d1248
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.bounceLight > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -1431,6 +1446,21 @@ index 0000000..c4d1248
 +                constants.worldX = { 1.0f, 0.0f, 0.0f, 0.0f };
 +                constants.worldZ = { 0.0f, 0.0f, 1.0f, 0.0f };
 +            }
++
++            // The sun stands high, to one side (the game has no sun of its own to follow): its direction in
++            // view space, through the view matrix (directions skip the translation).
++            const float sunWorld[3] = { 0.42f, 0.74f, -0.53f };
++            float sunView[3];
++            for (int c = 0; c < 3; c++) {
++                sunView[c] = sunWorld[0] * v[0][c] + sunWorld[1] * v[1][c] + sunWorld[2] * v[2][c];
++            }
++            const float sunLength = std::sqrt(sunView[0] * sunView[0] + sunView[1] * sunView[1] + sunView[2] * sunView[2]);
++            if (sunLength > 1e-6f) {
++                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts };
++            }
++            else {
++                constants.sun = { 0.0f, 0.0f, 1.0f, 0.0f };
++            }
 +        }
 +
 +        RenderCommandList *commandList = worker->commandList.get();
@@ -1460,7 +1490,7 @@ index 0000000..c4d1248
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.bounceLight > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -1660,10 +1690,10 @@ index 0000000..c4d1248
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1442ff5
+index 0000000..602c686
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,90 @@
 +//
 +// RT64
 +//
@@ -1700,6 +1730,7 @@ index 0000000..1442ff5
 +        float waterReflections = 0.0f;
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
++        float lightShafts = 0.0f;
 +        float waveSpeed = 1.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
@@ -1731,6 +1762,8 @@ index 0000000..1442ff5
 +    void SetSceneBounceLight(float strength);
 +    // Banjo-Tooie: water waves on the water mask's surfaces (0 off, 1 strongest), moving at speed (1 normal).
 +    void SetSceneWaterWaves(float strength, float speed);
++    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
++    void SetSceneLightShafts(float strength);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
@@ -3138,10 +3171,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..e987493
+index 0000000..ae9e469
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,509 @@
+@@ -0,0 +1,555 @@
 +//
 +// RT64
 +//
@@ -3429,6 +3462,48 @@ index 0000000..e987493
 +    return (LoadDepth(at) >= 0.99999f) ? float4(gColor.Load(int3(at, 0)).rgb, 0.5f) : 0.0f;
 +}
 +
++// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
++// through and fading with each step, so light streams through gaps between things against the sky.
++float3 LightShafts(int2 pixel) {
++    const float3 sun = gConstants.sun.xyz;
++    if (sun.z > -0.05f) {
++        // Behind the camera, or almost square to it.
++        return 0.0f;
++    }
++    const float2 size = gConstants.projection.zw;
++    const float2 ndc = float2(sun.x * gConstants.projection.x / -sun.z, sun.y * gConstants.projection.y / -sun.z);
++    const float2 sunScreen = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++    // Fades out as the sun leaves the screen, gone a screen's height past its edge.
++    const float2 outside = max(max(-sunScreen, sunScreen - size), 0.0f);
++    const float onScreen = saturate(1.0f - length(outside) / size.y);
++    if (onScreen <= 0.0f) {
++        return 0.0f;
++    }
++
++    const int Samples = 40;
++    const float2 delta = (sunScreen - float2(pixel)) * (0.85f / float(Samples));
++    // A different start for each pixel hides the steps.
++    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
++    float2 p = float2(pixel) + delta * jitter;
++    float3 gathered = 0.0f;
++    float weight = 1.0f;
++    [loop] for (int i = 0; i < Samples; i++) {
++        p += delta;
++        const int2 at = int2(p);
++        if (any(at < 0) || any(at >= int2(size))) {
++            break;
++        }
++        if (LoadDepth(at) >= 0.99999f) {
++            const float3 sky = gColor.Load(int3(at, 0)).rgb;
++            // Only bright sky gives light: night skies and dark backdrops don't.
++            const float bright = saturate((dot(sky, float3(0.299f, 0.587f, 0.114f)) - 0.45f) * 2.5f);
++            gathered += sky * (bright * weight);
++        }
++        weight *= 0.95f;
++    }
++    return gathered * (gConstants.sun.w * onScreen * 0.08f);
++}
++
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
 +// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
 +// they are.
@@ -3544,6 +3619,10 @@ index 0000000..e987493
 +    float3 bloom = 0.0f;
 +    if (gConstants.bloom.x > 0.0f) {
 +        bloom = gBloom.SampleLevel(LinearSampler, uv, 0).rgb * gConstants.bloom.x;
++    }
++    // Light shafts are added the same way.
++    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 0.5f)) {
++        bloom += LightShafts(pixel);
 +    }
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
@@ -4002,10 +4081,10 @@ index 0a5c332..54c2c83 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..25aac51
+index 0000000..2a1d24d
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,51 @@
 +//
 +// RT64
 +//
@@ -4044,6 +4123,8 @@ index 0000000..25aac51
 +        // A view-space position's world x and z: dot(position, xyz) + w. Lets the water waves stay in place.
 +        float4 worldX;
 +        float4 worldZ;
++        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
++        float4 sun;
 +    };
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
