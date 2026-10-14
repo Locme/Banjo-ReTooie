@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..2e43e6a 100644
+index 79dfc38..4c6f5cc 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -389,6 +389,9 @@ set (SOURCES
@@ -12,7 +12,13 @@ index 79dfc38..2e43e6a 100644
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -548,6 +551,26 @@ build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/Textu
+@@ -543,11 +546,32 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
+ build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
+ build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
++build_compute_shader(rt64 "src/shaders/TextureUpscaleCS.hlsl")
+ build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/TextureResolveSamples2XPS.hlsl" "-D SAMPLES_2X")
+ build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/TextureResolveSamples4XPS.hlsl" "-D SAMPLES_4X")
  build_pixel_shader(  rt64 "src/shaders/TextureResolvePS.hlsl" "src/shaders/TextureResolveSamples8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSRegular.hlsl")
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSPixel.hlsl" "-D PIXEL_ANTIALIASING")
@@ -350,13 +356,30 @@ index 5a331aa..87ecc21 100644
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..7e6af88 100644
+index 69a82ac..56ed4a1 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,52 @@ namespace RT64 {
+@@ -659,6 +659,69 @@ namespace RT64 {
          }
      };
  
++    // Banjo-Tooie: live texture upscaling (TextureUpscaleCS.hlsl), a decoded texture in and twice its size out.
++    struct TextureUpscaleDescriptorSet : RenderDescriptorSetBase {
++        uint32_t gInput;
++        uint32_t gOutput;
++
++        TextureUpscaleDescriptorSet(RenderDevice *device = nullptr) {
++            builder.begin();
++            gInput = builder.addTexture(1);
++            gOutput = builder.addReadWriteTexture(2);
++            builder.end();
++
++            if (device != nullptr) {
++                create(device);
++            }
++        }
++    };
++
 +    // Banjo-Tooie: every SMAA pass reads up to three textures with SMAA's linear and point samplers.
 +    struct SmaaDescriptorSet : RenderDescriptorSetBase {
 +        uint32_t gTexture0;
@@ -1355,10 +1378,10 @@ index 0000000..4e519ce
 +        const interop::float4x4 &projection, const ShaderLibrary *shaderLibrary);
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..48bc3f7 100644
+index d1c5273..19bd289 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,6 +40,21 @@
+@@ -40,7 +40,23 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -1378,9 +1401,11 @@ index d1c5273..48bc3f7 100644
 +#include "shaders/SceneEffects4XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects8XPS.hlsl.spirv.h"
  #include "shaders/TextureDecodeCS.hlsl.spirv.h"
++#include "shaders/TextureUpscaleCS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
-@@ -86,6 +101,21 @@
+ #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
+@@ -86,7 +102,23 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -1400,9 +1425,11 @@ index d1c5273..48bc3f7 100644
 +#   include "shaders/SceneEffects4XPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.dxil.h"
  #   include "shaders/TextureDecodeCS.hlsl.dxil.h"
++#   include "shaders/TextureUpscaleCS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
-@@ -131,6 +161,21 @@
+ #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
+@@ -131,7 +163,23 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -1422,9 +1449,11 @@ index d1c5273..48bc3f7 100644
 +#   include "shaders/SceneEffects4XPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.metal.h"
  #   include "shaders/TextureDecodeCS.hlsl.metal.h"
++#   include "shaders/TextureUpscaleCS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
-@@ -148,6 +193,9 @@
+ #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
+@@ -148,6 +196,9 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -1434,7 +1463,7 @@ index d1c5273..48bc3f7 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -569,6 +617,68 @@ namespace RT64 {
+@@ -569,6 +620,68 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -1503,7 +1532,28 @@ index d1c5273..48bc3f7 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -832,6 +942,52 @@ namespace RT64 {
+@@ -583,6 +696,20 @@ namespace RT64 {
+             textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
+         }
+ 
++        // Banjo-Tooie: Texture Upscale.
++        {
++            TextureUpscaleDescriptorSet descriptorSet;
++            layoutBuilder.begin();
++            layoutBuilder.addPushConstant(0, 0, sizeof(uint32_t) * 4, RenderShaderStageFlag::COMPUTE);
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.end();
++            textureUpscale.pipelineLayout = layoutBuilder.create(device);
++
++            std::unique_ptr<RenderShader> computeShader = device->createShader(CREATE_SHADER_INPUTS(TextureUpscaleCSBlobDXIL, TextureUpscaleCSBlobSPIRV, TextureUpscaleCSBlobMSL, "CSMain", shaderFormat));
++            RenderComputePipelineDesc pipelineDesc(textureUpscale.pipelineLayout.get(), computeShader.get(), 8, 8, 1);
++            textureUpscale.pipeline = device->createComputePipeline(pipelineDesc);
++        }
++
+         // Video Interface.
+         {
+             std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
+@@ -832,6 +959,52 @@ namespace RT64 {
              }
          }
  
@@ -1557,10 +1607,10 @@ index d1c5273..48bc3f7 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..9fca99a 100644
+index 641f3ec..6e1f323 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,20 @@ namespace RT64 {
+@@ -51,8 +51,21 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
@@ -1571,6 +1621,7 @@ index 641f3ec..9fca99a 100644
 +        // Banjo-Tooie: eye adaptation's brightness passes (BloomPS.hlsl passes 3 and 4), to R32_FLOAT.
 +        ShaderRecord luminance;
          ShaderRecord textureDecode;
++        ShaderRecord textureUpscale;
          ShaderRecord textureCopy;
 +        // Banjo-Tooie: SMAA passes, one per preset (low, medium, high, ultra) for the first two.
 +        ShaderRecord smaaEdges[4];
@@ -1786,6 +1837,273 @@ index 0000000..4cf5377
 +            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height);
 +    };
 +};
+diff --git a/src/render/rt64_texture.h b/src/render/rt64_texture.h
+index 95618bc..d5eb4dd 100644
+--- a/src/render/rt64_texture.h
++++ b/src/render/rt64_texture.h
+@@ -21,5 +21,7 @@ namespace RT64 {
+         uint64_t memorySize = 0;
+         std::vector<uint8_t> bytesTMEM;
+         bool decodeTMEM = false;
++        // Banjo-Tooie: this texture upscaled (live texture upscaling), used as its replacement and freed with it.
++        std::unique_ptr<Texture> upscaled;
+     };
+ };
+diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
+index 0848f3e..28ca5f0 100644
+--- a/src/render/rt64_texture_cache.cpp
++++ b/src/render/rt64_texture_cache.cpp
+@@ -20,6 +20,8 @@
+ 
+ #include "rt64_texture_cache.h"
+ 
++#include <unordered_set>
++
+ #define ONLY_USE_LOW_MIP_CACHE 0
+ 
+ namespace RT64 {
+@@ -29,6 +31,22 @@ namespace RT64 {
+     static const uint32_t TextureDataPitchAlignment = 256;
+     static const uint32_t TextureDataPlacementAlignment = 512;
+ 
++    // Banjo-Tooie: live texture upscaling. The upload thread notices a new generation and refreshes the cache.
++    static std::atomic<uint32_t> TextureUpscaleFactor = 1;
++    static std::atomic<uint32_t> TextureUpscaleGeneration = 0;
++    static const uint32_t TextureUpscaleMaxSize = 4096;
++
++    void SetTextureUpscale(uint32_t factor) {
++        factor = (factor >= 4) ? 4 : ((factor >= 2) ? 2 : 1);
++        if (TextureUpscaleFactor.exchange(factor) != factor) {
++            TextureUpscaleGeneration++;
++        }
++    }
++
++    uint32_t GetTextureUpscale() {
++        return TextureUpscaleFactor;
++    }
++
+     ReplacementMap::ReplacementMap() {
+         // Empty constructor.
+     }
+@@ -980,8 +998,17 @@ namespace RT64 {
+         std::vector<RenderTextureBarrier> beforeDecodeBarriers;
+         std::vector<RenderTextureBarrier> afterDecodeBarriers;
+         std::vector<uint8_t> replacementBytes;
++        std::unordered_set<uint64_t> packHashes;
+ 
+         while (uploadThreadRunning) {
++            // Banjo-Tooie: apply a changed texture upscale setting to the textures already loaded.
++            const uint32_t upscaleGenerationNow = TextureUpscaleGeneration;
++            if (upscaleGeneration != upscaleGenerationNow) {
++                upscaleGeneration = upscaleGenerationNow;
++                refreshUpscaled(GetTextureUpscale());
++            }
++
++
+             resolvedPathQueueCopy.clear();
+             streamResultQueueCopy.clear();
+             beforeCopyBarriers.clear();
+@@ -991,10 +1018,15 @@ namespace RT64 {
+             // Check the top of the queue or wait if it's empty.
+             {
+                 std::unique_lock queueLock(uploadQueueMutex);
+-                uploadQueueChanged.wait(queueLock, [this]() {
+-                    return !uploadThreadRunning || !uploadQueue.empty() || !resolvedPathQueue.empty() || !streamResultQueue.empty();
++                // Banjo-Tooie: wake up now and then to notice a changed texture upscale setting.
++                uploadQueueChanged.wait_for(queueLock, std::chrono::milliseconds(100), [this]() {
++                    return !uploadThreadRunning || !uploadQueue.empty() || !resolvedPathQueue.empty() || !streamResultQueue.empty() || (upscaleGeneration != TextureUpscaleGeneration);
+                 });
+ 
++                if (upscaleGeneration != TextureUpscaleGeneration) {
++                    continue;
++                }
++
+                 if (!uploadQueue.empty()) {
+                     queueCopy = uploadQueue;
+                 }
+@@ -1222,6 +1254,24 @@ namespace RT64 {
+                     directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
+                 }
+ 
++                // Banjo-Tooie: upscale the newly decoded textures that no texture pack replaces.
++                const uint32_t upscaleFactor = GetTextureUpscale();
++                upscaleDescriptorsUsed = 0;
++                if (upscaleFactor > 1) {
++                    packHashes.clear();
++                    for (const ReplacementResolvedPath &resolvedPath : resolvedPathQueueCopy) {
++                        packHashes.insert(resolvedPath.textureHash);
++                    }
++
++                    for (size_t i = 0; i < queueSize; i++) {
++                        const TextureUpload &upload = queueCopy[i];
++                        Texture *texture = textureMapAdditions[i].texture;
++                        if (upload.decodeTMEM && (packHashes.find(upload.hash) == packHashes.end()) && recordUpscale(directWorker->commandList.get(), texture, upscaleFactor)) {
++                            replacementMapAdditions.emplace_back(ReplacementMapAddition{ upload.hash, texture->upscaled.get(), ReplacementShift::None, false });
++                        }
++                    }
++                }
++
+                 // Execute the direct worker but make it wait for the copy worker to finish first.
+                 const RenderCommandList *directCommandList = directWorker->commandList.get();
+                 directWorker->commandList->end();
+@@ -1230,6 +1280,7 @@ namespace RT64 {
+ 
+                 // Delete all the resources used during the upload of replacements.
+                 replacementUploadResources.clear();
++                upscaleSteps.clear();
+                 
+                 // Add all the textures to the map once they're ready.
+                 {
+@@ -1258,6 +1309,110 @@ namespace RT64 {
+         }
+     }
+ 
++    bool TextureCache::recordUpscale(RenderCommandList *commandList, Texture *texture, uint32_t factor) {
++        if ((texture->texture == nullptr) || (texture->width == 0) || (texture->height == 0) || ((texture->width * factor) > TextureUpscaleMaxSize) || ((texture->height * factor) > TextureUpscaleMaxSize)) {
++            return false;
++        }
++
++        const ShaderRecord &textureUpscale = shaderLibrary->textureUpscale;
++        commandList->setPipeline(textureUpscale.pipeline.get());
++        commandList->setComputePipelineLayout(textureUpscale.pipelineLayout.get());
++
++        // Each pass doubles the size: once for 2x, twice for 4x (through a half-way texture).
++        RenderTexture *input = texture->texture.get();
++        uint32_t width = texture->width;
++        uint32_t height = texture->height;
++        std::unique_ptr<Texture> upscaled = std::make_unique<Texture>();
++        for (uint32_t scale = 2; scale <= factor; scale *= 2) {
++            const bool lastPass = (scale * 2) > factor;
++            std::unique_ptr<RenderTexture> output = directWorker->device->createTexture(RenderTextureDesc::Texture2D(width * 2, height * 2, 1, RenderFormat::R8G8B8A8_UNORM, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
++            output->setName("Texture Cache Upscaled");
++            if (upscaleDescriptorsUsed >= upscaleDescriptorSets.size()) {
++                upscaleDescriptorSets.emplace_back(std::make_unique<TextureUpscaleDescriptorSet>(directWorker->device));
++            }
++
++            TextureUpscaleDescriptorSet *descSet = upscaleDescriptorSets[upscaleDescriptorsUsed++].get();
++            descSet->setTexture(descSet->gInput, input, RenderTextureLayout::SHADER_READ);
++            descSet->setTexture(descSet->gOutput, output.get(), RenderTextureLayout::GENERAL);
++            commandList->barriers(RenderBarrierStage::COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::GENERAL));
++
++            const uint32_t upscaleCB[4] = { width, height, 0, 0 };
++            const uint32_t ThreadGroupSize = 8;
++            commandList->setComputePushConstants(0, upscaleCB);
++            commandList->setComputeDescriptorSet(descSet->get(), 0);
++            commandList->dispatch((width * 2 + ThreadGroupSize - 1) / ThreadGroupSize, (height * 2 + ThreadGroupSize - 1) / ThreadGroupSize, 1);
++            commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::SHADER_READ));
++
++            width *= 2;
++            height *= 2;
++            input = output.get();
++            if (lastPass) {
++                upscaled->texture = std::move(output);
++            }
++            else {
++                upscaleSteps.emplace_back(std::move(output));
++            }
++        }
++
++        upscaled->creationFrame = texture->creationFrame;
++        upscaled->format = RenderFormat::R8G8B8A8_UNORM;
++        upscaled->width = width;
++        upscaled->height = height;
++        upscaled->mipmaps = 1;
++        upscaled->memorySize = uint64_t(width) * height * 4;
++        texture->upscaled = std::move(upscaled);
++        return true;
++    }
++
++    void TextureCache::refreshUpscaled(uint32_t factor) {
++        std::unique_lock lock(textureMapMutex);
++
++        // Take off the upscales made with the old setting. Frames in flight may still use them, so they're
++        // freed with the evicted textures.
++        for (size_t i = 0; i < textureMap.textures.size(); i++) {
++            Texture *texture = textureMap.textures[i];
++            if ((texture == nullptr) || (texture->upscaled == nullptr)) {
++                continue;
++            }
++
++            if (textureMap.textureReplacements[i] == texture->upscaled.get()) {
++                textureMap.textureReplacements[i] = nullptr;
++                textureMap.textureReplacementShiftedByHalf[i] = false;
++                textureMap.textureReplacementReferenceCounted[i] = false;
++                textureMap.textureScales[i] = IdentityScale;
++                textureMap.versions[i]++;
++            }
++
++            textureMap.evictedTextures.emplace_back(texture->upscaled.release());
++        }
++
++        textureMap.globalVersion++;
++        if (factor <= 1) {
++            return;
++        }
++
++        // Upscale every decoded texture that nothing else replaces.
++        std::vector<uint32_t> upscaledIndices;
++        directWorker->commandList->begin();
++        upscaleDescriptorsUsed = 0;
++        for (size_t i = 0; i < textureMap.textures.size(); i++) {
++            Texture *texture = textureMap.textures[i];
++            if ((texture != nullptr) && texture->decodeTMEM && (textureMap.textureReplacements[i] == nullptr) && recordUpscale(directWorker->commandList.get(), texture, factor)) {
++                upscaledIndices.emplace_back(uint32_t(i));
++            }
++        }
++
++        directWorker->commandList->end();
++        const RenderCommandList *directCommandList = directWorker->commandList.get();
++        directWorker->commandQueue->executeCommandLists(&directCommandList, 1, nullptr, 0, nullptr, 0, directWorker->commandFence.get());
++        directWorker->wait();
++        upscaleSteps.clear();
++
++        for (uint32_t i : upscaledIndices) {
++            textureMap.replace(textureMap.hashes[i], textureMap.textures[i]->upscaled.get(), false, false);
++        }
++    }
++
+     void TextureCache::queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM) {
+         assert(!decodeTMEM || ((width > 0) && (height > 0)));
+ 
+diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
+index 9131697..d2968c7 100644
+--- a/src/render/rt64_texture_cache.h
++++ b/src/render/rt64_texture_cache.h
+@@ -151,6 +151,11 @@ namespace RT64 {
+         size_t getMaxIndex() const;
+     };
+ 
++    // Banjo-Tooie: live texture upscaling of the game's decoded textures (1 off, 2 or 4), applied as replacements.
++    // Textures that a texture pack replaces are left alone. Changes apply to the textures already loaded.
++    void SetTextureUpscale(uint32_t factor);
++    uint32_t GetTextureUpscale();
++
+     struct TextureCache {
+         struct StreamDescription {
+             uint32_t fileSystemIndex = 0;
+@@ -205,6 +210,11 @@ namespace RT64 {
+         std::vector<std::unique_ptr<RenderBuffer>> tmemUploadResources;
+         std::vector<std::unique_ptr<RenderBuffer>> replacementUploadResources;
+         std::vector<std::unique_ptr<TextureDecodeDescriptorSet>> descriptorSets;
++        // Banjo-Tooie: live texture upscaling.
++        std::vector<std::unique_ptr<TextureUpscaleDescriptorSet>> upscaleDescriptorSets;
++        std::vector<std::unique_ptr<RenderTexture>> upscaleSteps;
++        uint32_t upscaleDescriptorsUsed = 0;
++        uint32_t upscaleGeneration = 0;
+         std::mutex uploadQueueMutex;
+         std::condition_variable uploadQueueChanged;
+         std::condition_variable uploadQueueFinished;
+@@ -233,6 +243,10 @@ namespace RT64 {
+         TextureCache(RenderWorker *directWorker, RenderWorker *copyWorker, uint32_t threadCount, const ShaderLibrary *shaderLibrary);
+         ~TextureCache();
+         void uploadThreadLoop();
++        // Banjo-Tooie: records the upscale of a decoded texture (in SHADER_READ) into texture->upscaled, left in SHADER_READ.
++        bool recordUpscale(RenderCommandList *commandList, Texture *texture, uint32_t factor);
++        // Banjo-Tooie: applies a changed upscale setting to the textures already in the cache.
++        void refreshUpscaled(uint32_t factor);
+         void queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM);
+         void waitForGPUUploads();
+         void addResolvedPaths(uint64_t hash, uint32_t width, uint32_t height, uint32_t tlut, const LoadTile &loadTile, const std::vector<uint8_t> &bytesTMEM, bool decodeTMEM, std::vector<ReplacementResolvedPath> &resolvedPaths, uint64_t exclusiveDbHash = 0);
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
 index b4ff4e9..ef54bf8 100644
 --- a/src/render/rt64_vi_renderer.cpp
@@ -2706,6 +3024,80 @@ index 0000000..d6b151f
 +    SMAANeighborhoodBlendingVS(uv, offset);
 +    return SMAANeighborhoodBlendingPS(uv, offset, gTexture0, gTexture1);
 +#endif
++}
+diff --git a/src/shaders/TextureUpscaleCS.hlsl b/src/shaders/TextureUpscaleCS.hlsl
+new file mode 100644
+index 0000000..63b1ede
+--- /dev/null
++++ b/src/shaders/TextureUpscaleCS.hlsl
+@@ -0,0 +1,68 @@
++//
++// RT64
++//
++// Banjo-Tooie: live texture upscaling. Doubles a decoded texture with an edge-directed rule written from
++// the published description of Hyllian's xBR (level 1): for each corner of a source pixel, the edge
++// across that corner is compared with the one along it, using the pixels around them, and where the
++// corner sits on an edge it takes the colour of the nearer side, half blended. Run twice for 4x.
++// Textures wrap, as most of the game's tile.
++
++#define GROUP_SIZE 8
++
++struct TextureUpscaleCB {
++    uint2 inputSize;
++    uint2 padding;
++};
++
++[[vk::push_constant]] ConstantBuffer<TextureUpscaleCB> gConstants : register(b0);
++Texture2D<float4> gInput : register(t1);
++RWTexture2D<float4> gOutput : register(u2);
++
++float4 Fetch(int2 base, int2 offset, int2 mirror) {
++    const int2 size = int2(gConstants.inputSize);
++    const int2 p = ((base + offset * mirror) % size + size) % size;
++    return gInput.Load(int3(p, 0));
++}
++
++// A perceptual distance between two colours (luma counts most), with alpha.
++float Distance(float4 a, float4 b) {
++    const float3 d = a.rgb - b.rgb;
++    const float y = dot(d, float3(0.299f, 0.587f, 0.114f));
++    const float u = dot(d, float3(-0.169f, -0.331f, 0.5f));
++    const float v = dot(d, float3(0.5f, -0.419f, -0.081f));
++    return 48.0f * abs(y) + 7.0f * abs(u) + 6.0f * abs(v) + 32.0f * abs(a.a - b.a);
++}
++
++[numthreads(GROUP_SIZE, GROUP_SIZE, 1)]
++void CSMain(uint2 coord : SV_DispatchThreadID) {
++    if ((coord.x >= gConstants.inputSize.x * 2) || (coord.y >= gConstants.inputSize.y * 2)) {
++        return;
++    }
++
++    // The source pixel and the corner this output pixel is in, as a mirror so the rule is written once
++    // for the bottom-right corner.
++    const int2 base = int2(coord / 2);
++    const int2 mirror = int2((coord.x & 1) ? 1 : -1, (coord.y & 1) ? 1 : -1);
++    const float4 E = Fetch(base, int2(0, 0), mirror);
++    const float4 B = Fetch(base, int2(0, -1), mirror);
++    const float4 C = Fetch(base, int2(1, -1), mirror);
++    const float4 D = Fetch(base, int2(-1, 0), mirror);
++    const float4 F = Fetch(base, int2(1, 0), mirror);
++    const float4 G = Fetch(base, int2(-1, 1), mirror);
++    const float4 H = Fetch(base, int2(0, 1), mirror);
++    const float4 I = Fetch(base, int2(1, 1), mirror);
++    const float4 F4 = Fetch(base, int2(2, 0), mirror);
++    const float4 I4 = Fetch(base, int2(2, 1), mirror);
++    const float4 H5 = Fetch(base, int2(0, 2), mirror);
++    const float4 I5 = Fetch(base, int2(1, 2), mirror);
++
++    // An edge running between F and H (across the corner) against one through E and I (along it).
++    const float across = Distance(E, C) + Distance(E, G) + Distance(I, F4) + Distance(I, H5) + 4.0f * Distance(H, F);
++    const float along = Distance(H, D) + Distance(H, I5) + Distance(F, I4) + Distance(F, B) + 4.0f * Distance(E, I);
++    float4 result = E;
++    if (across < along) {
++        const float4 nearer = (Distance(E, F) <= Distance(E, H)) ? F : H;
++        result = lerp(E, nearer, 0.5f);
++    }
++    gOutput[coord] = result;
 +}
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
 index 3f33475..cb122d1 100644

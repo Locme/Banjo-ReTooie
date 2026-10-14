@@ -189,6 +189,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.50 Texture upscaling (xBR-style live cache) and the Real-ESRGAN tool
 - [ ] Done
 - [ ] Approved by L
+- Partial (2026-10-14, T91): live upscaler done. Graphics > Texture upscaling Off / 2x / 4x (Enhanced preset 2x), live. RT64's texture cache upscales each decoded game texture on the GPU (TextureUpscaleCS.hlsl, the project's own edge-directed 2x written from the published xBR level-1 rule, run twice for 4x; the GPL xBRZ code was not used) and uses it as the texture's replacement. Textures a texture pack replaces are left alone, and raw-TMEM textures (not decoded) aren't upscaled. Changing the setting re-upscales everything already loaded. Checked headless in Spiral Mountain at 4x and with live 2x then Off. The Real-ESRGAN offline tool is not started.
 
 ### 4.51 HD shadows
 - [ ] Done

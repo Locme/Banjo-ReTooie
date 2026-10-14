@@ -933,3 +933,13 @@
   2. Walk around somewhere colourful: Jolly Roger's Lagoon town, Mayahem Temple, a cave
 - Look for: Surfaces near colourful walls and grass pick up a little of their colour and light. Is there visible speckle or shimmer, especially when moving? Frame rate fine?
 - Status: waiting for L
+
+## T91 Texture upscaling
+- Asked: 2026-10-14 07:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.50
+- Steps:
+  1. Esc > Graphics: set "Texture upscaling" to 2x, then 4x, then Off, while in a level
+  2. Look at grass, rock walls, signs and the level title text up close
+- Look for: Textures look sharper with smoother lines and edges, and switch at once. Any texture that looks wrong (seams at tile edges, odd colours on see-through edges), any stutter when entering a new area at 4x?
+- Status: waiting for L

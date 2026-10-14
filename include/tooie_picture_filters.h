@@ -16,6 +16,7 @@
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
     enum class Colour16 : uint32_t { Off, Console, Raw };
+    enum class TextureUpscale : uint32_t { Off, Double, Quadruple };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
     enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
 
@@ -47,6 +48,7 @@ namespace tooie::picture_filters {
     inline const std::string underwater_distortion_option = "underwater_distortion";
     inline const std::string water_reflections_option = "water_reflections";
     inline const std::string bounce_light_option = "bounce_light";
+    inline const std::string texture_upscale_option = "texture_upscale";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

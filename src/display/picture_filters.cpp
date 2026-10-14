@@ -49,6 +49,8 @@ namespace RT64 {
     void SetSceneHeatHaze(float strength);
     void SetSceneWaterReflections(float strength);
     void SetSceneBounceLight(float strength);
+    // lib/rt64/src/render/rt64_texture_cache.h.
+    void SetTextureUpscale(uint32_t factor);
 }
 
 namespace {
@@ -143,6 +145,7 @@ namespace {
         { &tooie::picture_filters::underwater_distortion_option, 0.0 },
         { &tooie::picture_filters::water_reflections_option, 0.0 },
         { &tooie::picture_filters::bounce_light_option, 0.0 },
+        { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -169,6 +172,7 @@ namespace {
             graphics.update_option_value(heat_haze_option, 50.0);
             graphics.update_option_value(underwater_distortion_option, 30.0);
             graphics.update_option_value(water_reflections_option, 60.0);
+            graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -220,6 +224,8 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
+    RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
@@ -386,6 +392,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Draws 240 scanlines and the stripes of a CRT TV's aperture grille over the picture.",
         false);
 
+    graphics.add_enum_option(
+        texture_upscale_option,
+        "Texture upscaling",
+        "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority.",
+        {
+            {TextureUpscale::Off, "Off", "Off"},
+            {TextureUpscale::Double, "2x", "2x"},
+            {TextureUpscale::Quadruple, "4x", "4x"},
+        },
+        TextureUpscale::Off);
     graphics.add_number_option(
         sharpen_option,
         "Sharpening",
@@ -497,7 +513,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
