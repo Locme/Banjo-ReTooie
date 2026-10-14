@@ -1427,3 +1427,13 @@
   3. After any tear, hold F12 for a burst (let go after the tear) and look in the log for a line starting with [dl]
 - Look for: Whether the 1-2 frame tears and black patches still happen, how often compared with before, and whether any [dl] line appears in the log
 - Status: waiting for L
+
+## T135 Water and underwater effects drawn once
+- Asked: 2026-10-14 17:28 UTC
+- Build: main @ bd142ac
+- Steps:
+  1. Graphics: Water reflections 50, Water waves 50, Underwater tint 25, haze 15, distortion 30
+  2. Swim in the Spiral Mountain moat on top, then dive
+  3. Watch the water from above and below
+- Look for: The water and the underwater look show once, with no doubled or ghosted water and no tint that builds up; frame rate a little higher
+- Status: waiting for L
