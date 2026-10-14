@@ -761,7 +761,7 @@ index 69a82ac..f4f86fa 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a77664e 100644
+index 9fae0d4..07cff69 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -874,7 +874,7 @@ index 9fae0d4..a77664e 100644
              }
          }
      }
-@@ -1408,6 +1476,15 @@ namespace RT64 {
+@@ -1408,6 +1476,32 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -886,11 +886,28 @@ index 9fae0d4..a77664e 100644
 +        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
 +        // his 2D glow), so the effects go after the last of them, not before the HUD's 3D models.
 +        bool worldOpen = false;
++        // The 3D world's projection is the first perspective one whose draws write depth. The sky comes first
++        // with a projection of its own (other near and far planes) and writes no depth, so taking it read every
++        // depth wrongly (ambient occlusion off the characters' outlines). Without any, the first one as before.
++        int32_t worldProjection = -1;
++        for (uint32_t pr = 0; (pr < fbPair.projectionCount) && (worldProjection < 0); pr++) {
++            const Projection &proj = fbPair.projections[pr];
++            if ((proj.type != Projection::Type::Perspective) || proj.scissorRect.isNull()) {
++                continue;
++            }
++            for (uint32_t d = 0; d < proj.gameCallCount; d++) {
++                const interop::OtherMode om = proj.gameCalls[d].shaderDesc.otherMode;
++                if (om.zUpd() && (om.cycleType() != G_CYC_COPY) && (om.cycleType() != G_CYC_FILL)) {
++                    worldProjection = int32_t(pr);
++                    break;
++                }
++            }
++        }
 +        int32_t worldEnd = -1;
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1533,29 @@ namespace RT64 {
+@@ -1456,6 +1550,29 @@ namespace RT64 {
                  continue;
              }
  
@@ -898,7 +915,7 @@ index 9fae0d4..a77664e 100644
 +            // scene, so screen-space effects can go in between.
 +            if (proj.type == Projection::Type::Perspective) {
 +                if (fbPair.depthWrite && (proj.gameCallCount > 0)) {
-+                    if (targetDrawCall.sceneEffectsDrawData == nullptr) {
++                    if ((targetDrawCall.sceneEffectsDrawData == nullptr) && ((worldProjection < 0) || (int32_t(pr) >= worldProjection))) {
 +                        worldOpen = true;
 +                        targetDrawCall.sceneEffectsDrawData = &drawData;
 +                        targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
@@ -920,7 +937,7 @@ index 9fae0d4..a77664e 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1847,18 @@ namespace RT64 {
+@@ -1747,6 +1864,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -939,7 +956,7 @@ index 9fae0d4..a77664e 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1870,26 @@ namespace RT64 {
+@@ -1758,6 +1887,26 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
