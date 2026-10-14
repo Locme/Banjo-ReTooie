@@ -54,6 +54,46 @@ index 79dfc38..e1febf2 100644
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
+diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
+index dccaa87..4440507 100644
+--- a/src/hle/rt64_interpreter.cpp
++++ b/src/hle/rt64_interpreter.cpp
+@@ -32,10 +32,16 @@ namespace RT64 {
+         const uint32_t maskedTextAddress = textAddress & AddressMask;
+         const uint32_t maskedDataAddress = dataAddress & AddressMask;
+         if ((UCode.textAddress != maskedTextAddress) || (UCode.dataAddress != maskedDataAddress)) {
+-            hleGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
+-            if (hleGBI != nullptr) {
++            // Banjo-Tooie: a microcode that isn't in the database used to leave hleGBI null, and the
++            // next display list crashed reading its command table. Keep the last known one instead.
++            GBI *foundGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
++            if (foundGBI != nullptr) {
++                hleGBI = foundGBI;
+                 state->rsp->setGBI(hleGBI);
+             }
++            else {
++                fprintf(stderr, "[rt64] Unknown microcode (text 0x%06X, data 0x%06X); keeping the previous one.\n", maskedTextAddress, maskedDataAddress);
++            }
+ 
+             UCode.textAddress = maskedTextAddress;
+             UCode.dataAddress = maskedDataAddress;
+@@ -154,7 +160,15 @@ namespace RT64 {
+     }
+ 
+     void Interpreter::processDisplayLists(uint32_t dlStartAdddress, DisplayList *dlStart) {
+-        assert(hleGBI != nullptr);
++        // Banjo-Tooie: no microcode recognised yet, so there is nothing to run the list with.
++        if (hleGBI == nullptr) {
++            static bool reported = false;
++            if (!reported) {
++                fprintf(stderr, "[rt64] Display list skipped: no known microcode loaded.\n");
++                reported = true;
++            }
++            return;
++        }
+ 
+         state->dlCpuProfiler.start();
+ 
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
 index 3227ab1..8ec5744 100644
 --- a/src/hle/rt64_present_queue.cpp
@@ -471,7 +511,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..740c1c6 100644
+index 9fae0d4..1b4dfe7 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -546,7 +586,7 @@ index 9fae0d4..740c1c6 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1297,6 +1334,23 @@ namespace RT64 {
+@@ -1297,6 +1334,36 @@ namespace RT64 {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
                  submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
@@ -557,12 +597,25 @@ index 9fae0d4..740c1c6 100644
 +                    if (!targetDrawCall.waterInstances.empty() && SceneWaterWanted()) {
 +                        submitWaterMask(worker, framebuffer, targetDrawCall);
 +                    }
-+                    // The projection the processor adjusted, or the game's own when it didn't run.
++                    // The projection the processor adjusted (for the aspect ratio). Some recordings come when its
++                    // copies are already gone: then the game's own, widened the way the last adjusted one was.
 +                    const DrawData *effectsData = targetDrawCall.sceneEffectsDrawData;
 +                    const uint32_t effectsIndex = targetDrawCall.sceneEffectsTransformsIndex;
 +                    if ((effectsData != nullptr) && (effectsIndex < effectsData->viewTransforms.size())) {
-+                        const interop::float4x4 &effectsProjection = (effectsIndex < effectsData->modProjTransforms.size()) ?
-+                            effectsData->modProjTransforms[effectsIndex] : effectsData->projTransforms[effectsIndex];
++                        static float widthScale = 1.0f;
++                        interop::float4x4 effectsProjection = effectsData->projTransforms[effectsIndex];
++                        if (effectsIndex < effectsData->modProjTransforms.size()) {
++                            const interop::float4x4 &adjusted = effectsData->modProjTransforms[effectsIndex];
++                            if (std::abs(effectsProjection.m[0][0]) > 1e-6f) {
++                                widthScale = adjusted.m[0][0] / effectsProjection.m[0][0];
++                            }
++                            effectsProjection = adjusted;
++                        }
++                        else {
++                            for (int r = 0; r < 4; r++) {
++                                effectsProjection.m[r][0] *= widthScale;
++                            }
++                        }
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsData->viewTransforms[effectsIndex], shaderLibrary);
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -570,7 +623,7 @@ index 9fae0d4..740c1c6 100644
              }
          }
      }
-@@ -1408,6 +1462,10 @@ namespace RT64 {
+@@ -1408,6 +1475,10 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -581,7 +634,7 @@ index 9fae0d4..740c1c6 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1514,20 @@ namespace RT64 {
+@@ -1456,6 +1527,20 @@ namespace RT64 {
                  continue;
              }
  
@@ -602,7 +655,7 @@ index 9fae0d4..740c1c6 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1819,18 @@ namespace RT64 {
+@@ -1747,6 +1832,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -621,7 +674,7 @@ index 9fae0d4..740c1c6 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1842,9 @@ namespace RT64 {
+@@ -1758,6 +1855,9 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1150,10 +1203,10 @@ index 0000000..e400499
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..97d0d91
+index 0000000..65ddcb6
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,534 @@
+@@ -0,0 +1,553 @@
 +//
 +// RT64
 +//
@@ -1321,7 +1374,8 @@ index 0000000..97d0d91
 +
 +    void SetSceneUnderwater(float tint, float haze) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.underwaterTint = tint;
++        // The haze works without the tint too: a tiny tint keeps the underwater path on.
++        effectsSettings.underwaterTint = ((tint <= 0.0f) && (haze > 0.0f)) ? 1e-4f : tint;
 +        effectsSettings.underwaterHaze = haze;
 +    }
 +
@@ -1349,6 +1403,15 @@ index 0000000..97d0d91
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.waterWaves = strength;
 +        effectsSettings.waveSpeed = speed;
++    }
++
++    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]) {
++        const std::scoped_lock lock(effectsMutex);
++        for (int i = 0; i < 4; i++) {
++            effectsSettings.rippleX[i] = x[i];
++            effectsSettings.rippleZ[i] = z[i];
++            effectsSettings.rippleAge[i] = age[i];
++        }
 +    }
 +
 +    void SetSceneLightShafts(float strength) {
@@ -1420,6 +1483,9 @@ index 0000000..97d0d91
 +        waveTime = std::fmod(waveTime + std::min(std::chrono::duration<double>(now - waveClock).count(), 0.25) * settings.waveSpeed, 3600.0);
 +        waveClock = now;
 +        constants.ambientOcclusion.z = float(waveTime);
++        constants.rippleX = { settings.rippleX[0], settings.rippleX[1], settings.rippleX[2], settings.rippleX[3] };
++        constants.rippleZ = { settings.rippleZ[0], settings.rippleZ[1], settings.rippleZ[2], settings.rippleZ[3] };
++        constants.rippleAge = { settings.rippleAge[0], settings.rippleAge[1], settings.rippleAge[2], settings.rippleAge[3] };
 +
 +        // World x and z from a view-space position: the view matrix (row vectors: view = world * V) is a
 +        // scaled rotation A and a translation t, so world = (view - t) * inverse(A).
@@ -1439,12 +1505,18 @@ index 0000000..97d0d91
 +                const float z0 = (v[0][1] * v[1][2] - v[0][2] * v[1][1]) / det;
 +                const float z1 = -(v[0][0] * v[1][2] - v[0][2] * v[1][0]) / det;
 +                const float z2 = (v[0][0] * v[1][1] - v[0][1] * v[1][0]) / det;
++                // Column 1 of inverse(A).
++                const float y0 = -(v[0][1] * v[2][2] - v[0][2] * v[2][1]) / det;
++                const float y1 = (v[0][0] * v[2][2] - v[0][2] * v[2][0]) / det;
++                const float y2 = -(v[0][0] * v[2][1] - v[0][1] * v[2][0]) / det;
++                constants.worldY = { y0, y1, y2, -(v[3][0] * y0 + v[3][1] * y1 + v[3][2] * y2) };
 +                constants.worldX = { x0, x1, x2, -(v[3][0] * x0 + v[3][1] * x1 + v[3][2] * x2) };
 +                constants.worldZ = { z0, z1, z2, -(v[3][0] * z0 + v[3][1] * z1 + v[3][2] * z2) };
 +            }
 +            else {
 +                constants.worldX = { 1.0f, 0.0f, 0.0f, 0.0f };
 +                constants.worldZ = { 0.0f, 0.0f, 1.0f, 0.0f };
++                constants.worldY = { 0.0f, 1.0f, 0.0f, 0.0f };
 +            }
 +
 +            // The sun stands high, to one side (the game has no sun of its own to follow): its direction in
@@ -1690,10 +1762,10 @@ index 0000000..97d0d91
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..602c686
+index 0000000..b7009d0
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,95 @@
 +//
 +// RT64
 +//
@@ -1731,6 +1803,9 @@ index 0000000..602c686
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
 +        float lightShafts = 0.0f;
++        float rippleX[4] = {};
++        float rippleZ[4] = {};
++        float rippleAge[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
 +        float waveSpeed = 1.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
@@ -1764,6 +1839,8 @@ index 0000000..602c686
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
 +    void SetSceneLightShafts(float strength);
++    // Banjo-Tooie: four ripples on the water (world x and z, age in seconds, below 0 for none).
++    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
@@ -3171,10 +3248,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..ae9e469
+index 0000000..5a30031
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,555 @@
+@@ -0,0 +1,580 @@
 +//
 +// RT64
 +//
@@ -3215,7 +3292,8 @@ index 0000000..ae9e469
 +float3 Underwater(float3 color, float distance) {
 +    const float tint = saturate(gConstants.fog.w * 2.0f);
 +    const float3 tinted = color * float3(0.55f, 0.85f, 1.05f) + float3(0.0f, 0.03f, 0.07f);
-+    const float haze = saturate(gConstants.bloom.w * 4.0f) * (1.0f - exp(-distance / 2500.0f));
++    // Thickens within the few hundred units of a pool, not only across a whole level.
++    const float haze = saturate(gConstants.bloom.w * 4.0f) * (1.0f - exp(-distance / 900.0f));
 +    return lerp(lerp(color, tinted, tint), float3(0.08f, 0.32f, 0.45f), haze);
 +}
 +
@@ -3369,9 +3447,11 @@ index 0000000..ae9e469
 +    if (dot(normal, -surface) < 0.0f) {
 +        normal = -normal;
 +    }
-+    const float flat = saturate((normal.y - 0.35f) * 4.0f);
++    // Facing up in the world (not on the screen, so it holds when looking down at water). Streams
++    // running downhill count too; waterfalls don't.
++    const float flat = saturate((dot(normal, normalize(gConstants.worldY.xyz)) - 0.45f) * 4.0f);
 +    const float below = (sceneDepth >= 0.99999f) ? 1e6f : -ViewPosition(pixel, sceneDepth).z;
-+    const float gap = saturate((below - -surface.z - 2.0f) / 20.0f);
++    const float gap = saturate((below - -surface.z - 1.0f) / 6.0f);
 +    return flat * gap;
 +}
 +
@@ -3395,12 +3475,33 @@ index 0000000..ae9e469
 +    return slope;
 +}
 +
++// Ripples from Banjo: up to four rings spreading from where he moved in the water, fading as they grow.
++float2 RippleSlope(float2 p, float footprint) {
++    float2 slope = 0.0f;
++    const float wavelength = 38.0f;
++    const float k = 6.2831853f / wavelength;
++    const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
++    [unroll] for (int i = 0; i < 4; i++) {
++        const float age = gConstants.rippleAge[i];
++        if (age < 0.0f || age > 2.5f) {
++            continue;
++        }
++        const float2 away = p - float2(gConstants.rippleX[i], gConstants.rippleZ[i]);
++        const float d = length(away);
++        const float x = d - age * 110.0f;
++        const float life = 1.0f - age / 2.5f;
++        const float band = exp(-(x * x) / (2.0f * 45.0f * 45.0f));
++        slope += (away / max(d, 1.0f)) * (1.5f * life * life * band * visible * cos(k * x));
++    }
++    return slope;
++}
++
 +// The view-space normal of the waves on a water surface (with its flat normal), at a strength.
 +float3 WaveNormal(float3 surface, float3 normal, float strength) {
 +    const float2 world = float2(dot(surface, gConstants.worldX.xyz) + gConstants.worldX.w, dot(surface, gConstants.worldZ.xyz) + gConstants.worldZ.w);
 +    // World units one pixel covers here.
 +    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
-+    const float2 slope = WaveSlope(world, gConstants.ambientOcclusion.z, footprint) * strength;
++    const float2 slope = (WaveSlope(world, gConstants.ambientOcclusion.z, footprint) + RippleSlope(world, footprint)) * strength;
 +    const float3 alongX = normalize(gConstants.worldX.xyz);
 +    const float3 alongZ = normalize(gConstants.worldZ.xyz);
 +    return normalize(normal - alongX * slope.x - alongZ * slope.y);
@@ -3452,14 +3553,15 @@ index 0000000..ae9e469
 +        const float behind = -p.z - sceneZ;
 +        if (behind > 0.0f) {
 +            // Hit something, as long as the ray didn't pass far behind it.
-+            return (behind < stepLength * (2.0f + float(i) * 0.3f)) ? float4(gColor.Load(int3(at, 0)).rgb, edge) : 0.0f;
++            return float4(gColor.Load(int3(at, 0)).rgb, (behind < stepLength * (2.0f + float(i) * 0.3f)) ? edge : 0.3f * edge);
 +        }
 +    }
 +    // Left the screen: reflect the sky if that's where the ray went.
 +    const float3 p = surface + r * travelled;
 +    const float2 ndc = float2(p.x * gConstants.projection.x / max(-p.z, 1.0f), p.y * gConstants.projection.y / max(-p.z, 1.0f));
 +    const int2 at = clamp(int2(float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size), int2(0, 0), int2(size) - 1);
-+    return (LoadDepth(at) >= 0.99999f) ? float4(gColor.Load(int3(at, 0)).rgb, 0.5f) : 0.0f;
++    // Otherwise what's at the screen's edge where it left, faintly, so all of the water reflects something.
++    return float4(gColor.Load(int3(at, 0)).rgb, (LoadDepth(at) >= 0.99999f) ? 0.5f : 0.3f);
 +}
 +
 +// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
@@ -3707,7 +3809,7 @@ index 0000000..ae9e469
 +                    scene = lerp(scene, bentScene, amount);
 +                }
 +                const float3 light = normalize(normalize(gConstants.worldX.xyz) * 0.35f + normal * 0.8f - normalize(gConstants.worldZ.xyz) * 0.45f);
-+                const float shade = (dot(waved, light) - dot(normal, light)) * 1.6f;
++                const float shade = (dot(waved, light) - dot(normal, light)) * 0.6f;
 +                const float glint = pow(saturate(dot(reflect(normalize(surface), waved), light)), 48.0f);
 +                scene = scene * (1.0f + shade * amount) + float3(1.0f, 0.97f, 0.9f) * (glint * 0.5f * amount * saturate(gConstants.water.w * 2.0f));
 +                normal = waved;
@@ -4081,10 +4183,10 @@ index 0a5c332..54c2c83 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2a1d24d
+index 0000000..2f62a4f
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,57 @@
 +//
 +// RT64
 +//
@@ -4123,8 +4225,14 @@ index 0000000..2a1d24d
 +        // A view-space position's world x and z: dot(position, xyz) + w. Lets the water waves stay in place.
 +        float4 worldX;
 +        float4 worldZ;
++        // The same for world y: its xyz is also the normal of level ground, in view space.
++        float4 worldY;
 +        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
 +        float4 sun;
++        // Banjo's ripples: four rings' world x, world z and age in seconds (below 0 for none).
++        float4 rippleX;
++        float4 rippleZ;
++        float4 rippleAge;
 +    };
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
@@ -4181,43 +4289,3 @@ index b51cf09..a2b8354 100644
      };
  #ifdef HLSL_CPU
  };
-diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
-index dccaa87..4440507 100644
---- a/src/hle/rt64_interpreter.cpp
-+++ b/src/hle/rt64_interpreter.cpp
-@@ -32,10 +32,16 @@ namespace RT64 {
-         const uint32_t maskedTextAddress = textAddress & AddressMask;
-         const uint32_t maskedDataAddress = dataAddress & AddressMask;
-         if ((UCode.textAddress != maskedTextAddress) || (UCode.dataAddress != maskedDataAddress)) {
--            hleGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
--            if (hleGBI != nullptr) {
-+            // Banjo-Tooie: a microcode that isn't in the database used to leave hleGBI null, and the
-+            // next display list crashed reading its command table. Keep the last known one instead.
-+            GBI *foundGBI = gbiManager.getGBIForUCode(state->RDRAM, maskedTextAddress, maskedDataAddress);
-+            if (foundGBI != nullptr) {
-+                hleGBI = foundGBI;
-                 state->rsp->setGBI(hleGBI);
-             }
-+            else {
-+                fprintf(stderr, "[rt64] Unknown microcode (text 0x%06X, data 0x%06X); keeping the previous one.\n", maskedTextAddress, maskedDataAddress);
-+            }
- 
-             UCode.textAddress = maskedTextAddress;
-             UCode.dataAddress = maskedDataAddress;
-@@ -154,7 +160,15 @@ namespace RT64 {
-     }
- 
-     void Interpreter::processDisplayLists(uint32_t dlStartAdddress, DisplayList *dlStart) {
--        assert(hleGBI != nullptr);
-+        // Banjo-Tooie: no microcode recognised yet, so there is nothing to run the list with.
-+        if (hleGBI == nullptr) {
-+            static bool reported = false;
-+            if (!reported) {
-+                fprintf(stderr, "[rt64] Display list skipped: no known microcode loaded.\n");
-+                reported = true;
-+            }
-+            return;
-+        }
- 
-         state->dlCpuProfiler.start();
- 

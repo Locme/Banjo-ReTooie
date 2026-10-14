@@ -1068,3 +1068,17 @@
   3. Afterwards, open logs/console.log next to the exe and search for "[rt64]".
 - Look for: No crash at start or in play. If console.log has an "[rt64] Unknown microcode" line, send it: it says which graphics code the game used, so the picture glitch it may cause can be fixed too.
 - Status: waiting for L
+
+## T101 Underwater and water fixes (from your 09:15 list)
+- Asked: 2026-10-14 10:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45, §4.46
+- Steps:
+  1. Graphics: Underwater tint 25, Underwater haze 15, Underwater distortion 30, Water reflections 60, Water waves 50
+  2. Spiral Mountain: swim in the stream and the pool behind the waterfall; float on top, dive (B), look around in first person under water (C-up)
+- Look for:
+  - The blue tint, haze and distortion only when the camera is under the water, not while you float on top or the camera looks down from above. The distortion stays on the whole time you're under.
+  - The haze is visible in the pool.
+  - Reflections cover the whole stream and pool, including looking straight down.
+  - Rings spread from Banjo as he swims or floats. The effects no longer flicker between frames, which also affected the other effects at wide aspect ratios.
+- Status: waiting for L

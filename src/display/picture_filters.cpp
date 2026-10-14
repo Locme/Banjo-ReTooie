@@ -20,12 +20,15 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <variant>
 
 #include "recompui/config.h"
 
+#include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
 #include "tooie_smaa.h"
@@ -51,6 +54,7 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneLightShafts(float strength);
+    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
 }
@@ -76,6 +80,7 @@ namespace {
     std::atomic<float> underwater_haze{0.15f};
     std::atomic<float> heat_haze{0.0f};
     std::atomic<float> underwater_distortion{0.3f};
+    std::atomic<bool> water_waves_on{false};
     float heat_haze_sent = -1.0f;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
@@ -88,6 +93,9 @@ namespace {
     float underwater_amount = 0.0f;
     float underwater_sent = -1.0f;
     std::chrono::steady_clock::time_point underwater_at{};
+    // How far above Banjo's position the surface is while he floats. His position is about at the
+    // surface then (630 in the Spiral Mountain pool, where a plunge starts at 604).
+    constexpr float water_surface_offset = 0.0f;
 
     // Player 0's current state (see src/gameplay/fine_aim.cpp), 0 when there is no player.
     uint32_t player_state(uint8_t* rdram) {
@@ -102,11 +110,90 @@ namespace {
         return (uint32_t)MEM_W(4, (int32_t)block);
     }
 
-    // Under water: swimming under water (57) or floating in Atlantis (43), the states the XBLA port used
-    // (43 measured headless in Atlantis on N64), or anywhere in Atlantis and the Sea Bottom.
+    float read_f32(uint8_t* rdram, uint32_t address) {
+        const uint32_t bits = (uint32_t)MEM_W(0, (int32_t)address);
+        float value;
+        std::memcpy(&value, &bits, sizeof(value));
+        return value;
+    }
+
+    bool valid_pointer(uint32_t address) {
+        return (address >= 0x80000000u) && (address < 0x80800000u);
+    }
+
+    // Banjo's position (PlayerState +0xE4 points at it), false when there is no player.
+    bool banjo_position(uint8_t* rdram, float pos[3]) {
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if (!valid_pointer(player)) {
+            return false;
+        }
+        const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
+        if (!valid_pointer(transform)) {
+            return false;
+        }
+        for (int i = 0; i < 3; i++) {
+            pos[i] = read_f32(rdram, transform + 4 * i);
+        }
+        return true;
+    }
+
+    // Banjo's height, false when there is no player.
+    bool banjo_height(uint8_t* rdram, float& y) {
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if (!valid_pointer(player)) {
+            return false;
+        }
+        const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
+        if (!valid_pointer(transform)) {
+            return false;
+        }
+        y = read_f32(rdram, transform + 4);
+        return true;
+    }
+
+    // The viewport camera's height (its position is at +0x00), false before the camera has run.
+    bool camera_height(uint8_t* rdram, float& y) {
+        const uint32_t ctl = tooie::free_camera::last_controller();
+        if (!valid_pointer(ctl)) {
+            return false;
+        }
+        const uint32_t camera = (uint32_t)MEM_W(0, (int32_t)ctl);
+        if (!valid_pointer(camera)) {
+            return false;
+        }
+        y = read_f32(rdram, camera + 4);
+        return true;
+    }
+
+    // Banjo's states in the water, measured headless in the Spiral Mountain pool (TOOIE_WATER_TRACE=1):
+    // 45 floating on the surface, 46 swimming on it, 48 starting a dive, 57 swimming under water, 43 still under water,
+    // 76 plunging in from a fall, 61 coming out of the plunge.
+    bool on_surface(uint32_t state) {
+        return (state == 45) || (state == 46);
+    }
+    bool in_water_state(uint32_t state) {
+        return on_surface(state) || (state == 48) || (state == 57) || (state == 43) || (state == 76) || (state == 61);
+    }
+
+    // The water's surface while Banjo is in it: his height as he floats on it, or where he went in.
+    float water_surface = 0.0f;
+    bool was_in_water = false;
+
+    // Under water is where the camera is, not Banjo: below the surface of the water he is in, or
+    // anywhere in Atlantis and the Sea Bottom (whole levels under water).
     bool under_water(uint8_t* rdram, uint32_t state) {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
-        return (state == 57) || (state == 43) || (map == 0x1A8) || (map == 0x1A9);
+        if ((map == 0x1A8) || (map == 0x1A9)) {
+            return true;
+        }
+        float banjo = 0.0f;
+        const bool in_water = in_water_state(state) && banjo_height(rdram, banjo);
+        if (in_water && (!was_in_water || on_surface(state))) {
+            water_surface = banjo + water_surface_offset;
+        }
+        was_in_water = in_water;
+        float camera = 0.0f;
+        return in_water && camera_height(rdram, camera) && (camera < water_surface);
     }
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
@@ -234,6 +321,7 @@ void tooie::picture_filters::apply() {
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
+    water_waves_on = value<double>(water_waves_option, 0.0) > 0.0;
     RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
@@ -289,25 +377,60 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, address);
     }
 
-    // The underwater look eases in and out over a fifth of a second. TOOIE_WATER_TRACE=1 logs the
-    // player's state when it changes.
+    // The underwater look eases in and out over a fifth of a second.
     const uint32_t state = player_state(rdram);
-    if (std::getenv("TOOIE_WATER_TRACE")) {
-        static uint32_t last = 0xFFFFFFFFu;
-        if (state != last) {
-            last = state;
-            fprintf(stderr, "[water] player state %u, under water %d\n", state, (int)under_water(rdram, state));
-        }
-    }
     const auto now = std::chrono::steady_clock::now();
     const float dt = (underwater_at == std::chrono::steady_clock::time_point{}) ? 0.0f :
         std::min(std::chrono::duration<float>(now - underwater_at).count(), 0.25f);
     underwater_at = now;
     const float target = under_water(rdram, state) ? 1.0f : 0.0f;
+    // TOOIE_WATER_TRACE=1 logs the player's state when it changes, and every quarter second.
+    if (std::getenv("TOOIE_WATER_TRACE")) {
+        static uint32_t last = 0xFFFFFFFFu;
+        static auto last_log = std::chrono::steady_clock::now();
+        const auto log_now = std::chrono::steady_clock::now();
+        if ((state != last) || (log_now - last_log > std::chrono::milliseconds(250))) {
+            last = state;
+            last_log = log_now;
+            float banjo = 0.0f, camera = 0.0f;
+            banjo_height(rdram, banjo);
+            camera_height(rdram, camera);
+            fprintf(stderr, "[water] player state %u, Banjo y %.1f, camera y %.1f, surface %.1f, under water %d\n", state, banjo, camera, water_surface, (int)(target > 0.5f));
+        }
+    }
     underwater_amount = (target > underwater_amount) ? std::min(target, underwater_amount + dt * 5.0f) : std::max(target, underwater_amount - dt * 5.0f);
     if (underwater_amount != underwater_sent) {
         underwater_sent = underwater_amount;
         RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);
+    }
+
+    // Ripples: while Banjo floats on the water a ring spreads from him as he moves (one every 0.3 s and 25
+    // units), or now and then while he stays still. The newest four are drawn.
+    {
+        struct Ripple { float x = 0.0f, z = 0.0f; std::chrono::steady_clock::time_point at{}; bool used = false; };
+        static Ripple ripples[4];
+        static int next = 0;
+        static float last_x = 0.0f, last_z = 0.0f;
+        static std::chrono::steady_clock::time_point last_at{};
+        float pos[3];
+        if (water_waves_on && on_surface(state) && banjo_position(rdram, pos)) {
+            const float moved = std::hypot(pos[0] - last_x, pos[2] - last_z);
+            const float since = std::chrono::duration<float>(now - last_at).count();
+            if ((since > 0.3f && moved > 25.0f) || (since > 1.5f)) {
+                ripples[next] = { pos[0], pos[2], now, true };
+                next = (next + 1) % 4;
+                last_x = pos[0];
+                last_z = pos[2];
+                last_at = now;
+            }
+        }
+        float x[4], z[4], age[4];
+        for (int i = 0; i < 4; i++) {
+            x[i] = ripples[i].x;
+            z[i] = ripples[i].z;
+            age[i] = ripples[i].used ? std::chrono::duration<float>(now - ripples[i].at).count() : -1.0f;
+        }
+        RT64::SetSceneWaterRipples(x, z, age);
     }
 
     // The same shimmer, gentler, under water.
