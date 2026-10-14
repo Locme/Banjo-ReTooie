@@ -17,6 +17,19 @@
 
 namespace {
     const std::string tab_id = "cheats";
+    // The Cheato codes have a tab of their own (shown while "Enable cheats" is on) to keep Cheats short.
+    const std::string cheato_tab_id = "cheato";
+
+    bool is_cheato(const char* option) {
+        return std::string_view(option).starts_with("cheato_");
+    }
+
+    void show_cheato_tab(bool visible) {
+        try {
+            recompui::config::set_tab_visible(cheato_tab_id, visible);
+        } catch (...) {
+        }
+    }
     const std::string enabled_option = "cheats_enabled";
 
     // The game's item table (data at 0x8011AF50): one (item id, cap) pair of halfwords per item, in the
@@ -79,7 +92,7 @@ namespace {
 
     bool option_on(const std::string& id) {
         try {
-            return std::get<bool>(recompui::config::get_config(tab_id).get_option_value(id));
+            return std::get<bool>(recompui::config::get_config(is_cheato(id.c_str()) ? cheato_tab_id : tab_id).get_option_value(id));
         } catch (...) {
             return false;
         }
@@ -144,23 +157,31 @@ void tooie::cheats::create_tab() {
     // Speed-up first: it is the cheat people reach for most (src/game/speedup.cpp).
     tooie::speedup::add_options(config, enabled_option);
     tooie::transform_picker::add_options(config, enabled_option);
+    recomp::config::Config& cheato = recompui::config::create_config_tab("Cheato", cheato_tab_id, false);
     for (const Cheat& cheat : cheat_list) {
+        if (is_cheato(cheat.option)) {
+            cheato.add_bool_option(cheat.option, cheat.name, cheat.description, false);
+            continue;
+        }
         config.add_bool_option(cheat.option, cheat.name, cheat.description, false);
         // The rows only show while the master switch is on.
         config.add_option_hidden_dependency(cheat.option, enabled_option, false);
     }
+    show_cheato_tab(false);
 
     // Turning the master switch off (or loading it off) resets every cheat.
     config.add_option_change_callback(enabled_option,
         [](recomp::config::ConfigValueVariant cur, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             if (std::holds_alternative<bool>(cur) && !std::get<bool>(cur)) {
                 recomp::config::Config& cfg = recompui::config::get_config(tab_id);
+                recomp::config::Config& cheato_cfg = recompui::config::get_config(cheato_tab_id);
                 for (const Cheat& cheat : cheat_list) {
-                    cfg.update_option_value(cheat.option, false);
+                    (is_cheato(cheat.option) ? cheato_cfg : cfg).update_option_value(cheat.option, false);
                 }
                 cfg.update_option_value("debug_tab", false);
                 tooie::transform_picker::reset(cfg);
             }
+            show_cheato_tab(std::holds_alternative<bool>(cur) && std::get<bool>(cur));
             // The Warp tab follows the master switch too.
             tooie::level_warp::refresh();
         });
