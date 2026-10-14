@@ -9,7 +9,7 @@
 //
 // Camera: func_8010FC38 steps each viewport's camera controller; the free camera's hook in it
 // (tooie_free_camera) calls place_camera, which writes the viewport camera's position (+0x00) and
-// pitch / yaw (+0x18, +0x1C, degrees) after the game's camera has updated. Facing: yaw 0 looks
+// pitch / yaw / roll (+0x18, +0x1C, +0x20, degrees) after the game's camera has updated. Facing: yaw 0 looks
 // along -z, the yaw grows turning left, and a positive pitch looks up.
 //
 // Input: while photo mode is on, player 1's pad goes to the camera and the game reads an idle pad.
@@ -29,7 +29,8 @@
 //
 // Filters (QOL > Photo filter rows): a look, exposure, contrast, saturation, warmth, vignette and grain,
 // drawn by RT64's photo grade pass (lib-patches/rt64.patch) only while photo mode is on, so screenshots
-// show them. They can be changed from the menu while photo mode is on.
+// show them. They can be changed from the menu while photo mode is on, as can QOL > Photo tilt (the
+// camera's roll).
 //
 // Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
 // camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
@@ -380,6 +381,9 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {6, "9_16", "9:16"},
         },
         0u);
+    qol.add_number_option(tilt_option, "Photo tilt",
+        "Tilts photo mode's camera, in degrees. 0 is level.",
+        -45, 45, 1, 0, false, 0);
     qol.add_number_option(dof_option, "Photo depth of field",
         "Blurs what is nearer or further than the middle of photo mode's picture, which stays sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
@@ -602,7 +606,9 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
     }
     write_float(rdram, camera + cam_rot + 0, cam.pitch < 0.0f ? cam.pitch + 360.0f : cam.pitch);
     write_float(rdram, camera + cam_rot + 4, cam.yaw);
-    write_float(rdram, camera + cam_rot + 8, 0.0f);
+    // Tilt: the camera's roll, positive turning the picture clockwise.
+    const float tilt = (float)qol_value<double>(tooie::photo_mode::tilt_option, 0.0);
+    write_float(rdram, camera + cam_rot + 8, tilt < 0.0f ? tilt + 360.0f : tilt);
 
     static const bool log = std::getenv("TOOIE_PHOTO_LOG") != nullptr;
     static Clock::time_point last_log;
