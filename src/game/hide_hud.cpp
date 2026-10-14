@@ -28,6 +28,7 @@
 #include "tooie_hide_hud.h"
 #include "tooie_hooks.h"
 #include "tooie_model_tagging.h"
+#include "tooie_gfx_budget.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -83,6 +84,7 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         uint32_t added = tooie::model_tagging::tag_2d(rdram, marks[0] & 0x1FFFFFFF, end & 0x1FFFFFFF);
         MEM_W(0, gfx_ctx) = (int32_t)(end + added);
         tooie::dl_dump::frame_end(rdram, marks[0], end + added);
+        tooie::gfx_budget::frame_end(rdram);
     }
     marks[index] = (uint32_t)MEM_W(0, gfx_ctx);
 }

@@ -33,6 +33,7 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_hd_shadows.h"
+#include "tooie_gfx_budget.h"
 
 namespace {
     bool hd_shadows_on() {
@@ -299,7 +300,7 @@ extern "C" void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx) {
 }
 
 extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
-    if (!hd_shadows_on() || shadows_this_frame >= max_per_frame || draw_callback == 0) {
+    if (!hd_shadows_on() || shadows_this_frame >= max_per_frame || draw_callback == 0 || !tooie::gfx_budget::room_for_extras(rdram)) {
         return;
     }
     // Work on a copy so func_80101808 carries on with its own registers, below its stack frame.

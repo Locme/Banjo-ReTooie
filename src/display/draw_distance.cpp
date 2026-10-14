@@ -28,6 +28,7 @@
 #include "recomp.h"
 #include "recompui/config.h"
 #include "tooie_game.h"
+#include "tooie_gfx_budget.h"
 #include "tooie_hooks.h"
 
 namespace {
@@ -57,7 +58,8 @@ namespace {
     // How much further the extended distance reaches than the game's own
     // (cell size x 4), or 1 when the option is off.
     float distance_scale(uint8_t* rdram) {
-        if (!enabled()) {
+        // Not while the frame's drawing memory is nearly full (gfx_budget.cpp).
+        if (!enabled() || !tooie::gfx_budget::room_for_extras(rdram)) {
             return 1.0f;
         }
         int32_t cell = MEM_H(0, cell_size_addr);
@@ -77,7 +79,7 @@ extern "C" void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx) {
 }
 
 extern "C" void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx) {
-    if (!enabled()) {
+    if (!enabled() || !tooie::gfx_budget::room_for_extras(rdram)) {
         return;
     }
     int32_t game = (int32_t)ctx->r2;

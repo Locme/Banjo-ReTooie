@@ -1267,3 +1267,12 @@
 - Look for: The tint, haze and wobble stay on the whole time the camera is under the water, however Banjo swims, and go when it comes up. Note: in the small Spiral Mountain pool the game keeps the camera above the surface even when Banjo is at the bottom, so there is rightly no tint there.
 - Status: waiting for L
 
+
+## T120 Extras stop before the game's drawing memory is full
+- Asked: 2026-10-14 11:25 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Graphics: HD Shadows On, Extended Draw Distance On
+  2. Play Mayahem Temple and Witchyworld, turning the camera around
+- Look for: No torn geometry, exploding models or crash. Far objects or extra shadows may now be left out in very busy views, as the game's own drawing comes first. If something still breaks, send the crashes.log or console lines starting with "[gfx]".
+- Status: waiting for L
