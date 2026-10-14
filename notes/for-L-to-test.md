@@ -1298,7 +1298,7 @@
 ## T122 Interpolation rename, Game Frame Rate 120 FPS and Unlocked (from your 10:48 list)
 - Asked: 2026-10-14 11:35 UTC
 - Build: your local build of main
-- Commit: b2615fb
+- Commit: 59eca7a
 - Steps:
   1. Esc > Graphics, "Frame rate and overlay": Interpolation (was Framerate) now sits right under Game Frame Rate, with Off (was Original), Display and Manual. Your old choice should still be selected.
   2. Turn on the Frame rate overlay (F3), set Interpolation to Off, Game Frame Rate to 120 FPS (Experimental), and play a minute in Spiral Mountain and Mayahem Temple: run, jump, swim, watch the music and any cutscene
