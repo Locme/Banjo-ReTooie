@@ -783,7 +783,7 @@
 - Look for: Does the map line change to the new area, and do Banjo's numbers change as he walks? Does the renderer line say D3D12 or Vulkan as you set it, with your monitor's refresh rate? Does the 1% low drop and the hitch count go up when the game stutters (loading an area, say)? Does the last line show Speed-up, cheats and the texture pack by name?
 - Status: waiting for L
 
-## T78 Rim light
+## T81 Rim light
 - Asked: 2026-10-14 05:37 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.36
@@ -831,4 +831,14 @@
   3. Double-click update_and_build.bat (builds both)
   4. Check that your saves and settings are in both new folders, and that the files in Release itself are still there
 - Look for: Does each script finish with a message that names the folder? Are your save and settings in both new folders? Is the second one faster, and does it start on your PC? Anything left in Release that vanished? I could only check the scripts for typos here; none of them has been run on Windows.
+
+## T80 F6 effect views and F8 compare
+- Asked: 2026-10-14 05:55 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.43
+- Steps:
+  1. Turn on a few effects in Esc > Graphics (for example Effects preset Enhanced, plus Fog and Bloom)
+  2. Press F8: effects on the left half, original on the right. Press F8 again to stop.
+  3. Press F6 a few times: effects alone, depth, normals, then off.
+- Look for: The split line sits in the middle and the right half matches the game with the effects off. The views change on each F6 press with a toast naming them.
 - Status: waiting for L

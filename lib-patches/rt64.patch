@@ -495,10 +495,10 @@ index 3add9c3..abcd2be 100644
  #   endif
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..e1150a0
+index 0000000..4396d39
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,129 @@
 +//
 +// RT64
 +//
@@ -545,6 +545,11 @@ index 0000000..e1150a0
 +        return gradeSettings;
 +    }
 +
++    void SetPhotoGradeCompare(bool compare) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.compare = compare;
++    }
++
 +    void SetPhotoFrame(float cropAspect, bool grid) {
 +        const std::scoped_lock lock(gradeMutex);
 +        gradeSettings.cropAspect = cropAspect;
@@ -563,8 +568,10 @@ index 0000000..e1150a0
 +        if (!settings.enabled) {
 +            // Only the sharpening, if that.
 +            const float sharpen = settings.sharpen;
++            const bool compare = settings.compare;
 +            settings = PhotoGradeSettings();
 +            settings.sharpen = sharpen;
++            settings.compare = compare;
 +            if (sharpen <= 0.0f) {
 +                return input;
 +            }
@@ -599,7 +606,7 @@ index 0000000..e1150a0
 +        constants.tone = { settings.exposure, settings.contrast, settings.saturation, settings.warmth };
 +        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
-+        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, 0.0f, 0.0f };
++        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, settings.compare ? 1.0f : 0.0f, 0.0f };
 +        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, settings.sharpen };
 +
 +        RenderTextureBarrier barriers[] = {
@@ -623,10 +630,10 @@ index 0000000..e1150a0
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..e403425
+index 0000000..e400499
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,62 @@
 +//
 +// RT64
 +//
@@ -653,6 +660,7 @@ index 0000000..e403425
 +        float dofStrength = 0.0f;
 +        uint32_t depthAddress = 0;
 +        float sharpen = 0.0f;
++        bool compare = false;
 +    };
 +
 +    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
@@ -667,6 +675,8 @@ index 0000000..e403425
 +    // Sharpening (0 off, 1 strongest), a contrast-adaptive sharpen drawn in the same pass. It is kept
 +    // apart from the filters above, which photo mode and the game's picture settings take turns to set.
 +    void SetSharpening(float strength);
++    // Banjo-Tooie F8: the filters only on the left half of the picture, with a line down the middle.
++    void SetPhotoGradeCompare(bool compare);
 +
 +    // The depth of field strength and depth buffer address last set (strength 0 while photo mode is off).
 +    PhotoGradeSettings GetPhotoGrade();
@@ -688,10 +698,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d734f63
+index 0000000..d256db7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,381 @@
+@@ -0,0 +1,386 @@
 +//
 +// RT64
 +//
@@ -712,8 +722,6 @@ index 0000000..d734f63
 +
 +namespace RT64 {
 +    namespace {
-+        // Test aid: TOOIE_SCENE_FX_VIEW=1 shows the effects alone as grey.
-+        const bool debugView = (std::getenv("TOOIE_SCENE_FX_VIEW") != nullptr);
 +        std::mutex effectsMutex;
 +        SceneEffectsSettings effectsSettings;
 +
@@ -806,6 +814,12 @@ index 0000000..d734f63
 +        effectsSettings.eyeAdaptation = strength;
 +    }
 +
++    void SetSceneEffectsView(uint32_t view, bool compare) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.view = view;
++        effectsSettings.compare = compare;
++    }
++
 +    void SetSceneUnderwater(float tint, float haze) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.underwaterTint = tint;
@@ -831,7 +845,7 @@ index 0000000..d734f63
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -851,7 +865,8 @@ index 0000000..d734f63
 +        interop::SceneEffectsCB constants;
 +        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
-+        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, settings.rimLight };
++        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
++        constants.view = { float(settings.view), settings.compare ? 1.0f : 0.0f, 0.0f, 0.0f };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
@@ -1075,10 +1090,10 @@ index 0000000..d734f63
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..676d26d
+index 0000000..717d2d8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,68 @@
 +//
 +// RT64
 +//
@@ -1111,6 +1126,8 @@ index 0000000..676d26d
 +        float rimLight = 0.0f;
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
++        uint32_t view = 0;
++        bool compare = false;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
@@ -1130,6 +1147,9 @@ index 0000000..676d26d
 +    void SetSceneRimLight(float strength);
 +    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
 +    void SetSceneUnderwater(float tint, float haze);
++    // Debug views (0 none, 1 the effects alone as grey, 2 depth: near white, far dark, sky blue, 3 normals),
++    // and F8 compare (the effects only on the left half).
++    void SetSceneEffectsView(uint32_t view, bool compare);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1742,10 +1762,10 @@ index 0000000..c55fa85
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..d2190f9
+index 0000000..c5916ed
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,210 @@
 +//
 +// RT64
 +//
@@ -1896,6 +1916,16 @@ index 0000000..d2190f9
 +
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    float4 color = gTexture0.SampleLevel(PointSampler, uv, 0);
++    // F8 compare: the right half as it was, a line down the middle.
++    if (gConstants.frame.z > 0.5f) {
++        const float middle = gConstants.rtMetrics.z * 0.5f;
++        if (abs(pos.x - middle) < max(1.0f, gConstants.rtMetrics.w / 540.0f)) {
++            return float4(1.0f, 1.0f, 1.0f, color.a);
++        }
++        if (pos.x >= middle) {
++            return color;
++        }
++    }
 +    if (gConstants.dof.w > 0.0f) {
 +        color.rgb = Sharpen(int2(pos.xy), color.rgb, gConstants.dof.w);
 +    }
@@ -1948,10 +1978,10 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2babe34
+index 0000000..a7d4f9f
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,268 @@
+@@ -0,0 +1,291 @@
 +//
 +// RT64
 +//
@@ -2140,6 +2170,29 @@ index 0000000..2babe34
 +    const int2 pixel = int2(pos.xy);
 +    const float depth = LoadDepth(pixel);
 +
++    // F8 compare: the effects only on the left half, a line down the middle.
++    if (gConstants.view.y > 0.5f) {
++        const float middle = gConstants.projection.z * 0.5f;
++        if (abs(pos.x - middle) < max(1.0f, gConstants.projection.w / 540.0f)) {
++            return float4(1.0f, 1.0f, 1.0f, 0.0f);
++        }
++        if (pos.x >= middle) {
++            return float4(0.0f, 0.0f, 0.0f, 1.0f);
++        }
++    }
++
++    // Debug views of the depth: distance (near white, far dark, sky blue) and the normals from it.
++    if (gConstants.view.x > 1.5f) {
++        if (depth >= 0.99999f) {
++            return float4(0.3f, 0.5f, 1.0f, 0.0f);
++        }
++        const float3 center = ViewPosition(pixel, depth);
++        if (gConstants.view.x < 2.5f) {
++            return float4(exp(-length(center) / 3000.0f).xxx, 0.0f);
++        }
++        return float4(ViewNormal(pixel, center) * 0.5f + 0.5f, 0.0f);
++    }
++
 +    // Bloom: the blurred bright parts of the scene, added on top.
 +    float3 bloom = 0.0f;
 +    if (gConstants.bloom.x > 0.0f) {
@@ -2147,14 +2200,14 @@ index 0000000..2babe34
 +    }
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
-+    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.ambientOcclusion.z < 0.5f);
++    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f)) && (gConstants.ambientOcclusion.z < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f)) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
 +        const float skyFog = gConstants.fog.x * 0.75f;
-+        if (gConstants.ambientOcclusion.z > 0.5f) {
++        if (gConstants.view.x > 0.5f) {
 +            return float4(1.0f, 0.0f, 1.0f, 0.0f);
 +        }
 +        if (redraw) {
@@ -2202,7 +2255,7 @@ index 0000000..2babe34
 +        fog = gConstants.fog.x * (1.0f - exp(-max(distance - gConstants.fog.y, 0.0f) / gConstants.fog.z));
 +    }
 +
-+    if (gConstants.ambientOcclusion.z > 0.5f) {
++    if (gConstants.view.x > 0.5f) {
 +        return float4(lerp(keep.xxx * 0.6f + rim, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
 +    }
 +
@@ -2421,10 +2474,10 @@ index 3f33475..cb122d1 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..84fa600
+index 0000000..93ea5da
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,28 @@
 +//
 +// RT64
 +//
@@ -2443,7 +2496,8 @@ index 0000000..84fa600
 +        float4 tone;
 +        // Vignette (0 to 1), film grain (0 to 1), a time in seconds for the grain, the look (0 none).
 +        float4 effects;
-+        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid.
++        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid, 1 to
++        // keep the right half of the picture as it was (F8 compare), then unused.
 +        float4 frame;
 +        // Depth of field strength (0 off, 1 strongest), 1 when the depth texture holds this frame's depth, 1 for
 +        // an HDR colour buffer, then the sharpening (0 off, 1 strongest).
@@ -2454,10 +2508,10 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..35d00ee
+index 0000000..27dcd1e
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,42 @@
 +//
 +// RT64
 +//
@@ -2476,14 +2530,16 @@ index 0000000..35d00ee
 +        float4 depthTerms;
 +        // The projection's x and y scales, then the target's width and height.
 +        float4 projection;
-+        // Ambient occlusion strength (0 off, 1 strongest), its radius in world units, 1 to show the effects
-+        // alone as grey (a test view), then the rim light strength (0 off, 1 strongest).
++        // Ambient occlusion strength (0 off, 1 strongest), its radius in world units, unused, then the rim light strength (0 off, 1 strongest).
 +        float4 ambientOcclusion;
 +        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
 +        // thickens, then the underwater tint (0 off: not under water, 1 strongest).
 +        float4 fog;
 +        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
++        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals), 1 to draw the effects only
++        // on the left half of the picture (F8 compare), then unused.
++        float4 view;
 +        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), eye adaptation strength
 +        // (0 off, 1 strongest), then the underwater haze (0 to 1).
 +        float4 bloom;
