@@ -1306,3 +1306,15 @@
   4. Switch back to Original while playing
 - Look for: Does the overlay's "Game" line reach about 120 with 120 FPS, and go higher with Unlocked (up to 240)? Does Banjo move at his normal speed, and do music and sound effects play at normal pace and pitch (headless the amount of sound made was the same in every mode)? Does anything move too fast (enemies, animations, timers, water, particles)? Do cutscenes and the intro keep their length? Does switching modes while playing glitch the picture or sound? If your PC can't hold 120, 120 FPS goes slow-motion (like 60 FPS does on a slow PC); Unlocked should not.
 - Status: waiting for L
+
+## T123 HD Shadows: crashes, vanishing objects, bright patches
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- Commit: d92750a
+- XBLA history: report §4.51 (L's 09:15 list: "HD Shadows often breaks and objects suddenly disappear, also it brightens the image")
+- Steps:
+  1. Esc > Graphics: HD Shadows On
+  2. Play a few minutes in Mayahem Temple and Spiral Mountain, near Klungo, nests, honeycombs and enemies
+  3. Turn HD Shadows Off and On a few times
+- Look for: Any crash, object vanishing (honeycombs, eggs, enemies), or the image getting brighter in patches? Enemy shadows should be dark and shaped like the enemy. Checked headless: crashed within a minute before the fix, ran 40 minutes after it in Spiral Mountain, and 2 minutes in Mayahem Temple.
+- Status: waiting for L
