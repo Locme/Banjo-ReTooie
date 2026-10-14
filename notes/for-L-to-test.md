@@ -917,4 +917,9 @@
   2. Look at water from different heights: the Spiral Mountain pool, Jolly Roger's Lagoon, the Glitter Gulch Mine water, and any lake
   3. Press F6 until "Effect view: water": red is what counts as water, yellow is where it reflects
 - Look for: Banjo and the scenery mirrored in the water, with gentle ripples. Is anything that isn't water lighting up red or yellow (shadows, glass, smoke)? Any flicker at the screen edges? Frame rate fine?
+
+## T89 Vulkan is the default Graphics API
+- Do: Close the game, move graphics.json out of the game's folder (or delete it), start the game, press F3 until the overlay is in Full mode.
+- Look for: the renderer line says Vulkan. In Settings > Graphics the Graphics API row shows Vulkan, and the choices are Vulkan and D3D12 (no Auto).
+- Note: your saved graphics.json has Auto, which is not migrated. Open the Graphics API row and pick Vulkan once.
 - Status: waiting for L

@@ -32,7 +32,7 @@ index 1961e29..6060abf 100644
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..7334809 100644
+index f5ed6c0..fdcc3a6 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
 @@ -37,10 +37,23 @@ namespace recompinput {
@@ -60,7 +60,7 @@ index f5ed6c0..7334809 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +139,10 @@ namespace recompinput {
+@@ -127,6 +140,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -474,7 +474,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..e460eb9 100644
+index 4fdf81f..0982bbf 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,9 @@ namespace recompui {
@@ -487,7 +487,15 @@ index 4fdf81f..e460eb9 100644
              {ultramodern::renderer::Resolution::Auto, "Auto", "Auto"},
          };
  
-@@ -65,9 +68,9 @@ namespace recompui {
+@@ -52,7 +55,6 @@ namespace recompui {
+         #endif
+ 
+         static EnumOptionVector graphics_api_options = {
+-            {ultramodern::renderer::GraphicsApi::Auto, "Auto"},
+         #ifdef ALLOW_D3D12
+             {ultramodern::renderer::GraphicsApi::D3D12, "D3D12"},
+         #endif
+@@ -65,9 +67,9 @@ namespace recompui {
          };
  
          static EnumOptionVector aspect_ratio_options = {
@@ -500,7 +508,7 @@ index 4fdf81f..e460eb9 100644
          };
  
          static EnumOptionVector antialiasing_options = {
-@@ -100,6 +103,10 @@ namespace recompui {
+@@ -100,6 +102,10 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
                      return "Downsampling is not available at auto resolution";
@@ -511,7 +519,7 @@ index 4fdf81f..e460eb9 100644
                  case ultramodern::renderer::Resolution::Original:
                      if (ds_option == DownsamplingOption::X2) {
                          return "Rendered in 480p and scaled to 240p";
-@@ -217,6 +224,14 @@ namespace recompui {
+@@ -217,6 +223,14 @@ namespace recompui {
              apply_graphics_config();
          }
  
@@ -526,7 +534,7 @@ index 4fdf81f..e460eb9 100644
          recomp::config::Config &create_graphics_tab(const std::string &name) {
              created_graphics_config = true;
  
-@@ -245,6 +260,7 @@ namespace recompui {
+@@ -245,6 +259,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto new_opt = static_cast<ultramodern::renderer::Resolution>(std::get<uint32_t>(cur_value));
                          determine_downsampling_display(new_opt, change_context);
@@ -534,7 +542,7 @@ index 4fdf81f..e460eb9 100644
                      }
                  );
              }
-@@ -265,6 +281,7 @@ namespace recompui {
+@@ -265,6 +280,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto resolution_opt = get_graphics_enum_value<ultramodern::renderer::Resolution>(graphics::options::res_option, change_context);
                          determine_downsampling_display(resolution_opt, change_context);
@@ -542,7 +550,7 @@ index 4fdf81f..e460eb9 100644
                      }
                  );
  
-@@ -286,7 +303,7 @@ namespace recompui {
+@@ -286,7 +302,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::ar_option,
                  "Aspect Ratio",
@@ -551,7 +559,16 @@ index 4fdf81f..e460eb9 100644
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
-@@ -359,6 +376,16 @@ namespace recompui {
+@@ -346,7 +362,7 @@ namespace recompui {
+                 "Graphics API",
+                 "Selects the graphics API to use.",
+                 graphics_api_options,
+-                ultramodern::renderer::GraphicsApi::Auto,
++                ultramodern::renderer::GraphicsApi::Vulkan,
+                 true
+             );
+ 
+@@ -359,6 +375,16 @@ namespace recompui {
                  true
              );
  
