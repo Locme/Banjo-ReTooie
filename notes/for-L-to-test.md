@@ -1030,3 +1030,14 @@
   2. Look at calm water: the Spiral Mountain pool behind the waterfall, Jolly Roger's Lagoon, Cloud Cuckooland's pools
 - Look for: Waves roll across the water in one main direction, the water seen through bends with them, and their slopes catch the light. Do they stay put on the water when you turn the camera (they shouldn't slide with it)? Too strong, too busy, or shimmering far away?
 - Status: waiting for L
+
+## T96 FSR 1 Upscaling
+- Asked: 2026-10-14 07:45 UTC
+- Build: your own build from main (CI isn't running)
+- XBLA history: report §4.34
+- Steps:
+  1. Esc > Graphics: set Resolution to Original (or Original 2x) and Apply
+  2. Set "FSR 1 Upscaling" to On, then Sharp, then Off. It changes at once.
+  3. Set Resolution back to Auto afterwards; FSR then does nothing.
+- Look for: With FSR the picture is smooth and clean instead of blocky or blurry; Sharp is crisper. Does the picture line up the same as with FSR Off (no shift, no cut-off edges), also in widescreen? Do the HUD and menus look unchanged?
+- Status: waiting for L

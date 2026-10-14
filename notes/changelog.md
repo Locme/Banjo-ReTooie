@@ -67,6 +67,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Graphics API now shows in Graphics. Picking the other one asks "Restart now?" and the game reopens itself with it; Later keeps it for the next start.
 - Cheats and General tabs: section headings (Infinite items, Moves, Unlocks, Tabs; Saves, Back-Ports and cut content, Developer). In General the Control scheme, save and timer-save rows moved next to related rows; headings in Cheats hide while Enable cheats is off.
 - QOL tab: split into Speed and skipping, Camera, and Moves and aiming, with a heading for each. The two cutscene-skip options moved up next to the speed options.
+- Graphics: FSR 1 Upscaling (On or Sharp), AMD's upscaler for when Resolution is below the window's, as on Xbox Live Arcade.
 - Graphics: FXAA Anti-Aliasing (FXAA or Extreme), the Xbox Live Arcade version's quick edge smoothing; it works with MSAA and SMAA.
 - Graphics API: Auto is gone and Vulkan is the default (D3D12 is still a choice on Windows). If you have Auto saved, switch the row once.
 - Settings: the eleven Cheato codes moved from Cheats to their own Cheato tab, shown while Enable cheats is on (Cheats is much shorter). Your old Cheato switches start off.

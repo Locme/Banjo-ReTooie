@@ -33,6 +33,7 @@
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
+#include "tooie_fsr.h"
 
 namespace {
     void show_wip_tab() {
@@ -333,6 +334,7 @@ void tooie::init_config() {
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
+    tooie::fsr::add_option(graphics);
 
     recompui::config::create_controls_tab();
     tooie::music_player::add_options(recompui::config::create_sound_tab());
@@ -356,4 +358,5 @@ void tooie::init_config() {
     tooie::picture_filters::apply();
     tooie::smaa::apply();
     tooie::fxaa::apply();
+    tooie::fsr::apply();
 }

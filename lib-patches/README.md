@@ -111,6 +111,21 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `RT64_SMAA_DIR` at it. Because this patch changes RT64's `CMakeLists.txt`,
   the patches are applied before `add_subdirectory(lib/rt64)`.
   `src/display/smaa.cpp` sets the quality.
+* **FXAA** (`src/render/rt64_fxaa.cpp`, `.h`, `src/shaders/FxaaPS.hlsl`,
+  `src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`,
+  `CMakeLists.txt`): adds `RT64::SetFxaaMode(...)`. After SMAA, one FXAA pass
+  (written for this port) smooths the game image; Extreme searches further along
+  edges. `src/display/fxaa.cpp` sets the mode.
+* **FSR 1** (`src/render/rt64_fsr.cpp`, `.h`, `src/shaders/FsrPS.hlsl`,
+  `src/shared/rt64_fsr.h`, `src/render/rt64_shader_library.cpp`, `.h`,
+  `src/hle/rt64_present_queue.cpp`, `.h`, `CMakeLists.txt`): adds
+  `RT64::SetFsrMode(...)`. Just before the VI pass (after screenshots and photo
+  effects), when the game renders below the window's height, EASU upscales the
+  image to it and RCAS sharpens it; the VI gets a matching resolution scale.
+  The shaders include AMD's `ffx_a.h` and `ffx_fsr1.h` from `lib/fsr` (MIT),
+  through `RT64_FSR_DIR`, built with `-HV 2018`; EASU reads its 2x2 texels with
+  point samples instead of Gather, which came out grey on lavapipe.
+  `src/display/fsr.cpp` sets the mode.
 * **Photo mode filters** (`src/render/rt64_photo_grade.cpp`, `.h`, `src/shaders/PhotoGradePS.hlsl`,
   `src/shared/rt64_photo_grade.h`, `src/render/rt64_shader_library.cpp`, `.h`,
   `src/hle/rt64_present_queue.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetPhotoGrade(...)`. After SMAA

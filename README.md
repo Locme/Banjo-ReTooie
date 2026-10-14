@@ -78,7 +78,8 @@ RT64 are MIT; RecompFrontend ships no licence file and is used only as a
 submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
 ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
 `assets/icons/` come from BanjoRecomp (GPL-3.0). SMAA in `lib/smaa/` is
-MIT (`lib/smaa/LICENSE.txt`).
+MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
+(`lib/fsr/LICENSE.txt`).
 
 ## Credits
 
@@ -99,3 +100,5 @@ MIT (`lib/smaa/LICENSE.txt`).
 * PromptFont by Yukari "Shinmera" Hafner.
 * [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
   Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.
+* [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR)
+  by Advanced Micro Devices: the FSR 1 Upscaling option.

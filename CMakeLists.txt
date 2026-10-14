@@ -174,6 +174,8 @@ apply_nested_patch(plume lib/rt64/src/contrib/plume)
 
 # iryoku/smaa, for the SMAA passes rt64.patch adds.
 set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
+# AMD FidelityFX FSR 1, for the FSR passes rt64.patch adds.
+set(RT64_FSR_DIR ${CMAKE_SOURCE_DIR}/lib/fsr)
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)
@@ -260,6 +262,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp
     ${CMAKE_SOURCE_DIR}/src/display/smaa.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fxaa.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/fsr.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp

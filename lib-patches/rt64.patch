@@ -1,19 +1,20 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..89739b6 100644
+index 79dfc38..e1febf2 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -389,6 +389,10 @@ set (SOURCES
+@@ -389,6 +389,11 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_smaa.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_fxaa.cpp"
++    "${PROJECT_SOURCE_DIR}/src/render/rt64_fsr.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_photo_grade.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_scene_effects.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -543,11 +547,35 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,11 +548,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -38,6 +39,10 @@ index 79dfc38..89739b6 100644
 +# Banjo-Tooie: FXAA and FXAA Extreme.
 +build_pixel_shader(rt64 "src/shaders/FxaaPS.hlsl")
 +build_pixel_shader(rt64 "src/shaders/FxaaPS.hlsl" "src/shaders/FxaaExtremePS.hlsl" "-D FXAA_EXTREME")
++# Banjo-Tooie: FSR 1, built from AMD's FidelityFX FSR in the game's repository (RT64_FSR_DIR).
++build_pixel_shader(rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrEasuPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_EASU" "-HV 2018")
++build_pixel_shader(rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrRcasPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_RCAS" "-HV 2018")
++target_include_directories(rt64 PRIVATE ${RT64_FSR_DIR})
 +# Banjo-Tooie: photo mode's filters.
 +build_pixel_shader(rt64 "src/shaders/PhotoGradePS.hlsl")
 +# Banjo-Tooie: screen-space effects over the 3D world (ambient occlusion).
@@ -50,7 +55,7 @@ index 79dfc38..89739b6 100644
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..cbb2894 100644
+index 3227ab1..8ec5744 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,90 @@
@@ -144,17 +149,18 @@ index 3227ab1..cbb2894 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -87,6 +165,9 @@ namespace RT64 {
+@@ -87,6 +165,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
 +        smaaRenderer = std::make_unique<SmaaRenderer>();
 +        fxaaRenderer = std::make_unique<FxaaRenderer>();
++        fsrRenderer = std::make_unique<FsrRenderer>();
 +        photoGradeRenderer = std::make_unique<PhotoGradeRenderer>();
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +196,7 @@ namespace RT64 {
+@@ -115,6 +197,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -162,7 +168,7 @@ index 3227ab1..cbb2894 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +294,31 @@ namespace RT64 {
+@@ -212,6 +295,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -194,7 +200,7 @@ index 3227ab1..cbb2894 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -339,7 +446,58 @@ namespace RT64 {
+@@ -339,7 +447,78 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -250,10 +256,30 @@ index 3227ab1..cbb2894 100644
 +                        RenderTextureCopyLocation::Subresource(renderParams.texture));
 +                }
 +
++                // Banjo-Tooie: FSR 1, when it's on and the game renders below the window's resolution, upscales
++                // the image to it (after screenshots and photo effects, which stay at the game's resolution).
++                // The VI then sees a larger image with a matching resolution scale.
++                if ((renderParams.texture != nullptr) && (GetFsrMode() > 0) && (renderParams.vi != nullptr)) {
++                    const float hdHeight = 240.0f * renderParams.resolutionScale.y / float(std::max(renderParams.downsamplingScale, 1U));
++                    const float scale = std::min(float(ext.swapChain->getHeight()) / std::max(hdHeight, 1.0f), 4.0f);
++                    if (scale > 1.05f) {
++                        const uint32_t outputWidth = uint32_t(std::lround(renderParams.textureWidth * scale));
++                        const uint32_t outputHeight = uint32_t(std::lround(renderParams.textureHeight * scale));
++                        RenderTexture *upscaled = fsrRenderer->apply(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
++                            renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, outputWidth, outputHeight);
++                        if (upscaled != renderParams.texture) {
++                            renderParams.texture = upscaled;
++                            renderParams.resolutionScale *= hlslpp::float2(float(outputWidth) / float(renderParams.textureWidth), float(outputHeight) / float(renderParams.textureHeight));
++                            renderParams.textureWidth = outputWidth;
++                            renderParams.textureHeight = outputHeight;
++                        }
++                    }
++                }
++
                  commandList->setFramebuffer(swapChainFramebuffer);
                  commandList->clearColor();
  
-@@ -367,6 +525,10 @@ namespace RT64 {
+@@ -367,6 +546,10 @@ namespace RT64 {
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                      ext.presentGraphicsWorker->wait();
                  }
@@ -264,7 +290,7 @@ index 3227ab1..cbb2894 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +564,18 @@ namespace RT64 {
+@@ -402,6 +585,18 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
                  presentProfiler.logAndRestart();
@@ -284,10 +310,10 @@ index 3227ab1..cbb2894 100644
          }
      }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..5813716 100644
+index e08b02c..4f89422 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
-@@ -4,8 +4,14 @@
+@@ -4,8 +4,15 @@
  
  #pragma once
  
@@ -298,11 +324,12 @@ index e08b02c..5813716 100644
  #include "gui/rt64_inspector.h"
 +#include "render/rt64_smaa.h"
 +#include "render/rt64_fxaa.h"
++#include "render/rt64_fsr.h"
 +#include "render/rt64_photo_grade.h"
  #include "render/rt64_vi_renderer.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +23,28 @@
+@@ -17,6 +24,28 @@
  namespace RT64 {
      struct WorkloadQueue;
  
@@ -331,12 +358,13 @@ index e08b02c..5813716 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -52,6 +80,11 @@ namespace RT64 {
+@@ -52,6 +81,12 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
 +        std::unique_ptr<SmaaRenderer> smaaRenderer;
 +        std::unique_ptr<FxaaRenderer> fxaaRenderer;
++        std::unique_ptr<FsrRenderer> fsrRenderer;
 +        std::unique_ptr<PhotoGradeRenderer> photoGradeRenderer;
 +        // Banjo-Tooie: the scene's depth copied to a color target for photo mode's depth of field.
 +        std::unique_ptr<RenderTarget> photoDepthTarget;
@@ -622,6 +650,175 @@ index 3add9c3..6088166 100644
          void addFramebuffer(const DrawParams &p);
          void endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled);
          void recordSetup(RenderWorker *worker, std::vector<BufferUploader *> bufferUploaders, RSPProcessor *rspProcessor, VertexProcessor *vertexProcessor, const OutputBuffers *outputBuffers, bool rtEnabled);
+diff --git a/src/render/rt64_fsr.cpp b/src/render/rt64_fsr.cpp
+new file mode 100644
+index 0000000..8a8f11a
+--- /dev/null
++++ b/src/render/rt64_fsr.cpp
+@@ -0,0 +1,126 @@
++//
++// RT64
++//
++
++#include "rt64_fsr.h"
++
++#include <algorithm>
++#include <atomic>
++#include <cstring>
++
++#include "shared/rt64_fsr.h"
++
++#include "rt64_render_target.h"
++
++#define A_CPU 1
++#if defined(__GNUC__) || defined(__clang__)
++#   define A_GCC 1
++#endif
++#include "ffx_a.h"
++#include "ffx_fsr1.h"
++
++namespace RT64 {
++    namespace {
++        std::atomic<uint32_t> fsrMode{ 0 };
++
++        void toCB(const AU1 *con, interop::uint4 &out) {
++            out = interop::uint4(con[0], con[1], con[2], con[3]);
++        }
++    }
++
++    void SetFsrMode(uint32_t mode) {
++        fsrMode = std::min(mode, 2U);
++    }
++
++    uint32_t GetFsrMode() {
++        return fsrMode.load();
++    }
++
++    RenderTexture *FsrRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
++        RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight)
++    {
++        const uint32_t mode = fsrMode.load();
++        if ((mode == 0) || (input == nullptr) || (inputWidth == 0) || (inputHeight == 0) || (outputWidth <= inputWidth) || (outputHeight <= inputHeight) ||
++            (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR)))
++        {
++            return input;
++        }
++
++        if ((width != outputWidth) || (height != outputHeight) || (outputTexture == nullptr)) {
++            upscaledFramebuffer.reset();
++            outputFramebuffer.reset();
++            upscaledTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
++            outputTexture = device->createTexture(RenderTextureDesc::ColorTarget(outputWidth, outputHeight, format));
++            upscaledTexture->setName("FSR Upscaled");
++            outputTexture->setName("FSR Output");
++            const RenderTexture *upscaled = upscaledTexture.get();
++            const RenderTexture *output = outputTexture.get();
++            upscaledFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&upscaled, 1));
++            outputFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&output, 1));
++            width = outputWidth;
++            height = outputHeight;
++        }
++
++        if (easuSet == nullptr) {
++            const RenderSampler *linearSampler = shaderLibrary->samplerLibrary.linear.clampClamp.get();
++            const RenderSampler *pointSampler = shaderLibrary->samplerLibrary.nearest.clampClamp.get();
++            easuSet = std::make_unique<SmaaDescriptorSet>(linearSampler, pointSampler, device);
++            rcasSet = std::make_unique<SmaaDescriptorSet>(linearSampler, pointSampler, device);
++        }
++
++        // Every slot gets a texture, the ones a pass doesn't read included.
++        easuSet->setTexture(easuSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
++        easuSet->setTexture(easuSet->gTexture1, input, RenderTextureLayout::SHADER_READ);
++        easuSet->setTexture(easuSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
++        rcasSet->setTexture(rcasSet->gTexture0, upscaledTexture.get(), RenderTextureLayout::SHADER_READ);
++        rcasSet->setTexture(rcasSet->gTexture1, upscaledTexture.get(), RenderTextureLayout::SHADER_READ);
++        rcasSet->setTexture(rcasSet->gTexture2, upscaledTexture.get(), RenderTextureLayout::SHADER_READ);
++
++        varAU4(con0);
++        varAU4(con1);
++        varAU4(con2);
++        varAU4(con3);
++        FsrEasuCon(con0, con1, con2, con3, AF1(inputWidth), AF1(inputHeight), AF1(inputWidth), AF1(inputHeight), AF1(outputWidth), AF1(outputHeight));
++        interop::FsrCB easuConstants;
++        toCB(con0, easuConstants.con0);
++        toCB(con1, easuConstants.con1);
++        toCB(con2, easuConstants.con2);
++        toCB(con3, easuConstants.con3);
++
++        // Sharpness in stops below the maximum: 0.25 for Sharp, 1 for the default.
++        varAU4(rcasCon);
++        FsrRcasCon(rcasCon, (mode == 2) ? 0.25f : 1.0f);
++        interop::FsrCB rcasConstants;
++        std::memset(&rcasConstants, 0, sizeof(rcasConstants));
++        toCB(rcasCon, rcasConstants.con0);
++
++        auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, const SmaaDescriptorSet *set, const interop::FsrCB &constants) {
++            commandList->setFramebuffer(framebuffer);
++            commandList->setPipeline(record.pipeline.get());
++            commandList->setGraphicsPipelineLayout(record.pipelineLayout.get());
++            commandList->setGraphicsDescriptorSet(set->get(), 0);
++            commandList->setGraphicsPushConstants(0, &constants);
++            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
++            commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
++            commandList->drawInstanced(3, 1, 0, 0);
++        };
++
++        RenderTextureBarrier easuBarriers[] = {
++            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
++            RenderTextureBarrier(upscaledTexture.get(), RenderTextureLayout::COLOR_WRITE)
++        };
++
++        commandList->barriers(RenderBarrierStage::GRAPHICS, easuBarriers, uint32_t(std::size(easuBarriers)));
++        drawPass(shaderLibrary->fsrEasu, upscaledFramebuffer.get(), easuSet.get(), easuConstants);
++
++        RenderTextureBarrier rcasBarriers[] = {
++            RenderTextureBarrier(upscaledTexture.get(), RenderTextureLayout::SHADER_READ),
++            RenderTextureBarrier(outputTexture.get(), RenderTextureLayout::COLOR_WRITE)
++        };
++
++        commandList->barriers(RenderBarrierStage::GRAPHICS, rcasBarriers, uint32_t(std::size(rcasBarriers)));
++        drawPass(shaderLibrary->fsrRcas, outputFramebuffer.get(), rcasSet.get(), rcasConstants);
++        return outputTexture.get();
++    }
++};
+diff --git a/src/render/rt64_fsr.h b/src/render/rt64_fsr.h
+new file mode 100644
+index 0000000..8f2856d
+--- /dev/null
++++ b/src/render/rt64_fsr.h
+@@ -0,0 +1,31 @@
++//
++// RT64
++//
++
++#pragma once
++
++#include "rt64_descriptor_sets.h"
++#include "rt64_shader_library.h"
++
++namespace RT64 {
++    // Banjo-Tooie: AMD FSR 1 upscaling of the game image to the window's size, just before the VI draws it.
++    // Mode: 0 off, 1 FSR 1 (light sharpening), 2 FSR 1 sharp.
++    void SetFsrMode(uint32_t mode);
++    uint32_t GetFsrMode();
++
++    struct FsrRenderer {
++        std::unique_ptr<RenderTexture> upscaledTexture;
++        std::unique_ptr<RenderTexture> outputTexture;
++        std::unique_ptr<RenderFramebuffer> upscaledFramebuffer;
++        std::unique_ptr<RenderFramebuffer> outputFramebuffer;
++        std::unique_ptr<SmaaDescriptorSet> easuSet;
++        std::unique_ptr<SmaaDescriptorSet> rcasSet;
++        uint32_t width = 0;
++        uint32_t height = 0;
++
++        // Upscales by scale (above 1) and returns the sharpened image in a texture of outputWidth by
++        // outputHeight, or the input itself when FSR is off or the format isn't the game's.
++        RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
++            RenderTexture *input, RenderFormat format, uint32_t inputWidth, uint32_t inputHeight, uint32_t outputWidth, uint32_t outputHeight);
++    };
++};
 diff --git a/src/render/rt64_fxaa.cpp b/src/render/rt64_fxaa.cpp
 new file mode 100644
 index 0000000..479ce1e
@@ -1555,10 +1752,10 @@ index 0000000..1442ff5
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary);
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..aff3b67 100644
+index d1c5273..3f754b8 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,7 +40,25 @@
+@@ -40,7 +40,27 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -1573,6 +1770,8 @@ index d1c5273..aff3b67 100644
 +#include "shaders/SmaaBlendPS.hlsl.spirv.h"
 +#include "shaders/FxaaPS.hlsl.spirv.h"
 +#include "shaders/FxaaExtremePS.hlsl.spirv.h"
++#include "shaders/FsrEasuPS.hlsl.spirv.h"
++#include "shaders/FsrRcasPS.hlsl.spirv.h"
 +#include "shaders/PhotoGradePS.hlsl.spirv.h"
 +#include "shaders/SceneEffectsPS.hlsl.spirv.h"
 +#include "shaders/BloomPS.hlsl.spirv.h"
@@ -1584,7 +1783,7 @@ index d1c5273..aff3b67 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -86,7 +104,25 @@
+@@ -86,7 +106,27 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -1599,6 +1798,8 @@ index d1c5273..aff3b67 100644
 +#   include "shaders/SmaaBlendPS.hlsl.dxil.h"
 +#   include "shaders/FxaaPS.hlsl.dxil.h"
 +#   include "shaders/FxaaExtremePS.hlsl.dxil.h"
++#   include "shaders/FsrEasuPS.hlsl.dxil.h"
++#   include "shaders/FsrRcasPS.hlsl.dxil.h"
 +#   include "shaders/PhotoGradePS.hlsl.dxil.h"
 +#   include "shaders/SceneEffectsPS.hlsl.dxil.h"
 +#   include "shaders/BloomPS.hlsl.dxil.h"
@@ -1610,7 +1811,7 @@ index d1c5273..aff3b67 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -131,7 +167,25 @@
+@@ -131,7 +171,27 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -1625,6 +1826,8 @@ index d1c5273..aff3b67 100644
 +#   include "shaders/SmaaBlendPS.hlsl.metal.h"
 +#   include "shaders/FxaaPS.hlsl.metal.h"
 +#   include "shaders/FxaaExtremePS.hlsl.metal.h"
++#   include "shaders/FsrEasuPS.hlsl.metal.h"
++#   include "shaders/FsrRcasPS.hlsl.metal.h"
 +#   include "shaders/PhotoGradePS.hlsl.metal.h"
 +#   include "shaders/SceneEffectsPS.hlsl.metal.h"
 +#   include "shaders/BloomPS.hlsl.metal.h"
@@ -1636,17 +1839,18 @@ index d1c5273..aff3b67 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -148,6 +202,9 @@
+@@ -148,6 +208,10 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
 +#include "shared/rt64_smaa.h"
++#include "shared/rt64_fsr.h"
 +#include "shared/rt64_photo_grade.h"
 +#include "shared/rt64_scene_effects.h"
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -569,6 +626,70 @@ namespace RT64 {
+@@ -569,6 +633,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -1696,6 +1900,14 @@ index d1c5273..aff3b67 100644
 +            createPass(fxaa[0], SMAA_BLOBS(FxaaPS), RenderTarget::colorBufferFormat(usesHDR));
 +            createPass(fxaa[1], SMAA_BLOBS(FxaaExtremePS), RenderTarget::colorBufferFormat(usesHDR));
 +
++            // Banjo-Tooie: FSR 1, with the same textures and samplers and its own constants.
++            layoutBuilder.begin();
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::FsrCB), RenderShaderStageFlag::PIXEL);
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.end();
++            createPass(fsrEasu, SMAA_BLOBS(FsrEasuPS), RenderTarget::colorBufferFormat(usesHDR));
++            createPass(fsrRcas, SMAA_BLOBS(FsrRcasPS), RenderTarget::colorBufferFormat(usesHDR));
++
 +            // Banjo-Tooie: photo mode's filters, with the same textures and samplers and their own constants.
 +            layoutBuilder.begin();
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::PhotoGradeCB), RenderShaderStageFlag::PIXEL);
@@ -1717,7 +1929,7 @@ index d1c5273..aff3b67 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +704,20 @@ namespace RT64 {
+@@ -583,6 +719,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -1738,7 +1950,7 @@ index d1c5273..aff3b67 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +967,52 @@ namespace RT64 {
+@@ -832,6 +982,52 @@ namespace RT64 {
              }
          }
  
@@ -1792,10 +2004,10 @@ index d1c5273..aff3b67 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..e75442d 100644
+index 641f3ec..342552e 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,22 @@ namespace RT64 {
+@@ -51,8 +51,24 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
@@ -1813,6 +2025,8 @@ index 641f3ec..e75442d 100644
 +        ShaderRecord smaaWeights[4];
 +        ShaderRecord smaaBlend;
 +        ShaderRecord fxaa[2];
++        ShaderRecord fsrEasu;
++        ShaderRecord fsrRcas;
 +        // Banjo-Tooie: photo mode's filters.
 +        ShaderRecord photoGrade;
          ShaderRecord textureResolve;
@@ -2455,6 +2669,71 @@ index 0000000..c55fa85
 +    }
 +
 +    return float4(color, 1.0f);
++}
+diff --git a/src/shaders/FsrPS.hlsl b/src/shaders/FsrPS.hlsl
+new file mode 100644
+index 0000000..b4daa7f
+--- /dev/null
++++ b/src/shaders/FsrPS.hlsl
+@@ -0,0 +1,59 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: AMD FidelityFX Super Resolution 1 on the finished game image, just before the VI draws it.
++// ffx_a.h and ffx_fsr1.h are AMD's (MIT), kept in the game's repository under lib/fsr. FSR_PASS_EASU
++// upscales to the window's size, FSR_PASS_RCAS sharpens the upscaled image.
++
++#include "shared/rt64_fsr.h"
++
++[[vk::push_constant]] ConstantBuffer<FsrCB> gConstants : register(b0);
++
++Texture2D<float4> gTexture0 : register(t1);
++Texture2D<float4> gTexture1 : register(t2);
++Texture2D<float4> gTexture2 : register(t3);
++SamplerState LinearSampler : register(s4);
++SamplerState PointSampler : register(s5);
++
++#define A_GPU 1
++#define A_HLSL 1
++#include "ffx_a.h"
++
++#if defined(FSR_PASS_EASU)
++#   define FSR_EASU_F 1
++// The 2x2 texels around p in Gather's order (x: bottom-left, y: bottom-right, z: top-right, w: top-left),
++// read one by one: Gather isn't reliable on every driver here.
++float4x4 gatherTexels(float2 p) {
++    const float2 texel = asfloat(gConstants.con1.xy);
++    const float2 topLeft = p - 0.5 * texel;
++    return float4x4(
++        gTexture0.SampleLevel(PointSampler, topLeft + float2(0.0, texel.y), 0),
++        gTexture0.SampleLevel(PointSampler, topLeft + texel, 0),
++        gTexture0.SampleLevel(PointSampler, topLeft + float2(texel.x, 0.0), 0),
++        gTexture0.SampleLevel(PointSampler, topLeft, 0));
++}
++
++AF4 FsrEasuRF(AF2 p) { const float4x4 t = gatherTexels(p); return AF4(t[0].r, t[1].r, t[2].r, t[3].r); }
++AF4 FsrEasuGF(AF2 p) { const float4x4 t = gatherTexels(p); return AF4(t[0].g, t[1].g, t[2].g, t[3].g); }
++AF4 FsrEasuBF(AF2 p) { const float4x4 t = gatherTexels(p); return AF4(t[0].b, t[1].b, t[2].b, t[3].b); }
++#else
++#   define FSR_RCAS_F 1
++AF4 FsrRcasLoadF(ASU2 p) { return gTexture0.Load(int3(p, 0)); }
++void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) { }
++#endif
++
++#include "ffx_fsr1.h"
++
++float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
++    const AU2 ip = AU2(pos.xy);
++#if defined(FSR_PASS_EASU)
++    AF3 color;
++    FsrEasuF(color, ip, gConstants.con0, gConstants.con1, gConstants.con2, gConstants.con3);
++    return float4(color, 1.0f);
++#else
++    AF1 r, g, b;
++    FsrRcasF(r, g, b, ip, gConstants.con0);
++    return float4(r, g, b, 1.0f);
++#endif
 +}
 diff --git a/src/shaders/FxaaPS.hlsl b/src/shaders/FxaaPS.hlsl
 new file mode 100644
@@ -3645,6 +3924,33 @@ index 3f33475..cb122d1 100644
  #endif
  }
 \ No newline at end of file
+diff --git a/src/shared/rt64_fsr.h b/src/shared/rt64_fsr.h
+new file mode 100644
+index 0000000..6cb97eb
+--- /dev/null
++++ b/src/shared/rt64_fsr.h
+@@ -0,0 +1,21 @@
++//
++// RT64
++//
++
++#pragma once
++
++#include "shared/rt64_hlsl.h"
++
++#ifdef HLSL_CPU
++namespace interop {
++#endif
++    struct FsrCB {
++        // FsrEasuCon's four constants for the upscale, or FsrRcasCon's in con0 for the sharpening.
++        uint4 con0;
++        uint4 con1;
++        uint4 con2;
++        uint4 con3;
++    };
++#ifdef HLSL_CPU
++};
++#endif
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
 index 0000000..93ea5da
