@@ -50,6 +50,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include "recomp.h"
 #include "recompui/config.h"
@@ -109,6 +110,8 @@ namespace {
 
     // Game frames stepped so far (tooie_frame_step_done).
     std::atomic<uint32_t> game_frames_stepped{ 0 };
+    // Game time so far, in seconds (tooie_frame_step_done).
+    std::atomic<double> game_seconds_total{ 0.0 };
 
     // Game frames left in which an attract demo counts as playing. Set by the
     // demo replay, counted down by each frame's time step.
@@ -266,6 +269,7 @@ namespace {
             }
             std::memcpy(l.banjo, pos, sizeof(pos));
             l.has_banjo = true;
+            if (std::getenv("TOOIE_POS_LOG")) { std::printf("[pos] t %.3f dt %.4f %.1f %.1f %.1f\n", l.total_seconds, used_step / (60.0 * ultramodern::get_vi_rate_multiplier()), pos[0], pos[1], pos[2]); }
         }
         l.steps[asked_step <= 0 ? 0 : (asked_step >= 5 ? 5 : asked_step)]++;
         auto now = std::chrono::steady_clock::now();
@@ -283,6 +287,36 @@ namespace {
             l.distance = 0.0f;
             l.last = now;
         }
+    }
+}
+
+namespace {
+    // Headless aid: TOOIE_UNLOCKED_STEPS=<n>[,<n>...] makes Unlocked step by
+    // these VIs (1/240 s each) in turn, whatever really went by, to test frame
+    // rates a slow PC can't reach (use with TOOIE_PAD_GAME_TIME=1).
+    int32_t forced_unlocked_step(int32_t step) {
+        static const std::vector<int32_t> steps = []() {
+            std::vector<int32_t> out;
+            if (const char* v = std::getenv("TOOIE_UNLOCKED_STEPS")) {
+                for (const char* p = v; *p;) {
+                    char* end = nullptr;
+                    long n = std::strtol(p, &end, 10);
+                    if (end == p) {
+                        break;
+                    }
+                    if (n > 0) {
+                        out.push_back((int32_t)n);
+                    }
+                    p = (*end == ',') ? end + 1 : end;
+                }
+            }
+            return out;
+        }();
+        static size_t next = 0;
+        if (steps.empty()) {
+            return step;
+        }
+        return steps[next++ % steps.size()];
     }
 }
 
@@ -316,6 +350,9 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
         // Steps in VIs at 60 * multiplier a second: 1 for 120 FPS, the VIs that
         // went by for Unlocked (and while a demo plays, which replaces it anyway).
         int32_t step = (vis != 0 && mode() == Mode::Fps120) ? 1 : std::max(asked, 1);
+        if (vis != 0 && mode() == Mode::Unlocked) {
+            step = forced_unlocked_step(step);
+        }
         step = std::min<int32_t>(step, 15 * (int32_t)multiplier);
         fine.carry += (uint32_t)step;
         fine.count = (int32_t)(fine.carry / multiplier);
@@ -345,6 +382,7 @@ extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     game_frames_stepped++;
     if (!fine.pending) {
+        game_seconds_total.store(game_seconds_total.load() + read_float(rdram, delta_time_addr));
         return;
     }
     fine.pending = false;
@@ -354,6 +392,7 @@ extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     MEM_W(0, frame_count_addr) = fine.count;
     fine.delta = delta;
     fine.written = true;
+    game_seconds_total.store(game_seconds_total.load() + delta);
 }
 
 // func_800D9004 before it returns: $f0 is the frame count times 1/60. Above 60
@@ -516,6 +555,15 @@ extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
 // frame jumps there, so the eyes still show.
 extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+uint32_t tooie::game_frame_rate::game_ms() {
+    return (uint32_t)(game_seconds_total.load() * 1000.0);
+}
+
+bool tooie::game_frame_rate::pad_on_game_time() {
+    static const bool on = std::getenv("TOOIE_PAD_GAME_TIME") != nullptr;
+    return on;
 }
 
 void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {

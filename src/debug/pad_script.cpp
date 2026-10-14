@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "tooie_game_frame_rate.h"
 #include "tooie_debug.h"
 #include "tooie_control_scheme.h"
 #include "tooie_photo_mode.h"
@@ -123,6 +124,20 @@ bool tooie::debug::parse_pad_script(const char* script) {
     return true;
 }
 
+// Time since the first pad read: real time, or game time with TOOIE_PAD_GAME_TIME=1.
+static uint32_t script_ms() {
+    static uint32_t started_game_ms = 0;
+    std::call_once(started_flag, []() {
+        started = std::chrono::steady_clock::now();
+        started_game_ms = tooie::game_frame_rate::game_ms();
+    });
+    if (tooie::game_frame_rate::pad_on_game_time()) {
+        return tooie::game_frame_rate::game_ms() - started_game_ms;
+    }
+    return (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - started).count();
+}
+
 // Player input with any scripted input added.
 static bool merged_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = recompinput::profiles::get_n64_input(player_index, buttons_out, x_out, y_out);
@@ -133,9 +148,7 @@ static bool merged_n64_input(int player_index, uint16_t* buttons_out, float* x_o
         tooie::quick_start_note_input(*buttons_out);
         return ok;
     }
-    std::call_once(started_flag, []() { started = std::chrono::steady_clock::now(); });
-    uint32_t now_ms = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - started).count();
+    uint32_t now_ms = script_ms();
     for (const Step& step : steps) {
         if (now_ms < step.start_ms || now_ms >= step.start_ms + step.hold_ms) {
             continue;
@@ -161,9 +174,7 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
     if (steps.empty()) {
         return false;
     }
-    std::call_once(started_flag, []() { started = std::chrono::steady_clock::now(); });
-    uint32_t now_ms = (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - started).count();
+    uint32_t now_ms = script_ms();
     bool found = false;
     for (const Step& step : steps) {
         if (now_ms < step.start_ms || now_ms >= step.start_ms + step.hold_ms) {

@@ -26,6 +26,7 @@
 #include <cstring>
 #include <variant>
 
+#include "tooie_game_frame_rate.h"
 #include "recompui/config.h"
 
 #include "tooie_effect_views.h"
@@ -424,7 +425,8 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         long ms = 0;
         const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
         if ((holds < 30) && (std::sscanf(teleport, "%f,%f,%f@%ld", &x, &y, &z, &ms) == 4) && valid_pointer(player) &&
-            (now - started > std::chrono::milliseconds(ms)))
+            (tooie::game_frame_rate::pad_on_game_time() ? (long)tooie::game_frame_rate::game_ms() > ms
+                                                        : now - started > std::chrono::milliseconds(ms)))
         {
             if (holds++ == 0) {
                 fprintf(stderr, "[teleport] Banjo to %.0f %.0f %.0f\n", x, y, z);

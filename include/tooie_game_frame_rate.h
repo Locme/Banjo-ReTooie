@@ -15,6 +15,12 @@ namespace tooie::game_frame_rate {
 
     // Adds the option to the Graphics tab. It applies from the next game frame.
     void add_option(recomp::config::Config& graphics);
+
+    // Game time in ms since the game started, from each frame's delta time.
+    // With TOOIE_PAD_GAME_TIME=1 the pad script and TOOIE_TELEPORT run on it,
+    // so a headless run that can't keep up (120 FPS) gets the same inputs.
+    uint32_t game_ms();
+    bool pad_on_game_time();
 }
 
 #endif
