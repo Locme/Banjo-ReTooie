@@ -64,8 +64,14 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   controller mapping leaves out, so the Controls tab never saw them. Unmapped
   raw buttons now stand in, in order, for the paddle buttons the pad doesn't
   report (Paddle 1 to 4, then Misc 1), both when binding and in play. Each
-  controller's name, raw button count and back buttons are logged when it is
-  added.
+  controller's name, raw button count, back buttons and whether it has a gyro
+  are logged when it is added.
+* **Gyro in degrees** (`recompinput/src/input_events.cpp`): SDL's player-space
+  gyro is a rate in degrees per second; it is multiplied by the time since the
+  last sensor update so the deltas the game reads are degrees turned.
+* **Fine Aim input** (`recompinput/include/recompinput/input_types.h`): a
+  `FINE_AIM` game input, so the game's Fine aim key can be bound in the Controls
+  tab.
 
 * **Enum drop-down** (`recompui/src/config/ui_config_option.{h,cpp}`): an enum
   option with more than 6 entries is drawn as a drop-down (the menu's Select

@@ -1,12 +1,11 @@
 // Fine aim (handoff 4.57).
 //
-// In first person (C-up; player state 152, measured headless) the left stick moves
-// the aim and turns the view. The game ignores tilts under about 0.45 of the stick's
-// range (headless: 0.45 does nothing, 0.5 just moves the aim, 0.6 turns about 40
-// degrees in 2 s and 1.0 over 90). With Fine aim on, the tilt past that dead zone is
-// scaled before the game reads it, so the speed drops evenly instead of the stick
-// going dead: always, or while R is held (R still reaches the game). Speeds are 25%,
-// 40% and 60%.
+// In first person (C-up; player state 152, measured headless) the left stick turns
+// the view. With Fine aim on (always, or while the Fine Aim key is held: Controls tab,
+// Hotkeys; R by default, which still reaches the game) the view turns at 25%, 40% or
+// 60% of the game's speed. Scaling the stick did not work: the game's turn speed
+// barely depends on the tilt (headless, full tilt scaled to 0.67 still turned at 89%).
+// So src/input/motion_aim.cpp takes back part of each frame's turn instead.
 
 #include <atomic>
 #include <chrono>
@@ -14,7 +13,16 @@
 #include <cstdint>
 #include <variant>
 
+#ifdef _WIN32
+#include "SDL.h"
+#else
+#include "SDL2/SDL.h"
+#endif
+
 #include "recomp.h"
+#include "recompinput/recompinput.h"
+#include "recompinput/input_binding.h"
+#include "recompinput/profiles.h"
 #include "recompui/config.h"
 
 #include "tooie_game.h"
@@ -30,9 +38,8 @@ namespace {
     constexpr uint32_t state_current = 0x4;    // state block -> current state id
     constexpr uint32_t state_first_person = 152;
 
-    constexpr uint16_t button_r = 0x0010;
-    constexpr float dead_zone = 0.45f;
-
+    constexpr auto fine_aim_input = recompinput::GameInput::FINE_AIM;
+    
     std::atomic<uint32_t> player_state{0};
 
     tooie::fine_aim::Mode cached_mode = tooie::fine_aim::Mode::Off;
@@ -58,6 +65,23 @@ namespace {
         }
     }
 
+    // Whether any keyboard key or controller button bound to Fine Aim is held.
+    bool key_down() {
+        if (recompinput::binding::is_binding()) {
+            return false;
+        }
+        bool down = false;
+        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
+            if (profile < 0) {
+                continue;
+            }
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, fine_aim_input, b));
+            }
+        }
+        return down;
+    }
+
     uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
         return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
     }
@@ -65,6 +89,14 @@ namespace {
     bool valid_ptr(uint32_t p) {
         return p >= 0x80000000u && p < 0x80800000u;
     }
+}
+
+void tooie::fine_aim::register_input() {
+    recompinput::set_game_input_name(fine_aim_input, "Fine Aim");
+    recompinput::set_game_input_description(fine_aim_input,
+        "Hold to turn the first-person view (C-up) slower, when QOL > Fine aim is set to Hold key.");
+    recompinput::set_default_mapping_for_keyboard(fine_aim_input, { recompinput::InputField::keyboard(SDL_SCANCODE_R) });
+    recompinput::set_default_mapping_for_controller(fine_aim_input, { recompinput::InputField::controller_analog(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true) });
 }
 
 void tooie::fine_aim::tick(uint8_t* rdram, recomp_context* ctx) {
@@ -78,17 +110,13 @@ bool tooie::fine_aim::in_first_person() {
     return player_state.load() == state_first_person;
 }
 
-void tooie::fine_aim::apply(uint16_t buttons, float* x, float* y) {
+float tooie::fine_aim::view_scale() {
     if (player_state.load() != state_first_person) {
-        return;
+        return 1.0f;
     }
     read_options(Clock::now());
-    if (cached_mode == Mode::Always || (cached_mode == Mode::HoldR && (buttons & button_r) != 0)) {
-        const float magnitude = std::sqrt(*x * *x + *y * *y);
-        if (magnitude > dead_zone) {
-            const float scale = (dead_zone + (magnitude - dead_zone) * cached_scale) / magnitude;
-            *x *= scale;
-            *y *= scale;
-        }
+    if (cached_mode == Mode::Always || (cached_mode == Mode::HoldKey && key_down())) {
+        return cached_scale;
     }
+    return 1.0f;
 }

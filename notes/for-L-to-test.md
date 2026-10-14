@@ -1082,3 +1082,28 @@
   - Reflections cover the whole stream and pool, including looking straight down.
   - Rings spread from Banjo as he swims or floats. The effects no longer flicker between frames, which also affected the other effects at wide aspect ratios.
 - Status: waiting for L
+
+## T102 Fine aim (from your 09:15 list)
+- Asked: 2026-10-14 10:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.57
+- Steps:
+  1. Esc > QOL > Fine aim = Hold key, Fine aim speed = Medium
+  2. Esc > Controls > Hotkeys: Fine Aim is R and right trigger by default. Rebind it to a button you like
+  3. Load a file, press C-up for first person and turn with the left stick, with and without the Fine Aim button held
+  4. Try Fine aim = Always, and the Slow and Fast speeds
+- Look for: With the button held (or Always), does the view turn clearly slower (about 40% at Medium) and still smoothly? Does it go back to normal speed when you let go?
+- Status: waiting for L
+
+## T103 Gyro aim (from your 09:15 list)
+- Asked: 2026-10-14 10:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.59
+- Steps:
+  1. Connect the 8BitDo Ultimate 2 by Bluetooth or its 2.4G dongle with the switch on the Switch/BT position (X mode has no gyro), firmware 1.03 or later
+  2. Esc > General > Gyro Sensitivity = 25
+  3. Load a file, press C-up for first person and turn and tilt the controller
+  4. Open logs/console.log and find the "Controller added" line: it now says "gyro yes" or "gyro no"
+- Look for: Does turning the controller left turn the view left, and tilting the front up look up, about as far as you turned it? What does the "gyro" part of the log line say?
+- Status: waiting for L
+

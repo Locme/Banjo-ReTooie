@@ -44,7 +44,8 @@ namespace {
     constexpr float pitch_up_limit = 70.0f;
     // Degrees per pixel of mouse motion at 100% sensitivity.
     constexpr float mouse_degrees_per_pixel = 0.4f;
-    // Gyro motion is scaled 4x so the default 25% turns the view as far as the controller turns.
+    // Gyro deltas are degrees the controller turned (RecompFrontend patch), scaled 4x so the
+    // default 25% turns the view as far as the controller turns.
     constexpr float gyro_scale = 4.0f;
 
     std::mutex pending_mutex;
@@ -59,6 +60,17 @@ namespace {
     } test;
 
     std::once_flag test_flag;
+
+    // The angles this tick left the view at, so the next tick can see how far the game turned it.
+    bool have_last = false;
+    float last_yaw = 0.0f;
+    float last_pitch = 0.0f;
+
+    // Wraps an angle difference into -180..180.
+    float wrap_delta(float d) {
+        d = std::fmod(d + 180.0f, 360.0f);
+        return (d < 0.0f ? d + 360.0f : d) - 180.0f;
+    }
 
     bool valid_ptr(gpr p) {
         return (uint32_t)p >= 0x80000000u && (uint32_t)p < 0x80800000u;
@@ -116,9 +128,11 @@ void tooie::motion_aim::collect() {
     }
 
     // get_mouse_deltas has applied the sensitivity already (pixels * percent / 100); so has get_gyro_deltas.
+    // Gyro x is the pitch (front of the controller up is positive) and y the yaw (left is positive),
+    // the same senses as the view's angles.
     std::lock_guard lock{ pending_mutex };
-    pending_yaw += -mx * mouse_degrees_per_pixel + gx * gyro_scale;
-    pending_pitch += -my * mouse_degrees_per_pixel + gy * gyro_scale;
+    pending_yaw += -mx * mouse_degrees_per_pixel + gy * gyro_scale;
+    pending_pitch += -my * mouse_degrees_per_pixel + gx * gyro_scale;
 }
 
 void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
@@ -132,6 +146,7 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         pending_pitch = 0.0f;
     }
     if (!tooie::fine_aim::in_first_person()) {
+        have_last = false;
         return;
     }
     if (invert_y()) {
@@ -140,10 +155,12 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
 
     const gpr ctl = (gpr)(int32_t)tooie::free_camera::last_controller();
     if (!valid_ptr(ctl)) {
+        have_last = false;
         return;
     }
     const gpr dynamic = (gpr)(int32_t)MEM_W(dynamic_offset, ctl);
     if (!valid_ptr(dynamic)) {
+        have_last = false;
         return;
     }
 
@@ -151,6 +168,13 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     // Pitch is kept from 0 to 360 (297 is 63 degrees down).
     float pitch = read_float(rdram, dynamic + fp_pitch);
     float yaw = read_float(rdram, dynamic + fp_yaw);
+    // Fine aim: the game turned the view by (angle - last) with the stick since the last tick. Take
+    // back the unwanted part of that turn. Scaling the stick instead barely slows the game's turning.
+    const float fine = tooie::fine_aim::view_scale();
+    if (have_last && fine < 1.0f) {
+        yaw_delta += wrap_delta(yaw - last_yaw) * (fine - 1.0f);
+        pitch_delta += wrap_delta(pitch - last_pitch) * (fine - 1.0f);
+    }
     if (yaw_delta != 0.0f || pitch_delta != 0.0f) {
         yaw = std::fmod(yaw + yaw_delta, 360.0f);
         if (yaw < 0.0f) {
@@ -162,6 +186,9 @@ void tooie::motion_aim::tick(uint8_t* rdram, recomp_context* ctx) {
         write_float(rdram, dynamic + fp_yaw, yaw);
         write_float(rdram, dynamic + fp_pitch, pitch);
     }
+    have_last = true;
+    last_yaw = yaw;
+    last_pitch = pitch;
     if (log) {
         fprintf(stderr, "[aim] pitch %.1f yaw %.1f (+%.2f, +%.2f)\n", pitch, yaw, pitch_delta, yaw_delta);
     }

@@ -188,7 +188,6 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
         tooie::hold_to_run::apply(buttons_out, *x_out, *y_out);
         tooie::talon_trot::apply(buttons_out);
-        tooie::fine_aim::apply(*buttons_out, x_out, y_out);
         tooie::motion_aim::collect();
         tooie::cutscene_skip_apply(buttons_out);
         tooie::player_cheats::apply_input(buttons_out);

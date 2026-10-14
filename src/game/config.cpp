@@ -117,6 +117,7 @@ void tooie::init_config() {
     tooie::hold_to_run::register_input();
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
+    tooie::fine_aim::register_input();
 
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {
@@ -278,10 +279,11 @@ void tooie::init_config() {
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine aim",
-        "Turns the first-person view (C-up) slower with the left stick, for aiming eggs. <recomp-color primary>Hold R</recomp-color> slows it only while R is held.",
+        "Turns the first-person view (C-up) slower with the left stick, for aiming eggs. <recomp-color primary>Hold key</recomp-color> slows it only while the Fine Aim key is held (Controls tab, Hotkeys; R by default).",
         {
             {tooie::fine_aim::Mode::Off, "Off", "Off"},
-            {tooie::fine_aim::Mode::HoldR, "Hold R", "Hold R"},
+            // Saved under its old key, "Hold R", so existing settings keep working.
+            {tooie::fine_aim::Mode::HoldKey, "Hold R", "Hold key"},
             {tooie::fine_aim::Mode::Always, "Always", "Always"},
         },
         tooie::fine_aim::Mode::Off);

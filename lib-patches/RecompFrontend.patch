@@ -32,14 +32,14 @@ index 1961e29..6060abf 100644
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..fdcc3a6 100644
+index f5ed6c0..ff795a6 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,23 @@ namespace recompinput {
+@@ -37,10 +37,24 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
-+    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state, frame rate overlay and run keys). Games set their names,
++    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state, frame rate overlay, run and fine aim keys). Games set their names,
 +    // descriptions and default bindings with set_game_input_name/description and
 +    // set_default_mapping_for_keyboard/controller.
 +    #define DEFINE_GAME_HOTKEY_INPUTS() \
@@ -49,7 +49,8 @@ index f5ed6c0..fdcc3a6 100644
 +        DEFINE_INPUT(SAVE_STATE, 0, "Save State") \
 +        DEFINE_INPUT(LOAD_STATE, 0, "Load State") \
 +        DEFINE_INPUT(FRAME_OVERLAY, 0, "Frame Rate Overlay") \
-+        DEFINE_INPUT(RUN, 0, "Run")
++        DEFINE_INPUT(RUN, 0, "Run") \
++        DEFINE_INPUT(FINE_AIM, 0, "Fine Aim")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -60,7 +61,7 @@ index f5ed6c0..fdcc3a6 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +140,10 @@ namespace recompinput {
+@@ -127,6 +141,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -73,10 +74,10 @@ index f5ed6c0..fdcc3a6 100644
  }
 diff --git a/recompinput/src/extra_buttons.cpp b/recompinput/src/extra_buttons.cpp
 new file mode 100644
-index 0000000..0ea95f1
+index 0000000..0660cae
 --- /dev/null
 +++ b/recompinput/src/extra_buttons.cpp
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,94 @@
 +#include <cstdio>
 +#include <iterator>
 +
@@ -156,8 +157,9 @@ index 0000000..0ea95f1
 +
 +void recompinput::log_controller_buttons(SDL_GameController* controller) {
 +    SDL_Joystick* joystick = SDL_GameControllerGetJoystick(controller);
-+    printf("  Name: %s, type %d, %d raw buttons\n", SDL_GameControllerName(controller),
-+        (int)SDL_GameControllerGetType(controller), joystick != nullptr ? SDL_JoystickNumButtons(joystick) : 0);
++    printf("  Name: %s, type %d, %d raw buttons, gyro %s\n", SDL_GameControllerName(controller),
++        (int)SDL_GameControllerGetType(controller), joystick != nullptr ? SDL_JoystickNumButtons(joystick) : 0,
++        SDL_GameControllerHasSensor(controller, SDL_SENSOR_GYRO) ? "yes" : "no");
 +    for (SDL_GameControllerButton button : extra_buttons) {
 +        if (SDL_GameControllerHasButton(controller, button)) {
 +            printf("  Reports %s\n", SDL_GameControllerGetStringForButton(button));
@@ -171,7 +173,7 @@ index 0000000..0ea95f1
 +    }
 +}
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..69e65f7 100644
+index c76a1dc..8614c47 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,6 +1,7 @@
@@ -213,6 +215,27 @@ index c76a1dc..69e65f7 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
+@@ -208,13 +226,18 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+             ControllerState& state = recompinput::get_controller_state(event->csensor.which);
+             uint64_t cur_timestamp = event->csensor.timestamp;
+             uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
+-            state.motion.ProcessMotion(x, y, z, state.latest_accelerometer[0], state.latest_accelerometer[1], state.latest_accelerometer[2], delta_ms * 0.001f);
++            // The first sample, or one after a long gap, has no meaningful time step.
++            float delta_s = (state.prev_gyro_timestamp == 0 || delta_ms > 100) ? 0.0f : delta_ms * 0.001f;
++            state.motion.ProcessMotion(x, y, z, state.latest_accelerometer[0], state.latest_accelerometer[1], state.latest_accelerometer[2], delta_s);
+             state.prev_gyro_timestamp = cur_timestamp;
+ 
++            // Player-space gyro is a rate in degrees per second, x pitch (front up positive) and
++            // y yaw (left positive). Times the time step, the summed deltas are degrees turned,
++            // whatever the controller's sensor rate.
+             float rot_x = 0.0f;
+             float rot_y = 0.0f;
+             state.motion.GetPlayerSpaceGyro(rot_x, rot_y);
+-            recompinput::add_rotation_deltas(event->csensor.which, rot_x, rot_y);
++            recompinput::add_rotation_deltas(event->csensor.which, rot_x * delta_s, rot_y * delta_s);
+         }
+         break;
+     case SDL_EventType::SDL_MOUSEMOTION:
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
 index 03ed871..f3e5e63 100644
 --- a/recompinput/src/input_state.cpp

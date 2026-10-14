@@ -27,6 +27,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Controls
 
+- Fine aim now really slows first-person turning (headless: 44% of the normal turn at the 40% setting; before, about 89%). Its key is bindable: Controls tab, Hotkeys, Fine Aim (R or right trigger by default). Untested on PC (T102).
+- Gyro aim: the controller's turn now moves the view the right way (left/right and up/down were swapped) and by the right amount (it was a rate, not degrees). Untested on PC (T103).
 - Split up anywhere: D-pad left plays Banjo, right plays Kazooie (065b633, 22ee63c). Untested on PC (T55).
 - D-pad control scheme in General (1bbfe86). Untested on PC (T58).
 - Mouse and gyro aiming in first person (8888075). Untested on PC (T64).
