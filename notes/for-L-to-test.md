@@ -1523,3 +1523,13 @@
 - Look for: Do the dropdowns and switches work and follow the keys? Do all the F keys show up and rebind? Changed: F8 is now only Effect Compare. The old F8 blend cycling moved to F5 (the Blend Mode key).
 - Headless: F7 and F1 with their default keys showed their notices; the new options saved and applied. Not tried: rebinding, F6, F9, F12, controller bindings.
 - Status: waiting for L
+
+## T144 HD Shadows: eggs and objects no longer vanish (also ultrawide)
+- Asked: 2026-10-14 22:05 UTC
+- Build: main @ d47f9e7
+- Steps:
+  1. Graphics: HD Shadows on
+  2. Play Mayahem Temple near egg nests, and Pine Grove at 21:9
+  3. Walk around for a few minutes
+- Look for: Eggs, notes, boxes and characters stay on screen; nothing pops out and back
+- Status: waiting for L
