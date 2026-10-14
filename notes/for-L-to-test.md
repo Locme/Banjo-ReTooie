@@ -1544,3 +1544,13 @@
   4. Send interp_tags.txt here when a set of tags looks right, to be built in as the default
 - Look for: The highlight follows the picked model (the backpack and textured parts go dark green), F4 steps the tag live, and the file lists each tag with the map and position it was made in
 - Status: waiting for L
+
+## T146 HD Shadows: Tilt or Overhead for enemies and for Banjo
+- Asked: 2026-10-14 22:20 UTC
+- Build: main @ 628ee89
+- Steps:
+  1. Graphics: HD Shadows on; the two new options HD Shadows: Enemies and HD Shadows: Banjo appear under it, both Overhead
+  2. Set both to Tilt and stand near a Grublin in Pine Grove
+  3. Turn the camera around, and switch each back to Overhead
+- Look for: Tilt: shadows fall beside Banjo and the Grublin, in the same direction for both, and stay put when the camera turns. Overhead: as before. Each option only changes its own shadows
+- Status: waiting for L
