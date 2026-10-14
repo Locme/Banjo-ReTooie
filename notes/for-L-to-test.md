@@ -273,7 +273,7 @@
   3. Load a file and check the back button does what you bound
   4. Open logs/console.log and find the "Controller added" lines: they name the controller and list which back buttons it reports
 - Look for: Does the slot show L4, R4, L5 or R5 (or a Steam-style icon for the fifth one) when you press a back button? If nothing happens, what is the controller's name and model, and what do the "Controller added" lines say?
-- Status: waiting for L
+- Status: closed by L (2026-10-14 11:02). The Ultimate 2 runs in X mode (XInput), which never sends back buttons or gyro; BT switch position over USB would, L keeps X mode.
 
 ## T29 Always High-Detail Models
 - Asked: 2026-10-13 20:00 UTC
