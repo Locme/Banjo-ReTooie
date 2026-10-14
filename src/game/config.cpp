@@ -6,6 +6,7 @@
 #include "tooie_game.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
+#include "tooie_control_scheme.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
@@ -142,6 +143,7 @@ void tooie::init_config() {
         "Back-Port: Get Jiggy animation",
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
+    tooie::control_scheme::add_option(general);
     general.add_number_option(
         tooie::save_backups_keep_option,
         "Save backups to keep",

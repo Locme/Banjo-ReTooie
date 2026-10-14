@@ -208,7 +208,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.60 D-pad control scheme
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 
 ### 4.61 Music player

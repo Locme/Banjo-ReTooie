@@ -582,3 +582,15 @@
   4. Pick a song again and go through a door to another area
 - Look for: Does the level's music fade out and the song start? Does Level music bring the area's music back? Does going to another area end the song (the row goes back to Level music)? The names come from the decomp's jukebox switch names, so tell me any that are wrong. Some tracks are short jingles: the game brings its own music back after them.
 - Status: waiting for L
+
+## T58 D-pad control scheme
+- Asked: 2026-10-14 01:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.60
+- Steps:
+  1. Esc > General > Control scheme = D-pad
+  2. In a level, walk with the D-pad (try diagonals), then push the left stick while holding the D-pad
+  3. Hold LB and press the D-pad: up should go into first person (C-up), left/right turn the camera
+  4. Set it back to Original: the D-pad cheats (Fly anywhere, Split up anywhere) work again
+- Look for: Does Banjo run at full speed with the D-pad and the stick take over when pushed? Do LB + D-pad act as the C-buttons? Headless the D-pad ran Banjo at full tilt and LB + up reached the game as C-up.
+- Status: waiting for L

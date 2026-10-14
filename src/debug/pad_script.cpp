@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "tooie_debug.h"
+#include "tooie_control_scheme.h"
 #include "tooie_game.h"
 #include "tooie_player_cheats.h"
 #include "tooie_tiptoe.h"
@@ -179,6 +180,7 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
 bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
+        tooie::control_scheme::apply(buttons_out, x_out, y_out);
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
         tooie::talon_trot::apply(buttons_out);
         tooie::fine_aim::apply(*buttons_out, x_out, y_out);
