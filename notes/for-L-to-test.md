@@ -226,6 +226,7 @@
 - Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
 - Status: waiting for L
 
+
 ## T24 Audio glitch sounds
 - Asked: 2026-10-13 19:21 UTC
 - Build: latest Windows CI build from main
@@ -882,6 +883,7 @@
   2. D-pad up and down pick a row, left and right change it. Try Zoom (hold), Camera, Time, Banjo, Filter, Depth of field, Tilt, Crop
   3. Press L to hide the list, and L again to show it. Press A for a screenshot.
 - Look for: Is the list easy to read and use on your controller? The screenshot should have no list in it. Note: D-pad up/down used to toggle the HUD and orbit, and L used to hide Banjo; those are rows now.
+- Status: waiting for L
 
 ## T86 Hold B to run
 - Asked: 2026-10-14 06:45 UTC
