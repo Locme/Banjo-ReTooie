@@ -494,6 +494,7 @@ L_80015540:
     // 0x80015550: lw          $a1, 0x4($s0)
     ctx->r5 = MEM_W(ctx->r16, 0X4);
     after_5:
+    tooie_vi_client_sent(rdram, ctx);
     // 0x80015554: addiu       $s0, $s0, 0x8
     ctx->r16 = ADD32(ctx->r16, 0X8);
 L_80015558:

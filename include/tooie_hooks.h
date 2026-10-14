@@ -22,6 +22,7 @@ void tooie_frame_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx);
 void tooie_frame_seconds(uint8_t* rdram, recomp_context* ctx);
 void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx);
+void tooie_vi_client_sent(uint8_t* rdram, recomp_context* ctx);
 int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx);
 void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx);
