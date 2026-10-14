@@ -598,6 +598,7 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
 #define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
 
 int main(int argc, char** argv) {
+    tooie::api_restart::remember_launch_dir();
     for (int i = 1; i + 1 < argc; i++) {
         if (strcmp(argv[i], "--game") == 0 && strcmp(argv[i + 1], "bt") == 0) {
             autostart_game = true;

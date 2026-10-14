@@ -64,6 +64,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- Fixed a crash at startup ("string too long") when the game was started from another folder, for example by the Graphics API restart. It now finds its files next to the exe.
 - Graphics API now shows in Graphics. Picking the other one asks "Restart now?" and the game reopens itself with it; Later keeps it for the next start.
 - Cheats and General tabs: section headings (Infinite items, Moves, Unlocks, Tabs; Saves, Back-Ports and cut content, Developer). In General the Control scheme, save and timer-save rows moved next to related rows; headings in Cheats hide while Enable cheats is off.
 - QOL tab: split into Speed and skipping, Camera, and Moves and aiming, with a heading for each. The two cutscene-skip options moved up next to the speed options.

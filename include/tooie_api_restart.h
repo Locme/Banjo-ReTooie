@@ -7,6 +7,9 @@
 // new choice in Graphics > Graphics API asks "Restart now?" and, if confirmed, the game closes and
 // starts itself again with the new API.
 namespace tooie::api_restart {
+    // Called first in main(): moves to the executable's folder if the working directory has no
+    // assets/, and notes the working directory to start again in.
+    void remember_launch_dir();
     // Hooks the Graphics API option of the Graphics tab.
     void add_prompt(recomp::config::Config& graphics);
     // Called at the end of main(): starts the game again if a restart was confirmed.

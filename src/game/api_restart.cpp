@@ -26,6 +26,9 @@
 
 namespace {
     std::atomic_bool restart_requested = false;
+    // The working directory the game was started in. The menus load their files (assets/) from it,
+    // and a file dialog can move it while the game runs, so the restarted game is given this one.
+    std::filesystem::path launch_dir;
     // The API the renderer started with, from the saved settings.
     recomp::config::ConfigValueVariant running_api;
 
@@ -35,6 +38,37 @@ namespace {
         restart_requested = true;
         ultramodern::quit();
     }
+}
+
+namespace {
+    std::filesystem::path exe_path() {
+#ifdef _WIN32
+        wchar_t exe[MAX_PATH];
+        DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        if (length == 0 || length == MAX_PATH) {
+            return {};
+        }
+        return std::filesystem::path{ exe };
+#else
+        std::error_code ec;
+        std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
+        return ec ? std::filesystem::path{} : exe;
+#endif
+    }
+}
+
+void tooie::api_restart::remember_launch_dir() {
+    // The menus' files (assets/recomp.rcss and the rest) are opened relative to the working
+    // directory, and a missing one aborts at startup ("string too long" in init_styling). When
+    // the game is started from another folder (a shortcut, a script), use the executable's.
+    std::error_code ec;
+    if (!std::filesystem::exists("assets", ec)) {
+        std::filesystem::path exe_dir = exe_path().parent_path();
+        if (!exe_dir.empty() && std::filesystem::exists(exe_dir / "assets", ec)) {
+            std::filesystem::current_path(exe_dir, ec);
+        }
+    }
+    launch_dir = std::filesystem::current_path(ec);
 }
 
 void tooie::api_restart::add_prompt(recomp::config::Config& graphics) {
@@ -85,9 +119,8 @@ void tooie::api_restart::relaunch_if_requested(int argc, char** argv) {
 #ifdef _WIN32
     (void)argc;
     (void)argv;
-    wchar_t exe[MAX_PATH];
-    DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    if (length == 0 || length == MAX_PATH) {
+    std::filesystem::path exe = exe_path();
+    if (exe.empty()) {
         return;
     }
     std::wstring command_line = GetCommandLineW();
@@ -96,7 +129,8 @@ void tooie::api_restart::relaunch_if_requested(int argc, char** argv) {
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
-    if (CreateProcessW(exe, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+    const wchar_t* dir = launch_dir.empty() ? nullptr : launch_dir.c_str();
+    if (CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, dir, &startup, &process)) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
     }
@@ -104,10 +138,13 @@ void tooie::api_restart::relaunch_if_requested(int argc, char** argv) {
     (void)argc;
     std::fflush(stdout);
     std::fflush(stderr);
-    // The real path, not /proc/self/exe, so the process keeps its name.
     std::error_code ec;
-    std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
-    if (ec) {
+    if (!launch_dir.empty()) {
+        std::filesystem::current_path(launch_dir, ec);
+    }
+    // The real path, not /proc/self/exe, so the process keeps its name.
+    std::filesystem::path exe = exe_path();
+    if (exe.empty()) {
         exe = "/proc/self/exe";
     }
     execv(exe.c_str(), argv);
