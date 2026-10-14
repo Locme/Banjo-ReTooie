@@ -7,10 +7,19 @@
 // screenshots/<date>_<time>.png in the app-data folder, on a thread of its own
 // so the present thread is not held up by the PNG encoder.
 //
-// Headless test hook: TOOIE_SCREENSHOT_AT=<ms>[,<ms>...] takes a screenshot
-// at those times after the game started.
+// Holding F12 for half a second starts a burst: every presented frame is kept,
+// shrunk to a quarter of its size, in a ring of the last 150 frames, and when
+// the key is let go they are written to screenshots/burst-<date>_<time>/
+// 000.png, 001.png, ... (oldest first). For glitches that last a frame or two:
+// hold F12, play until one shows, let go.
+//
+// Headless test hooks: TOOIE_SCREENSHOT_AT=<ms>[,<ms>...] takes a screenshot
+// at those times after the game started; TOOIE_BURST=<from ms>:<to ms> acts as
+// F12 held over that window.
 
 #include <algorithm>
+#include <atomic>
+#include <deque>
 #include <chrono>
 #include <cstring>
 #include <cstdio>
@@ -115,6 +124,135 @@ namespace {
         }
     }
 
+    // Burst (F12 held): the last frames, shrunk, oldest first.
+    constexpr auto burst_hold = 500ms;
+    constexpr size_t burst_frames = 150;
+    constexpr uint32_t burst_shrink = 4;
+    struct Small {
+        uint32_t width;
+        uint32_t height;
+        std::vector<uint8_t> rgba;
+    };
+    std::atomic<bool> burst_on{false};
+    std::mutex burst_mutex;
+    std::deque<Small> burst_ring;
+
+    // Shrinks an image by burst_shrink in each direction, averaging the pixels.
+    Small shrink(uint32_t width, uint32_t height, const std::vector<uint8_t>& rgba) {
+        Small out;
+        out.width = std::max(1u, width / burst_shrink);
+        out.height = std::max(1u, height / burst_shrink);
+        out.rgba.resize((size_t)out.width * out.height * 4);
+        const uint32_t n = burst_shrink * burst_shrink;
+        for (uint32_t y = 0; y < out.height; y++) {
+            for (uint32_t x = 0; x < out.width; x++) {
+                uint32_t sum[4] = {0, 0, 0, 0};
+                for (uint32_t dy = 0; dy < burst_shrink; dy++) {
+                    const uint8_t* row = &rgba[((size_t)(y * burst_shrink + dy) * width + (size_t)x * burst_shrink) * 4];
+                    for (uint32_t dx = 0; dx < burst_shrink; dx++) {
+                        for (int c = 0; c < 4; c++) {
+                            sum[c] += row[dx * 4 + c];
+                        }
+                    }
+                }
+                uint8_t* dst = &out.rgba[((size_t)y * out.width + x) * 4];
+                for (int c = 0; c < 4; c++) {
+                    dst[c] = (uint8_t)(sum[c] / n);
+                }
+            }
+        }
+        return out;
+    }
+
+    void burst_request();
+
+    void burst_frame(uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+        if (!burst_on.load()) {
+            return;
+        }
+        Small small = shrink(width, height, rgba);
+        {
+            std::lock_guard<std::mutex> lock(burst_mutex);
+            burst_ring.push_back(std::move(small));
+            while (burst_ring.size() > burst_frames) {
+                burst_ring.pop_front();
+            }
+        }
+        burst_request();
+    }
+
+    void burst_request() {
+        RT64::RequestScreenshot([](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+            burst_frame(width, height, std::move(rgba));
+        });
+    }
+
+    void burst_save(std::deque<Small> frames) {
+        fs::path folder = recomp::get_config_path() / "screenshots";
+        std::error_code ec;
+        fs::create_directories(folder, ec);
+        fs::path stamped = next_path(folder);
+        fs::path dir = folder / ("burst-" + stamped.stem().string());
+        fs::create_directories(dir, ec);
+        size_t written = 0;
+        for (size_t i = 0; i < frames.size(); i++) {
+            const Small& f = frames[i];
+            char name[16];
+            std::snprintf(name, sizeof(name), "%03zu.png", i);
+            std::vector<uint8_t> png;
+            auto append = [](void* context, void* data, int size) {
+                auto* out = static_cast<std::vector<uint8_t>*>(context);
+                out->insert(out->end(), static_cast<uint8_t*>(data), static_cast<uint8_t*>(data) + size);
+            };
+            if (stbi_write_png_to_func(append, &png, (int)f.width, (int)f.height, 4, f.rgba.data(), (int)f.width * 4) == 0) {
+                continue;
+            }
+            fs::path path = dir / name;
+#ifdef _WIN32
+            FILE* file = _wfopen(path.c_str(), L"wb");
+#else
+            FILE* file = std::fopen(path.c_str(), "wb");
+#endif
+            if (file != nullptr) {
+                if (std::fwrite(png.data(), 1, png.size(), file) == png.size()) {
+                    written++;
+                }
+                std::fclose(file);
+            }
+        }
+        std::fprintf(stderr, "[screenshot] burst: %zu of %zu frames saved in %s\n", written, frames.size(), dir.string().c_str());
+        tooie::toast::show("Burst saved: " + std::to_string(written) + " frames");
+    }
+
+    void burst_begin() {
+        {
+            std::lock_guard<std::mutex> lock(burst_mutex);
+            burst_ring.clear();
+        }
+        burst_on = true;
+        tooie::toast::show("Burst: let go of F12 after the glitch");
+        burst_request();
+    }
+
+    void burst_end() {
+        burst_on = false;
+        std::deque<Small> frames;
+        {
+            std::lock_guard<std::mutex> lock(burst_mutex);
+            frames.swap(burst_ring);
+        }
+        std::thread(burst_save, std::move(frames)).detach();
+    }
+
+    // TOOIE_BURST=<from ms>:<to ms>
+    bool parse_burst_window(long& from, long& to) {
+        const char* v = std::getenv("TOOIE_BURST");
+        if (v == nullptr) {
+            return false;
+        }
+        return std::sscanf(v, "%ld:%ld", &from, &to) == 2;
+    }
+
     std::vector<long> parse_test_times() {
         std::vector<long> times;
         if (const char* v = std::getenv("TOOIE_SCREENSHOT_AT")) {
@@ -132,11 +270,29 @@ namespace {
         size_t next_test = 0;
         auto begin = std::chrono::steady_clock::now();
         bool was_down = false;
+        bool bursting = false;
+        std::chrono::steady_clock::time_point down_since;
+        long burst_from = 0, burst_to = 0;
+        const bool burst_test = parse_burst_window(burst_from, burst_to);
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
+            auto now = std::chrono::steady_clock::now();
             bool down = key_down();
+            if (burst_test) {
+                long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(now - begin).count();
+                down = down || (ms >= burst_from && ms < burst_to);
+            }
             if (down && !was_down) {
                 tooie::screenshot::take();
+                down_since = now;
+            }
+            if (down && !bursting && now - down_since >= burst_hold) {
+                bursting = true;
+                burst_begin();
+            }
+            if (!down && bursting) {
+                bursting = false;
+                burst_end();
             }
             was_down = down;
 

@@ -3,7 +3,8 @@
 
 // Screenshots (src/game/screenshot.cpp, handoff 4.83): F12 saves the game's picture, without
 // any menu or notice drawn over it, as a PNG in the screenshots folder of the app-data folder,
-// then shows "Screenshot saved".
+// then shows "Screenshot saved". Held for half a second, F12 keeps the last 150 frames
+// (shrunk 4x) and writes them to screenshots/burst-<stamp>/ when let go.
 namespace tooie::screenshot {
     // Starts the key-watching thread (safe to call more than once).
     void start();
