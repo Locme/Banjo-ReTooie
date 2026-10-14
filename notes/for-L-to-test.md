@@ -922,15 +922,16 @@
 - Status: waiting for L
 
 ## T86 Hold to run (sprint)
-- Asked: 2026-10-14 06:45 UTC, updated 2026-10-14 (own unbound control, new sprint animation)
+- Asked: 2026-10-14 06:45 UTC, updated 2026-10-14 19:55 (any stick tilt runs; no B or roll link; QOL > Running)
 - Build: latest Windows CI build from main
 - Commit: f4a8154, 64a95d0
 - Steps:
   1. Esc > Controls > Movement > Run: it starts unbound. Bind it to a spare button (for example a shoulder or back button)
   2. As Banjo-Kazooie, run with the stick fully pushed, then hold Run: he sprints at once (no roll), about half again as fast, leaning forward with a longer stride and calmer arms, easing in and out over about a third of a second (updated after your 10:48 note)
   3. Let go: he drops back to the normal run. B still rolls as before
-  4. Try it as Banjo alone (same sprint) and as Kazooie alone (her own sprint: leant in, longer, bouncier stride)
-  5. Optional: bind Run to B as well. Holding B then sprints and a quick tap still rolls
+  4. Push the stick only a little and hold Run: he runs and sprints anyway (this is the "sometimes it refuses" fix)
+  5. Try it as Banjo alone (same sprint) and as Kazooie alone (her own sprint: leant in, longer, bouncier stride)
+  6. Esc > QOL > Running: Off. Holding Run does nothing; turn it back On
 - Look for: Does the sprint look like Banjo/Kazooie sprinting? Too much or too little lean or swing? Feet keeping up with the ground?
 - Status: waiting for L
 

@@ -9,9 +9,9 @@
 // the same factor, so Banjo's run (Banjo-Kazooie, and Banjo alone, who shares it) and Kazooie's run
 // keep the same step length and simply step faster.
 //
-// B while moving is the forward roll (Kazooie alone: her wing attack). When Run is bound to a button
-// B also uses, B is held back while moving; letting go within tap_time passes a B press on, so a tap still rolls.
-// Standing still, B goes through at once (the claw swipe).
+// Run has nothing to do with B or the roll (L, 2026-10-14: "i just want a toggle and a run button").
+// Holding it while the stick is tilted at all runs at full speed: a partly tilted stick would
+// otherwise walk, and the walk has no sprint. QOL > Running turns the whole feature off.
 //
 // Debug: TOOIE_RUN_HOLD=<from ms>:<to ms>[,...] acts as Run held between those times after the first pad
 // read (headless); TOOIE_RUN_LOG=1 logs form, state, animation, speed, animation duration and sprint blend 10 times
@@ -26,7 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <mutex>
+#include <variant>
 #include <utility>
 #include <vector>
 
@@ -43,6 +43,8 @@
 #include "recompinput/input_binding.h"
 #include "recompinput/profiles.h"
 
+#include "recompui/config.h"
+#include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_hold_to_run.h"
 
@@ -51,7 +53,6 @@ namespace {
     using Clock = std::chrono::steady_clock;
 
     constexpr auto run_input = recompinput::GameInput::RUN;
-    constexpr uint16_t button_b = 0x4000;
 
     // Player 0's PlayerState pointer (see src/gameplay/player_cheats.cpp).
     constexpr uint32_t player_table = 0x80135490;
@@ -93,10 +94,6 @@ namespace {
     // starting and stopping were too sudden). The pose steps through blend_levels sprint files.
     constexpr float blend_seconds = 0.35f;
     constexpr int blend_levels = 8;
-    // Letting go of a shared Run/B button sooner than this is a tap: B is passed on.
-    constexpr auto tap_time = 200ms;
-    // How long a passed-on tap holds B down, so the game sees the press.
-    constexpr auto tap_press = 100ms;
     // A left stick tilted past this counts as moving.
     constexpr float move_tilt = 0.2f;
 
@@ -169,9 +166,8 @@ namespace {
     }
 
     // Whether the Run control is held, and whether any of its bindings is also one of B's.
-    void read_run(bool* held, bool* shares_b) {
+    void read_run(bool* held) {
         *held = false;
-        *shares_b = false;
         // Pressing the button to bind it in the Controls tab should not run.
         if (recompinput::binding::is_binding()) {
             return;
@@ -186,11 +182,6 @@ namespace {
                     continue;
                 }
                 *held = *held || recompinput::get_input_digital(0, field);
-                for (size_t c = 0; c < recompinput::num_bindings_per_input; c++) {
-                    if (recompinput::profiles::get_input_binding(profile, recompinput::GameInput::B, c) == field) {
-                        *shares_b = true;
-                    }
-                }
             }
         }
     }
@@ -493,15 +484,6 @@ namespace {
     // How far into the sprint, 0 (normal run) to 1, eased in and out by tick().
     std::atomic<float> sprint_blend{0.0f};
 
-    std::mutex input_mutex;
-    // Input side, under input_mutex.
-    struct InputState {
-        bool was_held = false;
-        bool hold_started_moving = false; // B was held back from the start of this hold
-        Clock::time_point held_since{};
-        Clock::time_point tap_until{};    // a passed-on tap holds B until then
-    } input;
-
     // Shared between the input and game threads.
     std::atomic<bool> run_held{false};
     std::atomic<bool> form_can_run{false};
@@ -548,16 +530,33 @@ namespace {
     }
 }
 
+namespace {
+    // QOL > Running, read a few times a second rather than on every pad read.
+    bool enabled(Clock::time_point now) {
+        static bool cached = true;
+        static Clock::time_point cached_at{};
+        if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
+            cached_at = now;
+            try {
+                cached = std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::hold_to_run::option));
+            } catch (...) {
+                cached = true;
+            }
+        }
+        return cached;
+    }
+}
+
 void tooie::hold_to_run::register_input() {
     recompinput::set_game_input_name(run_input, "Run");
     recompinput::set_game_input_description(run_input,
-        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. Not bound by default. Bound to the B button, a quick tap still rolls.");
+        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. Not bound by default. QOL > Running turns it off.");
     recompinput::set_game_input_section(run_input, "Movement");
     recompinput::set_default_mapping_for_keyboard(run_input, {});
     recompinput::set_default_mapping_for_controller(run_input, {});
 }
 
-void tooie::hold_to_run::apply(uint16_t* buttons, float x, float y) {
+void tooie::hold_to_run::apply(float* x, float* y) {
     const auto now = Clock::now();
     // TOOIE_RUN_REBIND=<SDL scancode> rebinds Run on the keyboard to that key, as the Controls tab does.
     static const bool rebound = [] {
@@ -575,8 +574,7 @@ void tooie::hold_to_run::apply(uint16_t* buttons, float x, float y) {
     }();
     (void)rebound;
     bool held = false;
-    bool shares_b = false;
-    read_run(&held, &shares_b);
+    read_run(&held);
     TestHold& test = test_hold();
     if (!test.windows.empty()) {
         const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(now - test.begin).count();
@@ -584,31 +582,15 @@ void tooie::hold_to_run::apply(uint16_t* buttons, float x, float y) {
             held = held || (ms >= from && ms < to);
         }
     }
-
-    std::lock_guard lock(input_mutex);
-    const bool moving = std::sqrt(x * x + y * y) > move_tilt;
-    const bool can_run = form_can_run.load();
-
-    if (held && !input.was_held) {
-        input.held_since = now;
-        input.hold_started_moving = shares_b && moving && can_run;
+    const float tilt = std::sqrt(*x * *x + *y * *y);
+    const bool moving = tilt > move_tilt;
+    const bool on = held && moving && enabled(now) && form_can_run.load();
+    if (on) {
+        // A full tilt the same way, so the game runs rather than walks.
+        *x = std::clamp(*x / tilt, -1.0f, 1.0f);
+        *y = std::clamp(*y / tilt, -1.0f, 1.0f);
     }
-    if (!held && input.was_held && input.hold_started_moving && now - input.held_since < tap_time) {
-        input.tap_until = now + tap_press;
-    }
-    // Moving after a standing B press (the claw swipe) holds B back from then on.
-    if (held && shares_b && moving && can_run) {
-        input.hold_started_moving = true;
-    }
-    input.was_held = held;
-
-    if (shares_b && held && input.hold_started_moving) {
-        *buttons &= (uint16_t)~button_b;
-    }
-    if (now < input.tap_until) {
-        *buttons |= button_b;
-    }
-    run_held = held && moving;
+    run_held = on;
 }
 
 void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {

@@ -272,6 +272,11 @@ void tooie::init_config() {
             {tooie::talon_trot::Mode::Toggle, "Toggle", "Toggle"},
         },
         tooie::talon_trot::Mode::Toggle);
+    qol.add_bool_option(
+        tooie::hold_to_run::option,
+        "Running",
+        "Hold the Run key (Controls tab, Movement; not bound by default) to run faster as Banjo-Kazooie, Banjo or Kazooie. Off turns running off.",
+        true);
     qol.add_enum_option(
         tooie::canary_mary::mode_option,
         "Canary Mary races",

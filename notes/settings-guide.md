@@ -39,6 +39,8 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
+- **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound
+  by default) run faster as Banjo-Kazooie, Banjo or Kazooie. Default: On.
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.
@@ -65,8 +67,8 @@ framework, not from this port's code, so it is not described here.
 
 - **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
   Kazooie, with a sprint animation. Not bound by default: bind it in the
-  Controls tab under Movement. Bound to the same button as B, a quick tap still
-  rolls.
+  Controls tab under Movement. Any stick tilt runs at full speed while it is
+  held. QOL > Running turns it off.
 
 ## Controls: Cheats
 
