@@ -1510,7 +1510,8 @@
   2. Spiral Mountain and Cloud Cuckooland: free camera up to Banjo, spin, 2 minutes each; also walk around Jolly Roger's Lagoon
   3. Watch Banjo, Kazooie and a few enemies up close while they animate
 - Look for: No torn sky, quads or black boxes during spins; characters still blend smoothly (no low-fps look); nothing that moved smoothly before now steps
-- Status: waiting for L
+- Status: answered 2026-10-14 21:54 UTC
+- L's result: L (2026-10-14 21:53): resolved. Interpolation without vertex blending (2a0f638) fixed the tears.
 
 ## T143 Debug section and every F-key in Controls
 - Asked: 2026-10-14 22:10 UTC
