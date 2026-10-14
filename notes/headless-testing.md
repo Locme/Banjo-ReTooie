@@ -120,3 +120,4 @@ Use the call profiler to see which functions run while something is on screen.
 
 Details are in `include/trace.h`, `src/debug/trace.cpp` and
 `tools/trace_diff.py`.
+- `TOOIE_BOTTLES=1`: turns on Cut Content: Bottles' Revenge (src/gameplay/bottles_revenge.cpp); Devil Bottles spawns in the next area loaded (checked at Mayahem Temple, map 0xB8).

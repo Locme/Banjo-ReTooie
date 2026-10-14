@@ -618,3 +618,15 @@
   6. Press B (or F10) to go back to the game
 - Look for: Does everything stop (Banjo, enemies, water) while the camera flies freely? Is the HUD and the area name gone? Does B put you back exactly where you were? The camera stops at the ground and walls and slides along them (QOL > Photo mode camera collision turns that off). The filters show only in photo mode and in its screenshots. Not built yet: depth of field and crop.
 - Status: waiting for L
+
+## T61 Bottles' Revenge (cut two-player mode)
+- Asked: 2026-10-14 01:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.77
+- Steps:
+  1. Plug in two controllers. Load a save and go into any level
+  2. Esc > General > Cut Content: Bottles' Revenge: On. The area reloads
+  3. Devil Bottles (red, with a pitchfork) should appear and follow Banjo. Player 2 uses the second controller: R near an enemy possesses it, then attack Banjo
+  4. Turn the option Off: the area reloads without him
+- Look for: Does the area reload when you toggle it? Does the first controller still only move Banjo (it should no longer also drive player 2), and does the keyboard stay with Banjo? Checked headless: Devil Bottles appears at Mayahem Temple with the option on and not with it off. Not checked headless: a real second pad, and the live reload.
+- Status: waiting for L

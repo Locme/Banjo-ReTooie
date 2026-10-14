@@ -51,6 +51,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   option with more than 6 entries is drawn as a drop-down (the menu's Select
   element) instead of a row of tabs, which ran together. Used by the Cheats
   tab's Transformation row.
+* **Split controllers** (`recompinput/include/recompinput/input_state.h`,
+  `recompinput/src/input_state.cpp`, `recompinput/src/profiles.cpp`): single player mode
+  sends every pad to every N64 controller. `set_split_controllers(true)` makes N64
+  controller N read only the Nth pad, and keeps the keyboard on controller 1. Used by
+  Bottles' Revenge (handoff 4.77) so player 2's pad drives controller 2.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

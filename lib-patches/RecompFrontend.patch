@@ -15,6 +15,22 @@ index 0000000..56f8df6
 +    bool get_controller_button(SDL_GameController* controller, SDL_GameControllerButton button);
 +    void log_controller_buttons(SDL_GameController* controller);
 +}
+diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
+index 1961e29..6060abf 100644
+--- a/recompinput/include/recompinput/input_state.h
++++ b/recompinput/include/recompinput/input_state.h
+@@ -40,6 +40,11 @@ namespace recompinput {
+     void get_right_analog(int controller_num, float* x, float* y);
+     void apply_joystick_deadzone(float x_in, float y_in, float* x_out, float* y_out);
+     void set_right_analog_suppressed(bool suppressed);
++    // Single player mode normally merges every controller into each N64 controller. With split
++    // controllers on, N64 controller N reads only the Nth controller detected, and the keyboard
++    // drives only the first (Banjo-Tooie's two-player Bottles' Revenge).
++    void set_split_controllers(bool split);
++    bool get_split_controllers();
+     bool game_input_disabled();
+     bool all_input_disabled();
+     ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
 index f5ed6c0..0515591 100644
 --- a/recompinput/include/recompinput/input_types.h
@@ -194,7 +210,7 @@ index c76a1dc..69e65f7 100644
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..20cf022 100644
+index 03ed871..f3e5e63 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,7 @@
@@ -205,9 +221,33 @@ index 03ed871..20cf022 100644
  #include "recompui/config.h"
  
  using namespace recompinput;
-@@ -142,13 +143,13 @@ bool controller_button_state(int controller_num, int32_t input_id) {
+@@ -134,21 +135,36 @@ void recompinput::update_rumble() {
+     }
+ }
+ 
++static std::atomic_bool split_controllers = false;
++
++void recompinput::set_split_controllers(bool split) {
++    split_controllers.store(split);
++}
++
++bool recompinput::get_split_controllers() {
++    return split_controllers.load();
++}
++
+ bool controller_button_state(int controller_num, int32_t input_id) {
+     if (input_id >= 0 && input_id < SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_MAX) {
+         SDL_GameControllerButton button = (SDL_GameControllerButton)input_id;
+         bool ret = false;
+         {
              std::lock_guard lock{ InputState.controllers_mutex };
-             if (recompinput::players::is_single_player_mode()) {
+-            if (recompinput::players::is_single_player_mode()) {
++            if (recompinput::players::is_single_player_mode() && split_controllers.load()) {
++                if (controller_num >= 0 && size_t(controller_num) < InputState.detected_controllers.size()) {
++                    ret |= recompinput::get_controller_button(InputState.detected_controllers[controller_num], button);
++                }
++            }
++            else if (recompinput::players::is_single_player_mode()) {
                  for (const auto &controller : InputState.detected_controllers) {
 -                    ret |= SDL_GameControllerGetButton(controller, button);
 +                    ret |= recompinput::get_controller_button(controller, button);
@@ -221,6 +261,20 @@ index 03ed871..20cf022 100644
                  }
              }
          }
+@@ -183,7 +199,12 @@ float controller_axis_state(int controller_num, int32_t input_id, bool allow_sup
+             };
+ 
+             std::lock_guard lock{ InputState.controllers_mutex };
+-            if (recompinput::players::is_single_player_mode()) {
++            if (recompinput::players::is_single_player_mode() && split_controllers.load()) {
++                if (controller_num >= 0 && size_t(controller_num) < InputState.detected_controllers.size()) {
++                    ret = gather_axis_state(InputState.detected_controllers[controller_num]);
++                }
++            }
++            else if (recompinput::players::is_single_player_mode()) {
+                 for (SDL_GameController *controller : InputState.detected_controllers) {
+                     float controller_state = gather_axis_state(controller);
+                     if (fabsf(controller_state) > fabsf(ret)) {
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
 index c6786e6..60450ac 100644
 --- a/recompinput/src/input_types.cpp
@@ -256,6 +310,21 @@ index c6786e6..60450ac 100644
  const std::string& get_game_input_enum_name(GameInput input) {
      return game_input_enum_names.at(static_cast<size_t>(input));
  }
+diff --git a/recompinput/src/profiles.cpp b/recompinput/src/profiles.cpp
+index c89956e..e781099 100644
+--- a/recompinput/src/profiles.cpp
++++ b/recompinput/src/profiles.cpp
+@@ -399,6 +399,10 @@ namespace recompinput {
+             
+             int profile_index_cont = players::is_single_player_mode() ? profiles::get_sp_controller_profile_index() : players_input_profile_indices[player_index].first;
+             int profile_index_kb = players::is_single_player_mode() ? profiles::get_sp_keyboard_profile_index() : players_input_profile_indices[player_index].second;
++            // Split controllers: the keyboard is player 1's only.
++            if (players::is_single_player_mode() && recompinput::get_split_controllers() && player_index != 0) {
++                profile_index_kb = -1;
++            }
+             check_buttons(profile_index_cont);
+             check_buttons(profile_index_kb);
+ 
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
 index 86428c9..8bee756 100644
 --- a/recompui/src/config/ui_config_option.cpp

@@ -244,7 +244,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.77 Bottles' Revenge (Cut Content)
-- [ ] Done
+- [x] Done (T61)
 - [ ] Approved by L
 
 ### 4.78 Transformation picker
