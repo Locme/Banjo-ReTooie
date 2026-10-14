@@ -60,6 +60,13 @@ framework, not from this port's code, so it is not described here.
   click on a controller, nothing on the keyboard. Rebind it in the Controls tab
   under Hotkeys. The game still sees every button as usual.
 
+## Controls: Movement
+
+- **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
+  Kazooie. Default: the same buttons as B (X on an Xbox pad, Left Shift on the
+  keyboard); a quick tap still rolls. Rebind it in the Controls tab under
+  Movement.
+
 ## Controls: Cheats
 
 - **Speed-Up**: the speed-up key. Default: F2 on the keyboard, nothing on a

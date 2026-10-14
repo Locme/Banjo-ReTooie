@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-14
 
+- Hold to run: hold B while moving and Banjo-Kazooie, Banjo alone or Kazooie alone runs half again as fast, with the run animation stepping faster to match. A quick tap of B still rolls. Rebind it as Run under Movement in the Controls tab.
 - Frame rate overlay: Off, Compact or Full, with F3 to step through them; Full adds audio queue and dropouts, the build, and a frame time graph.
 - Above Original, a part of Banjo that changes its look (his face when he blinks) no longer jumps for a frame.
 - Achievements: the Xbox Live Arcade version's twelve achievements (200 G), with a pop-up when one unlocks and an Achievements tab listing them. Eight are tracked so far; nothing is awarded while cheats are on.

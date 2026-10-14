@@ -226,7 +226,6 @@
 - Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
 - Status: waiting for L
 
-
 ## T24 Audio glitch sounds
 - Asked: 2026-10-13 19:21 UTC
 - Build: latest Windows CI build from main
@@ -883,4 +882,15 @@
   2. D-pad up and down pick a row, left and right change it. Try Zoom (hold), Camera, Time, Banjo, Filter, Depth of field, Tilt, Crop
   3. Press L to hide the list, and L again to show it. Press A for a screenshot.
 - Look for: Is the list easy to read and use on your controller? The screenshot should have no list in it. Note: D-pad up/down used to toggle the HUD and orbit, and L used to hide Banjo; those are rows now.
+
+## T86 Hold B to run
+- Asked: 2026-10-14 06:45 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. As Banjo-Kazooie, run with the stick fully pushed, then hold B (X on an Xbox pad, Left Shift on the keyboard): he should run about half again as fast, with no roll
+  2. Let go of B: he drops back to the normal run. Tap B while running: he still rolls
+  3. Stand still and press B: the claw swipe, as before
+  4. Try it as Banjo alone and as Kazooie alone (Cheats > Transformation, or a split-up pad)
+  5. Esc > Controls > Movement > Run: bind it to another button. That button now runs, and B only rolls
+- Look for: Does the run look right, with the feet keeping up with the ground? Too fast or too slow? Does the tap-to-roll feel delayed (it fires when you let go)?
 - Status: waiting for L

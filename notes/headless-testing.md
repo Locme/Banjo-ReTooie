@@ -61,6 +61,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 - `TOOIE_CUT_LOG=1`: logs `[cut]` each frame with how far the camera moved and turned, and whether frame interpolation treats it as a camera cut (src/game/model_tagging.cpp).
 - `TOOIE_TAG_LOG=1`: logs `[ids]` each frame for every model with 20 or more tagged matrices: how many there are and how many ids carried over from the last frame (RT64 can only blend those).
 - `TOOIE_INTERP_CHECK=1`: starts with the F7 interpolation check on (`[interp-check]` lines, red tint; src/debug/interp_check.cpp).
+- `TOOIE_RUN_HOLD=<from ms>:<to ms>[,...]`: acts as the Run key held in those windows (after the first pad read). Add `b` in the pad script over the same window to act as a button bound to both Run and B. `TOOIE_RUN_LOG=1` logs `[run]` 4 times a second: form, state, animation, target and actual speed, the run animation's duration and its speed map. `TOOIE_RUN_REBIND=<SDL scancode>` rebinds Run on the keyboard as the Controls tab does (src/gameplay/hold_to_run.cpp). Measured: run state 4 (Banjo-Kazooie and Banjo alone, animation 0xC) and 199 (Kazooie alone, 0xA6); the forward roll is state 49.
 - `TOOIE_NO_MODEL_TAGS=1`: turns off the matrix ids for frame interpolation (src/game/model_tagging.cpp), for before/after comparisons. Interpolation only runs with Framerate set to Manual (headless, Display gives no in-between frames).
 
 ## Pad script syntax
