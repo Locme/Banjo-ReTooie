@@ -10,8 +10,8 @@
 // nothing is awarded until the game is restarted (flags a cheat set would otherwise count later).
 // A save that already has the progress unlocks the achievement when it is loaded.
 //
-// Achievements whose XBLA rule counts events (enemies beaten with given attacks, octopi frozen, one of
-// each collectible) are listed but not tracked yet.
+// Achievements whose XBLA rule counts events (enemies beaten with given attacks, octopi frozen, minigame
+// targets shot) are listed but not tracked yet.
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,8 +46,13 @@ namespace {
         const char* name;
         int points;
         const char* description;
-        // Unlocked when any of these flags is set; empty means not tracked yet.
+        // Unlocked when any of these flags is set.
         std::vector<int32_t> flags;
+        // Or when all of these flags are set and the game total of each of these item types is above 0.
+        std::vector<int32_t> all_flags = {};
+        std::vector<int16_t> all_totals = {};
+
+        bool tracked() const { return !flags.empty() || !all_flags.empty() || !all_totals.empty(); }
     };
 
     // Names, points and descriptions as the XBLA game lists them.
@@ -87,7 +92,11 @@ namespace {
             {0x252, 0x293}},                // FLAG_252_JIGGY_MT_KICKBALL, FLAG_293_JIGGY_HFP_KICKBALL
         {"treasure_hunt", "Treasure Hunt", 20,
             "You'll probably end up with many more, but to achieve this you need just one of each.",
-            {}},
+            // The game's "first time" flags for each pickup (FLAG_02A..02F, 032, 035, 067: glowbo, egg,
+            // red and gold feather, treble clef, health and empty honeycomb, jinjo, cheato page), and the
+            // Jiggy (type 1) and note (type 6) totals, which have no such flag. Stop 'n' Swop items and
+            // Jolly Roger's doubloons are left out as not collectibles of every level.
+            {}, {0x02A, 0x02B, 0x02C, 0x02D, 0x02E, 0x02F, 0x032, 0x035, 0x067}, {1, 6}},
     };
 
     const std::string tab_id = "achievements";
@@ -129,6 +138,15 @@ namespace {
         }
         std::error_code ec;
         std::filesystem::rename(temp, path, ec);
+    }
+
+    // func_800D035C: the game-wide total of an item type collected, as the pause menu's totals show.
+    int32_t item_total(uint8_t* rdram, recomp_context* ctx, int16_t type) {
+        recomp_context call = *ctx;
+        call.r29 = ctx->r29 - 0x100;
+        call.r4 = (uint64_t)(int64_t)type;
+        func_800D035C(rdram, &call);
+        return (int32_t)call.r2;
     }
 
     std::string now_text() {
@@ -192,7 +210,7 @@ namespace {
             std::string status;
             if (done.contains(a.id) && done[a.id].is_string()) {
                 status = "Unlocked " + done[a.id].get<std::string>();
-            } else if (a.flags.empty()) {
+            } else if (!a.tracked()) {
                 status = "Locked (not tracked yet)";
             } else {
                 status = "Locked";
@@ -207,9 +225,10 @@ namespace {
         }
     }
 
-    // TOOIE_ACHIEVEMENT_TEST=flag@ms sets a game flag once, for the headless check.
+    // TOOIE_ACHIEVEMENT_TEST=flag[,flag...]@ms sets game flags once, for the headless check. With
+    // TOOIE_ACHIEVEMENT_LOG the Jiggy and note totals are printed then too.
     void test_flag(uint8_t* rdram, recomp_context* ctx) {
-        static int flag = -1;
+        static std::vector<int32_t> flags;
         static long long at = 0;
         static bool parsed = false;
         static bool done = false;
@@ -217,13 +236,18 @@ namespace {
         if (!parsed) {
             parsed = true;
             if (const char* env = std::getenv("TOOIE_ACHIEVEMENT_TEST")) {
-                flag = (int)std::strtol(env, nullptr, 16);
-                if (const char* a = std::strchr(env, '@')) {
-                    at = std::atoll(a + 1);
+                const char* p = env;
+                while (*p != '\0' && *p != '@') {
+                    char* end = nullptr;
+                    flags.push_back((int32_t)std::strtol(p, &end, 16));
+                    p = (*end == ',') ? end + 1 : end;
+                }
+                if (*p == '@') {
+                    at = std::atoll(p + 1);
                 }
             }
         }
-        if (done || flag < 0 || !tooie::debug::can_warp()) {
+        if (done || flags.empty() || !tooie::debug::can_warp()) {
             return;
         }
         long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
@@ -231,12 +255,17 @@ namespace {
             return;
         }
         done = true;
-        recomp_context call = *ctx;
-        call.r29 = ctx->r29 - 0x100;
-        call.r4 = (uint64_t)(int64_t)flag;
-        call.r5 = 1;
-        func_800DA3B8(rdram, &call); // the game's flag setter
-        std::printf("[achievements] test set flag 0x%X\n", flag);
+        for (int32_t flag : flags) {
+            recomp_context call = *ctx;
+            call.r29 = ctx->r29 - 0x100;
+            call.r4 = (uint64_t)(int64_t)flag;
+            call.r5 = 1;
+            func_800DA3B8(rdram, &call); // the game's flag setter
+            std::printf("[achievements] test set flag 0x%X\n", flag);
+        }
+        if (log_on()) {
+            std::printf("[achievements] jiggies %d, notes %d\n", item_total(rdram, ctx, 1), item_total(rdram, ctx, 6));
+        }
         std::fflush(stdout);
     }
 
@@ -271,11 +300,23 @@ void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
                 continue;
             }
         }
+        if (!a.tracked()) {
+            continue;
+        }
         bool earned = false;
         for (int32_t flag : a.flags) {
             if (flag_get(rdram, ctx, flag)) {
                 earned = true;
                 break;
+            }
+        }
+        if (!earned && a.flags.empty()) {
+            earned = true;
+            for (int32_t flag : a.all_flags) {
+                earned = earned && flag_get(rdram, ctx, flag);
+            }
+            for (int16_t type : a.all_totals) {
+                earned = earned && item_total(rdram, ctx, type) > 0;
             }
         }
         if (!earned) {

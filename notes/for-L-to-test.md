@@ -861,7 +861,7 @@
   1. Turn cheats off (Cheats tab master switch), then restart the game
   2. Load a save that has beaten Klungo once, or play until you do
   3. Open Esc > Achievements
-- Look for: A pop-up "Achievement unlocked: Knocked Out Klungo (20 G)" at the top right, and the tab shows it with the date. A save that already has the progress unlocks those achievements a moment after loading. With cheats on, nothing unlocks until you restart with cheats off. All Beaten Up, Calamari Bonanza, Shoot Em Up! and Treasure Hunt say "not tracked yet". Points Make Prizes unlocks on the Balloon Burst Jiggy, which may not match XBLA's 60 points rule.
+- Look for: A pop-up "Achievement unlocked: Knocked Out Klungo (20 G)" at the top right, and the tab shows it with the date. A save that already has the progress unlocks those achievements a moment after loading. With cheats on, nothing unlocks until you restart with cheats off. All Beaten Up, Calamari Bonanza and Shoot Em Up! say "not tracked yet". Treasure Hunt unlocks once you have picked up one of each: Jiggy, note, glowbo, egg, red and gold feather, treble clef, health and empty honeycomb, Jinjo and cheato page. Points Make Prizes unlocks on the Balloon Burst Jiggy, which may not match XBLA's 60 points rule.
 - Status: waiting for L
 
 ## T84 Frame rate overlay: Compact, Full, F3, audio, graph
