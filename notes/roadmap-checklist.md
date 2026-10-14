@@ -288,8 +288,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.42 Effect presets
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-14 (T71): Graphics > Effects preset: Custom, Original (every effect off), Enhanced (SMAA High, ambient occlusion 50, sharpening 30), Retro (N64 16-bit colour Console, CRT, 3-point filtering). It sets the options through update_option_value, so the menu shows the new values, and saves once; changing any effect it covers by hand makes it Custom. Brightness, colourblind and fog colour/start are left alone. Sun shadows aren't in it (4.98 not built). Checked headless with TOOIE_PRESET_TEST (saved graphics.json values for each preset). Code: src/display/picture_filters.cpp.
 
 ### 4.43 F8 split-screen compare, F3 per-effect GPU times, F6 debug views
 - [ ] Done

@@ -10,13 +10,16 @@
 // Picture filters drawn by RT64 as it puts the picture in the window (src/display/picture_filters.cpp,
 // lib-patches/rt64.patch): brightness with a test pattern (handoff 4.25), colourblind filters (4.41)
 // and the retro filters (4.40). Sharpening, contrast, saturation, vignette and film grain (4.35, 4.36)
-// use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion, fog (4.35) and toon outlines (4.36)
-// are RT64's scene effects pass, drawn after the 3D world and before the HUD.
+// use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion, fog (4.35)
+// and toon outlines (4.36) are RT64's scene effects pass, drawn after the 3D world and before the HUD.
+// Effects preset (4.42) sets them all at once.
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
     enum class Colour16 : uint32_t { Off, Console, Raw };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
+    enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
 
+    inline const std::string preset_option = "effects_preset";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -37,6 +40,14 @@ namespace tooie::picture_filters {
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
+    // An effect setting was changed by hand: the effects preset becomes Custom (unless a preset is
+    // being applied).
+    void effect_changed();
+    // An effect setting was changed by hand: the effects preset becomes Custom (unless a preset is
+    // being applied).
+    void effect_changed();
+    // Whether a preset is setting the effect options now.
+    bool applying_effects_preset();
     // Each game frame: gives RT64 the game's depth buffer for ambient occlusion.
     void tick(uint8_t* rdram, recomp_context* ctx);
     // Hands the current settings to RT64 (the contrast, saturation, vignette and grain only while photo

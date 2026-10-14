@@ -12,6 +12,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 
 namespace RT64 {
@@ -58,6 +59,11 @@ void tooie::smaa::add_option(recomp::config::Config& graphics) {
     graphics.add_option_change_callback(option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {
+                // An effects preset saves once it has set everything; a change by hand makes it Custom.
+                if (tooie::picture_filters::applying_effects_preset()) {
+                    return;
+                }
+                tooie::picture_filters::effect_changed();
                 // Saving applies the change, which calls back here as Permanent.
                 graphics_config().save_config();
             } else {

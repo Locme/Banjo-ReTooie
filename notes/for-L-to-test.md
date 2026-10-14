@@ -730,3 +730,14 @@
   1. Do a Beak Barge (Z + B on the ground) a few times while holding the right stick forward, then backward, then not at all
 - Look for: Does the whoosh get quieter with the stick forward here? If yes, the N64 game does it too and it stays. If not, it was the XBLA port and nothing needs doing
 - Status: waiting for L
+
+## T71 Effects preset
+- Asked: 2026-10-14 03:15 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.42 (Original / Enhanced / Retro / Custom)
+- Steps:
+  1. Esc > Graphics: set "Effects preset" to Enhanced. SMAA, Ambient occlusion and Sharpening rows should change in the menu at once
+  2. Try Retro (16-bit colour and CRT) and Original (all off)
+  3. Change Sharpening by hand: the preset should go back to Custom
+- Look for: Do the rows update in the menu straight away? Should Enhanced include anything else (fog, outlines)?
+- Status: waiting for L

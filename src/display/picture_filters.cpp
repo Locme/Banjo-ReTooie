@@ -17,13 +17,16 @@
 //   scanlines and an aperture grille.
 // The Graphics tab normally waits for Apply; these save and apply as they change.
 
+#include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstdlib>
 #include <variant>
 
 #include "recompui/config.h"
 
 #include "tooie_photo_mode.h"
+#include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
 
 namespace RT64 {
@@ -62,6 +65,51 @@ namespace {
         { 0.16f, 0.17f, 0.22f },   // Gloom: dark blue-grey
     };
     constexpr float fog_length = 3000.0f;
+
+    // True while a preset sets the effect options, so their callbacks neither save one by one nor
+    // switch the preset back to Custom.
+    bool applying_preset = false;
+
+    // Every effect a preset sets, with its value for Original (everything off).
+    struct PresetValue {
+        const std::string* id;
+        recomp::config::ConfigValueVariant off;
+    };
+    const PresetValue preset_values[] = {
+        { &tooie::smaa::option, (uint32_t)tooie::smaa::Quality::Off },
+        { &tooie::picture_filters::three_point_option, true },
+        { &tooie::picture_filters::dither16_option, (uint32_t)tooie::picture_filters::Colour16::Off },
+        { &tooie::picture_filters::crt_option, false },
+        { &tooie::picture_filters::sharpen_option, 0.0 },
+        { &tooie::picture_filters::ambient_occlusion_option, 0.0 },
+        { &tooie::picture_filters::outlines_option, 0.0 },
+        { &tooie::picture_filters::fog_option, 0.0 },
+        { &tooie::picture_filters::contrast_option, 0.0 },
+        { &tooie::picture_filters::saturation_option, 0.0 },
+        { &tooie::picture_filters::vignette_option, 0.0 },
+        { &tooie::picture_filters::grain_option, 0.0 },
+    };
+
+    void apply_preset(tooie::picture_filters::Preset preset) {
+        using namespace tooie::picture_filters;
+        if (preset == Preset::Custom) {
+            return;
+        }
+        recomp::config::Config& graphics = graphics_config();
+        applying_preset = true;
+        for (const PresetValue& entry : preset_values) {
+            graphics.update_option_value(*entry.id, entry.off);
+        }
+        if (preset == Preset::Enhanced) {
+            graphics.update_option_value(tooie::smaa::option, (uint32_t)tooie::smaa::Quality::High);
+            graphics.update_option_value(ambient_occlusion_option, 50.0);
+            graphics.update_option_value(sharpen_option, 30.0);
+        } else if (preset == Preset::Retro) {
+            graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
+            graphics.update_option_value(crt_option, true);
+        }
+        applying_preset = false;
+    }
 
     template <typename T>
     T value(const std::string& id, T fallback) {
@@ -108,8 +156,39 @@ void tooie::picture_filters::apply() {
     }
 }
 
+void tooie::picture_filters::effect_changed() {
+    if (!created || applying_preset) {
+        return;
+    }
+    try {
+        if (std::get<uint32_t>(graphics_config().get_option_value(preset_option)) != (uint32_t)Preset::Custom) {
+            graphics_config().update_option_value(preset_option, (uint32_t)Preset::Custom);
+        }
+    } catch (...) {
+    }
+}
+
+bool tooie::picture_filters::applying_effects_preset() {
+    return applying_preset;
+}
+
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    // Test aid: TOOIE_PRESET_TEST=<preset number> picks that effects preset on the first frame and logs
+    // the effect settings it gave, then changes Sharpening by hand and logs the preset again.
+    static bool preset_tested = false;
+    if (!preset_tested) {
+        preset_tested = true;
+        if (const char* v = std::getenv("TOOIE_PRESET_TEST")) {
+            recomp::config::Config& graphics = graphics_config();
+            graphics.update_option_value(preset_option, (uint32_t)std::atoi(v));
+            fprintf(stderr, "[preset] %u: smaa %u ao %.0f sharpen %.0f 16bit %u crt %d fog %.0f\n",
+                value<uint32_t>(preset_option, 99), value<uint32_t>(tooie::smaa::option, 99), value<double>(ambient_occlusion_option, -1),
+                value<double>(sharpen_option, -1), value<uint32_t>(dither16_option, 99), (int)value<bool>(crt_option, false), value<double>(fog_option, -1));
+            graphics.update_option_value(sharpen_option, 55.0);
+            fprintf(stderr, "[preset] after a change by hand: %u, sharpen %.0f\n", value<uint32_t>(preset_option, 99), value<double>(sharpen_option, -1));
+        }
+    }
     // RT64 keys framebuffers by physical address.
     const uint32_t address = (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu;
     if (depth_address.exchange(address) != address) {
@@ -119,6 +198,29 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
 
 void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     created = true;
+
+    graphics.add_enum_option(
+        preset_option,
+        "Effects preset",
+        "Sets all the picture effects below at once. <recomp-color primary>Original</recomp-color> turns them all off. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
+        {
+            {Preset::Custom, "Custom", "Custom"},
+            {Preset::Original, "Original", "Original"},
+            {Preset::Enhanced, "Enhanced", "Enhanced"},
+            {Preset::Retro, "Retro", "Retro"},
+        },
+        Preset::Custom);
+    graphics.add_option_change_callback(preset_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context != recomp::config::OptionChangeContext::Temporary) {
+                return;
+            }
+            const auto* preset = std::get_if<uint32_t>(&value);
+            if ((preset != nullptr) && (*preset != (uint32_t)Preset::Custom)) {
+                apply_preset((Preset)*preset);
+                graphics_config().save_config();
+            }
+        });
 
     graphics.add_number_option(
         brightness_option,
@@ -230,9 +332,18 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option }) {
+        const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
+            [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
-            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            [in_presets](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {
+                    if (applying_preset) {
+                        // The preset saves once it has set everything.
+                        return;
+                    }
+                    if (in_presets) {
+                        effect_changed();
+                    }
                     // Saving applies the change, which calls back here as Permanent.
                     graphics_config().save_config();
                 } else {
