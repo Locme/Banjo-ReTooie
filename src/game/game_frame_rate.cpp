@@ -370,6 +370,8 @@ extern "C" void tooie_frame_seconds(uint8_t* rdram, recomp_context* ctx) {
 // more than 60 times a second, but skips its timers on the extra ones.
 constexpr uint32_t sound_vi_queue = 0x8007AEF0;
 std::atomic<uint32_t> vi_tick{ 0 };
+// 60-a-second VIs the VI thread has passed on whose timers the scheduler has not run yet.
+std::atomic<uint32_t> scheduler_full_vis{ 0 };
 
 // Before each client's osSendMesg ($a0 = its queue): drop the sound thread's on the skipped VIs.
 extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
@@ -387,20 +389,33 @@ extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
 extern "C" int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     (void)ctx;
-    static uint32_t count = 0;
-    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
-    if (multiplier <= 1) {
-        count = 0;
+    if (ultramodern::get_vi_rate_multiplier() <= 1) {
         return 0;
     }
-    return (count++ % multiplier) != 0;
+    // Run the timers for the same VIs the sound thread is sent (counted by the VI
+    // thread), so the sound timer keeps its place after the sound thread's VI. Out
+    // of step, the sound task could start on a command list still being written
+    // (L's crash in the sound microcode with Unlocked, 2026-10-14).
+    uint32_t pending = scheduler_full_vis.load();
+    while (pending > 0) {
+        if (scheduler_full_vis.compare_exchange_weak(pending, pending - 1)) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 // func_8001546C, once per VI, before it compares the VIs since the last frame with
 // 600 (10 s, $s6): keep that 10 s at the faster VI rate, and count the VI.
 extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
-    vi_tick++;
+    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
+    uint32_t tick = ++vi_tick;
+    if (multiplier > 1 && (tick % multiplier) == 0) {
+        scheduler_full_vis++;
+    } else if (multiplier <= 1) {
+        scheduler_full_vis = 0;
+    }
     ctx->r22 = 600 * (int32_t)ultramodern::get_vi_rate_multiplier();
 }
 
