@@ -204,6 +204,16 @@ void tooie::init_config() {
         },
         tooie::TransitionSpeed::Original);
     qol.add_bool_option(
+        tooie::cutscene_skip_option,
+        "Skip boss intros",
+        "Press B during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
+        true);
+    qol.add_bool_option(
+        tooie::cutscene_skip_other_option,
+        "Skip other cutscenes",
+        "Press B during any other cutscene to fast-forward through it and its dialogue. This includes conversations, so a stray B skips them.",
+        false);
+    qol.add_bool_option(
         tooie::free_camera_option,
         "Free camera",
         "The right stick turns the camera smoothly around Banjo and tilts it, instead of the game's stepped camera swings. The camera stays where you turned it until a cutscene or another area.",
@@ -279,16 +289,11 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
-    qol.add_bool_option(
-        tooie::cutscene_skip_option,
-        "Skip boss intros",
-        "Press B during a boss's intro cutscene to fast-forward through it and its dialogue to the fight.",
-        true);
-    qol.add_bool_option(
-        tooie::cutscene_skip_other_option,
-        "Skip other cutscenes",
-        "Press B during any other cutscene to fast-forward through it and its dialogue. This includes conversations, so a stray B skips them.",
-        false);
+
+    // Section headings in the QOL tab (the options of a group sit next to each other above).
+    recompui::config::set_option_group(tooie::quick_start_option, "Speed and skipping");
+    recompui::config::set_option_group(tooie::free_camera_option, "Camera");
+    recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
 
     recomp::config::Config& graphics = recompui::config::create_graphics_tab();
     tooie::picture_filters::add_options(graphics);

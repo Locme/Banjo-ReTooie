@@ -329,6 +329,49 @@ index c89956e..e781099 100644
              check_buttons(profile_index_cont);
              check_buttons(profile_index_kb);
  
+diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
+index 38b84f5..9c12cff 100644
+--- a/recompui/include/recompui/config.h
++++ b/recompui/include/recompui/config.h
+@@ -133,6 +133,11 @@ namespace recompui {
+         // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
+         void set_tab_visible(const std::string &id, bool is_visible);
+ 
++        // Puts a small heading above the option with this ID in its tab. Options after it belong to the
++        // group until the next heading.
++        void set_option_group(const std::string &option_id, const std::string &title);
++        const std::string *get_option_group(const std::string &option_id);
++
+         void set_tab(const std::string &id);
+         void open();
+         bool close();
+diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
+index 6c84c05..3821b46 100644
+--- a/recompui/src/config/ui_config.cpp
++++ b/recompui/src/config/ui_config.cpp
+@@ -1,3 +1,4 @@
++#include <unordered_map>
+ #include "recompui/config.h"
+ #include "elements/ui_modal.h"
+ #include "elements/ui_icon_button.h"
+@@ -121,6 +122,17 @@ namespace recompui {
+         loaded_configs = true;
+     }
+ 
++    static std::unordered_map<std::string, std::string> option_groups;
++
++    void config::set_option_group(const std::string &option_id, const std::string &title) {
++        option_groups[option_id] = title;
++    }
++
++    const std::string *config::get_option_group(const std::string &option_id) {
++        auto it = option_groups.find(option_id);
++        return it == option_groups.end() ? nullptr : &it->second;
++    }
++
+     void config::set_tab_visible(const std::string &id, bool is_visible) {
+         if (config_modal == nullptr) {
+             for (auto &tab : pending_tabs) {
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
 index 86428c9..8bee756 100644
 --- a/recompui/src/config/ui_config_option.cpp
@@ -473,6 +516,29 @@ index f379a6f..7687717 100644
          } else {
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
+diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
+index 6ba64e2..87e8e02 100644
+--- a/recompui/src/config/ui_config_page_options_menu.cpp
++++ b/recompui/src/config/ui_config_page_options_menu.cpp
+@@ -1,4 +1,5 @@
+ #include "ui_config_page_options_menu.h"
++#include "recompui/config.h"
+ 
+ 
+ namespace recompui {
+@@ -183,6 +184,12 @@ void ConfigPageOptionsMenu::render_config_options() {
+         auto schema = config->get_config_schema();
+         for (size_t i = 0; i < schema.options.size(); i++) {
+             auto &config_option = schema.options[i];
++            if (const std::string *group = recompui::config::get_option_group(config_option.id)) {
++                auto heading = context.create_element<Label>(body_left_scroll, *group, LabelStyle::Large);
++                heading->set_margin_top(i == 0 ? 0.0f : 16.0f);
++                heading->set_margin_bottom(4.0f);
++                heading->set_color(theme::color::Primary);
++            }
+             ConfigOptionElement *element = nullptr;
+             switch (config_option.type) {
+                 case recomp::config::ConfigOptionType::Enum: {
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
 index 4fdf81f..0982bbf 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp

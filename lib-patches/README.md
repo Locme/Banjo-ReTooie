@@ -29,6 +29,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 ## RecompFrontend.patch
 
+* **Section headings** (`recompui/include/recompui/config.h`, `ui_config.cpp`,
+  `ui_config_page_options_menu.cpp`): `recompui::config::set_option_group(option_id, title)`
+  puts a heading above that option in its tab (used by the QOL tab).
 * **Vulkan is the default Graphics API** (`recompui/src/config/ui_config_tab_graphics.cpp`):
   the `api_option` default is Vulkan and the Auto entry is removed (the list is D3D12 and
   Vulkan on Windows). A saved `graphics.json` with Auto is not migrated.

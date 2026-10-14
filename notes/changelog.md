@@ -64,6 +64,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- QOL tab: split into Speed and skipping, Camera, and Moves and aiming, with a heading for each. The two cutscene-skip options moved up next to the speed options.
 - Graphics: FXAA Anti-Aliasing (FXAA or Extreme), the Xbox Live Arcade version's quick edge smoothing; it works with MSAA and SMAA.
 - Graphics API: Auto is gone and Vulkan is the default (D3D12 is still a choice on Windows). If you have Auto saved, switch the row once.
 - Settings: the eleven Cheato codes moved from Cheats to their own Cheato tab, shown while Enable cheats is on (Cheats is much shorter). Your old Cheato switches start off.
