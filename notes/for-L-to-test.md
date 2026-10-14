@@ -1459,3 +1459,13 @@
   3. Watch the shading round Banjo and the wave pattern as the camera moves
 - Look for: The shading hugs Banjo and the scenery and doesn't cut out now and then; the waves stay fixed on the water instead of the whole pattern sliding when you move a little
 - Status: waiting for L
+
+## T138 Unlocked / 120 FPS: sound keeps working, no sound crash
+- Asked: 2026-10-14 20:30 UTC
+- Build: your local build of main
+- Commit: 1256297
+- Steps:
+  1. Graphics: Game Frame Rate Unlocked (Experimental), Interpolation Off; play for 10 minutes or more in a few levels (talk to someone, enter a level, a cutscene)
+  2. Same for 5 minutes with 120 FPS (Experimental)
+- Look for: Does the sound keep playing the whole time, and does the game no longer crash with "n_aspMain unhandled jump"? If it still breaks, send the session log and say roughly how many minutes in. Headless, Unlocked ran 3 minutes without a crash both before and after this fix, so I could not reproduce your crash here.
+- Status: waiting for L
