@@ -1308,10 +1308,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..464a81c
+index 0000000..e0b2af9
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,562 @@
+@@ -0,0 +1,607 @@
 +//
 +// RT64
 +//
@@ -1322,6 +1322,7 @@ index 0000000..464a81c
 +#include <cmath>
 +#include <cstdio>
 +#include <cstdlib>
++#include <iterator>
 +#include <chrono>
 +#include <mutex>
 +#include <unordered_map>
@@ -1490,9 +1491,10 @@ index 0000000..464a81c
 +        effectsSettings.rimLight = strength;
 +    }
 +
-+    void SetSceneOutlines(float outlines) {
++    void SetSceneOutlines(float outlines, float thickness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.outlines = outlines;
++        effectsSettings.outlineThickness = std::clamp(thickness, 1.0f, 4.0f);
 +    }
 +
 +    void SetSceneWaterReflections(float strength) {
@@ -1511,13 +1513,20 @@ index 0000000..464a81c
 +        effectsSettings.waveSpeed = speed;
 +    }
 +
-+    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]) {
++    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]) {
 +        const std::scoped_lock lock(effectsMutex);
-+        for (int i = 0; i < 4; i++) {
++        for (int i = 0; i < 3; i++) {
 +            effectsSettings.rippleX[i] = x[i];
 +            effectsSettings.rippleZ[i] = z[i];
 +            effectsSettings.rippleAge[i] = age[i];
 +        }
++    }
++
++    void SetScenePlayer(bool valid, float x, float y, float z) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.player[0] = x;
++        effectsSettings.player[1] = valid ? y : -1e9f;
++        effectsSettings.player[2] = z;
 +    }
 +
 +    void SetSceneLightShafts(float strength) {
@@ -1527,7 +1536,8 @@ index 0000000..464a81c
 +
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
-+        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || (effectsSettings.view == 4);
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || (effectsSettings.view == 4) ||
++            (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
 +    }
 +
 +    RenderFramebuffer *BeginSceneWaterMask(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget) {
@@ -1545,8 +1555,42 @@ index 0000000..464a81c
 +    }
 +
 +    SceneEffectsSettings GetSceneEffects() {
-+        const std::scoped_lock lock(effectsMutex);
-+        return effectsSettings;
++        SceneEffectsSettings settings;
++        {
++            const std::scoped_lock lock(effectsMutex);
++            settings = effectsSettings;
++        }
++        if (settings.view < SceneEffectsSoloFirst) {
++            return settings;
++        }
++
++        // A solo view: the picture with only one effect, at its setting or at half strength when it is off.
++        SceneEffectsSettings solo = settings;
++        solo.view = 0;
++        float *const strengths[] = {
++            &solo.ambientOcclusion, &solo.bounceLight, &solo.outlines, &solo.rimLight, &solo.fog, &solo.bloom,
++            &solo.lightShafts, &solo.eyeAdaptation, &solo.waterReflections, &solo.waterWaves, &solo.underwaterTint,
++            &solo.heatHaze, &solo.depthOfField
++        };
++        static_assert(std::size(strengths) == SceneEffectsSoloCount);
++        const uint32_t kept = settings.view - SceneEffectsSoloFirst;
++        for (uint32_t i = 0; i < SceneEffectsSoloCount; i++) {
++            if (i == kept) {
++                if (*strengths[i] <= 0.0f) {
++                    *strengths[i] = 0.5f;
++                }
++            }
++            else {
++                *strengths[i] = 0.0f;
++            }
++        }
++        if (kept != 10) {
++            solo.underwaterHaze = 0.0f;
++        }
++        else if (solo.underwaterHaze <= 0.0f) {
++            solo.underwaterHaze = 0.3f;
++        }
++        return solo;
 +    }
 +
 +    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -1578,7 +1622,8 @@ index 0000000..464a81c
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
 +        constants.view = { float(settings.view), settings.compare ? 1.0f : 0.0f, seconds, settings.heatHaze };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
-+        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
++        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2],
++            (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * std::floor(settings.outlineThickness - 1.0f)) : 0.0f };
 +
 +        constants.bloom = { settings.bloom, settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
 +
@@ -1589,9 +1634,9 @@ index 0000000..464a81c
 +        waveTime = std::fmod(waveTime + std::min(std::chrono::duration<double>(now - waveClock).count(), 0.25) * settings.waveSpeed, 3600.0);
 +        waveClock = now;
 +        constants.ambientOcclusion.z = float(waveTime);
-+        constants.rippleX = { settings.rippleX[0], settings.rippleX[1], settings.rippleX[2], settings.rippleX[3] };
-+        constants.rippleZ = { settings.rippleZ[0], settings.rippleZ[1], settings.rippleZ[2], settings.rippleZ[3] };
-+        constants.rippleAge = { settings.rippleAge[0], settings.rippleAge[1], settings.rippleAge[2], settings.rippleAge[3] };
++        constants.rippleX = { settings.rippleX[0], settings.rippleX[1], settings.rippleX[2], settings.player[0] };
++        constants.rippleZ = { settings.rippleZ[0], settings.rippleZ[1], settings.rippleZ[2], settings.player[2] };
++        constants.rippleAge = { settings.rippleAge[0], settings.rippleAge[1], settings.rippleAge[2], settings.player[1] };
 +
 +        // World x and z from a view-space position: the view matrix (row vectors: view = world * V) is a
 +        // scaled rotation A and a translation t, so world = (view - t) * inverse(A).
@@ -1876,10 +1921,10 @@ index 0000000..464a81c
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..b7009d0
+index 0000000..7279a98
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,105 @@
 +//
 +// RT64
 +//
@@ -1896,6 +1941,12 @@ index 0000000..b7009d0
 +
 +    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light, underwater tint, heat haze, water reflections, bounce light) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
++    // Debug views from this one on show the picture with one effect only, in this order: ambient occlusion,
++    // bounce light, outlines, rim light, fog, bloom, light shafts, eye adaptation, water reflections, water
++    // waves, underwater tint and haze, heat haze, depth of field.
++    constexpr uint32_t SceneEffectsSoloFirst = 5;
++    constexpr uint32_t SceneEffectsSoloCount = 13;
++
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
 +        float ambientOcclusionRadius = 60.0f;
@@ -1905,6 +1956,7 @@ index 0000000..b7009d0
 +        float fogLength = 3000.0f;
 +        float fogColor[3] = { 0.75f, 0.8f, 0.85f };
 +        float outlines = 0.0f;
++        float outlineThickness = 1.0f;
 +        float bloom = 0.0f;
 +        float bloomThreshold = 0.7f;
 +        float depthOfField = 0.0f;
@@ -1917,9 +1969,10 @@ index 0000000..b7009d0
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
 +        float lightShafts = 0.0f;
-+        float rippleX[4] = {};
-+        float rippleZ[4] = {};
-+        float rippleAge[4] = { -1.0f, -1.0f, -1.0f, -1.0f };
++        float rippleX[3] = {};
++        float rippleZ[3] = {};
++        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
++        float player[3] = { 0.0f, -1e9f, 0.0f };
 +        float waveSpeed = 1.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
@@ -1929,8 +1982,8 @@ index 0000000..b7009d0
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
 +    // fog: 0 off, 1 the most. start and length in world units; color in 0 to 1.
 +    void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
-+    // Toon outlines where the depth jumps (silhouettes and creases): 0 off, 1 strongest.
-+    void SetSceneOutlines(float outlines);
++    // Toon outlines where the depth jumps (silhouettes and creases): 0 off, 1 strongest; thickness 1 to 4.
++    void SetSceneOutlines(float outlines, float thickness);
 +    // Bloom: a glow around the bright parts of the scene (0 off, 1 strongest), from the parts brighter
 +    // than the threshold (0 to 1).
 +    void SetSceneBloom(float bloom, float threshold);
@@ -1953,8 +2006,10 @@ index 0000000..b7009d0
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
 +    void SetSceneLightShafts(float strength);
-+    // Banjo-Tooie: four ripples on the water (world x and z, age in seconds, below 0 for none).
-+    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]);
++    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
++    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
++    // Banjo-Tooie: Banjo's world position, which the fog is measured from (valid false: from the camera).
++    void SetScenePlayer(bool valid, float x, float y, float z);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
@@ -3132,10 +3187,10 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..c5916ed
+index 0000000..0bbe1d5
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,210 @@
+@@ -0,0 +1,217 @@
 +//
 +// RT64
 +//
@@ -3312,9 +3367,16 @@ index 0000000..c5916ed
 +    const float2 centered = (uv - 0.5f) * float2(gConstants.rtMetrics.z / gConstants.rtMetrics.w, 1.0f);
 +    rgb *= 1.0f - gConstants.effects.x * smoothstep(0.35f, 1.0f, length(centered) * 1.2f);
 +
-+    // Film grain.
-+    const float noise = Hash(pos.xy + frac(gConstants.effects.z) * 517.0f) - 0.5f;
-+    rgb += noise * 0.18f * gConstants.effects.y;
++    // Film grain: soft clumps sized to the picture (about two pixels at 1080p), so it reads the same at
++    // any resolution, strongest in the mid tones like real film.
++    const float grainSize = max(gConstants.rtMetrics.w / 540.0f, 1.0f);
++    const float2 grainAt = pos.xy / grainSize + frac(gConstants.effects.z) * 517.0f;
++    const float2 cell = floor(grainAt);
++    const float2 f = smoothstep(0.0f, 1.0f, grainAt - cell);
++    const float noise = lerp(lerp(Hash(cell), Hash(cell + float2(1.0f, 0.0f)), f.x),
++        lerp(Hash(cell + float2(0.0f, 1.0f)), Hash(cell + float2(1.0f, 1.0f)), f.x), f.y) - 0.5f;
++    const float midTones = 0.6f + 1.6f * Luma(rgb) * (1.0f - Luma(rgb));
++    rgb += noise * 0.3f * midTones * gConstants.effects.y;
 +    rgb = saturate(rgb);
 +
 +    // The crop frame: the largest rectangle of that shape in the middle of the picture.
@@ -3367,10 +3429,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..40e65da
+index 0000000..6f819a4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,597 @@
+@@ -0,0 +1,629 @@
 +//
 +// RT64
 +//
@@ -3468,13 +3530,14 @@ index 0000000..40e65da
 +
 +    const float radius = gConstants.ambientOcclusion.y;
 +    const float distance = max(-center.z, 1.0f);
-+    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 2.0f, gConstants.projection.w * 0.08f);
++    // Capped at 5% of the picture's height: wider reads cost far more (they miss the cache) for little gain.
++    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 2.0f, gConstants.projection.w * 0.05f);
 +
 +    // A 4x4 pattern of rotations spreads the samples between neighbouring pixels.
 +    const uint2 cell = uint2(pixel) & 3u;
 +    const float rotation = float((cell.x * 4u + cell.y) * 7u % 16u) * (6.2831853f / 16.0f);
 +
-+    const int samples = 12;
++    const int samples = 8;
 +    float occlusion = 0.0f;
 +    [loop] for (int i = 0; i < samples; i++) {
 +        const float t = (float(i) + 0.5f) / float(samples);
@@ -3494,18 +3557,20 @@ index 0000000..40e65da
 +}
 +
 +// Bounce light: the colour of nearby surfaces facing this one, gathered like the ambient occlusion over
-+// a wider radius, so colourful walls and floors light what is next to them a little.
++// a wider radius: their average colour, as much of it as there is around (a corner gets more than an open
++// floor), so colourful walls and floors light what is next to them.
 +float3 BounceLight(int2 pixel, float depth) {
 +    const float3 center = ViewPosition(pixel, depth);
 +    const float3 normal = ViewNormal(pixel, center);
 +    const float radius = gConstants.ambientOcclusion.y * 1.5f;
 +    const float distance = max(-center.z, 1.0f);
-+    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 3.0f, gConstants.projection.w * 0.12f);
++    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 3.0f, gConstants.projection.w * 0.07f);
 +    const uint2 cell = uint2(pixel) & 3u;
 +    const float rotation = float((cell.x * 4u + cell.y) * 7u % 16u) * (6.2831853f / 16.0f);
 +
-+    const int samples = 16;
++    const int samples = 8;
 +    float3 light = 0.0f;
++    float weight = 0.0f;
 +    [loop] for (int i = 0; i < samples; i++) {
 +        const float t = (float(i) + 0.5f) / float(samples);
 +        const float angle = float(i) * 2.39996323f + rotation + 1.0f;
@@ -3517,10 +3582,14 @@ index 0000000..40e65da
 +        const float3 v = ViewPosition(samplePixel, sampleDepth) - center;
 +        const float lengthSquared = dot(v, v);
 +        const float facing = saturate(dot(normal, v) * rsqrt(max(lengthSquared, 1e-4f)));
-+        const float falloff = saturate(1.0f - lengthSquared / (radius * radius));
-+        light += gColor.Load(int3(samplePixel, 0)).rgb * facing * falloff;
++        const float w = facing * saturate(1.0f - lengthSquared / (radius * radius));
++        light += gColor.Load(int3(samplePixel, 0)).rgb * w;
++        weight += w;
 +    }
-+    return light / float(samples);
++    if (weight <= 1e-3f) {
++        return 0.0f;
++    }
++    return (light / weight) * saturate(weight * (3.0f / float(samples)));
 +}
 +
 +// Heat haze: the scene so far, read a little to the side and up and down in waves that rise, more with
@@ -3608,13 +3677,13 @@ index 0000000..40e65da
 +    return slope;
 +}
 +
-+// Ripples from Banjo: up to four rings spreading from where he moved in the water, fading as they grow.
++// Ripples from Banjo: up to three rings spreading from where he moved in the water, fading as they grow.
 +float2 RippleSlope(float2 p, float footprint) {
 +    float2 slope = 0.0f;
 +    const float wavelength = 38.0f;
 +    const float k = 6.2831853f / wavelength;
 +    const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
-+    [unroll] for (int i = 0; i < 4; i++) {
++    [unroll] for (int i = 0; i < 3; i++) {
 +        const float age = gConstants.rippleAge[i];
 +        if (age < 0.0f || age > 2.5f) {
 +            continue;
@@ -3715,7 +3784,7 @@ index 0000000..40e65da
 +        return 0.0f;
 +    }
 +
-+    const int Samples = 40;
++    const int Samples = 24;
 +    const float2 delta = (sunScreen - float2(pixel)) * (0.9f / float(Samples));
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
@@ -3733,7 +3802,7 @@ index 0000000..40e65da
 +            gathered += sky * (bright * weight);
 +        }
 +        total += weight;
-+        weight *= 0.96f;
++        weight *= 0.935f;
 +    }
 +    // The share of the way to the sun that is open sky: whole near gaps in the scenery, so beams fan out
 +    // from them across whatever is in front, and brightest close to the sun.
@@ -3757,11 +3826,11 @@ index 0000000..40e65da
 +    const float reach = max(3.0f, gConstants.projection.w / 135.0f);
 +    float behind = 0.0f;
 +    float total = 0.0f;
-+    [unroll] for (int r = 1; r <= 3; r++) {
-+        const float w = 4.0f - float(r);
++    [unroll] for (int r = 1; r <= 2; r++) {
++        const float w = 3.0f - float(r);
 +        [unroll] for (int i = 0; i < 8; i++) {
 +            const float angle = (float(i) + 0.5f * float(r)) * 0.785398163f;
-+            const int2 offset = int2(round(float2(cos(angle), sin(angle)) * reach * float(r) / 3.0f));
++            const int2 offset = int2(round(float2(cos(angle), sin(angle)) * reach * float(r) / 2.0f));
 +            const float neighbour = -ViewPositionAt(pixel + offset).z;
 +            behind += w * saturate(((neighbour - distance) / distance - 0.04f) * 6.0f);
 +            total += w;
@@ -3892,18 +3961,33 @@ index 0000000..40e65da
 +        keep *= AmbientOcclusion(pixel, depth);
 +    }
 +
-+    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind).
++    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
++    // and along creases, where the surface folds away on both sides (ridges, the top edge of a cliff).
 +    if (gConstants.fogColor.w > 0.0f) {
++        const float thickness = floor((gConstants.fogColor.w - 1e-3f) * 0.5f) + 1.0f;
++        const float strength = gConstants.fogColor.w - 2.0f * (thickness - 1.0f);
 +        const float distance = -ViewPosition(pixel, depth).z;
-+        // About one pixel per 540 rows, so the lines keep their weight at higher resolutions.
-+        const int step = max(1, int(round(gConstants.projection.w / 540.0f)));
++        // About one pixel per 540 rows for each step of thickness, so the lines keep their weight at higher
++        // resolutions.
++        const float scale = max(gConstants.projection.w / 540.0f, 1.0f);
++        const int step = max(1, int(round(scale * thickness)));
 +        float jump = 0.0f;
-+        [unroll] for (int i = 0; i < 4; i++) {
-+            const int2 offset = step * ((i == 0) ? int2(1, 0) : (i == 1) ? int2(-1, 0) : (i == 2) ? int2(0, 1) : int2(0, -1));
++        [unroll] for (int i = 0; i < 8; i++) {
++            const int2 direction = (i == 0) ? int2(1, 0) : (i == 1) ? int2(-1, 0) : (i == 2) ? int2(0, 1) : (i == 3) ? int2(0, -1) :
++                (i == 4) ? int2(1, 1) : (i == 5) ? int2(-1, 1) : (i == 6) ? int2(1, -1) : int2(-1, -1);
++            // The diagonals a little shorter, so the line is as thick at every angle.
++            const int2 offset = (i < 4) ? direction * step : direction * max(1, int(round(float(step) * 0.7f)));
 +            const float neighbour = -ViewPositionAt(pixel + offset).z;
 +            jump = max(jump, (neighbour - distance) / distance);
 +        }
-+        keep *= 1.0f - gConstants.fogColor.w * saturate((jump - 0.08f) * 6.0f);
++        float edge = saturate((jump - 0.05f) * 8.0f);
++        // Creases: both neighbours across the pixel further away than a straight surface would put them.
++        const int crease = max(1, int(round(scale)));
++        const float left = -ViewPositionAt(pixel + int2(-crease, 0)).z, right = -ViewPositionAt(pixel + int2(crease, 0)).z;
++        const float up = -ViewPositionAt(pixel + int2(0, -crease)).z, down = -ViewPositionAt(pixel + int2(0, crease)).z;
++        const float bend = max(left + right - 2.0f * distance, up + down - 2.0f * distance) / distance;
++        edge = max(edge, saturate((bend - 0.012f) * 40.0f) * 0.8f);
++        keep *= 1.0f - strength * edge;
 +    }
 +
 +    // Rim light: a soft warm-white light added along the edges.
@@ -3912,10 +3996,17 @@ index 0000000..40e65da
 +        rim = float3(1.0f, 0.95f, 0.85f) * (0.9f * RimLight(pixel, depth));
 +    }
 +
-+    // Fog thickens with distance past its start, approaching its strength.
++    // Fog thickens with distance from Banjo (from the camera when there is no Banjo) past its start,
++    // approaching its strength, so moving the camera doesn't change how fogged things are.
 +    float fog = 0.0f;
 +    if (gConstants.fog.x > 0.0f) {
-+        const float distance = length(ViewPosition(pixel, depth));
++        const float3 position = ViewPosition(pixel, depth);
++        float distance = length(position);
++        if (gConstants.rippleAge.w > -1e8f) {
++            const float3 world = float3(dot(position, gConstants.worldX.xyz) + gConstants.worldX.w,
++                dot(position, gConstants.worldY.xyz) + gConstants.worldY.w, dot(position, gConstants.worldZ.xyz) + gConstants.worldZ.w);
++            distance = length(world - float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w));
++        }
 +        fog = gConstants.fog.x * (1.0f - exp(-max(distance - gConstants.fog.y, 0.0f) / gConstants.fog.z));
 +    }
 +
@@ -3927,7 +4018,10 @@ index 0000000..40e65da
 +        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) :
 +            (gConstants.view.w > 0.0f) ? HeatHaze(pixel, -ViewPosition(pixel, depth).z) : gColor.Load(int3(pixel, 0)).rgb;
 +        if (gConstants.water.z > 0.0f) {
-+            scene += scene * BounceLight(pixel, depth) * (gConstants.water.z * 1.5f);
++            // The surface's own colour lit by it, and a little of it straight on, so dark corners take on the
++            // colour of what is around them.
++            const float3 bounce = BounceLight(pixel, depth) * gConstants.water.z;
++            scene += scene * bounce * 1.2f + bounce * 0.12f;
 +        }
 +        if ((gConstants.water.x > 0.0f) || (gConstants.water.w > 0.0f)) {
 +            float3 surface, normal;
@@ -4319,10 +4413,10 @@ index 0a5c332..54c2c83 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2f62a4f
+index 0000000..08ee7d6
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,59 @@
 +//
 +// RT64
 +//
@@ -4346,7 +4440,8 @@ index 0000000..2f62a4f
 +        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
 +        // thickens, then the underwater tint (0 off: not under water, 1 strongest).
 +        float4 fog;
-+        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
++        // The fog's color (rgb), then the outlines: 0 off, else strength (0 to 1, above 0) + 2 * (thickness - 1)
++        // for a thickness of 1 to 4.
 +        float4 fogColor;
 +        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), 1 to draw the effects only
 +        // on the left half of the picture (F8 compare), a time in seconds, then the heat haze (0 off,
@@ -4365,7 +4460,8 @@ index 0000000..2f62a4f
 +        float4 worldY;
 +        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
 +        float4 sun;
-+        // Banjo's ripples: four rings' world x, world z and age in seconds (below 0 for none).
++        // Banjo's ripples: three rings' world x, world z and age in seconds (below 0 for none) in xyz; the w
++        // components hold Banjo's world x, z and y (y below -1e8 when there is no Banjo), for the fog.
 +        float4 rippleX;
 +        float4 rippleZ;
 +        float4 rippleAge;

@@ -43,7 +43,7 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
     void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
-    void SetSceneOutlines(float outlines);
+    void SetSceneOutlines(float outlines, float thickness);
     void SetSceneBloom(float bloom, float threshold);
     void SetSceneDepthOfField(float strength);
     void SetSceneEyeAdaptation(float strength);
@@ -54,7 +54,8 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneLightShafts(float strength);
-    void SetSceneWaterRipples(const float x[4], const float z[4], const float age[4]);
+    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
+    void SetScenePlayer(bool valid, float x, float y, float z);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
 }
@@ -316,7 +317,7 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
-    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0), (float)value<double>(outline_thickness_option, 1.0));
     const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
@@ -405,10 +406,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     // Ripples: while Banjo floats on the water a ring spreads from him as he moves (one every 0.3 s and 25
-    // units), or now and then while he stays still. The newest four are drawn.
+    // units), or now and then while he stays still. The newest three are drawn.
     {
         struct Ripple { float x = 0.0f, z = 0.0f; std::chrono::steady_clock::time_point at{}; bool used = false; };
-        static Ripple ripples[4];
+        static Ripple ripples[3];
         static int next = 0;
         static float last_x = 0.0f, last_z = 0.0f;
         static std::chrono::steady_clock::time_point last_at{};
@@ -418,19 +419,26 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             const float since = std::chrono::duration<float>(now - last_at).count();
             if ((since > 0.3f && moved > 25.0f) || (since > 1.5f)) {
                 ripples[next] = { pos[0], pos[2], now, true };
-                next = (next + 1) % 4;
+                next = (next + 1) % 3;
                 last_x = pos[0];
                 last_z = pos[2];
                 last_at = now;
             }
         }
-        float x[4], z[4], age[4];
-        for (int i = 0; i < 4; i++) {
+        float x[3], z[3], age[3];
+        for (int i = 0; i < 3; i++) {
             x[i] = ripples[i].x;
             z[i] = ripples[i].z;
             age[i] = ripples[i].used ? std::chrono::duration<float>(now - ripples[i].at).count() : -1.0f;
         }
         RT64::SetSceneWaterRipples(x, z, age);
+    }
+
+    // The fog is measured from Banjo.
+    {
+        float pos[3];
+        const bool valid = banjo_position(rdram, pos);
+        RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f);
     }
 
     // The same shimmer, gentler, under water.
@@ -553,8 +561,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         outlines_option,
         "Toon outlines",
-        "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them. 0 is off.",
+        "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them, and lighter ones along ridges and the top edges of cliffs. 0 is off.",
         0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        outline_thickness_option,
+        "Toon outline thickness",
+        "How thick the toon outlines are, from 1 (thin) to 4 (thick). They keep the same thickness at any resolution.",
+        1, 4, 1, 0, false, 1);
     graphics.add_number_option(
         rim_light_option,
         "Rim light",
@@ -660,7 +673,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option,
                                    &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });

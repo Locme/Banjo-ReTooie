@@ -38,6 +38,7 @@ namespace tooie::picture_filters {
     inline const std::string fog_start_option = "fog_start";
     inline const std::string fog_colour_option = "fog_colour";
     inline const std::string outlines_option = "toon_outlines";
+    inline const std::string outline_thickness_option = "toon_outline_thickness";
     inline const std::string bloom_option = "bloom";
     inline const std::string cutscene_dof_option = "cutscene_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";

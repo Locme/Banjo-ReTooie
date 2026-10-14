@@ -3,11 +3,14 @@
 // F6 steps through the debug views of RT64's scene effects pass (lib-patches/rt64.patch,
 // SceneEffectsPS.hlsl): the effects alone (ambient occlusion and outlines as grey, rim light lighter,
 // fog blue, sky magenta), the depth (near white, far dark, sky blue), the normals worked out from the
-// depth, the water mask (red where the game draws water, yellow where it reflects), then off. F8 draws the picture effects (the scene effects pass and the photo grade pass:
+// depth, the water mask (red where the game draws water, yellow where it reflects). F8 draws the picture effects (the scene effects pass and the photo grade pass:
 // sharpening, contrast, saturation, vignette, grain) only on the left half, with the original on the
 // right and a line between. SMAA and the Retro filters aren't split.
 //
-// Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-4> starts in that view; TOOIE_FX_COMPARE=1 starts with
+// Then one view for each effect on its own ("Only: bloom" and so on), at its setting or at half strength
+// when it is off, to see what each one does; with F8 it is compared with the original.
+//
+// Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-17> starts in that view; TOOIE_FX_COMPARE=1 starts with
 // the compare on.
 
 #include <atomic>
@@ -36,13 +39,28 @@ namespace {
     using namespace std::chrono_literals;
 
     constexpr auto poll_interval = 10ms;
-    constexpr uint32_t view_count = 5;
+    // From 5 on, the picture with one effect only (RT64::SceneEffectsSoloFirst), at its setting or at half
+    // strength when it is off; F8 compares it with the original.
+    constexpr uint32_t view_count = 18;
     const char* const view_names[view_count] = {
         "Effect view off",
         "Effect view: effects alone",
         "Effect view: depth",
         "Effect view: normals",
         "Effect view: water (red, yellow where it reflects)",
+        "Only: ambient occlusion",
+        "Only: bounce light",
+        "Only: toon outlines",
+        "Only: rim light",
+        "Only: fog",
+        "Only: bloom",
+        "Only: light shafts",
+        "Only: eye adaptation",
+        "Only: water reflections",
+        "Only: water waves",
+        "Only: underwater tint and haze",
+        "Only: heat haze",
+        "Only: depth of field",
     };
 
     std::once_flag started;
@@ -67,7 +85,9 @@ namespace {
             const bool view_down = key_down(SDL_SCANCODE_F6);
             const bool compare_down = key_down(SDL_SCANCODE_F8);
             if (view_down && !view_was_down) {
-                view = (view + 1) % view_count;
+                // Shift+F6 steps back.
+                const bool back = key_down(SDL_SCANCODE_LSHIFT) || key_down(SDL_SCANCODE_RSHIFT);
+                view = (view + (back ? view_count - 1 : 1)) % view_count;
                 send();
                 tooie::toast::show(view_names[view]);
             }

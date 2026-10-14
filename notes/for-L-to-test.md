@@ -1176,3 +1176,54 @@
   2. Enter a level you haven't visited this session, then walk around a busy part of one
 - Look for: A "Shaders compiled: N in 5 s, M this session" line under the 1% low. It should jump when you enter somewhere new and fall back to 0 in 5 s; going back to the same place should add few or none. The "Game" line now ends with "CPU X ms per frame (busy Y%)". On a normal PC expect a few ms and a low busy %; tell me if it ever goes near the frame time (33 ms at 30 fps) or 100%.
 - Status: waiting for L
+
+## T111 Toon outlines: thickness and more edges (from your 09:15 list)
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Toon outlines 100, then the new Toon outline thickness 1, 2, 3 and 4
+  2. Spiral Mountain: look at Banjo, the cliffs and the bridge posts
+- Look for: Thickness 4 is clearly heavier than before; the lines keep their weight at any resolution. Lighter lines now also run along ridges and the top edges of cliffs, not only around silhouettes. Too many lines, or too few?
+- Status: waiting for L
+
+## T112 Film grain size (from your 09:15 list)
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Film grain 50, at your usual resolution
+- Look for: Grain you can actually see: soft clumps about two pixels across at 1080p (bigger at higher resolutions), strongest in the mid tones.
+- Status: waiting for L
+
+## T113 Fog measured from Banjo (from your 09:15 list)
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Fog 60
+  2. Stand still in Spiral Mountain and zoom the camera in and out, and swing it round
+- Look for: How fogged things are stays the same as the camera moves; it only changes as Banjo moves. Things right by Banjo stay clear even with the camera far back.
+- Status: waiting for L
+
+## T114 "Only" debug views for the effects (from your 09:15 list)
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Turn on the effects you want to look at (or none)
+  2. Press F6 repeatedly (Shift+F6 goes back): after the four old views come "Only: ambient occlusion", "Only: bounce light", ... "Only: depth of field"
+  3. Press F8 in any of them to split the picture with the original
+- Look for: Each "Only" view shows the game with just that one effect, at your setting, or at half strength if it is off. The toast names the view.
+- Status: waiting for L
+
+## T115 Effect performance and bounce light (from your 09:15 list)
+- Asked: 2026-10-14 11:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Frame rate overlay on. Graphics: Ambient occlusion 50, Bounce light 100, Light shafts 100, Rim light 50
+  2. Jolly Roger's Lagoon town and Spiral Mountain; compare the frame time with each one on and off (or use F6 "Only" views)
+- Look for: Headless (CPU renderer, so only the proportions count) the extra cost dropped by about 80% for light shafts, 40% for bounce light, 25% for ambient occlusion, 15% for rim light. Bounce light is stronger now: colourful walls and floors tint what is next to them, dark corners take on the colour around them. No speckle or shimmer?
+- Status: waiting for L
+
