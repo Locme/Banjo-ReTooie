@@ -288,14 +288,14 @@
 - Status: waiting for L
 
 ## T30 Extended draw distance
-- Asked: 2026-10-13 20:40 UTC, fixed 22:20 UTC (the first version made feathers, eggs and enemies vanish)
-- Build: latest Windows CI build from main
+- Asked: 2026-10-13 20:40 UTC, fixed 22:20 UTC (the first version made feathers, eggs and enemies vanish); 2026-10-14 the toggle now applies at once (before, it did nothing until Apply)
+- Build: your local build of main from 2026-10-14 10:00 UTC or later
 - XBLA history: report §4.26
 - Steps:
   1. Settings (Esc) > Graphics > Extended Draw Distance = On (it is now off by default)
   2. Walk around Spiral Mountain and Jinjo Village, then a big area (Mayahem Temple, Witchyworld)
-  3. Switch the option Off and On while looking
-- Look for: Are feathers, eggs and enemies all there again with it On? Do far-away characters stay drawn longer instead of popping in? Any slowdown?
+  3. Switch the option Off and On while looking, without pressing Apply
+- Look for: Does it change straight away? Note where things still pop in (notes and eggs, or characters), since this only keeps loaded models drawn further. Are feathers, eggs and enemies all there again with it On? Do far-away characters stay drawn longer instead of popping in? Any slowdown?
 - Status: waiting for L
 
 ## T31 Transformation picker

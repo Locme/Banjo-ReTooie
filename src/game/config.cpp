@@ -320,6 +320,12 @@ void tooie::init_config() {
         "Extended Draw Distance",
         "Keeps characters and objects that are already loaded drawn much further away than the original.",
         false);
+    graphics.add_option_change_callback(tooie::draw_distance_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
     graphics.add_number_option(
         tooie::fov_offset_option,
         "Field of View",
