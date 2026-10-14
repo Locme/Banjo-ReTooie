@@ -46,6 +46,7 @@
 #include "recomp.h"
 #include "ultramodern/config.hpp"
 #include "tooie_debug.h"
+#include "tooie_frame_overlay.h"
 #include "tooie_hooks.h"
 #include "tooie_interp_check.h"
 #include "tooie_model_tagging.h"
@@ -1408,6 +1409,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
 
 uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_t end) {
     stat_scenes.fetch_add(1, std::memory_order_relaxed);
+    tooie::frame_overlay::note_scene_done();
     tooie::interp_check::start();
     if (tooie::interp_check::enabled()) {
         static bool filled = false;

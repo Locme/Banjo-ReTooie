@@ -11,6 +11,7 @@
 
 #include "librecomp/game.hpp"
 
+#include "tooie_frame_overlay.h"
 #include "tooie_watchdog.h"
 
 namespace {
@@ -95,6 +96,8 @@ namespace {
         void send_dl(const OSTask* task) override { inner->send_dl(task); }
         void send_dummy_workload(uint32_t fb_address) override { inner->send_dummy_workload(fb_address); }
         void update_screen() override {
+            // Hands RT64 the controller read the new frame was made from (input latency).
+            tooie::frame_overlay::note_screen_update();
             inner->update_screen();
             frames_presented.fetch_add(1, std::memory_order_relaxed);
             reported_api.store((int)inner->get_chosen_api(), std::memory_order_relaxed);

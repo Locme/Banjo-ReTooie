@@ -31,6 +31,7 @@
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_fine_aim.h"
+#include "tooie_frame_overlay.h"
 #include "tooie_motion_aim.h"
 #include "recompinput/profiles.h"
 
@@ -183,6 +184,7 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
 bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
+        tooie::frame_overlay::note_input_read();
         tooie::photo_mode::apply_input(buttons_out, x_out, y_out);
         tooie::control_scheme::apply(buttons_out, x_out, y_out);
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);

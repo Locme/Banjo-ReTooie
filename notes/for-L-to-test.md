@@ -1118,3 +1118,12 @@
 - Look for: Pale beams fanning out from the sun past whatever is in the way, with darker streaks behind the posts and Banjo. Nothing when you face away from the sun. The sky itself shouldn't wash out. Is 100 strong enough, or too strong?
 - Status: waiting for L
 
+## T105 Frame rate overlay: input latency
+- Asked: 2026-10-14 09:45 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Turn on the overlay (F3 or Esc > Graphics) in Compact, then Full
+  2. Play a minute with Framerate at Original, then at Display (or Manual at your monitor's rate)
+  3. If you can, try with V-Sync or a frame cap on and off in your GPU driver
+- Look for: The first line ends with "input N ms", and Full has an "Input latency" line under the frame time. Does the number go down when the frame rate goes up, and up when the game stutters? A value near 2 to 3 frame times is normal. Does it feel like it matches how responsive the game feels? It leaves out your monitor's and controller's own delay.
+- Status: waiting for L

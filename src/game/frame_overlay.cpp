@@ -66,8 +66,12 @@ namespace RT64 {
         uint32_t gpuFrames = 0;
         double gpuMs = 0.0;
         std::vector<float> intervals;
+        uint32_t latencyFrames = 0;
+        double latencyMs = 0.0;
+        double worstLatencyMs = 0.0;
     };
     FrameStats TakeFrameStats();
+    void NoteInputRead(int64_t steadyNs);
 }
 
 namespace {
@@ -77,7 +81,7 @@ namespace {
     constexpr auto update_interval = 250ms;
     // Wait for the UI to come up before building the overlay.
     constexpr auto ui_wait = 500ms;
-    constexpr size_t max_lines = 14;
+    constexpr size_t max_lines = 16;
     // The frame time graph: one bar per presented frame, newest on the right.
     constexpr size_t graph_bars = 100;
     constexpr float graph_height = 40.0f;
@@ -172,6 +176,39 @@ namespace {
             was_down = down;
         }
     }
+
+    // Input latency over the last 2 s (8 updates), summed from RT64's per-update figures.
+    struct LatencyTick {
+        uint32_t frames = 0;
+        double ms = 0.0;
+        double worst = 0.0;
+    };
+    std::array<LatencyTick, 8> latency_ticks{};
+    size_t latency_next = 0;
+    uint32_t latency_frames = 0;
+    double latency_ms = 0.0;
+    double latency_worst = 0.0;
+
+    void add_latency(const RT64::FrameStats& frames) {
+        latency_ticks[latency_next] = { frames.latencyFrames, frames.latencyMs, frames.worstLatencyMs };
+        latency_next = (latency_next + 1) % latency_ticks.size();
+        latency_frames = 0;
+        latency_ms = 0.0;
+        latency_worst = 0.0;
+        for (const LatencyTick& t : latency_ticks) {
+            latency_frames += t.frames;
+            latency_ms += t.ms;
+            latency_worst = std::max(latency_worst, t.worst);
+        }
+    }
+
+    int64_t steady_ns() {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(clock_type::now().time_since_epoch()).count();
+    }
+
+    // Controller read times on their way to RT64 (see note_input_read and the others).
+    std::atomic<int64_t> last_read_ns{0};
+    std::atomic<int64_t> scene_read_ns{0};
 
     // Audio chunks since the last 2 s summary (note_audio_chunk runs on the audio thread).
     struct AudioStats {
@@ -471,6 +508,15 @@ namespace {
             std::snprintf(line, sizeof(line), "Worst frame %.2f ms", frames.worstPresentMs);
             text.push_back(line);
         }
+        if (latency_frames > 0) {
+            double avg = latency_ms / latency_frames;
+            if (!text.empty()) {
+                std::snprintf(line, sizeof(line), ", input %.0f ms", avg);
+                text[0] += line;
+            }
+            std::snprintf(line, sizeof(line), "Input latency %.0f ms (worst %.0f ms), controller read to screen", avg, latency_worst);
+            text.insert(text.begin() + std::min<size_t>(2, text.size()), line);
+        }
         else {
             text.push_back("No frames presented");
         }
@@ -528,6 +574,7 @@ namespace {
             uint64_t game_frames = tooie::model_tagging::last_stats().scenes;
             auto now = clock_type::now();
             add_intervals(frames.intervals, now);
+            add_latency(frames);
             static int mod_ticks = 0;
             if (mod_ticks++ % 8 == 0) {
                 refresh_mods();
@@ -613,6 +660,26 @@ void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
                 graphics_config().save_config();
             }
         });
+}
+
+void tooie::frame_overlay::note_input_read() {
+    last_read_ns.store(steady_ns(), std::memory_order_relaxed);
+}
+
+void tooie::frame_overlay::note_scene_done() {
+    // The game reads the controller before it builds a frame, so the newest read when the
+    // scene is done is the one this frame used. Taken, so a read is counted once.
+    int64_t read = last_read_ns.exchange(0, std::memory_order_relaxed);
+    if (read != 0) {
+        scene_read_ns.store(read, std::memory_order_relaxed);
+    }
+}
+
+void tooie::frame_overlay::note_screen_update() {
+    int64_t read = scene_read_ns.exchange(0, std::memory_order_relaxed);
+    if (read != 0) {
+        RT64::NoteInputRead(read);
+    }
 }
 
 void tooie::frame_overlay::note_audio_chunk(uint64_t queued_us, bool sped_up) {

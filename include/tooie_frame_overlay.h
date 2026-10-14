@@ -25,6 +25,14 @@ namespace tooie::frame_overlay {
     // Called by the audio output for each chunk the game hands over: how much was
     // still queued, and whether the chunk was sped up to cut latency.
     void note_audio_chunk(uint64_t queued_us, bool sped_up);
+
+    // Input latency: the game read player 1's controller (pad_script.cpp), finished a
+    // frame's 3D scene (model_tagging.cpp), and handed a frame to the screen (watchdog.cpp).
+    // The read before a scene goes with that frame to RT64, which times it to the first
+    // present that shows the frame.
+    void note_input_read();
+    void note_scene_done();
+    void note_screen_update();
 }
 
 #endif

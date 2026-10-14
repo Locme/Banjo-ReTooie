@@ -150,10 +150,14 @@ F12 screenshots are taken before these filters, so they don't show them.
 
 - **Frame rate overlay**: Off, Compact or Full. A small box in the top left
   corner, updated four times a second. **Compact** shows only the first line
-  below. **Full** shows:
+  below (frame rate, frame time and input latency). **Full** shows:
   - the frame rate and frame time on screen (averaged over the last quarter
     second)
   - the worst frame time in that quarter second
+  - input latency, averaged over the last 2 seconds, with the worst: the time
+    from the game reading your controller to the first frame on screen that
+    was made from that read. Your monitor's own delay and the controller's
+    are not included.
   - the GPU time per game frame
   - the game's own frame rate (the frames it really makes; with Framerate
     above Original the rest are in-between frames), counted over the last

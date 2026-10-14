@@ -112,7 +112,9 @@ To change it: edit the files in `lib/RecompFrontend`, then
   returns the presented frames, their total and worst interval (from
   `presentProfiler`) and the GPU time per game frame (from the renderer's
   timestamps) since the last call, with each present interval for the 1% low
-  and hitch count. Used by the frame rate overlay
+  and hitch count, and input latency: `RT64::NoteInputRead` gives the next
+  game frame the time its controller read happened, and the first present of
+  that frame is timed against it. Used by the frame rate overlay
   (`src/game/frame_overlay.cpp`).
 
 * **SMAA** (`src/render/rt64_smaa.cpp`, `.h`, `src/shaders/SmaaPS.hlsl`,
