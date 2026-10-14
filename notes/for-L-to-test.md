@@ -263,6 +263,7 @@
   2. Load a file and enter or leave a level, or use the Warp tab
   3. Watch the Jiggy-shaped wipe that opens the picture
 - Look for: Does the Jiggy hole grow until the whole wide screen is clear, with no black left at the sides when it disappears?
+- L's result: L, 2026-10-14: fixed
 
 ## T28 Controller back buttons
 - Asked: 2026-10-13 19:50 UTC
