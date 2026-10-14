@@ -580,10 +580,10 @@ index 5a331aa..87ecc21 100644
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..56ed4a1 100644
+index 69a82ac..f4f86fa 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,69 @@ namespace RT64 {
+@@ -659,6 +659,71 @@ namespace RT64 {
          }
      };
  
@@ -638,10 +638,12 @@ index 69a82ac..56ed4a1 100644
 +            builder.begin();
 +            gInput = builder.addTexture(1);
 +            gBloom = builder.addTexture(2);
-+            builder.addImmutableSampler(3, linearSampler);
 +            gColor = builder.addTexture(4);
 +            gAdapted = builder.addTexture(5);
 +            gWater = builder.addTexture(6);
++            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
++            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
++            builder.addImmutableSampler(3, linearSampler);
 +            builder.end();
 +
 +            if (device != nullptr) {

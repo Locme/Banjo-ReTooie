@@ -397,6 +397,34 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         std::min(std::chrono::duration<float>(now - underwater_at).count(), 0.25f);
     underwater_at = now;
     const float target = under_water(rdram, state) ? 1.0f : 0.0f;
+    // Headless test aid: TOOIE_TELEPORT=<x>,<y>,<z>@<ms> puts Banjo at that place (held for 30 frames), that
+    // long after the program started, to reach a spot without steering him there.
+    if (const char* teleport = std::getenv("TOOIE_TELEPORT")) {
+        static const auto started = now;
+        static int holds = 0;
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        long ms = 0;
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if ((holds < 30) && (std::sscanf(teleport, "%f,%f,%f@%ld", &x, &y, &z, &ms) == 4) && valid_pointer(player) &&
+            (now - started > std::chrono::milliseconds(ms)))
+        {
+            if (holds++ == 0) {
+                fprintf(stderr, "[teleport] Banjo to %.0f %.0f %.0f\n", x, y, z);
+            }
+            const uint32_t physics = (uint32_t)MEM_W(0xC8, (int32_t)player);
+            const uint32_t position = (uint32_t)MEM_W(0xE4, (int32_t)player);
+            for (uint32_t base : { physics + 4, position }) {
+                if (valid_pointer(base) && (base != 4)) {
+                    const float values[3] = { x, y, z };
+                    for (int i = 0; i < 3; i++) {
+                        uint32_t bits;
+                        std::memcpy(&bits, &values[i], sizeof(bits));
+                        MEM_W(4 * i, (int32_t)base) = (int32_t)bits;
+                    }
+                }
+            }
+        }
+    }
     // TOOIE_WATER_TRACE=1 logs the player's state when it changes, and every quarter second.
     if (std::getenv("TOOIE_WATER_TRACE")) {
         static uint32_t last = 0xFFFFFFFFu;
