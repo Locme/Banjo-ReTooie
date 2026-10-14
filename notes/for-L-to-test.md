@@ -1062,3 +1062,9 @@
   3. Close the menu
 - Look for: Does the view widen or narrow straight away, and does the setting stay after a restart?
 - Status: waiting for L
+
+## T99 Settings menu tidy-up
+- Do: Open Settings (Esc). Go through General, QOL, Graphics and Cheats. In Graphics open the Resolution row. In the Warp tab (Cheats > Warp tab) hold Down on a controller. Type in the Search box at the top of a tab.
+- Look for: section headings in each tab; Cheato codes are in Cheats again; Resolution lists 3x (720p), 4.5x (1080p), 6x (1440p) and 9x (4K); Field of View and Game Frame Rate apply as soon as you change them (Apply stays grey); the Warp list scrolls with the selection; Search filters that tab's rows; Texture upscaling's description says it uses an xBR-style filter.
+- Not done: search covers one tab at a time; controller scrolling was only checked with the keyboard.
+- Status: waiting for L
