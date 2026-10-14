@@ -44,6 +44,19 @@ namespace {
             return false;
         }
     }
+
+    bool tilted(const std::string& option) {
+        try {
+            return static_cast<tooie::hd_shadows::Direction>(std::get<uint32_t>(
+                recompui::config::get_config(recompui::config::graphics::id).get_option_value(option))) == tooie::hd_shadows::Direction::Tilt;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    // The Tilt light, towards the light and fixed in the world like a sun: about 35 degrees from
+    // straight up, so a shadow falls beside what casts it (towards -X, -Z) instead of under it.
+    constexpr float tilt_light[3] = {0.47f, 0.82f, 0.33f};
 }
 
 extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
@@ -61,6 +74,20 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
     }
     if (hd_shadows_on()) {
         MEM_W(0x1C8, ctx->r29) = MEM_W(0x1C4, ctx->r29);
+        // $s0 is the light direction, a vector its callers (func_800A69F0 via func_800A6B24) build on
+        // their stack for every shadow. Tilt replaces the default overhead light (0, 1, 0) only, so a
+        // shadow cast by a real light in the level keeps that light's direction.
+        const gpr light = ctx->r16;
+        const uint32_t light_y_bits = MEM_W(4, light);
+        float light_y;
+        std::memcpy(&light_y, &light_y_bits, sizeof(light_y));
+        if (tilted(tooie::hd_shadows::banjo_direction_option) && light_y > 0.999f) {
+            for (int i = 0; i < 3; i++) {
+                uint32_t bits;
+                std::memcpy(&bits, &tilt_light[i], sizeof(bits));
+                MEM_W(i * 4, light) = bits;
+            }
+        }
     }
 }
 
@@ -164,19 +191,19 @@ namespace {
             return;  // a wall or a steep slope
         }
 
-        // Flatten along the light (0, 1, 0) onto the floor plane: M = I - l n / (l . n), as func_800A6250.
+        // Flatten along the light l onto the floor plane: M = I - n l / (l . n), as func_800A6250
+        // (row i, column j at i * 0x10 + j * 4). Overhead is l = (0, 1, 0).
+        static const float overhead_light[3] = {0.0f, 1.0f, 0.0f};
+        const float* l = tilted(tooie::hd_shadows::enemy_direction_option) ? tilt_light : overhead_light;
+        const float n[3] = {nx, ny, nz};
+        const float inv = 1.0f / (l[0] * nx + l[1] * ny + l[2] * nz);
         ctx->r4 = flatten;
         func_800F274C(rdram, ctx);
-        const float inv = 1.0f / ny;
-        store_float(rdram, flatten + 0x00, 1.0f);
-        store_float(rdram, flatten + 0x04, -nx * inv);
-        store_float(rdram, flatten + 0x08, 0.0f);
-        store_float(rdram, flatten + 0x10, 0.0f);
-        store_float(rdram, flatten + 0x14, 1.0f - ny * inv);
-        store_float(rdram, flatten + 0x18, 0.0f);
-        store_float(rdram, flatten + 0x20, 0.0f);
-        store_float(rdram, flatten + 0x24, -nz * inv);
-        store_float(rdram, flatten + 0x28, 1.0f);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                store_float(rdram, flatten + i * 0x10 + j * 4, (i == j ? 1.0f : 0.0f) - n[i] * l[j] * inv);
+            }
+        }
 
         // The actor's turn, folded in as func_800A6250 does for the player.
         ctx->r4 = actor;

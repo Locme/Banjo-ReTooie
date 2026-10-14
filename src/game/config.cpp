@@ -4,6 +4,7 @@
 #include <json/json.hpp>
 
 #include "tooie_game.h"
+#include "tooie_hd_shadows.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_mix_rate.h"
@@ -332,6 +333,26 @@ void tooie::init_config() {
         "HD Shadows (Experimental)",
         "Shadows are shaped like the full model on screen, with its pose. Covers the player (instead of the game's simpler shadow model) and enemies and NPCs, which have none on N64.",
         false);
+    graphics.add_enum_option(
+        tooie::hd_shadows::enemy_direction_option,
+        "HD Shadows: Enemies",
+        "Where the light for enemy and NPC shadows comes from. Overhead: straight down, as the game lights them, so the shadow sits right under them. Tilt: at an angle, like a low sun, so the shadow falls beside them and shows their shape.",
+        {
+            {tooie::hd_shadows::Direction::Overhead, "Overhead", "Overhead"},
+            {tooie::hd_shadows::Direction::Tilt, "Tilt", "Tilt"},
+        },
+        tooie::hd_shadows::Direction::Overhead);
+    graphics.add_option_hidden_dependency(tooie::hd_shadows::enemy_direction_option, tooie::hd_shadows_option, false);
+    graphics.add_enum_option(
+        tooie::hd_shadows::banjo_direction_option,
+        "HD Shadows: Banjo",
+        "Where the light for Banjo's shadow comes from. Overhead: straight down, as in the original, right under him. Tilt: at an angle, so the shadow falls beside him; this makes it easier to see where Banjo is in 3D space.",
+        {
+            {tooie::hd_shadows::Direction::Overhead, "Overhead", "Overhead"},
+            {tooie::hd_shadows::Direction::Tilt, "Tilt", "Tilt"},
+        },
+        tooie::hd_shadows::Direction::Overhead);
+    graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
