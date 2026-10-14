@@ -133,6 +133,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.6 Start-menu renames: "PC Settings" and "Exit"
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: deferred. Settings already open from Esc, F5 and the controller hotkey. A "Settings" row in the game's pause menu needs a new text entry (rows name their text by id), a layout change and a function hook (the main thread owns the hook file); the pause overlay's option table (D_80802070, rows of icon/text/function/sub-option/are-you-sure) was not found in memory headless yet.
 
 ### 4.13 Timer save
 - [x] Done
