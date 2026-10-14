@@ -39,6 +39,7 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 ## RecompFrontend.patch
 
+* **Option display order** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`): `set_option_display_before(id, before_id)` shows an option above another in its tab without changing the config schema (used to show MS Anti-Aliasing under Anti-aliasing and scaling).
 * **Settings search** (`recompui/src/config/ui_config.cpp`, `create_search_tab()`): a Search tab with a hidden row for every option of every other tab; typing in its box shows the matching rows.
 * **Focus scrolls into view** (`recompui/src/elements/ui_button.cpp`): a button that gets focus scrolls itself into view, so moving down a long list with a controller keeps the selection visible.
 * **1440p resolution** (`ui_config_tab_graphics.cpp`, `rt64_render_context.cpp`, and `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): `R1440p` is 6x the game's 240 lines. The Resolution row names are 3x/4.5x/6x/9x with the pixel height in brackets (the saved keys stay 720p, 1080p, 2160p).

@@ -359,7 +359,9 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::picture_filters::ambient_occlusion_option, "Lighting, water and fog");
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
-    recompui::config::set_option_group(tooie::smaa::option, "Anti-aliasing and scaling");
+    // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
+    recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
+    recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-aliasing and scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame rate and overlay");
 
     recompui::config::create_controls_tab();

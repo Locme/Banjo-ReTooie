@@ -353,7 +353,7 @@ index c89956e..e781099 100644
              check_buttons(profile_index_kb);
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..e8f283c 100644
+index 38b84f5..385bb5b 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -65,6 +65,8 @@ namespace recompui {
@@ -365,7 +365,7 @@ index 38b84f5..e8f283c 100644
              void toggle_fullscreen();
          }
  
-@@ -133,6 +135,14 @@ namespace recompui {
+@@ -133,6 +135,18 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -376,12 +376,16 @@ index 38b84f5..e8f283c 100644
 +        // group until the next heading.
 +        void set_option_group(const std::string &option_id, const std::string &title);
 +        const std::string *get_option_group(const std::string &option_id);
++        // Shows the option with this ID just above another option of the same tab, for options a
++        // library adds in an order that doesn't fit the tab's sections. Only the display order changes.
++        void set_option_display_before(const std::string &option_id, const std::string &before_id);
++        const std::string *get_option_display_before(const std::string &option_id);
 +
          void set_tab(const std::string &id);
          void open();
          bool close();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..ac5d7fb 100644
+index 6c84c05..f7a4064 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,13 @@
@@ -497,7 +501,7 @@ index 6c84c05..ac5d7fb 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +219,17 @@ namespace recompui {
+@@ -121,6 +219,28 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -510,6 +514,17 @@ index 6c84c05..ac5d7fb 100644
 +    const std::string *config::get_option_group(const std::string &option_id) {
 +        auto it = option_groups.find(option_id);
 +        return it == option_groups.end() ? nullptr : &it->second;
++    }
++
++    static std::unordered_map<std::string, std::string> option_display_before;
++
++    void config::set_option_display_before(const std::string &option_id, const std::string &before_id) {
++        option_display_before[option_id] = before_id;
++    }
++
++    const std::string *config::get_option_display_before(const std::string &option_id) {
++        auto it = option_display_before.find(option_id);
++        return it == option_display_before.end() ? nullptr : &it->second;
 +    }
 +
      void config::set_tab_visible(const std::string &id, bool is_visible) {
@@ -687,17 +702,18 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..3ba871a 100644
+index 6ba64e2..ff125a2 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
-@@ -1,4 +1,6 @@
+@@ -1,4 +1,7 @@
++#include <algorithm>
  #include "ui_config_page_options_menu.h"
 +#include "elements/ui_container.h"
 +#include "recompui/config.h"
  
  
  namespace recompui {
-@@ -149,6 +151,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +152,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -708,14 +724,30 @@ index 6ba64e2..3ba871a 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -183,6 +189,14 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +188,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+             this->on_set_option_value(option_id, value);
+         };
          auto schema = config->get_config_schema();
++        // Display order: the schema's, with options moved by set_option_display_before.
++        std::vector<size_t> order;
++        for (size_t i = 0; i < schema.options.size(); i++) {
++            order.push_back(i);
++        }
          for (size_t i = 0; i < schema.options.size(); i++) {
++            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
++            if (before == nullptr || !schema.options_by_id.contains(*before)) {
++                continue;
++            }
++            order.erase(std::find(order.begin(), order.end(), i));
++            order.insert(std::find(order.begin(), order.end(), schema.options_by_id.at(*before)), i);
++        }
++        for (size_t position = 0; position < order.size(); position++) {
++            const size_t i = order[position];
              auto &config_option = schema.options[i];
 +            Element *group_heading = nullptr;
 +            if (const std::string *group = recompui::config::get_option_group(config_option.id)) {
 +                auto heading = context.create_element<Label>(body_left_scroll, *group, LabelStyle::Large);
-+                heading->set_margin_top(i == 0 ? 0.0f : 16.0f);
++                heading->set_margin_top(position == 0 ? 0.0f : 16.0f);
 +                heading->set_margin_bottom(4.0f);
 +                heading->set_color(theme::color::Primary);
 +                group_heading = heading;
@@ -723,7 +755,7 @@ index 6ba64e2..3ba871a 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +247,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +262,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
