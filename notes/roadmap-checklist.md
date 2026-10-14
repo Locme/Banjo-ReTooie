@@ -25,7 +25,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - Note (2026-10-13): L chose the RmlUi settings screen opened with Esc or the controller's Back/Select button; no row in the N64 pause menu.
 
 ### 4.10 Settings apply without restart
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 - Partial (2026-10-13): every Graphics tab option applies and saves the moment it changes; no Apply button needed (lib-patches/RecompFrontend.patch). Graphics API still needs a restart (RT64).
 - 2026-10-14: claimed by the Opus helper thread (frame-rate thread): Graphics API switch without a restart, behind an option that defaults to off.
@@ -379,7 +379,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.33 Graphics API choice
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 - 2026-10-14: claimed by the Opus helper thread with 4.10. The Graphics API row was hidden in the menu (upstream); it now shows in Graphics with Vulkan (default) and D3D12 on Windows (default set by the Sonnet Tasks lane). Untested on D3D12 until L tries it, so the default stays Vulkan. T93.
 
