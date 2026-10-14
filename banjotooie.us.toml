@@ -240,9 +240,10 @@ func = "func_800A7D30"
 before_vram = 0x800A7D6C
 text = "tooie_frame_step(rdram, ctx);"
 
-# func_8001608C replays an attract demo's recorded time step (0x80016110 calls
-# func_800D8FA0 with it). A demo runs a fixed number of frames, so while one
-# plays the game keeps its own frame pacing, or at 60 FPS it would run twice as fast.
+# func_8001608C replays a recorded time step (0x80016110 calls func_800D8FA0
+# with it): attract demos, the game select screen and the intro story cutscenes.
+# They run a fixed number of frames, so while one plays the game keeps its own
+# frame pacing, or at 60 FPS it would run twice as fast.
 [[patches.hook]]
 func = "func_8001608C"
 before_vram = 0x80016110

@@ -223,6 +223,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/warp.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/distance_probe.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/watchdog.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/settings_script.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/session_log.cpp
     ${CMAKE_SOURCE_DIR}/src/game/app_data.cpp
     ${CMAKE_SOURCE_DIR}/src/game/boot.cpp

@@ -78,6 +78,8 @@ namespace tooie {
     inline const std::string cutscene_fov_offset_option = "cutscene_fov_offset";
     // True while a letterboxed scene camera is drawing instead of the gameplay camera (field_of_view.cpp).
     bool in_letterboxed_scene();
+    // Headless settings script, TOOIE_SET (src/debug/settings_script.cpp).
+    void start_settings_script();
     // Skip cutscenes with B (src/gameplay/cutscene_skip.cpp), QOL tab.
     inline const std::string cutscene_skip_option = "cutscene_skip_all";
     inline const std::string cutscene_skip_other_option = "cutscene_skip_other";

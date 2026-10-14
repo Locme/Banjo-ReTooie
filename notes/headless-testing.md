@@ -47,6 +47,8 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 - `TOOIE_GAME_FPS=30|60`: Game Frame Rate as 30 or 60 FPS whatever the setting says. `TOOIE_GAME_FPS_LOG=1` prints `[game-fps]` every 2 s: game frames a second, the time steps the game asked for, the wait it asked for, game time against real time, and how far Banjo moved per second of game time (src/game/game_frame_rate.cpp). It also prints `[game-time]` at every map change and letterboxed scene start or end, with game time, real time, frame count and whether an attract demo is playing, to compare scene lengths between modes. Lavapipe at the default resolution caps the game near 15 fps; set `res_option` to `Original` and `msaa_option` to `None` in the run folder's graphics.json to reach 30.
 
+- `TOOIE_SET="<ms>:<option>=<value>[,...];<ms>:..."`: changes Graphics options at those times after the game started, the way the menu does (saved and applied at once), to test live switching. Enum options take the index of their choice (`game_frame_rate` 0 Original, 1 30 FPS, 2 60 FPS; `rr_option` 0 Original, 1 Display, 2 Manual), number options a number (`rr_manual_value=120`). Logs `[set]`. It saves graphics.json in the run folder, so put that back afterwards (src/debug/settings_script.cpp).
+
 - `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;
   `TOOIE_FREECAM_LOG=1` logs the camera, Banjo and stick 4 times a second
   (`[freecam]`). Drive the right stick with `rx=`/`ry=` in the pad script.

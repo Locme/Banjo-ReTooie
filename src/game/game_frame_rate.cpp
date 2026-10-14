@@ -220,9 +220,10 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-// func_8001608C, as an attract demo replays a frame's recorded time step. Demos
-// replay a fixed number of frames, so the game keeps its own pacing while one
-// plays (at 60 FPS it would otherwise run twice as fast).
+// func_8001608C, as the game replays a frame's recorded time step: attract
+// demos, the game select screen and the intro story cutscenes (seen headless).
+// These run a fixed number of frames, so the game keeps its own pacing while
+// one plays (at 60 FPS it would otherwise run twice as fast).
 extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     (void)ctx;
