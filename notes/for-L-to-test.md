@@ -1276,3 +1276,13 @@
   2. Play Mayahem Temple and Witchyworld, turning the camera around
 - Look for: No torn geometry, exploding models or crash. Far objects or extra shadows may now be left out in very busy views, as the game's own drawing comes first. If something still breaks, send the crashes.log or console lines starting with "[gfx]".
 - Status: waiting for L
+
+
+## T121 Water reflections stay on every frame
+- Asked: 2026-10-14 11:35 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Graphics: Water reflections 100, Water waves on
+  2. Spiral Mountain: walk into the stream by the tunnel and the pool below the cliff, turn the camera slowly
+- Look for: Reflections and ripples hold steady instead of flickering on and off. Some frames drew the sky separately, and the effects ran once for the sky (without water) and again for the world; now they run once.
+- Status: waiting for L

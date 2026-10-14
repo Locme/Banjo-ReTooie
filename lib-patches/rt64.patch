@@ -582,7 +582,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..856b48d 100644
+index 9fae0d4..a99c095 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -758,7 +758,7 @@ index 9fae0d4..856b48d 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1868,10 @@ namespace RT64 {
+@@ -1758,6 +1868,26 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -766,6 +766,22 @@ index 9fae0d4..856b48d 100644
 +            worldEnd = int32_t(targetDrawCall.rasterScenes.size());
 +        }
 +        targetDrawCall.sceneEffectsAfter = worldEnd;
++
++        // Banjo-Tooie: some frames draw the sky with its own projection, then a small draw to another buffer,
++        // then the world, on the same picture (the Spiral Mountain pool). The effects go once, after the last
++        // part, with the water of every part in their mask; they ran after each part, so the sky got them twice.
++        if (worldEnd > 0) {
++            for (uint32_t i = 0; (i + 1) < framebufferCount; i++) {
++                RenderTargetDrawCall &earlier = framebufferVector[i].renderTargetDrawCall;
++                if ((earlier.sceneEffectsAfter > 0) && (earlier.sceneEffectsDrawData == targetDrawCall.sceneEffectsDrawData) &&
++                    (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget))
++                {
++                    targetDrawCall.waterInstances.insert(targetDrawCall.waterInstances.begin(), earlier.waterInstances.begin(), earlier.waterInstances.end());
++                    earlier.waterInstances.clear();
++                    earlier.sceneEffectsAfter = -1;
++                }
++            }
++        }
      }
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
