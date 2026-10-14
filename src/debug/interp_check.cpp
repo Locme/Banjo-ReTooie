@@ -80,7 +80,7 @@ int tooie::interp_check::blend_mode() {
 const char* tooie::interp_check::blend_mode_name(int m) {
     switch (m) {
         case 1: return "no tags (RT64 matches on its own)";
-        case 2: return "tags, no vertex blending";
+        case 2: return "tags, with vertex blending";
         case 3: return "camera untagged";
         case 4: return "models snap, camera blends";
         default: return "normal";

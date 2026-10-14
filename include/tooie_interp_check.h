@@ -10,7 +10,8 @@ namespace tooie::interp_check {
     void start();
     bool enabled();
     // F8 cycles a blend mode for finding what blends wrong (0 = normal):
-    // 1 no tags (RT64's own matching), 2 tags but no vertex blending,
+    // 1 no tags (RT64's own matching), 2 tags with vertex blending (off since
+    // it tore the sky),
     // 3 camera untagged, 4 models snap (camera still blends).
     int blend_mode();
     const char* blend_mode_name(int mode);

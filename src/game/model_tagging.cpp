@@ -1253,7 +1253,12 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
             // A particle's quad is rebuilt each frame; only its place blends.
-            uint32_t vertices = snap || particle || blend_mode == 2 ? component_skip : component_interpolate;
+            // Vertex blending is off: RT64 blends vertex positions by index
+            // when a bone loads the same number of vertices as last frame,
+            // and models whose vertex set changes with the view (the sky
+            // dome's parts) then tear for a game frame (L, 2026-10-14, F8
+            // bisect). Blend mode 2 turns it back on for comparison.
+            uint32_t vertices = snap || particle || blend_mode != 2 ? component_skip : component_interpolate;
             // A shadow's bones are flat, so they cannot be split into turn and
             // scale (that put spikes in the shadow between frames): blended
             // element by element, as the game's own shadows are.
