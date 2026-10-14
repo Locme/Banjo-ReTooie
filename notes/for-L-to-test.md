@@ -1437,3 +1437,14 @@
   3. Watch the water from above and below
 - Look for: The water and the underwater look show once, with no doubled or ghosted water and no tint that builds up; frame rate a little higher
 - Status: waiting for L
+
+## T136 Cutscene skip: title left alone, Start stops it, sound muted
+- Asked: 2026-10-14 20:05 UTC
+- Build: main @ (this commit) (also covers T131)
+- Steps:
+  1. QOL: "Skip boss intros" and "Skip other cutscenes" on
+  2. Start the game and press Start during the logos / title flight
+  3. Warp to Chilly Willy, press Start during the intro, then Start again a second later
+  4. Press Start once more and let the skip run to the fight
+- Look for: Step 2 goes to the file select and does not pick a save by itself; in step 3 the second Start shows "Skip stopped" and the scene plays on at normal speed; while skipping there is silence (no sped-up sound) and the sound comes back when it ends
+- Status: waiting for L

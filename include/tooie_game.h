@@ -88,6 +88,8 @@ namespace tooie {
     void cutscene_skip_tick(uint8_t* rdram);
     // Applies the skip to player 1's buttons as the game reads them (input thread).
     void cutscene_skip_apply(uint16_t* buttons);
+    // True while a skip is fast-forwarding (the sound is muted then).
+    bool cutscene_skip_active();
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.

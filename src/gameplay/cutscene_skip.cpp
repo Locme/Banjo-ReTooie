@@ -11,7 +11,13 @@
 // that lands in gameplay, or after a safety limit. During the skip the
 // player's own A, B and Start are kept from the game, and the Start press
 // that begins a skip is not passed on, so it does not open the pause menu.
-// (Was B until L asked for Start, 2026-10-14.)
+// (Was B until L asked for Start, 2026-10-14.) Start again during a skip
+// stops it, and the sound is muted while it runs (main.cpp queue_samples)
+// rather than played sped up (L).
+//
+// The boot logos, title (0x18B) and file select (0x158) are never skipped:
+// Start there is the game's own (and quick start's), and the A taps would
+// pick the first save file.
 //
 // Headless: Chilly Willy's intro (warp 12C:0) with one Start press reaches the
 // fight in about 18 s of real time; with A held it took about 60 s. The boss
@@ -41,6 +47,8 @@ namespace {
     constexpr auto skip_limit = std::chrono::seconds(45);
 
     constexpr gpr current_map_addr = (int32_t)0x80132DC2;
+    constexpr uint16_t title_map = 0x18B;
+    constexpr uint16_t file_select_map = 0x158;
 
     // Maps with a boss whose intro the game will not skip (names from src/game/map_names.inc).
     // Weldar's map is inferred from the decomp's map names, not seen headless.
@@ -69,6 +77,7 @@ namespace {
 
     std::atomic<bool> scene_on{false};      // game thread -> input thread
     std::atomic<bool> skip_requested{false}; // input thread -> game thread
+    std::atomic<bool> stop_requested{false}; // input thread -> game thread
     std::atomic<bool> skipping{false};
     uint16_t last_buttons = 0;
     uint32_t polls = 0;
@@ -93,22 +102,28 @@ namespace {
 
 void tooie::cutscene_skip_tick(uint8_t* rdram) {
     const bool scene = tooie::in_letterboxed_scene();
-    const bool boss = boss_map((uint16_t)MEM_HU(0, current_map_addr));
+    const uint16_t map = (uint16_t)MEM_HU(0, current_map_addr);
+    const bool boss = boss_map(map);
+    const bool menu = map == title_map || map == file_select_map;
     static const bool log = std::getenv("TOOIE_CUTSCENE_LOG") != nullptr;
     if (log && scene != scene_on.load()) {
         printf("[cutscene] %s\n", scene ? "scene" : "gameplay");
         fflush(stdout);
     }
-    scene_on = scene && (boss ? option(tooie::cutscene_skip_option, true) : option(tooie::cutscene_skip_other_option, false));
+    scene_on = scene && !menu && (boss ? option(tooie::cutscene_skip_option, true) : option(tooie::cutscene_skip_other_option, false));
 
     if (skipping) {
-        if (!scene) {
-            stop("scene over");
+        if (stop_requested.exchange(false)) {
+            stop("Start pressed");
+            tooie::toast::show("Skip stopped");
+        } else if (!scene || menu) {
+            stop(menu ? "menu" : "scene over");
         } else if (std::chrono::steady_clock::now() - skip_started > skip_limit) {
             stop("time limit");
         }
         return;
     }
+    stop_requested = false;
     if (skip_requested.exchange(false) && scene_on) {
         speed_before = ultramodern::get_speed_multiplier();
         ultramodern::set_speed_multiplier(skip_speed);
@@ -126,6 +141,9 @@ void tooie::cutscene_skip_apply(uint16_t* buttons) {
     last_buttons = now;
 
     if (skipping) {
+        if (start_pressed) {
+            stop_requested = true;
+        }
         // Tap A: held for two reads, released for two.
         *buttons &= (uint16_t)~(button_a | button_b | button_start);
         if ((polls++ / 2) % 2 == 0) {
@@ -140,4 +158,8 @@ void tooie::cutscene_skip_apply(uint16_t* buttons) {
             skip_requested = true;
         }
     }
+}
+
+bool tooie::cutscene_skip_active() {
+    return skipping;
 }
