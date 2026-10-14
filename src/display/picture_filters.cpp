@@ -34,6 +34,7 @@ namespace RT64 {
     void SetSharpening(float strength);
     // lib/rt64/src/render/rt64_scene_effects.h.
     void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
+    void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
 }
 
 namespace {
@@ -51,6 +52,15 @@ namespace {
     const float ambient_occlusion_radius = std::getenv("TOOIE_AO_RADIUS") ? (float)std::atof(std::getenv("TOOIE_AO_RADIUS")) : 200.0f;
     std::atomic<float> ambient_occlusion{0.0f};
     std::atomic<uint32_t> depth_address{0};
+
+    // Fog colours by FogColour value, and how far fog takes to thicken (world units).
+    constexpr float fog_colours[][3] = {
+        { 0.72f, 0.80f, 0.88f },   // Haze: pale blue
+        { 0.90f, 0.92f, 0.94f },   // Mist: white
+        { 0.95f, 0.72f, 0.52f },   // Dusk: warm orange
+        { 0.16f, 0.17f, 0.22f },   // Gloom: dark blue-grey
+    };
+    constexpr float fog_length = 3000.0f;
 
     template <typename T>
     T value(const std::string& id, T fallback) {
@@ -78,6 +88,14 @@ void tooie::picture_filters::apply() {
     RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
     ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
     RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
+
+    uint32_t colour = value<uint32_t>(fog_colour_option, (uint32_t)FogColour::Haze);
+    if (colour >= std::size(fog_colours)) {
+        colour = 0;
+    }
+    RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
+        fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
+
     if (!tooie::photo_mode::active()) {
         const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
         const float saturation = (float)(value<double>(saturation_option, 0.0) / 100.0);
@@ -160,6 +178,27 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Soft shading where surfaces meet: in corners, under ledges and around things standing on the ground. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        fog_option,
+        "Fog",
+        "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        fog_start_option,
+        "Fog start distance",
+        "How far from the camera the fog begins, in the game's units (Banjo is about 150 tall).",
+        0, 6000, 250, 0, false, 1500);
+    graphics.add_enum_option(
+        fog_colour_option,
+        "Fog colour",
+        "The fog's colour.",
+        {
+            {FogColour::Haze, "Haze", "Haze"},
+            {FogColour::Mist, "Mist", "Mist"},
+            {FogColour::Dusk, "Dusk", "Dusk"},
+            {FogColour::Gloom, "Gloom", "Gloom"},
+        },
+        FogColour::Haze);
+    graphics.add_number_option(
         contrast_option,
         "Contrast",
         "More or less difference between the dark and light parts of the picture. 0 leaves it as it is.",
@@ -182,7 +221,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
-                                   &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option }) {
+                                   &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
+                                   &fog_option, &fog_start_option, &fog_colour_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {

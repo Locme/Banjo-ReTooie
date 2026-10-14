@@ -659,16 +659,17 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..567eafa
+index 0000000..30712da
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,97 @@
 +//
 +// RT64
 +//
 +
 +#include "rt64_scene_effects.h"
 +
++#include <algorithm>
 +#include <cmath>
 +#include <cstdlib>
 +#include <mutex>
@@ -692,6 +693,16 @@ index 0000000..567eafa
 +        effectsSettings.depthAddress = depthAddress;
 +    }
 +
++    void SetSceneFog(float fog, float start, float length, float red, float green, float blue) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.fog = fog;
++        effectsSettings.fogStart = start;
++        effectsSettings.fogLength = length;
++        effectsSettings.fogColor[0] = red;
++        effectsSettings.fogColor[1] = green;
++        effectsSettings.fogColor[2] = blue;
++    }
++
 +    SceneEffectsSettings GetSceneEffects() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return effectsSettings;
@@ -699,7 +710,7 @@ index 0000000..567eafa
 +
 +    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
 +        const SceneEffectsSettings settings = GetSceneEffects();
-+        return (settings.ambientOcclusion > 0.0f) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -720,6 +731,8 @@ index 0000000..567eafa
 +        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, 0.0f };
++        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
++        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], 0.0f };
 +
 +        if (depthTarget->targetCopyDescSet == nullptr) {
 +            depthTarget->targetCopyDescSet = std::make_unique<RenderTargetCopyDescriptorSet>(worker->device);
@@ -749,10 +762,10 @@ index 0000000..567eafa
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..bd679cd
+index 0000000..1c2c7e6
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,42 @@
 +//
 +// RT64
 +//
@@ -767,16 +780,22 @@ index 0000000..bd679cd
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
 +        float ambientOcclusionRadius = 60.0f;
 +        uint32_t depthAddress = 0;
++        float fog = 0.0f;
++        float fogStart = 1000.0f;
++        float fogLength = 3000.0f;
++        float fogColor[3] = { 0.75f, 0.8f, 0.85f };
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
++    // fog: 0 off, 1 the most. start and length in world units; color in 0 to 1.
++    void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1509,16 +1528,16 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..d90e000
+index 0000000..a082dec
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,107 @@
 +//
 +// RT64
 +//
 +// Banjo-Tooie: screen-space effects over the 3D world, drawn after its last perspective draw and before
 +// the HUD, with only the scene's depth as input. The output is blended as dst * a + rgb, so ambient
-+// occlusion darkens with a.
++// occlusion darkens with a and fog adds its color in rgb as a fades the scene.
 +
 +#include "shared/rt64_scene_effects.h"
 +
@@ -1597,7 +1616,9 @@ index 0000000..d90e000
 +    const int2 pixel = int2(pos.xy);
 +    const float depth = LoadDepth(pixel);
 +    if (depth >= 0.99999f) {
-+        return (gConstants.ambientOcclusion.z > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 0.0f) : float4(0.0f, 0.0f, 0.0f, 1.0f);
++        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
++        const float skyFog = gConstants.fog.x * 0.75f;
++        return (gConstants.ambientOcclusion.z > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 0.0f) : float4(gConstants.fogColor.rgb * skyFog, 1.0f - skyFog);
 +    }
 +
 +    float keep = 1.0f;
@@ -1605,11 +1626,18 @@ index 0000000..d90e000
 +        keep *= AmbientOcclusion(pixel, depth);
 +    }
 +
-+    if (gConstants.ambientOcclusion.z > 0.5f) {
-+        return float4(keep, keep, keep, 0.0f);
++    // Fog thickens with distance past its start, approaching its strength.
++    float fog = 0.0f;
++    if (gConstants.fog.x > 0.0f) {
++        const float distance = length(ViewPosition(pixel, depth));
++        fog = gConstants.fog.x * (1.0f - exp(-max(distance - gConstants.fog.y, 0.0f) / gConstants.fog.z));
 +    }
 +
-+    return float4(0.0f, 0.0f, 0.0f, keep);
++    if (gConstants.ambientOcclusion.z > 0.5f) {
++        return float4(lerp(keep.xxx, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
++    }
++
++    return float4(gConstants.fogColor.rgb * fog, keep * (1.0f - fog));
 +}
 diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
 new file mode 100644
@@ -1845,10 +1873,10 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1b4958c
+index 0000000..8fa075b
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,30 @@
 +//
 +// RT64
 +//
@@ -1869,6 +1897,11 @@ index 0000000..1b4958c
 +        // Ambient occlusion strength (0 off, 1 strongest), its radius in world units, 1 to show the effects
 +        // alone as grey (a test view), then unused.
 +        // The depth is the projected z / w, in [0, 1] over the 3D world.
++        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
++        // thickens, then unused.
++        float4 fog;
++        // The fog's color (rgb), then unused.
++        float4 fogColor;
 +        float4 ambientOcclusion;
 +    };
 +#ifdef HLSL_CPU

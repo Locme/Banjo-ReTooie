@@ -701,3 +701,13 @@
   4. Set it back to 0 and compare. Watch the frame rate with it on
 - Look for: Any lines, flicker or dark outlines around Banjo against far away scenery? Is 100 too strong or too weak? Any slowdown?
 - Status: waiting for L
+
+## T68 Fog
+- Asked: 2026-10-14 02:55 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.35 (you asked for clear distance, colour and tint controls for fog)
+- Steps:
+  1. Esc > Graphics: set "Fog" to 60. Try "Fog start distance" and "Fog colour" (Haze, Mist, Dusk, Gloom)
+  2. Look across a big area (Spiral Mountain, Mayahem Temple): far things fade into the fog colour, the sky blends in, the HUD and text stay clear
+- Look for: Is the start distance range useful? Do you want other colours, or a colour picker? Does the fog look wrong anywhere (water, the sky, indoors)?
+- Status: waiting for L

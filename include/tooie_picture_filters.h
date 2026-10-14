@@ -10,11 +10,12 @@
 // Picture filters drawn by RT64 as it puts the picture in the window (src/display/picture_filters.cpp,
 // lib-patches/rt64.patch): brightness with a test pattern (handoff 4.25), colourblind filters (4.41)
 // and the retro filters (4.40). Sharpening, contrast, saturation, vignette and film grain (4.35, 4.36)
-// use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion (4.35) is
-// RT64's scene effects pass, drawn after the 3D world and before the HUD.
+// use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion and fog (4.35)
+// are RT64's scene effects pass, drawn after the 3D world and before the HUD.
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
     enum class Colour16 : uint32_t { Off, Console, Raw };
+    enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
 
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
@@ -29,6 +30,9 @@ namespace tooie::picture_filters {
     inline const std::string vignette_option = "picture_vignette";
     inline const std::string grain_option = "picture_grain";
     inline const std::string ambient_occlusion_option = "ambient_occlusion";
+    inline const std::string fog_option = "fog";
+    inline const std::string fog_start_option = "fog_start";
+    inline const std::string fog_colour_option = "fog_colour";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
