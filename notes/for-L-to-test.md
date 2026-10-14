@@ -1478,4 +1478,14 @@
   2. Walk into a wall, a cliff and a closed door; hold LT (Z) to sink through the floor and RT (R) to rise
   3. Esc > Controls: look for Tiptoe under Movement (next to Run), not Hotkeys
 - Look for: Banjo walks straight through walls and scenery instead of stopping at them. Cause was that the game keeps its own "last valid position" for collision, which Noclip did not write, so walls pulled Banjo back. Headless in Mumbo's Skull, Banjo walked through the back wall (before: stopped at it). Not tried in water, doors with locked rooms or with Kazooie split up.
+
+## T140 Effect debug view: each filter on its own
+- Asked: 2026-10-14 20:40 UTC
+- Build: main @ 6776787
+- Steps:
+  1. Graphics, at the bottom: Debug > Effect debug view. Pick "All effects off" first, to see the plain picture
+  2. Pick each "Only: ..." view in turn (or close the menu and press F6 to step, Shift+F6 back; a notice names each view)
+  3. In a view that looks wrong, press F8 to split it: the effect on the left, the original on the right
+  4. Screenshot (F12) each broken one and say which view it is
+- Look for: Each view shows only that one effect (at your setting, or a default strength if it's off), and every other effect is gone. Report what looks wrong in each
 - Status: waiting for L

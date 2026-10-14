@@ -15,7 +15,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
-- Graphics > Debug > Effect debug view: shows any picture effect or filter on its own (all 13 scene effects plus sharpening, contrast, saturation, vignette, grain, SMAA, FXAA, FSR, CRT, 16-bit colour, colourblind and texture upscaling), or all of them off; F6 steps through the same list. Untested on PC (T139).
+- Graphics > Debug > Effect debug view: shows any picture effect or filter on its own (all 13 scene effects plus sharpening, contrast, saturation, vignette, grain, SMAA, FXAA, FSR, CRT, 16-bit colour, colourblind and texture upscaling), or all of them off; F6 steps through the same list. Untested on PC (T140).
 - HD Shadows and Extended Draw Distance stop adding to a frame when the game's fixed drawing memory is nearly full (both together filled up to 87% of it headless, and past the end it tears or explodes models). Untested on PC (T120).
 - Game Frame Rate: 120 FPS and Unlocked (up to 240), both experimental; the sound stays at its normal pace. The Framerate option is now Interpolation (Original is now Off) and sits under Game Frame Rate. Untested on PC (T122).
 - Frame rate overlay: shows input latency (controller read to screen), in Compact and Full.
