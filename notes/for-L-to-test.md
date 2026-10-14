@@ -1416,4 +1416,13 @@
   1. Graphics: Bounce light 100, your usual resolution
   2. Look at Banjo up close and at a honeycomb against grass
 - Look for: No fine grid of dots over Banjo's fur, skin or the background. Colours from nearby walls and floors still tint what is next to them.
+
+## T134 Torn frames: renderer wait and interpolation id clashes
+- Asked: 2026-10-14 17:15 UTC
+- Build: main (after 342cd2d)
+- Steps:
+  1. Pull, build, play 10 minutes in Spiral Mountain and Cloud Cuckooland, spin the camera a lot, at Original FPS and at 60
+  2. Do it once with Interpolation Off and once with your usual settings
+  3. After any tear, hold F12 for a burst (let go after the tear) and look in the log for a line starting with [dl]
+- Look for: Whether the 1-2 frame tears and black patches still happen, how often compared with before, and whether any [dl] line appears in the log
 - Status: waiting for L

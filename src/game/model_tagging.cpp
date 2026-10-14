@@ -41,6 +41,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "recomp.h"
@@ -174,6 +175,22 @@ namespace {
             hash = 1;
         }
         return hash;
+    }
+
+    // Ids given out this frame. make_id is a 32-bit hash of models,
+    // particles, shadows and the camera in one space, so with a couple of
+    // thousand ids a frame two unrelated bones collide now and then; a
+    // colliding pair is stable while both are drawn, and RT64 then blends one
+    // of them from the other's matrix every frame. A repeat gets a fresh id.
+    std::unordered_set<uint32_t> ids_given;
+    uint32_t stat_id_repeats = 0;
+
+    uint32_t unique_id(uint32_t id) {
+        for (uint32_t n = 1; !ids_given.insert(id).second; n++) {
+            id = make_id(id, 0x445550, n);
+            stat_id_repeats++;
+        }
+        return id;
     }
 
     // gEXMatrixGroup's projection flag.
@@ -475,6 +492,10 @@ uint32_t tooie::model_tagging::scene_start() {
 // its projected models (see ShadowScan) are tagged there, and the camera is
 // left to the scene.
 static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) {
+    if (!overlay) {
+        // The 2D overlay is tagged after the scene, in the same frame.
+        ids_given.clear();
+    }
     if (!interpolation_on() || end <= start) {
         if (!overlay) {
             stat_models = 0;
@@ -1129,7 +1150,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 enabled = true;
             }
             uint32_t components = cut ? component_skip : component_interpolate;
-            put(rdram, cursor, group_word0(), bones_group[index]);
+            put(rdram, cursor, group_word0(), unique_id(bones_group[index]));
             put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear), 0);
             put(rdram, cursor + 16, c.w0, c.w1);
             put(rdram, cursor + 24, op_enddl << 24, 0);
@@ -1165,7 +1186,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 enabled = true;
             }
             uint32_t components = snap ? component_skip : component_interpolate;
-            put(rdram, cursor, group_word0(), shadow[index]);
+            put(rdram, cursor, group_word0(), unique_id(shadow[index]));
             put(rdram, cursor + 8, group_params(interpolate_simple, components, order_linear), 0);
             cursor += 16;
             if (shadow_base[index] != 0) {
@@ -1192,7 +1213,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             enabled = true;
         }
         if (tag_camera) {
-            put(rdram, cursor, group_word0(), make_id(0x43414D, camera_generation, 0));
+            put(rdram, cursor, group_word0(), unique_id(make_id(0x43414D, camera_generation, 0)));
             put(rdram, cursor + 8, group_params(interpolate_simple, component_interpolate, order_auto) | group_projection, 0);
             cursor += 16;
             camera_tagged = true;
@@ -1209,6 +1230,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 if (carried != carried_id.end()) {
                     id = carried->second;
                 }
+                id = unique_id(id);
                 if (!overlay) {
                     Named& n = named[copy_key(b)][bone_name(index)];
                     n.id = id;
@@ -1221,10 +1243,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 blocks[b].ids.push_back(id);
             }
             else if (particle) {
-                id = particle_id[index];
+                id = unique_id(particle_id[index]);
             }
             else {
-                id = make_id(0, camera_generation, (uint32_t)index);
+                id = unique_id(make_id(0, camera_generation, (uint32_t)index));
             }
             uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
@@ -1422,6 +1444,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             std::fprintf(stderr, "[ids] model %08X matrices %zu kept %zu (last %zu)\n", model_key, ids.size(), kept, last.size());
         }
         ids_last = std::move(ids_now);
+        if (stat_id_repeats != 0) {
+            std::fprintf(stderr, "[ids] %u ids given out twice this frame, renamed\n", stat_id_repeats);
+            stat_id_repeats = 0;
+        }
     }
     if (!overlay) {
         uint32_t models = 0;
