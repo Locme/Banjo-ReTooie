@@ -1389,7 +1389,7 @@
 
 ## T131 Skip cutscenes with Start instead of X
 - Asked: 2026-10-14 16:45 UTC
-- Build: main @ (this commit)
+- Build: main @ 8c66e22
 - Steps:
   1. QOL: keep "Skip boss intros" on; turn "Skip other cutscenes" on too
   2. Warp to Chilly Willy (or any boss) and press Start during the intro
