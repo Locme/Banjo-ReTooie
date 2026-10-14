@@ -4642,6 +4642,7 @@ L_80109424:
     // 0x80109424: lw          $a0, 0xA0($sp)
     ctx->r4 = MEM_W(ctx->r29, 0XA0);
 L_80109428:
+    tooie_ach_enemy_hit(rdram, ctx);
     // 0x80109428: lw          $a1, 0xA4($sp)
     ctx->r5 = MEM_W(ctx->r29, 0XA4);
     // 0x8010942C: jal         0x800EB210

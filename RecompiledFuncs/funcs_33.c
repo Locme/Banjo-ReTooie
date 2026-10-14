@@ -3529,6 +3529,7 @@ L_80800470:
     // 0x808004A4: lw          $ra, 0x1C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X1C);
 L_808004A8:
+    tooie_ach_octopus_frozen(rdram, ctx);
     // 0x808004A8: addiu       $a1, $zero, 0x2
     ctx->r5 = ADD32(0, 0X2);
     // 0x808004AC: jal         0x80102424

@@ -597,3 +597,15 @@ text = "tooie_cell_draw_radius(rdram, ctx);"
 func = "func_800D2F44"
 before_vram = 0x800D3030
 text = "tooie_cell_draw_distance(rdram, ctx);"
+
+# Achievements (src/game/achievements.cpp): All Beaten Up counts enemy defeats here.
+[[patches.hook]]
+func = "func_80108F08"
+before_vram = 0x80109428
+text = "tooie_ach_enemy_hit(rdram, ctx);"
+
+# Calamari Bonanza: an Inky octopus starts to freeze.
+[[patches.hook]]
+func = "func_80800428_choctopus"
+before_vram = 0x808004A8
+text = "tooie_ach_octopus_frozen(rdram, ctx);"
