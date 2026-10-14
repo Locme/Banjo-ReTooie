@@ -1308,10 +1308,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..e0b2af9
+index 0000000..5dfaf75
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,607 @@
+@@ -0,0 +1,643 @@
 +//
 +// RT64
 +//
@@ -1340,9 +1340,13 @@ index 0000000..e0b2af9
 +        // The pass's own textures and descriptor sets. Ones replaced after a resize are kept (not freed)
 +        // since frames still in flight may use them; resizes are rare.
 +        struct Resources {
-+            std::unique_ptr<RenderTexture> bloomTexture[2];
-+            std::unique_ptr<RenderFramebuffer> bloomFramebuffer[2];
-+            std::unique_ptr<SmaaDescriptorSet> bloomSet[2];
++            // Bloom: the bright parts at a quarter of the size [0] (blurred through [1]), again at an eighth [2]
++            // (blurred through [3]) for a wider glow, and both together [4], which the pass reads.
++            static constexpr int BloomTextures = 5;
++            std::unique_ptr<RenderTexture> bloomTexture[BloomTextures];
++            std::unique_ptr<RenderFramebuffer> bloomFramebuffer[BloomTextures];
++            std::unique_ptr<SmaaDescriptorSet> bloomSet[BloomTextures];
++            std::unique_ptr<SmaaDescriptorSet> bloomCombineSet;
 +            uint32_t bloomWidth = 0;
 +            uint32_t bloomHeight = 0;
 +            std::unique_ptr<RenderTexture> copyTexture;
@@ -1382,7 +1386,10 @@ index 0000000..e0b2af9
 +            std::vector<std::unique_ptr<RenderTextureView>> retiredViews;
 +
 +            void retire() {
-+                for (int i = 0; i < 2; i++) {
++                if (bloomCombineSet != nullptr) {
++                    retiredSets.emplace_back(std::move(bloomCombineSet));
++                }
++                for (int i = 0; i < BloomTextures; i++) {
 +                    if (bloomTexture[i] != nullptr) {
 +                        retired.emplace_back(std::move(bloomTexture[i]));
 +                        retiredFramebuffers.emplace_back(std::move(bloomFramebuffer[i]));
@@ -1701,8 +1708,10 @@ index 0000000..e0b2af9
 +        const uint32_t bloomHeight = std::max(colorTarget->height / 4, 1U);
 +        if ((res.bloomTexture[0] == nullptr) || (res.bloomWidth != bloomWidth) || (res.bloomHeight != bloomHeight)) {
 +            res.retire();
-+            for (int i = 0; i < 2; i++) {
-+                res.bloomTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(bloomWidth, bloomHeight, format));
++            for (int i = 0; i < Resources::BloomTextures; i++) {
++                const bool eighth = (i == 2) || (i == 3);
++                res.bloomTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(eighth ? std::max(bloomWidth / 2, 1U) : bloomWidth,
++                    eighth ? std::max(bloomHeight / 2, 1U) : bloomHeight, format));
 +                res.bloomTexture[i]->setName("Scene Effects Bloom");
 +                const RenderTexture *texture = res.bloomTexture[i].get();
 +                res.bloomFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
@@ -1712,12 +1721,28 @@ index 0000000..e0b2af9
 +                res.bloomSet[i]->setTexture(res.bloomSet[i]->gTexture1, texture, RenderTextureLayout::SHADER_READ);
 +                res.bloomSet[i]->setTexture(res.bloomSet[i]->gTexture2, texture, RenderTextureLayout::SHADER_READ);
 +            }
++            res.bloomCombineSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
++                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
++            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture0, res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ);
++            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture1, res.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
++            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture2, res.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
 +            res.bloomWidth = bloomWidth;
 +            res.bloomHeight = bloomHeight;
-+            commandList->barriers(RenderBarrierStage::GRAPHICS, {
-+                RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ),
-+                RenderTextureBarrier(res.bloomTexture[1].get(), RenderTextureLayout::SHADER_READ)
-+            });
++            std::vector<RenderTextureBarrier> barriers;
++            for (int i = 0; i < Resources::BloomTextures; i++) {
++                barriers.emplace_back(res.bloomTexture[i].get(), RenderTextureLayout::COLOR_WRITE);
++            }
++            commandList->barriers(RenderBarrierStage::GRAPHICS, barriers);
++            // Start black, so a frame that skips the bloom reads nothing from them.
++            for (int i = 0; i < Resources::BloomTextures; i++) {
++                commandList->setFramebuffer(res.bloomFramebuffer[i].get());
++                commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++            }
++            barriers.clear();
++            for (int i = 0; i < Resources::BloomTextures; i++) {
++                barriers.emplace_back(res.bloomTexture[i].get(), RenderTextureLayout::SHADER_READ);
++            }
++            commandList->barriers(RenderBarrierStage::GRAPHICS, barriers);
 +        }
 +
 +        RenderTexture *source = nullptr;
@@ -1840,18 +1865,22 @@ index 0000000..e0b2af9
 +        }
 +
 +        if (settings.bloom > 0.0f) {
-+            // Bright parts at a quarter of the size into [0], blurred across into [1], then down into [0].
++            // Bright parts at a quarter of the size into [0], blurred across into [1] and down into [0]; the same
++            // at an eighth from [0] into [2] (through [3]) for a wider glow; then both together into [4].
 +            auto bloomPass = [&](const SmaaDescriptorSet *input, RenderTexture *inputTexture, int output, uint32_t inputWidth, uint32_t inputHeight, float pass) {
 +                commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +                    RenderTextureBarrier(inputTexture, RenderTextureLayout::SHADER_READ),
 +                    RenderTextureBarrier(res.bloomTexture[output].get(), RenderTextureLayout::COLOR_WRITE)
 +                });
 +
++                const bool eighth = (output == 2) || (output == 3);
++                const uint32_t outputWidth = eighth ? std::max(bloomWidth / 2, 1U) : bloomWidth;
++                const uint32_t outputHeight = eighth ? std::max(bloomHeight / 2, 1U) : bloomHeight;
 +                interop::BloomCB bloomConstants;
 +                bloomConstants.params = { 1.0f / float(inputWidth), 1.0f / float(inputHeight), pass, settings.bloomThreshold };
 +                commandList->setFramebuffer(res.bloomFramebuffer[output].get());
-+                commandList->setViewports(RenderViewport(0.0f, 0.0f, float(bloomWidth), float(bloomHeight)));
-+                commandList->setScissors(RenderRect(0, 0, bloomWidth, bloomHeight));
++                commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
++                commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));
 +                commandList->setPipeline(shaderLibrary->bloom.pipeline.get());
 +                commandList->setGraphicsPipelineLayout(shaderLibrary->bloom.pipelineLayout.get());
 +                commandList->setGraphicsDescriptorSet(input->get(), 0);
@@ -1860,9 +1889,16 @@ index 0000000..e0b2af9
 +                commandList->drawInstanced(3, 1, 0, 0);
 +            };
 +
++            const uint32_t eighthWidth = std::max(bloomWidth / 2, 1U);
++            const uint32_t eighthHeight = std::max(bloomHeight / 2, 1U);
 +            bloomPass(res.sourceSet.get(), source, 0, colorTarget->width, colorTarget->height, 0.0f);
 +            bloomPass(res.bloomSet[0].get(), res.bloomTexture[0].get(), 1, bloomWidth, bloomHeight, 1.0f);
 +            bloomPass(res.bloomSet[1].get(), res.bloomTexture[1].get(), 0, bloomWidth, bloomHeight, 2.0f);
++            bloomPass(res.bloomSet[0].get(), res.bloomTexture[0].get(), 2, bloomWidth, bloomHeight, 5.0f);
++            bloomPass(res.bloomSet[2].get(), res.bloomTexture[2].get(), 3, eighthWidth, eighthHeight, 1.0f);
++            bloomPass(res.bloomSet[3].get(), res.bloomTexture[3].get(), 2, eighthWidth, eighthHeight, 2.0f);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ));
++            bloomPass(res.bloomCombineSet.get(), res.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
 +        }
 +
 +        // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
@@ -1874,18 +1910,18 @@ index 0000000..e0b2af9
 +        res.waterDrawn = false;
 +        RenderTexture *water = res.waterTexture.get();
 +        constants.water = { (waterDrawn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, waterDrawn ? 1.0f : 0.0f, settings.bounceLight, waterDrawn ? settings.waterWaves : 0.0f };
-+        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[0].get()) ||
++        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water)) {
 +            if (res.sceneSet != nullptr) {
 +                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
 +            }
 +            res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device);
 +            res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
-+            res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ);
++            res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetDepth = depthTarget->texture.get();
 +            res.sceneSet->setTexture(res.sceneSet->gColor, color, RenderTextureLayout::SHADER_READ,
 +                ((source != nullptr) && colorTarget->usesResolve()) ? colorTarget->getResolvedTextureView() : nullptr);
-+            res.sceneSetBloom = res.bloomTexture[0].get();
++            res.sceneSetBloom = res.bloomTexture[4].get();
 +            res.sceneSet->setTexture(res.sceneSet->gAdapted, adapted, RenderTextureLayout::SHADER_READ);
 +            res.sceneSetColor = color;
 +            res.sceneSetAdapted = adapted;
@@ -1897,7 +1933,7 @@ index 0000000..e0b2af9
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +            RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
 +            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ),
++            RenderTextureBarrier(res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ),
 +            RenderTextureBarrier(water, RenderTextureLayout::SHADER_READ)
 +        });
 +
@@ -2881,15 +2917,16 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/BloomPS.hlsl b/src/shaders/BloomPS.hlsl
 new file mode 100644
-index 0000000..82574f9
+index 0000000..4c50800
 --- /dev/null
 +++ b/src/shaders/BloomPS.hlsl
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,91 @@
 +//
 +// RT64
 +//
 +// Banjo-Tooie: the scene effects' bloom. Pass 0 keeps the bright parts of the scene at a quarter of its
-+// size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down. Passes 3
++// size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down, pass 5 takes
++// them down to an eighth for a wider glow and pass 6 adds the two. Passes 3
 +// and 4 measure the scene's brightness and adapt to it over time for eye adaptation.
 +
 +#include "shared/rt64_scene_effects.h"
@@ -2936,10 +2973,31 @@ index 0000000..82574f9
 +        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(-1.0f, 1.0f), 0).rgb;
 +        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(1.0f, 1.0f), 0).rgb;
 +        color = saturate(color * 0.25f);
++        // What is brighter than the threshold, easing in over a soft knee instead of switching on, so the
++        // glow doesn't flicker on textures right at the threshold. Measured on the brightness, so a fully
++        // saturated red or blue doesn't count as bright as white.
 +        const float threshold = gConstants.params.w;
-+        const float brightness = max(color.r, max(color.g, color.b));
-+        const float keep = saturate((brightness - threshold) / max(1.0f - threshold, 1e-3f));
++        const float knee = 0.12f;
++        const float brightness = max(dot(color, float3(0.2126f, 0.7152f, 0.0722f)), max(color.r, max(color.g, color.b)) * 0.6f);
++        float soft = clamp(brightness - threshold + knee, 0.0f, 2.0f * knee);
++        soft = soft * soft / (4.0f * knee);
++        const float keep = max(soft, brightness - threshold) / max(brightness, 1e-4f);
 +        return float4(color * keep, 1.0f);
++    }
++    else if (pass == 5) {
++        // Down to an eighth: four bilinear taps cover each 4x4 block of the quarter.
++        float3 color = 0.0f;
++        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(-1.0f, -1.0f), 0).rgb;
++        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(1.0f, -1.0f), 0).rgb;
++        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(-1.0f, 1.0f), 0).rgb;
++        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(1.0f, 1.0f), 0).rgb;
++        return float4(color * 0.25f, 1.0f);
++    }
++    else if (pass == 6) {
++        // The tight glow and the wide one together.
++        const float3 tight = gTexture0.SampleLevel(LinearSampler, uv, 0).rgb;
++        const float3 wide = gTexture1.SampleLevel(LinearSampler, uv, 0).rgb;
++        return float4(tight * 0.6f + wide * 0.9f, 1.0f);
 +    }
 +
 +    // A 9-tap Gaussian, its taps spread 1.5 texels apart for a wider glow.
@@ -4413,7 +4471,7 @@ index 0a5c332..54c2c83 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..08ee7d6
+index 0000000..375c383
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,59 @@
@@ -4469,7 +4527,7 @@ index 0000000..08ee7d6
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
 +    // quarter of the size, 1 blur across, 2 blur down, 3 measure the average brightness, 4 move the adapted
-+    // brightness towards it), then the brightness threshold (0 to 1), or for pass 4 how far to move (0 to 1).
++    // brightness towards it, 5 down to an eighth, 6 the quarter and eighth glows together), then the brightness threshold (0 to 1), or for pass 4 how far to move (0 to 1).
 +    struct BloomCB {
 +        float4 params;
 +    };

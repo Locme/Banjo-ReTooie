@@ -1227,3 +1227,13 @@
 - Look for: Headless (CPU renderer, so only the proportions count) the extra cost dropped by about 80% for light shafts, 40% for bounce light, 25% for ambient occlusion, 15% for rim light. Bounce light is stronger now: colourful walls and floors tint what is next to them, dark corners take on the colour around them. No speckle or shimmer?
 - Status: waiting for L
 
+## T116 Bloom rework (from your 09:15 list)
+- Asked: 2026-10-14 12:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Bloom 50, then 100
+  2. Spiral Mountain in daylight (sky, clouds, waterfall), Hailfire Peaks lava side, Mayahem Temple
+- Look for: A tight glow right around bright things plus a wide soft one, stronger than before at the same number. It eases in, so bright textures don't flicker between glowing and not. Strongly coloured things (pure red or blue) glow less than white. Too much at 100?
+- Status: waiting for L
+

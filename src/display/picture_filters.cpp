@@ -206,7 +206,7 @@ namespace {
     };
     constexpr float fog_length = 3000.0f;
     // Bloom glows from the parts of the picture brighter than this (0 to 1).
-    constexpr float bloom_threshold = 0.65f;
+    constexpr float bloom_threshold = 0.55f;
 
     // True while a preset sets the effect options, so their callbacks neither save one by one nor
     // switch the preset back to Custom.
@@ -327,7 +327,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
-    RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0) * 0.6f, bloom_threshold);
+    RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
     if (!tooie::photo_mode::active()) {
         const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
@@ -616,7 +616,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         bloom_option,
         "Bloom",
-        "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
+        "A glow around the brightest parts of the 3D world: a tight one close to them and a wide soft one around it, easing in rather than switching on. The HUD doesn't glow. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         eye_adaptation_option,
