@@ -688,10 +688,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..8da3e98
+index 0000000..090c1b0
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,370 @@
+@@ -0,0 +1,375 @@
 +//
 +// RT64
 +//
@@ -806,6 +806,11 @@ index 0000000..8da3e98
 +        effectsSettings.eyeAdaptation = strength;
 +    }
 +
++    void SetSceneRimLight(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.rimLight = strength;
++    }
++
 +    void SetSceneOutlines(float outlines) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.outlines = outlines;
@@ -820,7 +825,7 @@ index 0000000..8da3e98
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -840,7 +845,7 @@ index 0000000..8da3e98
 +        interop::SceneEffectsCB constants;
 +        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
-+        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, 0.0f };
++        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, settings.rimLight };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
@@ -1064,10 +1069,10 @@ index 0000000..8da3e98
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1e6a6a1
+index 0000000..85e5930
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,59 @@
 +//
 +// RT64
 +//
@@ -1082,7 +1087,7 @@ index 0000000..1e6a6a1
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -1097,6 +1102,7 @@ index 0000000..1e6a6a1
 +        float bloomThreshold = 0.7f;
 +        float depthOfField = 0.0f;
 +        float eyeAdaptation = 0.0f;
++        float rimLight = 0.0f;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
@@ -1112,6 +1118,8 @@ index 0000000..1e6a6a1
 +    void SetSceneDepthOfField(float strength);
 +    // Eye adaptation (0 off, 1 strongest): dark scenes brighten and bright ones tone down over about a second.
 +    void SetSceneEyeAdaptation(float strength);
++    // Rim light (0 off, 1 strongest): a soft light along the edges of nearby characters and objects.
++    void SetSceneRimLight(float strength);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1930,10 +1938,10 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6ca1bb4
+index 0000000..2887095
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,253 @@
 +//
 +// RT64
 +//
@@ -1988,8 +1996,8 @@ index 0000000..6ca1bb4
 +    return ViewPosition(pixel, LoadDepth(pixel));
 +}
 +
-+float AmbientOcclusion(int2 pixel, float depth) {
-+    const float3 center = ViewPosition(pixel, depth);
++// The surface's view-space normal from the neighbouring depths, facing the camera.
++float3 ViewNormal(int2 pixel, float3 center) {
 +    const float3 left = ViewPositionAt(pixel + int2(-1, 0)), right = ViewPositionAt(pixel + int2(1, 0));
 +    const float3 up = ViewPositionAt(pixel + int2(0, -1)), down = ViewPositionAt(pixel + int2(0, 1));
 +    // The smaller step on each axis, so edges don't bend the normal.
@@ -1999,6 +2007,12 @@ index 0000000..6ca1bb4
 +    if (dot(normal, -center) < 0.0f) {
 +        normal = -normal;
 +    }
++    return normal;
++}
++
++float AmbientOcclusion(int2 pixel, float depth) {
++    const float3 center = ViewPosition(pixel, depth);
++    const float3 normal = ViewNormal(pixel, center);
 +
 +    const float radius = gConstants.ambientOcclusion.y;
 +    const float distance = max(-center.z, 1.0f);
@@ -2025,6 +2039,45 @@ index 0000000..6ca1bb4
 +    }
 +
 +    return saturate(1.0f - gConstants.ambientOcclusion.x * 2.5f * occlusion / float(samples));
++}
++
++// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
++// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
++// they are.
++float RimLight(int2 pixel, float depth) {
++    const float3 center = ViewPosition(pixel, depth);
++    const float distance = -center.z;
++    const float near = saturate(1.0f - (distance - 1500.0f) / 2500.0f);
++    if (near <= 0.0f) {
++        return 0.0f;
++    }
++
++    // A soft band inside the silhouette, about four pixels per 540 rows wide: the share of samples
++    // around the pixel that land on something further behind, nearer ones counting more.
++    const float reach = max(3.0f, gConstants.projection.w / 135.0f);
++    float behind = 0.0f;
++    float total = 0.0f;
++    [unroll] for (int r = 1; r <= 3; r++) {
++        const float w = 4.0f - float(r);
++        [unroll] for (int i = 0; i < 8; i++) {
++            const float angle = (float(i) + 0.5f * float(r)) * 0.785398163f;
++            const int2 offset = int2(round(float2(cos(angle), sin(angle)) * reach * float(r) / 3.0f));
++            const float neighbour = -ViewPositionAt(pixel + offset).z;
++            behind += w * saturate(((neighbour - distance) / distance - 0.04f) * 6.0f);
++            total += w;
++        }
++    }
++    const float edge = saturate(behind / total * 3.0f);
++    if (edge <= 0.0f) {
++        return 0.0f;
++    }
++
++    // Surfaces turned away from the camera take the most; tops that face up (the ground, ledges) don't.
++    const float3 normal = ViewNormal(pixel, center);
++    const float facing = saturate(dot(normal, normalize(-center)));
++    const float fresnel = pow(1.0f - facing, 2.0f);
++    const float notUp = 1.0f - saturate((normal.y - 0.45f) * 2.5f);
++    return gConstants.ambientOcclusion.w * edge * (0.25f + 0.75f * fresnel) * notUp * near;
 +}
 +
 +// Depth of field: the nearest thing in a small box at the middle of the picture is in focus, and the
@@ -2115,6 +2168,12 @@ index 0000000..6ca1bb4
 +        keep *= 1.0f - gConstants.fogColor.w * saturate((jump - 0.08f) * 6.0f);
 +    }
 +
++    // Rim light: a soft warm-white light added along the edges.
++    float3 rim = 0.0f;
++    if (gConstants.ambientOcclusion.w > 0.0f) {
++        rim = float3(1.0f, 0.95f, 0.85f) * (0.9f * RimLight(pixel, depth));
++    }
++
 +    // Fog thickens with distance past its start, approaching its strength.
 +    float fog = 0.0f;
 +    if (gConstants.fog.x > 0.0f) {
@@ -2123,7 +2182,7 @@ index 0000000..6ca1bb4
 +    }
 +
 +    if (gConstants.ambientOcclusion.z > 0.5f) {
-+        return float4(lerp(keep.xxx, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
++        return float4(lerp(keep.xxx * 0.6f + rim, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
 +    }
 +
 +    if (redraw) {
@@ -2131,10 +2190,10 @@ index 0000000..6ca1bb4
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
 +        }
-+        return float4(scene * keep * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
++        return float4((scene * keep + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
 +
-+    return float4(gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
++    return float4(rim * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
 +}
 diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
 new file mode 100644
@@ -2370,7 +2429,7 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..b136289
+index 0000000..61fdd2f
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,40 @@
@@ -2393,7 +2452,7 @@ index 0000000..b136289
 +        // The projection's x and y scales, then the target's width and height.
 +        float4 projection;
 +        // Ambient occlusion strength (0 off, 1 strongest), its radius in world units, 1 to show the effects
-+        // alone as grey (a test view), then unused.
++        // alone as grey (a test view), then the rim light strength (0 off, 1 strongest).
 +        float4 ambientOcclusion;
 +        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
 +        // thickens, then unused.

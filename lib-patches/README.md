@@ -119,7 +119,7 @@ To change it: edit the files in `lib/RecompFrontend`, then
   perspective one after the 3D world, and in the framebuffer whose depth target is at `depthAddress` it
   draws a full-screen pass there (ambient occlusion, fog and toon outlines from the depth target, `RT64::SetSceneFog(...)`,
   `RT64::SetSceneOutlines(...)`; bloom from a resolve of the scene so far, `RT64::SetSceneBloom(...)`,
-  `src/shaders/BloomPS.hlsl`; depth of field from the same scene copy, `RT64::SetSceneDepthOfField(...)`; eye adaptation from a 1x1 luminance measured and eased each frame, `RT64::SetSceneEyeAdaptation(...)`),
+  `src/shaders/BloomPS.hlsl`; depth of field from the same scene copy, `RT64::SetSceneDepthOfField(...)`; eye adaptation from a 1x1 luminance measured and eased each frame, `RT64::SetSceneEyeAdaptation(...)`; rim light from the depth, `RT64::SetSceneRimLight(...)`),
   so the HUD drawn after it is left alone.
 
 To change it: edit the files in `lib/rt64`, then

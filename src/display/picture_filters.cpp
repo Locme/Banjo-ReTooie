@@ -43,6 +43,7 @@ namespace RT64 {
     void SetSceneBloom(float bloom, float threshold);
     void SetSceneDepthOfField(float strength);
     void SetSceneEyeAdaptation(float strength);
+    void SetSceneRimLight(float strength);
 }
 
 namespace {
@@ -94,6 +95,7 @@ namespace {
         { &tooie::picture_filters::bloom_option, 0.0 },
         { &tooie::picture_filters::cutscene_dof_option, 0.0 },
         { &tooie::picture_filters::eye_adaptation_option, 0.0 },
+        { &tooie::picture_filters::rim_light_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -160,6 +162,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0) * 0.6f, bloom_threshold);
 
@@ -311,6 +314,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        rim_light_option,
+        "Rim light",
+        "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         bloom_option,
         "Bloom",
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
@@ -371,7 +379,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option }) {
+                                   &eye_adaptation_option, &rim_light_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

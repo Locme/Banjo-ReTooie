@@ -782,3 +782,13 @@
   3. Hold the Speed-Up key with cheats on, and turn a texture pack on and off in Mods
 - Look for: Does the map line change to the new area, and do Banjo's numbers change as he walks? Does the renderer line say D3D12 or Vulkan as you set it, with your monitor's refresh rate? Does the 1% low drop and the hitch count go up when the game stutters (loading an area, say)? Does the last line show Speed-up, cheats and the texture pack by name?
 - Status: waiting for L
+
+## T75 Rim light
+- Asked: 2026-10-14
+- Build: latest Windows CI build from main
+- XBLA history: report §4.36
+- Steps:
+  1. Esc > Graphics: set "Rim light" to 100, then try 50
+  2. Walk around Spiral Mountain and a level with dark backgrounds
+- Look for: A soft light along the edges of Banjo and nearby objects. Is it too strong, too thin, or does it shimmer when moving? Ground edges should not light up.
+- Status: waiting for L
