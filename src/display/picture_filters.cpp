@@ -100,6 +100,8 @@ namespace {
     // How far above Banjo's position the surface is while he floats. His position is about at the
     // surface then (630 in the Spiral Mountain pool, where a plunge starts at 604).
     constexpr float water_surface_offset = 0.0f;
+    // How far below the surface Banjo's position is once all of him is under water.
+    constexpr float submerged_depth = 100.0f;
 
     // Player 0's current state (see src/gameplay/fine_aim.cpp), 0 when there is no player.
     uint32_t player_state(uint8_t* rdram) {
@@ -176,7 +178,7 @@ namespace {
     float water_surface = 0.0f;
     bool was_in_water = false;
 
-    // Under water is where the camera is, not Banjo: below the surface of the water he is in, or
+    // Under water: the camera below the surface of the water Banjo is in, Banjo dived well under it, or
     // anywhere in Atlantis and the Sea Bottom (whole levels under water).
     bool under_water(uint8_t* rdram, uint32_t state) {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
@@ -192,6 +194,11 @@ namespace {
             water_surface = banjo + water_surface_offset;
         }
         was_in_water = in_water;
+        // Banjo dived well below the surface: the game draws its own underwater look then even where it keeps
+        // the camera above the water (the Spiral Mountain moat), so the tint and haze come on with it.
+        if (in_water && !on_surface(state) && (banjo < water_surface - submerged_depth)) {
+            return true;
+        }
         float camera = 0.0f;
         return in_water && camera_height(rdram, camera) && (camera < water_surface);
     }
@@ -591,12 +598,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         underwater_tint_option,
         "Underwater tint",
-        "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off.",
+        "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off, 100 strongest.",
         0, 100, 5, 0, false, 25);
     graphics.add_number_option(
         underwater_haze_option,
         "Underwater haze",
-        "While under water, things further away fade into a blue haze. Works with Underwater tint above 0.",
+        "While under water, things further away fade into a light blue haze. Works with Underwater tint at 0 too. 0 is off.",
         0, 100, 5, 0, false, 15);
     graphics.add_number_option(
         underwater_distortion_option,

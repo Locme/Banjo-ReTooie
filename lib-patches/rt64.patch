@@ -3689,10 +3689,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..9f51442
+index 0000000..3f355a8
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,723 @@
+@@ -0,0 +1,726 @@
 +//
 +// RT64
 +//
@@ -3738,13 +3738,16 @@ index 0000000..9f51442
 +    return lerp(c * exposure / (1.0f + c * (exposure - 1.0f)), saturate(c * exposure), 0.5f);
 +}
 +
-+// Underwater: the scene turns light blue and fades into a blue haze with distance (the sky is all haze).
++// Underwater: the scene turns light blue and fades into a light blue haze with distance (the sky is all haze).
 +float3 Underwater(float3 color, float distance) {
-+    const float tint = saturate(gConstants.fog.w * 2.0f);
-+    const float3 tinted = color * float3(0.55f, 0.85f, 1.05f) + float3(0.0f, 0.03f, 0.07f);
++    // Both settings rise quickly at first and keep rising up to 100, so low values show and high ones still add.
++    const float tint = 1.0f - pow(1.0f - saturate(gConstants.fog.w), 3.0f);
++    // Light blue: less red, a little less green, and lifted towards a light blue so dark water brightens too
++    // (scaling the colour alone only darkened it).
++    const float3 tinted = color * float3(0.6f, 0.8f, 0.9f) + float3(0.1f, 0.2f, 0.26f);
 +    // Thickens within the few hundred units of a pool, not only across a whole level.
-+    const float haze = saturate(gConstants.bloom.w * 4.0f) * (1.0f - exp(-distance / 900.0f));
-+    return lerp(lerp(color, tinted, tint), float3(0.08f, 0.32f, 0.45f), haze);
++    const float haze = (1.0f - pow(1.0f - saturate(gConstants.bloom.w), 4.0f)) * (1.0f - exp(-distance / 900.0f));
++    return lerp(lerp(color, tinted, tint), float3(0.36f, 0.6f, 0.74f), haze);
 +}
 +
 +float LoadDepth(int2 pixel) {
