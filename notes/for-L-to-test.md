@@ -1146,6 +1146,7 @@
 - Steps:
   1. Go to Bottles' ghost by his house in Spiral Mountain (where your photo was taken)
   2. Graphics: Fog 50, Bloom 50; then photo mode (F10) with Depth of field 40 and a filter, as in your photo
+- Note: I couldn't reach Bottles headless, so the cause (his glow is drawn in 2D between world draws) is inferred, not seen. Checked headless: effects and HUD unchanged elsewhere in Spiral Mountain, 3 clean boots.
 - Look for: The glow and Bottles now get the same fog, bloom and depth of field as the scenery around them (a blurred glow when the focus is elsewhere). The HUD still gets none of it. Tell me if anything else in the world now looks wrong, as the effects are now applied after any later 3D drawing with the world's camera, not before it.
 - Status: waiting for L
 
