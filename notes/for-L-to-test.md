@@ -801,3 +801,14 @@
   2. Walk around the places where you saw meshes suddenly stretch, and the Cave of Horrors where the black artifacts were
 - Look for: Do models still stretch into a broken shape for a moment? Do the black artifacts still appear? If yes, where, and on which model?
 - Status: waiting for L
+
+## T77 Detailed nests and Mayahem Temple stairs (4.27)
+- Asked: 2026-10-14 05:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.27
+- Steps:
+  1. Esc > Graphics: Always High-Detail Models On
+  2. In Mayahem Temple, walk far away from the temple stairs and from some nests, then turn the camera back to look at them
+  3. Turn Always High-Detail Models Off and look again from the same spot
+- Look for: With it On, do the stairs and nests keep their detailed 3D look from far away (nests with twiggy rims and three eggs)? Headless check: the nests near the start of Mayahem Temple use the detailed model with it On and a plainer one with it Off; neither turns into a flat sprite. The stairs were not checked yet.
+- Status: waiting for L
