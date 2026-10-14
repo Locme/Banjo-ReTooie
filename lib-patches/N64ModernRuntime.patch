@@ -180,7 +180,7 @@ index 3b28af3..13883ab 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..dd0dcbf 100644
+index 090cc42..6543907 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,4 +1,5 @@
@@ -405,7 +405,7 @@ index 090cc42..dd0dcbf 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,8 +673,24 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,8 +673,34 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue
@@ -421,9 +421,19 @@ index 090cc42..dd0dcbf 100644
 +        static const bool async_dl = std::getenv("TOOIE_ASYNC_DL") != nullptr;
 +        if (!async_dl) {
 +            auto start = std::chrono::steady_clock::now();
-+            auto deadline = start + std::chrono::milliseconds(500);
++            // Giving up (a renderer stall: shader build, window change, a driver hitch) lets the game overwrite
++            // memory the renderer is still reading, so the frame can come out torn. Say so when it happens.
++            auto deadline = start + std::chrono::milliseconds(2000);
 +            while (gfx_tasks_read.load() < ticket && std::chrono::steady_clock::now() < deadline) {
 +                std::this_thread::sleep_for(std::chrono::microseconds(50));
++            }
++            if (gfx_tasks_read.load() < ticket) {
++                static unsigned gave_up = 0;
++                gave_up++;
++                if (gave_up <= 10) {
++                    fprintf(stderr, "[dl] The renderer took over 2 s to read display list %" PRIu64 "; the game went on (%u times).\n",
++                        ticket, gave_up);
++                }
 +            }
 +            ultramodern::add_game_idle_ns(uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count()));
 +        }

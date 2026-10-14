@@ -64,7 +64,10 @@ namespace {
 bool tooie::gfx_budget::room_for_extras(uint8_t* rdram) {
     for (int pool = 0; pool < 2; pool++) {
         uint32_t used, size;
-        if (usage(rdram, pool, &used, &size) && used + margin[pool] > size) {
+        // Not in a known buffer (a few rooms draw into their own table at
+        // D_8007BCE8, which this does not measure): no extras rather than
+        // unguarded ones.
+        if (!usage(rdram, pool, &used, &size) || used + margin[pool] > size) {
             skipped++;
             return false;
         }
