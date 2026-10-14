@@ -116,7 +116,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `src/render/rt64_shader_library.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetSceneEffects(ao, radius,
   depthAddress)`. The framebuffer renderer splits its raster scenes at the first projection that isn't a
   perspective one after the 3D world, and in the framebuffer whose depth target is at `depthAddress` it
-  draws a full-screen pass there (ambient occlusion and fog from the depth target, `RT64::SetSceneFog(...)`),
+  draws a full-screen pass there (ambient occlusion, fog and toon outlines from the depth target, `RT64::SetSceneFog(...)`,
+  `RT64::SetSceneOutlines(...)`),
   so the HUD drawn after it is left alone.
 
 To change it: edit the files in `lib/rt64`, then

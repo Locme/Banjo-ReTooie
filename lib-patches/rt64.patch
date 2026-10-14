@@ -659,10 +659,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..30712da
+index 0000000..872cdde
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,102 @@
 +//
 +// RT64
 +//
@@ -703,6 +703,11 @@ index 0000000..30712da
 +        effectsSettings.fogColor[2] = blue;
 +    }
 +
++    void SetSceneOutlines(float outlines) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.outlines = outlines;
++    }
++
 +    SceneEffectsSettings GetSceneEffects() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return effectsSettings;
@@ -710,7 +715,7 @@ index 0000000..30712da
 +
 +    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
 +        const SceneEffectsSettings settings = GetSceneEffects();
-+        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -732,7 +737,7 @@ index 0000000..30712da
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, 0.0f };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
-+        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], 0.0f };
++        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
 +        if (depthTarget->targetCopyDescSet == nullptr) {
 +            depthTarget->targetCopyDescSet = std::make_unique<RenderTargetCopyDescriptorSet>(worker->device);
@@ -762,10 +767,10 @@ index 0000000..30712da
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1c2c7e6
+index 0000000..9839775
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,45 @@
 +//
 +// RT64
 +//
@@ -780,7 +785,7 @@ index 0000000..1c2c7e6
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -790,12 +795,15 @@ index 0000000..1c2c7e6
 +        float fogStart = 1000.0f;
 +        float fogLength = 3000.0f;
 +        float fogColor[3] = { 0.75f, 0.8f, 0.85f };
++        float outlines = 0.0f;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
 +    // fog: 0 off, 1 the most. start and length in world units; color in 0 to 1.
 +    void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
++    // Toon outlines where the depth jumps (silhouettes and creases): 0 off, 1 strongest.
++    void SetSceneOutlines(float outlines);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1528,16 +1536,16 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..a082dec
+index 0000000..452c039
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,121 @@
 +//
 +// RT64
 +//
 +// Banjo-Tooie: screen-space effects over the 3D world, drawn after its last perspective draw and before
 +// the HUD, with only the scene's depth as input. The output is blended as dst * a + rgb, so ambient
-+// occlusion darkens with a and fog adds its color in rgb as a fades the scene.
++// occlusion and outlines darken with a, and fog adds its color in rgb as a fades the scene.
 +
 +#include "shared/rt64_scene_effects.h"
 +
@@ -1624,6 +1632,20 @@ index 0000000..a082dec
 +    float keep = 1.0f;
 +    if (gConstants.ambientOcclusion.x > 0.0f) {
 +        keep *= AmbientOcclusion(pixel, depth);
++    }
++
++    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind).
++    if (gConstants.fogColor.w > 0.0f) {
++        const float distance = -ViewPosition(pixel, depth).z;
++        // About one pixel per 540 rows, so the lines keep their weight at higher resolutions.
++        const int step = max(1, int(round(gConstants.projection.w / 540.0f)));
++        float jump = 0.0f;
++        [unroll] for (int i = 0; i < 4; i++) {
++            const int2 offset = step * ((i == 0) ? int2(1, 0) : (i == 1) ? int2(-1, 0) : (i == 2) ? int2(0, 1) : int2(0, -1));
++            const float neighbour = -ViewPositionAt(pixel + offset).z;
++            jump = max(jump, (neighbour - distance) / distance);
++        }
++        keep *= 1.0f - gConstants.fogColor.w * saturate((jump - 0.08f) * 6.0f);
 +    }
 +
 +    // Fog thickens with distance past its start, approaching its strength.
@@ -1873,7 +1895,7 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..8fa075b
+index 0000000..9aeed6a
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,30 @@
@@ -1900,7 +1922,7 @@ index 0000000..8fa075b
 +        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
 +        // thickens, then unused.
 +        float4 fog;
-+        // The fog's color (rgb), then unused.
++        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
 +        float4 ambientOcclusion;
 +    };

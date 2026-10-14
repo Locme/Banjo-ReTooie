@@ -711,3 +711,13 @@
   2. Look across a big area (Spiral Mountain, Mayahem Temple): far things fade into the fog colour, the sky blends in, the HUD and text stay clear
 - Look for: Is the start distance range useful? Do you want other colours, or a colour picker? Does the fog look wrong anywhere (water, the sky, indoors)?
 - Status: waiting for L
+
+## T69 Toon outlines
+- Asked: 2026-10-14 03:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.36
+- Steps:
+  1. Esc > Graphics: set "Toon outlines" to 100
+  2. Banjo, enemies, posts and ledges get dark outlines where they stand in front of something further away. The HUD and text don't
+- Look for: Are the lines the right thickness at your resolution? Should flat creases (inner edges) get lines too?
+- Status: waiting for L

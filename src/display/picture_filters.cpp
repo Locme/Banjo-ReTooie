@@ -35,6 +35,7 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
     void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
+    void SetSceneOutlines(float outlines);
 }
 
 namespace {
@@ -95,6 +96,7 @@ void tooie::picture_filters::apply() {
     }
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
+    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
 
     if (!tooie::photo_mode::active()) {
         const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
@@ -178,6 +180,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Soft shading where surfaces meet: in corners, under ledges and around things standing on the ground. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        outlines_option,
+        "Toon outlines",
+        "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         fog_option,
         "Fog",
         "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
@@ -222,7 +229,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option }) {
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option }) {
         graphics.add_option_change_callback(*id,
             [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
                 if (context == recomp::config::OptionChangeContext::Temporary) {
