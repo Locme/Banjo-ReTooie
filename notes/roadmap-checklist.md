@@ -314,6 +314,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.81 Debug section with race warps (parked)
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: tried and parked. Warping straight to the race maps (0x16F, 0x170 mine cart, 0x161 clouds) works but Mary and the race are not there unless her flags are set: 0x066 (freed) and 0x507 (ready to race) for the mine cart, 0x504 for the clouds, plus the 3-bit race state at flag 0xA4C (mine cart) or 0xA37 (clouds) set to 1 (all read back fine after setting). With those set the game crashes at the cart's init (func_80802068_chhandcart calling func_800EE88C on a missing cube-search prop 0x313/0x314 in the race map), so the race can't be entered from a warp yet. Canary Cave (0xDB) in the Warp tab starts the races normally.
 
 ### 4.82 Photo mode
 - [ ] Done
