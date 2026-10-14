@@ -30,8 +30,8 @@ endif()
 #   Recompiled game functions stay separate, as RECOMP_FUNC marks them weak and noinline, so mods can
 #   still patch them.
 # - Every library is built for the chosen CPU level (TOOIE_CPU), not only the exe.
-# TOOIE_LTO is off until a renderer crash seen once in an LTO run is ruled out.
-option(TOOIE_LTO "Build optimised configs with link-time optimisation (ThinLTO)" OFF)
+# Turn LTO off with -DTOOIE_LTO=OFF for quicker builds while debugging.
+option(TOOIE_LTO "Build optimised configs with link-time optimisation (ThinLTO)" ON)
 
 # Two Windows builds (L, 2026-10-14):
 #   compatible: any 64-bit PC from 2008 and up (Intel Nehalem / AMD Bulldozer level, SSE4.2)
