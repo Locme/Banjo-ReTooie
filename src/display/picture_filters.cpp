@@ -48,6 +48,7 @@ namespace RT64 {
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength);
     void SetSceneWaterReflections(float strength);
+    void SetSceneBounceLight(float strength);
 }
 
 namespace {
@@ -141,6 +142,7 @@ namespace {
         { &tooie::picture_filters::heat_haze_option, 0.0 },
         { &tooie::picture_filters::underwater_distortion_option, 0.0 },
         { &tooie::picture_filters::water_reflections_option, 0.0 },
+        { &tooie::picture_filters::bounce_light_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -218,6 +220,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
@@ -394,6 +397,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Soft shading where surfaces meet: in corners, under ledges and around things standing on the ground. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        bounce_light_option,
+        "Bounce light",
+        "Light bounced off nearby surfaces: colourful walls and floors tint and brighten what is next to them a little. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         outlines_option,
         "Toon outlines",
         "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them. 0 is off.",
@@ -489,7 +497,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

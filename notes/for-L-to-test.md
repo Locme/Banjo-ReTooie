@@ -923,3 +923,13 @@
 - Look for: the renderer line says Vulkan. In Settings > Graphics the Graphics API row shows Vulkan, and the choices are Vulkan and D3D12 (no Auto).
 - Note: your saved graphics.json has Auto, which is not migrated. Open the Graphics API row and pick Vulkan once.
 - Status: waiting for L
+
+## T90 Bounce light
+- Asked: 2026-10-14 06:52 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.35 (GI)
+- Steps:
+  1. Esc > Graphics: set "Bounce light" to 50, then 100
+  2. Walk around somewhere colourful: Jolly Roger's Lagoon town, Mayahem Temple, a cave
+- Look for: Surfaces near colourful walls and grass pick up a little of their colour and light. Is there visible speckle or shimmer, especially when moving? Frame rate fine?
+- Status: waiting for L

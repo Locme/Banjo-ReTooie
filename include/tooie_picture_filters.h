@@ -46,6 +46,7 @@ namespace tooie::picture_filters {
     inline const std::string heat_haze_option = "heat_haze";
     inline const std::string underwater_distortion_option = "underwater_distortion";
     inline const std::string water_reflections_option = "water_reflections";
+    inline const std::string bounce_light_option = "bounce_light";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
