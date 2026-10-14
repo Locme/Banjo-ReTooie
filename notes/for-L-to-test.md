@@ -792,3 +792,12 @@
   2. Walk around Spiral Mountain and a level with dark backgrounds
 - Look for: A soft light along the edges of Banjo and nearby objects. Is it too strong, too thin, or does it shimmer when moving? Ground edges should not light up.
 - Status: waiting for L
+
+## T76 Models stretching for a moment
+- Asked: 2026-10-14 05:55 UTC
+- Build: latest Windows CI build from main (after the "repeated parts" interpolation fix)
+- Steps:
+  1. Play at your usual frame rate above Original (170)
+  2. Walk around the places where you saw meshes suddenly stretch, and the Cave of Horrors where the black artifacts were
+- Look for: Do models still stretch into a broken shape for a moment? Do the black artifacts still appear? If yes, where, and on which model?
+- Status: waiting for L

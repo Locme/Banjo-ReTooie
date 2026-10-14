@@ -32,6 +32,7 @@
 #include <atomic>
 #include <algorithm>
 #include <array>
+#include <tuple>
 #include <functional>
 #include <chrono>
 #include <cmath>
@@ -382,6 +383,13 @@ namespace {
     // A move counts as a jump above this many units per frame and over three
     // times the copy's own move the frame before.
     constexpr float jump_distance = 60.0f;
+    // Game units a drawing of a repeated list may move in one frame and
+    // still be paired with last frame's.
+    constexpr float repeat_distance = 150.0f;
+    // ...or, among drawings that mostly moved little, this much.
+    constexpr float repeat_close = 40.0f;
+    // Above this many drawings now times last frame's, they keep draw order.
+    constexpr size_t repeat_pairs_max = 16384;
 
     bool interpolation_on() {
         static const bool disabled = std::getenv("TOOIE_NO_MODEL_TAGS") != nullptr;
@@ -858,13 +866,132 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         last_copies = std::move(now_copies);
     }
 
+    // A list drawn more than once in a model (both hands, the links of a
+    // chain, the segments of a long body) gets one id per drawing. Counting
+    // them in draw order went wrong when the game left one out for a frame
+    // (out of view, or a part that comes and goes): the ids after it moved
+    // one drawing along, and RT64 blended each part towards its neighbour's
+    // place, so the mesh stretched across the gap for the in-between frames.
+    // Each drawing keeps the number of last frame's nearest one instead.
+    std::vector<uint32_t> repeat_slot(commands.size(), 0);
+    if (!overlay) {
+        struct Drawing {
+            float pos[3];
+            uint32_t slot;
+        };
+        static std::unordered_map<uint32_t, std::vector<Drawing>> last_drawings;
+        std::unordered_map<uint32_t, std::vector<std::pair<size_t, Drawing>>> now;
+        for (size_t index = 0; index < commands.size(); index++) {
+            const Command& c = commands[index];
+            int b = c.block;
+            if ((c.w0 >> 24) != op_mtx || b < 0 || blocks[b].model == 0 ||
+                (((c.w0 & 0xFF) ^ 1) & mtx_projection) != 0 || shadow[index] != 0 || bones_group[index] != 0) {
+                continue;
+            }
+            uint32_t key = make_id(blocks[b].model, blocks[b].instance, bone_id[index]);
+            Drawing d{};
+            read_translation(rdram, c.w1 & 0x1FFFFFFF, d.pos);
+            now[key].push_back({index, d});
+        }
+        std::unordered_map<uint32_t, std::vector<Drawing>> drawings;
+        for (auto& [key, list] : now) {
+            auto found = last_drawings.find(key);
+            std::vector<Drawing> empty;
+            const std::vector<Drawing>& last = found != last_drawings.end() ? found->second : empty;
+            std::vector<bool> slot_used;
+            auto use = [&](uint32_t slot) {
+                if (slot >= slot_used.size()) {
+                    slot_used.resize(slot + 1, false);
+                }
+                slot_used[slot] = true;
+            };
+            std::vector<bool> done(list.size(), false);
+            if (list.size() == 1 && last.size() == 1) {
+                list[0].second.slot = last[0].slot;
+                use(last[0].slot);
+                done[0] = true;
+            }
+            else if (list.size() * last.size() > repeat_pairs_max) {
+                // Too many to compare each with each every frame: draw order.
+                for (size_t i = 0; i < list.size(); i++) {
+                    list[i].second.slot = (uint32_t)i;
+                    use((uint32_t)i);
+                    done[i] = true;
+                }
+            }
+            else if (!last.empty()) {
+                // Closest pairs first, each drawing and each of last frame's
+                // used once. A drawing far from all of last frame's is a new
+                // one (another left out, this one put in) and is not paired.
+                std::vector<std::tuple<float, size_t, size_t>> pairs;
+                for (size_t i = 0; i < list.size(); i++) {
+                    for (size_t j = 0; j < last.size(); j++) {
+                        float d = 0.0f;
+                        for (int k = 0; k < 3; k++) {
+                            float e = list[i].second.pos[k] - last[j].pos[k];
+                            d += e * e;
+                        }
+                        pairs.emplace_back(d, i, j);
+                    }
+                }
+                std::sort(pairs.begin(), pairs.end());
+                std::vector<bool> last_taken(last.size(), false);
+                std::vector<std::tuple<float, size_t, size_t>> chosen;
+                for (const auto& [d, i, j] : pairs) {
+                    if (d > repeat_distance * repeat_distance) {
+                        break;
+                    }
+                    if (done[i] || last_taken[j]) {
+                        continue;
+                    }
+                    done[i] = true;
+                    last_taken[j] = true;
+                    chosen.emplace_back(d, i, j);
+                }
+                // Many drawings close together (a swarm, a row of plants)
+                // move about alike; one that moved far more than the rest
+                // took a neighbour's place, so it is drawn as new instead.
+                float gate = repeat_distance * repeat_distance;
+                if (chosen.size() >= 3) {
+                    float median = std::get<0>(chosen[chosen.size() / 2]);
+                    gate = std::min(gate, std::max(repeat_close * repeat_close, 16.0f * median));
+                }
+                for (const auto& [d, i, j] : chosen) {
+                    if (d > gate) {
+                        done[i] = false;
+                        continue;
+                    }
+                    list[i].second.slot = last[j].slot;
+                    use(last[j].slot);
+                }
+            }
+            // New drawings take numbers no drawing had last frame either, so
+            // RT64 finds nothing to blend them from.
+            for (const Drawing& d : last) {
+                use(d.slot);
+            }
+            uint32_t next = 0;
+            for (size_t i = 0; i < list.size(); i++) {
+                if (!done[i]) {
+                    while (next < slot_used.size() && slot_used[next]) {
+                        next++;
+                    }
+                    list[i].second.slot = next;
+                    use(next);
+                }
+                repeat_slot[list[i].first] = list[i].second.slot;
+                drawings[key].push_back(list[i].second);
+            }
+        }
+        last_drawings = std::move(drawings);
+    }
+
     // Pass 3: wrap the matrix loads.
     uint32_t bones_tagged = 0;
     uint32_t shadows_tagged = 0;
     bool enabled = false;
     bool tagged = false;
     bool camera_tagged = false;
-    std::unordered_map<uint32_t, uint32_t> repeats;
     // Headless aid: TOOIE_TAG_LOG=1 logs how many of each big model's ids
     // carry over from the last frame.
     static const bool log_ids = std::getenv("TOOIE_TAG_LOG") != nullptr;
@@ -958,8 +1085,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             if (model) {
                 uint32_t bone = bone_id[index];
                 uint32_t key = make_id(blocks[b].model, blocks[b].instance, bone);
-                // A list drawn twice in a model (both hands, say) gets a second id.
-                id = make_id(key, repeats[key]++, camera_generation);
+                // A list drawn twice in a model (both hands, say) gets a second id
+                // (see repeat_slot).
+                id = make_id(key, repeat_slot[index], camera_generation);
                 if (log_ids) {
                     ids_now[blocks[b].model].push_back(id);
                 }

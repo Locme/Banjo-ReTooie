@@ -5,6 +5,7 @@ regenerated code, CI, notes and tooling are left out.
 
 ## 2026-10-14
 
+- Above Original, models made of one repeated part (chains, rows of plants, swarms) no longer stretch for a moment when the game drops one of the parts.
 - Frame rate overlay: adds the 1% low and hitches, the map and Banjo's position, the renderer and resolution, and whether speed-up, cheats or mods are on.
 
 ## 2026-10-13
