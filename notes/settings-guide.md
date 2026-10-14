@@ -135,8 +135,9 @@ F12 screenshots are taken before these filters, so they don't show them.
 
 ## Graphics: Frame rate overlay
 
-- **Frame rate overlay**: shows a small box in the top left corner, updated
-  four times a second, with:
+- **Frame rate overlay**: Off, Compact or Full. A small box in the top left
+  corner, updated four times a second. **Compact** shows only the first line
+  below. **Full** shows:
   - the frame rate and frame time on screen (averaged over the last quarter
     second)
   - the worst frame time in that quarter second
@@ -155,8 +156,18 @@ F12 screenshots are taken before these filters, so they don't show them.
   - the renderer (Vulkan or D3D12), the internal resolution and the
     Resolution setting, MSAA and the display's refresh rate
   - whether Speed-up is running, whether cheats are on, and which mods
-    (texture packs included) are on.
-  Default: off.
+    (texture packs included) are on
+  - audio: how much sound was queued (normal is about 10 to 50 ms), how many
+    dropouts there were (the queue ran dry: a gap you can hear) and how many
+    chunks were sped up to cut lag, over the last 2 seconds
+  - the build: its commit and date
+  - a graph of the last 100 frame times, newest on the right. Twice the usual
+    frame time fills it; a hitch is drawn in red.
+  Default: Off.
+- **Frame Rate Overlay key** (F3, rebindable under Hotkeys in the Controls
+  tab): steps the overlay through Off, Compact and Full while you play, with
+  a notice. It lasts for the session; the setting decides how the next
+  session starts, and changing the setting takes over from the key.
 
 ## Cheats
 

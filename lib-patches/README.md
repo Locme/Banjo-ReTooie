@@ -66,6 +66,7 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   Bottles' Revenge (handoff 4.77) so player 2's pad drives controller 2.
 * **Save State and Load State keys** (`recompinput/include/recompinput/input_types.h`): two more
   game hotkeys, `SAVE_STATE` (Insert) and `LOAD_STATE` (Home), named by `src/gameplay/save_state.cpp`.
+* **Frame Rate Overlay key** (same file): `FRAME_OVERLAY` (F3), named by `src/game/frame_overlay.cpp`.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

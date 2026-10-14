@@ -863,3 +863,13 @@
   3. Open Esc > Achievements
 - Look for: A pop-up "Achievement unlocked: Knocked Out Klungo (20 G)" at the top right, and the tab shows it with the date. A save that already has the progress unlocks those achievements a moment after loading. With cheats on, nothing unlocks until you restart with cheats off. All Beaten Up, Calamari Bonanza, Shoot Em Up! and Treasure Hunt say "not tracked yet". Points Make Prizes unlocks on the Balloon Burst Jiggy, which may not match XBLA's 60 points rule.
 - Status: waiting for L
+
+## T84 Frame rate overlay: Compact, Full, F3, audio, graph
+- Asked: 2026-10-14 05:54 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > Graphics: set Frame rate overlay to Compact, then Full (it starts Off again: the setting was renamed)
+  2. Close the menu and press F3 a few times while you play
+  3. With Full on, play for a minute and go through a door into another area
+- Look for: Does F3 step Off, Compact, Full with a notice each time? Is F3 listed under Hotkeys in the Controls tab? In Full, does the graph at the bottom fill from right to left and show a red spike when the game hitches? Does the audio line stay at 0 dropouts while the sound is clean, and count up if it crackles? Does the build line match the CI build you downloaded?
+- Status: waiting for L

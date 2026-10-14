@@ -40,6 +40,7 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_frame_overlay.h"
 #include "tooie_game.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
@@ -220,6 +221,7 @@ constexpr uint32_t bytes_per_frame = input_channels * sizeof(float);
 // Debug aid: TOOIE_AUDIO_LOG=1 prints, every 2 s, how much audio was queued when the game handed over
 // each chunk, how many chunks were sped up to cut latency, and how often the queue had run dry.
 static void audio_stats_note(uint64_t queued_us, uint32_t skip_factor) {
+    tooie::frame_overlay::note_audio_chunk(queued_us, skip_factor != 0);
     static const bool enabled = std::getenv("TOOIE_AUDIO_LOG") != nullptr;
     if (!enabled) {
         return;

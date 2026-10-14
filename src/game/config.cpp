@@ -107,6 +107,7 @@ namespace {
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
+    tooie::frame_overlay::register_input();
     tooie::input::register_input();
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();

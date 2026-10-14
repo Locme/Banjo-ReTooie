@@ -3,7 +3,11 @@
 // time, the game's own frame rate, the Framerate setting and what frame
 // interpolation tagged; then the 1% low and hitches over the last 5 s, the
 // map and Banjo's position, the renderer, and whether speed-up, cheats or
-// mods are on (so a screenshot of a glitch carries what is needed to find it).
+// mods are on (so a screenshot of a glitch carries what is needed to find it);
+// the audio queue and its dropouts; the build; and a graph of the last 100
+// frame times. Compact shows only the first line. The Frame Rate Overlay
+// hotkey (F3) steps Off, Compact, Full for the session; the setting decides
+// how a session starts.
 //
 // Nothing here times frames itself. The presented frames come from RT64's own
 // present timer (presentProfiler) and the GPU time from its renderer timestamps
@@ -14,6 +18,7 @@
 // drawing a few lines of UI text.
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -27,6 +32,15 @@
 #include <variant>
 #include <vector>
 
+#ifdef _WIN32
+#include "SDL.h"
+#else
+#include "SDL2/SDL.h"
+#endif
+
+#include "recompinput/recompinput.h"
+#include "recompinput/input_binding.h"
+#include "recompinput/profiles.h"
 #include "recompui/config.h"
 #include "recompui/recompui.h"
 #include "elements/ui_element.h"
@@ -39,6 +53,8 @@
 #include "tooie_debug.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_model_tagging.h"
+#include "tooie_toast.h"
+#include "build_info.h"
 #include "tooie_watchdog.h"
 
 namespace RT64 {
@@ -61,7 +77,12 @@ namespace {
     constexpr auto update_interval = 250ms;
     // Wait for the UI to come up before building the overlay.
     constexpr auto ui_wait = 500ms;
-    constexpr size_t max_lines = 12;
+    constexpr size_t max_lines = 14;
+    // The frame time graph: one bar per presented frame, newest on the right.
+    constexpr size_t graph_bars = 100;
+    constexpr float graph_height = 40.0f;
+    constexpr auto key_poll = 16ms;
+    constexpr auto overlay_input = recompinput::GameInput::FRAME_OVERLAY;
     // How far back the 1% low and the hitch count look.
     constexpr auto stutter_window = 5s;
     // A hitch: a frame more than this many times the median frame.
@@ -90,25 +111,86 @@ namespace {
         return recompui::config::get_config(recompui::config::graphics::id);
     }
 
-    bool enabled() {
-        // For headless runs: shows the overlay whatever the setting says.
-        static const bool forced = std::getenv("TOOIE_FRAME_OVERLAY") != nullptr;
-        if (forced) {
-            return true;
-        }
+    using tooie::frame_overlay::Mode;
+
+    // Set by the hotkey for this session; -1 follows the setting.
+    std::atomic<int> hotkey_mode{-1};
+
+    Mode setting_mode() {
         if (!created) {
-            return false;
+            return Mode::Off;
         }
         try {
-            return std::get<bool>(graphics_config().get_option_value(tooie::frame_overlay::option));
+            return (Mode)std::get<uint32_t>(graphics_config().get_option_value(tooie::frame_overlay::option));
         } catch (...) {
-            return false;
+            return Mode::Off;
         }
     }
+
+    Mode current_mode() {
+        int from_key = hotkey_mode.load(std::memory_order_relaxed);
+        if (from_key >= 0) {
+            return (Mode)from_key;
+        }
+        // For headless runs: TOOIE_FRAME_OVERLAY=1 (or full) shows Full, =compact shows Compact.
+        static const char* forced = std::getenv("TOOIE_FRAME_OVERLAY");
+        if (forced != nullptr) {
+            return std::string(forced) == "compact" ? Mode::Compact : Mode::Full;
+        }
+        return setting_mode();
+    }
+
+    // Whether any key or button bound to Frame Rate Overlay (Controls tab, Hotkeys) is held.
+    bool key_down() {
+        // Pressing the key to bind it in the Controls tab should not switch the overlay.
+        if (recompinput::binding::is_binding()) {
+            return false;
+        }
+        bool down = false;
+        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
+            if (profile < 0) {
+                continue;
+            }
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, overlay_input, b));
+            }
+        }
+        return down;
+    }
+
+    void key_worker() {
+        bool was_down = false;
+        for (;;) {
+            std::this_thread::sleep_for(key_poll);
+            bool down = key_down();
+            if (down && !was_down) {
+                Mode next = (Mode)(((uint32_t)current_mode() + 1) % 3);
+                hotkey_mode.store((int)next, std::memory_order_relaxed);
+                tooie::toast::show(next == Mode::Off ? "Frame rate overlay off" :
+                    next == Mode::Compact ? "Frame rate overlay: Compact" : "Frame rate overlay: Full");
+            }
+            was_down = down;
+        }
+    }
+
+    // Audio chunks since the last 2 s summary (note_audio_chunk runs on the audio thread).
+    struct AudioStats {
+        uint64_t chunks = 0;
+        uint64_t sped_up = 0;
+        uint64_t dropouts = 0;
+        uint64_t min_us = UINT64_MAX;
+        uint64_t max_us = 0;
+    };
+    std::mutex audio_mutex;
+    AudioStats audio_now;
+    bool audio_started = false;
+    std::string audio_text = "Audio: no sound yet";
 
     struct Overlay {
         recompui::ContextId context = recompui::ContextId::null();
         std::vector<recompui::Label*> lines;
+        recompui::Element* graph = nullptr;
+        std::vector<recompui::Element*> bars;
         bool shown = false;
     };
 
@@ -124,6 +206,7 @@ namespace {
             recompui::Element* box = ctx.create_element<recompui::Element>(root);
             box->set_display(recompui::Display::Flex);
             box->set_flex_direction(recompui::FlexDirection::Column);
+            box->set_align_items(recompui::AlignItems::FlexStart);
             box->set_position(recompui::Position::Absolute);
             box->set_top(16);
             box->set_left(16);
@@ -137,6 +220,25 @@ namespace {
                 recompui::Label* line = ctx.create_element<recompui::Label>(box, "", recompui::LabelStyle::Small);
                 line->set_pointer_events(recompui::PointerEvents::None);
                 o.lines.push_back(line);
+            }
+
+            o.graph = ctx.create_element<recompui::Element>(box);
+            o.graph->set_display(recompui::Display::Flex);
+            o.graph->set_flex_direction(recompui::FlexDirection::Row);
+            o.graph->set_align_items(recompui::AlignItems::FlexEnd);
+            o.graph->set_height(graph_height);
+            o.graph->set_width(graph_bars * 3.0f);
+            o.graph->set_margin_top(6);
+            o.graph->set_pointer_events(recompui::PointerEvents::None);
+            for (size_t i = 0; i < graph_bars; i++) {
+                recompui::Element* bar = ctx.create_element<recompui::Element>(o.graph);
+                bar->set_display(recompui::Display::Block);
+                bar->set_width(3);
+                bar->set_height(1);
+                bar->set_flex_shrink(0);
+                bar->set_background_color(recompui::theme::color::Primary);
+                bar->set_pointer_events(recompui::PointerEvents::None);
+                o.bars.push_back(bar);
             }
             ctx.close();
 
@@ -230,6 +332,55 @@ namespace {
         return line;
     }
 
+    // Bars scaled so twice the median frame fills the graph; hitches are drawn in red.
+    void update_graph(Overlay& o) {
+        if (recent.empty()) {
+            for (recompui::Element* bar : o.bars) {
+                bar->set_height(1);
+                bar->set_background_color(recompui::theme::color::Transparent);
+            }
+            return;
+        }
+        std::vector<float> sorted;
+        for (const Interval& i : recent) {
+            sorted.push_back(i.ms);
+        }
+        std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+        float median = std::max(sorted[sorted.size() / 2], 0.1f);
+        float full = median * hitch_factor;
+        size_t count = std::min(graph_bars, recent.size());
+        size_t first = graph_bars - count;
+        for (size_t i = 0; i < graph_bars; i++) {
+            recompui::Element* bar = o.bars[i];
+            if (i < first) {
+                // Not filled yet; a bar with no height would also lose its width.
+                bar->set_height(1);
+                bar->set_background_color(recompui::theme::color::Transparent);
+                continue;
+            }
+            float ms = recent[recent.size() - count + (i - first)].ms;
+            bar->set_height(std::clamp(ms / full, 0.02f, 1.0f) * graph_height);
+            bar->set_background_color(ms > full ? recompui::theme::color::Danger : recompui::theme::color::Primary);
+        }
+    }
+
+    void summarize_audio() {
+        AudioStats stats;
+        {
+            std::lock_guard lock{ audio_mutex };
+            stats = audio_now;
+            audio_now = AudioStats();
+        }
+        if (stats.chunks == 0) {
+            return;
+        }
+        char line[200];
+        std::snprintf(line, sizeof(line), "Audio queued %.0f-%.0f ms, %llu dropout%s, %llu sped up (2 s)",
+            stats.min_us / 1000.0, stats.max_us / 1000.0,
+            (unsigned long long)stats.dropouts, stats.dropouts == 1 ? "" : "s", (unsigned long long)stats.sped_up);
+        audio_text = line;
+    }
+
     std::string map_line(uint8_t* rdram) {
         uint16_t map = tooie::debug::current_map(rdram);
         const char* name = "unknown";
@@ -309,7 +460,7 @@ namespace {
         return text;
     }
 
-    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds) {
+    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, Mode mode) {
         char line[160];
         std::vector<std::string> text;
 
@@ -322,6 +473,10 @@ namespace {
         }
         else {
             text.push_back("No frames presented");
+        }
+        if (mode == Mode::Compact) {
+            text.resize(1);
+            return text;
         }
         if (frames.gpuFrames > 0) {
             std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame", frames.gpuMs / frames.gpuFrames);
@@ -350,6 +505,8 @@ namespace {
         }
         text.push_back(renderer_line());
         text.push_back(extras_line());
+        text.push_back(audio_text);
+        text.push_back(std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")");
         return text;
     }
 
@@ -374,6 +531,7 @@ namespace {
             static int mod_ticks = 0;
             if (mod_ticks++ % 8 == 0) {
                 refresh_mods();
+                summarize_audio();
             }
 
             // The game's frame rate is counted over the last 2 s: a 30 fps game only
@@ -390,14 +548,15 @@ namespace {
             static int ticks = 0;
             if (log && ++ticks % 8 == 0) {
                 std::string joined;
-                for (const std::string& line : format(frames, game_delta, game_seconds)) {
+                for (const std::string& line : format(frames, game_delta, game_seconds, Mode::Full)) {
                     joined += (joined.empty() ? "" : " | ") + line;
                 }
                 std::printf("[frames] %s\n", joined.c_str());
                 std::fflush(stdout);
             }
 
-            if (!enabled()) {
+            Mode mode = current_mode();
+            if (mode == Mode::Off) {
                 if (overlay.shown) {
                     hide(overlay);
                 }
@@ -408,12 +567,16 @@ namespace {
                 continue;
             }
 
-            std::vector<std::string> text = format(frames, game_delta, game_seconds);
+            std::vector<std::string> text = format(frames, game_delta, game_seconds, mode);
             overlay.context.open();
             for (size_t i = 0; i < overlay.lines.size(); i++) {
                 bool used = i < text.size();
                 overlay.lines[i]->set_text(used ? text[i] : std::string());
                 overlay.lines[i]->set_display(used ? recompui::Display::Block : recompui::Display::None);
+            }
+            overlay.graph->set_display(mode == Mode::Full ? recompui::Display::Flex : recompui::Display::None);
+            if (mode == Mode::Full) {
+                update_graph(overlay);
             }
             overlay.context.close();
             show(overlay);
@@ -421,15 +584,30 @@ namespace {
     }
 }
 
+void tooie::frame_overlay::register_input() {
+    recompinput::set_game_input_name(overlay_input, "Frame Rate Overlay");
+    recompinput::set_game_input_description(overlay_input,
+        "Steps the frame rate overlay through Off, Compact and Full for this session. The Graphics tab sets how it starts.");
+    recompinput::set_default_mapping_for_keyboard(overlay_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F3) });
+    recompinput::set_default_mapping_for_controller(overlay_input, {});
+}
+
 void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
     created = true;
-    graphics.add_bool_option(
+    graphics.add_enum_option(
         option,
         "Frame rate overlay",
-        "Shows the frame rate, frame time, stutter, GPU time, the game's own frame rate, frame interpolation figures, the map and Banjo's position, the renderer and whether speed-up, cheats or mods are on, in the top left corner.",
-        false);
+        "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, GPU time, the game's own frame rate, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
+        {
+            {Mode::Off, "Off", "Off"},
+            {Mode::Compact, "Compact", "Compact"},
+            {Mode::Full, "Full", "Full"},
+        },
+        Mode::Off);
     graphics.add_option_change_callback(option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            // A change in the menu wins over the hotkey.
+            hotkey_mode.store(-1, std::memory_order_relaxed);
             if (context == recomp::config::OptionChangeContext::Temporary) {
                 // The overlay thread reads the saved value.
                 graphics_config().save_config();
@@ -437,10 +615,26 @@ void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
         });
 }
 
+void tooie::frame_overlay::note_audio_chunk(uint64_t queued_us, bool sped_up) {
+    std::lock_guard lock{ audio_mutex };
+    audio_now.chunks++;
+    if (sped_up) {
+        audio_now.sped_up++;
+    }
+    // The queue running dry after sound has started is a dropout (a gap you can hear).
+    if (audio_started && queued_us == 0) {
+        audio_now.dropouts++;
+    }
+    audio_started = true;
+    audio_now.min_us = std::min(audio_now.min_us, queued_us);
+    audio_now.max_us = std::max(audio_now.max_us, queued_us);
+}
+
 void tooie::frame_overlay::start(uint8_t* rdram) {
     game_rdram = rdram;
     std::call_once(start_once, [] {
         // Detached on purpose: the thread owns no resources that need a clean shutdown.
         std::thread(worker).detach();
+        std::thread(key_worker).detach();
     });
 }
