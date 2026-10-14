@@ -79,25 +79,27 @@ index 8c8e5d1..3599f5a 100644
      func_map.clear();
      section_addresses = (int32_t *)calloc(sections_info.total_num_sections, sizeof(int32_t));
 diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
-index 2f22456..005332a 100644
+index 2f22456..41b1e8b 100644
 --- a/ultramodern/include/ultramodern/config.hpp
 +++ b/ultramodern/include/ultramodern/config.hpp
-@@ -11,6 +11,9 @@ namespace ultramodern {
+@@ -11,6 +11,10 @@ namespace ultramodern {
          enum class Resolution {
              Original,
              Original2x,
 +            R720p,
 +            R1080p,
++            R1440p,
 +            R2160p,
              Auto,
              OptionCount
          };
-@@ -88,6 +91,9 @@ namespace ultramodern {
+@@ -88,6 +92,10 @@ namespace ultramodern {
          NLOHMANN_JSON_SERIALIZE_ENUM(ultramodern::renderer::Resolution, {
              {ultramodern::renderer::Resolution::Original, "Original"},
              {ultramodern::renderer::Resolution::Original2x, "Original2x"},
 +            {ultramodern::renderer::Resolution::R720p, "720p"},
 +            {ultramodern::renderer::Resolution::R1080p, "1080p"},
++            {ultramodern::renderer::Resolution::R1440p, "1440p"},
 +            {ultramodern::renderer::Resolution::R2160p, "2160p"},
              {ultramodern::renderer::Resolution::Auto, "Auto"},
          });

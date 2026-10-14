@@ -544,7 +544,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..b18c1c9 100644
+index 6ba64e2..2df8ec4 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,5 @@
@@ -553,7 +553,18 @@ index 6ba64e2..b18c1c9 100644
  
  
  namespace recompui {
-@@ -183,6 +184,14 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -149,6 +150,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+ 
+ void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
+     config->set_option_value(option_id, value);
++    // Graphics settings are live (no Apply button), including the options other parts of the port add.
++    if (config->requires_confirmation && config->id == recompui::config::graphics::id) {
++        config->save_config();
++    }
+     if (config->requires_confirmation && apply_button != nullptr) {
+         apply_button->set_enabled(config->is_dirty());
+     }
+@@ -183,6 +188,14 @@ void ConfigPageOptionsMenu::render_config_options() {
          auto schema = config->get_config_schema();
          for (size_t i = 0; i < schema.options.size(); i++) {
              auto &config_option = schema.options[i];
@@ -568,7 +579,7 @@ index 6ba64e2..b18c1c9 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +242,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +246,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -577,20 +588,21 @@ index 6ba64e2..b18c1c9 100644
              element->update_hidden();
              config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..95ec9b2 100644
+index 4fdf81f..c4aaa9b 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
-@@ -22,6 +22,9 @@ namespace recompui {
+@@ -22,6 +22,10 @@ namespace recompui {
          static EnumOptionVector resolution_options = {
              {ultramodern::renderer::Resolution::Original, "Original", "Original"},
              {ultramodern::renderer::Resolution::Original2x, "Original2x", "Original 2x"},
-+            {ultramodern::renderer::Resolution::R720p, "720p", "720p"},
-+            {ultramodern::renderer::Resolution::R1080p, "1080p", "1080p"},
-+            {ultramodern::renderer::Resolution::R2160p, "2160p", "4K"},
++            {ultramodern::renderer::Resolution::R720p, "720p", "3x (720p)"},
++            {ultramodern::renderer::Resolution::R1080p, "1080p", "4.5x (1080p)"},
++            {ultramodern::renderer::Resolution::R1440p, "1440p", "6x (1440p)"},
++            {ultramodern::renderer::Resolution::R2160p, "2160p", "9x (4K)"},
              {ultramodern::renderer::Resolution::Auto, "Auto", "Auto"},
          };
  
-@@ -52,7 +55,6 @@ namespace recompui {
+@@ -52,7 +56,6 @@ namespace recompui {
          #endif
  
          static EnumOptionVector graphics_api_options = {
@@ -598,7 +610,7 @@ index 4fdf81f..95ec9b2 100644
          #ifdef ALLOW_D3D12
              {ultramodern::renderer::GraphicsApi::D3D12, "D3D12"},
          #endif
-@@ -65,9 +67,9 @@ namespace recompui {
+@@ -65,9 +68,9 @@ namespace recompui {
          };
  
          static EnumOptionVector aspect_ratio_options = {
@@ -611,18 +623,19 @@ index 4fdf81f..95ec9b2 100644
          };
  
          static EnumOptionVector antialiasing_options = {
-@@ -100,6 +102,10 @@ namespace recompui {
+@@ -100,6 +103,11 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
                      return "Downsampling is not available at auto resolution";
 +                case ultramodern::renderer::Resolution::R720p:
 +                case ultramodern::renderer::Resolution::R1080p:
++                case ultramodern::renderer::Resolution::R1440p:
 +                case ultramodern::renderer::Resolution::R2160p:
 +                    return "Downsampling is not available at a fixed resolution";
                  case ultramodern::renderer::Resolution::Original:
                      if (ds_option == DownsamplingOption::X2) {
                          return "Rendered in 480p and scaled to 240p";
-@@ -217,6 +223,14 @@ namespace recompui {
+@@ -217,6 +225,14 @@ namespace recompui {
              apply_graphics_config();
          }
  
@@ -637,7 +650,16 @@ index 4fdf81f..95ec9b2 100644
          recomp::config::Config &create_graphics_tab(const std::string &name) {
              created_graphics_config = true;
  
-@@ -245,6 +259,7 @@ namespace recompui {
+@@ -235,7 +251,7 @@ namespace recompui {
+             config.add_enum_option(
+                 graphics::options::res_option,
+                 "Resolution",
+-                "Sets the output resolution of the game. <recomp-color primary>Original</recomp-color> matches the game's original 240p resolution. <recomp-color primary>Original 2x</recomp-color> will render at 480p. <recomp-color primary>Auto</recomp-color> will scale based on the game window's resolution.",
++                "Sets the output resolution of the game. <recomp-color primary>Original</recomp-color> matches the game's original 240p resolution. <recomp-color primary>Original 2x</recomp-color> will render at 480p. <recomp-color primary>3x</recomp-color> is 720p, <recomp-color primary>4.5x</recomp-color> is 1080p, <recomp-color primary>6x</recomp-color> is 1440p and <recomp-color primary>9x</recomp-color> is 4K (each multiplies the game's 240 lines). <recomp-color primary>Auto</recomp-color> will scale based on the game window's resolution.",
+                 resolution_options,
+                 ultramodern::renderer::Resolution::Auto
+             );
+@@ -245,6 +261,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto new_opt = static_cast<ultramodern::renderer::Resolution>(std::get<uint32_t>(cur_value));
                          determine_downsampling_display(new_opt, change_context);
@@ -645,7 +667,7 @@ index 4fdf81f..95ec9b2 100644
                      }
                  );
              }
-@@ -265,6 +280,7 @@ namespace recompui {
+@@ -265,6 +282,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto resolution_opt = get_graphics_enum_value<ultramodern::renderer::Resolution>(graphics::options::res_option, change_context);
                          determine_downsampling_display(resolution_opt, change_context);
@@ -653,7 +675,7 @@ index 4fdf81f..95ec9b2 100644
                      }
                  );
  
-@@ -286,7 +302,7 @@ namespace recompui {
+@@ -286,7 +304,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::ar_option,
                  "Aspect Ratio",
@@ -662,21 +684,16 @@ index 4fdf81f..95ec9b2 100644
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
-@@ -344,10 +360,10 @@ namespace recompui {
-             config.add_enum_option(
-                 graphics::options::api_option,
+@@ -346,7 +364,7 @@ namespace recompui {
                  "Graphics API",
--                "Selects the graphics API to use.",
-+                "Selects the graphics API to use. Takes effect after a restart.",
+                 "Selects the graphics API to use.",
                  graphics_api_options,
 -                ultramodern::renderer::GraphicsApi::Auto,
--                true
 +                ultramodern::renderer::GraphicsApi::Vulkan,
-+                false
+                 true
              );
  
-             config.add_enum_option(
-@@ -359,6 +375,16 @@ namespace recompui {
+@@ -359,6 +377,16 @@ namespace recompui {
                  true
              );
  
@@ -738,14 +755,14 @@ index cc4932c..4a6808c 100644
          Style hover_style;
          Style focus_style;
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
-index a7954c7..f91b291 100644
+index a7954c7..8add9d9 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
 +++ b/recompui/src/renderer/rt64_render_context.cpp
-@@ -155,6 +155,22 @@ void set_application_user_config(RT64::Application* application, const ultramode
+@@ -155,6 +155,27 @@ void set_application_user_config(RT64::Application* application, const ultramode
              application->userConfig.resolutionMultiplier = 2.0 * std::max(config.ds_option, 1);
              application->userConfig.downsampleMultiplier = std::max(config.ds_option, 1);
              break;
-+        // Fixed heights from the N64's 240 lines: 720 = 3x, 1080 = 4.5x, 2160 (4K) = 9x.
++        // Fixed heights from the N64's 240 lines: 720 = 3x, 1080 = 4.5x, 1440 = 6x, 2160 (4K) = 9x.
 +        case ultramodern::renderer::Resolution::R720p:
 +            application->userConfig.resolution = RT64::UserConfiguration::Resolution::Manual;
 +            application->userConfig.resolutionMultiplier = 3.0;
@@ -754,6 +771,11 @@ index a7954c7..f91b291 100644
 +        case ultramodern::renderer::Resolution::R1080p:
 +            application->userConfig.resolution = RT64::UserConfiguration::Resolution::Manual;
 +            application->userConfig.resolutionMultiplier = 4.5;
++            application->userConfig.downsampleMultiplier = 1;
++            break;
++        case ultramodern::renderer::Resolution::R1440p:
++            application->userConfig.resolution = RT64::UserConfiguration::Resolution::Manual;
++            application->userConfig.resolutionMultiplier = 6.0;
 +            application->userConfig.downsampleMultiplier = 1;
 +            break;
 +        case ultramodern::renderer::Resolution::R2160p:

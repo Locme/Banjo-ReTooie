@@ -29,6 +29,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 ## RecompFrontend.patch
 
+* **1440p resolution** (`ui_config_tab_graphics.cpp`, `rt64_render_context.cpp`, and `ultramodern/include/ultramodern/config.hpp` in N64ModernRuntime.patch): `R1440p` is 6x the game's 240 lines. The Resolution row names are 3x/4.5x/6x/9x with the pixel height in brackets (the saved keys stay 720p, 1080p, 2160p).
+* **All Graphics options are live** (`ui_config_page_options_menu.cpp`): any change in the Graphics tab calls `save_config()` at once, so options added by the port need no callback of their own.
 * **Section headings** (`recompui/include/recompui/config.h`, `ui_config.cpp`,
   `ui_config_page_options_menu.cpp`): `recompui::config::set_option_group(option_id, title)`
   puts a heading above that option in its tab (used by the QOL tab).
