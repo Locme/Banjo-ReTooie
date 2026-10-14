@@ -64,6 +64,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- Graphics tab: section headings (Display, Picture and effects, Lighting water and fog, Colour grading, Game view, Anti-aliasing and scaling, Frame rate and overlay). Game Frame Rate and the Frame rate overlay rows moved to the end, under their own heading.
 - Graphics > Texture upscaling: the description now says what each option uses (2x is one pass of an xBR-style edge filter, 4x is two passes).
 - Menus: moving the selection down a list with a controller or the arrow keys now scrolls the list with it (the Warp list used to keep the selection out of view).
 - Settings: the Cheato codes are back in Cheats (under a Cheato codes heading); the separate Cheato tab is gone. Cheato switches you had on are read from the Cheats settings again.

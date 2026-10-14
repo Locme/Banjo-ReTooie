@@ -315,8 +315,6 @@ void tooie::init_config() {
         "HD Shadows",
         "Shadows are shaped like the full model on screen, with its pose. Covers the player (instead of the game's simpler shadow model) and enemies and NPCs, which have none on N64.",
         false);
-    tooie::frame_overlay::add_option(graphics);
-    tooie::game_frame_rate::add_option(graphics);
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -336,6 +334,18 @@ void tooie::init_config() {
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
+    tooie::game_frame_rate::add_option(graphics);
+    tooie::frame_overlay::add_option(graphics);
+
+    // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
+    // heading hides with its option.
+    recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
+    recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture and effects");
+    recompui::config::set_option_group(tooie::picture_filters::ambient_occlusion_option, "Lighting, water and fog");
+    recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
+    recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
+    recompui::config::set_option_group(tooie::smaa::option, "Anti-aliasing and scaling");
+    recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame rate and overlay");
 
     recompui::config::create_controls_tab();
     {
