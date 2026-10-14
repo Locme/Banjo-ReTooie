@@ -16,19 +16,20 @@ index 0000000..56f8df6
 +    void log_controller_buttons(SDL_GameController* controller);
 +}
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..922f0ec 100644
+index f5ed6c0..0515591 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,18 @@ namespace recompinput {
+@@ -37,10 +37,19 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
-+    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up and tiptoe keys). Games set their names,
++    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe and photo mode keys). Games set their names,
 +    // descriptions and default bindings with set_game_input_name/description and
 +    // set_default_mapping_for_keyboard/controller.
 +    #define DEFINE_GAME_HOTKEY_INPUTS() \
 +        DEFINE_INPUT(SPEED_UP, 0, "Speed-Up") \
-+        DEFINE_INPUT(TIPTOE, 0, "Tiptoe")
++        DEFINE_INPUT(TIPTOE, 0, "Tiptoe") \
++        DEFINE_INPUT(PHOTO_MODE, 0, "Photo Mode")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -39,7 +40,7 @@ index f5ed6c0..922f0ec 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +135,10 @@ namespace recompinput {
+@@ -127,6 +136,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);

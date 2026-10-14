@@ -5,6 +5,8 @@
 // frame; banjotooie.us.toml marks the display list pointer before and after
 // the calls that draw that 2D. While hidden, the pointer is put back to
 // where it was before each of those calls, so what they wrote is never run.
+// The area name shown on arrival (chintrotext) is drawn with the 3D scene, so a hook on its
+// draw (func_808003EC_chintrotext) skips it too.
 // The game itself carries on as normal: only the drawing is skipped.
 //
 // Headless test hook: TOOIE_HIDE_HUD=1 starts with the HUD hidden.
@@ -83,6 +85,10 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         tooie::dl_dump::frame_end(rdram, marks[0], end + added);
     }
     marks[index] = (uint32_t)MEM_W(0, gfx_ctx);
+}
+
+extern "C" int tooie_hud_hidden(void) {
+    return hidden.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
 void tooie::hide_hud::set_hidden(bool hide) {

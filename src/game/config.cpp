@@ -7,6 +7,7 @@
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_control_scheme.h"
+#include "tooie_photo_mode.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
@@ -103,6 +104,7 @@ void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
     tooie::input::register_input();
+    tooie::photo_mode::register_input();
 
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {

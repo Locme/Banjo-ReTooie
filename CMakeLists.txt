@@ -187,6 +187,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/photo_mode.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp

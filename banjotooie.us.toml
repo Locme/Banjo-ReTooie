@@ -275,6 +275,13 @@ func = "func_800A73F4"
 before_vram = 0x800A7404
 text = "tooie_scene_begin(rdram, ctx);"
 
+# Hide HUD also hides the area name shown on arrival (the chintrotext actor's draw), which is drawn
+# with the 3D scene rather than with the 2D (src/game/hide_hud.cpp).
+[[patches.hook]]
+func = "func_808003EC_chintrotext"
+before_vram = 0x808003EC
+text = "if (tooie_hud_hidden()) { return; }"
+
 [[patches.hook]]
 func = "func_800A73F4"
 before_vram = 0x800A74C8

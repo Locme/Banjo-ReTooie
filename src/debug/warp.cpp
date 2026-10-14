@@ -26,6 +26,8 @@
 #include "recomp.h"
 #include "funcs.h"
 #include "tooie_debug.h"
+#include "tooie_music_player.h"
+#include "tooie_photo_mode.h"
 #include "tooie_game.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
@@ -119,9 +121,12 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
     tooie::music_player::tick(rdram, ctx);
+    tooie::music_player::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);
+    // Last: photo mode scales this frame's delta time.
+    tooie::photo_mode::tick(rdram, ctx);
 
     if (env_next < env_requests.size()) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(

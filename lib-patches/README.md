@@ -33,7 +33,7 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   "4:3" and "Fill" (handoff 4.22).
 * **Speed-Up hotkey** (`recompinput/include/recompinput/input_types.h`,
   `recompinput/src/input_types.cpp`, `recompui/src/config/ui_config_page_controls.cpp`):
-  adds `SPEED_UP` and `TIPTOE` game inputs in a new hotkey group, so the speed-up and tiptoe keys can be
+  adds `SPEED_UP`, `TIPTOE` and `PHOTO_MODE` game inputs in a new hotkey group, so the speed-up, tiptoe and photo mode keys can be
   bound like any other input. The Controls tab lists hotkeys under their own
   "Hotkeys" heading, or under another heading a game picks with
   `set_game_input_section` (Speed-Up is under "Cheats"). Name, description and default (F2) are set by

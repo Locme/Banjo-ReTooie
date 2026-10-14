@@ -605,3 +605,15 @@
   3. Turn Speed-up toggle on and tap F2 instead
 - Look for: Does the game run 3x while held, with a "Speed-up x3" note, and "Speed-up off" when you let go? Headless it ran 180 frames a second instead of 60. Cutscenes speed up too for now; tell me if you want them kept at normal speed like the XBLA version.
 - Status: waiting for L
+
+## T60 Photo mode (first part)
+- Asked: 2026-10-14 02:00 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.82
+- Steps:
+  1. In a level, press F10 (or your controller's Share button; you can bind another under Controls > Hotkeys > Photo Mode)
+  2. Fly around: left stick moves, right stick looks, LT (Z) down, RT (R) up, LB faster
+  3. Press A for a screenshot, D-pad up to show the HUD, Start to run time at 1/8 and 1/4 speed
+  4. Press B (or F10) to go back to the game
+- Look for: Does everything stop (Banjo, enemies, water) while the camera flies freely? Is the HUD and the area name gone? Does B put you back exactly where you were? Not built yet: camera collision, orbit around Banjo, zoom, filters, depth of field, crop and hiding Banjo. Tell me which of those you want first.
+- Status: waiting for L

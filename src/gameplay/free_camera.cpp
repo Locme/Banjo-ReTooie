@@ -31,6 +31,7 @@
 #include "recompinput/input_state.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
+#include "tooie_photo_mode.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 
@@ -215,6 +216,10 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const uint32_t camera = read_word(rdram, ctl + ctl_camera);
+    if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, camera)) {
+        state.active = false;
+        return;
+    }
     const uint32_t dynamic = read_word(rdram, ctl + ctl_dynamic);
     const int16_t mode = read_half(rdram, ctl + ctl_mode);
     const bool updating = read_byte(rdram, ctl + ctl_active) != 0 || read_byte(rdram, ctl + ctl_forced) != 0;
