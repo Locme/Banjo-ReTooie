@@ -5006,6 +5006,7 @@ L_800DE770:
     // 0x800DE770: lw          $t4, 0x18($s0)
     ctx->r12 = MEM_W(ctx->r16, 0X18);
 L_800DE774:
+    tooie_shadow_note_model(rdram, ctx);
     // 0x800DE774: lw          $v1, 0x10C($sp)
     ctx->r3 = MEM_W(ctx->r29, 0X10C);
     // 0x800DE778: bnel        $t4, $zero, L_800DE790

@@ -1800,6 +1800,7 @@ L_80806AB0:
 RECOMP_FUNC void func_800DF830(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_shadow_render_mode(rdram, ctx);
     // 0x800DF830: lui         $at, 0x8013
     ctx->r1 = S32(0X8013 << 16);
     // 0x800DF834: jr          $ra

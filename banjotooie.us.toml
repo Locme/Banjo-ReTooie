@@ -898,6 +898,19 @@ func = "func_80101808"
 before_vram = 0x8010185C
 text = "tooie_actor_shadow(rdram, ctx);"
 
+# An actor's draw callback picks its own render mode; during the shadow pass keep the shadow's (3).
+[[patches.hook]]
+func = "func_800DF830"
+before_vram = 0x800DF830
+text = "tooie_shadow_render_mode(rdram, ctx);"
+
+# The model func_800DE498 settled on (0x10C($sp)), kept so an actor's shadow redraws that model
+# instead of fetching it a second time this frame (which unbalanced the model cache).
+[[patches.hook]]
+func = "func_800DE498"
+before_vram = 0x800DE774
+text = "tooie_shadow_note_model(rdram, ctx);"
+
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
 [[patches.hook]]

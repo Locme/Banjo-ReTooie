@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstring>
 #include <variant>
+#include <vector>
 
 #include "recomp.h"
 #include "funcs.h"
@@ -71,13 +72,20 @@ namespace {
     int shadows_this_frame = 0;
     // TOOIE_SHADOW_LOG=1: why actors got no shadow, counted per reason and printed every 2 s.
     const bool shadow_log = std::getenv("TOOIE_SHADOW_LOG") != nullptr;
-    enum Outcome { NoModel, NoFloor, Steep, Offscreen, TooSmall, Drawn, OutcomeCount };
+    enum Outcome { NoModel, NoFloor, Steep, Offscreen, TooSmall, NoRoom, Drawn, OutcomeCount };
     int outcomes[OutcomeCount] = {};
     void count(Outcome outcome) {
         outcomes[outcome]++;
     }
-    // func_80101808's draw callback ($a1), kept from its entry for the shadow draw.
-    uint32_t draw_callback = 0;
+    // func_80101808's draw callback ($a1), kept from its entry for the shadow draw. A callback can
+    // draw another actor through func_80101808, so each call keeps its own: a stack, one per call.
+    std::vector<uint32_t> draw_callbacks;
+    // The model the outermost func_80101808 draw used (tooie_shadow_note_model), 0 if none. The
+    // shadow passes it to the renderer: fetching it again (func_800D674C) in the same frame marks
+    // it as drawn twice, and the model cache then dropped models still in use (crash, objects gone).
+    uint32_t drawn_model = 0;
+    // True while an actor is drawn into the shadow buffer.
+    bool in_shadow_pass = false;
 
     float load_float(uint8_t* rdram, gpr addr) {
         uint32_t bits = MEM_W(0, addr);
@@ -112,7 +120,7 @@ namespace {
     }
 
     // The shadow for one actor. ctx is a scratch copy; frame is free RDRAM stack space.
-    void draw_actor_shadow(uint8_t* rdram, recomp_context* ctx, gpr actor, gpr frame) {
+    void draw_actor_shadow(uint8_t* rdram, recomp_context* ctx, gpr actor, gpr frame, uint32_t draw_callback, uint32_t drawn) {
         const gpr start = frame + 0x40;     // vec3
         const gpr floor = frame + 0x50;     // vec3, the end of the ray, then the floor point
         const gpr normal = frame + 0x60;    // vec3
@@ -252,15 +260,18 @@ namespace {
         push_gfx(rdram, gfx_head, 0xE200001C, 0);
         push_gfx(rdram, gfx_head, 0xF64BC38C, 0);
 
-        // func_8010347C sets the draw distances for the next model draw (it returns 0), as in func_80101808.
+        // func_8010347C sets the model id and draw distances (D_8012CA18, by func_800DF7F8), as in
+        // func_80101808; the model itself is passed in, so the renderer does not fetch it again.
         ctx->r4 = (int32_t)MEM_W(0, actor);
         func_8010347C(rdram, ctx);
         ctx->r4 = floor;
         ctx->r5 = 0;
         ctx->r6 = float_bits(scale);
         ctx->r7 = 0;
-        MEM_W(0x10, ctx->r29) = 0;  // no model: the draw callback draws the actor's own, as in func_80101808
+        MEM_W(0x10, ctx->r29) = drawn;  // the model the actor's own draw used
+        in_shadow_pass = true;
         func_800DE448(rdram, ctx);
+        in_shadow_pass = false;
 
         // Back to the screen, then paste.
         push_gfx(rdram, gfx_head, 0xE7000000, 0);
@@ -286,8 +297,8 @@ void tooie::hd_shadows::tick() {
     if (shadow_log) {
         static int frames = 0;
         if (++frames >= 60) {
-            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d\n",
-                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall]);
+            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d, no room %d\n",
+                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall], outcomes[NoRoom]);
             std::fflush(stdout);
             std::memset(outcomes, 0, sizeof(outcomes));
             frames = 0;
@@ -295,17 +306,56 @@ void tooie::hd_shadows::tick() {
     }
 }
 
+extern "C" void tooie_shadow_render_mode(uint8_t* /*rdram*/, recomp_context* ctx) {
+    if (in_shadow_pass) {
+        ctx->r4 = 3;  // the shadow render mode func_800A61D4 set
+    }
+}
+
+extern "C" void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx) {
+    if (!in_shadow_pass && draw_callbacks.size() == 1) {
+        drawn_model = MEM_W(0x10C, ctx->r29);
+    }
+}
+
 extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) {
-    draw_callback = (uint32_t)ctx->r5;
+    if (draw_callbacks.empty()) {
+        drawn_model = 0;
+    }
+    draw_callbacks.push_back((uint32_t)ctx->r5);
 }
 
 extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
-    if (!hd_shadows_on() || shadows_this_frame >= max_per_frame || draw_callback == 0 || !tooie::gfx_budget::room_for_extras(rdram)) {
+    if (draw_callbacks.empty()) {
+        return;
+    }
+    const uint32_t draw_callback = draw_callbacks.back();
+    draw_callbacks.pop_back();
+    // Only outermost draws: one nested in another actor's draw (or in a shadow pass) would reset
+    // the outer draw's state halfway through.
+    if (!draw_callbacks.empty() || in_shadow_pass || !hd_shadows_on()) {
+        return;
+    }
+    if (shadows_this_frame >= max_per_frame || draw_callback == 0 || drawn_model == 0) {
+        return;
+    }
+    if (!tooie::gfx_budget::room_for_extras(rdram)) {
+        count(NoRoom);
         return;
     }
     // Work on a copy so func_80101808 carries on with its own registers, below its stack frame.
     recomp_context scratch = *ctx;
     const gpr frame = (ctx->r29 - 0x200) & ~(gpr)0xF;
     scratch.r29 = frame;
-    draw_actor_shadow(rdram, &scratch, ctx->r16, frame);
+    // The shadow draw runs the actor's draw callback a second time this frame. Put the Actor
+    // (0x9C bytes) back as the real draw left it, so per-draw counters and flags only move once.
+    const gpr actor = ctx->r16;
+    uint32_t saved[0x9C / 4];
+    for (int i = 0; i < 0x9C / 4; i++) {
+        saved[i] = MEM_W(i * 4, actor);
+    }
+    draw_actor_shadow(rdram, &scratch, actor, frame, draw_callback, drawn_model);
+    for (int i = 0; i < 0x9C / 4; i++) {
+        MEM_W(i * 4, actor) = saved[i];
+    }
 }
