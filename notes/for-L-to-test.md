@@ -1554,3 +1554,13 @@
   3. Turn the camera around, and switch each back to Overhead
 - Look for: Tilt: shadows fall beside Banjo and the Grublin, in the same direction for both, and stay put when the camera turns. Overhead: as before. Each option only changes its own shadows
 - Status: waiting for L
+
+## T147 Unlocked sound crash: does the game keep running now?
+- Asked: 2026-10-14 22:45 UTC
+- Build: your local build of main
+- Commit: 0ba964f
+- Steps:
+  1. Graphics: Game Frame Rate Unlocked (Experimental); play as you did when it crashed (the music player too) for 10 minutes or more
+  2. Send the session log afterwards, even if nothing went wrong
+- Look for: Does the game keep running where it used to close with "Unhandled jump target ... in n_aspMain"? If the sound glitches, the log now has "[audio] A sound task failed" and maybe "[audio] A sound list changed between being queued and playing"; those lines tell me the cause. Does the sound recover after a glitch?
+- Status: waiting for L
