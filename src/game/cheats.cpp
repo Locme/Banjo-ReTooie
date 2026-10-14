@@ -46,7 +46,7 @@ namespace {
         { "cheat_infinite_jumps", "Infinite Jumps (Levitate)",
           "Press A again in mid-air to jump again, and hold it to keep rising.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_split_anywhere", "Split up anywhere",
-          "Press D-pad down to split Banjo and Kazooie up where you stand, and again to join them up. Off while Noclip is on.", { -1, -1, -1, -1, -1, -1 } },
+          "Press D-pad down to split Banjo and Kazooie up where you stand, and again to join them up. While split, D-pad left plays Banjo and D-pad right plays Kazooie. Off while Noclip is on.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_noclip", "Noclip",
           "Walk and float through walls, floors and ceilings. Hold R (RT) to rise and Z (LT) to sink; you stay at that height when you let go.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_fly_anywhere", "Fly anywhere",

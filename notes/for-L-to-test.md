@@ -555,6 +555,7 @@
   2. Load a save that has learned Split Up, stand still somewhere and press D-pad down
   3. The first time, Jamjars explains splitting up; press A through it
   4. Walk Banjo right up to Kazooie: they should stay apart
-  5. Press D-pad down again
-- Look for: Do they split where you stand, without a split-up pad? Do they stay apart until you press D-pad down, then join up again? Try it somewhere cramped or on a slope too. Switching between Banjo and Kazooie (D-pad left/right) isn't built yet.
+  5. Press D-pad right (play Kazooie), walk her somewhere, then D-pad left (back to Banjo)
+  6. Press D-pad down again
+- Look for: Do they split where you stand, without a split-up pad? Do D-pad left/right switch who you play, with the camera following, while the other one waits? Do they stay apart until you press D-pad down, then join up again (even when far apart)? Try it somewhere cramped or on a slope too.
 - Status: waiting for L

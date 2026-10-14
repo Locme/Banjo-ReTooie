@@ -240,7 +240,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.76 Split up anywhere
-- [x] Done (T55; D-pad left/right switching not built yet)
+- [x] Done (T55)
 - [ ] Approved by L
 
 ### 4.77 Bottles' Revenge (Cut Content)

@@ -26,6 +26,10 @@ namespace {
     constexpr uint16_t button_b = 0x4000;
     constexpr uint16_t button_d_up = 0x0800;
     constexpr uint16_t button_d_down = 0x0400;
+    constexpr uint16_t button_d_left = 0x0200;
+    constexpr uint16_t button_d_right = 0x0100;
+    // The index (in player_table) of the player being controlled (func_800F54E4 reads it, func_800F80D8 sets it).
+    constexpr uint32_t current_player_index = 0x801354DC;
     constexpr uint16_t button_z = 0x2000;
     constexpr uint16_t button_r = 0x0010;
 
@@ -76,6 +80,17 @@ namespace {
         ctx->r4 = (int32_t)player; // addresses are sign-extended in the registers
         ctx->r5 = id;
         bs_setState(rdram, ctx);
+        *ctx = saved;
+    }
+
+    // Calls a game function with up to three arguments on a copy of the context, below the caller's stack.
+    void call_game(uint8_t* rdram, recomp_context* ctx, void (*fn)(uint8_t*, recomp_context*), uint32_t a0, uint32_t a1 = 0, uint32_t a2 = 0) {
+        recomp_context saved = *ctx;
+        ctx->r29 = (int32_t)((((uint32_t)ctx->r29 - 0x100) & ~0xFu));
+        ctx->r4 = (int32_t)a0;
+        ctx->r5 = (int32_t)a1;
+        ctx->r6 = (int32_t)a2;
+        fn(rdram, ctx);
         *ctx = saved;
     }
 
@@ -221,7 +236,8 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     // split-up pad's own animation; the pad search is answered by tooie_split_pad_search), and joins them
     // again when they are split. The game joins them by itself whenever Banjo stands within 90 units of
     // Kazooie (func_8008D40C); after a split made here that check is held off, so they stay apart until
-    // D-pad down is pressed again, which makes it answer yes.
+    // D-pad down is pressed again, which makes it answer yes. While split, D-pad left and right hand control to
+    // Banjo or Kazooie the way the game's own switching does (see below).
     {
         static bool was_dd = false;
         const bool dd_pressed = (buttons & button_d_down) && !was_dd;
@@ -233,6 +249,30 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         if (!split && !splitting) {
             split_by_cheat = false;
             join_requested = false;
+        }
+        static bool was_lr = false;
+        const bool lr = (buttons & (button_d_left | button_d_right)) != 0;
+        const bool lr_pressed = lr && !was_lr;
+        was_lr = lr;
+        if (on && split && lr_pressed) {
+            const uint32_t now_idx = rd_word(rdram, current_player_index);
+            const uint8_t want_form = (buttons & button_d_left) ? form_banjo : form_kazooie;
+            if (form != want_form && now_idx < 2) {
+                const uint32_t want_idx = now_idx ^ 1;
+                if (log) {
+                    std::printf("[split] switching from player %u to %u\n", now_idx, want_idx);
+                    std::fflush(stdout);
+                }
+                // Each half has a stack of reasons to wait (player+0xF0, count at +0x80; func_800F82D4 with a
+                // reason pushes one, with 0 pops one), and stands idle while it isn't empty. Reason 2 is "the
+                // other half is being played".
+                call_game(rdram, ctx, func_800F8268, now_idx, 0, 1);   // the old half stops taking input
+                call_game(rdram, ctx, func_800F82D4, now_idx, 2);      // and waits
+                call_game(rdram, ctx, func_800F8128, want_idx);        // controlled player (and camera)
+                call_game(rdram, ctx, func_800F8EBC, want_idx);
+                call_game(rdram, ctx, func_800F8268, want_idx, 1, 1);  // the new half takes input
+                call_game(rdram, ctx, func_800F82D4, want_idx, 0);     // and stops waiting
+            }
         }
         if (on && dd_pressed) {
             if (form == form_banjo_kazooie && cur >= 1 && cur <= 4) {
@@ -302,6 +342,16 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     if (log && std::chrono::steady_clock::now() - last_log >= std::chrono::milliseconds(100)) {
+        const uint32_t p1 = rd_word(rdram, player_table + 4);
+        if (valid_ptr(p1)) {
+            const uint32_t st1 = rd_word(rdram, p1 + state_offset), ph1 = rd_word(rdram, p1 + physics_offset);
+            float x1 = 0, z1 = 0;
+            if (valid_ptr(ph1)) {
+                uint32_t b = rd_word(rdram, ph1 + 4); std::memcpy(&x1, &b, 4);
+                b = rd_word(rdram, ph1 + 0xC); std::memcpy(&z1, &b, 4);
+            }
+            std::printf("[player2] state %u pos %.1f %.1f controlled %u\n", valid_ptr(st1) ? rd_word(rdram, st1 + state_current) : 0, x1, z1, rd_word(rdram, current_player_index));
+        }
         last_log = std::chrono::steady_clock::now();
         uint32_t hv_bits = rd_word(rdram, physics + 0x3C); // target horizontal velocity
         float hv;
