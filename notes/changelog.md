@@ -6,6 +6,7 @@ regenerated code, CI, notes and tooling are left out.
 ## 2026-10-14
 
 - Above Original, a part of Banjo that changes its look (his face when he blinks) no longer jumps for a frame.
+- Achievements: the Xbox Live Arcade version's twelve achievements (200 G), with a pop-up when one unlocks and an Achievements tab listing them. Eight are tracked so far; nothing is awarded while cheats are on.
 - Windows builds: build.bat makes two games in Release: "Any 64-bit PC (2008 and up)" and "Optimized for newer CPUs (2013 and up)". update_and_build_any_pc_2008.bat and update_and_build_newer_cpu_2013.bat build one each, update_and_build.bat both; saves and settings from the old Release folder are copied into each new folder.
 - Above Original, models made of one repeated part (chains, rows of plants, swarms) no longer stretch for a moment when the game drops one of the parts.
 - Frame rate overlay: adds the 1% low and hitches, the map and Banjo's position, the renderer and resolution, and whether speed-up, cheats or mods are on.

@@ -852,3 +852,14 @@
   2. Go to Hailfire Peaks' lava side and inside the volcano
 - Look for: The air shimmers, more in the distance, while Banjo and near things stay steady. Is it too strong, or too fast? It should not show on the icy side.
 - Status: waiting for L
+
+## T83 Achievements
+- Asked: 2026-10-14 06:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.85
+- Steps:
+  1. Turn cheats off (Cheats tab master switch), then restart the game
+  2. Load a save that has beaten Klungo once, or play until you do
+  3. Open Esc > Achievements
+- Look for: A pop-up "Achievement unlocked: Knocked Out Klungo (20 G)" at the top right, and the tab shows it with the date. A save that already has the progress unlocks those achievements a moment after loading. With cheats on, nothing unlocks until you restart with cheats off. All Beaten Up, Calamari Bonanza, Shoot Em Up! and Treasure Hunt say "not tracked yet". Points Make Prizes unlocks on the Balloon Burst Jiggy, which may not match XBLA's 60 points rule.
+- Status: waiting for L
