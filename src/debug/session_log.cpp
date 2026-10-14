@@ -11,6 +11,7 @@
 #include "ultramodern/ultramodern.hpp"
 
 #include "tooie_game.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_session_log.h"
 
 namespace {
@@ -39,7 +40,16 @@ namespace {
         if (with_fps) {
             frame_rate += " (target " + std::to_string(ultramodern::get_target_framerate(30)) + " fps)";
         }
-        return "frame rate " + frame_rate +
+        // Game Frame Rate (the port's own Graphics option), by its saved key.
+        std::string game_rate = "?";
+        try {
+            static const char* names[] = { "Original", "Fps30", "Fps60", "Fps120", "Unlocked" };
+            uint32_t v = std::get<uint32_t>(recompui::config::get_graphics_config().get_option_value(tooie::game_frame_rate::option));
+            game_rate = v < 5 ? names[v] : std::to_string(v);
+        } catch (...) {
+        }
+        return "game frame rate " + game_rate +
+            ", interpolation " + frame_rate +
             ", aspect ratio " + widescreen +
             ", HUD " + enum_name(config.hr_option) +
             ", renderer " + enum_name(config.api_option) +
