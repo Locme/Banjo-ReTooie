@@ -1203,10 +1203,10 @@ index 0000000..e400499
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..65ddcb6
+index 0000000..3b4afdf
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,553 @@
+@@ -0,0 +1,561 @@
 +//
 +// RT64
 +//
@@ -1519,12 +1519,20 @@ index 0000000..65ddcb6
 +                constants.worldY = { 0.0f, 1.0f, 0.0f, 0.0f };
 +            }
 +
-+            // The sun stands high, to one side (the game has no sun of its own to follow): its direction in
-+            // view space, through the view matrix (directions skip the translation).
-+            const float sunWorld[3] = { 0.42f, 0.74f, -0.53f };
++            // The sun stands fairly low, to one side (the game has no sun of its own to follow), so it is
++            // often in view: its direction in view space, through the view matrix (directions skip the
++            // translation).
++            const float sunWorld[3] = { 0.47f, 0.42f, -0.78f };
 +            float sunView[3];
 +            for (int c = 0; c < 3; c++) {
 +                sunView[c] = sunWorld[0] * v[0][c] + sunWorld[1] * v[1][c] + sunWorld[2] * v[2][c];
++            }
++            // Headless test hook: TOOIE_SUN_FRONT puts the sun just right of and above the middle of the screen.
++            static const bool sunFront = (getenv("TOOIE_SUN_FRONT") != nullptr);
++            if (sunFront) {
++                sunView[0] = 0.2f;
++                sunView[1] = 0.25f;
++                sunView[2] = -1.0f;
 +            }
 +            const float sunLength = std::sqrt(sunView[0] * sunView[0] + sunView[1] * sunView[1] + sunView[2] * sunView[2]);
 +            if (sunLength > 1e-6f) {
@@ -3248,10 +3256,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..5a30031
+index 0000000..2c633d7
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,580 @@
+@@ -0,0 +1,583 @@
 +//
 +// RT64
 +//
@@ -3583,27 +3591,29 @@ index 0000000..5a30031
 +    }
 +
 +    const int Samples = 40;
-+    const float2 delta = (sunScreen - float2(pixel)) * (0.85f / float(Samples));
++    const float2 delta = (sunScreen - float2(pixel)) * (0.9f / float(Samples));
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
 +    float2 p = float2(pixel) + delta * jitter;
 +    float3 gathered = 0.0f;
 +    float weight = 1.0f;
++    float total = 0.0f;
 +    [loop] for (int i = 0; i < Samples; i++) {
 +        p += delta;
-+        const int2 at = int2(p);
-+        if (any(at < 0) || any(at >= int2(size))) {
-+            break;
-+        }
++        const int2 at = clamp(int2(p), int2(0, 0), int2(size) - 1);
 +        if (LoadDepth(at) >= 0.99999f) {
 +            const float3 sky = gColor.Load(int3(at, 0)).rgb;
 +            // Only bright sky gives light: night skies and dark backdrops don't.
-+            const float bright = saturate((dot(sky, float3(0.299f, 0.587f, 0.114f)) - 0.45f) * 2.5f);
++            const float bright = saturate((dot(sky, float3(0.299f, 0.587f, 0.114f)) - 0.2f) * 1.6f);
 +            gathered += sky * (bright * weight);
 +        }
-+        weight *= 0.95f;
++        total += weight;
++        weight *= 0.96f;
 +    }
-+    return gathered * (gConstants.sun.w * onScreen * 0.08f);
++    // The share of the way to the sun that is open sky: whole near gaps in the scenery, so beams fan out
++    // from them across whatever is in front, and brightest close to the sun.
++    const float near = saturate(1.0f - length(sunScreen - float2(pixel)) / (size.y * 1.2f));
++    return (gathered / total) * (gConstants.sun.w * onScreen * near * near * 1.4f);
 +}
 +
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
@@ -3723,8 +3733,9 @@ index 0000000..5a30031
 +        bloom = gBloom.SampleLevel(LinearSampler, uv, 0).rgb * gConstants.bloom.x;
 +    }
 +    // Light shafts are added the same way.
-+    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 0.5f)) {
-+        bloom += LightShafts(pixel);
++    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 1.5f)) {
++        // Less on the sky itself, so the beams show over the scenery rather than the sky washing out.
++        bloom += LightShafts(pixel) * ((depth >= 0.99999f) ? 0.4f : 1.0f);
 +    }
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
@@ -3784,7 +3795,7 @@ index 0000000..5a30031
 +    }
 +
 +    if (gConstants.view.x > 0.5f) {
-+        return float4(lerp(keep.xxx * 0.6f + rim, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
++        return float4(lerp(keep.xxx * 0.6f + rim + bloom, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
 +    }
 +
 +    if (redraw) {

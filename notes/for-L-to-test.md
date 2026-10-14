@@ -1107,3 +1107,14 @@
 - Look for: Does turning the controller left turn the view left, and tilting the front up look up, about as far as you turned it? What does the "gyro" part of the log line say?
 - Status: waiting for L
 
+## T104 Light shafts (from your 09:15 list)
+- Asked: 2026-10-14 10:20 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Light shafts 100 (Bloom 0 so it's clear what is what)
+  2. Spiral Mountain outside: turn the camera slowly all the way round and tilt it up a little. The sun sits low, to one side, at the same place in the sky wherever you stand
+  3. With the sun in or near the picture, stand so posts, trees or Banjo are between the camera and the sky
+- Look for: Pale beams fanning out from the sun past whatever is in the way, with darker streaks behind the posts and Banjo. Nothing when you face away from the sun. The sky itself shouldn't wash out. Is 100 strong enough, or too strong?
+- Status: waiting for L
+
