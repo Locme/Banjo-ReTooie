@@ -1355,6 +1355,16 @@
   2. Spiral Mountain: walk and stand around on the sloped grass by the molehills, where the shadows are long
   3. Also turn the camera so you see Banjo's shadow from the side
 - Look for: The shadow keeps Banjo's shape and moves smoothly, with no long pointed spikes or broken triangles. The overlay's 'Interpolation on' line now counts the shadows (was 0 shadows).
+
+## T130 Torn triangles and black patches for a frame (camera split)
+- Asked: 2026-10-14 16:32 UTC
+- Build: main @ (next commit)
+- Steps:
+  1. Build main at the commit below
+  2. Warp to Cloud Cuckooland (or play Spiral Mountain) with your usual settings
+  3. Spin the camera around Banjo for a minute, with the free camera and with the normal camera; try Interpolation Off and Display
+  4. Also look at the places where you saw it before
+- Look for: Do triangles still fly across the screen or do black patches and holes still show for a frame or two? Checked headless: the renderer split the camera wrongly 31 times in a 2-minute spin before the fix and 0 times after.
 - Status: waiting for L
 
 ## T128 Underwater tint and haze turn things light blue

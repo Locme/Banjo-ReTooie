@@ -106,6 +106,15 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 * **VI rate** (`src/hle/rt64_vi.cpp/.h`): `SetVIRate` replaces the fixed 60 VIs a second that
   `logicalRateFromFactors` worked the game's frame rate out from, for Game Frame Rate 120 FPS and Unlocked.
+* **Camera split** (`src/common/rt64_math.cpp`, `matrixDecomposeViewProj`): Banjo-Tooie loads one
+  combined view-projection matrix, which RT64 splits back into a view and a projection. The near and far
+  scale was taken from row 0 alone (`vp[0][2] / -vp[0][3]`, the x of the camera's facing), so with the
+  camera facing nearly along z it was a ratio of two tiny 16.16 fixed-point numbers and came out wrong
+  by up to several percent for a frame or two. Every depth went with it: near things were cut by the near
+  plane and far things (the sky) fell past the far plane, torn triangles and black patches for a frame
+  (L's "vertex explosion", 2026-10-14). The scale now comes from the row with the largest facing
+  component. `TOOIE_OLD_VP_SPLIT=1` brings the old split back; `TOOIE_VP_SPLIT_LOG=1` logs `[vp-split]`
+  for any split whose product differs from the input.
 * **Unknown microcode guard** (`src/hle/rt64_interpreter.cpp`): a graphics task whose microcode
   isn't in RT64's database left the interpreter with no command table, and the next display list
   crashed (L's 2026-10-14 10:33 dump). It now keeps the last known microcode and logs
