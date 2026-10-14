@@ -665,10 +665,18 @@ index 5b70e01..e0b2168 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..87ecc21 100644
+index 5a331aa..6d6ed6c 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
-@@ -848,6 +848,7 @@ namespace RT64 {
+@@ -101,6 +101,7 @@ namespace RT64 {
+         rspProcessor = std::make_unique<RSPProcessor>(ext.device);
+         vertexProcessor = std::make_unique<VertexProcessor>(ext.device);
+         framebufferRenderer = std::make_unique<FramebufferRenderer>(ext.workloadGraphicsWorker, true, ext.createdGraphicsAPI, ext.shaderLibrary);
++        framebufferRenderer->sceneEffectsEnabled = true;
+         renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
+         queryPool = ext.device->createQueryPool(2);
+ 
+@@ -848,6 +849,7 @@ namespace RT64 {
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -753,7 +761,7 @@ index 69a82ac..f4f86fa 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..f6c11ab 100644
+index 9fae0d4..a77664e 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -823,7 +831,7 @@ index 9fae0d4..f6c11ab 100644
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
-+        const bool drawSceneEffects = (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
++        const bool drawSceneEffects = sceneEffectsEnabled && (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
 +        int32_t rasterScenesDrawn = 0;
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
@@ -959,7 +967,7 @@ index 9fae0d4..f6c11ab 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..851949a 100644
+index 3add9c3..df41318 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,18 @@ namespace RT64 {
@@ -981,7 +989,18 @@ index 3add9c3..851949a 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -165,6 +177,7 @@ namespace RT64 {
+@@ -123,6 +135,10 @@ namespace RT64 {
+         std::vector<Framebuffer> framebufferVector;
+         std::vector<BufferUploader *> pendingUploaders;
+         uint32_t framebufferCount = 0;
++        // Banjo-Tooie: the screen-space effects only go on the picture that is shown. The game's own copies of
++        // its frame buffers (rendered again by RT64 for the game to read back) are left as the game drew them, or
++        // the game draws them on screen again (the underwater wobble) and the effects show twice.
++        bool sceneEffectsEnabled = false;
+ 
+         struct DrawParams {
+             RenderWorker *worker;
+@@ -165,6 +181,7 @@ namespace RT64 {
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
          void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
@@ -1500,10 +1519,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5ddf6dd
+index 0000000..5affbee
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,742 @@
+@@ -0,0 +1,743 @@
 +//
 +// RT64
 +//
@@ -1899,6 +1918,7 @@ index 0000000..5ddf6dd
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary)
 +    {
++
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        if (effectsWorkloadKnown) {
 +            UsePlayerFrame(settings, effectsWorkload);
