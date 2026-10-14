@@ -1519,6 +1519,6 @@
   1. Esc > Graphics, scroll to Debug: Effect debug view, Effect compare, Interpolation check, Interpolation blend mode
   2. Pick a blend mode from the list, turn the check on, and press F7 and F6 in game: the menu values should follow the keys
   3. Esc > Controls: look for Hide HUD (F1), Screenshot (F12) under Hotkeys and Effect Debug View, Effect Compare, Interpolation Check, Blend Mode, Warp Again under Debug; rebind one and try it
-- Look for: Do the dropdowns and switches work and follow the keys? Do all the F keys show up and rebind? Changed: F8 is now only Effect Compare. The old F8 blend cycling is the Blend Mode key, which is unbound until you bind it.
+- Look for: Do the dropdowns and switches work and follow the keys? Do all the F keys show up and rebind? Changed: F8 is now only Effect Compare. The old F8 blend cycling moved to F5 (the Blend Mode key).
 - Headless: F7 and F1 with their default keys showed their notices; the new options saved and applied. Not tried: rebinding, F6, F9, F12, controller bindings.
 - Status: waiting for L

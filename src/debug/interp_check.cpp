@@ -121,7 +121,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
         blend_option,
         "Interpolation blend mode",
         "For testing. How frames between two game frames are blended, to find what blends wrong. "
-        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. The Blend Mode key (not bound unless you bind it in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
+        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. The Blend Mode key (F5 unless changed in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
         options,
         0u);
     graphics.add_option_change_callback(blend_option,

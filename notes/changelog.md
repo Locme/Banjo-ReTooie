@@ -13,7 +13,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Noclip now passes through walls, scenery and floors; the game was pulling Banjo back to a collision position that Noclip did not write (T139).
 - Tiptoe's key binding is under Movement in the Controls tab, with Run (T139).
 - Graphics > Debug has Effect compare, Interpolation check and an Interpolation blend mode list beside the Effect debug view (T143).
-- F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes have their own unbound Blend Mode key (T143).
+- F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
 ### Graphics
 

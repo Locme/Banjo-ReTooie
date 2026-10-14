@@ -40,7 +40,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::INTERP_CHECK, "Interpolation Check",
         "Switches the interpolation check on and off. It tints a model red when its blend between game frames looks wrong.", SDL_SCANCODE_F7, "Debug");
     add(GameInput::BLEND_MODE, "Blend Mode",
-        "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list. Not bound by default.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list.", SDL_SCANCODE_F5, "Debug");
     add(GameInput::WARP_AGAIN, "Warp Again",
         "Warps to the last place picked in the Warp tab. Works while the Warp tab is on in the Cheats tab.", SDL_SCANCODE_F9, "Debug");
 }
