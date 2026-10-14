@@ -345,10 +345,10 @@ index 5a331aa..87ecc21 100644
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..26e17bb 100644
+index 69a82ac..075ff01 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,45 @@ namespace RT64 {
+@@ -659,6 +659,47 @@ namespace RT64 {
          }
      };
  
@@ -373,16 +373,18 @@ index 69a82ac..26e17bb 100644
 +        }
 +    };
 +
-+    // Banjo-Tooie: the scene effects pass's inputs, the depth target and the blurred bloom.
++    // Banjo-Tooie: the scene effects pass's inputs, the depth target, the blurred bloom and the scene so far.
 +    struct SceneEffectsDescriptorSet : RenderDescriptorSetBase {
 +        uint32_t gInput;
 +        uint32_t gBloom;
++        uint32_t gColor;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
 +            gInput = builder.addTexture(1);
 +            gBloom = builder.addTexture(2);
 +            builder.addImmutableSampler(3, linearSampler);
++            gColor = builder.addTexture(4);
 +            builder.end();
 +
 +            if (device != nullptr) {
@@ -678,10 +680,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..795b323
+index 0000000..616d4cd
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,279 @@
 +//
 +// RT64
 +//
@@ -722,6 +724,7 @@ index 0000000..795b323
 +            std::unique_ptr<SceneEffectsDescriptorSet> sceneSet;
 +            const RenderTexture *sceneSetDepth = nullptr;
 +            const RenderTexture *sceneSetBloom = nullptr;
++            const RenderTexture *sceneSetColor = nullptr;
 +            std::vector<std::unique_ptr<RenderTexture>> retired;
 +            std::vector<std::unique_ptr<RenderFramebuffer>> retiredFramebuffers;
 +            std::vector<std::unique_ptr<SmaaDescriptorSet>> retiredSets;
@@ -776,6 +779,11 @@ index 0000000..795b323
 +        effectsSettings.bloomThreshold = threshold;
 +    }
 +
++    void SetSceneDepthOfField(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.depthOfField = strength;
++    }
++
 +    void SetSceneOutlines(float outlines) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.outlines = outlines;
@@ -789,7 +797,7 @@ index 0000000..795b323
 +    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
-+            (settings.bloom > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -813,7 +821,7 @@ index 0000000..795b323
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
-+        constants.bloom = { settings.bloom, 0.0f, 0.0f, 0.0f };
++        constants.bloom = { settings.bloom, settings.depthOfField, 0.0f, 0.0f };
 +
 +        RenderCommandList *commandList = worker->commandList.get();
 +        Resources &res = resourcesFor(worker);
@@ -841,9 +849,9 @@ index 0000000..795b323
 +            });
 +        }
 +
-+        if (settings.bloom > 0.0f) {
++        RenderTexture *source = nullptr;
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
-+            RenderTexture *source = nullptr;
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
 +                colorTarget->markForResolve();
@@ -882,6 +890,12 @@ index 0000000..795b323
 +                res.sourceSetTexture = source;
 +            }
 +
++            commandList->barriers(RenderBarrierStage::GRAPHICS, {
++                RenderTextureBarrier(source, RenderTextureLayout::SHADER_READ)
++            });
++        }
++
++        if (settings.bloom > 0.0f) {
 +            // Bright parts at a quarter of the size into [0], blurred across into [1], then down into [0].
 +            auto bloomPass = [&](const SmaaDescriptorSet *input, RenderTexture *inputTexture, int output, uint32_t inputWidth, uint32_t inputHeight, float pass) {
 +                commandList->barriers(RenderBarrierStage::GRAPHICS, {
@@ -907,8 +921,10 @@ index 0000000..795b323
 +            bloomPass(res.bloomSet[1].get(), res.bloomTexture[1].get(), 0, bloomWidth, bloomHeight, 2.0f);
 +        }
 +
-+        // The pass's inputs: the depth target and the bloom.
-+        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[0].get())) {
++        // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
++        const RenderTexture *color = (source != nullptr) ? source : res.bloomTexture[0].get();
++        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[0].get()) ||
++            (res.sceneSetColor != color)) {
 +            if (res.sceneSet != nullptr) {
 +                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
 +            }
@@ -916,7 +932,10 @@ index 0000000..795b323
 +            res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
 +            res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetDepth = depthTarget->texture.get();
++            res.sceneSet->setTexture(res.sceneSet->gColor, color, RenderTextureLayout::SHADER_READ,
++                ((source != nullptr) && colorTarget->usesResolve()) ? colorTarget->getResolvedTextureView() : nullptr);
 +            res.sceneSetBloom = res.bloomTexture[0].get();
++            res.sceneSetColor = color;
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
@@ -946,10 +965,10 @@ index 0000000..795b323
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..e5def9e
+index 0000000..7f74a9a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,53 @@
 +//
 +// RT64
 +//
@@ -964,7 +983,7 @@ index 0000000..e5def9e
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -977,6 +996,7 @@ index 0000000..e5def9e
 +        float outlines = 0.0f;
 +        float bloom = 0.0f;
 +        float bloomThreshold = 0.7f;
++        float depthOfField = 0.0f;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
@@ -988,6 +1008,8 @@ index 0000000..e5def9e
 +    // Bloom: a glow around the bright parts of the scene (0 off, 1 strongest), from the parts brighter
 +    // than the threshold (0 to 1).
 +    void SetSceneBloom(float bloom, float threshold);
++    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
++    void SetSceneDepthOfField(float strength);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1782,10 +1804,10 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6200b72
+index 0000000..dba737b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,184 @@
 +//
 +// RT64
 +//
@@ -1805,6 +1827,7 @@ index 0000000..6200b72
 +#endif
 +Texture2D<float4> gBloom : register(t2);
 +SamplerState LinearSampler : register(s3);
++Texture2D<float4> gColor : register(t4);
 +
 +float LoadDepth(int2 pixel) {
 +    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
@@ -1868,6 +1891,44 @@ index 0000000..6200b72
 +    return saturate(1.0f - gConstants.ambientOcclusion.x * 2.5f * occlusion / float(samples));
 +}
 +
++// Depth of field: the nearest thing in a small box at the middle of the picture is in focus, and the
++// picture blurs more the further a pixel's distance is from it, up to a radius set by the strength.
++float3 DepthOfField(int2 pixel, float distance, float strength) {
++    const float2 size = gConstants.projection.zw;
++    const int spacing = int(max(1.0f, size.y / 90.0f));
++    float focus = 1e9f;
++    [unroll] for (int y = -2; y <= 2; y++) {
++        [unroll] for (int x = -2; x <= 2; x++) {
++            const int2 probe = int2(size * 0.5f) + int2(x, y) * spacing;
++            focus = min(focus, -ViewPositionAt(probe).z);
++        }
++    }
++
++    const float3 sharp = gColor.Load(int3(pixel, 0)).rgb;
++    const float maxRadius = strength * size.y / 80.0f;
++    const float coc = saturate(abs(distance - focus) / max(focus, 1.0f)) * maxRadius;
++    if (coc < 0.75f) {
++        return sharp;
++    }
++
++    const int taps = 24;
++    float3 sum = sharp;
++    float weight = 1.0f;
++    [loop] for (int i = 1; i <= taps; i++) {
++        const float t = float(i) / float(taps);
++        const float angle = float(i) * 2.39996323f;
++        const int2 tapPixel = clamp(pixel + int2(round(float2(cos(angle), sin(angle)) * sqrt(t) * coc)), int2(0, 0), int2(size) - 1);
++        // Something sharp in front of the focus doesn't bleed into the blurred background behind it.
++        const float tapDistance = -ViewPositionAt(tapPixel).z;
++        const float tapCoc = saturate(abs(tapDistance - focus) / max(focus, 1.0f)) * maxRadius;
++        const float w = (tapDistance < distance) ? saturate(tapCoc / max(coc, 1e-3f)) : 1.0f;
++        sum += gColor.Load(int3(tapPixel, 0)).rgb * w;
++        weight += w;
++    }
++
++    return sum / weight;
++}
++
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    const int2 pixel = int2(pos.xy);
 +    const float depth = LoadDepth(pixel);
@@ -1878,10 +1939,20 @@ index 0000000..6200b72
 +        bloom = gBloom.SampleLevel(LinearSampler, uv, 0).rgb * gConstants.bloom.x;
 +    }
 +
++    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
++    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.ambientOcclusion.z < 0.5f);
++
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
 +        const float skyFog = gConstants.fog.x * 0.75f;
-+        return (gConstants.ambientOcclusion.z > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 0.0f) : float4(gConstants.fogColor.rgb * skyFog + bloom, 1.0f - skyFog);
++        if (gConstants.ambientOcclusion.z > 0.5f) {
++            return float4(1.0f, 0.0f, 1.0f, 0.0f);
++        }
++        if (blur) {
++            const float3 scene = DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y);
++            return float4(scene * (1.0f - skyFog) + gConstants.fogColor.rgb * skyFog + bloom, 0.0f);
++        }
++        return float4(gConstants.fogColor.rgb * skyFog + bloom, 1.0f - skyFog);
 +    }
 +
 +    float keep = 1.0f;
@@ -1912,6 +1983,11 @@ index 0000000..6200b72
 +
 +    if (gConstants.ambientOcclusion.z > 0.5f) {
 +        return float4(lerp(keep.xxx, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
++    }
++
++    if (blur) {
++        const float3 scene = DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y);
++        return float4(scene * keep * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
 +
 +    return float4(gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
@@ -2150,7 +2226,7 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..44abede
+index 0000000..369fed3
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,38 @@
@@ -2180,7 +2256,7 @@ index 0000000..44abede
 +        float4 fog;
 +        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
-+        // Bloom strength (0 off), then unused.
++        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), then unused.
 +        float4 bloom;
 +    };
 +

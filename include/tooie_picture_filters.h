@@ -38,6 +38,7 @@ namespace tooie::picture_filters {
     inline const std::string fog_colour_option = "fog_colour";
     inline const std::string outlines_option = "toon_outlines";
     inline const std::string bloom_option = "bloom";
+    inline const std::string cutscene_dof_option = "cutscene_dof";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

@@ -25,6 +25,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_game.h"
 #include "tooie_photo_mode.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
@@ -40,6 +41,7 @@ namespace RT64 {
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
     void SetSceneOutlines(float outlines);
     void SetSceneBloom(float bloom, float threshold);
+    void SetSceneDepthOfField(float strength);
 }
 
 namespace {
@@ -57,6 +59,8 @@ namespace {
     const float ambient_occlusion_radius = std::getenv("TOOIE_AO_RADIUS") ? (float)std::atof(std::getenv("TOOIE_AO_RADIUS")) : 200.0f;
     std::atomic<float> ambient_occlusion{0.0f};
     std::atomic<uint32_t> depth_address{0};
+    std::atomic<float> cutscene_dof{0.0f};
+    std::atomic<bool> cutscene_dof_on{false};
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
     constexpr float fog_colours[][3] = {
@@ -87,6 +91,7 @@ namespace {
         { &tooie::picture_filters::ambient_occlusion_option, 0.0 },
         { &tooie::picture_filters::outlines_option, 0.0 },
         { &tooie::picture_filters::bloom_option, 0.0 },
+        { &tooie::picture_filters::cutscene_dof_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -138,6 +143,10 @@ void tooie::picture_filters::apply() {
         value<uint32_t>(dither16_option, (uint32_t)Colour16::Off),
         value<bool>(three_point_option, true));
 
+    cutscene_dof = (float)(value<double>(cutscene_dof_option, 0.0) / 100.0);
+    // The next frame sets it again for the scene playing then.
+    cutscene_dof_on = false;
+    RT64::SetSceneDepthOfField(0.0f);
     RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
     ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
     RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
@@ -198,6 +207,13 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t address = (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu;
     if (depth_address.exchange(address) != address) {
         RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, address);
+    }
+
+    // Depth of field only in letterboxed scenes.
+    const bool dof_on = (cutscene_dof > 0.0f) && tooie::in_letterboxed_scene();
+    if (dof_on != cutscene_dof_on) {
+        cutscene_dof_on = dof_on;
+        RT64::SetSceneDepthOfField(dof_on ? cutscene_dof.load() : 0.0f);
     }
 }
 
@@ -297,6 +313,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        cutscene_dof_option,
+        "Cutscene depth of field",
+        "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         fog_option,
         "Fog",
         "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
@@ -341,7 +362,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option }) {
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

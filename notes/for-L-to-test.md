@@ -752,3 +752,13 @@
   3. Watch the frame rate with it on
 - Look for: Too strong or too weak? Should more of the picture glow (a lower brightness threshold)?
 - Status: waiting for L
+
+## T73 Cutscene depth of field
+- Asked: 2026-10-14 05:25 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.36 (letterboxed scenes only)
+- Steps:
+  1. Esc > Graphics: set "Cutscene depth of field" to 70
+  2. Watch the title flyby and a cutscene with the black bars (Jamjars, Bottles, a boss intro)
+- Look for: Is the focus on the right thing (it focuses on the nearest thing at the middle of the picture)? Text boxes and subtitles should stay sharp. Any flicker when the camera cuts?
+- Status: waiting for L
