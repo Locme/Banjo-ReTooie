@@ -240,6 +240,14 @@ func = "func_800A7D30"
 before_vram = 0x800A7D6C
 text = "tooie_frame_step(rdram, ctx);"
 
+# func_8001608C replays an attract demo's recorded time step (0x80016110 calls
+# func_800D8FA0 with it). A demo runs a fixed number of frames, so while one
+# plays the game keeps its own frame pacing, or at 60 FPS it would run twice as fast.
+[[patches.hook]]
+func = "func_8001608C"
+before_vram = 0x80016110
+text = "tooie_demo_frame(rdram, ctx);"
+
 # --- HUD at the screen edges (src/game/hud_edges.cpp) -----------------------
 # scinfobar_entrypoint_24 draws one HUD element. Mark where its display list
 # starts (entry) and fix it up when it is done (the return, while $s1 still

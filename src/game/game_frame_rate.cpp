@@ -8,8 +8,8 @@
 // frame, swaps, and keeps the number of VIs that really went by as the next
 // frame's time step. func_800A7D30 hands that count to func_800D8FA0, which
 // clamps it to 1..15 and turns it into the frame's delta time (count / 60 s).
-// (Attract demos call func_800D8FA0 again with their recorded steps; those are
-// left alone.)
+// (Attract demos call func_800D8FA0 again with their recorded steps, and run a
+// fixed number of frames; while one plays nothing is changed.)
 // So a frame that ran one VI late moves the whole game a step further, and
 // the next one may be a step shorter.
 //
@@ -35,6 +35,7 @@
 #include "recomp.h"
 #include "recompui/config.h"
 
+#include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_hooks.h"
 
@@ -75,8 +76,15 @@ namespace {
         }
     }
 
-    // VIs per game frame for the chosen mode, or 0 for Original.
+    // Game frames left in which an attract demo counts as playing. Set by the
+    // demo replay, counted down by each frame's time step.
+    std::atomic<int> demo_frames{ 0 };
+
+    // VIs per game frame for the chosen mode, or 0 for Original (and while a demo plays).
     int32_t locked_vis() {
+        if (demo_frames.load() > 0) {
+            return 0;
+        }
         switch (mode()) {
             case Mode::Fps30:
                 return 2;
@@ -98,6 +106,11 @@ namespace {
         float banjo[3] = { 0, 0, 0 };
         float distance = 0.0f;    // how far Banjo moved
         bool has_banjo = false;
+        // For timing scenes: game time since start, and the map and letterbox state last seen.
+        uint64_t total_vis = 0;
+        uint64_t total_frames = 0;
+        int map = -1;
+        bool scene = false;
     };
 
     bool logging() {
@@ -133,6 +146,21 @@ namespace {
         std::lock_guard lock{ l.mutex };
         l.frames++;
         l.game_vis += used_step > 0 ? used_step : 0;
+        l.total_vis += used_step > 0 ? used_step : 0;
+        l.total_frames++;
+        // Map changes and letterboxed scenes, stamped with game time, so a scene's
+        // length in game time can be compared between modes.
+        int map = MEM_HU(0, (gpr)(int32_t)0x80132DC2);
+        bool scene = tooie::in_letterboxed_scene();
+        if (map != l.map || scene != l.scene) {
+            static const auto start = std::chrono::steady_clock::now();
+            std::printf("[game-time] %.2f s game time, %.2f s real time, frame %llu: map %03X%s%s\n", l.total_vis / 60.0,
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(),
+                (unsigned long long)l.total_frames, map, scene ? ", letterboxed scene" : "", demo_frames.load() > 0 ? ", demo" : "");
+            std::fflush(stdout);
+            l.map = map;
+            l.scene = scene;
+        }
         float pos[3];
         if (banjo_position(rdram, pos)) {
             if (l.has_banjo) {
@@ -180,6 +208,9 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
 // frame took, which becomes this frame's time step.
 extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     int32_t asked = (int32_t)ctx->r2;
+    if (demo_frames.load() > 0) {
+        demo_frames--;
+    }
     int32_t vis = locked_vis();
     if (vis != 0) {
         ctx->r2 = vis;
@@ -187,6 +218,15 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     if (logging()) {
         log_frame(rdram, asked, (int32_t)ctx->r2);
     }
+}
+
+// func_8001608C, as an attract demo replays a frame's recorded time step. Demos
+// replay a fixed number of frames, so the game keeps its own pacing while one
+// plays (at 60 FPS it would otherwise run twice as fast).
+extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    (void)ctx;
+    demo_frames = 2;
 }
 
 void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {

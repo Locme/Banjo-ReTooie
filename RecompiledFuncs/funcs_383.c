@@ -1031,6 +1031,7 @@ RECOMP_FUNC void func_8001608C(uint8_t* rdram, recomp_context* ctx) {
     // 0x8001610C: nop
 
 L_80016110:
+    tooie_demo_frame(rdram, ctx);
     // 0x80016110: jal         0x800D8FA0
     // 0x80016114: lw          $a0, 0x50($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X50);

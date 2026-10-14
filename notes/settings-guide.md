@@ -129,6 +129,8 @@ F12 screenshots are taken before these filters, so they don't show them.
     would run twice as fast.
   - With 30 or 60 FPS, a PC that cannot keep up slows the game down instead
     of taking bigger steps.
+  - The attract demos on the title screen keep the game's own pacing, since
+    they replay a fixed number of recorded frames.
 
 ## Graphics: Frame rate overlay
 
