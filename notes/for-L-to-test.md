@@ -819,7 +819,7 @@
 - Steps:
   1. Esc > Graphics: Underwater tint and Underwater haze are on by default (25 and 15)
   2. Dive in the Spiral Mountain pool, then swim in Jolly Roger's Lagoon and Atlantis
-- Look for: The 3D turns light blue with a blue haze in the distance while under water, and goes back when you surface. Does it switch on and off at the right moments (for example with the camera above the water while Banjo is under)? The HUD should stay as it is.
+- Look for: The 3D turns light blue with a blue haze in the distance while under water, and goes back when you surface. Underwater distortion (default 30, added later) makes the distance wobble gently: too much or too little? Does it switch on and off at the right moments (for example with the camera above the water while Banjo is under)? The HUD should stay as it is.
 - Status: waiting for L
 
 ## T78 The two Windows builds and the three update scripts
