@@ -105,7 +105,7 @@ index 2f22456..41b1e8b 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..7b842e8 100644
+index 3b28af3..13883ab 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
 @@ -2,6 +2,8 @@
@@ -117,17 +117,19 @@ index 3b28af3..7b842e8 100644
  #include <cassert>
  #include <stdexcept>
  #include <span>
-@@ -55,6 +57,9 @@ PTR(OSThread) thread_queue_peek(RDRAM_ARG PTR(PTR(OSThread)) queue);
+@@ -55,6 +57,11 @@ PTR(OSThread) thread_queue_peek(RDRAM_ARG PTR(PTR(OSThread)) queue);
  void enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool jam, bool requeue_if_blocked);
  void wait_for_external_message(RDRAM_ARG1);
  void wait_for_external_message_timed(RDRAM_ARG1, u32 millis);
 +// Total time, in nanoseconds, that the game spent waiting in the two calls above with every
 +// game thread blocked (its idle thread). The rest of the time the game's own code was running.
 +uint64_t game_idle_ns();
++// Adds time a game thread spent waiting on the host (not running game code) to game_idle_ns().
++void add_game_idle_ns(uint64_t ns);
  
  // Thread scheduling.
  void check_running_queue(RDRAM_ARG1);
-@@ -79,7 +84,49 @@ void set_main_thread();
+@@ -79,7 +86,49 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
@@ -178,7 +180,7 @@ index 3b28af3..7b842e8 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..d0f05ed 100644
+index 090cc42..dd0dcbf 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,4 +1,5 @@
@@ -187,7 +189,15 @@ index 090cc42..d0f05ed 100644
  #include <atomic>
  #include <chrono>
  #include <cinttypes>
-@@ -172,6 +173,17 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
+@@ -8,6 +9,7 @@
+ #include <mutex>
+ #include <queue>
+ #include <cstring>
++#include <cstdlib>
+ 
+ #include "blockingconcurrentqueue.h"
+ 
+@@ -172,6 +174,17 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
  }
  
  uint64_t total_vis = 0;
@@ -205,7 +215,7 @@ index 090cc42..d0f05ed 100644
  
  
  extern std::atomic_bool exited;
-@@ -187,10 +199,20 @@ void vi_thread_func() {
+@@ -187,10 +200,20 @@ void vi_thread_func() {
      using namespace std::chrono_literals;
  
      int remaining_retraces = 1;
@@ -227,7 +237,7 @@ index 090cc42..d0f05ed 100644
          //if (next > std::chrono::high_resolution_clock::now()) {
          //    printf("Sleeping for %" PRIu64 " us to get from %" PRIu64 " us to %" PRIu64 " us \n",
          //        (next - std::chrono::high_resolution_clock::now()) / 1us,
-@@ -205,9 +227,9 @@ void vi_thread_func() {
+@@ -205,9 +228,9 @@ void vi_thread_func() {
              next = std::chrono::high_resolution_clock::now();
          }
          ultramodern::sleep_until(next);
@@ -239,7 +249,7 @@ index 090cc42..d0f05ed 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -226,8 +248,16 @@ void vi_thread_func() {
+@@ -226,8 +249,16 @@ void vi_thread_func() {
          // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
          events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
  
@@ -258,7 +268,7 @@ index 090cc42..d0f05ed 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -243,7 +273,11 @@ void vi_thread_func() {
+@@ -243,7 +274,11 @@ void vi_thread_func() {
                  }
                  remaining_retraces = cur_state->retrace_count;
              }
@@ -271,7 +281,7 @@ index 090cc42..d0f05ed 100644
                  // Send a message to the VI queue, and do not set it to be requeued if the queue was full for the same reason as the VI message above.
                  ultramodern::enqueue_external_message(events_context.ai.mq, events_context.ai.msg, false, false);
              }
-@@ -261,12 +295,70 @@ void sp_complete() {
+@@ -261,12 +296,73 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -296,6 +306,9 @@ index 090cc42..d0f05ed 100644
 +    return true;
 +}
 +static int dp_completions_held = 0;
++// Display list tasks sent to the renderer, and how many of them it has finished reading.
++static std::atomic<uint64_t> gfx_tasks_sent = 0;
++static std::atomic<uint64_t> gfx_tasks_read = 0;
 +
  void dp_complete() {
      uint8_t* rdram = events_context.rdram;
@@ -342,7 +355,7 @@ index 090cc42..d0f05ed 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -290,6 +382,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -290,6 +386,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
  
          // Tell the game that the RSP has completed
          sp_complete();
@@ -350,24 +363,75 @@ index 090cc42..d0f05ed 100644
      }
  }
  
-@@ -374,6 +467,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -359,21 +456,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+         if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
+             // Determine the action type and act on it
+             if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
+-                // Tell the game that the RSP completed instantly. This will allow it to queue other task types, but it won't
+-                // start another graphics task until the RDP is also complete. Games usually preserve the RSP inputs until the RDP
+-                // is finished as well, so sending this early shouldn't be an issue in most cases.
+-                // If this causes issues then the logic can be replaced with responding to yield requests.
+-                sp_complete();
++                // Upstream tells the game that the RSP completed before the renderer has read the display list, assuming
++                // games keep the RSP inputs until the RDP is done. Banjo-Tooie does not (see submit_rsp_task), so report
++                // the RSP done only once send_dl has read everything it needs from RDRAM, as a real RSP would.
++                // TOOIE_EARLY_SP_DONE=1 restores the upstream order; TOOIE_DL_DELAY_MS=<n> waits n ms before reading
++                // the display list, to make the renderer fall behind on purpose when testing.
++                static const bool early_sp_done = std::getenv("TOOIE_EARLY_SP_DONE") != nullptr;
++                static const int dl_delay_ms = std::getenv("TOOIE_DL_DELAY_MS") ? std::atoi(std::getenv("TOOIE_DL_DELAY_MS")) : 0;
++                if (early_sp_done) {
++                    sp_complete();
++                }
+                 ultramodern::measure_input_latency();
+ 
+                 PTR(u64) displaylist = task_action->task.t.data_ptr;
+                 ultramodern::extensions::on_displaylist_submitted(displaylist);
+ 
++                if (dl_delay_ms > 0) {
++                    std::this_thread::sleep_for(std::chrono::milliseconds(dl_delay_ms));
++                }
++
+                 [[maybe_unused]] auto renderer_start = std::chrono::high_resolution_clock::now();
+                 renderer_context->send_dl(&task_action->task);
                  [[maybe_unused]] auto renderer_end = std::chrono::high_resolution_clock::now();
  
++                gfx_tasks_read++;
++                if (!early_sp_done) {
++                    sp_complete();
++                }
++
                  dp_complete();
 +                tasks_in_flight--;
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,6 +655,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,8 +673,24 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue
 +    tasks_in_flight++;
      if (task->t.type == M_GFXTASK) {
++        uint64_t ticket = ++gfx_tasks_sent;
          events_context.action_queue.enqueue(SpTaskAction{ *task });
++        // Banjo-Tooie reuses heap memory that a sent display list still points at (map vertices among it) while it
++        // works on the next frame: map code rewrites it, animation files are unpacked into it and the heap is
++        // defragmented (seen headless in Jinjo Village: 1 frame in 3 had vertices change while being read). A real RSP has read the list long before that; the renderer can fall behind by a frame
++        // or more. So the game thread that sends the list waits here until the renderer has read it. Game threads
++        // run one at a time, so no other game code runs meanwhile. TOOIE_ASYNC_DL=1 turns the wait off.
++        static const bool async_dl = std::getenv("TOOIE_ASYNC_DL") != nullptr;
++        if (!async_dl) {
++            auto start = std::chrono::steady_clock::now();
++            auto deadline = start + std::chrono::milliseconds(500);
++            while (gfx_tasks_read.load() < ticket && std::chrono::steady_clock::now() < deadline) {
++                std::this_thread::sleep_for(std::chrono::microseconds(50));
++            }
++            ultramodern::add_game_idle_ns(uint64_t(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count()));
++        }
      }
+     // Set all other tasks as the RSP task
+     else {
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
-index 961de3d..5181374 100644
+index 961de3d..405fe1f 100644
 --- a/ultramodern/src/mesgqueue.cpp
 +++ b/ultramodern/src/mesgqueue.cpp
 @@ -1,3 +1,5 @@
@@ -376,7 +440,7 @@ index 961de3d..5181374 100644
  #include <thread>
  
  #include "blockingconcurrentqueue.h"
-@@ -13,6 +15,21 @@ struct QueuedMessage {
+@@ -13,6 +15,25 @@ struct QueuedMessage {
  };
  
  static moodycamel::BlockingConcurrentQueue<QueuedMessage> external_messages {};
@@ -395,10 +459,14 @@ index 961de3d..5181374 100644
 +uint64_t ultramodern::game_idle_ns() {
 +    return idle_ns.load(std::memory_order_relaxed);
 +}
++
++void ultramodern::add_game_idle_ns(uint64_t ns) {
++    idle_ns.fetch_add(ns, std::memory_order_relaxed);
++}
  
  void ultramodern::enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool jam, bool requeue_if_blocked) {
      external_messages.enqueue({mq, msg, jam, requeue_if_blocked});
-@@ -20,6 +37,27 @@ void ultramodern::enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool
+@@ -20,6 +41,27 @@ void ultramodern::enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool
  
  bool do_send(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, bool jam, bool block);
  
@@ -426,7 +494,7 @@ index 961de3d..5181374 100644
  void dequeue_external_messages(RDRAM_ARG1) {
      QueuedMessage to_send;
      std::vector<QueuedMessage> requeued_messages{};
-@@ -35,7 +73,10 @@ void dequeue_external_messages(RDRAM_ARG1) {
+@@ -35,7 +77,10 @@ void dequeue_external_messages(RDRAM_ARG1) {
  
  void ultramodern::wait_for_external_message(RDRAM_ARG1) {
      QueuedMessage to_send;
@@ -438,7 +506,7 @@ index 961de3d..5181374 100644
      if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
          external_messages.enqueue(to_send);
      }
-@@ -43,7 +84,12 @@ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
+@@ -43,7 +88,12 @@ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
  
  void ultramodern::wait_for_external_message_timed(RDRAM_ARG u32 millis) {
      QueuedMessage to_send;
