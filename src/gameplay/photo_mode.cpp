@@ -16,13 +16,16 @@
 //   left stick      move (forward, back, sideways)
 //   right stick     look (C-buttons on the keyboard)
 //   Z / R           down / up
-//   L               faster (holding a move for a second speeds it up too)
+//   L               hide / show Banjo and Kazooie (holding a move for a second speeds it up)
 //   A               screenshot (as F12)
 //   D-pad up        HUD on / off
 //   D-pad down      orbit Banjo (the sticks circle him, Z / R move closer and further) / fly freely
 //   D-pad left/right zoom out / in (the field of view, through tooie_set_fov)
 //   Start           frozen, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
+//
+// Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
+// func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
 //
 // Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
 // camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
@@ -110,6 +113,8 @@ namespace {
     std::atomic<bool> is_active{false};
     std::atomic<int> speed{0};
     std::atomic<bool> orbit_toggle{false};
+    std::atomic<bool> players_toggle{false};
+    std::atomic<bool> players_hidden{false};
     std::atomic<float> fov_scale{1.0f};
 
     // The pad as photo mode reads it (written by apply_input, read by place_camera).
@@ -243,6 +248,7 @@ namespace {
         orbit_toggle = false;
         cam.placed = false;
         cam.orbit = false;
+        players_toggle = false;
         cam.moving = false;
         entered_map = tooie::debug::current_map(rdram);
         hud_was_hidden = tooie::hide_hud::is_hidden();
@@ -259,6 +265,7 @@ namespace {
 
     void leave() {
         is_active = false;
+        players_hidden = false;
         if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
             tooie::hide_hud::set_hidden(false);
         }
@@ -271,7 +278,7 @@ void tooie::photo_mode::register_input() {
     recompinput::set_game_input_name(photo_input, "Photo Mode");
     recompinput::set_game_input_description(photo_input,
         "Freezes the game and hides the HUD so you can fly the camera around and take screenshots. "
-        "Left stick moves, right stick looks, Z and R go down and up, L goes faster, A takes a screenshot, "
+        "Left stick moves, right stick looks, Z and R go down and up, L hides Banjo, A takes a screenshot, "
         "D-pad up shows the HUD, D-pad down circles Banjo, D-pad left and right zoom, "
         "Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
@@ -317,6 +324,9 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     if (pressed & d_up) {
         tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
     }
+    if (pressed & button_l) {
+        players_toggle = true;
+    }
     if (pressed & d_down) {
         orbit_toggle = true;
     }
@@ -331,7 +341,6 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
 }
 
 void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
-    (void)ctx;
     if (test.active) {
         if (test.begin == Clock::time_point{}) {
             test.begin = Clock::now();
@@ -364,6 +373,11 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
     leave_requested = false;
     if (!is_active) {
         return;
+    }
+
+    if (players_toggle.exchange(false)) {
+        players_hidden = !players_hidden;
+        tooie::toast::show(players_hidden ? "Banjo hidden" : "Banjo shown");
     }
 
     const float scale = speed_scales[speed.load()];
@@ -441,7 +455,7 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
         cam.moving_since = now;
     }
     cam.moving = moving;
-    const bool fast = (p.buttons & button_l) || (moving && now - cam.moving_since >= 1s);
+    const bool fast = moving && now - cam.moving_since >= 1s;
     const float speed_now = move_speed * (fast ? fast_factor : 1.0f);
 
     if (cam.orbit) {
@@ -499,4 +513,8 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
             cam.orbit, cam.distance, fov_scale.load());
     }
     return true;
+}
+
+extern "C" int tooie_players_hidden(void) {
+    return is_active && players_hidden ? 1 : 0;
 }

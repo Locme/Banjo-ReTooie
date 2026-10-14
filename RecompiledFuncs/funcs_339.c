@@ -5755,6 +5755,7 @@ RECOMP_FUNC void _chcamerawibble_entrypoint_0(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_800F50D0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_players_hidden()) { return; }
     // 0x800F50D0: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x800F50D4: sw          $s2, 0x1C($sp)

@@ -53,6 +53,8 @@ void tooie_split_pad_search(uint8_t* rdram, recomp_context* ctx, int after);
 int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx);
 // Whether Hide HUD (or photo mode) has the HUD hidden (src/game/hide_hud.cpp).
 int tooie_hud_hidden(void);
+// Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
+int tooie_players_hidden(void);
 
 #ifdef __cplusplus
 }
