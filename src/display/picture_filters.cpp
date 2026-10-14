@@ -403,7 +403,9 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         texture_upscale_option,
         "Texture upscaling",
-        "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority.",
+        "Draws the game's textures at 2 or 4 times their size, smoothing the stair steps on their edges and lines while keeping them sharp. Texture packs take priority."
+        "<br /><br />"
+        "<recomp-color primary>2x</recomp-color> runs one pass of an xBR-style edge-directed filter (a compute shader on the GPU). <recomp-color primary>4x</recomp-color> runs the same filter twice, so it is sharper on lines but uses more video memory and loading time. Neither uses AI; both only smooth edges.",
         {
             {TextureUpscale::Off, "Off", "Off"},
             {TextureUpscale::Double, "2x", "2x"},

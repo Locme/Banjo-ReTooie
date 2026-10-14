@@ -64,6 +64,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ## 2026-10-14
 
+- Graphics > Texture upscaling: the description now says what each option uses (2x is one pass of an xBR-style edge filter, 4x is two passes).
 - Menus: moving the selection down a list with a controller or the arrow keys now scrolls the list with it (the Warp list used to keep the selection out of view).
 - Settings: the Cheato codes are back in Cheats (under a Cheato codes heading); the separate Cheato tab is gone. Cheato switches you had on are read from the Cheats settings again.
 - Graphics > Resolution: 720p, 1080p and 4K are now named 3x, 4.5x and 9x with the pixel height in brackets, and 6x (1440p) is new. Every Graphics option (including Field of View and Game Frame Rate) applies the moment you change it; the Apply button is not needed.
