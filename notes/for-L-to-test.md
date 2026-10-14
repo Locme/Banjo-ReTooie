@@ -1346,3 +1346,13 @@
   3. Warp to Cloud Cuckooland from the menu and spin the camera for a minute
 - Look for: Do models still explode into giant shapes, and does the screen still flash black?
 - Status: waiting for L
+
+## T127 HD Shadows spikes at high refresh
+- Asked: 2026-10-14 16:10 UTC
+- Build: main @ next commit
+- Steps:
+  1. Graphics: HD Shadows on, Interpolation Display (your 175 Hz)
+  2. Spiral Mountain: walk and stand around on the sloped grass by the molehills, where the shadows are long
+  3. Also turn the camera so you see Banjo's shadow from the side
+- Look for: The shadow keeps Banjo's shape and moves smoothly, with no long pointed spikes or broken triangles. The overlay's 'Interpolation on' line now counts the shadows (was 0 shadows).
+- Status: waiting for L

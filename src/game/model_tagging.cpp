@@ -58,6 +58,10 @@ namespace {
     constexpr uint32_t op_moveword = 0xDB;
     constexpr uint32_t op_dl = 0xDE;
     constexpr uint32_t op_enddl = 0xDF;
+    constexpr uint32_t op_setcimg = 0xFF;
+    // G_SETCIMG's pixel size field (bits 19-20), and its value for 8-bit images.
+    constexpr uint32_t cimg_size_mask = 0x3 << 19;
+    constexpr uint32_t cimg_size_8b = 0x1 << 19;
     constexpr uint32_t moveword_segment = 0x06;
     // F3DEX2 stores G_MTX params with G_MTX_PUSH inverted.
     constexpr uint32_t mtx_projection = 0x04;
@@ -360,6 +364,10 @@ namespace {
         bool have_pos = false;
         float pos[3] = {};
         uint32_t instance = 0;
+        // Drawn into the 8-bit shadow buffer (a model flattened onto the floor
+        // by HD Shadows, see ShadowScan); pos is then the mean of its bones.
+        bool shadow = false;
+        float sum[3] = {};
         // Index of its SEG 2 command, for the interpolation check's tint.
         size_t texture_command = SIZE_MAX;
         // Index of its SEG 1 command (its vertices).
@@ -487,15 +495,20 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     std::vector<Block> blocks;
     int current = -1;
     bool have_camera = false;
+    bool shadow_buffer = false;
     Camera camera;
     for (uint32_t p = start; p < end; p += 8) {
         uint32_t w0 = word(rdram, p);
         uint32_t w1 = word(rdram, p + 4);
         uint32_t op = w0 >> 24;
+        if (op == op_setcimg) {
+            shadow_buffer = (w0 & cimg_size_mask) == cimg_size_8b;
+        }
         if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 4) {
             blocks.emplace_back();
             current = (int)blocks.size() - 1;
             blocks[current].vertex_command = commands.size();
+            blocks[current].shadow = shadow_buffer;
         }
         else if (op == op_moveword && ((w0 >> 16) & 0xFF) == moveword_segment && (w0 & 0xFFFF) == 8 && current >= 0) {
             blocks[current].textures = w1;
@@ -515,6 +528,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     read_translation(rdram, w1 & 0x1FFFFFFF, block.pos);
                     block.have_pos = true;
                 }
+                if (block.shadow) {
+                    float t[3];
+                    read_translation(rdram, w1 & 0x1FFFFFFF, t);
+                    for (int k = 0; k < 3; k++) {
+                        block.sum[k] += t[k];
+                    }
+                }
                 block.matrices++;
             }
         }
@@ -531,6 +551,17 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         // from lists the game builds anew every frame, one matrix per
         // particle; they are paired one by one below instead.
         block.model = block.first_list == 0 || block.textures == 0 || overlay ? 0 : make_id(block.first_list, block.textures, 0);
+        // HD Shadows draws a character's own model flattened into the shadow
+        // buffer, right next to the character: its root is on the same floor
+        // point, so the shadow (one per light) and the character were matched
+        // to each other's copies. A shadow is its own model, placed by the
+        // middle of its bones, which differs with the light's direction.
+        if (block.model != 0 && block.shadow && block.matrices != 0) {
+            block.model = make_id(block.model, 0x534844, 0);
+            for (int k = 0; k < 3; k++) {
+                block.pos[k] = block.sum[k] / (float)block.matrices;
+            }
+        }
     }
 
     // A camera cut: the camera jumps or turns sharply in one game frame, or
@@ -1199,7 +1230,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             put(rdram, cursor, group_word0(), id);
             // A particle's quad is rebuilt each frame; only its place blends.
             uint32_t vertices = snap || particle ? component_skip : component_interpolate;
-            put(rdram, cursor + 8, group_params(interpolate_decompose, components, order_linear, vertices), 0);
+            // A shadow's bones are flat, so they cannot be split into turn and
+            // scale (that put spikes in the shadow between frames): blended
+            // element by element, as the game's own shadows are.
+            uint32_t mode = model && blocks[b].shadow ? interpolate_simple : interpolate_decompose;
+            put(rdram, cursor + 8, group_params(mode, components, order_linear, vertices), 0);
             cursor += 16;
         }
         else if (tagged) {
@@ -1393,9 +1428,16 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         for (const auto& [model, copies] : previous) {
             models += (uint32_t)copies.size();
         }
-        stat_models = models;
+        // HD Shadows' flattened models count as shadows, not models.
+        uint32_t model_shadows = 0;
+        for (const Block& block : blocks) {
+            if (block.model != 0 && block.shadow && block.matrices != 0) {
+                model_shadows++;
+            }
+        }
+        stat_models = models - std::min(models, model_shadows);
         stat_bones = bones_tagged;
-        stat_shadows = shadows_tagged;
+        stat_shadows = shadows_tagged + model_shadows;
     }
 
     // Leave the rest of the frame with the defaults.
