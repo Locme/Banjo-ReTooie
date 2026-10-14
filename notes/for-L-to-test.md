@@ -398,12 +398,11 @@
 - Asked: 2026-10-13 22:11 UTC
 - Build: latest Windows CI build from main
 - Steps:
-  1. Start a new game and go up Spiral Mountain to the Klungo cutscene, or walk up to a spot where Jamjars talks to you (a sign, e.g. near the Haunted Tavern) and let him talk
-  2. Do it again with Settings (Esc) > QOL > Free camera = Off
-  3. If he still slides, do it again with Graphics > Frame rate = Original
-- Look for: Which of the three runs does Banjo slide in? Does he end up somewhere else after the talk, or only look like he slides while it lasts?
+  1. Run (don't stand still) into something that starts a talk or cutscene: Klungo going up Spiral Mountain on a new game, a sign where Jamjars or Bottles talks, or a pad
+  2. Do it a few more times in different places
+- Look for: Does Banjo stop where he is when the scene starts, and stay there until it ends? Does anything else about him look wrong in those scenes?
 - Status: waiting for L
-- Fix to test (2026-10-13 23:40 UTC, CI build after the "Banjo no longer slides" commit): the game's "stop moving" step for standing and talking was recompiled empty, so Banjo kept his walking speed through the talk at any frame rate. Headless at the Haunted Cavern sign he now stops where Jamjars starts talking. Retest step 1 (sign and Klungo).
+- Fix to test (2026-10-13 23:40 UTC, CI build after the "Banjo no longer slides" commit): the game's "stop moving" step for standing and talking was recompiled empty, so Banjo kept his walking speed through the talk at any frame rate. Headless at the Haunted Cavern sign he now stops where Jamjars starts talking, and in Klungo's Spiral Mountain scene started while running (before: he slid over 4000 units) he stops on the spot. Retest steps 1 and 2.
 
 ## T41 Canary Mary races
 - Asked: 2026-10-13 22:14 UTC
