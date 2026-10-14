@@ -56,6 +56,7 @@ namespace RT64 {
     void SetSceneLightShafts(float strength);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
+    bool GetSceneCameraHeight(float *height);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
 }
@@ -154,18 +155,11 @@ namespace {
         return true;
     }
 
-    // The viewport camera's height (its position is at +0x00), false before the camera has run.
-    bool camera_height(uint8_t* rdram, float& y) {
-        const uint32_t ctl = tooie::free_camera::last_controller();
-        if (!valid_pointer(ctl)) {
-            return false;
-        }
-        const uint32_t camera = (uint32_t)MEM_W(0, (int32_t)ctl);
-        if (!valid_pointer(camera)) {
-            return false;
-        }
-        y = read_f32(rdram, camera + 4);
-        return true;
+    // The height of the camera the 3D world is drawn from, from RT64's view matrix. The camera controller's
+    // own position isn't it: under water the game moves the real camera down to Banjo while that stays
+    // above the surface.
+    bool camera_height(uint8_t*, float& y) {
+        return RT64::GetSceneCameraHeight(&y);
     }
 
     // Banjo's states in the water, measured headless in the Spiral Mountain pool (TOOIE_WATER_TRACE=1):
@@ -190,7 +184,10 @@ namespace {
             return true;
         }
         float banjo = 0.0f;
-        const bool in_water = in_water_state(state) && banjo_height(rdram, banjo);
+        const bool have_banjo = banjo_height(rdram, banjo);
+        // A water state, or still below the surface he went in at: swimming fast, turning and other moves
+        // under water have states of their own, which mustn't end it.
+        const bool in_water = have_banjo && (in_water_state(state) || (was_in_water && (banjo < water_surface + 20.0f)));
         if (in_water && (!was_in_water || on_surface(state))) {
             water_surface = banjo + water_surface_offset;
         }
@@ -589,6 +586,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "While under water, things further away fade into a blue haze. Works with Underwater tint above 0.",
         0, 100, 5, 0, false, 15);
     graphics.add_number_option(
+        underwater_distortion_option,
+        "Underwater distortion",
+        "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
+        0, 100, 5, 0, false, 30);
+    graphics.add_number_option(
         water_reflections_option,
         "Water reflections",
         "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
@@ -603,11 +605,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Water wave speed",
         "How fast the water waves move, in percent. 100 is normal.",
         25, 200, 5, 0, false, 100);
-    graphics.add_number_option(
-        underwater_distortion_option,
-        "Underwater distortion",
-        "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
-        0, 100, 5, 0, false, 30);
     graphics.add_number_option(
         heat_haze_option,
         "Heat haze",

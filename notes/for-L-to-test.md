@@ -1257,3 +1257,13 @@
 - Look for: Banjo stays sharp and the far cliffs and anything close to the camera blur, more the further they are from him. In first person the middle of the picture is in focus instead. Cutscenes still use the cutscene setting.
 - Status: waiting for L
 
+## T119 Underwater look stays on while swimming fast (from your 10:48 list)
+- Asked: 2026-10-14 12:35 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Underwater tint 25, Underwater haze 15, Underwater distortion 30 (distortion now sits right under haze)
+  2. A deep stretch of water where the camera follows Banjo under (Jolly Roger's Lagoon, the lake outside Atlantis): dive, then swim fast (tap A), turn, roll, and come back up
+- Look for: The tint, haze and wobble stay on the whole time the camera is under the water, however Banjo swims, and go when it comes up. Note: in the small Spiral Mountain pool the game keeps the camera above the surface even when Banjo is at the bottom, so there is rightly no tint there.
+- Status: waiting for L
+

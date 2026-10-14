@@ -582,7 +582,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..5766cae 100644
+index 9fae0d4..856b48d 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -709,7 +709,7 @@ index 9fae0d4..5766cae 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1531,28 @@ namespace RT64 {
+@@ -1456,6 +1531,29 @@ namespace RT64 {
                  continue;
              }
  
@@ -721,6 +721,7 @@ index 9fae0d4..5766cae 100644
 +                        worldOpen = true;
 +                        targetDrawCall.sceneEffectsDrawData = &drawData;
 +                        targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
++                        NoteSceneCamera(drawData.projTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex]);
 +                    }
 +                    else if (!worldOpen && (targetDrawCall.sceneEffectsDrawData == &drawData) &&
 +                        (matrixDifference(drawData.projTransforms[proj.transformsIndex], drawData.projTransforms[targetDrawCall.sceneEffectsTransformsIndex]) < 1e-4f))
@@ -738,7 +739,7 @@ index 9fae0d4..5766cae 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1844,18 @@ namespace RT64 {
+@@ -1747,6 +1845,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -757,7 +758,7 @@ index 9fae0d4..5766cae 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1867,10 @@ namespace RT64 {
+@@ -1758,6 +1868,10 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1308,10 +1309,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..773e4db
+index 0000000..77aebe6
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,644 @@
+@@ -0,0 +1,680 @@
 +//
 +// RT64
 +//
@@ -1319,6 +1320,7 @@ index 0000000..773e4db
 +#include "rt64_scene_effects.h"
 +
 +#include <algorithm>
++#include <atomic>
 +#include <cmath>
 +#include <cstdio>
 +#include <cstdlib>
@@ -1528,6 +1530,41 @@ index 0000000..773e4db
 +            effectsSettings.rippleZ[i] = z[i];
 +            effectsSettings.rippleAge[i] = age[i];
 +        }
++    }
++
++    namespace {
++        std::atomic<float> sceneCameraHeight{ 0.0f };
++        std::atomic<bool> sceneCameraKnown{ false };
++    }
++
++    void NoteSceneCamera(const interop::float4x4 &projection, const interop::float4x4 &view) {
++        // As in RecordSceneEffects: the matrices may be either way round, told apart by the projection.
++        const float (&m)[4][4] = projection.m;
++        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
++        float v[4][4];
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                v[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
++            }
++        }
++        const float det = v[0][0] * (v[1][1] * v[2][2] - v[1][2] * v[2][1]) - v[0][1] * (v[1][0] * v[2][2] - v[1][2] * v[2][0]) + v[0][2] * (v[1][0] * v[2][1] - v[1][1] * v[2][0]);
++        if (std::abs(det) <= 1e-12f) {
++            return;
++        }
++        // The camera's world height: the view origin taken back through column 1 of the inverse.
++        const float y0 = -(v[0][1] * v[2][2] - v[0][2] * v[2][1]) / det;
++        const float y1 = (v[0][0] * v[2][2] - v[0][2] * v[2][0]) / det;
++        const float y2 = -(v[0][0] * v[2][1] - v[0][1] * v[2][0]) / det;
++        sceneCameraHeight = -(v[3][0] * y0 + v[3][1] * y1 + v[3][2] * y2);
++        sceneCameraKnown = true;
++    }
++
++    bool GetSceneCameraHeight(float *height) {
++        if (!sceneCameraKnown) {
++            return false;
++        }
++        *height = sceneCameraHeight;
++        return true;
 +    }
 +
 +    void SetScenePlayer(bool valid, float x, float y, float z) {
@@ -1958,10 +1995,10 @@ index 0000000..773e4db
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1684c4a
+index 0000000..2c3a4fe
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,110 @@
 +//
 +// RT64
 +//
@@ -2046,6 +2083,10 @@ index 0000000..1684c4a
 +    void SetSceneLightShafts(float strength);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
++    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
++    void NoteSceneCamera(const interop::float4x4 &projection, const interop::float4x4 &view);
++    // The last noted camera's world height; false until there is one.
++    bool GetSceneCameraHeight(float *height);
 +    // Banjo-Tooie: Banjo's world position, which the fog is measured from (valid false: from the camera).
 +    void SetScenePlayer(bool valid, float x, float y, float z);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
