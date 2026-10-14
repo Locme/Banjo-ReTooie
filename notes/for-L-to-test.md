@@ -1448,3 +1448,13 @@
   4. Press Start once more and let the skip run to the fight
 - Look for: Step 2 goes to the file select and does not pick a save by itself; in step 3 the second Start shows "Skip stopped" and the scene plays on at normal speed; while skipping there is silence (no sped-up sound) and the sound comes back when it ends
 - Status: waiting for L
+
+## T137 Ambient occlusion fits Banjo; water waves stay put
+- Asked: 2026-10-14 19:59 UTC
+- Build: main @ 46097d8
+- Steps:
+  1. Graphics: Ambient occlusion 50, Water waves 50, Water reflections 50
+  2. Spiral Mountain: walk Banjo around, then swim and inch forward in the moat
+  3. Watch the shading round Banjo and the wave pattern as the camera moves
+- Look for: The shading hugs Banjo and the scenery and doesn't cut out now and then; the waves stay fixed on the water instead of the whole pattern sliding when you move a little
+- Status: waiting for L
