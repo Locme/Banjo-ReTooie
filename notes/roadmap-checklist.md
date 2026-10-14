@@ -458,3 +458,15 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 ### 4.38 Sun shadows
 - [ ] Done
 - [ ] Approved by L
+
+## End features (to do last)
+
+### AI texture pack (SeedVR2, Real-ESRGAN as second engine)
+Offline, not live. (a) A "dump textures" option saves every texture the game draws, by ID, to a folder. (b) A script on the player's PC runs SeedVR2 at 4x over them, padding tiling textures with their own edges so no seams show, and upscales alpha separately. (c) It writes a normal texture pack, which the game already loads (T21). Needs an NVIDIA GPU with plenty of VRAM, plus Python and PyTorch. Check SeedVR2's licence and VRAM needs before building. Nothing it produces goes in the repo (ROM-derived). L wants side-by-side samples first. Graphics > Texture upscaling (4.50) stays as it is; the extra-upscaler card is "None".
+- [ ] Done
+- [ ] Approved by L
+
+### Finalize Discord Rich Presence (4.90)
+4.90 shows the level you are playing. This is the final pass on it, left to do last.
+- [ ] Done
+- [ ] Approved by L
