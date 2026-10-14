@@ -51,8 +51,10 @@ namespace {
         // Or when all of these flags are set and the game total of each of these item types is above 0.
         std::vector<int32_t> all_flags = {};
         std::vector<int16_t> all_totals = {};
+        // Counted outside these rules (Shoot Em Up!).
+        bool counted = false;
 
-        bool tracked() const { return !flags.empty() || !all_flags.empty() || !all_totals.empty(); }
+        bool tracked() const { return counted || !flags.empty() || !all_flags.empty() || !all_totals.empty(); }
     };
 
     // Names, points and descriptions as the XBLA game lists them.
@@ -86,7 +88,7 @@ namespace {
             {0x268}},                       // FLAG_268_JIGGY_WW_BALLOON_BURST (its Jiggy)
         {"shoot_em_up", "Shoot Em Up!", 15,
             "It's great fun exploding these little lovelies! Any 20 Ulcers, Clinkers or Mines will earn this.",
-            {}},
+            {}, {}, {}, true},             // counted by shooting_tick, 20 over any number of games
         {"all_over", "They think it's all over...", 15,
             "Win a Colosseum Kickball final. The worst scorers rule at this game, so you should be good at it!",
             {0x252, 0x293}},                // FLAG_252_JIGGY_MT_KICKBALL, FLAG_293_JIGGY_HFP_KICKBALL
@@ -100,6 +102,10 @@ namespace {
     };
 
     const std::string tab_id = "achievements";
+
+    // Shoot Em Up! needs 20 targets over any number of games; the running count is kept with the unlocks.
+    constexpr int shoot_goal = 20;
+    const char* const shoot_count_key = "shoot_em_up_count";
 
     std::mutex unlocked_mutex;
     // Achievement id -> when it was unlocked (local time, "YYYY-MM-DD HH:MM").
@@ -210,6 +216,10 @@ namespace {
             std::string status;
             if (done.contains(a.id) && done[a.id].is_string()) {
                 status = "Unlocked " + done[a.id].get<std::string>();
+            } else if (a.counted) {
+                const int count = done.contains(shoot_count_key) && done[shoot_count_key].is_number_integer()
+                    ? done[shoot_count_key].get<int>() : 0;
+                status = "Locked (" + std::to_string(count) + " of " + std::to_string(shoot_goal) + ")";
             } else if (!a.tracked()) {
                 status = "Locked (not tracked yet)";
             } else {
@@ -269,6 +279,47 @@ namespace {
         std::fflush(stdout);
     }
 
+    // Shoot Em Up!: targets shot in the three shooting games, read each frame from the game's HUD
+    // counters (func_800D21D0: display id -> 0x8011AFB0 + (id - 0xC0) * 12, the value set at +4).
+    // Clinker's Cavern (map 0x162) and Ordnance Storage (map 0xDC) count down the targets left on
+    // displays 0x103 and 0x102, one per target. Chompa's Belly (map 0x123) shows points on display 0xF7,
+    // weighted by Ulcer type, so each rise counts as one Ulcer (two in the same frame count as one).
+    int16_t shoot_last = -1;
+    uint16_t shoot_last_map = 0;
+
+    int16_t hud_value(uint8_t* rdram, uint32_t display) {
+        const uint32_t addr = 0x8011AFB0u + (display - 0xC0u) * 12u + 4u;
+        return *(int16_t*)(rdram + ((addr - 0x80000000u) ^ 2u));
+    }
+
+    // Returns how many targets were shot since the last frame.
+    int shooting_tick(uint8_t* rdram) {
+        const uint16_t map = tooie::debug::current_map(rdram);
+        uint32_t display;
+        bool counts_down;
+        switch (map) {
+            case 0x162: display = 0x103; counts_down = true; break;  // Clinker's Cavern
+            case 0xDC:  display = 0x102; counts_down = true; break;  // Ordnance Storage
+            case 0x123: display = 0xF7;  counts_down = false; break; // Chompa's Belly
+            default:
+                shoot_last = -1;
+                shoot_last_map = map;
+                return 0;
+        }
+        const int16_t value = hud_value(rdram, display);
+        int shot = 0;
+        if (map == shoot_last_map && shoot_last >= 0 && value >= 0) {
+            if (counts_down && value == shoot_last - 1) {
+                shot = 1;
+            } else if (!counts_down && value > shoot_last) {
+                shot = 1;
+            }
+        }
+        shoot_last = value;
+        shoot_last_map = map;
+        return shot;
+    }
+
     int frame_counter = 0;
     bool cheats_seen = false;
 }
@@ -279,15 +330,39 @@ void tooie::achievements::create_tab() {
 }
 
 void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
-    // A few checks a second are plenty.
+    if (tooie::cheats::enabled()) {
+        cheats_seen = true;
+    }
+    if (!cheats_seen && loaded && tooie::debug::can_warp()) {
+        if (shooting_tick(rdram) > 0) {
+            bool earned = false;
+            int count = 0;
+            {
+                std::lock_guard lock{unlocked_mutex};
+                count = unlocked.value(shoot_count_key, 0) + 1;
+                unlocked[shoot_count_key] = count;
+                if (count >= shoot_goal && !unlocked.contains("shoot_em_up")) {
+                    unlocked["shoot_em_up"] = now_text();
+                    earned = true;
+                }
+                save();
+            }
+            if (log_on()) {
+                std::printf("[achievements] target shot, %d so far\n", count);
+                std::fflush(stdout);
+            }
+            if (earned) {
+                tooie::toast::show("Achievement unlocked: Shoot Em Up! (15 G)");
+            }
+        }
+    }
+
+    // A few checks a second are plenty for the rest.
     if (++frame_counter < 10) {
         return;
     }
     frame_counter = 0;
 
-    if (tooie::cheats::enabled()) {
-        cheats_seen = true;
-    }
     test_flag(rdram, ctx);
     if (cheats_seen || !loaded || !tooie::debug::can_warp()) {
         return;
@@ -300,7 +375,7 @@ void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
                 continue;
             }
         }
-        if (!a.tracked()) {
+        if (!a.tracked() || a.counted) {
             continue;
         }
         bool earned = false;
