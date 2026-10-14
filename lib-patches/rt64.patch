@@ -3337,10 +3337,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..873e808
+index 0000000..40e65da
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,592 @@
+@@ -0,0 +1,597 @@
 +//
 +// RT64
 +//
@@ -3493,19 +3493,24 @@ index 0000000..873e808
 +    return light / float(samples);
 +}
 +
-+// Heat haze: the scene so far, read a little to the side and up and down in rising waves, more with
-+// distance. A pixel isn't read from something nearer than itself, so near things keep their edges.
++// Heat haze: the scene so far, read a little to the side and up and down in waves that rise, more with
++// distance. The waves are sized to the picture, not to pixels, so they look the same at any resolution,
++// and read between pixels so the shimmer is smooth. A pixel isn't read from something nearer than itself,
++// so near things keep their edges.
 +float3 HeatHaze(int2 pixel, float distance) {
-+    const float amount = gConstants.view.w * saturate((distance - 300.0f) / 3000.0f) * gConstants.projection.w / 540.0f;
++    const float2 size = gConstants.projection.zw;
++    // In 540ths of the picture's height: up to 3 far away.
++    const float amount = gConstants.view.w * 3.0f * saturate((distance - 150.0f) / 1800.0f);
 +    const float t = gConstants.view.z;
-+    const float2 wave = float2(sin(pixel.y * 0.11f + t * 5.0f) + 0.5f * sin(pixel.y * 0.037f - t * 2.3f + pixel.x * 0.02f),
-+        0.6f * sin(pixel.x * 0.07f + t * 3.7f));
-+    const int2 size = int2(gConstants.projection.zw);
-+    const int2 from = clamp(pixel + int2(round(wave * amount * 1.6f)), int2(0, 0), size - 1);
++    const float2 at = float2(pixel) / size.y * 540.0f;
++    const float2 wave = float2(sin(at.y * 0.21f + t * 6.0f) + 0.5f * sin(at.y * 0.083f + at.x * 0.035f + t * 2.9f),
++        0.6f * sin(at.x * 0.13f + at.y * 0.05f + t * 4.3f));
++    const float2 offset = wave * amount * (size.y / 540.0f);
++    const int2 from = clamp(int2(round(float2(pixel) + offset)), int2(0, 0), int2(size) - 1);
 +    if (-ViewPositionAt(from).z < distance * 0.95f) {
 +        return gColor.Load(int3(pixel, 0)).rgb;
 +    }
-+    return gColor.Load(int3(from, 0)).rgb;
++    return gColor.SampleLevel(LinearSampler, (float2(pixel) + 0.5f + offset) / size, 0).rgb;
 +}
 +
 +// Water: the water mask holds each water pixel's own depth (24 bits over rgb, a = 1), redrawn from the

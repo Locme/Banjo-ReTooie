@@ -1150,3 +1150,13 @@
 - Look for: The glow and Bottles now get the same fog, bloom and depth of field as the scenery around them (a blurred glow when the focus is elsewhere). The HUD still gets none of it. Tell me if anything else in the world now looks wrong, as the effects are now applied after any later 3D drawing with the world's camera, not before it.
 - Status: waiting for L
 
+## T108 Heat haze (from your 09:15 list)
+- Asked: 2026-10-14 11:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45
+- Steps:
+  1. Graphics: Heat haze 50, then 100
+  2. Hailfire Peaks lava side, then its train station; also try a different resolution
+- Look for: The air shimmers in smooth waves that rise, starting a short way from the camera and stronger further off. No blocky or stair-step shimmer, and the waves look the same size at any resolution. Banjo and nearby edges stay steady. None on the icy side.
+- Status: waiting for L
+
