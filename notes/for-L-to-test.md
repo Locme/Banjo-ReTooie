@@ -1427,7 +1427,8 @@
   2. Do it once with Interpolation Off and once with your usual settings
   3. After any tear, hold F12 for a burst (let go after the tear) and look in the log for a line starting with [dl]
 - Look for: Whether the 1-2 frame tears and black patches still happen, how often compared with before, and whether any [dl] line appears in the log
-- Status: waiting for L
+- Status: answered 2026-10-14 21:19 UTC
+- L's result: 2026-10-14: still tore with interpolation on; L's F8 bisect found vertex blending at fault; fixed 2a0f638 (vertex blending off)
 
 ## T135 Water and underwater effects drawn once
 - Asked: 2026-10-14 17:28 UTC
@@ -1499,4 +1500,14 @@
   2. Talk to a character so the talking-head box opens; watch the mouth and the blinking in the portrait
   3. Watch a character's eyes in the world for a while (Bottles, Jamjars, Mumbo, villagers)
 - Look for: Do the portrait mouths and blinks now move at the same speed as with Original? Do characters in the world blink as often and as fast as with Original? If one character still blinks too fast, tell me which one: it uses its own blink code.
+- Status: waiting for L
+
+## T142 Interpolation without vertex blending: sky, close-up spins, characters
+- Asked: 2026-10-14 21:19 UTC
+- Build: main @ 2a0f638
+- Steps:
+  1. Pull, build, Interpolation on at your usual settings, F8 left at normal (press F7 once if anything is tinted red)
+  2. Spiral Mountain and Cloud Cuckooland: free camera up to Banjo, spin, 2 minutes each; also walk around Jolly Roger's Lagoon
+  3. Watch Banjo, Kazooie and a few enemies up close while they animate
+- Look for: No torn sky, quads or black boxes during spins; characters still blend smoothly (no low-fps look); nothing that moved smoothly before now steps
 - Status: waiting for L
