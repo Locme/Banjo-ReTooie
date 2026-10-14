@@ -145,7 +145,16 @@ F12 screenshots are taken before these filters, so they don't show them.
     2 seconds (over a quarter second a 30 fps game read as 28 and 32)
   - the Framerate setting
   - frame interpolation: off, or on with how many models, bones and shadows
-    it tracked in the last frame, and how many camera cuts it has seen.
+    it tracked in the last frame, and how many camera cuts it has seen
+  - the 1% low over the last 5 seconds (the frame time 99 frames in 100
+    beat, and the frame rate it works out to) and how many hitches there
+    were: frames that took more than twice the usual time
+  - the map number (as used by the Warp tab and bug reports) and name, and
+    Banjo's position
+  - the renderer (Vulkan or D3D12), the internal resolution and the
+    Resolution setting, MSAA and the display's refresh rate
+  - whether Speed-up is running, whether cheats are on, and which mods
+    (texture packs included) are on.
   Default: off.
 
 ## Cheats

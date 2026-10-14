@@ -29,5 +29,5 @@ void tooie::on_game_init(uint8_t* rdram, recomp_context* ctx) {
     tooie::hide_hud::start();
     tooie::photo_mode::start();
     tooie::save_state::start();
-    tooie::frame_overlay::start();
+    tooie::frame_overlay::start(rdram);
 }

@@ -3,6 +3,10 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## 2026-10-14
+
+- Frame rate overlay: adds the 1% low and hitches, the map and Banjo's position, the renderer and resolution, and whether speed-up, cheats or mods are on.
+
 ## 2026-10-13
 
 - Save Game Select: above Original, the waving hand is smooth again while the pictures keep their quick shake.

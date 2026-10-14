@@ -40,7 +40,7 @@ index 79dfc38..2e43e6a 100644
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..85934cf 100644
+index 3227ab1..eee4c29 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,90 @@
@@ -115,7 +115,7 @@ index 3227ab1..85934cf 100644
 +
 +    FrameStats TakeFrameStats() {
 +        const std::scoped_lock lock(frameStatsMutex);
-+        FrameStats taken = frameStats;
++        FrameStats taken = std::move(frameStats);
 +        frameStats = FrameStats();
 +        return taken;
 +    }
@@ -247,7 +247,7 @@ index 3227ab1..85934cf 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +557,15 @@ namespace RT64 {
+@@ -402,6 +557,18 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
                  presentProfiler.logAndRestart();
@@ -259,12 +259,15 @@ index 3227ab1..85934cf 100644
 +                    frameStats.presents++;
 +                    frameStats.presentMs += ms;
 +                    frameStats.worstPresentMs = std::max(frameStats.worstPresentMs, ms);
++                    if (frameStats.intervals.size() < 4096) {
++                        frameStats.intervals.push_back(float(ms));
++                    }
 +                }
              }
          }
      }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..e814ec0 100644
+index e08b02c..066094e 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,8 +4,13 @@
@@ -281,7 +284,7 @@ index e08b02c..e814ec0 100644
  #include "render/rt64_vi_renderer.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +22,26 @@
+@@ -17,6 +22,28 @@
  namespace RT64 {
      struct WorkloadQueue;
  
@@ -300,6 +303,8 @@ index e08b02c..e814ec0 100644
 +        double worstPresentMs = 0.0;
 +        uint32_t gpuFrames = 0;
 +        double gpuMs = 0.0;
++        // Each present interval in ms, oldest first (at most 4096 kept between reads).
++        std::vector<float> intervals;
 +    };
 +
 +    FrameStats TakeFrameStats();
@@ -308,7 +313,7 @@ index e08b02c..e814ec0 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -52,6 +77,10 @@ namespace RT64 {
+@@ -52,6 +79,10 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;

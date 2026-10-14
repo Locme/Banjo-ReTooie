@@ -772,4 +772,13 @@
   1. Esc > Graphics: set "Eye adaptation" to 70
   2. Walk from Spiral Mountain into a dark place (Glitter Gulch Mine, a cave) and back out
 - Look for: Dark places brighten over about a second and bright ones settle. Does it pump or flicker? The HUD should stay as it is.
+
+## T75 Frame rate overlay: stutter, location, renderer, extras
+- Asked: 2026-10-14 05:28 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Esc > Graphics: turn on Frame rate overlay
+  2. Walk around a level for a minute, then go through a door into another area
+  3. Hold the Speed-Up key with cheats on, and turn a texture pack on and off in Mods
+- Look for: Does the map line change to the new area, and do Banjo's numbers change as he walks? Does the renderer line say D3D12 or Vulkan as you set it, with your monitor's refresh rate? Does the 1% low drop and the hitch count go up when the game stutters (loading an area, say)? Does the last line show Speed-up, cheats and the texture pack by name?
 - Status: waiting for L

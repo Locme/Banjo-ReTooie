@@ -21,6 +21,10 @@ namespace {
     constexpr auto poll_interval = 250ms;
 
     std::atomic<uint64_t> frames_presented{0};
+    // What the renderer reports, for the frame rate overlay.
+    std::atomic<int> reported_api{(int)ultramodern::renderer::GraphicsApi::Auto};
+    std::atomic<float> reported_scale{0.0f};
+    std::atomic<uint32_t> reported_rate{0};
     std::once_flag start_once;
 
     std::string wall_time() {
@@ -93,6 +97,9 @@ namespace {
         void update_screen() override {
             inner->update_screen();
             frames_presented.fetch_add(1, std::memory_order_relaxed);
+            reported_api.store((int)inner->get_chosen_api(), std::memory_order_relaxed);
+            reported_scale.store(inner->get_resolution_scale(), std::memory_order_relaxed);
+            reported_rate.store(inner->get_display_framerate(), std::memory_order_relaxed);
         }
         void shutdown() override { inner->shutdown(); }
         uint32_t get_display_framerate() const override { return inner->get_display_framerate(); }
@@ -101,6 +108,14 @@ namespace {
     private:
         std::unique_ptr<ultramodern::renderer::RendererContext> inner;
     };
+}
+
+tooie::watchdog::RendererInfo tooie::watchdog::renderer_info() {
+    RendererInfo info;
+    info.api = (ultramodern::renderer::GraphicsApi)reported_api.load(std::memory_order_relaxed);
+    info.resolution_scale = reported_scale.load(std::memory_order_relaxed);
+    info.display_rate = reported_rate.load(std::memory_order_relaxed);
+    return info;
 }
 
 void tooie::watchdog::start() {
