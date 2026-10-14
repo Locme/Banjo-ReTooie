@@ -710,6 +710,21 @@ index 4fdf81f..c4aaa9b 100644
              return config;
          }
      }
+diff --git a/recompui/src/elements/ui_button.cpp b/recompui/src/elements/ui_button.cpp
+index cf2a311..486e08d 100644
+--- a/recompui/src/elements/ui_button.cpp
++++ b/recompui/src/elements/ui_button.cpp
+@@ -112,6 +112,10 @@ namespace recompui {
+             break;
+         case EventType::Focus:
+             set_style_enabled(focus_state, std::get<EventFocus>(e.variant).active);
++            // Moving the selection with a controller or the arrow keys scrolls the list with it.
++            if (std::get<EventFocus>(e.variant).active) {
++                scroll_into_view();
++            }
+             break;
+         case EventType::Update:
+             break;
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
 index e289e9e..e2e38f5 100644
 --- a/recompui/src/elements/ui_select.cpp
