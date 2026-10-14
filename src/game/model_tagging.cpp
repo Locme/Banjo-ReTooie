@@ -496,7 +496,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         // The 2D overlay is tagged after the scene, in the same frame.
         ids_given.clear();
     }
-    if (!interpolation_on() || end <= start) {
+    // F8 blend modes (interp_check.cpp) for finding what blends wrong on a real PC.
+    const int blend_mode = tooie::interp_check::blend_mode();
+    if (!interpolation_on() || end <= start || blend_mode == 1) {
         if (!overlay) {
             stat_models = 0;
             stat_bones = 0;
@@ -774,7 +776,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // on the first frame after a camera cut. Their bones (the hand waving)
     // are still blended, see below.
     const bool game_select = !overlay && tooie::debug::current_map(rdram) == game_select_map;
-    const bool snap = (cut && !overlay) || game_select;
+    const bool snap = (cut && !overlay) || game_select || blend_mode == 4;
 
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
@@ -1171,7 +1173,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         bool tag = model || particle || (snap && !projection && !overlay);
         // The perspective camera gets an id that changes at each cut, so RT64
         // does not blend the camera across it.
-        bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera;
+        bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera && blend_mode != 3;
         if (shadow[index]) {
             // Replaces the projection multiply: one id for all the shadow's
             // bones, matched in load order and blended element by element
@@ -1251,7 +1253,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             uint32_t components = snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
             // A particle's quad is rebuilt each frame; only its place blends.
-            uint32_t vertices = snap || particle ? component_skip : component_interpolate;
+            uint32_t vertices = snap || particle || blend_mode == 2 ? component_skip : component_interpolate;
             // A shadow's bones are flat, so they cannot be split into turn and
             // scale (that put spikes in the shadow between frames): blended
             // element by element, as the game's own shadows are.

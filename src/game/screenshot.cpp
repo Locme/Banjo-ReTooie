@@ -126,7 +126,11 @@ namespace {
 
     // Burst (F12 held): the last frames, shrunk, oldest first.
     constexpr auto burst_hold = 500ms;
-    constexpr size_t burst_frames = 150;
+    // Headless aid: TOOIE_BURST_FRAMES=<n> keeps more.
+    const size_t burst_frames = [] {
+        const char* v = std::getenv("TOOIE_BURST_FRAMES");
+        return v != nullptr && std::atoi(v) > 0 ? (size_t)std::atoi(v) : (size_t)150;
+    }();
     constexpr uint32_t burst_shrink = 4;
     struct Small {
         uint32_t width;

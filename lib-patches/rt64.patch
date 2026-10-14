@@ -134,6 +134,42 @@ index c20fb51..e14ac77 100644
      }
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
+diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
+index 87392d0..9aca6cd 100644
+--- a/src/hle/rt64_game_frame.cpp
++++ b/src/hle/rt64_game_frame.cpp
+@@ -2,6 +2,10 @@
+ // RT64
+ //
+ 
++#include <cstdio>
++#include <cstdlib>
++#include <algorithm>
++
+ #include "common/rt64_math.h"
+ 
+ #include "rt64_game_frame.h"
+@@ -744,12 +748,20 @@ namespace RT64 {
+                 const float *curPosFloatsRef = &curPosFloats[curVertexIndex * 3];
+                 const float *prevPosFloatsRef = &prevPosFloats[prevVertexIndex * 3];
+                 float *curVelFloatsRef = &curVelFloats[curVertexIndex * 3];
++                float maxVel = 0.0f;
+                 for (uint32_t i = 0; i < curVertexCount; i++) {
+                     for (uint32_t j = 0; j < 3; j++) {
+                         curVelFloatsRef[i * 3 + j] = (curPosFloatsRef[i * 3 + j] - prevPosFloatsRef[i * 3 + j]);
++                        maxVel = std::max(maxVel, std::abs(curVelFloatsRef[i * 3 + j]));
+                     }
+                 }
+ 
++                // Banjo-Tooie: TOOIE_MATCH_LOG=1 reports vertex sets that moved far between frames under one matrix.
++                static const bool matchLog = getenv("TOOIE_MATCH_LOG") != nullptr;
++                if (matchLog && (maxVel > 100.0f)) {
++                    fprintf(stderr, "[match] vertices moved up to %.0f under matrix id %08X (%u vertices)\n", maxVel, curGroup.matrixId, curVertexCount);
++                }
++
+                 modifiedBuffers.positionVelocity = true;
+             }
+         }
 diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
 index dccaa87..4440507 100644
 --- a/src/hle/rt64_interpreter.cpp
