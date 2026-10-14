@@ -253,6 +253,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/input/tiptoe.cpp
     ${CMAKE_SOURCE_DIR}/src/input/control_scheme.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/talon_trot.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/hold_to_run.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/canary_mary.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fine_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp

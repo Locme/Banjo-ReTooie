@@ -52,6 +52,8 @@ int tooie_canary_mary_rule(uint8_t* rdram, recomp_context* ctx, int race);
 void tooie_split_pad_search(uint8_t* rdram, recomp_context* ctx, int after);
 // The game's should-they-join-up check (func_8008D40C): -1 to run it, otherwise its answer.
 int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx);
+// Hold to run (src/gameplay/hold_to_run.cpp): $a1 is the target speed baphysics_set_target_horizontal_velocity sets.
+void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx);
 // Whether Hide HUD (or photo mode) has the HUD hidden (src/game/hide_hud.cpp).
 int tooie_hud_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).

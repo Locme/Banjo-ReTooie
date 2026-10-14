@@ -29,6 +29,7 @@
 #include "tooie_player_cheats.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_hold_to_run.h"
 #include "tooie_fine_aim.h"
 #include "tooie_motion_aim.h"
 #include "recompinput/profiles.h"
@@ -185,6 +186,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::photo_mode::apply_input(buttons_out, x_out, y_out);
         tooie::control_scheme::apply(buttons_out, x_out, y_out);
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
+        tooie::hold_to_run::apply(buttons_out, *x_out, *y_out);
         tooie::talon_trot::apply(buttons_out);
         tooie::fine_aim::apply(*buttons_out, x_out, y_out);
         tooie::motion_aim::collect();

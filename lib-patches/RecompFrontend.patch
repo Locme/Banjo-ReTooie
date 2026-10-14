@@ -35,11 +35,11 @@ diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include
 index f5ed6c0..7334809 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,22 @@ namespace recompinput {
+@@ -37,10 +37,23 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
-+    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state and frame rate overlay keys). Games set their names,
++    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state, frame rate overlay and run keys). Games set their names,
 +    // descriptions and default bindings with set_game_input_name/description and
 +    // set_default_mapping_for_keyboard/controller.
 +    #define DEFINE_GAME_HOTKEY_INPUTS() \
@@ -48,7 +48,8 @@ index f5ed6c0..7334809 100644
 +        DEFINE_INPUT(PHOTO_MODE, 0, "Photo Mode") \
 +        DEFINE_INPUT(SAVE_STATE, 0, "Save State") \
 +        DEFINE_INPUT(LOAD_STATE, 0, "Load State") \
-+        DEFINE_INPUT(FRAME_OVERLAY, 0, "Frame Rate Overlay")
++        DEFINE_INPUT(FRAME_OVERLAY, 0, "Frame Rate Overlay") \
++        DEFINE_INPUT(RUN, 0, "Run")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \

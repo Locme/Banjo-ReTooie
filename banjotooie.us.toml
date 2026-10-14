@@ -490,3 +490,10 @@ text = "tooie_split_pad_search(rdram, ctx, 1);"
 func = "func_8008D40C"
 before_vram = 0x8008D40C
 text = "{ int join = tooie_split_join_check(rdram, ctx); if (join >= 0) { ctx->r2 = join; return; } }"
+
+# --- Hold to run (src/gameplay/hold_to_run.cpp) -------------------------------
+# While Run is held in a run state, the host raises the target speed ($a1) the state sets.
+[[patches.hook]]
+func = "baphysics_set_target_horizontal_velocity"
+before_vram = 0x8009B9B0
+text = "tooie_run_target_speed(rdram, ctx);"

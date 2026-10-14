@@ -882,6 +882,7 @@ L_800D724C:
 RECOMP_FUNC void baphysics_set_target_horizontal_velocity(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_run_target_speed(rdram, ctx);
     // 0x8009B9B0: mtc1        $a1, $f12
     ctx->f12.u32l = ctx->r5;
     // 0x8009B9B4: lw          $t6, 0xC8($a0)

@@ -21,6 +21,7 @@
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_hold_to_run.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_frame_overlay.h"
@@ -109,6 +110,7 @@ void tooie::init_config() {
     tooie::speedup::register_input();
     tooie::frame_overlay::register_input();
     tooie::input::register_input();
+    tooie::hold_to_run::register_input();
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
 
