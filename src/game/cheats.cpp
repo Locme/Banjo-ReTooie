@@ -64,6 +64,8 @@ namespace {
         { "cheato_homing", "Cheato: HOMING", "The game's HOMING code, switched on directly. No Code Chamber needed.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_stop_n_swop", "Stop 'n' Swop items",
           "Marks the Stop 'n' Swop mystery eggs (blue and pink) as collected from the Banjo-Kazooie link, without a Banjo-Kazooie save.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_unlock_everything", "Unlock everything",
+          "Learns every move and opens every world, warp pad, silo, train station, Isle o' Hags path and Cheato code, and the doors and shortcuts that have a switch of their own. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);

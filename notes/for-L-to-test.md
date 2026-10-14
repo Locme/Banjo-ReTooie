@@ -559,3 +559,15 @@
   6. Press D-pad down again
 - Look for: Do they split where you stand, without a split-up pad? Do D-pad left/right switch who you play, with the camera following, while the other one waits? Do they stay apart until you press D-pad down, then join up again (even when far apart)? Try it somewhere cramped or on a slope too.
 - Status: waiting for L
+
+## T56 Unlock everything
+- Asked: 2026-10-14 00:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.72 (you said the XBLA one was incomplete)
+- Steps:
+  1. Load an early save (or a new game past the intro)
+  2. Esc > Cheats: Enable cheats, then Unlock everything = On. The area reloads once.
+  3. Go around Isle o' Hags: world entrances, warp pads, Jamjars' silos (moves), Chuffy's stations, Pine Grove, the bridge to Hailfire Peaks, Cauldron Keep's drawbridge
+  4. Check the Cheato codes in the Code Chamber
+- Look for: Is anything still locked? Tell me which door or path, and I'll find its switch. Headless I only checked that the game reads the 134 switches as set and that the area reloads.
+- Status: waiting for L

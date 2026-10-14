@@ -91,7 +91,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.72 Unlock everything
-- [ ] Done
+- [x] Done (T56)
 - [ ] Approved by L
 
 ### 4.73 Levitate

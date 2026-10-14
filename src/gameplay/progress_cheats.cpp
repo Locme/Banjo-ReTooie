@@ -7,6 +7,7 @@
 #include "funcs.h"
 
 #include "tooie_cheats.h"
+#include "tooie_debug.h"
 #include "tooie_hooks.h"
 #include "tooie_progress_cheats.h"
 
@@ -45,6 +46,29 @@ namespace {
     constexpr int32_t first_move_flag = 237;
     constexpr int32_t last_move_flag = 296;
 
+    // Unlock everything (handoff 4.72): the N64 flags (decomp include/gameflags.h, the same ids the report
+    // lists) for every world, hub path, station, silo, warp pad and Cheato code, and the doors and shortcuts
+    // the report names that have a flag of their own. Set once when the option is switched on; the area
+    // then reloads so everything in it is redrawn, and saving keeps it.
+    constexpr int32_t unlock_ranges[][2] = {
+        { 0x392, 0x39A },  // worlds Mayahem Temple .. Cauldron Keep
+        { 0x32D, 0x333 },  // Jamjars' silos
+        { 0x3AC, 0x3D5 },  // warp pads in every world (0x3D1..0x3D3 and the CK ones past 0x3D5 are unused)
+        { 0x06C, 0x07A },  // Cheato codes: typeable and available
+        { 0x1B4, 0x1B7 },  // Grunty Industries battery doors
+    };
+    constexpr int32_t unlock_flags[] = {
+        0x391,                                   // Isle o' Hags: the bridge to Hailfire Peaks
+        0x3E9, 0x3EA, 0x3F0,                     // Isle o' Hags: Pine Grove doors and Kazooie's boulder
+        0x436,                                   // Cauldron Keep drawbridge
+        0x1AB,                                   // Grunty Industries main entrance
+        0x096, 0x163, 0x164, 0x1CF, 0x1D0, 0x403, // Chuffy's stations
+        0x042, 0x04B, 0x446,                     // Cheato: NESTKING, the Jiggywiggy special, HOMING
+        0x0D5,                                   // Mayahem Temple prison compound
+        0x3AA,                                   // Spiral Mountain Jinjo door
+        0x3EE,                                   // the first warp pad
+    };
+
     // Frames between checks. A cheat only needs to take hold within a fraction of a second.
     constexpr int check_interval = 10;
 
@@ -80,6 +104,47 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     frame_counter = 0;
+
+    // Unlock everything, once each time the option is switched on (while a save is being played).
+    static bool unlock_was_on = false;
+    const bool unlock_on = tooie::cheats::is_on("cheat_unlock_everything");
+    if (unlock_on && !unlock_was_on && tooie::debug::can_warp()) {
+        // Only flags that were still clear count, so a save that already has everything isn't reloaded.
+        int count = 0;
+        auto unlock = [&](int32_t f) {
+            if (!flag_get(rdram, ctx, f)) {
+                flag_set(rdram, ctx, f, true);
+                count++;
+            }
+        };
+        for (const auto& range : unlock_ranges) {
+            for (int32_t f = range[0]; f <= range[1]; f++) {
+                unlock(f);
+            }
+        }
+        for (int32_t f : unlock_flags) {
+            unlock(f);
+        }
+        for (int32_t f = first_move_flag; f <= last_move_flag; f++) {
+            unlock(f);
+        }
+        if (count > 0) {
+            const uint16_t map = tooie::debug::current_map(rdram);
+            const uint8_t exit = rdram[((0x80127630u + 0x13) ^ 3u) - 0x80000000u];
+            std::printf("[unlock] set %d flags, reloading map 0x%X exit %u\n", count, map, exit);
+            std::fflush(stdout);
+            // The map change as the warp makes it (src/debug/warp.cpp), on a copy of the context.
+            recomp_context saved = *ctx;
+            ctx->r4 = map;
+            ctx->r5 = exit;
+            ctx->r6 = 1;
+            func_800A7990(rdram, ctx);
+            *ctx = saved;
+        }
+        unlock_was_on = true;
+    } else if (!unlock_on) {
+        unlock_was_on = false;
+    }
 
     for (size_t i = 0; i < cheato_count; i++) {
         const bool want = tooie::cheats::is_on(cheato_list[i].option);
