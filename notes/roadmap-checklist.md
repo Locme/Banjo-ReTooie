@@ -29,6 +29,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - Partial (2026-10-13): every Graphics tab option applies and saves the moment it changes; no Apply button needed (lib-patches/RecompFrontend.patch). Graphics API still needs a restart (RT64).
 - 2026-10-14: claimed by the Opus helper thread (frame-rate thread): Graphics API switch without a restart, behind an option that defaults to off.
+- 2026-10-14: L chose an automatic restart over rebuilding the renderer live (the menus are drawn by the renderer, so a live rebuild means tearing them down mid-game). Picking another Graphics API asks "Restart now?"; Restart closes the game and starts it again with the new API, Later keeps it for the next start (src/game/api_restart.cpp). Switching back to the API in use asks nothing. Verified headless: Vulkan run, change confirmed, the game came back on its own with the saved choice; D3D12 could not be run here. T93.
 
 ### 4.11 Saves folder next to the executable
 - [x] Done
@@ -380,6 +381,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.33 Graphics API choice
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: claimed by the Opus helper thread with 4.10. The Graphics API row was hidden in the menu (upstream); it now shows in Graphics with Vulkan (default) and D3D12 on Windows (default set by the Sonnet Tasks lane). Untested on D3D12 until L tries it, so the default stays Vulkan. T93.
 
 ### 4.34 Anti-aliasing, supersampling, upscaling
 - [ ] Done

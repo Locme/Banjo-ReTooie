@@ -44,6 +44,7 @@
 #include "tooie_game.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
+#include "tooie_api_restart.h"
 #include "tooie_debug.h"
 #include "librecomp/game.hpp"
 #include "librecomp/mods.hpp"
@@ -807,6 +808,8 @@ int main(int argc, char** argv) {
     // End high resolution timing period.
     timeEndPeriod(1);
 #endif
+
+    tooie::api_restart::relaunch_if_requested(argc, argv);
 
     return EXIT_SUCCESS;
 }

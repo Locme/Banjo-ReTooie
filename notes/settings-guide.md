@@ -82,7 +82,7 @@ Sets how the picture fits the window. Default: Fill.
 - **Letterbox 16:9**: widens the view to 16:9 and adds black bars in windows of
   any other shape.
 
-Graphics changes apply at once. Graphics API needs a restart. The choices are Vulkan (the default) and, on Windows, D3D12; there is no Auto. A saved Auto is not migrated, so switch it once.
+Graphics changes apply at once. Graphics API needs a restart: changing it asks "Restart now?", and Restart closes the game and opens it again with the new API. The choices are Vulkan (the default) and, on Windows, D3D12; there is no Auto. A saved Auto is not migrated, so switch it once.
 
 ## Graphics: picture filters
 

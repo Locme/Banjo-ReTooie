@@ -29,6 +29,7 @@
 #include "tooie_motion_aim.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
+#include "tooie_api_restart.h"
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
@@ -326,6 +327,7 @@ void tooie::init_config() {
         -10, 20, 1, 0, false, 0);
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
+    tooie::api_restart::add_prompt(graphics);
 
     recompui::config::create_controls_tab();
     tooie::music_player::add_options(recompui::config::create_sound_tab());

@@ -997,3 +997,15 @@
   2. Look at slanted edges, like the warp pad's rim, fences and Banjo's outline. Try it with MSAA off too.
 - Look for: Jagged stair-steps on slanted edges get smoother with FXAA, and a bit more with Extreme. Is Extreme too blurry on text and the HUD? Does it cost frame rate?
 - Status: waiting for L
+
+## T93 Graphics API restart
+- Asked: 2026-10-14 07:25 UTC
+- Build: your own build from main
+- XBLA history: report §4.10, §4.33
+- Steps:
+  1. Esc > Graphics: find Graphics API (it was hidden before). It shows Vulkan.
+  2. Switch it to D3D12. A "Restart now?" box appears; press Later. Switch back to Vulkan: no box this time.
+  3. Switch to D3D12 again and press Restart. The game closes and opens again by itself.
+  4. Check Graphics API reads D3D12 and play a little, then switch back to Vulkan and Restart.
+- Look for: Does the game reopen on its own both times, without a second window or an error? Does D3D12 look and run the same as Vulkan (black or wrong colours, crashes)? I could only run Vulkan here.
+- Status: waiting for L
