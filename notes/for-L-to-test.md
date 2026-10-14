@@ -1294,3 +1294,15 @@
   2. Spiral Mountain: walk into the stream by the tunnel and the pool below the cliff, turn the camera slowly
 - Look for: Reflections and ripples hold steady instead of flickering on and off. Some frames drew the sky separately, and the effects ran once for the sky (without water) and again for the world; now they run once.
 - Status: waiting for L
+
+## T122 Interpolation rename, Game Frame Rate 120 FPS and Unlocked (from your 10:48 list)
+- Asked: 2026-10-14 11:35 UTC
+- Build: your local build of main
+- Commit: b2615fb
+- Steps:
+  1. Esc > Graphics, "Frame rate and overlay": Interpolation (was Framerate) now sits right under Game Frame Rate, with Off (was Original), Display and Manual. Your old choice should still be selected.
+  2. Turn on the Frame rate overlay (F3), set Interpolation to Off, Game Frame Rate to 120 FPS (Experimental), and play a minute in Spiral Mountain and Mayahem Temple: run, jump, swim, watch the music and any cutscene
+  3. Do the same with Unlocked (Experimental), then with Interpolation on Display
+  4. Switch back to Original while playing
+- Look for: Does the overlay's "Game" line reach about 120 with 120 FPS, and go higher with Unlocked (up to 240)? Does Banjo move at his normal speed, and do music and sound effects play at normal pace and pitch (headless the amount of sound made was the same in every mode)? Does anything move too fast (enemies, animations, timers, water, particles)? Do cutscenes and the intro keep their length? Does switching modes while playing glitch the picture or sound? If your PC can't hold 120, 120 FPS goes slow-motion (like 60 FPS does on a slow PC); Unlocked should not.
+- Status: waiting for L
