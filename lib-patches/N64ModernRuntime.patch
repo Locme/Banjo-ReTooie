@@ -165,7 +165,7 @@ index 3b28af3..e7186c6 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..895c554 100644
+index 090cc42..05420f9 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -190,7 +190,7 @@ void vi_thread_func() {
@@ -189,7 +189,26 @@ index 090cc42..895c554 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -261,12 +261,70 @@ void sp_complete() {
+@@ -226,8 +226,16 @@ void vi_thread_func() {
+         // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
+         events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
+ 
+-        // Update VI registers and swap VI modes.
+-        events_context.vi.update_vi();
++        // Update VI registers and swap VI modes. The game sets the next mode and framebuffer from its own
++        // thread under message_mutex, so swap under it too. If the game has started but not set a mode yet
++        // (it can start before this thread's first VI), keep showing the dummy one instead of reading a null mode.
++        {
++            std::lock_guard lock{ events_context.message_mutex };
++            if (events_context.vi.get_next_state()->mode == nullptr) {
++                set_dummy_vi(false);
++            }
++            events_context.vi.update_vi();
++        }
+ 
+         // If the game has started, handle sending VI and AI events.
+         if (ultramodern::is_game_started()) {
+@@ -261,12 +269,70 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -260,7 +279,7 @@ index 090cc42..895c554 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -290,6 +348,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -290,6 +356,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
  
          // Tell the game that the RSP has completed
          sp_complete();
@@ -268,7 +287,7 @@ index 090cc42..895c554 100644
      }
  }
  
-@@ -374,6 +433,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -374,6 +441,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
                  [[maybe_unused]] auto renderer_end = std::chrono::high_resolution_clock::now();
  
                  dp_complete();
@@ -276,7 +295,7 @@ index 090cc42..895c554 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,6 +621,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,6 +629,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue

@@ -1160,3 +1160,11 @@
 - Look for: The air shimmers in smooth waves that rise, starting a short way from the camera and stronger further off. No blocky or stair-step shimmer, and the waves look the same size at any resolution. Banjo and nearby edges stay steady. None on the icy side.
 - Status: waiting for L
 
+
+## T109 Random crash right at game start (VI thread)
+- Asked: 2026-10-14 10:19 UTC
+- Build: main after this commit (build it yourself)
+- Steps:
+  1. Start the game 10 times in a row, closing it each time once the title or file select shows
+- Look for: Does it ever crash or close by itself while starting? If so, attach the newest crash_*.dmp and logs/crashes.log.
+- Status: waiting for L

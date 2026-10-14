@@ -24,6 +24,11 @@ so the submodules stay pinned to their upstream commits.
   of the game threads with the queue each waits on. `wait_for_tasks_idle` waits until
   no RSP or display list task is running, since those read and write RDRAM.
 
+* **VI start-up crash** (`ultramodern/src/events.cpp`): the game can start before the VI thread's
+  first tick, so no mode was set yet and `update_vi` read a null `OSViMode` (a segfault on "VI Thread"
+  in about 1 in 4 to 1 in 30 boots). The VI thread now falls back to the dummy mode, and swaps the VI
+  states under `message_mutex`, which `osViSetMode` and `osViSwapBuffer` already hold.
+
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 
