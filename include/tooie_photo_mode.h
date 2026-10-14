@@ -3,12 +3,14 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "recomp.h"
 
 // Photo mode (handoff 4.82, src/gameplay/photo_mode.cpp): the Photo Mode key (F10, bindable in the
 // Controls tab) freezes the game, hides the HUD and flies the camera freely. A takes a screenshot,
-// Start cycles frozen / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game.
+// Start cycles frozen / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game. An on-screen
+// list (the photo panel) picks and changes the camera, time and filter settings with the D-pad.
 namespace recomp::config {
     class Config;
 }
@@ -36,6 +38,10 @@ namespace tooie::photo_mode {
     void start();
 
     bool active();
+
+    // The photo panel's rows ("Name: value") and the picked one; false when the panel isn't shown
+    // (photo mode off, or hidden with L). Read by src/ui/photo_panel.cpp.
+    bool panel_state(std::vector<std::string>& rows, int& picked_row);
 
     // The photo crop's width / height while photo mode is on, 0 for none. Screenshots keep only the frame.
     float crop_aspect();

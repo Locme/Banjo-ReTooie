@@ -873,3 +873,14 @@
   3. With Full on, play for a minute and go through a door into another area
 - Look for: Does F3 step Off, Compact, Full with a notice each time? Is F3 listed under Hotkeys in the Controls tab? In Full, does the graph at the bottom fill from right to left and show a red spike when the game hitches? Does the audio line stay at 0 dropouts while the sound is clean, and count up if it crackles? Does the build line match the CI build you downloaded?
 - Status: waiting for L
+
+## T85 Photo mode panel
+- Asked: 2026-10-14 06:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.82 (the D-pad list)
+- Steps:
+  1. Press F10 (or Share) for photo mode: a list appears at the top left
+  2. D-pad up and down pick a row, left and right change it. Try Zoom (hold), Camera, Time, Banjo, Filter, Depth of field, Tilt, Crop
+  3. Press L to hide the list, and L again to show it. Press A for a screenshot.
+- Look for: Is the list easy to read and use on your controller? The screenshot should have no list in it. Note: D-pad up/down used to toggle the HUD and orbit, and L used to hide Banjo; those are rows now.
+- Status: waiting for L

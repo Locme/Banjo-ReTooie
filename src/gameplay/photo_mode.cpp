@@ -16,11 +16,13 @@
 //   left stick      move (forward, back, sideways)
 //   right stick     look (C-buttons on the keyboard)
 //   Z / R           down / up
-//   L               hide / show Banjo and Kazooie (holding a move for a second speeds it up)
+//   (holding a move for a second speeds it up)
 //   A               screenshot (as F12)
-//   D-pad up        HUD on / off
-//   D-pad down      orbit Banjo (the sticks circle him, Z / R move closer and further) / fly freely
-//   D-pad left/right zoom out / in (the field of view, through tooie_set_fov)
+//   D-pad up/down   pick a row of the photo panel (src/ui/photo_panel.cpp)
+//   D-pad left/right change it (held repeats): zoom (the field of view, through tooie_set_fov), camera
+//                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), time,
+//                   HUD, Banjo shown or hidden, the filter rows below, depth of field, tilt, crop, grid
+//   L               show / hide the photo panel
 //   Start           frozen, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
 //
@@ -29,8 +31,8 @@
 //
 // Filters (QOL > Photo filter rows): a look, exposure, contrast, saturation, warmth, vignette and grain,
 // drawn by RT64's photo grade pass (lib-patches/rt64.patch) only while photo mode is on, so screenshots
-// show them. They can be changed from the menu while photo mode is on, as can QOL > Photo tilt (the
-// camera's roll).
+// show them. They can be changed from the photo panel or the menu while photo mode is on, as can
+// QOL > Photo tilt (the camera's roll); the panel writes the same options, so both stay in step.
 //
 // Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
 // camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
@@ -49,6 +51,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 #include <variant>
 
 #ifdef _WIN32
@@ -130,6 +133,21 @@ namespace {
     std::atomic<bool> players_toggle{false};
     std::atomic<bool> players_hidden{false};
     std::atomic<float> fov_scale{1.0f};
+
+    // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
+    // thread (-1 or +1 on the picked row).
+    enum class Row { Zoom, Camera, Time, Hud, Banjo, Filter, Exposure, Contrast, Saturation, Warmth, Vignette, Grain,
+        Focus, Tilt, Crop, Grid, Count };
+    constexpr int row_count = (int)Row::Count;
+    std::atomic<int> picked{0};
+    std::atomic<bool> panel_shown{true};
+    std::atomic<int> pending_step{0};
+    std::atomic<bool> orbit_on{false};
+    // Held left / right: the first change at once, then repeats.
+    Clock::time_point step_held_since{};
+    Clock::time_point step_last{};
+    constexpr auto repeat_delay = 400ms;
+    constexpr auto repeat_every = 70ms;
 
     // The pad as photo mode reads it (written by apply_input, read by place_camera).
     std::mutex pad_mutex;
@@ -295,6 +313,115 @@ namespace {
         return std::fabs(v) < stick_deadzone ? 0.0f : v;
     }
 
+    recomp::config::Config& qol_config() {
+        return recompui::config::get_config(tooie::qol_tab_id);
+    }
+
+    struct NumberRow {
+        Row row;
+        const std::string* id;
+        double min, max, step;
+    };
+    const NumberRow number_rows[] = {
+        { Row::Exposure, &tooie::photo_mode::exposure_option, -20, 20, 1 },
+        { Row::Contrast, &tooie::photo_mode::contrast_option, -50, 50, 5 },
+        { Row::Saturation, &tooie::photo_mode::saturation_option, -100, 100, 5 },
+        { Row::Warmth, &tooie::photo_mode::warmth_option, -100, 100, 5 },
+        { Row::Vignette, &tooie::photo_mode::vignette_option, 0, 100, 5 },
+        { Row::Grain, &tooie::photo_mode::grain_option, 0, 100, 5 },
+        { Row::Focus, &tooie::photo_mode::dof_option, 0, 100, 5 },
+        { Row::Tilt, &tooie::photo_mode::tilt_option, -45, 45, 1 },
+    };
+    constexpr const char* look_names[] = { "None", "Sepia", "Black and white", "Noir", "Warm", "Cool", "Vivid", "Faded film",
+        "Teal and orange", "Dream" };
+    constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Filter", "Exposure", "Contrast",
+        "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Tilt", "Crop", "Grid" };
+    static_assert(std::size(row_names) == row_count);
+
+    // On the game thread: one step of the picked row, -1 or +1.
+    void change_row(Row row, int step) {
+        try {
+            recomp::config::Config& qol = qol_config();
+            switch (row) {
+            case Row::Zoom:
+                break;
+            case Row::Camera:
+                orbit_toggle = true;
+                break;
+            case Row::Time:
+                speed = (speed + 3 + step) % 3;
+                break;
+            case Row::Hud:
+                tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
+                break;
+            case Row::Banjo:
+                players_toggle = true;
+                break;
+            case Row::Filter: {
+                const uint32_t n = (uint32_t)std::size(look_names);
+                qol.update_option_value(tooie::photo_mode::look_option, (qol_value<uint32_t>(tooie::photo_mode::look_option, 0) + n + step) % n);
+                break;
+            }
+            case Row::Crop: {
+                const uint32_t n = (uint32_t)std::size(crop_names);
+                qol.update_option_value(tooie::photo_mode::crop_option, (qol_value<uint32_t>(tooie::photo_mode::crop_option, 0) + n + step) % n);
+                break;
+            }
+            case Row::Grid:
+                qol.update_option_value(tooie::photo_mode::grid_option, !qol_value<bool>(tooie::photo_mode::grid_option, false));
+                break;
+            default:
+                for (const NumberRow& n : number_rows) {
+                    if (n.row == row) {
+                        const double v = std::clamp(qol_value<double>(*n.id, 0.0) + step * n.step, n.min, n.max);
+                        qol.update_option_value(*n.id, v);
+                    }
+                }
+                break;
+            }
+        } catch (...) {
+        }
+    }
+
+    std::string row_value(Row row) {
+        char text[32];
+        switch (row) {
+        case Row::Zoom:
+            std::snprintf(text, sizeof(text), "x%.2f", 1.0f / fov_scale.load());
+            return text;
+        case Row::Camera:
+            return orbit_on ? "Orbit Banjo" : "Free";
+        case Row::Time:
+            return speed == 0 ? "Frozen" : speed == 1 ? "1/8 speed" : "1/4 speed";
+        case Row::Hud:
+            return tooie::hide_hud::is_hidden() ? "Hidden" : "Shown";
+        case Row::Banjo:
+            return players_hidden ? "Hidden" : "Shown";
+        case Row::Filter: {
+            const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
+            return v < std::size(look_names) ? look_names[v] : "None";
+        }
+        case Row::Crop: {
+            const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::crop_option, 0);
+            return v < std::size(crop_names) ? crop_names[v] : "None";
+        }
+        case Row::Grid:
+            return qol_value<bool>(tooie::photo_mode::grid_option, false) ? "On" : "Off";
+        case Row::Exposure:
+            std::snprintf(text, sizeof(text), "%+.1f stops", qol_value<double>(tooie::photo_mode::exposure_option, 0.0) / 10.0);
+            return text;
+        default:
+            for (const NumberRow& n : number_rows) {
+                if (n.row == row) {
+                    std::snprintf(text, sizeof(text), "%.0f", qol_value<double>(*n.id, 0.0));
+                    return text;
+                }
+            }
+            return "";
+        }
+    }
+
     void enter(uint8_t* rdram) {
         is_active = true;
         speed = 0;
@@ -302,7 +429,9 @@ namespace {
         orbit_toggle = false;
         cam.placed = false;
         cam.orbit = false;
+        orbit_on = false;
         players_toggle = false;
+        pending_step = 0;
         cam.moving = false;
         entered_map = tooie::debug::current_map(rdram);
         hud_was_hidden = tooie::hide_hud::is_hidden();
@@ -313,7 +442,9 @@ namespace {
             std::lock_guard lock{ pad_mutex };
             last_buttons = 0xFFFF;   // buttons already held don't count as presses
         }
-        tooie::toast::show("Photo mode: A photo, B back, Start time");
+        if (!panel_shown) {
+            tooie::toast::show("Photo mode: A photo, B back, L shows the list");
+        }
         fprintf(stderr, "[photo] on\n");
     }
 
@@ -333,8 +464,9 @@ void tooie::photo_mode::register_input() {
     recompinput::set_game_input_name(photo_input, "Photo Mode");
     recompinput::set_game_input_description(photo_input,
         "Freezes the game and hides the HUD so you can fly the camera around and take screenshots. "
-        "Left stick moves, right stick looks, Z and R go down and up, L hides Banjo, A takes a screenshot, "
-        "D-pad up shows the HUD, D-pad down circles Banjo, D-pad left and right zoom, "
+        "Left stick moves, right stick looks, Z and R go down and up, A takes a screenshot. "
+        "A list on screen holds zoom, camera, time, HUD, Banjo, the filters, depth of field, tilt, crop and grid: "
+        "D-pad up and down pick a row, left and right change it, L hides the list. "
         "Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
     recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_MISC1) });
@@ -393,6 +525,18 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
 }
 
+bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_row) {
+    if (!is_active || !panel_shown) {
+        return false;
+    }
+    rows.clear();
+    for (int i = 0; i < row_count; i++) {
+        rows.push_back(std::string(row_names[i]) + ": " + row_value((Row)i));
+    }
+    picked_row = picked;
+    return true;
+}
+
 bool tooie::photo_mode::active() {
     return is_active;
 }
@@ -425,18 +569,35 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
         tooie::screenshot::take();
     }
     if (pressed & d_up) {
-        tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
-    }
-    if (pressed & button_l) {
-        players_toggle = true;
+        picked = (picked + row_count - 1) % row_count;
     }
     if (pressed & d_down) {
-        orbit_toggle = true;
+        picked = (picked + 1) % row_count;
+    }
+    if (pressed & button_l) {
+        panel_shown = !panel_shown;
+    }
+    // Left / right change the picked row (zoom is held, in place_camera).
+    const int dir = (*buttons & d_right ? 1 : 0) - (*buttons & d_left ? 1 : 0);
+    const Clock::time_point now = Clock::now();
+    if (dir == 0 || (Row)picked.load() == Row::Zoom) {
+        step_held_since = {};
+    }
+    else if (pressed & (d_left | d_right)) {
+        step_held_since = now;
+        step_last = now;
+        pending_step = dir;
+    }
+    else if (step_held_since != Clock::time_point{} && now - step_held_since >= repeat_delay && now - step_last >= repeat_every) {
+        step_last = now;
+        pending_step = dir;
     }
     if (pressed & button_start) {
         int s = (speed + 1) % 3;
         speed = s;
-        tooie::toast::show(speed_names[s]);
+        if (!panel_shown) {
+            tooie::toast::show(speed_names[s]);
+        }
     }
     *buttons = 0;
     *x = 0.0f;
@@ -478,9 +639,14 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
 
+    if (const int step = pending_step.exchange(0); step != 0) {
+        change_row((Row)picked.load(), step);
+    }
     if (players_toggle.exchange(false)) {
         players_hidden = !players_hidden;
-        tooie::toast::show(players_hidden ? "Banjo hidden" : "Banjo shown");
+        if (!panel_shown) {
+            tooie::toast::show(players_hidden ? "Banjo hidden" : "Banjo shown");
+        }
     }
 
     // RT64 keys framebuffers by physical address.
@@ -526,7 +692,7 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
         look_y = (p.buttons & c_up ? 1.0f : 0.0f) - (p.buttons & c_down ? 1.0f : 0.0f);
     }
     // Zoom, held.
-    const float zoom = (p.buttons & d_left ? 1.0f : 0.0f) - (p.buttons & d_right ? 1.0f : 0.0f);
+    const float zoom = (Row)picked.load() != Row::Zoom ? 0.0f : (p.buttons & d_left ? 1.0f : 0.0f) - (p.buttons & d_right ? 1.0f : 0.0f);
     if (zoom != 0.0f) {
         fov_scale = std::clamp(fov_scale.load() * std::exp(zoom * fov_rate * dt), min_fov_scale, max_fov_scale);
     }
@@ -550,7 +716,10 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
                 cam.yaw = std::fmod(std::atan2(-d[0], -d[2]) / deg + 360.0f, 360.0f);
             }
         }
-        tooie::toast::show(cam.orbit ? "Orbit Banjo" : "Free camera");
+        orbit_on = cam.orbit;
+        if (!panel_shown) {
+            tooie::toast::show(cam.orbit ? "Orbit Banjo" : "Free camera");
+        }
     }
     const float move_x = deadzone(p.x);
     const float move_y = deadzone(p.y);

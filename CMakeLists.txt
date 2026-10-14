@@ -280,6 +280,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/frame_overlay.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_frame_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/photo_panel.cpp
 
     ${CMAKE_SOURCE_DIR}/rsp/n_aspMain.cpp
 )
