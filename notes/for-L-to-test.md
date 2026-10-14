@@ -909,7 +909,7 @@
 - Status: waiting for L
 
 ## T88 Water reflections
-- Asked: 2026-10-14 06:50 UTC
+- Asked: 2026-10-14 06:46 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.45 (XBLA's reflections didn't work on your PC)
 - Steps:
