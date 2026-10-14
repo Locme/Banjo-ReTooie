@@ -295,7 +295,7 @@ void tooie::hd_shadows::tick() {
     }
 }
 
-extern "C" void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) {
     draw_callback = (uint32_t)ctx->r5;
 }
 

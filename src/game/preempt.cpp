@@ -16,7 +16,7 @@
 
 void dequeue_external_messages(uint8_t* rdram);
 
-extern "C" void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_preempt_point(uint8_t* rdram, recomp_context* /*ctx*/) {
     std::this_thread::yield();
     dequeue_external_messages(rdram);
     ultramodern::check_running_queue(rdram);

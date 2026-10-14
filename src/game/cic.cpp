@@ -58,10 +58,10 @@ namespace {
     }
 }
 
-extern "C" void __osSiGetAccess_recomp(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void __osSiGetAccess_recomp(uint8_t* /*rdram*/, recomp_context* /*ctx*/) {
 }
 
-extern "C" void __osSiRelAccess_recomp(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void __osSiRelAccess_recomp(uint8_t* /*rdram*/, recomp_context* /*ctx*/) {
 }
 
 // s32 __osSiRawStartDma(s32 direction, void* dramAddr)
@@ -84,13 +84,13 @@ extern "C" void __osSiRawStartDma_recomp(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // s32 osPfsInit(OSMesgQueue*, OSPfs*, int channel): no Controller Pak.
-extern "C" void osPfsInit_recomp(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void osPfsInit_recomp(uint8_t* /*rdram*/, recomp_context* ctx) {
     ctx->r2 = 1; // PFS_ERR_NOPACK
 }
 
 // Only wait_one_frame (in the gz debug overlay) uses this, to spin until the
 // beam passes line 5. Line 5 lets both of its loops finish at once.
-extern "C" void osViGetCurrentLine_recomp(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void osViGetCurrentLine_recomp(uint8_t* /*rdram*/, recomp_context* ctx) {
     ctx->r2 = 5;
 }
 

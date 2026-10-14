@@ -87,7 +87,7 @@ uint32_t tooie::mix_rate::extra_region_size() {
 }
 
 // func_800125B0, after the audio heap is set up and before func_8001268C builds the synthesizer.
-extern "C" void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* /*ctx*/) {
     factor = high_picked() ? 2 : 1;
     fprintf(stderr, "[mix rate] %u Hz\n", 22050 * factor);
     if (factor == 1) {
@@ -125,7 +125,7 @@ extern "C" void tooie_mix_rate_frequency(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // func_8001268C, after the command lists and AI buffers are assigned: swap in the bigger ones.
-extern "C" void tooie_mix_rate_buffers(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_mix_rate_buffers(uint8_t* rdram, recomp_context* /*ctx*/) {
     if (factor == 1) {
         return;
     }
@@ -171,7 +171,7 @@ extern "C" void tooie_mix_rate_pitch_begin(uint8_t* rdram, recomp_context* ctx) 
 }
 
 // func_8002D450, at its return: put the voice's own ratio back for the next pull and pitch updates.
-extern "C" void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* /*ctx*/) {
     if (pulled_voice == 0) {
         return;
     }
@@ -180,7 +180,7 @@ extern "C" void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // func_800129FC, right after osAiGetLength: count the queue in 22 kHz samples for the game's checks.
-extern "C" void tooie_mix_rate_queue_length(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_mix_rate_queue_length(uint8_t* /*rdram*/, recomp_context* ctx) {
     if (factor == 1) {
         return;
     }

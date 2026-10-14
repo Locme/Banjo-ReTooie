@@ -604,7 +604,7 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     *y = 0.0f;
 }
 
-void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
+void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     if (test.active) {
         if (test.begin == Clock::time_point{}) {
             test.begin = Clock::now();

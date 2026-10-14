@@ -105,7 +105,7 @@ namespace {
 // Hook in func_80082088 before `lw $s5, 0x40($s5)`, which the config replaces
 // with a no-op. $s5 holds 0xB0000000 | (overlay index * 4): the key lives in
 // the ROM's IPL3 area at 0x40 + overlay index * 4.
-extern "C" void tooie_read_overlay_key(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_read_overlay_key(uint8_t* /*rdram*/, recomp_context* ctx) {
     uint32_t offset = 0x40 + ((uint32_t)ctx->r21 & 0x0FFFFFFF);
     std::span<const uint8_t> rom = recomp::get_rom();
     if (offset + 4 > rom.size()) {

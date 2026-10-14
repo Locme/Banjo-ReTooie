@@ -121,7 +121,7 @@ extern "C" void tooie_hud_element_begin(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // Return of scinfobar_entrypoint_24.
-extern "C" void tooie_hud_element_end(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_hud_element_end(uint8_t* rdram, recomp_context* /*ctx*/) {
     if (span_gfx_ctx == 0) {
         return;
     }

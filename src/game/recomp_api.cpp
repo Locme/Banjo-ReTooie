@@ -17,7 +17,7 @@ extern "C" void recomp_puts(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-extern "C" void recomp_exit(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void recomp_exit(uint8_t* /*rdram*/, recomp_context* /*ctx*/) {
     ultramodern::quit();
 }
 

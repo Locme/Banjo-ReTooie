@@ -15,7 +15,7 @@
 
 extern "C" u32 osGetCount();
 
-extern "C" void boot_osInitialize(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void boot_osInitialize(uint8_t* /*rdram*/, recomp_context* /*ctx*/) {
 }
 
 // s32 __osPiRawStartDma(s32 direction, u32 devAddr, void* dramAddr, u32 size)
@@ -39,14 +39,14 @@ extern "C" void boot___osPiRawStartDma(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // The raw DMA above completes immediately, so the PI is never busy.
-extern "C" void boot_osPiGetStatus(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void boot_osPiGetStatus(uint8_t* /*rdram*/, recomp_context* ctx) {
     ctx->r2 = 0;
 }
 
 // func_8001DDC0 returns the running thread's CPU time: the cop0 Count register
 // plus two fields of __osRunningThread. The runtime does not keep those fields,
 // so this returns the count alone.
-extern "C" void func_8001DDC0(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void func_8001DDC0(uint8_t* /*rdram*/, recomp_context* ctx) {
     ctx->r2 = (int32_t)osGetCount();
 }
 
@@ -54,6 +54,6 @@ extern "C" void func_8001DDC0(uint8_t* rdram, recomp_context* ctx) {
 // cleared interrupt mask bit 5 (SR_IBIT5, 0x1000) as a pending reset and halts.
 // On the console every interrupt is unmasked while the game runs, so report
 // them all as enabled.
-extern "C" void __osGetSR_2(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void __osGetSR_2(uint8_t* /*rdram*/, recomp_context* ctx) {
     ctx->r2 = (int32_t)(ctx->status_reg | 0xFF01);
 }

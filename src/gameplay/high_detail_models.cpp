@@ -81,7 +81,7 @@ extern "C" void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-extern "C" void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx) {
+extern "C" void tooie_banjo_detail(uint8_t* /*rdram*/, recomp_context* ctx) {
     if (high_detail_on()) {
         ctx->r4 = 0;
     }
