@@ -68,6 +68,8 @@ namespace tooie {
 
     // High-detail models always (src/gameplay/high_detail_models.cpp), QOL tab.
     inline const std::string high_detail_models_option = "high_detail_models";
+    // HD shadows (src/gameplay/hd_shadows.cpp), Graphics tab.
+    inline const std::string hd_shadows_option = "hd_shadows";
     // WIP tab (src/game/config.cpp): its id, and the General toggle that shows it.
     inline const std::string wip_tab_id = "wip";
     inline const std::string wip_tab_option = "wip_tab";

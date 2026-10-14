@@ -896,3 +896,14 @@
   5. Esc > Controls > Movement > Run: bind it to another button. That button now runs, and B only rolls
 - Look for: Does the run look right, with the feet keeping up with the ground? Too fast or too slow? Does the tap-to-roll feel delayed (it fires when you let go)?
 - Status: waiting for L
+
+## T87 HD Shadows (player)
+- Asked: 2026-10-14 06:45 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.51
+- Steps:
+  1. Esc > Graphics: HD Shadows On
+  2. Stand in a bright place and look at Banjo's shadow while he idles, runs and jumps
+  3. Turn HD Shadows Off and On a few times, then try a transformation or two
+- Look for: With it On, does the shadow match Banjo's full shape (Kazooie, backpack, arms) and pose? Does it switch at once? Does it ever flicker or go missing? Checked headless only.
+- Status: waiting for L

@@ -193,7 +193,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.51 HD shadows
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-14: claimed by the Second Opus helper thread (L picked it). Banjo's N64 shadow is already model-shaped; this gives other characters the same instead of the round blob.
+- 2026-10-14: claimed by the Second Opus helper thread (L picked it). Graphics > HD Shadows (off by default, live). The player's shadow is already drawn from a model on N64, but from a simpler per-form shadow model (0x853 for Banjo-Kazooie); a hook in func_800A6250 swaps in the model on screen, which the game already supports. Checked headless in map 0x173: the shadow model 801A6280 is replaced by the on-screen model 801BA710 (TOOIE_SHADOW_LOG=1). T87. Next (L's pick): model-shaped shadows for enemies and NPCs, which have none.
 
 ### 4.53 Canary Mary rubber banding
 - [x] Done

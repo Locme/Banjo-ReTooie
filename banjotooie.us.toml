@@ -409,6 +409,15 @@ func = "func_80093F30"
 before_vram = 0x80093F30
 text = "tooie_banjo_detail(rdram, ctx);"
 
+# --- HD shadows, 4.51 (src/gameplay/hd_shadows.cpp) --------------------------
+# func_800A6250 draws the player's shadow. Here $sp+0x1C8 holds the form's
+# shadow model (func_800D674C) and $sp+0x1C4 the model on screen
+# (func_80092B04), both just stored; they are compared at 0x800A64B0.
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A62C0
+text = "tooie_player_shadow_model(rdram, ctx);"
+
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
 [[patches.hook]]

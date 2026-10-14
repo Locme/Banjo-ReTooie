@@ -4598,6 +4598,7 @@ RECOMP_FUNC void func_800A6250(uint8_t* rdram, recomp_context* ctx) {
     after_4:
     // 0x800A62BC: sw          $v0, 0x1C4($sp)
     MEM_W(0X1C4, ctx->r29) = ctx->r2;
+    tooie_player_shadow_model(rdram, ctx);
     // 0x800A62C0: jal         0x800F274C
     // 0x800A62C4: addiu       $a0, $sp, 0x210
     ctx->r4 = ADD32(ctx->r29, 0X210);

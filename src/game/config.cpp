@@ -296,6 +296,11 @@ void tooie::init_config() {
         "Always High-Detail Models",
         "Models that switch to a simpler version far away always use the detailed one. Banjo always uses his close-up model (with his necklace).",
         true);
+    graphics.add_bool_option(
+        tooie::hd_shadows_option,
+        "HD Shadows",
+        "The player's shadow is shaped like the full model on screen, with its pose, instead of the game's simpler shadow model.",
+        false);
     tooie::frame_overlay::add_option(graphics);
     tooie::game_frame_rate::add_option(graphics);
     graphics.add_bool_option(
