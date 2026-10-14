@@ -860,6 +860,7 @@ L_8008BDE8:
     // 0x8008BE18: lh          $a0, 0x18($s0)
     ctx->r4 = MEM_H(ctx->r16, 0X18);
     after_2:
+    tooie_run_anim_file(rdram, ctx);
     // 0x8008BE1C: or          $s1, $v0, $zero
     ctx->r17 = ctx->r2 | 0;
     // 0x8008BE20: jal         0x8008BD1C
@@ -941,6 +942,7 @@ L_8008BE78:
     // 0x8008BE7C: lh          $a0, 0x18($s0)
     ctx->r4 = MEM_H(ctx->r16, 0X18);
     after_9:
+    tooie_run_anim_file(rdram, ctx);
     // 0x8008BE80: or          $s1, $v0, $zero
     ctx->r17 = ctx->r2 | 0;
     // 0x8008BE84: jal         0x8008BD1C

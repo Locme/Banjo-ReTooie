@@ -6,10 +6,10 @@
 #include "recomp.h"
 
 // Hold to run (src/gameplay/hold_to_run.cpp, L 2026-10-14): while the Run control (Controls tab,
-// B by default) is held, Banjo-Kazooie, Banjo alone and Kazooie alone run faster than their
+// not bound by default) is held, Banjo-Kazooie, Banjo alone and Kazooie alone run faster than their
 // normal run, with a sprint animation.
 namespace tooie::hold_to_run {
-    // Names the Run control and gives it its default binding. Call before
+    // Names the Run control and leaves it unbound by default. Call before
     // recompui::config::finalize(), which loads the controls config.
     void register_input();
 

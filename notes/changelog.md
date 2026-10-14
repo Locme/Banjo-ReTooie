@@ -68,7 +68,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Graphics: FXAA Anti-Aliasing (FXAA or Extreme), the Xbox Live Arcade version's quick edge smoothing; it works with MSAA and SMAA.
 - Graphics API: Auto is gone and Vulkan is the default (D3D12 is still a choice on Windows). If you have Auto saved, switch the row once.
 - Settings: the eleven Cheato codes moved from Cheats to their own Cheato tab, shown while Enable cheats is on (Cheats is much shorter). Your old Cheato switches start off.
-- Hold to run: hold B while moving and Banjo-Kazooie, Banjo alone or Kazooie alone runs half again as fast, with the run animation stepping faster to match. A quick tap of B still rolls. Rebind it as Run under Movement in the Controls tab.
+- Hold to run: a new Run control (Controls tab, Movement), not bound by default. Hold it while moving and Banjo-Kazooie, Banjo alone or Kazooie alone runs half again as fast, with a new sprint animation: Banjo leans forward and swings his arms and legs wider, Kazooie leans in with a longer, bouncier stride. Bound to the B button, a quick tap of B still rolls.
 - Frame rate overlay: Off, Compact or Full, with F3 to step through them; Full adds audio queue and dropouts, the build, and a frame time graph.
 - Above Original, a part of Banjo that changes its look (his face when he blinks) no longer jumps for a frame.
 - Achievements: the Xbox Live Arcade version's twelve achievements (200 G), with a pop-up when one unlocks and an Achievements tab listing them. Eight are tracked so far; nothing is awarded while cheats are on.

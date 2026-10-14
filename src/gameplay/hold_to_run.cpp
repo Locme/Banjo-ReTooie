@@ -1,22 +1,23 @@
 // Hold to run (L, 2026-10-14): "press B and hold to run", rebindable in the controller options,
 // with an animation that fits Banjo running. Only for Banjo-Kazooie, Banjo alone and Kazooie alone.
 //
-// The Run control is a game input in the Controls tab, on the same buttons as the N64 B button by
-// default. While it is held in that form's run state, the target speed the run state asks for
+// The Run control is a game input in the Controls tab, with no default binding (L, 2026-10-14: "its
+// own bind ... but unbind it"). While it is held in that form's run state, the target speed the run state asks for
 // (baphysics_set_target_horizontal_velocity, hooked in banjotooie.us.toml) is raised by sprint_scale.
 // The game ties its run animation's pace to the speed only up to the normal run speed, so at the
 // higher speed the feet would slide (the steps get longer); the top of that speed map is stretched by
 // the same factor, so Banjo's run (Banjo-Kazooie, and Banjo alone, who shares it) and Kazooie's run
 // keep the same step length and simply step faster.
 //
-// B while moving is the forward roll (Kazooie alone: her wing attack). When Run shares a button with
-// B, B is held back while moving; letting go within tap_time passes a B press on, so a tap still rolls.
+// B while moving is the forward roll (Kazooie alone: her wing attack). When Run is bound to a button
+// B also uses, B is held back while moving; letting go within tap_time passes a B press on, so a tap still rolls.
 // Standing still, B goes through at once (the claw swipe).
 //
 // Debug: TOOIE_RUN_HOLD=<from ms>:<to ms>[,...] acts as Run held between those times after the first pad
 // read (headless); TOOIE_RUN_LOG=1 logs form, state, animation, speed and animation duration 4 times
 // a second; TOOIE_RUN_REBIND=<SDL scancode> rebinds Run on the keyboard as the Controls tab does.
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -24,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -35,6 +37,7 @@
 #endif
 
 #include "recomp.h"
+#include "librecomp/addresses.hpp"
 #include "funcs.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
@@ -62,12 +65,21 @@ namespace {
         uint8_t form;
         uint32_t run_state;
         uint32_t run_anim;
+        uint32_t idle_state;
     };
     constexpr RunForm run_forms[] = {
-        { 0x1, 4,   0x0C },  // Banjo-Kazooie
-        { 0xA, 4,   0x0C },  // Banjo alone: the same run as Banjo-Kazooie
-        { 0xB, 199, 0xA6 },  // Kazooie alone
+        { 0x1, 4,   0x0C, 1 },    // Banjo-Kazooie
+        { 0xA, 4,   0x0C, 1 },    // Banjo alone: the same run as Banjo-Kazooie
+        { 0xB, 199, 0xA6, 187 },  // Kazooie alone
     };
+
+    // anctrl -> the animation struct it plays (index at +0x18, as anctrl_setIndex sets on the anctrl).
+    constexpr uint32_t anctrl_animation = 0x1C;
+
+    // The sprint's length when shown on the spot (TOOIE_RUN_ANIM_TEST): the run's at its top speed, sped up.
+    float in_place_duration(uint32_t run_anim) {
+        return (run_anim == 0xA6 ? 0.376f : 0.44f) / 1.5f;
+    }
 
     // PlayerState +0x4 -> animation block. In the speed-scaled animation mode (the run) the duration is
     // mapped linearly from the speed at +0x24 to the duration at +0x2C, and from +0x28 to +0x30
@@ -179,6 +191,293 @@ namespace {
         }
     }
 
+    // --- The sprint animations -------------------------------------------------------------------
+    //
+    // Tooie has no sprint, so the sprint is made from each form's own run animation in the player's
+    // ROM, at runtime: an animation file is a list of tracks (bone, transform type), each a list of
+    // keyframes (frame, value), as in Banjo-Kazooie. Rotations are in 1/64 degree, scales in 1/64,
+    // translations in model units. Each rule below scales a track's swing about its average and adds
+    // an offset, or adds a track the run does not have. The result is kept in the recomp heap and
+    // handed to the game in place of the run file while the sprint plays.
+    struct Rule {
+        uint16_t bone;
+        uint8_t type;   // 0-2 rotation x/y/z, 3-5 scale, 6-8 translation
+        float scale;    // swing about the track's average
+        float offset;   // added to every key (rotations: degrees)
+    };
+
+    struct Key {
+        uint16_t frame; // frame and flags as stored
+        int16_t value;
+    };
+
+    struct Track {
+        uint16_t bone;
+        uint8_t type;
+        std::vector<Key> keys;
+    };
+
+    // Banjo's run (animation 0xC; Banjo alone uses it too): body leant 12 degrees forward (bone 3),
+    // arms and legs (the mirrored chains 6-16 and 20-30) swing 40% further.
+    const std::vector<Rule> banjo_rules = {
+        { 3, 0, 1.0f, 12.0f },
+        { 6, 0, 1.4f, 0.0f }, { 6, 1, 1.4f, 0.0f }, { 6, 2, 1.4f, 0.0f },
+        { 8, 0, 1.4f, 0.0f }, { 8, 1, 1.4f, 0.0f }, { 8, 2, 1.4f, 0.0f },
+        { 10, 0, 1.4f, 0.0f }, { 10, 1, 1.4f, 0.0f }, { 10, 2, 1.4f, 0.0f },
+        { 12, 0, 1.4f, 0.0f }, { 12, 1, 1.4f, 0.0f }, { 12, 2, 1.4f, 0.0f },
+        { 14, 0, 1.4f, 0.0f }, { 14, 1, 1.4f, 0.0f }, { 14, 2, 1.4f, 0.0f },
+        { 16, 0, 1.4f, 0.0f }, { 16, 1, 1.4f, 0.0f }, { 16, 2, 1.4f, 0.0f },
+        { 20, 0, 1.4f, 0.0f }, { 20, 1, 1.4f, 0.0f }, { 20, 2, 1.4f, 0.0f },
+        { 22, 0, 1.4f, 0.0f }, { 22, 1, 1.4f, 0.0f }, { 22, 2, 1.4f, 0.0f },
+        { 24, 0, 1.4f, 0.0f }, { 24, 1, 1.4f, 0.0f }, { 24, 2, 1.4f, 0.0f },
+        { 26, 0, 1.4f, 0.0f }, { 26, 1, 1.4f, 0.0f }, { 26, 2, 1.4f, 0.0f },
+        { 28, 0, 1.4f, 0.0f }, { 28, 1, 1.4f, 0.0f }, { 28, 2, 1.4f, 0.0f },
+        { 30, 0, 1.4f, 0.0f }, { 30, 1, 1.4f, 0.0f }, { 30, 2, 1.4f, 0.0f },
+    };
+
+    // Kazooie's run (animation 0xA6): legs (6-12, 20-26) stride 35% further, body (bone 106) leant
+    // 10 degrees forward with 40% more bounce.
+    const std::vector<Rule> kazooie_rules = {
+        { 6, 0, 1.35f, 0.0f },
+        { 10, 0, 1.35f, 0.0f },
+        { 12, 0, 1.35f, 0.0f },
+        { 20, 0, 1.35f, 0.0f },
+        { 24, 0, 1.35f, 0.0f },
+        { 26, 0, 1.35f, 0.0f },
+        { 106, 0, 1.0f, 10.0f }, { 106, 7, 1.4f, 0.0f },
+    };
+
+    float rotation_units(uint8_t type) {
+        return type <= 2 ? 64.0f : 1.0f;
+    }
+
+    // TOOIE_RUN_ANIM_TUNE=<file>: rules to use instead, for tuning headless. Lines: "<anim hex> <bone>
+    // <type> <scale> <offset>"; # starts a comment; "@<ms>" starts a set of rules used from that long
+    // after the first animation update (to compare several in one run). An animation listed in the
+    // set in use takes only those rules.
+    struct TuneSet {
+        long from_ms = 0;
+        std::vector<std::pair<uint32_t, Rule>> rules;
+    };
+    std::vector<TuneSet> tune_sets;
+    size_t tune_active = 0;
+    uint32_t tune_generation = 0;
+
+    void reload_tune() {
+        const char* path = std::getenv("TOOIE_RUN_ANIM_TUNE");
+        if (path == nullptr) {
+            return;
+        }
+        static const Clock::time_point began = Clock::now();
+        static bool read = false;
+        if (!read) {
+            read = true;
+            tune_sets.push_back({});
+            if (FILE* f = std::fopen(path, "r")) {
+                char line[256];
+                while (std::fgets(line, sizeof(line), f)) {
+                    unsigned anim = 0, bone = 0, type = 0;
+                    float scale = 1, offset = 0;
+                    long ms = 0;
+                    if (std::sscanf(line, "@%ld", &ms) == 1) {
+                        tune_sets.push_back({ ms, {} });
+                    } else if (line[0] != '#' && std::sscanf(line, "%x %u %u %f %f", &anim, &bone, &type, &scale, &offset) == 5) {
+                        tune_sets.back().rules.push_back({ anim, Rule{ (uint16_t)bone, (uint8_t)type, scale, offset } });
+                    }
+                }
+                std::fclose(f);
+            }
+        }
+        const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - began).count();
+        size_t pick = 0;
+        for (size_t i = 0; i < tune_sets.size(); i++) {
+            if (tune_sets[i].from_ms <= ms) {
+                pick = i;
+            }
+        }
+        if (pick != tune_active || tune_generation == 0) {
+            tune_active = pick;
+            tune_generation++;
+            std::printf("[run] tune set %zu (from %ld ms): %zu rules\n", pick, tune_sets[pick].from_ms, tune_sets[pick].rules.size());
+            std::fflush(stdout);
+        }
+    }
+
+    const std::vector<Rule>* tuned_rules(uint32_t index) {
+        static std::vector<Rule> picked;
+        if (tune_sets.empty()) {
+            return nullptr;
+        }
+        picked.clear();
+        for (const auto& [anim, rule] : tune_sets[tune_active].rules) {
+            if (anim == index) {
+                picked.push_back(rule);
+            }
+        }
+        return &picked;
+    }
+
+    uint16_t rd_half(uint8_t* rdram, uint32_t addr) {
+        return (uint16_t)MEM_H(0, (gpr)(int32_t)addr);
+    }
+
+    void wr_half(uint8_t* rdram, uint32_t addr, uint16_t value) {
+        MEM_H(0, (gpr)(int32_t)addr) = (int16_t)value;
+    }
+
+    // Reads an animation file: header (start frame, end frame, track count, pad), then the tracks.
+    // Returns its size in bytes, or 0 if it does not look like one.
+    uint32_t read_anim(uint8_t* rdram, uint32_t file, uint16_t* start, uint16_t* end, std::vector<Track>* tracks) {
+        *start = rd_half(rdram, file);
+        *end = rd_half(rdram, file + 2);
+        const uint16_t count = rd_half(rdram, file + 4);
+        if (count == 0 || count > 512) {
+            return 0;
+        }
+        uint32_t at = file + 8;
+        for (uint16_t i = 0; i < count; i++) {
+            const uint16_t head = rd_half(rdram, at);
+            const uint16_t keys = rd_half(rdram, at + 2);
+            if (keys > 2048) {
+                return 0;
+            }
+            Track t{ (uint16_t)(head >> 4), (uint8_t)(head & 0xF), {} };
+            at += 4;
+            for (uint16_t k = 0; k < keys; k++) {
+                t.keys.push_back({ rd_half(rdram, at), (int16_t)rd_half(rdram, at + 2) });
+                at += 4;
+            }
+            tracks->push_back(std::move(t));
+        }
+        return at - file;
+    }
+
+    void apply_rules(std::vector<Track>& tracks, const std::vector<Rule>& rules, uint16_t start) {
+        for (const Rule& r : rules) {
+            Track* track = nullptr;
+            for (Track& t : tracks) {
+                if (t.bone == r.bone && t.type == r.type) {
+                    track = &t;
+                }
+            }
+            if (track == nullptr) {
+                if (r.offset == 0.0f) {
+                    continue;
+                }
+                // A track the run does not move: one key holding the offset (frame flags as the game's own).
+                tracks.push_back({ r.bone, r.type, { Key{ (uint16_t)(0xC000 | start), 0 } } });
+                track = &tracks.back();
+            }
+            double mean = 0;
+            for (const Key& k : track->keys) {
+                mean += k.value;
+            }
+            mean /= (double)track->keys.size();
+            for (Key& k : track->keys) {
+                const double v = mean + (k.value - mean) * r.scale + r.offset * rotation_units(r.type);
+                k.value = (int16_t)std::clamp(v, -32768.0, 32767.0);
+            }
+        }
+        // The game expects the tracks in bone order.
+        std::stable_sort(tracks.begin(), tracks.end(), [](const Track& a, const Track& b) {
+            return a.bone != b.bone ? a.bone < b.bone : a.type < b.type;
+        });
+    }
+
+    struct Built {
+        uint32_t source = 0;
+        uint32_t vram = 0;
+    };
+
+    // The sprint file for the run animation `index`, made from the run file at `file` the first time.
+    uint32_t sprint_file(uint8_t* rdram, uint32_t index, uint32_t file) {
+        static Built built[4];
+        static uint32_t built_generation = 0;
+        if (built_generation != tune_generation) {
+            built_generation = tune_generation;
+            for (Built& b : built) {
+                b = {};
+            }
+        }
+        for (const Built& b : built) {
+            if (b.source == index && b.vram != 0) {
+                return b.vram;
+            }
+        }
+        uint16_t start = 0, end = 0;
+        std::vector<Track> tracks;
+        if (read_anim(rdram, file, &start, &end, &tracks) == 0) {
+            return 0;
+        }
+        const std::vector<Rule>* rules = tuned_rules(index);
+        if (rules == nullptr) {
+            rules = index == 0xA6 ? &kazooie_rules : &banjo_rules;
+        }
+        apply_rules(tracks, *rules, start);
+        uint32_t size = 8;
+        for (const Track& t : tracks) {
+            size += 4 + 4 * (uint32_t)t.keys.size();
+        }
+        void* mem = recomp::alloc(rdram, size + 16);
+        if (mem == nullptr) {
+            return 0;
+        }
+        const uint32_t vram = ((uint32_t)(static_cast<uint8_t*>(mem) - rdram) + 0x80000000u + 15u) & ~15u;
+        wr_half(rdram, vram, start);
+        wr_half(rdram, vram + 2, end);
+        wr_half(rdram, vram + 4, (uint16_t)tracks.size());
+        wr_half(rdram, vram + 6, 0);
+        uint32_t at = vram + 8;
+        for (const Track& t : tracks) {
+            wr_half(rdram, at, (uint16_t)((t.bone << 4) | t.type));
+            wr_half(rdram, at + 2, (uint16_t)t.keys.size());
+            at += 4;
+            for (const Key& k : t.keys) {
+                wr_half(rdram, at, k.frame);
+                wr_half(rdram, at + 2, (uint16_t)k.value);
+                at += 4;
+            }
+        }
+        for (Built& b : built) {
+            if (b.vram == 0) {
+                b = { index, vram };
+                break;
+            }
+        }
+        if (log_on()) {
+            std::printf("[run] sprint animation made from 0x%X: %zu tracks, %zu rules, at 0x%08X\n",
+                index, tracks.size(), rules->size(), vram);
+            std::fflush(stdout);
+        }
+        return vram;
+    }
+
+    // TOOIE_RUN_ANIM_DUMP=<folder>: writes each animation file the game evaluates once, as anim_<index>.bin.
+    void dump_anim(uint8_t* rdram, uint32_t index, uint32_t file) {
+        static const char* dump = std::getenv("TOOIE_RUN_ANIM_DUMP");
+        static bool done[0x1000] = {};
+        if (dump == nullptr || index >= 0x1000 || done[index]) {
+            return;
+        }
+        done[index] = true;
+        uint16_t start = 0, end = 0;
+        std::vector<Track> tracks;
+        const uint32_t size = read_anim(rdram, file, &start, &end, &tracks);
+        char name[512];
+        std::snprintf(name, sizeof(name), "%s/anim_%03X.bin", dump, index);
+        if (FILE* f = std::fopen(name, "wb")) {
+            for (uint32_t i = 0; i < size; i++) {
+                const uint8_t b = (uint8_t)MEM_BU(i, (gpr)(int32_t)file);
+                std::fwrite(&b, 1, 1, f);
+            }
+            std::fclose(f);
+        }
+    }
+
+    // The player's animation struct and the run animation the sprint replaces, while it plays.
+    std::atomic<uint32_t> sprint_anim_struct{0};
+    std::atomic<uint32_t> sprint_source{0};
+
     std::mutex input_mutex;
     // Input side, under input_mutex.
     struct InputState {
@@ -229,10 +528,10 @@ namespace {
 void tooie::hold_to_run::register_input() {
     recompinput::set_game_input_name(run_input, "Run");
     recompinput::set_game_input_description(run_input,
-        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. On the B button, a quick tap still rolls.");
+        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. Not bound by default. Bound to the B button, a quick tap still rolls.");
     recompinput::set_game_input_section(run_input, "Movement");
-    recompinput::set_default_mapping_for_keyboard(run_input, { recompinput::InputField::keyboard(SDL_SCANCODE_LSHIFT) });
-    recompinput::set_default_mapping_for_controller(run_input, { recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_WEST) });
+    recompinput::set_default_mapping_for_keyboard(run_input, {});
+    recompinput::set_default_mapping_for_controller(run_input, {});
 }
 
 void tooie::hold_to_run::apply(uint16_t* buttons, float x, float y) {
@@ -340,6 +639,28 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const bool want = rf != nullptr && state == rf->run_state && index == rf->run_anim && run_held.load();
+    // The sprint animation plays in place of the run while the sprint is on.
+    sprint_anim_struct = want && ctrl != 0 ? ctrl + anctrl_animation : 0;
+    sprint_source = want && rf != nullptr ? rf->run_anim : 0;
+    // TOOIE_RUN_ANIM_TEST=1: standing still plays the sprint animation on the spot, to look at it.
+    static const bool in_place = std::getenv("TOOIE_RUN_ANIM_TEST") != nullptr;
+    if (in_place && rf != nullptr && ctrl != 0 && state == rf->idle_state) {
+        if (index != rf->run_anim) {
+            recomp_context call = call_context(ctx, ctrl);
+            call.r5 = (int32_t)rf->run_anim;
+            anctrl_setIndex(rdram, &call);
+            call.r4 = (int32_t)ctrl;
+            call.r5 = (int32_t)as_bits(in_place_duration(rf->run_anim));
+            anctrl_setDuration(rdram, &call);
+            call.r4 = (int32_t)ctrl;
+            call.r5 = 2; // loop
+            anctrl_setPlaybackType(rdram, &call);
+            call.r4 = (int32_t)ctrl;
+            anctrl_start(rdram, &call);
+        }
+        sprint_anim_struct = ctrl + anctrl_animation;
+        sprint_source = rf->run_anim;
+    }
     const uint32_t cur_speed = rd_word(rdram, anim + map_top_speed);
     const uint32_t cur_duration = rd_word(rdram, anim + map_top_duration);
     if (want) {
@@ -384,4 +705,24 @@ extern "C" void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx) {
     speed *= sprint_scale;
     std::memcpy(&bits, &speed, sizeof(bits));
     ctx->r5 = (int32_t)bits;
+}
+
+// Hooked in the animation update (func_8008BD94, func_8008BEB4) after the asset getter: $v0 is the
+// animation file about to be evaluated for the animation struct in $s0 (its index at +0x18).
+extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t anim = (uint32_t)ctx->r16;
+    const uint32_t file = (uint32_t)ctx->r2;
+    if (!valid_ptr(anim) || !valid_ptr(file)) {
+        return;
+    }
+    const uint32_t index = (uint32_t)(uint16_t)MEM_H(0x18, (gpr)(int32_t)anim);
+    dump_anim(rdram, index, file);
+    reload_tune();
+    if (anim != sprint_anim_struct.load() || index != sprint_source.load()) {
+        return;
+    }
+    const uint32_t sprint = sprint_file(rdram, index, file);
+    if (sprint != 0) {
+        ctx->r2 = (gpr)(int32_t)sprint;
+    }
 }

@@ -921,17 +921,17 @@
 - Look for: Is the list easy to read and use on your controller? The screenshot should have no list in it. Note: D-pad up/down used to toggle the HUD and orbit, and L used to hide Banjo; those are rows now.
 - Status: waiting for L
 
-## T86 Hold B to run
-- Asked: 2026-10-14 06:45 UTC
+## T86 Hold to run (sprint)
+- Asked: 2026-10-14 06:45 UTC, updated 2026-10-14 (own unbound control, new sprint animation)
 - Build: latest Windows CI build from main
 - Commit: f4a8154, 64a95d0
 - Steps:
-  1. As Banjo-Kazooie, run with the stick fully pushed, then hold B (X on an Xbox pad, Left Shift on the keyboard): he should run about half again as fast, with no roll
-  2. Let go of B: he drops back to the normal run. Tap B while running: he still rolls
-  3. Stand still and press B: the claw swipe, as before
-  4. Try it as Banjo alone and as Kazooie alone (Cheats > Transformation, or a split-up pad)
-  5. Esc > Controls > Movement > Run: bind it to another button. That button now runs, and B only rolls
-- Look for: Does the run look right, with the feet keeping up with the ground? Too fast or too slow? Does the tap-to-roll feel delayed (it fires when you let go)?
+  1. Esc > Controls > Movement > Run: it starts unbound. Bind it to a spare button (for example a shoulder or back button)
+  2. As Banjo-Kazooie, run with the stick fully pushed, then hold Run: he sprints at once (no roll), about half again as fast, leaning forward with wider arm and leg swings
+  3. Let go: he drops back to the normal run. B still rolls as before
+  4. Try it as Banjo alone (same sprint) and as Kazooie alone (her own sprint: leant in, longer, bouncier stride)
+  5. Optional: bind Run to B as well. Holding B then sprints and a quick tap still rolls
+- Look for: Does the sprint look like Banjo/Kazooie sprinting? Too much or too little lean or swing? Feet keeping up with the ground?
 - Status: waiting for L
 
 ## T87 HD Shadows (player)

@@ -63,9 +63,9 @@ framework, not from this port's code, so it is not described here.
 ## Controls: Movement
 
 - **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
-  Kazooie. Default: the same buttons as B (X on an Xbox pad, Left Shift on the
-  keyboard); a quick tap still rolls. Rebind it in the Controls tab under
-  Movement.
+  Kazooie, with a sprint animation. Not bound by default: bind it in the
+  Controls tab under Movement. Bound to the same button as B, a quick tap still
+  rolls.
 
 ## Controls: Cheats
 

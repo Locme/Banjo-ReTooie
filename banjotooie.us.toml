@@ -506,3 +506,26 @@ text = "{ int join = tooie_split_join_check(rdram, ctx); if (join >= 0) { ctx->r
 func = "baphysics_set_target_horizontal_velocity"
 before_vram = 0x8009B9B0
 text = "tooie_run_target_speed(rdram, ctx);"
+
+# Hold to run: the animation file the player's animation is about to be evaluated from ($v0, just
+# fetched by the asset getter; $s0 is the animation). The host hands the sprint animation in place of
+# the run animation while Run is held.
+[[patches.hook]]
+func = "func_8008BD94"
+before_vram = 0x8008BE1C
+text = "tooie_run_anim_file(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8008BD94"
+before_vram = 0x8008BE80
+text = "tooie_run_anim_file(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8008BEB4"
+before_vram = 0x8008BF84
+text = "tooie_run_anim_file(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8008BEB4"
+before_vram = 0x8008BFE8
+text = "tooie_run_anim_file(rdram, ctx);"
