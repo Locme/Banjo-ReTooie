@@ -32,10 +32,18 @@ namespace tooie::interp_tags {
     // pressed (steps the picked model's tag).
     bool take_pick();
     bool take_tag();
+    bool take_save();
+    bool take_unsave();
+    // Writes interp_tags.txt. Returns how many tags it holds.
+    size_t save();
+    // Removes the picked model's tag from the game and the file.
+    void unsave_picked();
+    // "snap, saved", "snap, not saved yet", "default (saved as snap)" or "default".
+    std::string describe(uint32_t model);
     // The picked model (0 = none) and its setter; the tagger highlights it.
     uint32_t picked();
     void set_picked(uint32_t model, const std::string& note);
-    // Steps the picked model's tag and saves the file. Returns the new mode.
+    // Steps the picked model's tag (in memory; the Save Tags key writes the file). Returns the new mode.
     int step_picked();
 }
 

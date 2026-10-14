@@ -550,6 +550,22 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Manual tags: the Pick Model and Tag Model keys, read once per scene.
     const bool pick_now = !overlay && tooie::interp_tags::take_pick();
     const bool tag_now = !overlay && tooie::interp_tags::take_tag();
+    if (!overlay && tooie::interp_tags::take_save()) {
+        char text[64];
+        std::snprintf(text, sizeof(text), "%zu tags saved to interp_tags.txt", tooie::interp_tags::save());
+        tooie::toast::show(text);
+    }
+    if (!overlay && tooie::interp_tags::take_unsave()) {
+        uint32_t current_pick = tooie::interp_tags::picked();
+        if (current_pick == 0) {
+            tooie::toast::show("Pick a model first (Pick Model key)");
+        } else {
+            tooie::interp_tags::unsave_picked();
+            char text[96];
+            std::snprintf(text, sizeof(text), "Model %08X: tag removed from interp_tags.txt", current_pick);
+            tooie::toast::show(text);
+        }
+    }
     if (!interpolation_on() || end <= start || blend_mode == 1) {
         if (!overlay) {
             stat_models = 0;
@@ -646,12 +662,14 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     }
 
     // Manual tags (tooie_interp_tags.h): each model's print, and its tag.
-    const bool tags_wanted = !overlay && (tooie::interp_tags::any() || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids);
+    // The tags only count in the custom blend mode (normal plus the tags).
+    const bool custom = blend_mode == tooie::interp_check::blend_custom;
+    const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids);
     if (tags_wanted) {
         for (Block& block : blocks) {
             if (block.model != 0 && block.first_phys != 0) {
                 block.print = model_print(rdram, block.first_phys);
-                block.tag_mode = tooie::interp_tags::mode_of(block.print);
+                block.tag_mode = custom ? tooie::interp_tags::mode_of(block.print) : tooie::interp_tags::mode_default;
                 if (log_ids && block.tag_mode != tooie::interp_tags::mode_default) {
                     static std::unordered_map<uint32_t, int> logged;
                     if (logged[block.print] != block.tag_mode) {
@@ -731,7 +749,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             tooie::interp_tags::set_picked(c.print, note);
             char text[128];
             std::snprintf(text, sizeof(text), "Picked model %08X (%zu of %zu): %s", c.print, next + 1, candidates.size(),
-                tooie::interp_tags::mode_name(tooie::interp_tags::mode_of(c.print)));
+                tooie::interp_tags::describe(c.print).c_str());
             tooie::toast::show(text);
             std::printf("[interp-tags] picked %08X:%s\n", c.print, note);
         }
@@ -743,8 +761,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         } else {
             int mode = tooie::interp_tags::step_picked();
             char text[96];
-            std::snprintf(text, sizeof(text), "Model %08X: %s (saved)", current_pick, tooie::interp_tags::mode_name(mode));
+            std::snprintf(text, sizeof(text), "Model %08X: %s%s", current_pick, tooie::interp_tags::mode_name(mode),
+                custom ? "" : " (blend mode set to custom)");
             tooie::toast::show(text);
+            if (!custom) {
+                // Tags only show in the custom mode; the next scene runs in it.
+                tooie::interp_check::set_blend_mode(tooie::interp_check::blend_custom);
+            }
             for (Block& block : blocks) {
                 if (block.print == current_pick) {
                     block.tag_mode = mode;
@@ -1536,7 +1559,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 return;
             }
             uint32_t vertices = commands[block.vertex_command].w1 & 0x1FFFFFFF;
-            uint32_t bytes = std::min<uint32_t>(vertex_extent(rdram, commands, block_segments[bi], bi), 0x8000);
+            // The whole of the model's vertices or nothing: a copy cut short
+            // leaves vertex loads past it reading the list area (a huge
+            // yellow quad on Banjo, L 2026-10-14).
+            uint32_t bytes = vertex_extent(rdram, commands, block_segments[bi], bi);
             if (bytes != 0 && cursor + bytes <= limit) {
                 for (uint32_t offset = 0; offset < bytes; offset += 16) {
                     for (uint32_t w = 0; w < 12; w += 4) {

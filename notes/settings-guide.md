@@ -227,27 +227,30 @@ Game Frame Rate.
   - Only: sharpening, contrast, colour saturation, vignette, film grain,
     SMAA, FXAA, FSR, CRT, N64 16-bit colour, colourblind filter, texture
     upscaling
-  F6 steps to the next view (Shift+F6 back) with a notice naming it; F8 splits
-  the picture, the effect on the left and the original on the right (SMAA,
+  The Effect Debug View key steps to the next view (with Shift back) with a
+  notice naming it; the Effect Compare key splits the picture, the effect on the left and the original on the right (SMAA,
   FXAA, FSR and the Retro filters aren't split). Brightness and N64 3-point
   filtering stay at their settings. Starts Off each launch. Default: Off.
-- **Effect compare** (Graphics > Debug): the same split picture as F8, as a
-  switch. Starts Off each launch.
+- **Effect compare** (Graphics > Debug): the same split picture as the Effect
+  Compare key, as a switch. Starts Off each launch.
 - **Interpolation check** (Graphics > Debug): tints a model red for a moment
-  when its blend between game frames looks wrong, and logs it. F7 switches it
-  too. Shows nothing at Original. Starts Off each launch.
-- **Interpolation blend mode** (Graphics > Debug): a list of the five ways
+  when its blend between game frames looks wrong, and logs it. The
+  Interpolation Check key switches it too. Shows nothing at Original. Starts Off each launch.
+- **Interpolation blend mode** (Graphics > Debug): a list of the six ways
   in-between frames are blended (normal, no tags, tags with vertex blending,
-  camera untagged, models snap). Starts on normal each launch. The Blend Mode
-  key (F5) steps through them.
+  camera untagged, models snap, custom). Custom is normal plus the models you
+  tagged in the game (see the Pick Model and Tag Model keys in keys.md); the
+  tags live in `interp_tags.txt` next to the save files. Starts on normal
+  each launch. The Blend Mode key steps through them.
 
 ## Controls: Hotkeys and Debug
 
 Every function key is bound in the Controls tab and can be changed there:
 Hide HUD (F1), Speed-Up (F2, under Cheats), Frame Rate Overlay (F3), Photo Mode
-(F10), Screenshot (F12) under Hotkeys; Effect Debug View (F6, Shift steps
-back), Interpolation Check (F7), Effect Compare (F8), Blend Mode (F5) and
-Warp Again (F9, needs the Warp tab on) under Debug.
+(F10), Screenshot (F12) under Hotkeys. The Debug section has no default keys;
+bind what you use: Effect Debug View (Shift steps back), Interpolation Check,
+Effect Compare, Blend Mode, Warp Again (needs the Warp tab on), Pick Model,
+Tag Model, Save Tags and Unsave Tag.
 
 ## Cheats
 
@@ -288,7 +291,8 @@ as they are.
   Banjo-Kazooie (and reloads the area) if you had picked a form. Default: Off;
   the row goes back to Off when Enable cheats is turned off.
 - **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
-  to. F9 repeats the last warp. Default: off.
+  to. The Warp Again key (Debug section of the Controls tab) repeats the last
+  warp. Default: off.
 - **Stop 'n' Swop items**: marks the blue and pink Stop 'n' Swop mystery eggs as
   collected, without a Banjo-Kazooie save. Only these two flags are set; the
   yellow egg and the other items are not covered yet.

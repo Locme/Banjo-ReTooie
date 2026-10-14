@@ -194,7 +194,7 @@ void tooie::effect_views::add_option(recomp::config::Config& graphics) {
         "Effect debug view",
         "For testing. Shows one picture effect or filter on its own, with every other one off: at its setting, or at a default strength when it is off. "
         "<recomp-color primary>All effects off</recomp-color> shows the picture with none of them, to compare against. The first views show the scene effects' depth, normals and water mask. "
-        "F6 steps to the next view (Shift+F6 back) and F8 splits the picture: the effect on the left, the original on the right. Starts Off each launch.",
+        "The Effect Debug View key steps to the next view (with Shift back) and the Effect Compare key splits the picture: the effect on the left, the original on the right (both bound in the Debug section of the Controls tab). Starts Off each launch.",
         options,
         0u);
     graphics.add_bool_option(

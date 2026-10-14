@@ -10,7 +10,7 @@
 //     frame's, so those parts move at the game's own rate.
 // Only frame rates above Original blend, so it shows nothing at Original.
 //
-// Headless test hooks: TOOIE_INTERP_CHECK=1 starts with it on; TOOIE_BLEND_MODE=<0-4> picks the F8 blend mode.
+// Headless test hooks: TOOIE_INTERP_CHECK=1 starts with it on; TOOIE_BLEND_MODE=<0-5> picks the blend mode.
 
 #include <atomic>
 #include <chrono>
@@ -39,7 +39,7 @@ namespace {
     std::once_flag started;
     std::atomic<bool> on{false};
     std::atomic<int> mode{0};
-    constexpr int mode_count = 5;
+    constexpr int mode_count = 6;
     bool created = false;
 
     // Looked up each time: the tab list moves its configs as more tabs are added.
@@ -101,7 +101,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
         check_option,
         "Interpolation check",
         "For testing. Tints a model red for a moment when its blend between game frames looks wrong, and logs it to the console. Shows nothing at the Original frame rate. "
-        "The Interpolation Check key (F7 unless changed in the Debug section of the Controls tab) switches it on and off while you play. Starts Off each launch.",
+        "The Interpolation Check key (bind one in the Debug section of the Controls tab) switches it on and off while you play. Starts Off each launch.",
         false);
     graphics.add_option_change_callback(check_option,
         [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
@@ -121,7 +121,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
         blend_option,
         "Interpolation blend mode",
         "For testing. How frames between two game frames are blended, to find what blends wrong. "
-        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. The Blend Mode key (F5 unless changed in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
+        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. <recomp-color primary>custom</recomp-color> is normal plus the models you tagged with the Pick Model and Tag Model keys (interp_tags.txt). The Blend Mode key (bind one in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
         options,
         0u);
     graphics.add_option_change_callback(blend_option,
@@ -140,7 +140,7 @@ void tooie::interp_check::start() {
         if (const char* v = std::getenv("TOOIE_INTERP_CHECK"); v != nullptr && v[0] == '1') {
             on = true;
         }
-        // Headless: TOOIE_BLEND_MODE=<0-4> starts in that blend mode.
+        // Headless: TOOIE_BLEND_MODE=<0-5> starts in that blend mode.
         if (const char* v = std::getenv("TOOIE_BLEND_MODE"); v != nullptr) {
             mode = std::atoi(v) % mode_count;
         }
@@ -161,8 +161,13 @@ const char* tooie::interp_check::blend_mode_name(int m) {
         case 2: return "tags, with vertex blending";
         case 3: return "camera untagged";
         case 4: return "models snap, camera blends";
+        case 5: return "custom (normal plus your tags)";
         default: return "normal";
     }
+}
+
+void tooie::interp_check::set_blend_mode(int m) {
+    set_mode(m);
 }
 
 bool tooie::interp_check::enabled() {

@@ -1573,3 +1573,15 @@
   2. Open the list and hold down on the D-pad or stick to the bottom (Only: texture upscaling), then back up
 - Look for: The list scrolls so the highlighted entry stays on screen all the way down and back up
 - Status: waiting for L
+
+## T149 Manual tags round 2: highlight fixed, custom blend mode, Save and Unsave Tags, Debug keys unbound
+- Asked: 2026-10-14 23:03 UTC
+- Build: main @ 2cdb5bc
+- Steps:
+  1. Controls > Debug: every key there starts unbound; bind Pick Model, Tag Model, Save Tags, Unsave Tag (and any other debug key you use)
+  2. Pick Banjo: the whole model goes green with nothing else drawn wrong, in default, snap or vertex alike
+  3. Tag Model: the toast names the new tag and the blend mode goes to custom on the first press (Graphics > Debug shows it); normal shows the game without your tags
+  4. Pick a tagged model again: the toast says saved, not saved yet, or saved as another tag
+  5. Save Tags writes interp_tags.txt; Unsave Tag removes the picked model's tag from the game and the file
+- Look for: No yellow quads or broken parts while a model is highlighted; the tags only show in custom; the saved note on the pick toast is right
+- Status: waiting for L
