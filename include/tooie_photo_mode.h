@@ -2,13 +2,29 @@
 #define __TOOIE_PHOTO_MODE_H__
 
 #include <cstdint>
+#include <string>
 
 #include "recomp.h"
 
 // Photo mode (handoff 4.82, src/gameplay/photo_mode.cpp): the Photo Mode key (F10, bindable in the
 // Controls tab) freezes the game, hides the HUD and flies the camera freely. A takes a screenshot,
 // Start cycles frozen / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game.
+namespace recomp::config {
+    class Config;
+}
+
 namespace tooie::photo_mode {
+    inline const std::string look_option = "photo_look";
+    inline const std::string exposure_option = "photo_exposure";
+    inline const std::string contrast_option = "photo_contrast";
+    inline const std::string saturation_option = "photo_saturation";
+    inline const std::string warmth_option = "photo_warmth";
+    inline const std::string vignette_option = "photo_vignette";
+    inline const std::string grain_option = "photo_grain";
+
+    // Adds photo mode's filter rows to the QOL tab (used only while photo mode is on).
+    void add_options(recomp::config::Config& qol);
+
     // Names the Photo Mode key and sets its default bindings (before the controls config loads).
     void register_input();
 

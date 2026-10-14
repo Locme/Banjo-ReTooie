@@ -222,6 +222,7 @@ void tooie::init_config() {
         "Photo mode camera collision",
         "In photo mode (F10) the camera stops at the ground and slides along walls. Off lets it fly through everything.",
         true);
+    tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);

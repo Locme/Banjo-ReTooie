@@ -27,6 +27,10 @@
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
 // func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
 //
+// Filters (QOL > Photo filter rows): a look, exposure, contrast, saturation, warmth, vignette and grain,
+// drawn by RT64's photo grade pass (lib-patches/rt64.patch) only while photo mode is on, so screenshots
+// show them. They can be changed from the menu while photo mode is on.
+//
 // Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
 // camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
 // rest of the move slides along it. In orbit the line from Banjo to the camera pulls it in instead.
@@ -44,6 +48,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <variant>
 
 #ifdef _WIN32
 #include "SDL.h"
@@ -64,6 +69,11 @@
 #include "tooie_photo_mode.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
+
+namespace RT64 {
+    // lib/rt64/src/render/rt64_photo_grade.h (from lib-patches/rt64.patch).
+    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
+}
 
 namespace {
     using namespace std::chrono_literals;
@@ -196,6 +206,30 @@ namespace {
         return d;
     }
 
+    template <typename T>
+    T qol_value(const std::string& id, T fallback) {
+        try {
+            return std::get<T>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(id));
+        } catch (...) {
+            return fallback;
+        }
+    }
+
+    void apply_filters(bool on) {
+        if (!on) {
+            RT64::SetPhotoGrade(false, 0, 0, 0, 0, 0, 0, 0);
+            return;
+        }
+        RT64::SetPhotoGrade(true,
+            qol_value<uint32_t>(tooie::photo_mode::look_option, 0),
+            (float)qol_value<double>(tooie::photo_mode::exposure_option, 0.0) / 10.0f,
+            (float)qol_value<double>(tooie::photo_mode::contrast_option, 0.0) / 100.0f,
+            (float)qol_value<double>(tooie::photo_mode::saturation_option, 0.0) / 100.0f,
+            (float)qol_value<double>(tooie::photo_mode::warmth_option, 0.0) / 100.0f,
+            (float)qol_value<double>(tooie::photo_mode::vignette_option, 0.0) / 100.0f,
+            (float)qol_value<double>(tooie::photo_mode::grain_option, 0.0) / 100.0f);
+    }
+
     bool collision_on() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::photo_mode_collision_option));
@@ -265,6 +299,7 @@ namespace {
 
     void leave() {
         is_active = false;
+        apply_filters(false);
         players_hidden = false;
         if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
             tooie::hide_hud::set_hidden(false);
@@ -292,6 +327,30 @@ void tooie::photo_mode::start() {
         }
         std::thread(worker).detach();
     });
+}
+
+void tooie::photo_mode::add_options(recomp::config::Config& qol) {
+    qol.add_enum_option(look_option, "Photo filter",
+        "A colour look for photo mode (F10). Only shown while photo mode is on, and in its screenshots.",
+        {
+            {0, "none", "None"},
+            {1, "sepia", "Sepia"},
+            {2, "bw", "Black and white"},
+            {3, "noir", "Noir"},
+            {4, "warm", "Warm"},
+            {5, "cool", "Cool"},
+            {6, "vivid", "Vivid"},
+            {7, "faded", "Faded film"},
+            {8, "teal_orange", "Teal and orange"},
+            {9, "dream", "Dream"},
+        },
+        0u);
+    qol.add_number_option(exposure_option, "Photo exposure", "Brightens or darkens photo mode's picture, in tenths of a stop.", -20, 20, 1, 0, false, 0);
+    qol.add_number_option(contrast_option, "Photo contrast", "Photo mode's contrast, in percent.", -50, 50, 5, 0, false, 0);
+    qol.add_number_option(saturation_option, "Photo saturation", "Photo mode's colour strength, in percent. -100 is black and white.", -100, 100, 5, 0, false, 0);
+    qol.add_number_option(warmth_option, "Photo warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0);
+    qol.add_number_option(vignette_option, "Photo vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0);
+    qol.add_number_option(grain_option, "Photo film grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0);
 }
 
 bool tooie::photo_mode::active() {
@@ -379,6 +438,8 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         players_hidden = !players_hidden;
         tooie::toast::show(players_hidden ? "Banjo hidden" : "Banjo shown");
     }
+
+    apply_filters(true);
 
     const float scale = speed_scales[speed.load()];
     const float dt = read_float(rdram, (uint32_t)delta_time_addr);

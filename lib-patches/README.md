@@ -86,6 +86,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `RT64_SMAA_DIR` at it. Because this patch changes RT64's `CMakeLists.txt`,
   the patches are applied before `add_subdirectory(lib/rt64)`.
   `src/display/smaa.cpp` sets the quality.
+* **Photo mode filters** (`src/render/rt64_photo_grade.cpp`, `.h`, `src/shaders/PhotoGradePS.hlsl`,
+  `src/shared/rt64_photo_grade.h`, `src/render/rt64_shader_library.cpp`, `.h`,
+  `src/hle/rt64_present_queue.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetPhotoGrade(...)`. After SMAA
+  and before the VI pass, one pass applies a look (sepia, black and white, ...), exposure, contrast,
+  saturation, warmth, vignette and film grain, so screenshots show them. `src/gameplay/photo_mode.cpp`
+  turns it on only while photo mode is on.
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
