@@ -30,8 +30,8 @@
 // and steps by the VIs that really went by, so it runs as fast as the PC can
 // up to 240. Recorded scenes and demos keep the original pacing (their waits
 // are scaled by the multiplier). The game's VI thread (func_8001546C) passes
-// every VI to the frame wait but only every second or fourth to its other
-// clients, so the sound is still made 60 times a second.
+// only every second or fourth VI to the sound thread, so the sound is still
+// made 60 times a second.
 //
 // TOOIE_GAME_FPS=30|60|120|unlocked picks a mode whatever the setting says, for headless
 // runs. TOOIE_GAME_FPS_LOG=1 prints, every 2 s, the game frames counted, the
@@ -362,25 +362,45 @@ extern "C" void tooie_frame_seconds(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-// func_8001546C, the game's VI thread, after it has passed the VI to the frame
-// queue and before it passes it to its other clients (the sound among them):
-// above 60 FPS only every second or fourth VI goes on, so they still get 60 a second.
-extern "C" int tooie_vi_clients_skip(uint8_t* rdram, recomp_context* ctx) {
+// func_8001546C, the game's VI thread, passes each VI to the frame queue and to
+// its clients (0x80078F90: the scheduler, queue 0x800783D0, which hands back
+// shown framebuffers and starts the sound timer, and the sound thread, queue
+// 0x8007AEF0). Above 60 FPS the sound thread only gets every second or fourth
+// VI; the scheduler gets them all, or the game could not get a free framebuffer
+// more than 60 times a second, but skips its timers on the extra ones.
+constexpr uint32_t sound_vi_queue = 0x8007AEF0;
+std::atomic<uint32_t> vi_tick{ 0 };
+
+// Before each client's osSendMesg ($a0 = its queue): drop the sound thread's on the skipped VIs.
+extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
-    (void)ctx;
-    static uint32_t tick = 0;
     uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
-    if (multiplier <= 1) {
-        tick = 0;
-        return 0;
+    if (multiplier > 1 && (uint32_t)ctx->r4 == sound_vi_queue && (vi_tick.load() % multiplier) != 0) {
+        ctx->r4 = 0;
     }
-    return (tick++ % multiplier) != 0;
 }
 
-// func_8001546C, before it compares the VIs since the last frame with 600 (10 s,
-// $s6): keep that 10 s at the faster VI rate.
+// func_8001443C, the scheduler's VI handler, after it has handed back the shown
+// framebuffer: the rest (every second VI it starts the sound timer, and another
+// timer) runs only on every second or fourth VI above 60 FPS, so it keeps its
+// 60-a-second pace.
+extern "C" int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    (void)ctx;
+    static uint32_t count = 0;
+    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
+    if (multiplier <= 1) {
+        count = 0;
+        return 0;
+    }
+    return (count++ % multiplier) != 0;
+}
+
+// func_8001546C, once per VI, before it compares the VIs since the last frame with
+// 600 (10 s, $s6): keep that 10 s at the faster VI rate, and count the VI.
 extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
+    vi_tick++;
     ctx->r22 = 600 * (int32_t)ultramodern::get_vi_rate_multiplier();
 }
 

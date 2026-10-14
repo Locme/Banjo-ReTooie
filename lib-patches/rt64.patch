@@ -189,13 +189,15 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..3e6d610 100644
+index 3227ab1..8605243 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,109 @@
+@@ -4,12 +4,111 @@
  
  #include "rt64_present_queue.h"
  
++#include <cstdlib>
++
 +#include <algorithm>
 +#include <atomic>
 +#include <chrono>
@@ -302,7 +304,7 @@ index 3227ab1..3e6d610 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -87,6 +184,10 @@ namespace RT64 {
+@@ -87,6 +186,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -313,7 +315,7 @@ index 3227ab1..3e6d610 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +216,7 @@ namespace RT64 {
+@@ -115,6 +218,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -321,7 +323,7 @@ index 3227ab1..3e6d610 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +314,31 @@ namespace RT64 {
+@@ -212,6 +316,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -353,7 +355,7 @@ index 3227ab1..3e6d610 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +393,8 @@ namespace RT64 {
+@@ -266,6 +395,8 @@ namespace RT64 {
              }
          }
          
@@ -362,7 +364,7 @@ index 3227ab1..3e6d610 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -339,7 +468,78 @@ namespace RT64 {
+@@ -339,7 +470,78 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -441,7 +443,7 @@ index 3227ab1..3e6d610 100644
                  commandList->setFramebuffer(swapChainFramebuffer);
                  commandList->clearColor();
  
-@@ -367,6 +567,10 @@ namespace RT64 {
+@@ -367,6 +569,10 @@ namespace RT64 {
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                      ext.presentGraphicsWorker->wait();
                  }
@@ -452,9 +454,24 @@ index 3227ab1..3e6d610 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +606,26 @@ namespace RT64 {
+@@ -401,7 +607,41 @@ namespace RT64 {
+                 RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
++
++                // Banjo-Tooie, headless testing: TOOIE_FAKE_VSYNC=<hz> holds each present to that rate, as a
++                // vsync'd monitor does (software rendering on a virtual display presents at once).
++                static const uint32_t fakeVsyncRate = []() {
++                    const char *value = getenv("TOOIE_FAKE_VSYNC");
++                    return (value != nullptr) ? uint32_t(atoi(value)) : 0U;
++                }();
++                if (fakeVsyncRate > 0) {
++                    static Timestamp nextVsync = Timer::current();
++                    const auto interval = std::chrono::nanoseconds(1'000'000'000 / fakeVsyncRate);
++                    Timer::preciseSleepUntil(nextVsync);
++                    nextVsync = std::max(nextVsync + interval, Timer::current());
++                }
++
                  presentProfiler.logAndRestart();
 +
 +                // The interval just logged, for the frame rate overlay.

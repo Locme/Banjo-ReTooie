@@ -145,7 +145,7 @@ Game Frame Rate.
     would run twice as fast.
   - **120 FPS (Experimental)**: every game frame is 1/120 s. The runtime sends
     screen refreshes (VIs) 120 times a second for this, while the sound is
-    still made 60 times a second.
+    still made 60 times a second. A 60 Hz monitor still only shows 60 of them.
   - **Unlocked (Experimental)**: the game makes frames as fast as the PC can,
     up to 240 a second, and each step is the time that really went by (in
     240ths of a second).

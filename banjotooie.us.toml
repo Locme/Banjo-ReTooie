@@ -696,17 +696,27 @@ before_vram = 0x800D9024
 text = "tooie_frame_seconds(rdram, ctx);"
 
 # func_8001546C is the game's VI thread. Above 60 FPS the runtime sends 2 or 4
-# times as many VIs: the frame queue gets them all, its other clients (the sound
-# among them) only every second or fourth, and its 600-VI (10 s) check is scaled.
+# times as many VIs: its clients get them all except the sound thread (only every
+# second or fourth; its queue is dropped from $a0 before the osSendMesg), and its
+# 600-VI (10 s) check is scaled. The scheduler must get every VI, or the game gets
+# a free framebuffer only 60 times a second.
 [[patches.hook]]
 func = "func_8001546C"
-before_vram = 0x80015534
-text = "if (tooie_vi_clients_skip(rdram, ctx)) { ctx->r4 = ctx->r20; goto L_800154CC; }"
+before_vram = 0x80015544
+text = "tooie_vi_client_filter(rdram, ctx);"
 
 [[patches.hook]]
 func = "func_8001546C"
 before_vram = 0x800154F0
 text = "tooie_vi_hang_limit(rdram, ctx);"
+
+# func_8001443C, the scheduler's VI handler: after it hands back the shown
+# framebuffer, the sound timer and the other timer it sets run only on every
+# second or fourth VI above 60 FPS.
+[[patches.hook]]
+func = "func_8001443C"
+before_vram = 0x800145C4
+text = "if (tooie_scheduler_vi_skip(rdram, ctx)) { ctx->r31 = MEM_W(ctx->r29, 0X24); goto L_800146CC; }"
 
 # func_8001608C replays a recorded time step (0x80016110 calls func_800D8FA0
 # with it): attract demos, the game select screen and the intro story cutscenes.

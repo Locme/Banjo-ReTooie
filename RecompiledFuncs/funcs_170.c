@@ -3792,6 +3792,7 @@ L_800145B4:
     ctx->r4 = ADD32(0, 0X1);
     after_4:
 L_800145C4:
+    if (tooie_scheduler_vi_skip(rdram, ctx)) { ctx->r31 = MEM_W(ctx->r29, 0X24); goto L_800146CC; }
     // 0x800145C4: lui         $v0, 0x8004
     ctx->r2 = S32(0X8004 << 16);
     // 0x800145C8: lw          $v0, -0xBCC($v0)

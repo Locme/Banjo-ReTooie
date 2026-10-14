@@ -466,7 +466,6 @@ L_80015528:
     // 0x80015530: or          $a2, $zero, $zero
     ctx->r6 = 0 | 0;
     after_4:
-    if (tooie_vi_clients_skip(rdram, ctx)) { ctx->r4 = ctx->r20; goto L_800154CC; }
     // 0x80015534: lui         $s0, 0x8008
     ctx->r16 = S32(0X8008 << 16);
     // 0x80015538: addiu       $s0, $s0, -0x7070
@@ -476,6 +475,7 @@ L_80015528:
 L_80015540:
     // 0x80015540: or          $a2, $zero, $zero
     ctx->r6 = 0 | 0;
+    tooie_vi_client_filter(rdram, ctx);
     // 0x80015544: beql        $a0, $zero, L_80015558
     if (ctx->r4 == 0) {
         // 0x80015548: addiu       $s0, $s0, 0x8

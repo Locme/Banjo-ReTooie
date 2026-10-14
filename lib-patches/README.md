@@ -115,6 +115,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
   (L's "vertex explosion", 2026-10-14). The scale now comes from the row with the largest facing
   component. `TOOIE_OLD_VP_SPLIT=1` brings the old split back; `TOOIE_VP_SPLIT_LOG=1` logs `[vp-split]`
   for any split whose product differs from the input.
+* **Fake vsync for headless runs** (`src/hle/rt64_present_queue.cpp`): `TOOIE_FAKE_VSYNC=<hz>` holds each
+  present to that rate, as a vsync'd monitor would.
 * **Unknown microcode guard** (`src/hle/rt64_interpreter.cpp`): a graphics task whose microcode
   isn't in RT64's database left the interpreter with no command table, and the next display list
   crashed (L's 2026-10-14 10:33 dump). It now keeps the last known microcode and logs
