@@ -1356,3 +1356,13 @@
   3. Also turn the camera so you see Banjo's shadow from the side
 - Look for: The shadow keeps Banjo's shape and moves smoothly, with no long pointed spikes or broken triangles. The overlay's 'Interpolation on' line now counts the shadows (was 0 shadows).
 - Status: waiting for L
+
+## T128 Underwater tint and haze turn things light blue
+- Asked: 2026-10-14 16:15 UTC
+- Build: main @ 7b163d1
+- Steps:
+  1. Graphics: Underwater tint 25, Underwater haze 15 (then try 5 and 100 for each)
+  2. Spiral Mountain: dive deep into the moat (where your screenshot was) and swim along the bottom
+  3. Also try a deep lake where the camera follows Banjo under (Jolly Roger's Lagoon)
+- Look for: Under water the 3D world turns a lighter blue and far things fade into a light blue haze, getting stronger all the way to 100; it goes when Banjo comes up
+- Status: waiting for L
