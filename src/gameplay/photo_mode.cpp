@@ -73,6 +73,7 @@
 namespace RT64 {
     // lib/rt64/src/render/rt64_photo_grade.h (from lib-patches/rt64.patch).
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
+    void SetPhotoFrame(float cropAspect, bool grid);
 }
 
 namespace {
@@ -215,11 +216,21 @@ namespace {
         }
     }
 
+    // Photo crop entries' width / height, by enum value (0 none).
+    constexpr float crop_aspects[] = { 0.0f, 16.0f / 9.0f, 2.39f, 4.0f / 3.0f, 1.0f, 4.0f / 5.0f, 9.0f / 16.0f };
+
+    float crop_value() {
+        const uint32_t crop = qol_value<uint32_t>(tooie::photo_mode::crop_option, 0);
+        return crop < std::size(crop_aspects) ? crop_aspects[crop] : 0.0f;
+    }
+
     void apply_filters(bool on) {
         if (!on) {
             RT64::SetPhotoGrade(false, 0, 0, 0, 0, 0, 0, 0);
+            RT64::SetPhotoFrame(0.0f, false);
             return;
         }
+        RT64::SetPhotoFrame(crop_value(), qol_value<bool>(tooie::photo_mode::grid_option, false));
         RT64::SetPhotoGrade(true,
             qol_value<uint32_t>(tooie::photo_mode::look_option, 0),
             (float)qol_value<double>(tooie::photo_mode::exposure_option, 0.0) / 10.0f,
@@ -351,10 +362,28 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
     qol.add_number_option(warmth_option, "Photo warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0);
     qol.add_number_option(vignette_option, "Photo vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0);
     qol.add_number_option(grain_option, "Photo film grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0);
+    qol.add_enum_option(crop_option, "Photo crop",
+        "Frames photo mode's picture to a shape: outside the frame is shaded, and screenshots keep only the frame.",
+        {
+            {0, "none", "None"},
+            {1, "16_9", "16:9"},
+            {2, "239_1", "2.39:1"},
+            {3, "4_3", "4:3"},
+            {4, "1_1", "1:1"},
+            {5, "4_5", "4:5"},
+            {6, "9_16", "9:16"},
+        },
+        0u);
+    qol.add_bool_option(grid_option, "Photo grid",
+        "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
 }
 
 bool tooie::photo_mode::active() {
     return is_active;
+}
+
+float tooie::photo_mode::crop_aspect() {
+    return is_active ? crop_value() : 0.0f;
 }
 
 float tooie::photo_mode::adjust_fov(float fov) {

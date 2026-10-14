@@ -10,7 +10,9 @@
 // Headless test hook: TOOIE_SCREENSHOT_AT=<ms>[,<ms>...] takes a screenshot
 // at those times after the game started.
 
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -30,6 +32,7 @@
 
 #include "librecomp/game.hpp"
 
+#include "tooie_photo_mode.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
 
@@ -149,7 +152,25 @@ namespace {
 }
 
 void tooie::screenshot::take() {
-    RT64::RequestScreenshot([](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+    // Photo mode's crop: keep only the frame, the largest rectangle of that shape in the middle.
+    const float crop = tooie::photo_mode::crop_aspect();
+    RT64::RequestScreenshot([crop](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {
+        if (crop > 0.0f && width > 0 && height > 0) {
+            uint32_t w = width, h = height;
+            if (crop < (float)width / (float)height) {
+                w = std::max(1u, (uint32_t)((float)height * crop + 0.5f));
+            }
+            else {
+                h = std::max(1u, (uint32_t)((float)width / crop + 0.5f));
+            }
+            const uint32_t x0 = (width - w) / 2, y0 = (height - h) / 2;
+            std::vector<uint8_t> cropped((size_t)w * h * 4);
+            for (uint32_t y = 0; y < h; y++) {
+                std::memcpy(&cropped[(size_t)y * w * 4], &rgba[((size_t)(y0 + y) * width + x0) * 4], (size_t)w * 4);
+            }
+            std::thread(save, w, h, std::move(cropped)).detach();
+            return;
+        }
         std::thread(save, width, height, std::move(rgba)).detach();
     });
 }

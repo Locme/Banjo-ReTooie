@@ -630,3 +630,14 @@
   4. Turn the option Off: the area reloads without him
 - Look for: Does the area reload when you toggle it? Does the first controller still only move Banjo (it should no longer also drive player 2), and does the keyboard stay with Banjo? Checked headless: Devil Bottles appears at Mayahem Temple with the option on and not with it off. Not checked headless: a real second pad, and the live reload.
 - Status: waiting for L
+
+## T62 Photo mode crop and grid
+- Asked: 2026-10-14 01:15 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.82
+- Steps:
+  1. In a level, press F10 for photo mode, then Esc > QOL
+  2. Set Photo crop to 4:5 (or 2.39:1, 1:1, 9:16...) and turn on Photo grid. Close the menu
+  3. Outside the frame should be darkened, with rule-of-thirds lines inside it. Press A for a screenshot
+- Look for: The saved screenshot holds only the frame (no dark sides) and no grid lines. Leaving photo mode removes the frame and grid.
+- Status: waiting for L

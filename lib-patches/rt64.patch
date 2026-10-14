@@ -33,7 +33,7 @@ index 79dfc38..a826526 100644
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..75b3014 100644
+index 3227ab1..34f6201 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,90 @@
@@ -136,7 +136,7 @@ index 3227ab1..75b3014 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -339,7 +419,45 @@ namespace RT64 {
+@@ -339,7 +419,51 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -147,10 +147,16 @@ index 3227ab1..75b3014 100644
 +                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight);
 +                }
 +
-+                // Banjo-Tooie: photo mode's filters, so screenshots show them.
++                // Banjo-Tooie: photo mode's filters, so screenshots show them (without the grid).
 +                if (renderParams.texture != nullptr) {
++                    bool screenshotPending;
++                    {
++                        const std::scoped_lock lock(screenshotMutex);
++                        screenshotPending = (screenshotCallback != nullptr);
++                    }
++
 +                    renderParams.texture = photoGradeRenderer->apply(ext.device, commandList, ext.shaderLibrary, renderParams.texture,
-+                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight);
++                        renderParams.textureFormat, renderParams.textureWidth, renderParams.textureHeight, screenshotPending);
 +                }
                  
 +                // Copy the game image for a pending screenshot, before any UI is drawn.
@@ -182,7 +188,7 @@ index 3227ab1..75b3014 100644
                  commandList->setFramebuffer(swapChainFramebuffer);
                  commandList->clearColor();
  
-@@ -367,6 +485,10 @@ namespace RT64 {
+@@ -367,6 +491,10 @@ namespace RT64 {
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                      ext.presentGraphicsWorker->wait();
                  }
@@ -193,7 +199,7 @@ index 3227ab1..75b3014 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +524,15 @@ namespace RT64 {
+@@ -402,6 +530,15 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
                  presentProfiler.logAndRestart();
@@ -322,10 +328,10 @@ index 69a82ac..d0f2f49 100644
          uint32_t gSampler;
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..dfacef7
+index 0000000..ebcfc87
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,91 @@
 +//
 +// RT64
 +//
@@ -348,11 +354,19 @@ index 0000000..dfacef7
 +
 +    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain) {
 +        const std::scoped_lock lock(gradeMutex);
-+        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain };
++        const float cropAspect = gradeSettings.cropAspect;
++        const bool grid = gradeSettings.grid;
++        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid };
++    }
++
++    void SetPhotoFrame(float cropAspect, bool grid) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.cropAspect = cropAspect;
++        gradeSettings.grid = grid;
 +    }
 +
 +    RenderTexture *PhotoGradeRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height)
++        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot)
 +    {
 +        PhotoGradeSettings settings;
 +        {
@@ -389,6 +403,7 @@ index 0000000..dfacef7
 +        constants.tone = { settings.exposure, settings.contrast, settings.saturation, settings.warmth };
 +        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
++        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, 0.0f, 0.0f };
 +
 +        RenderTextureBarrier barriers[] = {
 +            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
@@ -410,10 +425,10 @@ index 0000000..dfacef7
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..c06dab3
+index 0000000..5a382aa
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,44 @@
 +//
 +// RT64
 +//
@@ -435,9 +450,15 @@ index 0000000..c06dab3
 +        float warmth = 0.0f;
 +        float vignette = 0.0f;
 +        float grain = 0.0f;
++        float cropAspect = 0.0f;
++        bool grid = false;
 +    };
 +
 +    void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
++
++    // The crop frame (width / height, 0 for none; outside it is shaded) and the rule-of-thirds grid.
++    // The grid is left out of the frame a screenshot is taken from.
++    void SetPhotoFrame(float cropAspect, bool grid);
 +
 +    struct PhotoGradeRenderer {
 +        std::unique_ptr<RenderTexture> outputTexture;
@@ -447,8 +468,9 @@ index 0000000..c06dab3
 +        uint32_t height = 0;
 +
 +        // Records the pass and returns the graded image, or the input itself when the filters are off.
++        // forScreenshot leaves the grid out.
 +        RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height);
++            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot);
 +    };
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
@@ -895,17 +917,18 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..0947eb3
+index 0000000..6728bf2
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,123 @@
 +//
 +// RT64
 +//
 +
 +// Banjo-Tooie: photo mode's filters on the finished game image, after SMAA and before the VI draws it,
 +// so screenshots show them. A look (a fixed colour treatment) first, then exposure, contrast,
-+// saturation, warmth, vignette and film grain.
++// saturation, warmth, vignette and film grain. Then the crop frame (outside it shaded; screenshots keep
++// only the frame) and the rule-of-thirds grid inside it.
 +
 +#include "shared/rt64_photo_grade.h"
 +
@@ -990,7 +1013,36 @@ index 0000000..0947eb3
 +    // Film grain.
 +    const float noise = Hash(pos.xy + frac(gConstants.effects.z) * 517.0f) - 0.5f;
 +    rgb += noise * 0.18f * gConstants.effects.y;
-+    return float4(saturate(rgb), color.a);
++    rgb = saturate(rgb);
++
++    // The crop frame: the largest rectangle of that shape in the middle of the picture.
++    float2 frameMin = float2(0.0f, 0.0f);
++    float2 frameSize = gConstants.rtMetrics.zw;
++    const float cropAspect = gConstants.frame.x;
++    if (cropAspect > 0.0f) {
++        const float aspect = gConstants.rtMetrics.z / gConstants.rtMetrics.w;
++        frameSize = (cropAspect < aspect) ? float2(frameSize.y * cropAspect, frameSize.y) : float2(frameSize.x, frameSize.x / cropAspect);
++        frameMin = (gConstants.rtMetrics.zw - frameSize) * 0.5f;
++        if (any(pos.xy < frameMin) || any(pos.xy >= frameMin + frameSize)) {
++            rgb *= 0.3f;
++        }
++    }
++
++    // Rule-of-thirds grid: thin light lines at the thirds of the frame.
++    if (gConstants.frame.y > 0.5f) {
++        const float2 local = pos.xy - frameMin;
++        const float thickness = max(1.0f, gConstants.rtMetrics.w / 540.0f);
++        bool onLine = false;
++        [unroll] for (int i = 1; i <= 2; i++) {
++            const float2 at = frameSize * (float(i) / 3.0f);
++            onLine = onLine || (abs(local.x - at.x) < thickness * 0.5f) || (abs(local.y - at.y) < thickness * 0.5f);
++        }
++        if (onLine && all(local >= 0.0f) && all(local < frameSize)) {
++            rgb = lerp(rgb, float3(1.0f, 1.0f, 1.0f), 0.45f);
++        }
++    }
++
++    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
 new file mode 100644
@@ -1193,10 +1245,10 @@ index 3f33475..cb122d1 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..3a8a7b7
+index 0000000..6aab648
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,24 @@
 +//
 +// RT64
 +//
@@ -1215,6 +1267,8 @@ index 0000000..3a8a7b7
 +        float4 tone;
 +        // Vignette (0 to 1), film grain (0 to 1), a time in seconds for the grain, the look (0 none).
 +        float4 effects;
++        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid.
++        float4 frame;
 +    };
 +#ifdef HLSL_CPU
 +};
