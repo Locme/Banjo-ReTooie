@@ -274,6 +274,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
     ${CMAKE_SOURCE_DIR}/src/game/screenshot.cpp
     ${CMAKE_SOURCE_DIR}/src/game/level_warp.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/achievements.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hide_hud.cpp
     ${CMAKE_SOURCE_DIR}/src/display/effect_views.cpp
     ${CMAKE_SOURCE_DIR}/src/game/frame_overlay.cpp

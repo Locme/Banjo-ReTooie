@@ -41,6 +41,7 @@
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_jiggy_dance.h"
+#include "tooie_achievements.h"
 #include "tooie_picture_filters.h"
 
 namespace {
@@ -133,6 +134,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);
+    tooie::achievements::tick(rdram, ctx);
     // Last: photo mode scales this frame's delta time.
     tooie::photo_mode::tick(rdram, ctx);
 

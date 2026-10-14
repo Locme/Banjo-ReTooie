@@ -29,6 +29,7 @@
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 #include "tooie_speedup.h"
+#include "tooie_achievements.h"
 
 namespace {
     void show_wip_tab() {
@@ -315,6 +316,7 @@ void tooie::init_config() {
     tooie::music_player::add_options(recompui::config::create_sound_tab());
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();
+    tooie::achievements::create_tab();
     recompui::config::create_mods_tab();
 
     // Work-in-progress features (L, 2026-10-13), shown with General > WIP tab.
