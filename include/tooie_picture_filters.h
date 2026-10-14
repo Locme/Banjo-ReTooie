@@ -11,7 +11,7 @@
 // lib-patches/rt64.patch): brightness with a test pattern (handoff 4.25), colourblind filters (4.41)
 // and the retro filters (4.40). Sharpening, contrast, saturation, vignette and film grain (4.35, 4.36)
 // use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion, fog (4.35)
-// and toon outlines, bloom and rim light (4.36) are RT64's scene effects pass, drawn after the 3D world and before the HUD.
+// and toon outlines, bloom and rim light (4.36) and the underwater tint (4.45) are RT64's scene effects pass, drawn after the 3D world and before the HUD.
 // Cutscene depth of field (4.36) and eye adaptation (4.37) too. Effects preset (4.42) sets them all at once.
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
@@ -41,6 +41,8 @@ namespace tooie::picture_filters {
     inline const std::string cutscene_dof_option = "cutscene_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
+    inline const std::string underwater_tint_option = "underwater_tint";
+    inline const std::string underwater_haze_option = "underwater_haze";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

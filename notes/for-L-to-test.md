@@ -765,7 +765,7 @@
 - Status: waiting for L
 
 ## T74 Eye adaptation
-- Asked: 2026-10-14 06:10 UTC
+- Asked: 2026-10-14 05:30 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.37
 - Steps:
@@ -783,8 +783,8 @@
 - Look for: Does the map line change to the new area, and do Banjo's numbers change as he walks? Does the renderer line say D3D12 or Vulkan as you set it, with your monitor's refresh rate? Does the 1% low drop and the hitch count go up when the game stutters (loading an area, say)? Does the last line show Speed-up, cheats and the texture pack by name?
 - Status: waiting for L
 
-## T75 Rim light
-- Asked: 2026-10-14
+## T78 Rim light
+- Asked: 2026-10-14 05:37 UTC
 - Build: latest Windows CI build from main
 - XBLA history: report §4.36
 - Steps:
@@ -811,4 +811,13 @@
   2. In Mayahem Temple, walk far away from the temple stairs and from some nests, then turn the camera back to look at them
   3. Turn Always High-Detail Models Off and look again from the same spot
 - Look for: With it On, do the stairs and nests keep their detailed 3D look from far away (nests with twiggy rims and three eggs)? Headless check: the nests near the start of Mayahem Temple use the detailed model with it On and a plainer one with it Off; neither turns into a flat sprite. The stairs were not checked yet.
+
+## T79 Underwater tint
+- Asked: 2026-10-14 05:44 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.45 (your defaults: strength 0.25, haze 0.150)
+- Steps:
+  1. Esc > Graphics: Underwater tint and Underwater haze are on by default (25 and 15)
+  2. Dive in the Spiral Mountain pool, then swim in Jolly Roger's Lagoon and Atlantis
+- Look for: The 3D turns light blue with a blue haze in the distance while under water, and goes back when you surface. Does it switch on and off at the right moments (for example with the camera above the water while Banjo is under)? The HUD should stay as it is.
 - Status: waiting for L

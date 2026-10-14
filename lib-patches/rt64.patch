@@ -688,10 +688,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..090c1b0
+index 0000000..d734f63
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,381 @@
 +//
 +// RT64
 +//
@@ -806,6 +806,12 @@ index 0000000..090c1b0
 +        effectsSettings.eyeAdaptation = strength;
 +    }
 +
++    void SetSceneUnderwater(float tint, float haze) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.underwaterTint = tint;
++        effectsSettings.underwaterHaze = haze;
++    }
++
 +    void SetSceneRimLight(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.rimLight = strength;
@@ -825,7 +831,7 @@ index 0000000..090c1b0
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -846,10 +852,10 @@ index 0000000..090c1b0
 +        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, debugView ? 1.0f : 0.0f, settings.rimLight };
-+        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
++        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
-+        constants.bloom = { settings.bloom, settings.depthOfField, settings.eyeAdaptation, 0.0f };
++        constants.bloom = { settings.bloom, settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
 +
 +        RenderCommandList *commandList = worker->commandList.get();
 +        Resources &res = resourcesFor(worker);
@@ -878,7 +884,7 @@ index 0000000..090c1b0
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -1069,10 +1075,10 @@ index 0000000..090c1b0
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..85e5930
+index 0000000..676d26d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,63 @@
 +//
 +// RT64
 +//
@@ -1087,7 +1093,7 @@ index 0000000..85e5930
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation, rim light, underwater tint) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -1103,6 +1109,8 @@ index 0000000..85e5930
 +        float depthOfField = 0.0f;
 +        float eyeAdaptation = 0.0f;
 +        float rimLight = 0.0f;
++        float underwaterTint = 0.0f;
++        float underwaterHaze = 0.0f;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
@@ -1120,6 +1128,8 @@ index 0000000..85e5930
 +    void SetSceneEyeAdaptation(float strength);
 +    // Rim light (0 off, 1 strongest): a soft light along the edges of nearby characters and objects.
 +    void SetSceneRimLight(float strength);
++    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
++    void SetSceneUnderwater(float tint, float haze);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1938,10 +1948,10 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2887095
+index 0000000..2babe34
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,268 @@
 +//
 +// RT64
 +//
@@ -1971,6 +1981,14 @@ index 0000000..2887095
 +    const float exposure = lerp(1.0f, clamp(0.3f / adapted, 0.5f, 2.5f), gConstants.bloom.z);
 +    const float3 c = saturate(color);
 +    return c * exposure / (1.0f + c * (exposure - 1.0f));
++}
++
++// Underwater: the scene turns light blue and fades into a blue haze with distance (the sky is all haze).
++float3 Underwater(float3 color, float distance) {
++    const float tint = saturate(gConstants.fog.w * 2.0f);
++    const float3 tinted = color * float3(0.55f, 0.85f, 1.05f) + float3(0.0f, 0.03f, 0.07f);
++    const float haze = saturate(gConstants.bloom.w * 4.0f) * (1.0f - exp(-distance / 2500.0f));
++    return lerp(lerp(color, tinted, tint), float3(0.08f, 0.32f, 0.45f), haze);
 +}
 +
 +float LoadDepth(int2 pixel) {
@@ -2131,7 +2149,7 @@ index 0000000..2887095
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.ambientOcclusion.z < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f)) && (gConstants.ambientOcclusion.z < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f)) && (gConstants.ambientOcclusion.z < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -2143,6 +2161,9 @@ index 0000000..2887095
 +            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) : gColor.Load(int3(pixel, 0)).rgb;
 +            if (gConstants.bloom.z > 0.0f) {
 +                scene = Adapt(scene);
++            }
++            if (gConstants.fog.w > 0.0f) {
++                scene = Underwater(scene, 1e6f);
 +            }
 +            return float4(scene * (1.0f - skyFog) + gConstants.fogColor.rgb * skyFog + bloom, 0.0f);
 +        }
@@ -2189,6 +2210,10 @@ index 0000000..2887095
 +        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) : gColor.Load(int3(pixel, 0)).rgb;
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
++        }
++        if (gConstants.fog.w > 0.0f) {
++            scene = Underwater(scene * keep + rim, length(ViewPosition(pixel, depth)));
++            return float4(scene * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +        }
 +        return float4((scene * keep + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
@@ -2429,7 +2454,7 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..61fdd2f
+index 0000000..35d00ee
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,40 @@
@@ -2455,12 +2480,12 @@ index 0000000..61fdd2f
 +        // alone as grey (a test view), then the rim light strength (0 off, 1 strongest).
 +        float4 ambientOcclusion;
 +        // Fog strength (0 off, 1 the most), the distance it starts at, the distance over which it
-+        // thickens, then unused.
++        // thickens, then the underwater tint (0 off: not under water, 1 strongest).
 +        float4 fog;
 +        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
 +        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), eye adaptation strength
-+        // (0 off, 1 strongest), then unused.
++        // (0 off, 1 strongest), then the underwater haze (0 to 1).
 +        float4 bloom;
 +    };
 +

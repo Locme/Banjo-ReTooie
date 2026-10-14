@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <variant>
@@ -44,6 +45,7 @@ namespace RT64 {
     void SetSceneDepthOfField(float strength);
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
+    void SetSceneUnderwater(float tint, float haze);
 }
 
 namespace {
@@ -63,6 +65,32 @@ namespace {
     std::atomic<uint32_t> depth_address{0};
     std::atomic<float> cutscene_dof{0.0f};
     std::atomic<bool> cutscene_dof_on{false};
+    std::atomic<float> underwater_tint{0.25f};
+    std::atomic<float> underwater_haze{0.15f};
+    // How far into the underwater look (0 above water, 1 under), eased over a fifth of a second.
+    float underwater_amount = 0.0f;
+    float underwater_sent = -1.0f;
+    std::chrono::steady_clock::time_point underwater_at{};
+
+    // Player 0's current state (see src/gameplay/fine_aim.cpp), 0 when there is no player.
+    uint32_t player_state(uint8_t* rdram) {
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if (player < 0x80000000u || player >= 0x80800000u) {
+            return 0;
+        }
+        const uint32_t block = (uint32_t)MEM_W(0x120, (int32_t)player);
+        if (block < 0x80000000u || block >= 0x80800000u) {
+            return 0;
+        }
+        return (uint32_t)MEM_W(4, (int32_t)block);
+    }
+
+    // Under water: swimming under water (57) or floating in Atlantis (43), the states the XBLA port used
+    // (43 measured headless in Atlantis on N64), or anywhere in Atlantis and the Sea Bottom.
+    bool under_water(uint8_t* rdram, uint32_t state) {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        return (state == 57) || (state == 43) || (map == 0x1A8) || (map == 0x1A9);
+    }
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
     constexpr float fog_colours[][3] = {
@@ -96,6 +124,8 @@ namespace {
         { &tooie::picture_filters::cutscene_dof_option, 0.0 },
         { &tooie::picture_filters::eye_adaptation_option, 0.0 },
         { &tooie::picture_filters::rim_light_option, 0.0 },
+        { &tooie::picture_filters::underwater_tint_option, 0.0 },
+        { &tooie::picture_filters::underwater_haze_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -117,6 +147,8 @@ namespace {
             graphics.update_option_value(tooie::smaa::option, (uint32_t)tooie::smaa::Quality::High);
             graphics.update_option_value(ambient_occlusion_option, 50.0);
             graphics.update_option_value(sharpen_option, 30.0);
+            graphics.update_option_value(underwater_tint_option, 25.0);
+            graphics.update_option_value(underwater_haze_option, 15.0);
         } else if (preset == Preset::Retro) {
             graphics.update_option_value(dither16_option, (uint32_t)Colour16::Console);
             graphics.update_option_value(crt_option, true);
@@ -148,6 +180,9 @@ void tooie::picture_filters::apply() {
         value<bool>(three_point_option, true));
 
     cutscene_dof = (float)(value<double>(cutscene_dof_option, 0.0) / 100.0);
+    underwater_tint = (float)(value<double>(underwater_tint_option, 25.0) / 100.0);
+    underwater_haze = (float)(value<double>(underwater_haze_option, 15.0) / 100.0);
+    underwater_sent = -1.0f;
     // The next frame sets it again for the scene playing then.
     cutscene_dof_on = false;
     RT64::SetSceneDepthOfField(0.0f);
@@ -213,6 +248,27 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t address = (uint32_t)MEM_W(0, depth_buffer_ptr) & 0x1FFFFFFFu;
     if (depth_address.exchange(address) != address) {
         RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, address);
+    }
+
+    // The underwater look eases in and out over a fifth of a second. TOOIE_WATER_TRACE=1 logs the
+    // player's state when it changes.
+    const uint32_t state = player_state(rdram);
+    if (std::getenv("TOOIE_WATER_TRACE")) {
+        static uint32_t last = 0xFFFFFFFFu;
+        if (state != last) {
+            last = state;
+            fprintf(stderr, "[water] player state %u, under water %d\n", state, (int)under_water(rdram, state));
+        }
+    }
+    const auto now = std::chrono::steady_clock::now();
+    const float dt = (underwater_at == std::chrono::steady_clock::time_point{}) ? 0.0f :
+        std::min(std::chrono::duration<float>(now - underwater_at).count(), 0.25f);
+    underwater_at = now;
+    const float target = under_water(rdram, state) ? 1.0f : 0.0f;
+    underwater_amount = (target > underwater_amount) ? std::min(target, underwater_amount + dt * 5.0f) : std::max(target, underwater_amount - dt * 5.0f);
+    if (underwater_amount != underwater_sent) {
+        underwater_sent = underwater_amount;
+        RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);
     }
 
     // Depth of field only in letterboxed scenes.
@@ -319,6 +375,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        underwater_tint_option,
+        "Underwater tint",
+        "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off.",
+        0, 100, 5, 0, false, 25);
+    graphics.add_number_option(
+        underwater_haze_option,
+        "Underwater haze",
+        "While under water, things further away fade into a blue haze. Works with Underwater tint above 0.",
+        0, 100, 5, 0, false, 15);
+    graphics.add_number_option(
         bloom_option,
         "Bloom",
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
@@ -379,7 +445,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
-                                   &eye_adaptation_option, &rim_light_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
