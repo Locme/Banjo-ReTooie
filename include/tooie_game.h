@@ -73,6 +73,8 @@ namespace tooie {
     // WIP tab (src/game/config.cpp): its id, and the General toggle that shows it.
     inline const std::string wip_tab_id = "wip";
     inline const std::string wip_tab_option = "wip_tab";
+    // Cheats tab (src/game/cheats.cpp): the General toggle that shows it. Developer section.
+    inline const std::string cheats_tab_option = "cheats_tab";
     // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.

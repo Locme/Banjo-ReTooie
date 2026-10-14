@@ -42,6 +42,18 @@
 #include "tooie_interp_check.h"
 
 namespace {
+    void show_cheats_tab() {
+        bool on = true;
+        try {
+            on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::cheats_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible("cheats", on);
+        } catch (...) {
+        }
+    }
+
     void show_wip_tab() {
         bool on = false;
         try {
@@ -184,6 +196,15 @@ void tooie::init_config() {
     general.add_option_change_callback(tooie::wip_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_wip_tab();
+        });
+    general.add_bool_option(
+        tooie::cheats_tab_option,
+        "Cheats tab",
+        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on.",
+        true);
+    general.add_option_change_callback(tooie::cheats_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_cheats_tab();
         });
     general.add_bool_option(
         tooie::more_memory::option,
@@ -421,6 +442,7 @@ void tooie::init_config() {
     recompui::config::finalize();
     move_saved_options_to_graphics();
     show_wip_tab();
+    show_cheats_tab();
     move_saved_discord_option();
     tooie::picture_filters::apply();
     tooie::smaa::apply();
