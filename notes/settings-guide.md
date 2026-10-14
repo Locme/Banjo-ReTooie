@@ -162,12 +162,20 @@ F12 screenshots are taken before these filters, so they don't show them.
   - the game's own frame rate (the frames it really makes; with Framerate
     above Original the rest are in-between frames), counted over the last
     2 seconds (over a quarter second a 30 fps game read as 28 and 32)
+  - on the same line, the game's CPU time per game frame and how busy it kept
+    the CPU: the time its own code ran (everything but its idle wait) over
+    the same 2 seconds. High CPU time with a low GPU time means a slowdown
+    comes from the game, not from drawing.
   - the Framerate setting
   - frame interpolation: off, or on with how many models, bones and shadows
     it tracked in the last frame, and how many camera cuts it has seen
   - the 1% low over the last 5 seconds (the frame time 99 frames in 100
     beat, and the frame rate it works out to) and how many hitches there
     were: frames that took more than twice the usual time
+  - shader compiles in the last 5 seconds and this session. A new mix of
+    effects needs a shader the first time it is seen; until it is ready a
+    slower general shader draws it, so a burst often lines up with a hitch on
+    entering a new area.
   - the map number (as used by the Warp tab and bug reports) and name, and
     Banjo's position
   - the renderer (Vulkan or D3D12), the internal resolution and the

@@ -11,6 +11,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Graphics
 
 - Frame rate overlay: shows input latency (controller read to screen), in Compact and Full.
+- Frame rate overlay (Full): shader compiles in the last 5 s, and the game's CPU time per frame.
 - Extended Draw Distance now takes effect as soon as it is switched (before, it did nothing until Apply), and notes, eggs and other placed objects draw as far as characters. Untested on PC (T30).
 - Game Frame Rate (Original, 30 FPS, 60 FPS) holds the game's own update rate; attract demos keep their pacing (6231d8b, 6736f06). Untested on PC (T52).
 - Save Game Select: the waving hand is blended above Original, pictures keep their quick shake (a9b1817, 5fd696e). Untested on PC (T54).

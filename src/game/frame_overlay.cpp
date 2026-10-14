@@ -1,7 +1,7 @@
 // Frame rate overlay: one Graphics option that shows, in the top left corner,
 // the frame rate and frame time actually presented, the worst frame, the GPU
-// time, the game's own frame rate, the Framerate setting and what frame
-// interpolation tagged; then the 1% low and hitches over the last 5 s, the
+// time, the game's own frame rate and CPU time, the Framerate setting and what
+// frame interpolation tagged; then the 1% low, hitches and shader compiles over the last 5 s, the
 // map and Banjo's position, the renderer, and whether speed-up, cheats or
 // mods are on (so a screenshot of a glitch carries what is needed to find it);
 // the audio queue and its dropouts; the build; and a graph of the last 100
@@ -11,8 +11,10 @@
 //
 // Nothing here times frames itself. The presented frames come from RT64's own
 // present timer (presentProfiler) and the GPU time from its renderer timestamps
-// (lib-patches/rt64.patch, RT64::TakeFrameStats); the game's frames from the
-// 3D scenes counted by model_tagging.cpp, with the interpolation figures. The
+// (lib-patches/rt64.patch, RT64::TakeFrameStats), with its shader compiles; the
+// game's frames from the 3D scenes counted by model_tagging.cpp, with the
+// interpolation figures; the game's CPU time from the time its idle thread
+// waits (lib-patches/N64ModernRuntime.patch, ultramodern::game_idle_ns). The
 // thread below wakes four times a second, averages what arrived since the last
 // wake and rewrites the text, so the overlay costs the frame loop nothing but
 // drawing a few lines of UI text.
@@ -69,6 +71,7 @@ namespace RT64 {
         uint32_t latencyFrames = 0;
         double latencyMs = 0.0;
         double worstLatencyMs = 0.0;
+        uint32_t shaderCompiles = 0;
     };
     FrameStats TakeFrameStats();
     void NoteInputRead(int64_t steadyNs);
@@ -81,7 +84,7 @@ namespace {
     constexpr auto update_interval = 250ms;
     // Wait for the UI to come up before building the overlay.
     constexpr auto ui_wait = 500ms;
-    constexpr size_t max_lines = 16;
+    constexpr size_t max_lines = 18;
     // The frame time graph: one bar per presented frame, newest on the right.
     constexpr size_t graph_bars = 100;
     constexpr float graph_height = 40.0f;
@@ -497,7 +500,30 @@ namespace {
         return text;
     }
 
-    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, Mode mode) {
+    // Shader compiles over the same 5 s as the 1% low: one count per update.
+    std::deque<std::pair<clock_type::time_point, uint32_t>> recent_shaders;
+    uint64_t shaders_total = 0;
+
+    void add_shaders(uint32_t compiles, clock_type::time_point now) {
+        shaders_total += compiles;
+        recent_shaders.push_back({ now, compiles });
+        while (!recent_shaders.empty() && now - recent_shaders.front().first > stutter_window) {
+            recent_shaders.pop_front();
+        }
+    }
+
+    std::string shader_line() {
+        uint32_t recent_count = 0;
+        for (const auto& entry : recent_shaders) {
+            recent_count += entry.second;
+        }
+        char line[96];
+        std::snprintf(line, sizeof(line), "Shaders compiled: %u in 5 s, %llu this session",
+            recent_count, (unsigned long long)shaders_total);
+        return line;
+    }
+
+    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, double game_busy_ms, Mode mode) {
         char line[160];
         std::vector<std::string> text;
 
@@ -530,6 +556,12 @@ namespace {
         }
         std::snprintf(line, sizeof(line), "Game %.0f fps", seconds > 0.0 ? game_frames / seconds : 0.0);
         text.push_back(line);
+        if (game_frames > 0 && seconds > 0.0) {
+            // The game's code ran whenever its idle thread wasn't waiting.
+            std::snprintf(line, sizeof(line), ", CPU %.2f ms per frame (busy %.0f%%)",
+                game_busy_ms / game_frames, std::clamp(game_busy_ms / (seconds * 10.0), 0.0, 100.0));
+            text.back() += line;
+        }
         text.push_back("Framerate: " + framerate_setting());
 
         tooie::model_tagging::Stats tags = tooie::model_tagging::last_stats();
@@ -545,6 +577,7 @@ namespace {
         }
 
         text.push_back(stutter_line());
+        text.push_back(shader_line());
         if (game_rdram != nullptr) {
             text.push_back(map_line(game_rdram));
             text.push_back(position_line(game_rdram));
@@ -560,10 +593,11 @@ namespace {
         Overlay overlay;
         struct GameSample {
             uint64_t frames = 0;
+            uint64_t idle_ns = 0;
             clock_type::time_point time;
         };
         std::array<GameSample, 9> game_window{};
-        game_window[0] = { tooie::model_tagging::last_stats().scenes, clock_type::now() };
+        game_window[0] = { tooie::model_tagging::last_stats().scenes, ultramodern::game_idle_ns(), clock_type::now() };
         size_t window_next = 1;
         size_t window_filled = 1;
         for (;;) {
@@ -572,8 +606,10 @@ namespace {
             // Taken every time, so turning the overlay on starts from fresh figures.
             RT64::FrameStats frames = RT64::TakeFrameStats();
             uint64_t game_frames = tooie::model_tagging::last_stats().scenes;
+            uint64_t idle_ns = ultramodern::game_idle_ns();
             auto now = clock_type::now();
             add_intervals(frames.intervals, now);
+            add_shaders(frames.shaderCompiles, now);
             add_latency(frames);
             static int mod_ticks = 0;
             if (mod_ticks++ % 8 == 0) {
@@ -583,19 +619,20 @@ namespace {
 
             // The game's frame rate is counted over the last 2 s: a 30 fps game only
             // fits 7 or 8 frames into one 250 ms update, which read as 28 and 32.
-            game_window[window_next] = { game_frames, now };
+            game_window[window_next] = { game_frames, idle_ns, now };
             window_next = (window_next + 1) % game_window.size();
             window_filled = std::min(window_filled + 1, game_window.size());
             const GameSample& oldest = game_window[window_filled < game_window.size() ? 0 : window_next];
             uint64_t game_delta = game_frames - oldest.frames;
             double game_seconds = std::chrono::duration<double>(now - oldest.time).count();
+            double game_busy_ms = std::max(0.0, game_seconds * 1000.0 - (idle_ns - oldest.idle_ns) / 1e6);
 
             // TOOIE_FRAME_LOG=1: prints the same figures every 2 s, shown or not.
             static const bool log = std::getenv("TOOIE_FRAME_LOG") != nullptr;
             static int ticks = 0;
             if (log && ++ticks % 8 == 0) {
                 std::string joined;
-                for (const std::string& line : format(frames, game_delta, game_seconds, Mode::Full)) {
+                for (const std::string& line : format(frames, game_delta, game_seconds, game_busy_ms, Mode::Full)) {
                     joined += (joined.empty() ? "" : " | ") + line;
                 }
                 std::printf("[frames] %s\n", joined.c_str());
@@ -614,7 +651,7 @@ namespace {
                 continue;
             }
 
-            std::vector<std::string> text = format(frames, game_delta, game_seconds, mode);
+            std::vector<std::string> text = format(frames, game_delta, game_seconds, game_busy_ms, mode);
             overlay.context.open();
             for (size_t i = 0; i < overlay.lines.size(); i++) {
                 bool used = i < text.size();
@@ -644,7 +681,7 @@ void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Frame rate overlay",
-        "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, GPU time, the game's own frame rate, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
+        "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, shader compiles, GPU time, the game's own frame rate and CPU time, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
         {
             {Mode::Off, "Off", "Off"},
             {Mode::Compact, "Compact", "Compact"},

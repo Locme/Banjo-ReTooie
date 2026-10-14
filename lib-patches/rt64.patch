@@ -109,10 +109,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..220ab76 100644
+index 3227ab1..3e6d610 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,104 @@
+@@ -4,12 +4,109 @@
  
  #include "rt64_present_queue.h"
  
@@ -209,6 +209,11 @@ index 3227ab1..220ab76 100644
 +        frameStats.gpuMs += ms;
 +    }
 +
++    void RecordShaderCompiled() {
++        const std::scoped_lock lock(frameStatsMutex);
++        frameStats.shaderCompiles++;
++    }
++
 +    void RequestScreenshot(ScreenshotCallback callback) {
 +        const std::scoped_lock lock(screenshotMutex);
 +        screenshotCallback = std::move(callback);
@@ -217,7 +222,7 @@ index 3227ab1..220ab76 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -87,6 +179,10 @@ namespace RT64 {
+@@ -87,6 +184,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -228,7 +233,7 @@ index 3227ab1..220ab76 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +211,7 @@ namespace RT64 {
+@@ -115,6 +216,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -236,7 +241,7 @@ index 3227ab1..220ab76 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +309,31 @@ namespace RT64 {
+@@ -212,6 +314,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -268,7 +273,7 @@ index 3227ab1..220ab76 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +388,8 @@ namespace RT64 {
+@@ -266,6 +393,8 @@ namespace RT64 {
              }
          }
          
@@ -277,7 +282,7 @@ index 3227ab1..220ab76 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -339,7 +463,78 @@ namespace RT64 {
+@@ -339,7 +468,78 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -356,7 +361,7 @@ index 3227ab1..220ab76 100644
                  commandList->setFramebuffer(swapChainFramebuffer);
                  commandList->clearColor();
  
-@@ -367,6 +562,10 @@ namespace RT64 {
+@@ -367,6 +567,10 @@ namespace RT64 {
                      ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                      ext.presentGraphicsWorker->wait();
                  }
@@ -367,7 +372,7 @@ index 3227ab1..220ab76 100644
              }
  
              if (lockedWorkloadMutex) {
-@@ -402,6 +601,26 @@ namespace RT64 {
+@@ -402,6 +606,26 @@ namespace RT64 {
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
                  presentProfiler.logAndRestart();
@@ -395,7 +400,7 @@ index 3227ab1..220ab76 100644
          }
      }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..cc3bef4 100644
+index e08b02c..31d30f4 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,8 +4,15 @@
@@ -414,7 +419,7 @@ index e08b02c..cc3bef4 100644
  #include "render/rt64_vi_renderer.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +24,37 @@
+@@ -17,6 +24,41 @@
  namespace RT64 {
      struct WorkloadQueue;
  
@@ -440,10 +445,14 @@ index e08b02c..cc3bef4 100644
 +        uint32_t latencyFrames = 0;
 +        double latencyMs = 0.0;
 +        double worstLatencyMs = 0.0;
++        // Shaders compiled for a new combination of render settings. The ubershader draws
++        // while one compiles, so the game keeps going, but more slowly.
++        uint32_t shaderCompiles = 0;
 +    };
 +
 +    FrameStats TakeFrameStats();
 +    void RecordGpuFrameTime(double ms);
++    void RecordShaderCompiled();
 +    // The game read the controller at this steady_clock time (ns). The next game frame
 +    // handed to RT64 takes the latest such time with it.
 +    void NoteInputRead(int64_t steadyNs);
@@ -452,7 +461,7 @@ index e08b02c..cc3bef4 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -52,6 +90,12 @@ namespace RT64 {
+@@ -52,6 +94,12 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -1276,6 +1285,27 @@ index 0000000..e400499
 +            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth);
 +    };
 +};
+diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
+index bf7b669..2f2f9c9 100644
+--- a/src/render/rt64_raster_shader_cache.cpp
++++ b/src/render/rt64_raster_shader_cache.cpp
+@@ -5,6 +5,7 @@
+ #include "rt64_raster_shader_cache.h"
+ 
+ #include "common/rt64_thread.h"
++#include "hle/rt64_present_queue.h"
+ 
+ #define ENABLE_OPTIMIZED_SHADER_GENERATION
+ 
+@@ -66,6 +67,8 @@ namespace RT64 {
+                     const std::unique_lock<std::mutex> lock(shaderCache->GPUShadersMutex);
+                     shaderCache->GPUShaders[shaderDesc.hash()] = std::move(newShader);
+                 }
++
++                RecordShaderCompiled();
+             }
+         }
+     }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
 index 0000000..464a81c

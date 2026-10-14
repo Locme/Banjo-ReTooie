@@ -1167,4 +1167,12 @@
 - Steps:
   1. Start the game 10 times in a row, closing it each time once the title or file select shows
 - Look for: Does it ever crash or close by itself while starting? If so, attach the newest crash_*.dmp and logs/crashes.log.
+
+## T110 Frame rate overlay: shader compiles and game CPU time
+- Asked: 2026-10-14 10:24 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Turn the overlay to Full (F3 or Esc > Graphics)
+  2. Enter a level you haven't visited this session, then walk around a busy part of one
+- Look for: A "Shaders compiled: N in 5 s, M this session" line under the 1% low. It should jump when you enter somewhere new and fall back to 0 in 5 s; going back to the same place should add few or none. The "Game" line now ends with "CPU X ms per frame (busy Y%)". On a normal PC expect a few ms and a low busy %; tell me if it ever goes near the frame time (33 ms at 30 fps) or 100%.
 - Status: waiting for L
