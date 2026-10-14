@@ -721,3 +721,12 @@
   2. Banjo, enemies, posts and ledges get dark outlines where they stand in front of something further away. The HUD and text don't
 - Look for: Are the lines the right thickness at your resolution? Should flat creases (inner edges) get lines too?
 - Status: waiting for L
+
+## T70 Beak Barge volume with the right stick (check only)
+- Asked: 2026-10-14 03:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.66 (on XBLA the Beak Barge whoosh got quieter with the right stick held forward, not backward)
+- Steps:
+  1. Do a Beak Barge (Z + B on the ground) a few times while holding the right stick forward, then backward, then not at all
+- Look for: Does the whoosh get quieter with the stick forward here? If yes, the N64 game does it too and it stays. If not, it was the XBLA port and nothing needs doing
+- Status: waiting for L

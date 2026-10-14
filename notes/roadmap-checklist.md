@@ -74,6 +74,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.66 Held sounds / "full-length sounds" (removed) and the Beak Barge investigation
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-14: nothing to port (the XBLA fix was removed). The open question is whether the Beak Barge volume drop with the right stick held forward happens here, where the game's own N64 mixer runs: if it does, it is how the N64 game behaves. Asked L to check (T70).
 
 ### 4.67 "Enable cheats" gate
 - [x] Done
