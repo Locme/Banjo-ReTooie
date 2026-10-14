@@ -1408,3 +1408,12 @@
   3. Listen to the music and sound effects in both
 - Look for: Does the overlay's "Game ... fps" line now reach about 120 (and above with Unlocked) instead of staying at 60? Is it still slow motion at 120? Do music and sound play smoothly, without gaps or crackles (headless, Unlocked had some gaps while the software renderer kept the CPU busy)? A 60 Hz monitor still only shows 60 pictures a second.
 - Status: waiting for L
+
+## T133 Bounce light without dotted noise
+- Asked: 2026-10-14 17:11 UTC
+- Build: main @ ada3c63
+- Steps:
+  1. Graphics: Bounce light 100, your usual resolution
+  2. Look at Banjo up close and at a honeycomb against grass
+- Look for: No fine grid of dots over Banjo's fur, skin or the background. Colours from nearby walls and floors still tint what is next to them.
+- Status: waiting for L
