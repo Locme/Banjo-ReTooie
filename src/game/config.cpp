@@ -36,6 +36,7 @@
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
 #include "tooie_fsr.h"
+#include "tooie_effect_views.h"
 
 namespace {
     void show_wip_tab() {
@@ -356,6 +357,7 @@ void tooie::init_config() {
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::frame_overlay::add_option(graphics);
+    tooie::effect_views::add_option(graphics);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
@@ -368,6 +370,7 @@ void tooie::init_config() {
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-aliasing and scaling");
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame rate and overlay");
+    recompui::config::set_option_group(tooie::effect_views::option, "Debug");
 
     recompui::config::create_controls_tab();
     {

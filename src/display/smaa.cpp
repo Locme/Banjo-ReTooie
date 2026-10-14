@@ -12,6 +12,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_effect_views.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 
@@ -37,6 +38,14 @@ void tooie::smaa::apply() {
     try {
         quality = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
+    }
+    // Graphics > Debug > Effect debug view: on (at its setting, or High when it is off) only in its own view.
+    if (tooie::effect_views::isolating()) {
+        if (tooie::effect_views::solo() != tooie::effect_views::Solo::Smaa) {
+            quality = (uint32_t)Quality::Off;
+        } else if (quality == (uint32_t)Quality::Off) {
+            quality = (uint32_t)Quality::High;
+        }
     }
     RT64::SetSmaaQuality(quality);
 }

@@ -11,6 +11,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_effect_views.h"
 #include "tooie_fsr.h"
 
 namespace RT64 {
@@ -35,6 +36,14 @@ void tooie::fsr::apply() {
     try {
         mode = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
+    }
+    // Graphics > Debug > Effect debug view: on (at its setting, or On when it is off) only in its own view.
+    if (tooie::effect_views::isolating()) {
+        if (tooie::effect_views::solo() != tooie::effect_views::Solo::Fsr) {
+            mode = (uint32_t)Mode::Off;
+        } else if (mode == (uint32_t)Mode::Off) {
+            mode = (uint32_t)Mode::On;
+        }
     }
     RT64::SetFsrMode(mode);
 }

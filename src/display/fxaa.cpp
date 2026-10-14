@@ -10,6 +10,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_effect_views.h"
 #include "tooie_fxaa.h"
 
 namespace RT64 {
@@ -34,6 +35,14 @@ void tooie::fxaa::apply() {
     try {
         mode = std::get<uint32_t>(graphics_config().get_option_value(option));
     } catch (...) {
+    }
+    // Graphics > Debug > Effect debug view: on (at its setting, or Fxaa when it is off) only in its own view.
+    if (tooie::effect_views::isolating()) {
+        if (tooie::effect_views::solo() != tooie::effect_views::Solo::Fxaa) {
+            mode = (uint32_t)Mode::Off;
+        } else if (mode == (uint32_t)Mode::Off) {
+            mode = (uint32_t)Mode::Fxaa;
+        }
     }
     RT64::SetFxaaMode(mode);
 }

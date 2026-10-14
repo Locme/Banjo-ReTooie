@@ -210,6 +210,28 @@ Game Frame Rate.
   a notice. It lasts for the session; the setting decides how the next
   session starts, and changing the setting takes over from the key.
 
+## Graphics: Debug
+
+- **Effect debug view**: for testing. Shows one picture effect or filter on
+  its own, with every other one off: at its setting, or at a default
+  strength when it is off (half for the scene effects and sharpening,
+  saturation, vignette and grain; 30 contrast; SMAA High; FXAA; FSR On;
+  16-bit Console; Deuteranopia; 2x texture upscaling). The list:
+  - Off, then the scene effects' own views: Effects alone, Depth, Normals,
+    Water (red, yellow where it reflects)
+  - Only: ambient occlusion, bounce light, toon outlines, rim light, fog,
+    bloom, light shafts, eye adaptation, water reflections, water waves,
+    underwater tint and haze, heat haze and underwater distortion, depth of
+    field
+  - All effects off (the picture with none of them, to compare against)
+  - Only: sharpening, contrast, colour saturation, vignette, film grain,
+    SMAA, FXAA, FSR, CRT, N64 16-bit colour, colourblind filter, texture
+    upscaling
+  F6 steps to the next view (Shift+F6 back) with a notice naming it; F8 splits
+  the picture, the effect on the left and the original on the right (SMAA,
+  FXAA, FSR and the Retro filters aren't split). Brightness and N64 3-point
+  filtering stay at their settings. Starts Off each launch. Default: Off.
+
 ## Cheats
 
 Cheats are in their own tab. Turn on **Enable cheats** first. Every cheat below

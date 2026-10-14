@@ -28,6 +28,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_effect_views.h"
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
@@ -295,13 +296,30 @@ void tooie::picture_filters::apply() {
     if (!created) {
         return;
     }
+    // Graphics > Debug > Effect debug view: one filter on its own (at its setting, or a default when it is
+    // off), every other one off.
+    using tooie::effect_views::Solo;
+    const bool isolating = tooie::effect_views::isolating();
+    const Solo solo = tooie::effect_views::solo();
+    // A setting as it is, or for a debug view: the setting (or `fallback` when it is off) if this filter
+    // is the one shown, otherwise off.
+    auto debug_value = [&](Solo filter, auto setting, auto off, auto fallback) -> decltype(setting) {
+        if (!isolating) {
+            return setting;
+        }
+        if (solo != filter) {
+            return (decltype(setting))off;
+        }
+        return (setting != (decltype(setting))off) ? setting : (decltype(setting))fallback;
+    };
+
     RT64::SetPictureFilters(
         (int)value<double>(brightness_option, 0.0),
         value<bool>(brightness_pattern_option, false),
-        value<uint32_t>(colourblind_option, (uint32_t)Colourblind::Off),
-        (float)(value<double>(colourblind_strength_option, 100.0) / 100.0),
-        value<bool>(crt_option, false),
-        value<uint32_t>(dither16_option, (uint32_t)Colour16::Off),
+        debug_value(Solo::Colourblind, value<uint32_t>(colourblind_option, (uint32_t)Colourblind::Off), (uint32_t)Colourblind::Off, (uint32_t)Colourblind::Deuteranopia),
+        debug_value(Solo::Colourblind, (float)(value<double>(colourblind_strength_option, 100.0) / 100.0), 0.0f, 1.0f),
+        debug_value(Solo::Crt, value<bool>(crt_option, false), false, true),
+        debug_value(Solo::Colour16, value<uint32_t>(dither16_option, (uint32_t)Colour16::Off), (uint32_t)Colour16::Off, (uint32_t)Colour16::Console),
         value<bool>(three_point_option, true));
 
     cutscene_dof = (float)(value<double>(cutscene_dof_option, 0.0) / 100.0);
@@ -314,7 +332,7 @@ void tooie::picture_filters::apply() {
     underwater_distortion = (float)(value<double>(underwater_distortion_option, 30.0) / 100.0);
     // The next frame sets it again for the scene playing then.
     dof_sent = -1;
-    RT64::SetSharpening((float)(value<double>(sharpen_option, 0.0) / 100.0));
+    RT64::SetSharpening(debug_value(Solo::Sharpening, (float)(value<double>(sharpen_option, 0.0) / 100.0), 0.0f, 0.5f));
     ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
     RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
 
@@ -330,7 +348,7 @@ void tooie::picture_filters::apply() {
         thickness *= 25.0;
     }
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0), (float)(thickness / 25.0));
-    const uint32_t upscale = value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off);
+    const uint32_t upscale = debug_value(Solo::TextureUpscale, value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off), (uint32_t)TextureUpscale::Off, (uint32_t)TextureUpscale::Double);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
@@ -342,10 +360,10 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
     if (!tooie::photo_mode::active()) {
-        const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
-        const float saturation = (float)(value<double>(saturation_option, 0.0) / 100.0);
-        const float vignette = (float)(value<double>(vignette_option, 0.0) / 100.0);
-        const float grain = (float)(value<double>(grain_option, 0.0) / 100.0);
+        const float contrast = debug_value(Solo::Contrast, (float)(value<double>(contrast_option, 0.0) / 100.0), 0.0f, 0.3f);
+        const float saturation = debug_value(Solo::Saturation, (float)(value<double>(saturation_option, 0.0) / 100.0), 0.0f, 0.5f);
+        const float vignette = debug_value(Solo::Vignette, (float)(value<double>(vignette_option, 0.0) / 100.0), 0.0f, 0.5f);
+        const float grain = debug_value(Solo::Grain, (float)(value<double>(grain_option, 0.0) / 100.0), 0.0f, 0.5f);
         const bool any = (contrast != 0.0f) || (saturation != 0.0f) || (vignette != 0.0f) || (grain != 0.0f);
         RT64::SetPhotoGrade(any, 0, 0.0f, contrast, saturation, 0.0f, vignette, grain);
     }
