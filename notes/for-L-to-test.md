@@ -1009,3 +1009,15 @@
   4. Check Graphics API reads D3D12 and play a little, then switch back to Vulkan and Restart.
 - Look for: Does the game reopen on its own both times, without a second window or an error? Does D3D12 look and run the same as Vulkan (black or wrong colours, crashes)? I could only run Vulkan here.
 - Status: waiting for L
+
+## T94 HD Shadows (enemies and NPCs)
+- Asked: 2026-10-14 07:24 UTC
+- Build: latest Windows CI build from main
+- Commit: 8d1f242
+- XBLA history: report §4.51
+- Steps:
+  1. Esc > Graphics: HD Shadows On
+  2. Go to Klungo in Mayahem Temple and to a few enemies (Grublins, Ugger) in bright places
+  3. Turn HD Shadows Off and On a few times
+- Look for: With it On, does each enemy and NPC cast a shadow shaped like its model, on the floor below it? Any shadow floating, doubled with an old blob shadow, flickering, or cut off at a screen edge? Does the frame rate stay smooth with many enemies on screen? Checked headless at Klungo only.
+- Status: waiting for L
