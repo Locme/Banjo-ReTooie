@@ -12,7 +12,7 @@
 // and the retro filters (4.40). Sharpening, contrast, saturation, vignette and film grain (4.35, 4.36)
 // use photo mode's RT64 pass, which photo mode takes over while it is on. Ambient occlusion, fog (4.35)
 // and toon outlines and bloom (4.36) are RT64's scene effects pass, drawn after the 3D world and before the HUD.
-// Effects preset (4.42) sets them all at once.
+// Cutscene depth of field (4.36) and eye adaptation (4.37) too. Effects preset (4.42) sets them all at once.
 namespace tooie::picture_filters {
     enum class Colourblind : uint32_t { Off, Deuteranopia, Protanopia, Tritanopia };
     enum class Colour16 : uint32_t { Off, Console, Raw };
@@ -39,6 +39,7 @@ namespace tooie::picture_filters {
     inline const std::string outlines_option = "toon_outlines";
     inline const std::string bloom_option = "bloom";
     inline const std::string cutscene_dof_option = "cutscene_dof";
+    inline const std::string eye_adaptation_option = "eye_adaptation";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

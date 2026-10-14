@@ -345,10 +345,10 @@ index 5a331aa..87ecc21 100644
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..075ff01 100644
+index 69a82ac..be4d991 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,47 @@ namespace RT64 {
+@@ -659,6 +659,50 @@ namespace RT64 {
          }
      };
  
@@ -373,11 +373,13 @@ index 69a82ac..075ff01 100644
 +        }
 +    };
 +
-+    // Banjo-Tooie: the scene effects pass's inputs, the depth target, the blurred bloom and the scene so far.
++    // Banjo-Tooie: the scene effects pass's inputs, the depth target, the blurred bloom, the scene so far
++    // and the adapted brightness.
 +    struct SceneEffectsDescriptorSet : RenderDescriptorSetBase {
 +        uint32_t gInput;
 +        uint32_t gBloom;
 +        uint32_t gColor;
++        uint32_t gAdapted;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -385,6 +387,7 @@ index 69a82ac..075ff01 100644
 +            gBloom = builder.addTexture(2);
 +            builder.addImmutableSampler(3, linearSampler);
 +            gColor = builder.addTexture(4);
++            gAdapted = builder.addTexture(5);
 +            builder.end();
 +
 +            if (device != nullptr) {
@@ -680,10 +683,10 @@ index 0000000..e403425
 +};
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..616d4cd
+index 0000000..8da3e98
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,279 @@
+@@ -0,0 +1,370 @@
 +//
 +// RT64
 +//
@@ -693,6 +696,7 @@ index 0000000..616d4cd
 +#include <algorithm>
 +#include <cmath>
 +#include <cstdlib>
++#include <chrono>
 +#include <mutex>
 +#include <unordered_map>
 +#include <vector>
@@ -725,6 +729,14 @@ index 0000000..616d4cd
 +            const RenderTexture *sceneSetDepth = nullptr;
 +            const RenderTexture *sceneSetBloom = nullptr;
 +            const RenderTexture *sceneSetColor = nullptr;
++            const RenderTexture *sceneSetAdapted = nullptr;
++            // Eye adaptation: the measured brightness [0], the adapted one [1] and a copy of last frame's [2].
++            std::unique_ptr<RenderTexture> luminanceTexture[3];
++            std::unique_ptr<RenderFramebuffer> luminanceFramebuffer[3];
++            std::unique_ptr<SmaaDescriptorSet> measureSet;
++            const RenderTexture *measureSetTexture = nullptr;
++            std::unique_ptr<SmaaDescriptorSet> adaptSet;
++            std::chrono::steady_clock::time_point lastAdapt;
 +            std::vector<std::unique_ptr<RenderTexture>> retired;
 +            std::vector<std::unique_ptr<RenderFramebuffer>> retiredFramebuffers;
 +            std::vector<std::unique_ptr<SmaaDescriptorSet>> retiredSets;
@@ -784,6 +796,11 @@ index 0000000..616d4cd
 +        effectsSettings.depthOfField = strength;
 +    }
 +
++    void SetSceneEyeAdaptation(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.eyeAdaptation = strength;
++    }
++
 +    void SetSceneOutlines(float outlines) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.outlines = outlines;
@@ -797,7 +814,8 @@ index 0000000..616d4cd
 +    bool SceneEffectsWanted(const RenderTarget *depthTarget) {
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
-+            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
++            (settings.eyeAdaptation > 0.0f)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -821,7 +839,7 @@ index 0000000..616d4cd
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), 0.0f };
 +        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2], settings.outlines };
 +
-+        constants.bloom = { settings.bloom, settings.depthOfField, 0.0f, 0.0f };
++        constants.bloom = { settings.bloom, settings.depthOfField, settings.eyeAdaptation, 0.0f };
 +
 +        RenderCommandList *commandList = worker->commandList.get();
 +        Resources &res = resourcesFor(worker);
@@ -850,7 +868,7 @@ index 0000000..616d4cd
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -895,6 +913,79 @@ index 0000000..616d4cd
 +            });
 +        }
 +
++        if (res.luminanceTexture[0] == nullptr) {
++            for (int i = 0; i < 3; i++) {
++                res.luminanceTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(1, 1, RenderFormat::R32_FLOAT));
++                res.luminanceTexture[i]->setName("Scene Effects Luminance");
++                const RenderTexture *texture = res.luminanceTexture[i].get();
++                res.luminanceFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
++            }
++
++            // Adapting into [1] reads the measured brightness [0] and last frame's [2].
++            res.adaptSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
++                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
++            res.adaptSet->setTexture(res.adaptSet->gTexture0, res.luminanceTexture[0].get(), RenderTextureLayout::SHADER_READ);
++            res.adaptSet->setTexture(res.adaptSet->gTexture1, res.luminanceTexture[2].get(), RenderTextureLayout::SHADER_READ);
++            res.adaptSet->setTexture(res.adaptSet->gTexture2, res.luminanceTexture[0].get(), RenderTextureLayout::SHADER_READ);
++
++            // Start with nothing adapted yet (0), so the first measurement is taken as it is.
++            for (int i = 0; i < 3; i++) {
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.luminanceTexture[i].get(), RenderTextureLayout::COLOR_WRITE));
++                commandList->setFramebuffer(res.luminanceFramebuffer[i].get());
++                commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.luminanceTexture[i].get(), RenderTextureLayout::SHADER_READ));
++            }
++        }
++
++        if ((settings.eyeAdaptation > 0.0f) && (source != nullptr)) {
++            if ((res.measureSet == nullptr) || (res.measureSetTexture != source)) {
++                if (res.measureSet != nullptr) {
++                    res.retiredSets.emplace_back(std::move(res.measureSet));
++                }
++                res.measureSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
++                    shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
++                const RenderTextureView *view = colorTarget->usesResolve() ? colorTarget->getResolvedTextureView() : nullptr;
++                res.measureSet->setTexture(res.measureSet->gTexture0, source, RenderTextureLayout::SHADER_READ, view);
++                res.measureSet->setTexture(res.measureSet->gTexture1, source, RenderTextureLayout::SHADER_READ, view);
++                res.measureSet->setTexture(res.measureSet->gTexture2, source, RenderTextureLayout::SHADER_READ, view);
++                res.measureSetTexture = source;
++            }
++
++            // About 63% of the way to the new brightness each second.
++            const auto now = std::chrono::steady_clock::now();
++            const float seconds = std::min(std::chrono::duration<float>(now - res.lastAdapt).count(), 0.25f);
++            res.lastAdapt = now;
++            const float rate = 1.0f - std::exp(-seconds / 1.0f);
++
++            auto luminancePass = [&](const SmaaDescriptorSet *input, int output, float pass, float amount) {
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.luminanceTexture[output].get(), RenderTextureLayout::COLOR_WRITE));
++                interop::BloomCB luminanceConstants;
++                luminanceConstants.params = { 0.0f, 0.0f, pass, amount };
++                commandList->setFramebuffer(res.luminanceFramebuffer[output].get());
++                commandList->setViewports(RenderViewport(0.0f, 0.0f, 1.0f, 1.0f));
++                commandList->setScissors(RenderRect(0, 0, 1, 1));
++                commandList->setPipeline(shaderLibrary->luminance.pipeline.get());
++                commandList->setGraphicsPipelineLayout(shaderLibrary->luminance.pipelineLayout.get());
++                commandList->setGraphicsDescriptorSet(input->get(), 0);
++                commandList->setGraphicsPushConstants(0, &luminanceConstants);
++                commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++                commandList->drawInstanced(3, 1, 0, 0);
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.luminanceTexture[output].get(), RenderTextureLayout::SHADER_READ));
++            };
++
++            luminancePass(res.measureSet.get(), 0, 3.0f, 0.0f);
++            luminancePass(res.adaptSet.get(), 1, 4.0f, rate);
++            commandList->barriers(RenderBarrierStage::COPY, {
++                RenderTextureBarrier(res.luminanceTexture[1].get(), RenderTextureLayout::COPY_SOURCE),
++                RenderTextureBarrier(res.luminanceTexture[2].get(), RenderTextureLayout::COPY_DEST)
++            });
++            commandList->copyTexture(res.luminanceTexture[2].get(), res.luminanceTexture[1].get());
++            commandList->barriers(RenderBarrierStage::GRAPHICS, {
++                RenderTextureBarrier(res.luminanceTexture[1].get(), RenderTextureLayout::SHADER_READ),
++                RenderTextureBarrier(res.luminanceTexture[2].get(), RenderTextureLayout::SHADER_READ)
++            });
++        }
++
 +        if (settings.bloom > 0.0f) {
 +            // Bright parts at a quarter of the size into [0], blurred across into [1], then down into [0].
 +            auto bloomPass = [&](const SmaaDescriptorSet *input, RenderTexture *inputTexture, int output, uint32_t inputWidth, uint32_t inputHeight, float pass) {
@@ -923,8 +1014,9 @@ index 0000000..616d4cd
 +
 +        // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
 +        const RenderTexture *color = (source != nullptr) ? source : res.bloomTexture[0].get();
++        const RenderTexture *adapted = res.luminanceTexture[1].get();
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[0].get()) ||
-+            (res.sceneSetColor != color)) {
++            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted)) {
 +            if (res.sceneSet != nullptr) {
 +                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
 +            }
@@ -935,7 +1027,9 @@ index 0000000..616d4cd
 +            res.sceneSet->setTexture(res.sceneSet->gColor, color, RenderTextureLayout::SHADER_READ,
 +                ((source != nullptr) && colorTarget->usesResolve()) ? colorTarget->getResolvedTextureView() : nullptr);
 +            res.sceneSetBloom = res.bloomTexture[0].get();
++            res.sceneSet->setTexture(res.sceneSet->gAdapted, adapted, RenderTextureLayout::SHADER_READ);
 +            res.sceneSetColor = color;
++            res.sceneSetAdapted = adapted;
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
@@ -965,10 +1059,10 @@ index 0000000..616d4cd
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..7f74a9a
+index 0000000..1e6a6a1
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,56 @@
 +//
 +// RT64
 +//
@@ -983,7 +1077,7 @@ index 0000000..7f74a9a
 +namespace RT64 {
 +    struct RenderTarget;
 +
-+    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field) drawn over the 3D world after its last perspective draw and
++    // Banjo-Tooie: screen-space effects (ambient occlusion, fog, outlines, bloom, depth of field, eye adaptation) drawn over the 3D world after its last perspective draw and
 +    // before the HUD, only into the framebuffer whose depth buffer is at depthAddress (the game's).
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -997,6 +1091,7 @@ index 0000000..7f74a9a
 +        float bloom = 0.0f;
 +        float bloomThreshold = 0.7f;
 +        float depthOfField = 0.0f;
++        float eyeAdaptation = 0.0f;
 +    };
 +
 +    // ambientOcclusion: 0 off, 1 strongest. radius in world units. depthAddress is physical.
@@ -1010,6 +1105,8 @@ index 0000000..7f74a9a
 +    void SetSceneBloom(float bloom, float threshold);
 +    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
 +    void SetSceneDepthOfField(float strength);
++    // Eye adaptation (0 off, 1 strongest): dark scenes brighten and bright ones tone down over about a second.
++    void SetSceneEyeAdaptation(float strength);
 +    SceneEffectsSettings GetSceneEffects();
 +
 +    // Whether the effects should be drawn into a framebuffer with this depth target.
@@ -1023,7 +1120,7 @@ index 0000000..7f74a9a
 +        const interop::float4x4 &projection, const ShaderLibrary *shaderLibrary);
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..e6b08b0 100644
+index d1c5273..48bc3f7 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -40,6 +40,21 @@
@@ -1102,7 +1199,7 @@ index d1c5273..e6b08b0 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -569,6 +617,66 @@ namespace RT64 {
+@@ -569,6 +617,68 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -1163,13 +1260,15 @@ index d1c5273..e6b08b0 100644
 +            layoutBuilder.addDescriptorSet(descriptorSet);
 +            layoutBuilder.end();
 +            createPass(bloom, SMAA_BLOBS(BloomPS), RenderTarget::colorBufferFormat(usesHDR));
++            // The same passes measuring and adapting the scene's brightness, into one-pixel float targets.
++            createPass(luminance, SMAA_BLOBS(BloomPS), RenderFormat::R32_FLOAT);
 +#       undef SMAA_BLOBS
 +        }
 +
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -832,6 +940,52 @@ namespace RT64 {
+@@ -832,6 +942,52 @@ namespace RT64 {
              }
          }
  
@@ -1223,10 +1322,10 @@ index d1c5273..e6b08b0 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..69fccee 100644
+index 641f3ec..9fca99a 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,18 @@ namespace RT64 {
+@@ -51,8 +51,20 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
@@ -1234,6 +1333,8 @@ index 641f3ec..69fccee 100644
 +        ShaderRecord sceneEffects;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
 +        ShaderRecord bloom;
++        // Banjo-Tooie: eye adaptation's brightness passes (BloomPS.hlsl passes 3 and 4), to R32_FLOAT.
++        ShaderRecord luminance;
          ShaderRecord textureDecode;
          ShaderRecord textureCopy;
 +        // Banjo-Tooie: SMAA passes, one per preset (low, medium, high, ultra) for the first two.
@@ -1548,15 +1649,16 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/BloomPS.hlsl b/src/shaders/BloomPS.hlsl
 new file mode 100644
-index 0000000..96d43aa
+index 0000000..c55fa85
 --- /dev/null
 +++ b/src/shaders/BloomPS.hlsl
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,64 @@
 +//
 +// RT64
 +//
 +// Banjo-Tooie: the scene effects' bloom. Pass 0 keeps the bright parts of the scene at a quarter of its
-+// size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down.
++// size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down. Passes 3
++// and 4 measure the scene's brightness and adapt to it over time for eye adaptation.
 +
 +#include "shared/rt64_scene_effects.h"
 +
@@ -1571,6 +1673,25 @@ index 0000000..96d43aa
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    const float2 texel = gConstants.params.xy;
 +    const uint pass = uint(gConstants.params.z + 0.5f);
++    if (pass == 3) {
++        // The scene's average brightness (geometric mean over a 16x16 grid), into one pixel.
++        float sum = 0.0f;
++        [loop] for (int y = 0; y < 16; y++) {
++            [loop] for (int x = 0; x < 16; x++) {
++                const float2 at = (float2(x, y) + 0.5f) / 16.0f;
++                const float3 c = saturate(gTexture0.SampleLevel(LinearSampler, at, 0).rgb);
++                sum += log(max(dot(c, float3(0.2126f, 0.7152f, 0.0722f)), 0.002f));
++            }
++        }
++        return float4(exp(sum / 256.0f), 0.0f, 0.0f, 1.0f);
++    }
++    else if (pass == 4) {
++        // The adapted brightness moves towards the measured one (gTexture0) from where it was (gTexture1).
++        const float measured = gTexture0.Load(int3(0, 0, 0)).r;
++        const float previous = gTexture1.Load(int3(0, 0, 0)).r;
++        const float adapted = (previous > 0.0f) ? lerp(previous, measured, gConstants.params.w) : measured;
++        return float4(adapted, 0.0f, 0.0f, 1.0f);
++    }
 +    if (pass == 0) {
 +        float3 color = 0.0f;
 +        color += gTexture0.SampleLevel(LinearSampler, uv + texel * float2(-1.0f, -1.0f), 0).rgb;
@@ -1804,10 +1925,10 @@ index 0000000..d2190f9
 +}
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..dba737b
+index 0000000..6ca1bb4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,184 @@
+@@ -0,0 +1,202 @@
 +//
 +// RT64
 +//
@@ -1828,6 +1949,16 @@ index 0000000..dba737b
 +Texture2D<float4> gBloom : register(t2);
 +SamplerState LinearSampler : register(s3);
 +Texture2D<float4> gColor : register(t4);
++Texture2D<float> gAdapted : register(t5);
++
++// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
++// black and white white (out = c * e / (1 + c * (e - 1))).
++float3 Adapt(float3 color) {
++    const float adapted = max(gAdapted.Load(int3(0, 0, 0)), 0.002f);
++    const float exposure = lerp(1.0f, clamp(0.3f / adapted, 0.5f, 2.5f), gConstants.bloom.z);
++    const float3 c = saturate(color);
++    return c * exposure / (1.0f + c * (exposure - 1.0f));
++}
 +
 +float LoadDepth(int2 pixel) {
 +    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
@@ -1941,6 +2072,8 @@ index 0000000..dba737b
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y > 0.0f) && (gConstants.ambientOcclusion.z < 0.5f);
++    // Eye adaptation also draws the scene itself.
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f)) && (gConstants.ambientOcclusion.z < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -1948,8 +2081,11 @@ index 0000000..dba737b
 +        if (gConstants.ambientOcclusion.z > 0.5f) {
 +            return float4(1.0f, 0.0f, 1.0f, 0.0f);
 +        }
-+        if (blur) {
-+            const float3 scene = DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y);
++        if (redraw) {
++            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) : gColor.Load(int3(pixel, 0)).rgb;
++            if (gConstants.bloom.z > 0.0f) {
++                scene = Adapt(scene);
++            }
 +            return float4(scene * (1.0f - skyFog) + gConstants.fogColor.rgb * skyFog + bloom, 0.0f);
 +        }
 +        return float4(gConstants.fogColor.rgb * skyFog + bloom, 1.0f - skyFog);
@@ -1985,8 +2121,11 @@ index 0000000..dba737b
 +        return float4(lerp(keep.xxx, float3(0.0f, 0.4f, 1.0f), fog), 0.0f);
 +    }
 +
-+    if (blur) {
-+        const float3 scene = DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y);
++    if (redraw) {
++        float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, gConstants.bloom.y) : gColor.Load(int3(pixel, 0)).rgb;
++        if (gConstants.bloom.z > 0.0f) {
++            scene = Adapt(scene);
++        }
 +        return float4(scene * keep * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
 +
@@ -2226,10 +2365,10 @@ index 0000000..84fa600
 +#endif
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..369fed3
+index 0000000..b136289
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,40 @@
 +//
 +// RT64
 +//
@@ -2256,12 +2395,14 @@ index 0000000..369fed3
 +        float4 fog;
 +        // The fog's color (rgb), then the outline strength (0 off, 1 strongest).
 +        float4 fogColor;
-+        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), then unused.
++        // Bloom strength (0 off), depth of field strength (0 off, 1 strongest), eye adaptation strength
++        // (0 off, 1 strongest), then unused.
 +        float4 bloom;
 +    };
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
-+    // quarter of the size, 1 blur across, 2 blur down), then the brightness threshold (0 to 1).
++    // quarter of the size, 1 blur across, 2 blur down, 3 measure the average brightness, 4 move the adapted
++    // brightness towards it), then the brightness threshold (0 to 1), or for pass 4 how far to move (0 to 1).
 +    struct BloomCB {
 +        float4 params;
 +    };

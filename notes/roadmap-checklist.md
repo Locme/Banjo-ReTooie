@@ -285,8 +285,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - Partial (2026-10-14, T66): Graphics > Vignette and Film grain during play (same pass as 4.35). 16-bit colour is 4.40 (Graphics > Retro). Toon outlines (2026-10-14, T69): Graphics > Toon outlines (0-100) in the scene effects pass (4.35), dark where the distance jumps by over 8% against a neighbour, about a pixel per 540 rows, under the HUD; checked headless around Banjo, the posts and the platform edge. Bloom (2026-10-14, T72): Graphics > Bloom (0-100) in the same pass: the scene so far (resolved, or copied without MSAA) gives its parts above 65% brightness at a quarter size, blurred across and down (BloomPS.hlsl), added under the HUD; each RT64 worker that records the pass has its own textures (the workload thread and the game's framebuffer syncs record at the same time, which crashed when shared). Checked headless: clouds and lit rock glow, HUD head and area title don't. Cutscene depth of field (2026-10-14, T73): Graphics > Cutscene depth of field (0-100), only while tooie::in_letterboxed_scene(); drawn in the scene effects pass from the scene so far, so cutscene text and the HUD stay sharp; focus is the nearest thing in a 5x5 box at the middle. Checked headless on the title flyby: near rock blurs, logo and copyright text sharp. Rim light not started.
 
 ### 4.37 Eye adaptation
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-14 (T74): Graphics > Eye adaptation (0-100) in the scene effects pass (4.35): the scene's average brightness (geometric mean of a 16x16 grid) is eased toward over about a second, and the picture is brightened in dark places and toned down in bright ones (exposure 0.5x to 2.5x), under the HUD. Checked headless: Glitter Gulch Mine mean brightness 69 -> 93, Spiral Mountain 89 -> 92.
 
 ### 4.42 Effect presets
 - [x] Done

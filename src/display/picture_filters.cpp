@@ -42,6 +42,7 @@ namespace RT64 {
     void SetSceneOutlines(float outlines);
     void SetSceneBloom(float bloom, float threshold);
     void SetSceneDepthOfField(float strength);
+    void SetSceneEyeAdaptation(float strength);
 }
 
 namespace {
@@ -92,6 +93,7 @@ namespace {
         { &tooie::picture_filters::outlines_option, 0.0 },
         { &tooie::picture_filters::bloom_option, 0.0 },
         { &tooie::picture_filters::cutscene_dof_option, 0.0 },
+        { &tooie::picture_filters::eye_adaptation_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -158,6 +160,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0) * 0.6f, bloom_threshold);
 
     if (!tooie::photo_mode::active()) {
@@ -313,6 +316,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        eye_adaptation_option,
+        "Eye adaptation",
+        "Dark places slowly brighten and very bright ones tone down, over about a second, like your eyes adjusting. Black stays black and white stays white. The HUD isn't changed. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         cutscene_dof_option,
         "Cutscene depth of field",
         "In letterboxed cutscenes, blurs what is nearer or further than the middle of the picture, like a film camera. Text and the HUD stay sharp. 0 is off.",
@@ -362,7 +370,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option }) {
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option, &cutscene_dof_option,
+                                   &eye_adaptation_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

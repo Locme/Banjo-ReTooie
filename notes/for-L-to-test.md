@@ -762,3 +762,13 @@
   2. Watch the title flyby and a cutscene with the black bars (Jamjars, Bottles, a boss intro)
 - Look for: Is the focus on the right thing (it focuses on the nearest thing at the middle of the picture)? Text boxes and subtitles should stay sharp. Any flicker when the camera cuts?
 - Status: waiting for L
+
+## T74 Eye adaptation
+- Asked: 2026-10-14 06:10 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.37
+- Steps:
+  1. Esc > Graphics: set "Eye adaptation" to 70
+  2. Walk from Spiral Mountain into a dark place (Glitter Gulch Mine, a cave) and back out
+- Look for: Dark places brighten over about a second and bright ones settle. Does it pump or flicker? The HUD should stay as it is.
+- Status: waiting for L
