@@ -204,8 +204,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.58 Gyro aiming and camera
-- [ ] Done
+- [x] Done (T64)
 - [ ] Approved by L
+- 2026-10-14 (T64, with 4.58/4.59): in first person the mouse and a controller's gyro turn the view directly (src/input/motion_aim.cpp), on top of the stick. The source angles are the dynamic camera's +0xBC pitch / +0xC0 yaw (found by RDRAM diffs, checked by writing them headless: the view, Banjo's yaw and the up/down limits of -68 and 70 follow). Strength: General > Mouse Sensitivity (default 0, off; non-zero locks the cursor while playing) and Gyro Sensitivity (default 25%), both RecompFrontend's own rows. QOL > "Mouse and gyro aim: invert up/down". Checked headless with scripted mouse motion; real mouse and gyro not checked.
 
 ### 4.60 D-pad control scheme
 - [x] Done
@@ -299,8 +300,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.59 Mouse aiming
-- [ ] Done
+- [x] Done (T64)
 - [ ] Approved by L
+- 2026-10-14 (T64, with 4.58/4.59): in first person the mouse and a controller's gyro turn the view directly (src/input/motion_aim.cpp), on top of the stick. The source angles are the dynamic camera's +0xBC pitch / +0xC0 yaw (found by RDRAM diffs, checked by writing them headless: the view, Banjo's yaw and the up/down limits of -68 and 70 follow). Strength: General > Mouse Sensitivity (default 0, off; non-zero locks the cursor while playing) and Gyro Sensitivity (default 25%), both RecompFrontend's own rows. QOL > "Mouse and gyro aim: invert up/down". Checked headless with scripted mouse motion; real mouse and gyro not checked.
 
 ### 4.81 Debug section with race warps (parked)
 - [ ] Done

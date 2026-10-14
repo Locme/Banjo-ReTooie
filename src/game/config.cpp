@@ -25,6 +25,7 @@
 #include "tooie_game_frame_rate.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_fine_aim.h"
+#include "tooie_motion_aim.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 #include "tooie_speedup.h"
@@ -116,8 +117,9 @@ void tooie::init_config() {
 
     recompui::config::GeneralTabOptions general_options{};
     general_options.has_rumble_strength = true;
-    general_options.has_gyro_sensitivity = false;
-    general_options.has_mouse_sensitivity = false;
+    // Mouse and gyro aiming in first person (src/input/motion_aim.cpp).
+    general_options.has_gyro_sensitivity = true;
+    general_options.has_mouse_sensitivity = true;
     auto& general = recompui::config::create_general_tab(general_options);
     general.add_bool_option(
         tooie::save_backups_option,
@@ -271,6 +273,7 @@ void tooie::init_config() {
         },
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
+    tooie::motion_aim::add_options(qol);
     qol.add_bool_option(
         tooie::cutscene_skip_option,
         "Skip boss intros",

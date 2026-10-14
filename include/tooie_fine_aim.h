@@ -18,6 +18,8 @@ namespace tooie::fine_aim {
     void tick(uint8_t* rdram, recomp_context* ctx);
     // Scales player 1's left stick as the game is about to read it. Safe to call more than once per frame.
     void apply(uint16_t buttons, float* x, float* y);
+    // Whether Banjo is in first person (as of the last tick).
+    bool in_first_person();
 }
 
 #endif

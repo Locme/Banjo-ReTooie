@@ -19,6 +19,7 @@
 // game's camera logic is left as it was and only the picture moves.
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -204,6 +205,14 @@ bool tooie::free_camera::enabled() {
     return forced || option<bool>(tooie::free_camera_option, true);
 }
 
+namespace {
+    std::atomic<uint32_t> last_ctl{0};
+}
+
+uint32_t tooie::free_camera::last_controller() {
+    return last_ctl.load();
+}
+
 extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_FREECAM_LOG") != nullptr;
     static auto last_log = std::chrono::steady_clock::now();
@@ -218,6 +227,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     if (!valid_ptr(ctl)) {
         return;
     }
+    last_ctl = ctl;
     const uint32_t camera = read_word(rdram, ctl + ctl_camera);
     if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, ctx, camera)) {
         state.active = false;

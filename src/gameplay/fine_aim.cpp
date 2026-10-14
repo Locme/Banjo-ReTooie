@@ -74,6 +74,10 @@ void tooie::fine_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     player_state = valid_ptr(state) ? rd_word(rdram, state + state_current) : 0;
 }
 
+bool tooie::fine_aim::in_first_person() {
+    return player_state.load() == state_first_person;
+}
+
 void tooie::fine_aim::apply(uint16_t buttons, float* x, float* y) {
     if (player_state.load() != state_first_person) {
         return;

@@ -139,6 +139,48 @@ namespace {
     const char* last_refusal = "";
 
 
+    // TOOIE_RAMDUMP=<ms>[,<ms>...]: writes RDRAM (big-endian words as the game sees them) to
+    // ramdump_<ms>.bin in the working folder at those times, for finding values by diffing.
+    void ram_dump_tick(uint8_t* rdram) {
+        static std::vector<long> times = [] {
+            std::vector<long> t;
+            if (const char* v = std::getenv("TOOIE_RAMDUMP")) {
+                for (const char* p = v; *p;) {
+                    char* end;
+                    long ms = std::strtol(p, &end, 10);
+                    if (end == p) {
+                        break;
+                    }
+                    t.push_back(ms);
+                    p = (*end == ',') ? end + 1 : end;
+                }
+            }
+            return t;
+        }();
+        static size_t next = 0;
+        static const auto begin = std::chrono::steady_clock::now();
+        if (next >= times.size()) {
+            return;
+        }
+        const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
+        if (ms < times[next]) {
+            return;
+        }
+        char name[64];
+        snprintf(name, sizeof(name), "ramdump_%ld.bin", times[next]);
+        next++;
+        std::vector<uint8_t> words(rdram_size);
+        for (size_t i = 0; i < rdram_size; i += 4) {
+            const uint32_t w = (uint32_t)MEM_W(0, (gpr)(int32_t)(0x80000000u + i));
+            words[i] = w >> 24; words[i + 1] = w >> 16; words[i + 2] = w >> 8; words[i + 3] = w;
+        }
+        if (FILE* f = std::fopen(name, "wb")) {
+            std::fwrite(words.data(), 1, words.size(), f);
+            std::fclose(f);
+            fprintf(stderr, "[savestate] wrote %s\n", name);
+        }
+    }
+
     enum class Result { done, retry };
 
     // The renderer and the RSP task thread read and write RDRAM: let what they have finish first.
@@ -266,6 +308,7 @@ void tooie::save_state::start() {
 
 void tooie::save_state::tick(uint8_t* rdram, recomp_context* ctx) {
     test_tick();
+    ram_dump_tick(rdram);
     if (!save_requested.load() && !load_requested.load()) {
         return;
     }

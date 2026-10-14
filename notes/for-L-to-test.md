@@ -653,3 +653,15 @@
   4. Go into another area and press Home: the game should take you back to the saved area, then load
 - Look for: Does the music and sound carry on normally after a load? Any freeze or crash? The keys can be changed under Controls > Hotkeys. The slot is lost when the game closes.
 - Status: waiting for L
+
+## T64 Mouse and gyro aiming
+- Asked: 2026-10-14 02:05 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.58 and §4.59
+- Steps:
+  1. Esc > General: set Mouse Sensitivity to about 25% (it is off at 0). Gyro Sensitivity is 25% already
+  2. In a level, press C-up for first person (egg aiming)
+  3. Move the mouse: the view should turn with it, left/right and up/down. With a gyro controller (Switch Pro, DualSense), tilt and turn it
+  4. Fire an egg and check it goes where you look. Try QOL > "Mouse and gyro aim: invert up/down"
+- Look for: Does the mouse feel right at some setting? Is gyro drift a problem when the pad is still (set Gyro Sensitivity to 0 to turn it off)? While Mouse Sensitivity is above 0 the cursor is locked to the window while you play.
+- Status: waiting for L
