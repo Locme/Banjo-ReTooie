@@ -583,5 +583,5 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
             {Mode::Fps120, "Fps120", "120 FPS (Experimental)"},
             {Mode::Unlocked, "Unlocked", "Unlocked (Experimental)"},
         },
-        Mode::Original);
+        Mode::Fps60);
 }

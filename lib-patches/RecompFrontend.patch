@@ -856,7 +856,7 @@ index 4fdf81f..2a006fa 100644
 +                "Interpolation",
 +                get_framerate_text(60),
 +                refresh_rate_options,
-+                ultramodern::renderer::RefreshRate::Display
++                ultramodern::renderer::RefreshRate::Original
 +            );
 +
 +            config.add_number_option(
