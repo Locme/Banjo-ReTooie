@@ -28,6 +28,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Done
 - [ ] Approved by L
 - Partial (2026-10-13): every Graphics tab option applies and saves the moment it changes; no Apply button needed (lib-patches/RecompFrontend.patch). Graphics API still needs a restart (RT64).
+- 2026-10-14: claimed by the Opus helper thread (frame-rate thread): Graphics API switch without a restart, behind an option that defaults to off.
 
 ### 4.11 Saves folder next to the executable
 - [x] Done
