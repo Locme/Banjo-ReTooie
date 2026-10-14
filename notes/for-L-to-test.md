@@ -741,3 +741,14 @@
   3. Change Sharpening by hand: the preset should go back to Custom
 - Look for: Do the rows update in the menu straight away? Should Enhanced include anything else (fog, outlines)?
 - Status: waiting for L
+
+## T72 Bloom
+- Asked: 2026-10-14 03:30 UTC
+- Build: latest Windows CI build from main
+- XBLA history: report §4.36
+- Steps:
+  1. Esc > Graphics: set "Bloom" to 60
+  2. Bright parts (sky, sunlit rock, glowing things) get a soft glow. The HUD and text don't
+  3. Watch the frame rate with it on
+- Look for: Too strong or too weak? Should more of the picture glow (a lower brightness threshold)?
+- Status: waiting for L

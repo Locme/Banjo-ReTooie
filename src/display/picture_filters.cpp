@@ -39,6 +39,7 @@ namespace RT64 {
     void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
     void SetSceneOutlines(float outlines);
+    void SetSceneBloom(float bloom, float threshold);
 }
 
 namespace {
@@ -65,6 +66,8 @@ namespace {
         { 0.16f, 0.17f, 0.22f },   // Gloom: dark blue-grey
     };
     constexpr float fog_length = 3000.0f;
+    // Bloom glows from the parts of the picture brighter than this (0 to 1).
+    constexpr float bloom_threshold = 0.65f;
 
     // True while a preset sets the effect options, so their callbacks neither save one by one nor
     // switch the preset back to Custom.
@@ -83,6 +86,7 @@ namespace {
         { &tooie::picture_filters::sharpen_option, 0.0 },
         { &tooie::picture_filters::ambient_occlusion_option, 0.0 },
         { &tooie::picture_filters::outlines_option, 0.0 },
+        { &tooie::picture_filters::bloom_option, 0.0 },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
         { &tooie::picture_filters::saturation_option, 0.0 },
@@ -145,6 +149,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneFog((float)(value<double>(fog_option, 0.0) / 100.0), (float)value<double>(fog_start_option, 1500.0), fog_length,
         fog_colours[colour][0], fog_colours[colour][1], fog_colours[colour][2]);
     RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0));
+    RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0) * 0.6f, bloom_threshold);
 
     if (!tooie::photo_mode::active()) {
         const float contrast = (float)(value<double>(contrast_option, 0.0) / 100.0);
@@ -287,6 +292,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Draws dark outlines around characters and objects, on the edge in front of whatever is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        bloom_option,
+        "Bloom",
+        "A soft glow around the brightest parts of the 3D world. The HUD doesn't glow. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         fog_option,
         "Fog",
         "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
@@ -331,7 +341,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
-                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option }) {
+                                   &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &bloom_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

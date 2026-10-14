@@ -281,7 +281,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.36 Bloom, toon outlines, rim light, cutscene DoF, vignette and grain, 16-bit effects
 - [ ] Done
 - [ ] Approved by L
-- Partial (2026-10-14, T66): Graphics > Vignette and Film grain during play (same pass as 4.35). 16-bit colour is 4.40 (Graphics > Retro). Toon outlines (2026-10-14, T69): Graphics > Toon outlines (0-100) in the scene effects pass (4.35), dark where the distance jumps by over 8% against a neighbour, about a pixel per 540 rows, under the HUD; checked headless around Banjo, the posts and the platform edge. Bloom, rim light and cutscene DoF not started.
+- Partial (2026-10-14, T66): Graphics > Vignette and Film grain during play (same pass as 4.35). 16-bit colour is 4.40 (Graphics > Retro). Toon outlines (2026-10-14, T69): Graphics > Toon outlines (0-100) in the scene effects pass (4.35), dark where the distance jumps by over 8% against a neighbour, about a pixel per 540 rows, under the HUD; checked headless around Banjo, the posts and the platform edge. Bloom (2026-10-14, T72): Graphics > Bloom (0-100) in the same pass: the scene so far (resolved, or copied without MSAA) gives its parts above 65% brightness at a quarter size, blurred across and down (BloomPS.hlsl), added under the HUD; each RT64 worker that records the pass has its own textures (the workload thread and the game's framebuffer syncs record at the same time, which crashed when shared). Checked headless: clouds and lit rock glow, HUD head and area title don't. Rim light and cutscene DoF not started.
 
 ### 4.37 Eye adaptation
 - [ ] Done
