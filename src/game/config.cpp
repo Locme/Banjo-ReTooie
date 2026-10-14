@@ -37,6 +37,8 @@
 #include "tooie_fxaa.h"
 #include "tooie_fsr.h"
 #include "tooie_effect_views.h"
+#include "tooie_hotkeys.h"
+#include "tooie_interp_check.h"
 
 namespace {
     void show_wip_tab() {
@@ -120,6 +122,7 @@ void tooie::init_config() {
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
+    tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();
     if (!app_dir.empty()) {
@@ -358,6 +361,7 @@ void tooie::init_config() {
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::frame_overlay::add_option(graphics);
     tooie::effect_views::add_option(graphics);
+    tooie::interp_check::add_options(graphics);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.

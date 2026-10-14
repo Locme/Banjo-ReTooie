@@ -11,6 +11,7 @@
 // filter on its own; F8 shows the picture effects on the left half only, to compare.
 namespace tooie::effect_views {
     inline const std::string option = "effect_debug_view";
+    inline const std::string compare_option = "effect_debug_compare";
 
     // The filter outside RT64's scene effects pass that a debug view shows on its own.
     enum class Solo : uint32_t {
@@ -29,7 +30,7 @@ namespace tooie::effect_views {
         TextureUpscale,
     };
 
-    // Adds the Effect debug view option to the Graphics tab (Debug heading).
+    // Adds the Effect debug view and Effect compare options to the Graphics tab (Debug heading).
     void add_option(recomp::config::Config& graphics);
     // Starts the F6 / F8 key-watching thread (safe to call more than once).
     void start();

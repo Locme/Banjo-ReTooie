@@ -231,6 +231,23 @@ Game Frame Rate.
   the picture, the effect on the left and the original on the right (SMAA,
   FXAA, FSR and the Retro filters aren't split). Brightness and N64 3-point
   filtering stay at their settings. Starts Off each launch. Default: Off.
+- **Effect compare** (Graphics > Debug): the same split picture as F8, as a
+  switch. Starts Off each launch.
+- **Interpolation check** (Graphics > Debug): tints a model red for a moment
+  when its blend between game frames looks wrong, and logs it. F7 switches it
+  too. Shows nothing at Original. Starts Off each launch.
+- **Interpolation blend mode** (Graphics > Debug): a list of the five ways
+  in-between frames are blended (normal, no tags, tags with vertex blending,
+  camera untagged, models snap). Starts on normal each launch. The Blend Mode
+  key steps through them; it isn't bound by default (F8 is Effect Compare).
+
+## Controls: Hotkeys and Debug
+
+Every function key is bound in the Controls tab and can be changed there:
+Hide HUD (F1), Speed-Up (F2, under Cheats), Frame Rate Overlay (F3), Photo Mode
+(F10), Screenshot (F12) under Hotkeys; Effect Debug View (F6, Shift steps
+back), Interpolation Check (F7), Effect Compare (F8), Blend Mode (unbound) and
+Warp Again (F9, needs the Warp tab on) under Debug.
 
 ## Cheats
 

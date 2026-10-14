@@ -35,7 +35,7 @@ diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include
 index f5ed6c0..ff795a6 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,24 @@ namespace recompinput {
+@@ -37,10 +37,31 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -50,7 +50,14 @@ index f5ed6c0..ff795a6 100644
 +        DEFINE_INPUT(LOAD_STATE, 0, "Load State") \
 +        DEFINE_INPUT(FRAME_OVERLAY, 0, "Frame Rate Overlay") \
 +        DEFINE_INPUT(RUN, 0, "Run") \
-+        DEFINE_INPUT(FINE_AIM, 0, "Fine Aim")
++        DEFINE_INPUT(FINE_AIM, 0, "Fine Aim") \
++        DEFINE_INPUT(HIDE_HUD, 0, "Hide HUD") \
++        DEFINE_INPUT(SCREENSHOT, 0, "Screenshot") \
++        DEFINE_INPUT(EFFECT_VIEW, 0, "Effect Debug View") \
++        DEFINE_INPUT(EFFECT_COMPARE, 0, "Effect Compare") \
++        DEFINE_INPUT(INTERP_CHECK, 0, "Interpolation Check") \
++        DEFINE_INPUT(BLEND_MODE, 0, "Blend Mode") \
++        DEFINE_INPUT(WARP_AGAIN, 0, "Warp Again")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \

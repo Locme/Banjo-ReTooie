@@ -99,6 +99,7 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Save State and Load State keys** (`recompinput/include/recompinput/input_types.h`): two more
   game hotkeys, `SAVE_STATE` (Insert) and `LOAD_STATE` (Home), named by `src/gameplay/save_state.cpp`.
 * **Frame Rate Overlay key** (same file): `FRAME_OVERLAY` (F3), named by `src/game/frame_overlay.cpp`.
+* **Debug and capture keys** (same file): `HIDE_HUD` (F1), `SCREENSHOT` (F12), `EFFECT_VIEW` (F6), `EFFECT_COMPARE` (F8), `INTERP_CHECK` (F7), `BLEND_MODE` (unbound) and `WARP_AGAIN` (F9), named by `src/input/hotkeys.cpp`. The Controls tab lists the last four under a "Debug" heading.
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.

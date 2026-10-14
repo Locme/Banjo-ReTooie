@@ -1,6 +1,6 @@
 // Interpolation check (a debug aid for frame interpolation, handoff 4.15).
 //
-// F7 switches it on and off; a toast says which. While it is on,
+// Graphics > Debug switches it on and off, or F7 (rebindable in the Controls tab); a toast says which. While it is on,
 // model_tagging.cpp tints a model red for about a third of a second when its
 // blend between game frames looks wrong, and prints a line for it to the
 // console (logs/console.log on Windows):
@@ -18,6 +18,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <variant>
+#include <vector>
 
 #ifdef _WIN32
 #include "SDL.h"
@@ -25,6 +27,9 @@
 #include "SDL2/SDL.h"
 #endif
 
+#include "recompui/config.h"
+
+#include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
 #include "tooie_toast.h"
 
@@ -35,29 +40,99 @@ namespace {
     std::atomic<bool> on{false};
     std::atomic<int> mode{0};
     constexpr int mode_count = 5;
+    bool created = false;
+
+    // Looked up each time: the tab list moves its configs as more tabs are added.
+    recomp::config::Config& graphics_config() {
+        return recompui::config::get_config(recompui::config::graphics::id);
+    }
+
+    // Through the option when it exists, so the menu follows the key; its callback sets the atomic.
+    void set_on(bool v) {
+        if (created) {
+            try {
+                graphics_config().update_option_value(tooie::interp_check::check_option, v);
+                return;
+            } catch (...) {
+            }
+        }
+        on = v;
+    }
+
+    void set_mode(int m) {
+        m %= mode_count;
+        if (created) {
+            try {
+                graphics_config().update_option_value(tooie::interp_check::blend_option, (uint32_t)m);
+                return;
+            } catch (...) {
+            }
+        }
+        mode = m;
+    }
 
     void worker() {
         bool was_down = false;
         bool mode_was_down = false;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            const Uint8* keys = SDL_GetKeyboardState(nullptr);
-            bool down = keys != nullptr && keys[SDL_SCANCODE_F7] != 0;
+            bool down = tooie::hotkeys::down(recompinput::GameInput::INTERP_CHECK);
             if (down && !was_down) {
                 bool now = !on.load();
-                on = now;
+                set_on(now);
                 tooie::toast::show(now ? "Interpolation check on" : "Interpolation check off");
             }
             was_down = down;
-            bool mode_down = keys != nullptr && keys[SDL_SCANCODE_F8] != 0;
+            bool mode_down = tooie::hotkeys::down(recompinput::GameInput::BLEND_MODE);
             if (mode_down && !mode_was_down) {
                 int now = (mode.load() + 1) % mode_count;
-                mode = now;
+                set_mode(now);
                 tooie::toast::show(std::string("Blend mode: ") + tooie::interp_check::blend_mode_name(now));
             }
             mode_was_down = mode_down;
         }
     }
+}
+
+void tooie::interp_check::add_options(recomp::config::Config& graphics) {
+    created = true;
+
+    graphics.add_bool_option(
+        check_option,
+        "Interpolation check",
+        "For testing. Tints a model red for a moment when its blend between game frames looks wrong, and logs it to the console. Shows nothing at the Original frame rate. "
+        "The Interpolation Check key (F7 unless changed in the Debug section of the Controls tab) switches it on and off while you play. Starts Off each launch.",
+        false);
+    graphics.add_option_change_callback(check_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+                return;
+            }
+            const auto* v = std::get_if<bool>(&value);
+            on = (v != nullptr) && *v;
+        });
+
+    std::vector<recomp::config::ConfigOptionEnumOption> options;
+    for (uint32_t i = 0; i < (uint32_t)mode_count; i++) {
+        options.emplace_back(i, blend_mode_name((int)i), blend_mode_name((int)i));
+    }
+    graphics.add_enum_option(
+        blend_option,
+        "Interpolation blend mode",
+        "For testing. How frames between two game frames are blended, to find what blends wrong. "
+        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. The Blend Mode key (not bound unless you bind it in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
+        options,
+        0u);
+    graphics.add_option_change_callback(blend_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+                return;
+            }
+            const auto* v = std::get_if<uint32_t>(&value);
+            mode = ((v != nullptr) && (*v < (uint32_t)mode_count)) ? (int)*v : 0;
+        });
 }
 
 void tooie::interp_check::start() {
@@ -69,6 +144,9 @@ void tooie::interp_check::start() {
         if (const char* v = std::getenv("TOOIE_BLEND_MODE"); v != nullptr) {
             mode = std::atoi(v) % mode_count;
         }
+        // Left on last time, they start off again.
+        set_on(on.load());
+        set_mode(mode.load());
         std::thread(worker).detach();
     });
 }

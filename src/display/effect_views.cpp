@@ -37,6 +37,7 @@
 #include "tooie_effect_views.h"
 #include "tooie_fsr.h"
 #include "tooie_fxaa.h"
+#include "tooie_hotkeys.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 #include "tooie_toast.h"
@@ -131,6 +132,19 @@ namespace {
         send();
     }
 
+    void set_compare(bool on) {
+        if (created) {
+            // The option's callback saves it, and then sets the compare.
+            try {
+                graphics_config().update_option_value(tooie::effect_views::compare_option, on);
+                return;
+            } catch (...) {
+            }
+        }
+        compare = on;
+        send();
+    }
+
     bool key_down(SDL_Scancode key) {
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         return keys != nullptr && keys[key] != 0;
@@ -141,8 +155,8 @@ namespace {
         bool compare_was_down = false;
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
-            const bool view_down = key_down(SDL_SCANCODE_F6);
-            const bool compare_down = key_down(SDL_SCANCODE_F8);
+            const bool view_down = tooie::hotkeys::down(recompinput::GameInput::EFFECT_VIEW);
+            const bool compare_down = tooie::hotkeys::down(recompinput::GameInput::EFFECT_COMPARE);
             if (view_down && !view_was_down) {
                 // Shift+F6 steps back.
                 const bool back = key_down(SDL_SCANCODE_LSHIFT) || key_down(SDL_SCANCODE_RSHIFT);
@@ -151,8 +165,7 @@ namespace {
                 tooie::toast::show(next == 0 ? "Effect view off" : views[next].name);
             }
             if (compare_down && !compare_was_down) {
-                compare = !compare;
-                send();
+                set_compare(!compare);
                 tooie::toast::show(compare ? "Compare: effects on the left, original on the right" : "Compare off");
             }
             view_was_down = view_down;
@@ -184,6 +197,21 @@ void tooie::effect_views::add_option(recomp::config::Config& graphics) {
         "F6 steps to the next view (Shift+F6 back) and F8 splits the picture: the effect on the left, the original on the right. Starts Off each launch.",
         options,
         0u);
+    graphics.add_bool_option(
+        compare_option,
+        "Effect compare",
+        "Splits the picture for testing: the effect or filter on the left, the original on the right. F8 switches it on and off while you play. Starts Off each launch.",
+        false);
+    graphics.add_option_change_callback(compare_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+                return;
+            }
+            const auto* v = std::get_if<bool>(&value);
+            compare = (v != nullptr) && *v;
+            send();
+        });
     graphics.add_option_change_callback(option,
         [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {
@@ -208,6 +236,7 @@ void tooie::effect_views::start() {
         }
         // A debug view left on last time starts off again.
         set_view(first);
+        set_compare(compare);
         send();
         std::thread(worker).detach();
     });

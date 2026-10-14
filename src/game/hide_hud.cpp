@@ -29,6 +29,7 @@
 #include "tooie_hooks.h"
 #include "tooie_model_tagging.h"
 #include "tooie_gfx_budget.h"
+#include "tooie_hotkeys.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -45,8 +46,7 @@ namespace {
     uint32_t marks[7];
 
     bool key_down() {
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        return keys != nullptr && keys[SDL_SCANCODE_F1] != 0;
+        return tooie::hotkeys::down(recompinput::GameInput::HIDE_HUD);
     }
 
     void worker() {

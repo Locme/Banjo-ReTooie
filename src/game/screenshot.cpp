@@ -41,6 +41,7 @@
 
 #include "librecomp/game.hpp"
 
+#include "tooie_hotkeys.h"
 #include "tooie_photo_mode.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
@@ -64,8 +65,7 @@ namespace {
     std::once_flag started;
 
     bool key_down() {
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        return keys != nullptr && keys[SDL_SCANCODE_F12] != 0;
+        return tooie::hotkeys::down(recompinput::GameInput::SCREENSHOT);
     }
 
     // A file name from the local time, with a counter if two land in one second.

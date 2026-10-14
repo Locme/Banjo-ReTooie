@@ -256,6 +256,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/timer_save.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/dialogue_speed.cpp
     ${CMAKE_SOURCE_DIR}/src/input/tiptoe.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/hotkeys.cpp
     ${CMAKE_SOURCE_DIR}/src/input/control_scheme.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/talon_trot.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hold_to_run.cpp

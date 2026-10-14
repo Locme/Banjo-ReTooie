@@ -32,6 +32,7 @@
 
 #include "tooie_debug.h"
 #include "tooie_cheats.h"
+#include "tooie_hotkeys.h"
 #include "tooie_level_warp.h"
 #include "tooie_toast.h"
 
@@ -84,8 +85,7 @@ namespace {
     }
 
     bool key_down() {
-        const Uint8* keys = SDL_GetKeyboardState(nullptr);
-        return keys != nullptr && keys[SDL_SCANCODE_F9] != 0;
+        return tooie::hotkeys::down(recompinput::GameInput::WARP_AGAIN);
     }
 
     void worker() {
