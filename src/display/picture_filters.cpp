@@ -529,6 +529,12 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
 void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     created = true;
 
+    graphics.add_bool_option(
+        section_option,
+        "Photo Filters",
+        "Shows the picture filter options below. Hiding them does not turn any filter off.",
+        false);
+
     graphics.add_enum_option(
         preset_option,
         "Effects preset",
@@ -769,4 +775,39 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                 }
             });
     }
+
+    // Hidden until the Photo Filters toggle is on; the filters keep their values either way.
+    graphics.add_option_hidden_dependency(preset_option, section_option, false);
+    graphics.add_option_hidden_dependency(ambient_occlusion_option, section_option, false);
+    graphics.add_option_hidden_dependency(bloom_option, section_option, false);
+    graphics.add_option_hidden_dependency(bounce_light_option, section_option, false);
+    graphics.add_option_hidden_dependency(brightness_option, section_option, false);
+    graphics.add_option_hidden_dependency(brightness_pattern_option, section_option, false);
+    graphics.add_option_hidden_dependency(colourblind_option, section_option, false);
+    graphics.add_option_hidden_dependency(contrast_option, section_option, false);
+    graphics.add_option_hidden_dependency(crt_option, section_option, false);
+    graphics.add_option_hidden_dependency(cutscene_dof_option, section_option, false);
+    graphics.add_option_hidden_dependency(eye_adaptation_option, section_option, false);
+    graphics.add_option_hidden_dependency(fog_colour_option, section_option, false);
+    graphics.add_option_hidden_dependency(fog_option, section_option, false);
+    graphics.add_option_hidden_dependency(fog_start_option, section_option, false);
+    graphics.add_option_hidden_dependency(gameplay_dof_option, section_option, false);
+    graphics.add_option_hidden_dependency(grain_option, section_option, false);
+    graphics.add_option_hidden_dependency(heat_haze_option, section_option, false);
+    graphics.add_option_hidden_dependency(light_shafts_option, section_option, false);
+    graphics.add_option_hidden_dependency(outline_thickness_option, section_option, false);
+    graphics.add_option_hidden_dependency(outlines_option, section_option, false);
+    graphics.add_option_hidden_dependency(rim_light_option, section_option, false);
+    graphics.add_option_hidden_dependency(saturation_option, section_option, false);
+    graphics.add_option_hidden_dependency(sharpen_option, section_option, false);
+    graphics.add_option_hidden_dependency(texture_upscale_option, section_option, false);
+    graphics.add_option_hidden_dependency(three_point_option, section_option, false);
+    graphics.add_option_hidden_dependency(underwater_distortion_option, section_option, false);
+    graphics.add_option_hidden_dependency(underwater_haze_option, section_option, false);
+    graphics.add_option_hidden_dependency(underwater_tint_option, section_option, false);
+    graphics.add_option_hidden_dependency(vignette_option, section_option, false);
+    graphics.add_option_hidden_dependency(water_reflections_option, section_option, false);
+    graphics.add_option_hidden_dependency(water_waves_option, section_option, false);
+    graphics.add_option_hidden_dependency(wave_speed_option, section_option, false);
+    graphics.add_option_hidden_dependency(dither16_option, section_option, false);
 }
