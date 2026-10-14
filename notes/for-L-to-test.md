@@ -927,7 +927,7 @@
 - Commit: f4a8154, 64a95d0
 - Steps:
   1. Esc > Controls > Movement > Run: it starts unbound. Bind it to a spare button (for example a shoulder or back button)
-  2. As Banjo-Kazooie, run with the stick fully pushed, then hold Run: he sprints at once (no roll), about half again as fast, leaning forward with wider arm and leg swings
+  2. As Banjo-Kazooie, run with the stick fully pushed, then hold Run: he sprints at once (no roll), about half again as fast, leaning well forward with a longer stride and calmer arms (updated after your 09:15 note)
   3. Let go: he drops back to the normal run. B still rolls as before
   4. Try it as Banjo alone (same sprint) and as Kazooie alone (her own sprint: leant in, longer, bouncier stride)
   5. Optional: bind Run to B as well. Holding B then sprints and a quick tap still rolls

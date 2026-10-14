@@ -217,22 +217,23 @@ namespace {
         std::vector<Key> keys;
     };
 
-    // Banjo's run (animation 0xC; Banjo alone uses it too): body leant 12 degrees forward (bone 3),
-    // arms and legs (the mirrored chains 6-16 and 20-30) swing 40% further.
+    // Banjo's run (animation 0xC; Banjo alone uses it too): body leant 22 degrees forward (bone 3),
+    // legs (chains 6-10 and 20-24) stride 40% further, arms (chains 12-16 and 26-30) swing 15% less
+    // (L 2026-10-14: arms flailed too much at 40% more, wanted more lean).
     const std::vector<Rule> banjo_rules = {
-        { 3, 0, 1.0f, 12.0f },
+        { 3, 0, 1.0f, 22.0f },
         { 6, 0, 1.4f, 0.0f }, { 6, 1, 1.4f, 0.0f }, { 6, 2, 1.4f, 0.0f },
         { 8, 0, 1.4f, 0.0f }, { 8, 1, 1.4f, 0.0f }, { 8, 2, 1.4f, 0.0f },
         { 10, 0, 1.4f, 0.0f }, { 10, 1, 1.4f, 0.0f }, { 10, 2, 1.4f, 0.0f },
-        { 12, 0, 1.4f, 0.0f }, { 12, 1, 1.4f, 0.0f }, { 12, 2, 1.4f, 0.0f },
-        { 14, 0, 1.4f, 0.0f }, { 14, 1, 1.4f, 0.0f }, { 14, 2, 1.4f, 0.0f },
-        { 16, 0, 1.4f, 0.0f }, { 16, 1, 1.4f, 0.0f }, { 16, 2, 1.4f, 0.0f },
         { 20, 0, 1.4f, 0.0f }, { 20, 1, 1.4f, 0.0f }, { 20, 2, 1.4f, 0.0f },
         { 22, 0, 1.4f, 0.0f }, { 22, 1, 1.4f, 0.0f }, { 22, 2, 1.4f, 0.0f },
         { 24, 0, 1.4f, 0.0f }, { 24, 1, 1.4f, 0.0f }, { 24, 2, 1.4f, 0.0f },
-        { 26, 0, 1.4f, 0.0f }, { 26, 1, 1.4f, 0.0f }, { 26, 2, 1.4f, 0.0f },
-        { 28, 0, 1.4f, 0.0f }, { 28, 1, 1.4f, 0.0f }, { 28, 2, 1.4f, 0.0f },
-        { 30, 0, 1.4f, 0.0f }, { 30, 1, 1.4f, 0.0f }, { 30, 2, 1.4f, 0.0f },
+        { 12, 0, 0.85f, 0.0f }, { 12, 1, 0.85f, 0.0f }, { 12, 2, 0.85f, 0.0f },
+        { 14, 0, 0.85f, 0.0f }, { 14, 1, 0.85f, 0.0f }, { 14, 2, 0.85f, 0.0f },
+        { 16, 0, 0.85f, 0.0f }, { 16, 1, 0.85f, 0.0f }, { 16, 2, 0.85f, 0.0f },
+        { 26, 0, 0.85f, 0.0f }, { 26, 1, 0.85f, 0.0f }, { 26, 2, 0.85f, 0.0f },
+        { 28, 0, 0.85f, 0.0f }, { 28, 1, 0.85f, 0.0f }, { 28, 2, 0.85f, 0.0f },
+        { 30, 0, 0.85f, 0.0f }, { 30, 1, 0.85f, 0.0f }, { 30, 2, 0.85f, 0.0f },
     };
 
     // Kazooie's run (animation 0xA6): legs (6-12, 20-26) stride 35% further, body (bone 106) leant
