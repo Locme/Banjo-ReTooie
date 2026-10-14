@@ -127,37 +127,12 @@ void tooie::init_config() {
     general_options.has_gyro_sensitivity = true;
     general_options.has_mouse_sensitivity = true;
     auto& general = recompui::config::create_general_tab(general_options);
+    tooie::control_scheme::add_option(general);
     general.add_bool_option(
         tooie::save_backups_option,
         "Back up saves",
         "Copies your save file into the save_backups folder whenever it changes.",
         true);
-    general.add_bool_option(
-        tooie::wip_tab_option,
-        "WIP tab",
-        "Shows the WIP tab, with features that are still being worked on.",
-        false);
-    general.add_option_change_callback(tooie::wip_tab_option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            show_wip_tab();
-        });
-    general.add_bool_option(
-        tooie::classic_sounds::option,
-        "Back-Port: Old Banjo sounds",
-        "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
-        false);
-    general.add_bool_option(
-        tooie::honeycomb_glitter::option,
-        "Back-Port: Glittering honeycombs",
-        "Health honeycombs sparkle like they did in Banjo-Kazooie.",
-        false);
-    general.add_bool_option(
-        tooie::jiggy_dance::option,
-        "Back-Port: Get Jiggy animation",
-        "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
-        false);
-    tooie::control_scheme::add_option(general);
-    tooie::bottles_revenge::add_option(general);
     general.add_number_option(
         tooie::save_backups_keep_option,
         "Save backups to keep",
@@ -176,6 +151,36 @@ void tooie::init_config() {
             {tooie::TimerSave::Minutes120, "120", "120 min"},
         },
         tooie::TimerSave::Off);
+    general.add_bool_option(
+        tooie::classic_sounds::option,
+        "Back-Port: Old Banjo sounds",
+        "Banjo-Kazooie's jump sounds instead of Banjo-Tooie's.",
+        false);
+    general.add_bool_option(
+        tooie::honeycomb_glitter::option,
+        "Back-Port: Glittering honeycombs",
+        "Health honeycombs sparkle like they did in Banjo-Kazooie.",
+        false);
+    general.add_bool_option(
+        tooie::jiggy_dance::option,
+        "Back-Port: Get Jiggy animation",
+        "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
+        false);
+    tooie::bottles_revenge::add_option(general);
+    general.add_bool_option(
+        tooie::wip_tab_option,
+        "WIP tab",
+        "Shows the WIP tab, with features that are still being worked on.",
+        false);
+    general.add_option_change_callback(tooie::wip_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_wip_tab();
+        });
+
+    // Section headings in the General tab (the controls and sliders above them have none).
+    recompui::config::set_option_group(tooie::save_backups_option, "Saves");
+    recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
+    recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(

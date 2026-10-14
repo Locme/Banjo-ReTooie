@@ -373,10 +373,29 @@ index 6c84c05..3821b46 100644
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..8bee756 100644
+index 86428c9..e9d03ad 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
-@@ -120,25 +120,42 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -88,13 +88,17 @@ void ConfigOptionElement::process_event(const Event &e) {
+ }
+ 
+ void ConfigOptionElement::update_hidden() {
+-    if (config->is_config_option_hidden(option_index)) {
++    const bool hidden = config->is_config_option_hidden(option_index);
++    if (hidden) {
+         set_display(Display::None);
+         set_enabled(false);
+     } else {
+         set_display(Display::Flex);
+         set_enabled(true);
+     }
++    if (group_heading != nullptr) {
++        group_heading->set_display(hidden ? Display::None : Display::Block);
++    }
+ }
+ 
+ // ConfigOptionEnum
+@@ -120,25 +124,42 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -436,7 +455,7 @@ index 86428c9..8bee756 100644
      }
  
      update_value();
-@@ -153,12 +170,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +174,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -457,7 +476,7 @@ index 86428c9..8bee756 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +199,10 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -176,6 +203,10 @@ void ConfigOptionEnum::update_enum_details() {
  
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
@@ -469,7 +488,7 @@ index 86428c9..8bee756 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..e5ad59c 100644
+index 0561657..be581b0 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -480,7 +499,15 @@ index 0561657..e5ad59c 100644
  #include "elements/ui_text_input.h"
  #include "elements/ui_slider.h"
  #include "elements/ui_toggle.h"
-@@ -48,6 +49,8 @@ namespace recompui {
+@@ -42,12 +43,16 @@ namespace recompui {
+         virtual void update_value() = 0;
+         virtual void update_disabled() = 0;
+         void update_hidden();
++        // The group heading shown above this option (hidden together with it).
++        Element *group_heading = nullptr;
+         const std::string &get_option_id() { return option_id; }
+     };
+ 
  class ConfigOptionEnum : public ConfigOptionElement {
  protected:
      Radio *radio = nullptr;
@@ -517,7 +544,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..87e8e02 100644
+index 6ba64e2..b18c1c9 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,5 @@
@@ -526,19 +553,29 @@ index 6ba64e2..87e8e02 100644
  
  
  namespace recompui {
-@@ -183,6 +184,12 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -183,6 +184,14 @@ void ConfigPageOptionsMenu::render_config_options() {
          auto schema = config->get_config_schema();
          for (size_t i = 0; i < schema.options.size(); i++) {
              auto &config_option = schema.options[i];
++            Element *group_heading = nullptr;
 +            if (const std::string *group = recompui::config::get_option_group(config_option.id)) {
 +                auto heading = context.create_element<Label>(body_left_scroll, *group, LabelStyle::Large);
 +                heading->set_margin_top(i == 0 ? 0.0f : 16.0f);
 +                heading->set_margin_bottom(4.0f);
 +                heading->set_color(theme::color::Primary);
++                group_heading = heading;
 +            }
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
+@@ -233,6 +242,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+                     assert(false && "Unknown config option type");
+                 }
+             };
++            element->group_heading = group_heading;
+             element->update_disabled();
+             element->update_hidden();
+             config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
 index 4fdf81f..95ec9b2 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp

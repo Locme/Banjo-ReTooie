@@ -157,6 +157,7 @@ void tooie::level_warp::create_tab() {
         "Shows the Warp tab, with the level warp list. F9 repeats the last warp.", false);
     // The row only shows while the master switch is on.
     cheats.add_option_hidden_dependency(option_id, "cheats_enabled", false);
+    recompui::config::set_option_group(option_id, "Tabs");
     cheats.add_option_change_callback(option_id,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             tooie::level_warp::refresh();

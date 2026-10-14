@@ -169,6 +169,11 @@ void tooie::cheats::create_tab() {
     }
     show_cheato_tab(false);
 
+    // Section headings (they hide with their rows while the master switch is off).
+    recompui::config::set_option_group("infinite_eggs", "Infinite items");
+    recompui::config::set_option_group("cheat_infinite_jumps", "Moves");
+    recompui::config::set_option_group("cheat_stop_n_swop", "Unlocks");
+
     // Turning the master switch off (or loading it off) resets every cheat.
     config.add_option_change_callback(enabled_option,
         [](recomp::config::ConfigValueVariant cur, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
