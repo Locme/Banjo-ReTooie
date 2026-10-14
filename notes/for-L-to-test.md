@@ -614,6 +614,7 @@
   1. In a level, press F10 (or your controller's Share button; you can bind another under Controls > Hotkeys > Photo Mode)
   2. Fly around: left stick moves, right stick looks, LT (Z) down, RT (R) up, LB faster
   3. Press A for a screenshot, D-pad up to show the HUD, Start to run time at 1/8 and 1/4 speed
-  4. Press B (or F10) to go back to the game
-- Look for: Does everything stop (Banjo, enemies, water) while the camera flies freely? Is the HUD and the area name gone? Does B put you back exactly where you were? Not built yet: camera collision, orbit around Banjo, zoom, filters, depth of field, crop and hiding Banjo. Tell me which of those you want first.
+  4. D-pad down circles Banjo (both sticks turn around him, LT/RT closer and further); D-pad down again flies freely. D-pad left/right zoom out and in
+  5. Press B (or F10) to go back to the game
+- Look for: Does everything stop (Banjo, enemies, water) while the camera flies freely? Is the HUD and the area name gone? Does B put you back exactly where you were? Not built yet: camera collision, filters, depth of field, crop and hiding Banjo.
 - Status: waiting for L

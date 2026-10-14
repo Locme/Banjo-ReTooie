@@ -17,6 +17,9 @@ namespace tooie::photo_mode {
 
     bool active();
 
+    // The field of view the game sets, zoomed while photo mode is on (tooie_set_fov).
+    float adjust_fov(float fov);
+
     // Takes player 1's input while photo mode is on: the controls drive the camera and the game
     // sees an idle pad.
     void apply_input(uint16_t* buttons, float* x, float* y);

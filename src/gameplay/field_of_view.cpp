@@ -26,6 +26,7 @@
 #include "recompui/config.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
+#include "tooie_photo_mode.h"
 
 namespace {
     constexpr uint32_t ctl_camera = 0x00;
@@ -134,7 +135,10 @@ extern "C" void tooie_set_fov(uint8_t* rdram, recomp_context* ctx) {
     }
     const int add = offset(gameplay ? tooie::fov_offset_option : tooie::cutscene_fov_offset_option);
     float result = fov + (float)add;
-    if (result < 10.0f) result = 10.0f;
+    if (gameplay) {
+        result = tooie::photo_mode::adjust_fov(result);
+    }
+    if (result < 8.0f) result = 8.0f;
     if (result > 150.0f) result = 150.0f;
 
     if (log_enabled()) {

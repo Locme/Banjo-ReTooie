@@ -19,6 +19,8 @@
 //   L               faster (holding a move for a second speeds it up too)
 //   A               screenshot (as F12)
 //   D-pad up        HUD on / off
+//   D-pad down      orbit Banjo (the sticks circle him, Z / R move closer and further) / fly freely
+//   D-pad left/right zoom out / in (the field of view, through tooie_set_fov)
 //   Start           frozen, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
 //
@@ -68,7 +70,7 @@ namespace {
     constexpr uint32_t cam_rot = 0x18;
 
     constexpr uint16_t button_a = 0x8000, button_b = 0x4000, button_z = 0x2000, button_start = 0x1000;
-    constexpr uint16_t d_up = 0x0800;
+    constexpr uint16_t d_up = 0x0800, d_down = 0x0400, d_left = 0x0200, d_right = 0x0100;
     constexpr uint16_t button_l = 0x0020, button_r = 0x0010;
     constexpr uint16_t c_up = 0x0008, c_down = 0x0004, c_left = 0x0002, c_right = 0x0001;
 
@@ -83,6 +85,13 @@ namespace {
     constexpr float frozen_delta = 0.0001f;
     constexpr float speed_scales[] = { 0.0f, 0.125f, 0.25f };
     constexpr const char* speed_names[] = { "Time frozen", "Time 1/8", "Time 1/4" };
+    // Orbit: the point circled is Banjo's position plus this much, at these distances.
+    constexpr uint32_t player_table = 0x80135490;
+    constexpr uint32_t player_transform = 0xE4;
+    constexpr float orbit_height = 60.0f;
+    constexpr float min_orbit = 100.0f, max_orbit = 6000.0f;
+    // Zoom: the field of view is multiplied by this, changed by this much per second.
+    constexpr float min_fov_scale = 0.2f, max_fov_scale = 2.0f, fov_rate = 0.8f;
 
     std::once_flag started;
 
@@ -91,6 +100,8 @@ namespace {
     std::atomic<bool> leave_requested{false};
     std::atomic<bool> is_active{false};
     std::atomic<int> speed{0};
+    std::atomic<bool> orbit_toggle{false};
+    std::atomic<float> fov_scale{1.0f};
 
     // The pad as photo mode reads it (written by apply_input, read by place_camera).
     std::mutex pad_mutex;
@@ -109,6 +120,9 @@ namespace {
         Clock::time_point last;
         Clock::time_point moving_since;
         bool moving = false;
+        bool orbit = false;
+        float pivot[3] = { 0, 0, 0 };
+        float distance = 0.0f;
     } cam;
     bool hud_was_hidden = false;
     uint16_t entered_map = 0;
@@ -175,7 +189,10 @@ namespace {
     void enter(uint8_t* rdram) {
         is_active = true;
         speed = 0;
+        fov_scale = 1.0f;
+        orbit_toggle = false;
         cam.placed = false;
+        cam.orbit = false;
         cam.moving = false;
         entered_map = tooie::debug::current_map(rdram);
         hud_was_hidden = tooie::hide_hud::is_hidden();
@@ -205,7 +222,8 @@ void tooie::photo_mode::register_input() {
     recompinput::set_game_input_description(photo_input,
         "Freezes the game and hides the HUD so you can fly the camera around and take screenshots. "
         "Left stick moves, right stick looks, Z and R go down and up, L goes faster, A takes a screenshot, "
-        "D-pad up shows the HUD, Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
+        "D-pad up shows the HUD, D-pad down circles Banjo, D-pad left and right zoom, "
+        "Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
     recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_MISC1) });
 }
@@ -221,6 +239,10 @@ void tooie::photo_mode::start() {
 
 bool tooie::photo_mode::active() {
     return is_active;
+}
+
+float tooie::photo_mode::adjust_fov(float fov) {
+    return is_active ? fov * fov_scale.load() : fov;
 }
 
 void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
@@ -244,6 +266,9 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     }
     if (pressed & d_up) {
         tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
+    }
+    if (pressed & d_down) {
+        orbit_toggle = true;
     }
     if (pressed & button_start) {
         int s = (speed + 1) % 3;
@@ -330,6 +355,33 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
         look_x = (p.buttons & c_right ? 1.0f : 0.0f) - (p.buttons & c_left ? 1.0f : 0.0f);
         look_y = (p.buttons & c_up ? 1.0f : 0.0f) - (p.buttons & c_down ? 1.0f : 0.0f);
     }
+    // Zoom, held.
+    const float zoom = (p.buttons & d_left ? 1.0f : 0.0f) - (p.buttons & d_right ? 1.0f : 0.0f);
+    if (zoom != 0.0f) {
+        fov_scale = std::clamp(fov_scale.load() * std::exp(zoom * fov_rate * dt), min_fov_scale, max_fov_scale);
+    }
+    if (orbit_toggle.exchange(false)) {
+        cam.orbit = !cam.orbit;
+        if (cam.orbit) {
+            const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+            const uint32_t transform = player != 0 ? (uint32_t)MEM_W(player_transform, (gpr)(int32_t)player) : 0;
+            if (transform == 0) {
+                cam.orbit = false;
+            }
+            else {
+                for (int i = 0; i < 3; i++) {
+                    cam.pivot[i] = read_float(rdram, transform + 4 * i);
+                }
+                cam.pivot[1] += orbit_height;
+                float d[3] = { cam.pivot[0] - cam.pos[0], cam.pivot[1] - cam.pos[1], cam.pivot[2] - cam.pos[2] };
+                cam.distance = std::clamp(std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]), min_orbit, max_orbit);
+                const float len = std::max(1.0f, std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
+                cam.pitch = std::clamp(std::asin(std::clamp(d[1] / len, -1.0f, 1.0f)) / deg, -max_pitch, max_pitch);
+                cam.yaw = std::fmod(std::atan2(-d[0], -d[2]) / deg + 360.0f, 360.0f);
+            }
+        }
+        tooie::toast::show(cam.orbit ? "Orbit Banjo" : "Free camera");
+    }
     const float move_x = deadzone(p.x);
     const float move_y = deadzone(p.y);
     const float rise = (p.buttons & button_r ? 1.0f : 0.0f) - (p.buttons & button_z ? 1.0f : 0.0f);
@@ -342,6 +394,11 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
     const bool fast = (p.buttons & button_l) || (moving && now - cam.moving_since >= 1s);
     const float speed_now = move_speed * (fast ? fast_factor : 1.0f);
 
+    if (cam.orbit) {
+        // Both sticks circle the pivot; Z / R move closer and further.
+        look_x += move_x;
+        look_y += move_y;
+    }
     cam.yaw = std::fmod(cam.yaw - look_x * look_speed * dt + 360.0f, 360.0f);
     cam.pitch = std::clamp(cam.pitch + look_y * look_speed * dt, -max_pitch, max_pitch);
 
@@ -349,10 +406,18 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
     const float sp = std::sin(cam.pitch * deg), cp = std::cos(cam.pitch * deg);
     const float forward[3] = { -sy * cp, sp, -cy * cp };
     const float right[3] = { cy, 0.0f, -sy };
-    for (int i = 0; i < 3; i++) {
-        cam.pos[i] += (forward[i] * move_y + right[i] * move_x) * speed_now * dt;
+    if (cam.orbit) {
+        cam.distance = std::clamp(cam.distance + rise * speed_now * dt, min_orbit, max_orbit);
+        for (int i = 0; i < 3; i++) {
+            cam.pos[i] = cam.pivot[i] - forward[i] * cam.distance;
+        }
     }
-    cam.pos[1] += rise * speed_now * dt;
+    else {
+        for (int i = 0; i < 3; i++) {
+            cam.pos[i] += (forward[i] * move_y + right[i] * move_x) * speed_now * dt;
+        }
+        cam.pos[1] += rise * speed_now * dt;
+    }
 
     for (int i = 0; i < 3; i++) {
         write_float(rdram, camera + cam_pos + 4 * i, cam.pos[i]);
@@ -365,8 +430,9 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, uint32_t camera) {
     static Clock::time_point last_log;
     if (log && now - last_log >= 500ms) {
         last_log = now;
-        fprintf(stderr, "[photo] cam %.0f %.0f %.0f yaw %.1f pitch %.1f speed %d dt %.5f\n",
-            cam.pos[0], cam.pos[1], cam.pos[2], cam.yaw, cam.pitch, speed.load(), read_float(rdram, (uint32_t)delta_time_addr));
+        fprintf(stderr, "[photo] cam %.0f %.0f %.0f yaw %.1f pitch %.1f speed %d dt %.5f orbit %d dist %.0f fov x%.2f\n",
+            cam.pos[0], cam.pos[1], cam.pos[2], cam.yaw, cam.pitch, speed.load(), read_float(rdram, (uint32_t)delta_time_addr),
+            cam.orbit, cam.distance, fov_scale.load());
     }
     return true;
 }
