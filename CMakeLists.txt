@@ -25,6 +25,55 @@ if (MSVC)
     endforeach()
 endif()
 
+# Whole-program speed-ups for optimised builds (L, 2026-10-14: slower builds are fine for a faster game).
+# - ThinLTO lets the compiler inline and optimise across files and libraries (RT64, the runtime, the game).
+#   Recompiled game functions stay separate, as RECOMP_FUNC marks them weak and noinline, so mods can
+#   still patch them.
+# - Every library is built for the chosen CPU level (TOOIE_CPU), not only the exe.
+# TOOIE_LTO is off until a renderer crash seen once in an LTO run is ruled out.
+option(TOOIE_LTO "Build optimised configs with link-time optimisation (ThinLTO)" OFF)
+
+# Two Windows builds (L, 2026-10-14):
+#   compatible: any 64-bit PC from 2008 and up (Intel Nehalem / AMD Bulldozer level, SSE4.2)
+#   modern:     optimised for newer CPUs, 2013 and up (Intel Haswell / AMD Excavator level, AVX2).
+#               It will not start on older CPUs.
+set(TOOIE_CPU "compatible" CACHE STRING "CPU level: compatible (2008 and up) or modern (2013 and up, AVX2)")
+set_property(CACHE TOOIE_CPU PROPERTY STRINGS compatible modern)
+if (NOT TOOIE_CPU MATCHES "^(compatible|modern)$")
+    message(FATAL_ERROR "TOOIE_CPU must be compatible or modern, not '${TOOIE_CPU}'")
+endif()
+if (CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+    if (TOOIE_CPU STREQUAL "modern")
+        set(tooie_march "-march=haswell")
+    else()
+        set(tooie_march "-march=nehalem")
+    endif()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${tooie_march}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${tooie_march}")
+    message(STATUS "CPU level: ${TOOIE_CPU} (${tooie_march})")
+endif()
+if (TOOIE_LTO AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    if (NOT MSVC)
+        # The default GNU linker cannot link LLVM bitcode; lld can.
+        find_program(TOOIE_LLD NAMES ld.lld lld)
+        if (TOOIE_LLD)
+            foreach(link_var CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS)
+                set(${link_var} "${${link_var}} -fuse-ld=lld")
+            endforeach()
+        endif()
+    endif()
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT tooie_ipo_ok OUTPUT tooie_ipo_error LANGUAGES C CXX)
+    if (tooie_ipo_ok)
+        set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+        message(STATUS "Link-time optimisation: on for Release and RelWithDebInfo")
+    else()
+        message(STATUS "Link-time optimisation: not supported here, building without it (${tooie_ipo_error})")
+    endif()
+endif()
+
 # Opt out of constexpr mutex constructor on windows to prevent vcredist issues
 if (WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
@@ -260,8 +309,12 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c ${CMAKE_CURRE
 target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
+    if (TOOIE_CPU STREQUAL "modern")
+        target_compile_definitions(BanjoTooieN64Recomp PRIVATE "TOOIE_CPU_NAME=\"newer CPUs, 2013 and up\"")
+    else()
+        target_compile_definitions(BanjoTooieN64Recomp PRIVATE "TOOIE_CPU_NAME=\"any 64-bit PC, 2008 and up\"")
+    endif()
     target_compile_options(BanjoTooieN64Recomp PRIVATE
-        -march=nehalem
         -fno-strict-aliasing
         -fms-extensions
     )

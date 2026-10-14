@@ -18,9 +18,18 @@ jobs:
   build-windows:
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         type: [ RelWithDebInfo ]
-    name: windows (${{ matrix.type }})
+        cpu: [ compatible, modern ]
+        # Two builds (L, 2026-10-14): any 64-bit PC from 2008 and up, and one optimised for
+        # newer CPUs (2013 and up, AVX2) that will not start on older ones.
+        include:
+          - cpu: compatible
+            label: Any-64-bit-PC-2008-and-up
+          - cpu: modern
+            label: Optimized-for-newer-CPUs-2013-and-up
+    name: windows (${{ matrix.type }}, ${{ matrix.cpu }})
     steps:
       - name: Keep LF line endings (lib-patches apply to LF sources)
         run: git config --global core.autocrlf false
@@ -31,7 +40,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ runner.os }}-tooie-ccache-${{ matrix.type }}
+          key: ${{ runner.os }}-tooie-ccache-${{ matrix.type }}-${{ matrix.cpu }}
       - name: Install Windows dependencies
         run: |
           choco install ninja
@@ -43,7 +52,7 @@ jobs:
           $cpuCores = (Get-CimInstance -ClassName Win32_Processor).NumberOfLogicalProcessors
           # Use the clang-cl that ships with Visual Studio, not the standalone LLVM.
           $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -ne 'C:\Program Files\LLVM\bin' }) -join ';'
-          cmake -DCMAKE_BUILD_TYPE=${{ matrix.type }} -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl -DCMAKE_MAKE_PROGRAM=ninja -G Ninja -S . -B cmake-build -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions"
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.type }} -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl -DCMAKE_MAKE_PROGRAM=ninja -G Ninja -S . -B cmake-build -DTOOIE_CPU=${{ matrix.cpu }} -DCMAKE_CXX_FLAGS="-Xclang -fexceptions -Xclang -fcxx-exceptions"
           cmake --build cmake-build --config ${{ matrix.type }} --target BanjoTooieN64Recomp -j $cpuCores
       - name: Prepare archive
         run: |
@@ -56,7 +65,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: BanjoTooieN64Recomp-Windows-${{ matrix.type }}
+          name: BanjoTooieN64Recomp-Windows-${{ matrix.label }}
           path: |
             BanjoTooieN64Recomp.exe
             BanjoTooieN64Recomp.pdb

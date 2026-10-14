@@ -128,6 +128,9 @@ namespace {
 
 void tooie::session_log::start(const std::string& version) {
     build_line = version + ", commit " TOOIE_GIT_COMMIT ", built " __DATE__ " " __TIME__
+#ifdef TOOIE_CPU_NAME
+        ", for " TOOIE_CPU_NAME
+#endif
 #ifdef NDEBUG
         ", release";
 #else
