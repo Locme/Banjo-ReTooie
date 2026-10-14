@@ -105,7 +105,7 @@ index 2f22456..41b1e8b 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..ef2c0ad 100644
+index 3b28af3..7b842e8 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
 @@ -2,6 +2,8 @@
@@ -127,7 +127,7 @@ index 3b28af3..ef2c0ad 100644
  
  // Thread scheduling.
  void check_running_queue(RDRAM_ARG1);
-@@ -79,7 +84,46 @@ void set_main_thread();
+@@ -79,7 +84,49 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
@@ -167,6 +167,9 @@ index 3b28af3..ef2c0ad 100644
  uint32_t get_speed_multiplier();
 +// Changes the game speed at runtime (1 = normal). The game clock continues smoothly from its current value.
 +void set_speed_multiplier(uint32_t multiplier);
++// VIs sent per 60th of a second (1 = 60 a second, 2 = 120). Game time and audio are unchanged.
++uint32_t get_vi_rate_multiplier();
++void set_vi_rate_multiplier(uint32_t multiplier);
 +// Game time since start. This runs at get_speed_multiplier() times real time.
 +std::chrono::microseconds game_time_now();
 +// Converts a game time into the real time it will occur at with the current game speed.
@@ -175,19 +178,56 @@ index 3b28af3..ef2c0ad 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..05420f9 100644
+index 090cc42..d0f05ed 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
-@@ -190,7 +190,7 @@ void vi_thread_func() {
+@@ -1,4 +1,5 @@
+ #include <thread>
++#include <algorithm>
+ #include <atomic>
+ #include <chrono>
+ #include <cinttypes>
+@@ -172,6 +173,17 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
+ }
+ 
+ uint64_t total_vis = 0;
++// VIs sent per 60th of a second (1 normally). Raised so the game can make more than 60 frames a second;
++// the AI messages stay at 60 a second. The VI count restarts from a base whenever it changes.
++static std::atomic<uint32_t> vi_rate_multiplier{ 1 };
++
++uint32_t ultramodern::get_vi_rate_multiplier() {
++    return vi_rate_multiplier.load();
++}
++
++void ultramodern::set_vi_rate_multiplier(uint32_t multiplier) {
++    vi_rate_multiplier = std::clamp<uint32_t>(multiplier, 1, 8);
++}
+ 
+ 
+ extern std::atomic_bool exited;
+@@ -187,10 +199,20 @@ void vi_thread_func() {
+     using namespace std::chrono_literals;
+ 
+     int remaining_retraces = 1;
++    uint32_t vi_multiplier = 1;
++    uint64_t vi_base_count = 0;
++    std::chrono::microseconds vi_base_time{ 0 };
++    uint64_t last_ai_tick = 0;
  
      while (!exited) {
++        if (vi_rate_multiplier.load() != vi_multiplier) {
++            vi_multiplier = vi_rate_multiplier.load();
++            vi_base_count = total_vis;
++            vi_base_time = ultramodern::game_time_now();
++        }
++        const uint64_t vi_rate = 60 * vi_multiplier;
          // Determine the next VI time (more accurate than adding 16ms each VI interrupt)
 -        auto next = ultramodern::get_start() + (total_vis * 1000000us) / (60 * ultramodern::get_speed_multiplier());
-+        auto next = ultramodern::game_time_to_real((total_vis * 1000000us) / 60);
++        auto next = ultramodern::game_time_to_real(vi_base_time + ((total_vis - vi_base_count) * 1000000us) / vi_rate);
          //if (next > std::chrono::high_resolution_clock::now()) {
          //    printf("Sleeping for %" PRIu64 " us to get from %" PRIu64 " us to %" PRIu64 " us \n",
          //        (next - std::chrono::high_resolution_clock::now()) / 1us,
-@@ -205,9 +205,9 @@ void vi_thread_func() {
+@@ -205,9 +227,9 @@ void vi_thread_func() {
              next = std::chrono::high_resolution_clock::now();
          }
          ultramodern::sleep_until(next);
@@ -195,11 +235,11 @@ index 090cc42..05420f9 100644
 +        auto time_now = ultramodern::game_time_now();
          // Calculate how many VIs have passed
 -        uint64_t new_total_vis = (time_now * (60 * ultramodern::get_speed_multiplier()) / 1000ms) + 1;
-+        uint64_t new_total_vis = (time_now * 60 / 1000ms) + 1;
++        uint64_t new_total_vis = vi_base_count + ((time_now - vi_base_time) * vi_rate / 1000ms) + 1;
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -226,8 +226,16 @@ void vi_thread_func() {
+@@ -226,8 +248,16 @@ void vi_thread_func() {
          // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
          events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
  
@@ -218,7 +258,20 @@ index 090cc42..05420f9 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -261,12 +269,70 @@ void sp_complete() {
+@@ -243,7 +273,11 @@ void vi_thread_func() {
+                 }
+                 remaining_retraces = cur_state->retrace_count;
+             }
+-            if (events_context.ai.mq != NULLPTR) {
++            // The AI messages stay at 60 a second whatever the VI rate.
++            uint64_t ai_tick = (time_now * 60 / 1000ms);
++            bool send_ai = vi_multiplier == 1 || ai_tick != last_ai_tick;
++            last_ai_tick = ai_tick;
++            if (send_ai && events_context.ai.mq != NULLPTR) {
+                 // Send a message to the VI queue, and do not set it to be requeued if the queue was full for the same reason as the VI message above.
+                 ultramodern::enqueue_external_message(events_context.ai.mq, events_context.ai.msg, false, false);
+             }
+@@ -261,12 +295,70 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -289,7 +342,7 @@ index 090cc42..05420f9 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -290,6 +356,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -290,6 +382,7 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
  
          // Tell the game that the RSP has completed
          sp_complete();
@@ -297,7 +350,7 @@ index 090cc42..05420f9 100644
      }
  }
  
-@@ -374,6 +441,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -374,6 +467,7 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
                  [[maybe_unused]] auto renderer_end = std::chrono::high_resolution_clock::now();
  
                  dp_complete();
@@ -305,7 +358,7 @@ index 090cc42..05420f9 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,6 +629,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -561,6 +655,7 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue

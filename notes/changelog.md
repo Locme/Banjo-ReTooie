@@ -11,6 +11,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Graphics
 
 - HD Shadows and Extended Draw Distance stop adding to a frame when the game's fixed drawing memory is nearly full (both together filled up to 87% of it headless, and past the end it tears or explodes models). Untested on PC (T120).
+- Game Frame Rate: 120 FPS and Unlocked (up to 240), both experimental; the sound stays at its normal pace. The Framerate option is now Interpolation (Original is now Off) and sits under Game Frame Rate. Untested on PC (T122).
 - Frame rate overlay: shows input latency (controller read to screen), in Compact and Full.
 - Frame rate overlay (Full): shader compiles in the last 5 s, and the game's CPU time per frame.
 - Extended Draw Distance now takes effect as soon as it is switched (before, it did nothing until Apply), and notes, eggs and other placed objects draw as far as characters. Untested on PC (T30).

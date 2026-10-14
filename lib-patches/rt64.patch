@@ -495,6 +495,59 @@ index 2970e71..a04074b 100644
          present.debuggerFramebuffer.address = debuggerInspector.renderer.framebufferAddress;
          present.debuggerFramebuffer.view = (debuggerInspector.renderer.framebufferIndex >= 0);
      }
+diff --git a/src/hle/rt64_vi.cpp b/src/hle/rt64_vi.cpp
+index a870166..f53626b 100644
+--- a/src/hle/rt64_vi.cpp
++++ b/src/hle/rt64_vi.cpp
+@@ -3,6 +3,7 @@
+ //
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cassert>
+ #include <memory.h>
+ #include <stdio.h>
+@@ -13,6 +14,16 @@
+ #include "rt64_vi.h"
+ 
+ namespace RT64 {
++    static std::atomic<uint32_t> viRate{ 60 };
++
++    void SetVIRate(uint32_t rate) {
++        viRate = (rate > 0) ? rate : 60;
++    }
++
++    uint32_t GetVIRate() {
++        return viRate.load();
++    }
++
+     // VI
+     
+     hlslpp::float4 VI::viewRectangle() const {
+@@ -163,7 +174,7 @@ namespace RT64 {
+ 
+     uint32_t VIHistory::logicalRateFromFactors() {
+         if ((factors[0] != 0) && std::all_of(factors.begin(), factors.end(), [&](uint32_t factor) { return factor == factors[0]; })) {
+-            const uint32_t FullRate = 60; // TODO: PAL support.
++            const uint32_t FullRate = GetVIRate(); // TODO: PAL support.
+             return FullRate / factors[0];
+         }
+         else {
+diff --git a/src/hle/rt64_vi.h b/src/hle/rt64_vi.h
+index 5b70e01..e0b2168 100644
+--- a/src/hle/rt64_vi.h
++++ b/src/hle/rt64_vi.h
+@@ -170,4 +170,9 @@ namespace RT64 {
+         uint32_t logicalRateFromFactors();
+         const Present &top() const;
+     };
++
++    // Banjo-Tooie: how many VIs a second the runtime sends (60 normally; 120 or 240 when the game runs
++    // above 60 frames a second), so the rate worked out from VIs per frame stays right.
++    void SetVIRate(uint32_t rate);
++    uint32_t GetVIRate();
+ };
+\ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
 index 5a331aa..87ecc21 100644
 --- a/src/hle/rt64_workload_queue.cpp

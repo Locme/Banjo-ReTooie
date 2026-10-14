@@ -1,6 +1,6 @@
 // Frame rate overlay: one Graphics option that shows, in the top left corner,
 // the frame rate and frame time actually presented, the worst frame, the GPU
-// time, the game's own frame rate and CPU time, the Framerate setting and what
+// time, the game's own frame rate and CPU time, the Interpolation setting and what
 // frame interpolation tagged; then the 1% low, hitches and shader compiles over the last 5 s, the
 // map and Banjo's position, the renderer, and whether speed-up, cheats or
 // mods are on (so a screenshot of a glitch carries what is needed to find it);
@@ -311,7 +311,7 @@ namespace {
         const auto& config = ultramodern::renderer::get_graphics_config();
         switch (config.rr_option) {
             case ultramodern::renderer::RefreshRate::Original:
-                return "Original";
+                return "Off";
             case ultramodern::renderer::RefreshRate::Display:
                 return "Display";
             case ultramodern::renderer::RefreshRate::Manual:
@@ -562,7 +562,7 @@ namespace {
                 game_busy_ms / game_frames, std::clamp(game_busy_ms / (seconds * 10.0), 0.0, 100.0));
             text.back() += line;
         }
-        text.push_back("Framerate: " + framerate_setting());
+        text.push_back("Interpolation: " + framerate_setting());
 
         tooie::model_tagging::Stats tags = tooie::model_tagging::last_stats();
         if (tags.interpolating) {

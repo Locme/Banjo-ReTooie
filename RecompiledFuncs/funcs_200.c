@@ -1089,6 +1089,7 @@ RECOMP_FUNC void func_800D9004(uint8_t* rdram, recomp_context* ctx) {
     CHECK_FR(ctx, 8);
     NAN_CHECK(ctx->f6.fl); NAN_CHECK(ctx->f8.fl); 
     ctx->f0.fl = MUL_S(ctx->f6.fl, ctx->f8.fl);
+    tooie_frame_seconds(rdram, ctx);
     // 0x800D9024: jr          $ra
     // 0x800D9028: nop
 

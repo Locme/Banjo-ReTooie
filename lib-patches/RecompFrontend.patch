@@ -353,10 +353,19 @@ index c89956e..e781099 100644
              check_buttons(profile_index_kb);
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..20c3031 100644
+index 38b84f5..e8f283c 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
-@@ -133,6 +133,14 @@ namespace recompui {
+@@ -65,6 +65,8 @@ namespace recompui {
+     
+             void update_msaa_supported(bool supported);
+             void update_refresh_rate(uint32_t refresh_rate);
++            // Adds the Interpolation rows (rr_option, rr_manual_value). Call after create_graphics_tab.
++            void add_interpolation_options(recomp::config::Config &config);
+             void toggle_fullscreen();
+         }
+ 
+@@ -133,6 +135,14 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -723,7 +732,7 @@ index 6ba64e2..3ba871a 100644
              element->update_hidden();
              config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..c4aaa9b 100644
+index 4fdf81f..2a006fa 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -758,6 +767,15 @@ index 4fdf81f..c4aaa9b 100644
          };
  
          static EnumOptionVector antialiasing_options = {
+@@ -78,7 +81,7 @@ namespace recompui {
+         };
+ 
+         static EnumOptionVector refresh_rate_options = {
+-            {ultramodern::renderer::RefreshRate::Original, "Original"},
++            {ultramodern::renderer::RefreshRate::Original, "Original", "Off"},
+             {ultramodern::renderer::RefreshRate::Display, "Display"},
+             {ultramodern::renderer::RefreshRate::Manual, "Manual"},
+         };
 @@ -100,6 +103,11 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
@@ -770,7 +788,16 @@ index 4fdf81f..c4aaa9b 100644
                  case ultramodern::renderer::Resolution::Original:
                      if (ds_option == DownsamplingOption::X2) {
                          return "Rendered in 480p and scaled to 240p";
-@@ -217,6 +225,14 @@ namespace recompui {
+@@ -153,7 +161,7 @@ namespace recompui {
+ 
+         static std::string get_framerate_text(uint32_t refresh_rate) {
+             return
+-                "Sets the game's output framerate. This option does not affect gameplay."
++                "Draws extra in-between frames so motion looks smoother than the game's own frame rate. <recomp-color primary>Off</recomp-color> shows only the frames the game makes. <recomp-color primary>Display</recomp-color> matches your screen's refresh rate, and <recomp-color primary>Manual</recomp-color> uses the number you set. This option does not affect gameplay."
+                 "<br />"
+                 "<br />"
+                 "Note: If you have issues with <recomp-color primary>Display</recomp-color> mode while using an external frame limiter, use <recomp-color primary>Manual</recomp-color> mode instead and configure it to that same frame limit."
+@@ -217,6 +225,47 @@ namespace recompui {
              apply_graphics_config();
          }
  
@@ -782,10 +809,43 @@ index 4fdf81f..c4aaa9b 100644
 +            }
 +        }
 +
++        // The port places these rows itself (under its Game Frame Rate option), so they
++        // are added by this function rather than by create_graphics_tab.
++        void graphics::add_interpolation_options(recomp::config::Config &config) {
++            config.add_enum_option(
++                graphics::options::rr_option,
++                "Interpolation",
++                get_framerate_text(60),
++                refresh_rate_options,
++                ultramodern::renderer::RefreshRate::Display
++            );
++
++            config.add_number_option(
++                graphics::options::rr_manual_value,
++                "",
++                get_framerate_text(60),
++                20.0, 240.0, 1.0, 0, false, 60.0
++            );
++            {
++                config.add_option_hidden_dependency(
++                    graphics::options::rr_manual_value,
++                    graphics::options::rr_option,
++                    ultramodern::renderer::RefreshRate::Original,
++                    ultramodern::renderer::RefreshRate::Display
++                );
++            }
++            for (const std::string *id : { &graphics::options::rr_option, &graphics::options::rr_manual_value }) {
++                config.add_option_change_callback(*id,
++                    [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {
++                        apply_live(change_context);
++                    });
++            }
++        }
++
          recomp::config::Config &create_graphics_tab(const std::string &name) {
              created_graphics_config = true;
  
-@@ -235,7 +251,7 @@ namespace recompui {
+@@ -235,7 +284,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::res_option,
                  "Resolution",
@@ -794,7 +854,7 @@ index 4fdf81f..c4aaa9b 100644
                  resolution_options,
                  ultramodern::renderer::Resolution::Auto
              );
-@@ -245,6 +261,7 @@ namespace recompui {
+@@ -245,6 +294,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto new_opt = static_cast<ultramodern::renderer::Resolution>(std::get<uint32_t>(cur_value));
                          determine_downsampling_display(new_opt, change_context);
@@ -802,7 +862,7 @@ index 4fdf81f..c4aaa9b 100644
                      }
                  );
              }
-@@ -265,6 +282,7 @@ namespace recompui {
+@@ -265,6 +315,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto resolution_opt = get_graphics_enum_value<ultramodern::renderer::Resolution>(graphics::options::res_option, change_context);
                          determine_downsampling_display(resolution_opt, change_context);
@@ -810,7 +870,7 @@ index 4fdf81f..c4aaa9b 100644
                      }
                  );
  
-@@ -286,7 +304,7 @@ namespace recompui {
+@@ -286,7 +337,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::ar_option,
                  "Aspect Ratio",
@@ -819,7 +879,37 @@ index 4fdf81f..c4aaa9b 100644
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
-@@ -346,7 +364,7 @@ namespace recompui {
+@@ -299,29 +350,6 @@ namespace recompui {
+                 wm_default()
+             );
+ 
+-            config.add_enum_option(
+-                graphics::options::rr_option,
+-                "Framerate",
+-                get_framerate_text(60),
+-                refresh_rate_options,
+-                ultramodern::renderer::RefreshRate::Display
+-            );
+-
+-            config.add_number_option(
+-                graphics::options::rr_manual_value,
+-                "",
+-                get_framerate_text(60),
+-                20.0, 240.0, 1.0, 0, false, 60.0
+-            );
+-            {
+-                config.add_option_hidden_dependency(
+-                    graphics::options::rr_manual_value,
+-                    graphics::options::rr_option,
+-                    ultramodern::renderer::RefreshRate::Original,
+-                    ultramodern::renderer::RefreshRate::Display
+-                );
+-            }
+-
+             config.add_enum_option(
+                 graphics::options::msaa_option,
+                 "MS Anti-Aliasing",
+@@ -346,7 +374,7 @@ namespace recompui {
                  "Graphics API",
                  "Selects the graphics API to use.",
                  graphics_api_options,
@@ -828,13 +918,13 @@ index 4fdf81f..c4aaa9b 100644
                  true
              );
  
-@@ -359,6 +377,16 @@ namespace recompui {
+@@ -359,6 +387,16 @@ namespace recompui {
                  true
              );
  
 +            for (const std::string *id : {
 +                &graphics::options::developer_mode, &graphics::options::ar_option, &graphics::options::wm_option,
-+                &graphics::options::rr_option, &graphics::options::rr_manual_value, &graphics::options::msaa_option,
++                &graphics::options::msaa_option,
 +                &graphics::options::hr_option, &graphics::options::api_option, &graphics::options::hpfb_option }) {
 +                config.add_option_change_callback(*id,
 +                    [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, OptionChangeContext change_context) {

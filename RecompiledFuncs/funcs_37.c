@@ -401,6 +401,7 @@ L_800154CC:
     MEM_W(0X0, ctx->r18) = ctx->r14;
     // 0x800154EC: lw          $t7, 0x0($s2)
     ctx->r15 = MEM_W(ctx->r18, 0X0);
+    tooie_vi_hang_limit(rdram, ctx);
     // 0x800154F0: xor         $s0, $s6, $t7
     ctx->r16 = ctx->r22 ^ ctx->r15;
     // 0x800154F4: jal         0x8001E7C0
@@ -465,6 +466,7 @@ L_80015528:
     // 0x80015530: or          $a2, $zero, $zero
     ctx->r6 = 0 | 0;
     after_4:
+    if (tooie_vi_clients_skip(rdram, ctx)) { ctx->r4 = ctx->r20; goto L_800154CC; }
     // 0x80015534: lui         $s0, 0x8008
     ctx->r16 = S32(0X8008 << 16);
     // 0x80015538: addiu       $s0, $s0, -0x7070

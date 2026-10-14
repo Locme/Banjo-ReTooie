@@ -349,6 +349,7 @@ void tooie::init_config() {
     tooie::api_restart::add_prompt(graphics);
     tooie::fsr::add_option(graphics);
     tooie::game_frame_rate::add_option(graphics);
+    recompui::config::graphics::add_interpolation_options(graphics);
     tooie::frame_overlay::add_option(graphics);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a

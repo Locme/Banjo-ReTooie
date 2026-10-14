@@ -127,10 +127,13 @@ F12 screenshots are taken before these filters, so they don't show them.
   no shadow on N64, get one too (up to 12 per frame, straight down onto the
   floor). Applies at once. Default: off.
 
-## Graphics: Game Frame Rate
+## Graphics: Game Frame Rate and Interpolation
+
+Both sit in the "Frame rate and overlay" section, Interpolation right under
+Game Frame Rate.
 
 - **Game Frame Rate**: how often the game itself updates, not the in-between
-  frames that Framerate adds. Applies from the next frame.
+  frames that Interpolation adds. Applies from the next frame.
   - **Original** (default): the game's own timing. It waits for at least two
     screen refreshes (a few places, such as the title screen and the
     Hailfire Peaks cannon, ask for three or four), and a frame that ran late
@@ -140,11 +143,25 @@ F12 screenshots are taken before these filters, so they don't show them.
   - **60 FPS**: the game updates every refresh with half the step. Movement
     keeps its speed; anything the game counts in frames rather than time
     would run twice as fast.
-  - With 30 or 60 FPS, a PC that cannot keep up slows the game down instead
-    of taking bigger steps.
+  - **120 FPS (Experimental)**: every game frame is 1/120 s. The runtime sends
+    screen refreshes (VIs) 120 times a second for this, while the sound is
+    still made 60 times a second.
+  - **Unlocked (Experimental)**: the game makes frames as fast as the PC can,
+    up to 240 a second, and each step is the time that really went by (in
+    240ths of a second).
+  - With 120 FPS and Unlocked anything the game counts in whole frames rather
+    than time is kept at 60 a second where the game uses its frame count, but
+    objects that move a fixed amount every frame would move too fast.
+  - With 30, 60 or 120 FPS, a PC that cannot keep up slows the game down
+    instead of taking bigger steps.
   - Scenes the game plays from recorded frames keep its own pacing: the
     attract demos, the game select screen and the intro story cutscenes
     (checked headless; they run at the game's 20 fps whatever this is set to).
+- **Interpolation** (was "Framerate"): draws in-between frames so motion
+  looks smoother than the game's own frame rate. It does not change the game.
+  - **Off** (was "Original"; saved as Original): only the frames the game makes.
+  - **Display**: your screen's refresh rate.
+  - **Manual**: the number you set (20 to 240).
 
 ## Graphics: Frame rate overlay
 
@@ -159,14 +176,14 @@ F12 screenshots are taken before these filters, so they don't show them.
     was made from that read. Your monitor's own delay and the controller's
     are not included.
   - the GPU time per game frame
-  - the game's own frame rate (the frames it really makes; with Framerate
-    above Original the rest are in-between frames), counted over the last
+  - the game's own frame rate (the frames it really makes; with Interpolation
+    on, the rest are in-between frames), counted over the last
     2 seconds (over a quarter second a 30 fps game read as 28 and 32)
   - on the same line, the game's CPU time per game frame and how busy it kept
     the CPU: the time its own code ran (everything but its idle wait) over
     the same 2 seconds. High CPU time with a low GPU time means a slowdown
     comes from the game, not from drawing.
-  - the Framerate setting
+  - the Interpolation setting
   - frame interpolation: off, or on with how many models, bones and shadows
     it tracked in the last frame, and how many camera cuts it has seen
   - the 1% low over the last 5 seconds (the frame time 99 frames in 100

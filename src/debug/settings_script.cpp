@@ -2,8 +2,8 @@
 // changes Graphics options at those times after the game started, the same way
 // the menu does (set_option_value, which saves and applies them at once), so a
 // run can switch settings live without anyone at the keyboard. Enum options take
-// the index of their choice (game_frame_rate: 0 Original, 1 30 FPS, 2 60 FPS;
-// rr_option: 0 Original, 1 Display, 2 Manual), number options a number.
+// the index of their choice (game_frame_rate: 0 Original, 1 30 FPS, 2 60 FPS, 3 120 FPS, 4 Unlocked;
+// rr_option, Interpolation: 0 Off, 1 Display, 2 Manual), number options a number.
 // Each change is logged as "[set] ...".
 
 #include <chrono>
@@ -60,6 +60,8 @@ namespace {
             } else {
                 graphics.set_option_value(c.option, c.value);
             }
+            // The Graphics tab saves on every change in the menu (no Apply button); do the same here.
+            graphics.save_config();
             std::printf("[set] %ld ms: %s = %g\n", c.ms, c.option.c_str(), c.value);
         } catch (...) {
             std::printf("[set] %ld ms: %s not found\n", c.ms, c.option.c_str());

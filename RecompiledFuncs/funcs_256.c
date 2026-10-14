@@ -2383,6 +2383,7 @@ L_800A7D64:
     // 0x800A7D70: or          $a0, $v0, $zero
     ctx->r4 = ctx->r2 | 0;
     after_2:
+    tooie_frame_step_done(rdram, ctx);
     // 0x800A7D74: lw          $ra, 0x14($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X14);
 L_800A7D78:

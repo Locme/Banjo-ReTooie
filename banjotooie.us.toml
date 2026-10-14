@@ -681,6 +681,33 @@ func = "func_800A7D30"
 before_vram = 0x800A7D6C
 text = "tooie_frame_step(rdram, ctx);"
 
+# 120 FPS and Unlocked: after func_800D8FA0 has set the frame's delta time and
+# count, put in the finer ones (time steps of 1/120 or 1/240 s).
+[[patches.hook]]
+func = "func_800A7D30"
+before_vram = 0x800A7D74
+text = "tooie_frame_step_done(rdram, ctx);"
+
+# func_800D9004 gives the frame count times 1/60 s ($f0, set before its jr);
+# above 60 FPS it gives the finer delta time instead.
+[[patches.hook]]
+func = "func_800D9004"
+before_vram = 0x800D9024
+text = "tooie_frame_seconds(rdram, ctx);"
+
+# func_8001546C is the game's VI thread. Above 60 FPS the runtime sends 2 or 4
+# times as many VIs: the frame queue gets them all, its other clients (the sound
+# among them) only every second or fourth, and its 600-VI (10 s) check is scaled.
+[[patches.hook]]
+func = "func_8001546C"
+before_vram = 0x80015534
+text = "if (tooie_vi_clients_skip(rdram, ctx)) { ctx->r4 = ctx->r20; goto L_800154CC; }"
+
+[[patches.hook]]
+func = "func_8001546C"
+before_vram = 0x800154F0
+text = "tooie_vi_hang_limit(rdram, ctx);"
+
 # func_8001608C replays a recorded time step (0x80016110 calls func_800D8FA0
 # with it): attract demos, the game select screen and the intro story cutscenes.
 # They run a fixed number of frames, so while one plays the game keeps its own

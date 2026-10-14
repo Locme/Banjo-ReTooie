@@ -29,6 +29,11 @@ so the submodules stay pinned to their upstream commits.
   in about 1 in 4 to 1 in 30 boots). The VI thread now falls back to the dummy mode, and swaps the VI
   states under `message_mutex`, which `osViSetMode` and `osViSwapBuffer` already hold.
 
+* **VI rate multiplier** (`ultramodern/src/events.cpp`, `ultramodern.hpp`): `set_vi_rate_multiplier(n)`
+  sends VIs 60 * n times a second (game time unchanged, unlike the speed multiplier) while the AI
+  messages stay at 60 a second. Game Frame Rate 120 FPS and Unlocked use 2 and 4
+  (`src/game/game_frame_rate.cpp`).
+
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 
@@ -77,6 +82,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Fine Aim input** (`recompinput/include/recompinput/input_types.h`): a
   `FINE_AIM` game input, so the game's Fine aim key can be bound in the Controls
   tab.
+* **Interpolation rows** (`ui_config_tab_graphics.cpp`, `recompui/config.h`): the Framerate option is
+  named Interpolation, its Original choice reads Off (saved key unchanged), and it is added by
+  `graphics::add_interpolation_options()`, which the port calls right after Game Frame Rate.
 
 * **Enum drop-down** (`recompui/src/config/ui_config_option.{h,cpp}`): an enum
   option with more than 6 entries is drawn as a drop-down (the menu's Select
@@ -96,6 +104,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 ## rt64.patch
 
+* **VI rate** (`src/hle/rt64_vi.cpp/.h`): `SetVIRate` replaces the fixed 60 VIs a second that
+  `logicalRateFromFactors` worked the game's frame rate out from, for Game Frame Rate 120 FPS and Unlocked.
 * **Unknown microcode guard** (`src/hle/rt64_interpreter.cpp`): a graphics task whose microcode
   isn't in RT64's database left the interpreter with no command table, and the next display list
   crashed (L's 2026-10-14 10:33 dump). It now keeps the last known microcode and logs
