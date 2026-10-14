@@ -51,6 +51,10 @@ namespace {
 
     // The form waiting to be applied (0 = none), set by the row's change callback.
     std::atomic<uint8_t> pending_form{0};
+    // Banjo's form as of the last frame, and whether the waiting request came from the test room
+    // (which works without the Cheats switch, since the Warp tab already needs it).
+    std::atomic<uint8_t> current_form{0};
+    std::atomic<bool> pending_from_room{false};
 
     // Headless test hook: TOOIE_TRANSFORM=<hex form>[@ms][,<hex form>@ms...] applies each form once, ms after
     // the game loop first runs (the Off row is form 1, the normal form).
@@ -95,6 +99,15 @@ void tooie::transform_picker::add_options(recomp::config::Config& cheats, const 
         });
 }
 
+bool tooie::transform_picker::request_form(uint8_t form) {
+    if (pending_form.load() != 0 || current_form == form) {
+        return false;
+    }
+    pending_from_room = true;
+    pending_form = form;
+    return true;
+}
+
 void tooie::transform_picker::reset(recomp::config::Config& cheats) {
     pending_form = 0;
     cheats.update_option_value(option, 0u);
@@ -135,17 +148,23 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
             fprintf(stderr, "[transform] stored form 0x%X, player form 0x%X\n", MEM_B(0, form_addr), cur);
         }
     }
+    {
+        const uint32_t player = MEM_W(0, player_table);
+        current_form = player != 0 ? MEM_B(0x29, MEM_W(0xA0, (gpr)(int32_t)player)) : 0;
+    }
     uint8_t form = pending_form.load();
     if (form == 0) {
         return;
     }
     // The cheats were switched off, or no save file is being played: drop the request.
-    if (!tooie::cheats::enabled() && !std::getenv("TOOIE_TRANSFORM")) {
+    if (!tooie::cheats::enabled() && !std::getenv("TOOIE_TRANSFORM") && !pending_from_room.load()) {
         pending_form = 0;
+        pending_from_room = false;
         return;
     }
     if (!tooie::debug::can_warp()) {
         pending_form = 0;
+        pending_from_room = false;
         return;
     }
     // A map change is already under way: try again next frame.
@@ -153,6 +172,7 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     pending_form = 0;
+    pending_from_room = false;
 
     {
         const uint32_t cur_player = MEM_W(0, player_table);

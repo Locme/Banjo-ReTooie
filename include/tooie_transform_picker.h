@@ -24,6 +24,10 @@ namespace tooie::transform_picker {
     // Resets the row to Off (the master switch went off).
     void reset(recomp::config::Config& cheats);
 
+    // Asks for a form the way the row does (applied by tick). False if a request is already waiting
+    // or Banjo is already in that form.
+    bool request_form(uint8_t form);
+
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram, recomp_context* ctx);
 }

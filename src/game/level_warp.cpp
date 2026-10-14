@@ -7,7 +7,8 @@
 // with the game's own map change (the usual wipe and title card). Warping to
 // the map you are in does nothing. F9 repeats the last warp. Before a save
 // file is being played (launcher, title screen, game select) a pick only shows
-// "Start the game and load a file first".
+// "Start the game and load a file first". The last entry, Test > Test room, also
+// fills its area with the test room's line-up (src/gameplay/test_room.cpp).
 
 #include <atomic>
 #include <chrono>
@@ -34,6 +35,7 @@
 #include "tooie_cheats.h"
 #include "tooie_hotkeys.h"
 #include "tooie_level_warp.h"
+#include "tooie_test_room.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -44,10 +46,13 @@ namespace {
         const char* name;
         uint16_t map;
         uint8_t exit;
+        // Fills the area with the test room's line-up on arrival (src/gameplay/test_room.cpp).
+        bool test_room = false;
     };
 
     constexpr Place places[] = {
 #include "level_warp_places.inc"
+        { "Test", "Test room", tooie::test_room::map, tooie::test_room::exit, true },
     };
 
     constexpr auto poll_interval = 10ms;
@@ -79,6 +84,9 @@ namespace {
         {
             std::lock_guard lock{last_mutex};
             last = place;
+        }
+        if (place.test_room) {
+            tooie::test_room::request();
         }
         tooie::debug::request_warp(place.map, place.exit);
         tooie::toast::show(std::string("Warping to ") + place.name);
