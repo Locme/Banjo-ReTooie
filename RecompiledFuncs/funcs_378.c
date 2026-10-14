@@ -616,6 +616,7 @@ RECOMP_FUNC void func_800129FC(uint8_t* rdram, recomp_context* ctx) {
     // 0x80012A28: nop
 
     after_2:
+    tooie_mix_rate_queue_length(rdram, ctx);
     // 0x80012A2C: lw          $a2, 0x3C($sp)
     ctx->r6 = MEM_W(ctx->r29, 0X3C);
     // 0x80012A30: srl         $v1, $v0, 2
@@ -759,6 +760,7 @@ L_80012AD8:
     // 0x80012AEC: sw          $v0, 0x6938($at)
     MEM_W(0X6938, ctx->r1) = ctx->r2;
 L_80012AF0:
+    tooie_mix_rate_frame_size(rdram, ctx);
     // 0x80012AF0: lw          $t1, -0x5EB0($t1)
     ctx->r9 = MEM_W(ctx->r9, -0X5EB0);
     // 0x80012AF4: lw          $a2, 0x34($sp)

@@ -69,6 +69,15 @@ int tooie_hud_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
 
+// Sound > Mix rate (src/gameplay/mix_rate.cpp): hooks in the audio manager's setup and frame code.
+void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_frequency(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_buffers(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_queue_length(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_frame_size(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_pitch_begin(uint8_t* rdram, recomp_context* ctx);
+void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
+
 #ifdef __cplusplus
 }
 #endif

@@ -318,6 +318,16 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
 
     audio_stats_note(cur_queued_microseconds, skip_factor);
 
+    // Debug aid: TOOIE_AUDIO_DUMP=<file> appends what is queued (float stereo at the output rate) to a raw
+    // file, for comparing runs (pitch, tempo) headless.
+    static FILE* audio_dump = [] {
+        const char* path = std::getenv("TOOIE_AUDIO_DUMP");
+        return path != nullptr ? std::fopen(path, "wb") : nullptr;
+    }();
+    if (audio_dump != nullptr) {
+        std::fwrite(samples_to_queue, 1, num_bytes_to_queue, audio_dump);
+    }
+
     // Queue the swapped audio data.
     // Offset the data start by only half the discarded frame count as the other half of the discarded frames are at the end of the buffer.
     SDL_QueueAudio(audio_device, samples_to_queue, num_bytes_to_queue);

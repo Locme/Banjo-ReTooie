@@ -1041,3 +1041,14 @@
   3. Set Resolution back to Auto afterwards; FSR then does nothing.
 - Look for: With FSR the picture is smooth and clean instead of blocky or blurry; Sharp is crisper. Does the picture line up the same as with FSR Off (no shift, no cut-off edges), also in widescreen? Do the HUD and menus look unchanged?
 - Status: waiting for L
+
+## T97 Sound > Mix rate High (44 kHz)
+- Asked: 2026-10-14 07:32 UTC
+- Build: main after this commit (build it yourself)
+- Steps:
+  1. Settings > Sound > Mix rate: High
+  2. Close and restart the game
+  3. Play a few minutes: Jinjo Village music, a level with echo (Glitter Gulch Mine or Cloud Cuckooland), jumps, notes and jiggies
+  4. Make a save state and load it
+- Look for: Do music and sounds play at the same pitch and speed as Original, with a bit more clarity in the high notes? Any crackle, wrong pitch, or broken echo? Does sound still work after loading the save state?
+- Status: waiting for L

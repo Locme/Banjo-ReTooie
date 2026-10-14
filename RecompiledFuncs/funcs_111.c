@@ -1670,6 +1670,7 @@ L_80012630:
     // 0x80012638: sw          $t0, 0x1398($at)
     MEM_W(0X1398, ctx->r1) = ctx->r8;
 L_8001263C:
+    tooie_mix_rate_heap(rdram, ctx);
     // 0x8001263C: jal         0x8001268C
     // 0x80012640: nop
 

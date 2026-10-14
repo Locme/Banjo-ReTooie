@@ -41,6 +41,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.
 
+- `TOOIE_AUDIO_DUMP=<file>`: writes the sound as it is queued (raw 32-bit float stereo at 48 kHz) to that file.
 - `TOOIE_AUDIO_LOG=1`: prints `[audio]` every 2 s: how much audio was queued when each chunk arrived (normal is about 10 to 50 ms), how many chunks were sped up to cut latency, and how often the queue ran dry. Both counts should be 0 in normal play.
 - `TOOIE_HIDE_HUD=1`: starts with the HUD hidden (as after F1).
 - `TOOIE_FRAME_OVERLAY=1`: shows the frame rate overlay in Full whatever the setting says (`=compact` for Compact). `TOOIE_FRAME_LOG=1` prints its figures every 2 s as `[frames]`, shown or not (src/game/frame_overlay.cpp). The game window is 1600x900, wider than a 1280x720 Xvfb screen, so its top left corner is off screen; start Xvfb at 1920x1080 to see it.

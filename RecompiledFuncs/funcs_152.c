@@ -3019,6 +3019,7 @@ L_8002D524:
     ctx->f4.fl = DIV_S(ctx->f16.fl, ctx->f18.fl);
     // 0x8002D568: swc1        $f4, 0x44($t7)
     MEM_W(0X44, ctx->r15) = ctx->f4.u32l;
+    tooie_mix_rate_pitch_begin(rdram, ctx);
     // 0x8002D56C: lw          $t8, 0x38($sp)
     ctx->r24 = MEM_W(ctx->r29, 0X38);
     // 0x8002D570: lui         $at, 0x4338
@@ -3195,6 +3196,7 @@ L_8002D674:
     // 0x8002D680: nop
 
 L_8002D684:
+    tooie_mix_rate_pitch_end(rdram, ctx);
     // 0x8002D684: lw          $ra, 0x14($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x8002D688: addiu       $sp, $sp, 0x38

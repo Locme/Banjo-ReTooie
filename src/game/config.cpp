@@ -6,6 +6,7 @@
 #include "tooie_game.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
+#include "tooie_mix_rate.h"
 #include "tooie_control_scheme.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
@@ -337,7 +338,11 @@ void tooie::init_config() {
     tooie::fsr::add_option(graphics);
 
     recompui::config::create_controls_tab();
-    tooie::music_player::add_options(recompui::config::create_sound_tab());
+    {
+        recomp::config::Config& sound = recompui::config::create_sound_tab();
+        tooie::music_player::add_options(sound);
+        tooie::mix_rate::add_option(sound);
+    }
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();
     tooie::achievements::create_tab();

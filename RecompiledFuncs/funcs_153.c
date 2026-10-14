@@ -2173,6 +2173,7 @@ RECOMP_FUNC void func_8001268C(uint8_t* rdram, recomp_context* ctx) {
     // 0x80012748: addiu       $a0, $zero, 0x5622
     ctx->r4 = ADD32(0, 0X5622);
     after_3:
+    tooie_mix_rate_frequency(rdram, ctx);
     // 0x8001274C: lui         $a0, 0x8007
     ctx->r4 = S32(0X8007 << 16);
     // 0x80012750: sw          $v0, 0x18($s3)
@@ -2354,6 +2355,7 @@ L_8001282C:
     // 0x80012868: addiu       $t4, $zero, 0x10
     ctx->r12 = ADD32(0, 0X10);
     skip_0:
+    tooie_mix_rate_buffers(rdram, ctx);
     // 0x8001286C: lui         $t6, 0x8004
     ctx->r14 = S32(0X8004 << 16);
     // 0x80012870: addiu       $t6, $t6, 0x6A78

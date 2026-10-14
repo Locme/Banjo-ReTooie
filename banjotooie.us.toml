@@ -210,6 +210,46 @@ func = "func_800C2AB8"
 before_vram = 0x800C2B50
 text = "if (ctx->r19 != 0) tooie_preempt_point(rdram, ctx);"
 
+# --- Sound mix rate (src/gameplay/mix_rate.cpp) -----------------------------
+# Sound > Mix rate = High mixes at 44100 Hz instead of 22050. func_800125B0 sets
+# up the audio heap, then calls func_8001268C (synthesizer, AI rate, buffers);
+# func_800129FC is the audio frame (queue check, frame size, alAudioFrame).
+[[patches.hook]]
+func = "func_800125B0"
+before_vram = 0x8001263C
+text = "tooie_mix_rate_heap(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8001268C"
+before_vram = 0x8001274C
+text = "tooie_mix_rate_frequency(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8001268C"
+before_vram = 0x8001286C
+text = "tooie_mix_rate_buffers(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800129FC"
+before_vram = 0x80012A2C
+text = "tooie_mix_rate_queue_length(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800129FC"
+before_vram = 0x80012AF0
+text = "tooie_mix_rate_frame_size(rdram, ctx);"
+
+# func_8002D450 is a voice's resampler pull: halve its pitch ratio while it runs.
+[[patches.hook]]
+func = "func_8002D450"
+before_vram = 0x8002D56C
+text = "tooie_mix_rate_pitch_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8002D450"
+before_vram = 0x8002D684
+text = "tooie_mix_rate_pitch_end(rdram, ctx);"
+
 # --- Map warps (src/debug/warp.cpp) ------------------------------------------
 # func_800A7D84 is the per-frame game-state update that acts on map change
 # requests. Warps are issued from its entry, on the game thread between frames.

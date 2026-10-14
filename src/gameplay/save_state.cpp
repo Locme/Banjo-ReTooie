@@ -38,6 +38,7 @@
 #include "recompinput/input_binding.h"
 #include "recompinput/input_state.h"
 #include "recompinput/profiles.h"
+#include "tooie_mix_rate.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_save_state.h"
@@ -58,6 +59,8 @@ namespace {
     struct Snapshot {
         bool valid = false;
         std::vector<uint8_t> rdram;
+        // Sound memory above 8 MB while Sound > Mix rate is High (src/gameplay/mix_rate.cpp).
+        std::vector<uint8_t> audio_rdram;
         recomp_context ctx;
         recomp::overlays::OverlayState overlays;
         std::unordered_map<uint32_t, int32_t> mapped_overlays;
@@ -199,6 +202,8 @@ namespace {
         }
         snapshot.rdram.resize(rdram_size);
         std::memcpy(snapshot.rdram.data(), rdram, rdram_size);
+        snapshot.audio_rdram.assign(rdram + tooie::mix_rate::extra_region_start(),
+            rdram + tooie::mix_rate::extra_region_start() + tooie::mix_rate::extra_region_size());
         snapshot.ctx = *ctx;
         snapshot.threads = std::move(threads);
         snapshot.dp_hold = ultramodern::get_dp_hold_state();
@@ -260,6 +265,9 @@ namespace {
             return Result::retry;
         }
         std::memcpy(rdram, snapshot.rdram.data(), rdram_size);
+        if (!snapshot.audio_rdram.empty()) {
+            std::memcpy(rdram + tooie::mix_rate::extra_region_start(), snapshot.audio_rdram.data(), snapshot.audio_rdram.size());
+        }
         *ctx = snapshot.ctx;
         recomp::overlays::load_overlay_state(snapshot.overlays);
         tooie::set_mapped_overlays(snapshot.mapped_overlays);
