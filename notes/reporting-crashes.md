@@ -18,5 +18,8 @@ exe you ran. For a local build from `build.bat` that is the folder under `Releas
 3. Keep `BanjoTooieN64Recomp.pdb` next to the exe. Without it, crash
    logs show addresses instead of function names.
 
+If the logs are gone, the newest `.dmp` alone is enough: each dump carries the
+crash log (build, settings, the crashing function and stack) inside it.
+
 Only the files in `logs\` and the newest `.dmp` are needed. Nothing else in the
 folder is needed for a report.

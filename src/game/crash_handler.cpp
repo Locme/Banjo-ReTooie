@@ -56,7 +56,22 @@ namespace {
         std::strftime(out, size, "%Y-%m-%d_%H-%M-%S", &tm_buf);
     }
 
+    // Everything written for this crash, also stored inside the minidump so the .dmp alone is enough.
+    char report[65536];
+    size_t report_len = 0;
+
+    void add_to_report(const char* text) {
+        size_t n = std::strlen(text);
+        if (report_len + n < sizeof(report)) {
+            std::memcpy(report + report_len, text, n);
+            report_len += n;
+            report[report_len] = '\0';
+        }
+    }
+
     void append_log_line(const char* line) {
+        add_to_report(line);
+        add_to_report("\n");
         FILE* f = std::fopen(crash_log_path, "a");
         if (f) {
             std::fprintf(f, "%s\n", line);
@@ -75,12 +90,16 @@ namespace {
         for (const char* c = text; *c != '\0'; c++) {
             if (line_start) {
                 std::fputs("    ", f);
+                add_to_report("    ");
             }
             std::fputc(*c, f);
+            char one[2] = { *c, '\0' };
+            add_to_report(one);
             line_start = *c == '\n';
         }
         if (!line_start) {
             std::fputc('\n', f);
+            add_to_report("\n");
         }
         std::fclose(f);
     }
@@ -109,15 +128,24 @@ namespace {
         std::memset(sym, 0, sizeof(buffer));
         sym->SizeOfStruct = sizeof(SYMBOL_INFO);
         sym->MaxNameLen = 255;
+        // Module and offset always, so a dump can be matched to the build's PDB later.
+        HMODULE module = nullptr;
+        char module_name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCSTR>(addr), &module) && module != nullptr) {
+            char path[MAX_PATH];
+            if (GetModuleFileNameA(module, path, sizeof(path)) > 0) {
+                const char* slash = std::strrchr(path, '\\');
+                std::snprintf(module_name, sizeof(module_name), "%s", slash ? slash + 1 : path);
+            }
+        }
+        unsigned long long offset = reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(module);
         DWORD64 displacement = 0;
         if (SymFromAddr(process, reinterpret_cast<DWORD64>(addr), &displacement, sym)) {
-            std::snprintf(out, size, "%s+0x%llx", sym->Name, static_cast<unsigned long long>(displacement));
+            std::snprintf(out, size, "%s+0x%llx (%s+0x%llx)", sym->Name, static_cast<unsigned long long>(displacement),
+                module_name, offset);
         } else {
-            HMODULE module = nullptr;
-            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                reinterpret_cast<LPCSTR>(addr), &module);
-            std::snprintf(out, size, "exe+0x%llx (no symbol)",
-                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(module)));
+            std::snprintf(out, size, "%s+0x%llx (no symbol)", module_name, offset);
         }
     }
 
@@ -159,10 +187,37 @@ namespace {
         return EXCEPTION_CONTINUE_SEARCH;
     }
 
-    // The calling thread's stack, one function per line, for the crash log.
-    void append_backtrace() {
+    // The crashing thread's stack, one function per line, for the crash log. Unwound from the
+    // exception's own context when there is one, so it starts at the faulting instruction.
+    USHORT walk_stack(EXCEPTION_POINTERS* ep, void** frames, USHORT max) {
+        if (ep == nullptr || ep->ContextRecord == nullptr) {
+            return CaptureStackBackTrace(0, max, frames, nullptr);
+        }
+        CONTEXT ctx = *ep->ContextRecord;
+        USHORT n = 0;
+        __try {
+            while (n < max && ctx.Rip != 0) {
+                frames[n++] = reinterpret_cast<void*>(ctx.Rip);
+                DWORD64 image_base = 0;
+                PRUNTIME_FUNCTION entry = RtlLookupFunctionEntry(ctx.Rip, &image_base, nullptr);
+                if (entry == nullptr) {
+                    // Leaf function: the return address is on top of the stack.
+                    ctx.Rip = *reinterpret_cast<DWORD64*>(ctx.Rsp);
+                    ctx.Rsp += 8;
+                } else {
+                    void* handler_data = nullptr;
+                    DWORD64 establisher = 0;
+                    RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, ctx.Rip, entry, &ctx, &handler_data, &establisher, nullptr);
+                }
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
+        return n;
+    }
+
+    void append_backtrace(EXCEPTION_POINTERS* ep) {
         void* frames[48];
-        USHORT n = CaptureStackBackTrace(0, 48, frames, nullptr);
+        USHORT n = walk_stack(ep, frames, 48);
         for (USHORT i = 0; i < n; i++) {
             char name[400];
             describe_address(frames[i], name, sizeof(name));
@@ -186,6 +241,20 @@ namespace {
 
         char dump_name[1200];
         std::snprintf(dump_name, sizeof(dump_name), "%s\\crash_%s.dmp", logs_dir, ts);
+
+        // The log first, so the same text can go inside the dump.
+        char line[1900];
+        std::snprintf(line, sizeof(line), "%s crash: %s at %s (code 0x%08lx), dump: %s", ts, reason, where,
+            ep && ep->ExceptionRecord ? static_cast<unsigned long>(ep->ExceptionRecord->ExceptionCode) : 0ul,
+            dump_name);
+        append_log_line(line);
+        append_context();
+        if (last_cpp_exception[0] != '\0') {
+            std::snprintf(line, sizeof(line), "    last C++ exception thrown: %s", last_cpp_exception);
+            append_log_line(line);
+        }
+        append_backtrace(ep);
+
         bool dumped = false;
         HANDLE file = CreateFileA(dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (file != INVALID_HANDLE_VALUE) {
@@ -193,22 +262,22 @@ namespace {
             info.ThreadId = GetCurrentThreadId();
             info.ExceptionPointers = ep;
             info.ClientPointers = FALSE;
-            dumped = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpWithDataSegs,
-                ep ? &info : nullptr, nullptr, nullptr) != FALSE;
+            // The crash log rides along as the dump's comment, readable with any minidump tool.
+            MINIDUMP_USER_STREAM comment{};
+            comment.Type = CommentStreamA;
+            comment.BufferSize = static_cast<ULONG>(report_len + 1);
+            comment.Buffer = report;
+            MINIDUMP_USER_STREAM_INFORMATION streams{};
+            streams.UserStreamCount = 1;
+            streams.UserStreamArray = &comment;
+            dumped = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
+                static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithIndirectlyReferencedMemory),
+                ep ? &info : nullptr, &streams, nullptr) != FALSE;
             CloseHandle(file);
         }
-
-        char line[1900];
-        std::snprintf(line, sizeof(line), "%s crash: %s at %s (code 0x%08lx), dump: %s", ts, reason, where,
-            ep && ep->ExceptionRecord ? static_cast<unsigned long>(ep->ExceptionRecord->ExceptionCode) : 0ul,
-            dumped ? dump_name : "not written");
-        append_log_line(line);
-        append_context();
-        if (last_cpp_exception[0] != '\0') {
-            std::snprintf(line, sizeof(line), "    last C++ exception thrown: %s", last_cpp_exception);
-            append_log_line(line);
+        if (!dumped) {
+            append_log_line("    (the dump could not be written)");
         }
-        append_backtrace();
         // The crash is recorded, so the marker no longer means "died silently".
         remove_marker();
     }
