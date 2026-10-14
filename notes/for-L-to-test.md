@@ -226,7 +226,6 @@
 - Look for: Does the camera turn smoothly at a speed you like? Does walking go where the camera faces? Does the camera go through walls? Does anything feel wrong when flying, swimming or in first person?
 - Status: waiting for L
 
-
 ## T24 Audio glitch sounds
 - Asked: 2026-10-13 19:21 UTC
 - Build: latest Windows CI build from main
@@ -518,6 +517,7 @@
 ## T52 Game Frame Rate (Original / 30 FPS / 60 FPS)
 - Asked: 2026-10-13 23:40 UTC
 - Build: latest Windows CI build from main
+- Commit: 6231d8b, 6736f06 (scene pacing fix)
 - Steps:
   1. Esc > Graphics: turn on Frame rate overlay
   2. Play somewhere busy at Game Frame Rate = Original and watch the "Game ... fps" line
@@ -528,6 +528,7 @@
 ## T53 Noclip
 - Asked: 2026-10-13 23:45 UTC
 - Build: latest Windows CI build from main
+- Commit: cb79700
 - XBLA history: report §4.75 (the XBLA version didn't clip and its D-pad didn't rise on your PC; this one is new and uses LT/RT as you asked)
 - Steps:
   1. Esc > Cheats: Enable cheats, then Noclip = On
@@ -540,6 +541,7 @@
 ## T54 Save Game Select smoothness
 - Asked: 2026-10-13 23:55 UTC
 - Build: latest Windows CI build from main
+- Commit: a9b1817, 5fd696e
 - Steps:
   1. Frame rate at your usual 170 fps
   2. Open the Save Game Select screen and watch the hand waving in picture 1, and the pictures
@@ -549,6 +551,7 @@
 ## T55 Split up anywhere
 - Asked: 2026-10-14 00:05 UTC
 - Build: latest Windows CI build from main
+- Commit: 065b633, 22ee63c
 - XBLA history: report §4.76
 - Steps:
   1. Esc > Cheats: Enable cheats, then Split up anywhere = On
@@ -563,6 +566,7 @@
 ## T56 Unlock everything
 - Asked: 2026-10-14 00:30 UTC
 - Build: latest Windows CI build from main
+- Commit: a6d5d1d
 - XBLA history: report §4.72 (you said the XBLA one was incomplete)
 - Steps:
   1. Load an early save (or a new game past the intro)
@@ -575,6 +579,7 @@
 ## T57 Music player
 - Asked: 2026-10-14 01:10 UTC
 - Build: latest Windows CI build from main
+- Commit: 098bb74
 - Steps:
   1. Load a save and stand anywhere, e.g. Spiral Mountain
   2. Esc > Sound > Music player: pick a song (Jolly's jukebox songs by name, then Track 0 to 159)
@@ -586,6 +591,7 @@
 ## T58 D-pad control scheme
 - Asked: 2026-10-14 01:30 UTC
 - Build: latest Windows CI build from main
+- Commit: 1bbfe86
 - XBLA history: report §4.60
 - Steps:
   1. Esc > General > Control scheme = D-pad
@@ -598,6 +604,7 @@
 ## T59 Speed-up key
 - Asked: 2026-10-14 01:45 UTC
 - Build: latest Windows CI build from main
+- Commit: af32c7a
 - XBLA history: report §4.21
 - Steps:
   1. Esc > Cheats: Enable cheats, Speed-up on, Speed-up factor 3
@@ -609,6 +616,7 @@
 ## T60 Photo mode (first part)
 - Asked: 2026-10-14 02:00 UTC
 - Build: latest Windows CI build from main
+- Commit: ce24995
 - XBLA history: report §4.82
 - Steps:
   1. In a level, press F10 (or your controller's Share button; you can bind another under Controls > Hotkeys > Photo Mode)
@@ -623,6 +631,7 @@
 ## T61 Bottles' Revenge (cut two-player mode)
 - Asked: 2026-10-14 01:10 UTC
 - Build: latest Windows CI build from main
+- Commit: accf3f7
 - XBLA history: report §4.77
 - Steps:
   1. Plug in two controllers. Load a save and go into any level
@@ -635,6 +644,7 @@
 ## T62 Photo mode crop and grid
 - Asked: 2026-10-14 01:15 UTC
 - Build: latest Windows CI build from main
+- Commit: d436740
 - XBLA history: report §4.82
 - Steps:
   1. In a level, press F10 for photo mode, then Esc > QOL
@@ -646,6 +656,7 @@
 ## T63 Save states
 - Asked: 2026-10-14 01:50 UTC
 - Build: latest Windows CI build from main
+- Commit: c433c88
 - XBLA history: report §4.14
 - Steps:
   1. In a level, press Insert. "State saved" shows
@@ -658,6 +669,7 @@
 ## T64 Mouse and gyro aiming
 - Asked: 2026-10-14 02:05 UTC
 - Build: latest Windows CI build from main
+- Commit: 8888075
 - XBLA history: report §4.58 and §4.59
 - Steps:
   1. Esc > General: set Mouse Sensitivity to about 25% (it is off at 0). Gyro Sensitivity is 25% already
@@ -670,6 +682,7 @@
 ## T65 Photo mode depth of field and tilt
 - Asked: 2026-10-14 02:15 UTC
 - Build: latest Windows CI build from main
+- Commit: 02a1f9a, ae1d780
 - Steps:
   1. Esc > QOL: set "Photo depth of field" to about 60
   2. In a level, press the Photo Mode key (F10)
@@ -682,6 +695,7 @@
 ## T66 Sharpening, contrast, saturation, vignette and film grain while playing
 - Asked: 2026-10-14 02:25 UTC
 - Build: latest Windows CI build from main
+- Commit: c0801d2
 - XBLA history: report §4.35 (sharpening, colour grading) and §4.36 (vignette, grain)
 - Steps:
   1. Esc > Graphics, scroll to the new rows: Sharpening, Contrast, Colour saturation, Vignette, Film grain
@@ -694,6 +708,7 @@
 ## T67 Ambient occlusion
 - Asked: 2026-10-14 02:45 UTC
 - Build: latest Windows CI build from main
+- Commit: 86f3937
 - XBLA history: report §4.35 (AO had band lines and a disk around Bottles' glow on XBLA)
 - Steps:
   1. Esc > Graphics: set "Ambient occlusion" to 100 to see it clearly
@@ -706,6 +721,7 @@
 ## T68 Fog
 - Asked: 2026-10-14 02:55 UTC
 - Build: latest Windows CI build from main
+- Commit: 3d5776b
 - XBLA history: report §4.35 (you asked for clear distance, colour and tint controls for fog)
 - Steps:
   1. Esc > Graphics: set "Fog" to 60. Try "Fog start distance" and "Fog colour" (Haze, Mist, Dusk, Gloom)
@@ -716,6 +732,7 @@
 ## T69 Toon outlines
 - Asked: 2026-10-14 03:00 UTC
 - Build: latest Windows CI build from main
+- Commit: 4f8b8d4
 - XBLA history: report §4.36
 - Steps:
   1. Esc > Graphics: set "Toon outlines" to 100
@@ -726,6 +743,7 @@
 ## T70 Beak Barge volume with the right stick (check only)
 - Asked: 2026-10-14 03:05 UTC
 - Build: latest Windows CI build from main
+- Commit: baeb352
 - XBLA history: report §4.66 (on XBLA the Beak Barge whoosh got quieter with the right stick held forward, not backward)
 - Steps:
   1. Do a Beak Barge (Z + B on the ground) a few times while holding the right stick forward, then backward, then not at all
@@ -735,6 +753,7 @@
 ## T71 Effects preset
 - Asked: 2026-10-14 03:15 UTC
 - Build: latest Windows CI build from main
+- Commit: f61ac36
 - XBLA history: report §4.42 (Original / Enhanced / Retro / Custom)
 - Steps:
   1. Esc > Graphics: set "Effects preset" to Enhanced. SMAA, Ambient occlusion and Sharpening rows should change in the menu at once
@@ -746,6 +765,7 @@
 ## T72 Bloom
 - Asked: 2026-10-14 03:30 UTC
 - Build: latest Windows CI build from main
+- Commit: a364434
 - XBLA history: report §4.36
 - Steps:
   1. Esc > Graphics: set "Bloom" to 60
@@ -757,6 +777,7 @@
 ## T73 Cutscene depth of field
 - Asked: 2026-10-14 05:25 UTC
 - Build: latest Windows CI build from main
+- Commit: aa21380
 - XBLA history: report §4.36 (letterboxed scenes only)
 - Steps:
   1. Esc > Graphics: set "Cutscene depth of field" to 70
@@ -767,15 +788,18 @@
 ## T74 Eye adaptation
 - Asked: 2026-10-14 05:30 UTC
 - Build: latest Windows CI build from main
+- Commit: a45ff11
 - XBLA history: report §4.37
 - Steps:
   1. Esc > Graphics: set "Eye adaptation" to 70
   2. Walk from Spiral Mountain into a dark place (Glitter Gulch Mine, a cave) and back out
 - Look for: Dark places brighten over about a second and bright ones settle. Does it pump or flicker? The HUD should stay as it is.
+- Status: waiting for L
 
 ## T75 Frame rate overlay: stutter, location, renderer, extras
 - Asked: 2026-10-14 05:28 UTC
 - Build: latest Windows CI build from main
+- Commit: 5bd3bbd
 - Steps:
   1. Esc > Graphics: turn on Frame rate overlay
   2. Walk around a level for a minute, then go through a door into another area
@@ -783,19 +807,10 @@
 - Look for: Does the map line change to the new area, and do Banjo's numbers change as he walks? Does the renderer line say D3D12 or Vulkan as you set it, with your monitor's refresh rate? Does the 1% low drop and the hitch count go up when the game stutters (loading an area, say)? Does the last line show Speed-up, cheats and the texture pack by name?
 - Status: waiting for L
 
-## T81 Rim light
-- Asked: 2026-10-14 05:37 UTC
-- Build: latest Windows CI build from main
-- XBLA history: report §4.36
-- Steps:
-  1. Esc > Graphics: set "Rim light" to 100, then try 50
-  2. Walk around Spiral Mountain and a level with dark backgrounds
-- Look for: A soft light along the edges of Banjo and nearby objects. Is it too strong, too thin, or does it shimmer when moving? Ground edges should not light up.
-- Status: waiting for L
-
 ## T76 Models stretching for a moment
 - Asked: 2026-10-14 05:55 UTC
 - Build: latest Windows CI build from main (after the "repeated parts" interpolation fix)
+- Commit: 7a025d1
 - Steps:
   1. Play at your usual frame rate above Original (170)
   2. Walk around the places where you saw meshes suddenly stretch, and the Cave of Horrors where the black artifacts were
@@ -805,16 +820,31 @@
 ## T77 Detailed nests and Mayahem Temple stairs (4.27)
 - Asked: 2026-10-14 05:45 UTC
 - Build: latest Windows CI build from main
+- Commit: b2f41b9, 98be7da
 - XBLA history: report §4.27
 - Steps:
   1. Esc > Graphics: Always High-Detail Models On
   2. In Mayahem Temple, walk far away from the temple stairs and from some nests, then turn the camera back to look at them
   3. Turn Always High-Detail Models Off and look again from the same spot
 - Look for: With it On, do the stairs and nests keep their detailed 3D look from far away (nests with twiggy rims and three eggs)? Headless check: the nests near the start of Mayahem Temple use the detailed model with it On and a plainer one with it Off; neither turns into a flat sprite. The stairs were not checked yet.
+- Status: waiting for L
+
+## T78 The two Windows builds and the three update scripts
+- Asked: 2026-10-14 05:50 UTC
+- Build: main, after this change
+- Commit: e49f23c, 3a25fe3
+- Steps:
+  1. Double-click update_and_build_any_pc_2008.bat. When it ends, open Release\Any 64-bit PC (2008 and up) and start the game there
+  2. Double-click update_and_build_newer_cpu_2013.bat. When it ends, open Release\Optimized for newer CPUs (2013 and up) and start the game there
+  3. Double-click update_and_build.bat (builds both)
+  4. Check that your saves and settings are in both new folders, and that the files in Release itself are still there
+- Look for: Does each script finish with a message that names the folder? Are your save and settings in both new folders? Is the second one faster, and does it start on your PC? Anything left in Release that vanished? I could only check the scripts for typos here; none of them has been run on Windows.
+- Status: waiting for L
 
 ## T79 Underwater tint
 - Asked: 2026-10-14 05:44 UTC
 - Build: latest Windows CI build from main
+- Commit: aabde0b, ac6613b
 - XBLA history: report §4.45 (your defaults: strength 0.25, haze 0.150)
 - Steps:
   1. Esc > Graphics: Underwater tint and Underwater haze are on by default (25 and 15)
@@ -822,19 +852,10 @@
 - Look for: The 3D turns light blue with a blue haze in the distance while under water, and goes back when you surface. Underwater distortion (default 30, added later) makes the distance wobble gently: too much or too little? Does it switch on and off at the right moments (for example with the camera above the water while Banjo is under)? The HUD should stay as it is.
 - Status: waiting for L
 
-## T78 The two Windows builds and the three update scripts
-- Asked: 2026-10-14 05:50 UTC
-- Build: main, after this change
-- Steps:
-  1. Double-click update_and_build_any_pc_2008.bat. When it ends, open Release\Any 64-bit PC (2008 and up) and start the game there
-  2. Double-click update_and_build_newer_cpu_2013.bat. When it ends, open Release\Optimized for newer CPUs (2013 and up) and start the game there
-  3. Double-click update_and_build.bat (builds both)
-  4. Check that your saves and settings are in both new folders, and that the files in Release itself are still there
-- Look for: Does each script finish with a message that names the folder? Are your save and settings in both new folders? Is the second one faster, and does it start on your PC? Anything left in Release that vanished? I could only check the scripts for typos here; none of them has been run on Windows.
-
 ## T80 F6 effect views and F8 compare
 - Asked: 2026-10-14 05:55 UTC
 - Build: latest Windows CI build from main
+- Commit: c5a21ee
 - XBLA history: report §4.43
 - Steps:
   1. Turn on a few effects in Esc > Graphics (for example Effects preset Enhanced, plus Fog and Bloom)
@@ -843,9 +864,21 @@
 - Look for: The split line sits in the middle and the right half matches the game with the effects off. The views change on each F6 press with a toast naming them.
 - Status: waiting for L
 
+## T81 Rim light
+- Asked: 2026-10-14 05:37 UTC
+- Build: latest Windows CI build from main
+- Commit: 38942a7
+- XBLA history: report §4.36
+- Steps:
+  1. Esc > Graphics: set "Rim light" to 100, then try 50
+  2. Walk around Spiral Mountain and a level with dark backgrounds
+- Look for: A soft light along the edges of Banjo and nearby objects. Is it too strong, too thin, or does it shimmer when moving? Ground edges should not light up.
+- Status: waiting for L
+
 ## T82 Heat haze
 - Asked: 2026-10-14 05:57 UTC
 - Build: latest Windows CI build from main
+- Commit: 160c285
 - XBLA history: report §4.45
 - Steps:
   1. Esc > Graphics: set "Heat haze" to 50, then try 100
@@ -856,6 +889,7 @@
 ## T83 Achievements
 - Asked: 2026-10-14 06:05 UTC
 - Build: latest Windows CI build from main
+- Commit: 8694d99, df684cf, 009573c, 965eb06
 - XBLA history: report §4.85
 - Steps:
   1. Turn cheats off (Cheats tab master switch), then restart the game
@@ -867,6 +901,7 @@
 ## T84 Frame rate overlay: Compact, Full, F3, audio, graph
 - Asked: 2026-10-14 05:54 UTC
 - Build: latest Windows CI build from main
+- Commit: 435fe16
 - Steps:
   1. Esc > Graphics: set Frame rate overlay to Compact, then Full (it starts Off again: the setting was renamed)
   2. Close the menu and press F3 a few times while you play
@@ -877,6 +912,7 @@
 ## T85 Photo mode panel
 - Asked: 2026-10-14 06:30 UTC
 - Build: latest Windows CI build from main
+- Commit: d3fdb80
 - XBLA history: report §4.82 (the D-pad list)
 - Steps:
   1. Press F10 (or Share) for photo mode: a list appears at the top left
@@ -888,6 +924,7 @@
 ## T86 Hold B to run
 - Asked: 2026-10-14 06:45 UTC
 - Build: latest Windows CI build from main
+- Commit: f4a8154, 64a95d0
 - Steps:
   1. As Banjo-Kazooie, run with the stick fully pushed, then hold B (X on an Xbox pad, Left Shift on the keyboard): he should run about half again as fast, with no roll
   2. Let go of B: he drops back to the normal run. Tap B while running: he still rolls
@@ -900,6 +937,7 @@
 ## T87 HD Shadows (player)
 - Asked: 2026-10-14 06:45 UTC
 - Build: latest Windows CI build from main
+- Commit: aa2351d
 - XBLA history: report §4.51
 - Steps:
   1. Esc > Graphics: HD Shadows On
@@ -911,14 +949,17 @@
 ## T88 Water reflections
 - Asked: 2026-10-14 06:46 UTC
 - Build: latest Windows CI build from main
+- Commit: eeadba0
 - XBLA history: report §4.45 (XBLA's reflections didn't work on your PC)
 - Steps:
   1. Esc > Graphics: set "Water reflections" to 60, then 100
   2. Look at water from different heights: the Spiral Mountain pool, Jolly Roger's Lagoon, the Glitter Gulch Mine water, and any lake
   3. Press F6 until "Effect view: water": red is what counts as water, yellow is where it reflects
 - Look for: Banjo and the scenery mirrored in the water, with gentle ripples. Is anything that isn't water lighting up red or yellow (shadows, glass, smoke)? Any flicker at the screen edges? Frame rate fine?
+- Status: waiting for L
 
 ## T89 Vulkan is the default Graphics API
+- Commit: 3516154
 - Do: Close the game, move graphics.json out of the game's folder (or delete it), start the game, press F3 until the overlay is in Full mode.
 - Look for: the renderer line says Vulkan. In Settings > Graphics the Graphics API row shows Vulkan, and the choices are Vulkan and D3D12 (no Auto).
 - Note: your saved graphics.json has Auto, which is not migrated. Open the Graphics API row and pick Vulkan once.
@@ -927,6 +968,7 @@
 ## T90 Bounce light
 - Asked: 2026-10-14 06:52 UTC
 - Build: latest Windows CI build from main
+- Commit: f319872
 - XBLA history: report §4.35 (GI)
 - Steps:
   1. Esc > Graphics: set "Bounce light" to 50, then 100
@@ -937,6 +979,7 @@
 ## T91 Texture upscaling
 - Asked: 2026-10-14 07:10 UTC
 - Build: latest Windows CI build from main
+- Commit: 36bb76a
 - XBLA history: report §4.50
 - Steps:
   1. Esc > Graphics: set "Texture upscaling" to 2x, then 4x, then Off, while in a level
@@ -947,6 +990,7 @@
 ## T92 FXAA and FXAA Extreme
 - Asked: 2026-10-14 07:15 UTC
 - Build: your own build from main (CI isn't running)
+- Commit: 61bd0ba
 - XBLA history: report §4.34
 - Steps:
   1. Esc > Graphics: set "FXAA Anti-Aliasing" to FXAA, then Extreme, then Off. It changes at once.

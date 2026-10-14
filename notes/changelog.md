@@ -3,6 +3,65 @@
 What landed on main, newest first. Only changes you can see or use are listed;
 regenerated code, CI, notes and tooling are left out.
 
+## Since 2026-10-13 23:00 UTC (L away)
+
+Every item below is untested on a real PC unless L's test list says otherwise
+(see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
+
+### Graphics
+
+- Game Frame Rate (Original, 30 FPS, 60 FPS) holds the game's own update rate; attract demos keep their pacing (6231d8b, 6736f06). Untested on PC (T52).
+- Save Game Select: the waving hand is blended above Original, pictures keep their quick shake (a9b1817, 5fd696e). Untested on PC (T54).
+- Frame rate overlay: 1% low, hitches, map and Banjo's position, renderer, speed-up/cheats/mods (5bd3bbd); Off, Compact and Full with F3 (435fe16). Untested on PC (T75, T84).
+- Interpolation: repeated model parts paired with last frame's nearest (7a025d1, fc5fb28); swapped bone keeps its id (ac39168, e075788). Untested on PC (T76).
+- Effects: sharpening, contrast, saturation, vignette, film grain (c0801d2); ambient occlusion under the HUD (86f3937); fog with start distance and colour (3d5776b); toon outlines (4f8b8d4); effects preset Original/Enhanced/Retro (f61ac36); bloom under the HUD (a364434); depth of field in letterboxed cutscenes (aa21380); eye adaptation (a45ff11); rim light (38942a7); heat haze by lava (160c285); underwater tint and distortion (ac6613b, aabde0b); water reflections (eeadba0); bounce light (f319872). Untested on PC (T66–T69, T71–T74, T79, T81, T82, T88, T90).
+- Photo mode: orbit and zoom (3ef2fb1), camera collision (24d1721), hide Banjo (758ef8e), filters (1740a93), crop and rule-of-thirds grid (d436740), depth of field and tilt (02a1f9a, ae1d780), panel (d3fdb80). Untested on PC (T60, T62, T65, T85).
+- F6 effect views and F8 compare (c5a21ee). Untested on PC (T80).
+- FXAA and FXAA Extreme (61bd0ba). Untested on PC (T92).
+- Texture upscaling, live 2x/4x (36bb76a). Untested on PC (T91).
+- HD Shadows for the player (aa2351d). Untested on PC (T87).
+- Always High-Detail Models keeps Banjo's close-up necklace model (b2f41b9). Untested on PC (T77).
+- Graphics API: Vulkan is the default and Auto is removed (3516154). Untested on PC (T89).
+- Glittering honeycombs sparkle on the comb (e482297). Untested on PC.
+
+### Controls
+
+- Split up anywhere: D-pad left plays Banjo, right plays Kazooie (065b633, 22ee63c). Untested on PC (T55).
+- D-pad control scheme in General (1bbfe86). Untested on PC (T58).
+- Mouse and gyro aiming in first person (8888075). Untested on PC (T64).
+- Hold B to run, with a faster run animation (f4a8154, 64a95d0). Untested on PC (T86).
+- Speed-up key test notes and 4.21 marked done (af32c7a). Untested on PC (T59).
+
+### Audio
+
+- Music player in the Sound tab (098bb74). Untested on PC (T57).
+- Back-Port: Get Jiggy animation, off by default (0c63fd2). Untested on PC.
+- Old Banjo sounds (4.64 marked done, da43b51). Untested on PC.
+
+### Cheats
+
+- Noclip (cb79700). Untested on PC (T53).
+- Unlock everything (a6d5d1d). Untested on PC (T56).
+- Cheato effects written up from fan wiki pages (7e1ab37), shown in the cheat menu (d9ada2c), and moved to their own Cheato tab (b64fd23). Effects are not checked in this port.
+- Cut Content: Bottles' Revenge, the cut two-player mode (accf3f7). Untested on PC (T61).
+- Save states (c433c88). Untested on PC (T63).
+- Split up anywhere, as above.
+
+### Achievements
+
+- The Xbox Live Arcade twelve, with pop-ups and an Achievements tab (8694d99). Untested on PC (T83).
+- Treasure Hunt, one of each collectible (df684cf). Untested on PC (T83).
+- Shoot Em Up!, 20 targets in the shooting games (009573c). Untested on PC (T83).
+- All Beaten Up and Calamari Bonanza counters (965eb06). Untested on PC (T83).
+
+### Tools and build
+
+- Two Windows builds: Any 64-bit PC (2008 and up) and Optimized for newer CPUs (2013 and up), with three update scripts (e49f23c, 3a25fe3). Untested on PC (T78).
+- Turn ThinLTO on for optimised builds (5eac701). Untested on PC.
+- Warp tab: Down goes down and Right goes right (b5550b0). Untested on PC.
+- F7 skips first moves in the interpolation check (e075788). Untested on PC.
+- Headless TOOIE_SET script changes Graphics options live (5fd696e). For testing only.
+
 ## 2026-10-14
 
 - Graphics: FXAA Anti-Aliasing (FXAA or Extreme), the Xbox Live Arcade version's quick edge smoothing; it works with MSAA and SMAA.
