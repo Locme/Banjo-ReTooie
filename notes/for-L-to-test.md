@@ -1536,7 +1536,7 @@
 
 ## T145 Manual interpolation tags: pick a model with F11, tag it with F4
 - Asked: 2026-10-14 22:14 UTC
-- Build: main @ next push
+- Build: main @ db5eb54
 - Steps:
   1. Above Original frame rate, stand near a model (the CCL sky dome, a character) and press F11: it turns green and a toast names it; F11 again steps to the next model on screen
   2. Press F4: the toast says the model's new tag (snap, vertex, untagged, back to default) and the game writes interp_tags.txt next to the save files
