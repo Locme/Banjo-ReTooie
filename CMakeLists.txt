@@ -258,6 +258,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/fine_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp
     ${CMAKE_SOURCE_DIR}/src/display/smaa.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/fxaa.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp

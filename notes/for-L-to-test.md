@@ -943,3 +943,13 @@
   2. Look at grass, rock walls, signs and the level title text up close
 - Look for: Textures look sharper with smoother lines and edges, and switch at once. Any texture that looks wrong (seams at tile edges, odd colours on see-through edges), any stutter when entering a new area at 4x?
 - Status: waiting for L
+
+## T92 FXAA and FXAA Extreme
+- Asked: 2026-10-14 07:15 UTC
+- Build: your own build from main (CI isn't running)
+- XBLA history: report §4.34
+- Steps:
+  1. Esc > Graphics: set "FXAA Anti-Aliasing" to FXAA, then Extreme, then Off. It changes at once.
+  2. Look at slanted edges, like the warp pad's rim, fences and Banjo's outline. Try it with MSAA off too.
+- Look for: Jagged stair-steps on slanted edges get smoother with FXAA, and a bit more with Extreme. Is Extreme too blurry on text and the HUD? Does it cost frame rate?
+- Status: waiting for L

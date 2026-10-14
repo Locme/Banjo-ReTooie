@@ -31,6 +31,7 @@
 #include "tooie_smaa.h"
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
+#include "tooie_fxaa.h"
 
 namespace {
     void show_wip_tab() {
@@ -319,6 +320,7 @@ void tooie::init_config() {
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
     tooie::smaa::add_option(graphics);
+    tooie::fxaa::add_option(graphics);
 
     recompui::config::create_controls_tab();
     tooie::music_player::add_options(recompui::config::create_sound_tab());
@@ -341,4 +343,5 @@ void tooie::init_config() {
     move_saved_discord_option();
     tooie::picture_filters::apply();
     tooie::smaa::apply();
+    tooie::fxaa::apply();
 }
