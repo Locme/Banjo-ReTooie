@@ -391,6 +391,57 @@ namespace {
     // Above this many drawings now times last frame's, they keep draw order.
     constexpr size_t repeat_pairs_max = 16384;
 
+    // Pairs things drawn this frame with last frame's (copies of a model,
+    // drawings of a repeated list): the closest pairs first, each used once,
+    // none further apart than `limit`. When three or more pair up, one that
+    // moved over four times as far as the median (and over `close`) took a
+    // vanished neighbour's place rather than moving, so it is left unpaired.
+    // Returns, for each of now, the index into last or -1.
+    template <typename Now, typename Last>
+    std::vector<int> pair_nearest(const std::vector<Now>& now, const std::vector<Last>& last,
+                                  const float* (*now_pos)(const Now&), const float* (*last_pos)(const Last&),
+                                  float limit, float close) {
+        std::vector<int> result(now.size(), -1);
+        if (now.empty() || last.empty()) {
+            return result;
+        }
+        std::vector<std::tuple<float, size_t, size_t>> pairs;
+        pairs.reserve(now.size() * last.size());
+        for (size_t i = 0; i < now.size(); i++) {
+            const float* a = now_pos(now[i]);
+            for (size_t j = 0; j < last.size(); j++) {
+                const float* b = last_pos(last[j]);
+                float d = 0.0f;
+                for (int k = 0; k < 3; k++) {
+                    d += (a[k] - b[k]) * (a[k] - b[k]);
+                }
+                if (d <= limit * limit) {
+                    pairs.emplace_back(d, i, j);
+                }
+            }
+        }
+        std::sort(pairs.begin(), pairs.end());
+        std::vector<bool> last_taken(last.size(), false);
+        std::vector<std::tuple<float, size_t, size_t>> chosen;
+        for (const auto& [d, i, j] : pairs) {
+            if (result[i] < 0 && !last_taken[j]) {
+                result[i] = (int)j;
+                last_taken[j] = true;
+                chosen.emplace_back(d, i, j);
+            }
+        }
+        if (chosen.size() >= 3) {
+            float median = std::get<0>(chosen[chosen.size() / 2]);
+            float gate = std::max(close * close, 16.0f * median);
+            for (const auto& [d, i, j] : chosen) {
+                if (d > gate) {
+                    result[i] = -1;
+                }
+            }
+        }
+        return result;
+    }
+
     bool interpolation_on() {
         static const bool disabled = std::getenv("TOOIE_NO_MODEL_TAGS") != nullptr;
         return !disabled && ultramodern::renderer::get_graphics_config().rr_option != ultramodern::renderer::RefreshRate::Original;
@@ -526,45 +577,37 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         stat_cuts++;
     }
 
-    // Pass 2: match each copy of a model to last frame's nearest copy.
+    // Pass 2: match each copy of a model to last frame's nearest copy, the
+    // closest pairs first (in draw order, an early copy could take a later
+    // one's match). Any copy may move alone (a note being collected), so
+    // none is left unpaired for moving more than the rest.
     std::unordered_map<uint32_t, std::vector<Copy>> now;
-    std::unordered_map<uint32_t, std::vector<bool>> taken;
-    for (Block& block : blocks) {
-        if (block.model == 0 || block.matrices == 0) {
-            continue;
-        }
-        auto& last = previous[block.model];
-        auto& used = taken[block.model];
-        used.resize(last.size(), false);
-        int best = -1;
-        float best_distance = teleport_distance * teleport_distance;
-        for (size_t i = 0; i < last.size() && !cut; i++) {
-            if (used[i]) {
-                continue;
-            }
-            float d = 0.0f;
-            for (int k = 0; k < 3; k++) {
-                float diff = last[i].pos[k] - block.pos[k];
-                d += diff * diff;
-            }
-            if (d < best_distance) {
-                best_distance = d;
-                best = (int)i;
+    {
+        std::unordered_map<uint32_t, std::vector<Block*>> by_model;
+        for (Block& block : blocks) {
+            if (block.model != 0 && block.matrices != 0) {
+                by_model[block.model].push_back(&block);
             }
         }
-        if (best >= 0) {
-            used[best] = true;
-            block.instance = last[best].instance;
+        for (auto& [model, copies] : by_model) {
+            static const std::vector<Copy> none;
+            auto found = previous.find(model);
+            const std::vector<Copy>& last = cut || found == previous.end() ? none : found->second;
+            std::vector<int> match = pair_nearest<Block*, Copy>(copies, last,
+                [](Block* const& block) -> const float* { return block->pos; },
+                [](const Copy& copy) -> const float* { return copy.pos; },
+                teleport_distance, teleport_distance);
+            for (size_t i = 0; i < copies.size(); i++) {
+                Block& block = *copies[i];
+                block.instance = match[i] >= 0 ? last[match[i]].instance : next_instance++;
+                Copy copy;
+                copy.pos[0] = block.pos[0];
+                copy.pos[1] = block.pos[1];
+                copy.pos[2] = block.pos[2];
+                copy.instance = block.instance;
+                now[model].push_back(copy);
+            }
         }
-        else {
-            block.instance = next_instance++;
-        }
-        Copy copy;
-        copy.pos[0] = block.pos[0];
-        copy.pos[1] = block.pos[1];
-        copy.pos[2] = block.pos[2];
-        copy.instance = block.instance;
-        now[block.model].push_back(copy);
     }
     // The 2D has no models of its own; keep the scene's for next frame.
     if (!overlay) {
@@ -919,50 +962,17 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     done[i] = true;
                 }
             }
-            else if (!last.empty()) {
-                // Closest pairs first, each drawing and each of last frame's
-                // used once. A drawing far from all of last frame's is a new
-                // one (another left out, this one put in) and is not paired.
-                std::vector<std::tuple<float, size_t, size_t>> pairs;
+            else {
+                std::vector<int> match = pair_nearest<std::pair<size_t, Drawing>, Drawing>(list, last,
+                    [](const std::pair<size_t, Drawing>& d) -> const float* { return d.second.pos; },
+                    [](const Drawing& d) -> const float* { return d.pos; },
+                    repeat_distance, repeat_close);
                 for (size_t i = 0; i < list.size(); i++) {
-                    for (size_t j = 0; j < last.size(); j++) {
-                        float d = 0.0f;
-                        for (int k = 0; k < 3; k++) {
-                            float e = list[i].second.pos[k] - last[j].pos[k];
-                            d += e * e;
-                        }
-                        pairs.emplace_back(d, i, j);
+                    if (match[i] >= 0) {
+                        list[i].second.slot = last[match[i]].slot;
+                        use(list[i].second.slot);
+                        done[i] = true;
                     }
-                }
-                std::sort(pairs.begin(), pairs.end());
-                std::vector<bool> last_taken(last.size(), false);
-                std::vector<std::tuple<float, size_t, size_t>> chosen;
-                for (const auto& [d, i, j] : pairs) {
-                    if (d > repeat_distance * repeat_distance) {
-                        break;
-                    }
-                    if (done[i] || last_taken[j]) {
-                        continue;
-                    }
-                    done[i] = true;
-                    last_taken[j] = true;
-                    chosen.emplace_back(d, i, j);
-                }
-                // Many drawings close together (a swarm, a row of plants)
-                // move about alike; one that moved far more than the rest
-                // took a neighbour's place, so it is drawn as new instead.
-                float gate = repeat_distance * repeat_distance;
-                if (chosen.size() >= 3) {
-                    float median = std::get<0>(chosen[chosen.size() / 2]);
-                    gate = std::min(gate, std::max(repeat_close * repeat_close, 16.0f * median));
-                }
-                for (const auto& [d, i, j] : chosen) {
-                    if (d > gate) {
-                        done[i] = false;
-                        continue;
-                    }
-                    list[i].second.slot = last[j].slot;
-                    use(last[j].slot);
                 }
             }
             // New drawings take numbers no drawing had last frame either, so
