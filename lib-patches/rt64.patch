@@ -3788,10 +3788,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..3f355a8
+index 0000000..c0d9417
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,726 @@
+@@ -0,0 +1,737 @@
 +//
 +// RT64
 +//
@@ -3922,22 +3922,27 @@ index 0000000..3f355a8
 +// Bounce light: the colour of nearby surfaces facing this one, gathered like the ambient occlusion over
 +// a wider radius: their average colour, as much of it as there is around (a corner gets more than an open
 +// floor), so colourful walls and floors light what is next to them.
++// Every pixel uses the same sample pattern, and each sample reads the colour blurred over a small square:
++// a pattern turned per pixel (as the ambient occlusion does) read single texels of the grass and fur a
++// different way at each pixel, which showed as a fine dotted noise all over at high resolutions.
 +float3 BounceLight(int2 pixel, float depth) {
 +    const float3 center = ViewPosition(pixel, depth);
 +    const float3 normal = ViewNormal(pixel, center);
 +    const float radius = gConstants.ambientOcclusion.y * 1.5f;
 +    const float distance = max(-center.z, 1.0f);
 +    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 3.0f, gConstants.projection.w * 0.07f);
-+    const uint2 cell = uint2(pixel) & 3u;
-+    const float rotation = float((cell.x * 4u + cell.y) * 7u % 16u) * (6.2831853f / 16.0f);
++    const float2 size = gConstants.projection.zw;
++    // Half the side of the square each sample's colour is averaged over (four bilinear reads).
++    const float spread = max(1.0f, radiusPixels * 0.12f);
 +
-+    const int samples = 8;
++    const int samples = 12;
 +    float3 light = 0.0f;
 +    float weight = 0.0f;
 +    [loop] for (int i = 0; i < samples; i++) {
 +        const float t = (float(i) + 0.5f) / float(samples);
-+        const float angle = float(i) * 2.39996323f + rotation + 1.0f;
-+        const int2 samplePixel = clamp(pixel + int2(round(float2(cos(angle), sin(angle)) * sqrt(t) * radiusPixels)), int2(0, 0), int2(gConstants.projection.zw) - 1);
++        const float angle = float(i) * 2.39996323f + 1.0f;
++        const float2 at = clamp(float2(pixel) + float2(cos(angle), sin(angle)) * sqrt(t) * radiusPixels, float2(0.0f, 0.0f), size - 1.0f);
++        const int2 samplePixel = int2(round(at));
 +        const float sampleDepth = LoadDepth(samplePixel);
 +        if (sampleDepth >= 0.99999f) {
 +            continue;
@@ -3946,7 +3951,13 @@ index 0000000..3f355a8
 +        const float lengthSquared = dot(v, v);
 +        const float facing = saturate(dot(normal, v) * rsqrt(max(lengthSquared, 1e-4f)));
 +        const float w = facing * saturate(1.0f - lengthSquared / (radius * radius));
-+        light += gColor.Load(int3(samplePixel, 0)).rgb * w;
++        const float2 uv = (at + 0.5f) / size;
++        const float2 d = spread / size;
++        const float3 colour = 0.25f * (gColor.SampleLevel(LinearSampler, uv + float2(-d.x, -d.y), 0).rgb +
++            gColor.SampleLevel(LinearSampler, uv + float2(d.x, -d.y), 0).rgb +
++            gColor.SampleLevel(LinearSampler, uv + float2(-d.x, d.y), 0).rgb +
++            gColor.SampleLevel(LinearSampler, uv + float2(d.x, d.y), 0).rgb);
++        light += colour * w;
 +        weight += w;
 +    }
 +    if (weight <= 1e-3f) {
