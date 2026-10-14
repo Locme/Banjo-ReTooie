@@ -475,10 +475,19 @@ index e08b02c..31d30f4 100644
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
-index 2970e71..a04074b 100644
+index 2970e71..bc9b04b 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
-@@ -820,7 +820,7 @@ namespace RT64 {
+@@ -4,6 +4,8 @@
+ 
+ #include "rt64_state.h"
+ 
++#include "render/rt64_scene_effects.h"
++
+ #include <cassert>
+ #include <cinttypes>
+ 
+@@ -820,7 +822,7 @@ namespace RT64 {
          const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
          const bool renderToRDRAM = extendedRenderToRAMSet ? (extended.renderToRAM != 0) : ext.emulatorConfig->framebuffer.renderToRAM;
          const bool warningsEnabled = ext.userConfig->developerMode;
@@ -487,7 +496,17 @@ index 2970e71..a04074b 100644
          const size_t callTileCount = workload.drawData.callTiles.size();
          for (size_t t = 0; t < callTileCount; t++) {
              DrawCallTile &callTile = workload.drawData.callTiles[t];
-@@ -2666,6 +2666,7 @@ namespace RT64 {
+@@ -1822,6 +1824,9 @@ namespace RT64 {
+         // Reset the next workload.
+         workloadCursor = ext.workloadQueue->writeCursor;
+         Workload &nextWorkload = ext.workloadQueue->workloads[workloadCursor];
++        if (workloadCounter > 0) {
++            NoteSceneWorkloadSubmitted(workloadCounter - 1);
++        }
+         nextWorkload.begin(workloadCounter++);
+ 
+         // Indicate on the framebuffer manager that all tile copies are free to be used again.
+@@ -2666,6 +2671,7 @@ namespace RT64 {
          present.presentId = ++presentId;
          present.workloadId = workloadId;
          present.paused = paused;
@@ -635,7 +654,7 @@ index 69a82ac..56ed4a1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a99c095 100644
+index 9fae0d4..f6c11ab 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -710,7 +729,7 @@ index 9fae0d4..a99c095 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1297,6 +1334,36 @@ namespace RT64 {
+@@ -1297,6 +1334,37 @@ namespace RT64 {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
                  submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
@@ -740,6 +759,7 @@ index 9fae0d4..a99c095 100644
 +                                effectsProjection.m[r][0] *= widthScale;
 +                            }
 +                        }
++                        SetSceneEffectsWorkload(targetDrawCall.submissionFrame);
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsData->viewTransforms[effectsIndex], shaderLibrary);
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -747,13 +767,14 @@ index 9fae0d4..a99c095 100644
              }
          }
      }
-@@ -1408,6 +1475,14 @@ namespace RT64 {
+@@ -1408,6 +1476,15 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
++        targetDrawCall.submissionFrame = p.submissionFrame;
 +        // The 3D world is open from its first perspective projection to the next projection that isn't one; it
 +        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
 +        // his 2D glow), so the effects go after the last of them, not before the HUD's 3D models.
@@ -762,7 +783,7 @@ index 9fae0d4..a99c095 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1531,29 @@ namespace RT64 {
+@@ -1456,6 +1533,29 @@ namespace RT64 {
                  continue;
              }
  
@@ -792,7 +813,7 @@ index 9fae0d4..a99c095 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1845,18 @@ namespace RT64 {
+@@ -1747,6 +1847,18 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -811,7 +832,7 @@ index 9fae0d4..a99c095 100644
                  }
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1868,26 @@ namespace RT64 {
+@@ -1758,6 +1870,26 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -839,10 +860,10 @@ index 9fae0d4..a99c095 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..87c4eab 100644
+index 3add9c3..851949a 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,16 @@ namespace RT64 {
+@@ -48,6 +48,18 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -856,10 +877,12 @@ index 3add9c3..87c4eab 100644
 +        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
 +        // scene effects' water mask.
 +        std::vector<uint32_t> waterInstances;
++        // The workload these draws come from.
++        uint64_t submissionFrame = 0;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -165,6 +175,7 @@ namespace RT64 {
+@@ -165,6 +177,7 @@ namespace RT64 {
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
          void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
@@ -1378,10 +1401,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..10bfd1b
+index 0000000..5ddf6dd
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,680 @@
+@@ -0,0 +1,742 @@
 +//
 +// RT64
 +//
@@ -1636,11 +1659,70 @@ index 0000000..10bfd1b
 +        return true;
 +    }
 +
++    namespace {
++        // Banjo and his ripples as of each handed-over frame (the game sets them once a frame, before its
++        // update, so they are what its last handed-over frame drew).
++        struct PlayerFrame {
++            uint64_t workload = 0;
++            bool used = false;
++            float player[3] = {};
++            float rippleX[3] = {}, rippleZ[3] = {}, rippleAge[3] = {};
++        };
++        PlayerFrame playerFrames[16];
++        uint32_t playerFrameNext = 0;
++        std::atomic<uint64_t> lastSubmittedWorkload{ 0 };
++        std::atomic<bool> anySubmittedWorkload{ false };
++        thread_local uint64_t effectsWorkload = 0;
++        thread_local bool effectsWorkloadKnown = false;
++    }
++
 +    void SetScenePlayer(bool valid, float x, float y, float z) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.player[0] = x;
 +        effectsSettings.player[1] = valid ? y : -1e9f;
 +        effectsSettings.player[2] = z;
++        if (anySubmittedWorkload) {
++            PlayerFrame &frame = playerFrames[playerFrameNext];
++            playerFrameNext = (playerFrameNext + 1) % std::size(playerFrames);
++            frame.workload = lastSubmittedWorkload;
++            frame.used = true;
++            for (int i = 0; i < 3; i++) {
++                frame.player[i] = effectsSettings.player[i];
++                frame.rippleX[i] = effectsSettings.rippleX[i];
++                frame.rippleZ[i] = effectsSettings.rippleZ[i];
++                frame.rippleAge[i] = effectsSettings.rippleAge[i];
++            }
++        }
++    }
++
++    void NoteSceneWorkloadSubmitted(uint64_t workloadId) {
++        lastSubmittedWorkload = workloadId;
++        anySubmittedWorkload = true;
++    }
++
++    void SetSceneEffectsWorkload(uint64_t workloadId) {
++        effectsWorkload = workloadId;
++        effectsWorkloadKnown = true;
++    }
++
++    // Banjo and his ripples as the given workload drew them: the newest kept for it or an earlier one.
++    static void UsePlayerFrame(SceneEffectsSettings &settings, uint64_t workloadId) {
++        const std::scoped_lock lock(effectsMutex);
++        const PlayerFrame *best = nullptr;
++        for (const PlayerFrame &frame : playerFrames) {
++            if (frame.used && (frame.workload <= workloadId) && ((best == nullptr) || (frame.workload >= best->workload))) {
++                best = &frame;
++            }
++        }
++        if (best == nullptr) {
++            return;
++        }
++        for (int i = 0; i < 3; i++) {
++            settings.player[i] = best->player[i];
++            settings.rippleX[i] = best->rippleX[i];
++            settings.rippleZ[i] = best->rippleZ[i];
++            settings.rippleAge[i] = best->rippleAge[i];
++        }
 +    }
 +
 +    void SetSceneLightShafts(float strength) {
@@ -1718,7 +1800,10 @@ index 0000000..10bfd1b
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary)
 +    {
-+        const SceneEffectsSettings settings = GetSceneEffects();
++        SceneEffectsSettings settings = GetSceneEffects();
++        if (effectsWorkloadKnown) {
++            UsePlayerFrame(settings, effectsWorkload);
++        }
 +
 +        // The game's matrices are row-vector (clip = v * M), so w = -z comes from m[2][3]; take the
 +        // transposed terms if the matrix is the other way round.
@@ -2064,10 +2149,10 @@ index 0000000..10bfd1b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2c3a4fe
+index 0000000..c999b2f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,115 @@
 +//
 +// RT64
 +//
@@ -2158,6 +2243,11 @@ index 0000000..2c3a4fe
 +    bool GetSceneCameraHeight(float *height);
 +    // Banjo-Tooie: Banjo's world position, which the fog is measured from (valid false: from the camera).
 +    void SetScenePlayer(bool valid, float x, float y, float z);
++    // The game frames: the id of each workload as the game hands it over, and the workload whose effects are
++    // being recorded next. Banjo and his ripples are kept for each handed-over frame, so the effects use the
++    // ones the drawn frame had, not the game's newest (it can run frames ahead of what is drawn).
++    void NoteSceneWorkloadSubmitted(uint64_t workloadId);
++    void SetSceneEffectsWorkload(uint64_t workloadId);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
@@ -3599,10 +3689,10 @@ index e7895c3..257dd95 100644
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f251243
+index 0000000..9f51442
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,657 @@
+@@ -0,0 +1,723 @@
 +//
 +// RT64
 +//
@@ -3669,8 +3759,9 @@ index 0000000..f251243
 +// The view-space position at a pixel (the camera looks along -z).
 +float3 ViewPosition(int2 pixel, float depth) {
 +    const float4 t = gConstants.depthTerms;
-+    // RT64 keeps the projected z itself as the depth (flat surfaces stay flat this way).
-+    const float ndcZ = depth;
++    // The game's projections give z / w in [-1, 1] and RT64 keeps it halved and moved into [0, 1] as the depth
++    // (flat surfaces stay flat this way). Reading the depth as z / w itself put everything about twice as far.
++    const float ndcZ = depth * 2.0f - 1.0f;
 +    const float z = (t.y - ndcZ * t.w) / (ndcZ * t.z - t.x);
 +    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
 +    return float3(ndc.x * -z / gConstants.projection.x, ndc.y * -z / gConstants.projection.y, z);
@@ -3847,33 +3938,96 @@ index 0000000..f251243
 +    return slope;
 +}
 +
-+// Ripples from Banjo: up to three rings spreading from where he moved in the water, fading as they grow.
-+float2 RippleSlope(float2 p, float footprint) {
++// Banjo in the water: up to three rings spreading from where he moved or splashed in, a wake trailing behind
++// him as he swims, and a small ring bobbing round him, with a little foam where he cuts the water. Only on
++// water near his height (rippleX/Z/Age.w are his position), so he must be standing, wading or swimming in it.
++// A ring's age carries 4 more for a splash: bigger, faster and longer lasting.
++float2 RippleSlope(float2 p, float waterY, float footprint, out float foam) {
 +    float2 slope = 0.0f;
-+    const float wavelength = 38.0f;
-+    const float k = 6.2831853f / wavelength;
-+    const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
++    foam = 0.0f;
++    const float banjoY = gConstants.rippleAge.w;
++    if ((banjoY < -1e8f) || (waterY < banjoY - 40.0f) || (waterY > banjoY + 150.0f)) {
++        return slope;
++    }
++    const float t = gConstants.ambientOcclusion.z;
++    const float2 banjo = float2(gConstants.rippleX.w, gConstants.rippleZ.w);
++    float newest = 1e9f;
++    float2 newestAt = banjo;
 +    [unroll] for (int i = 0; i < 3; i++) {
-+        const float age = gConstants.rippleAge[i];
-+        if (age < 0.0f || age > 2.5f) {
++        const float packed = gConstants.rippleAge[i];
++        if (packed < 0.0f) {
 +            continue;
 +        }
-+        const float2 away = p - float2(gConstants.rippleX[i], gConstants.rippleZ[i]);
++        const bool splash = packed >= 4.0f;
++        const float age = splash ? packed - 4.0f : packed;
++        const float2 at = float2(gConstants.rippleX[i], gConstants.rippleZ[i]);
++        if (age < newest) {
++            newest = age;
++            newestAt = at;
++        }
++        const float life = splash ? 3.5f : 2.5f;
++        if (age > life) {
++            continue;
++        }
++        const float wavelength = splash ? 55.0f : 38.0f;
++        const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
++        const float2 away = p - at;
 +        const float d = length(away);
-+        const float x = d - age * 110.0f;
-+        const float life = 1.0f - age / 2.5f;
-+        const float band = exp(-(x * x) / (2.0f * 45.0f * 45.0f));
-+        slope += (away / max(d, 1.0f)) * (1.5f * life * life * band * visible * cos(k * x));
++        const float x = d - age * (splash ? 170.0f : 110.0f);
++        const float fade = 1.0f - age / life;
++        const float width = splash ? 70.0f : 45.0f;
++        const float band = exp(-(x * x) / (2.0f * width * width));
++        slope += (away / max(d, 1.0f)) * ((splash ? 3.0f : 1.5f) * fade * fade * band * visible * cos(6.2831853f * x / wavelength));
++        if (splash) {
++            foam = max(foam, band * fade * fade * saturate(1.0f - abs(x) / 30.0f));
++        }
++    }
++
++    // The ring bobbing round him.
++    const float2 q = p - banjo;
++    const float d = length(q);
++    {
++        const float wavelength = 26.0f;
++        const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
++        const float x = d - 30.0f;
++        const float band = exp(-(x * x) / (2.0f * 22.0f * 22.0f));
++        slope += (q / max(d, 1.0f)) * (0.8f * band * visible * cos(6.2831853f * (d - t * 30.0f) / wavelength));
++        foam = max(foam, 0.35f * exp(-(x * x) / (2.0f * 8.0f * 8.0f)));
++    }
++
++    // The wake: two arms opening behind him at the 19.5 degrees of a boat's wake, while he is moving (the
++    // newest ring was dropped where he was moments ago).
++    const float2 moved = banjo - newestAt;
++    const float speed = (newest < 0.8f) ? length(moved) / max(newest, 0.1f) : 0.0f;
++    if (speed > 20.0f) {
++        const float2 ahead = moved / length(moved);
++        const float along = -dot(q, ahead);
++        if (along > 0.0f) {
++            const float2 side = float2(-ahead.y, ahead.x);
++            const float across = dot(q, side);
++            const float arm = abs(across) - along * 0.354f;
++            const float width = 10.0f + along * 0.08f;
++            const float wavelength = 30.0f;
++            const float visible = saturate(wavelength / (footprint * 6.0f) - 1.0f);
++            const float strength = saturate(speed / 150.0f) * exp(-along / 350.0f) * visible;
++            const float band = exp(-(arm * arm) / (2.0f * width * width));
++            const float2 outward = side * sign(across) - ahead * 0.354f;
++            slope += normalize(outward) * (1.6f * strength * band * cos(6.2831853f * (along - arm * 0.5f) / wavelength));
++            foam = max(foam, 0.5f * strength * band * saturate(1.0f - along / 120.0f));
++        }
 +    }
 +    return slope;
 +}
 +
 +// The view-space normal of the waves on a water surface (with its flat normal), at a strength.
-+float3 WaveNormal(float3 surface, float3 normal, float strength) {
++float3 WaveNormal(float3 surface, float3 normal, float strength, out float foam) {
 +    const float2 world = float2(dot(surface, gConstants.worldX.xyz) + gConstants.worldX.w, dot(surface, gConstants.worldZ.xyz) + gConstants.worldZ.w);
++    const float worldY = dot(surface, gConstants.worldY.xyz) + gConstants.worldY.w;
 +    // World units one pixel covers here.
 +    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
-+    const float2 slope = (WaveSlope(world, gConstants.ambientOcclusion.z, footprint) + RippleSlope(world, footprint)) * strength;
++    // Banjo's rings and wake keep their size whatever the waves' strength.
++    const float2 slope = WaveSlope(world, gConstants.ambientOcclusion.z, footprint) * strength +
++        RippleSlope(world, worldY, footprint, foam) * max(strength, 0.6f);
 +    const float3 alongX = normalize(gConstants.worldX.xyz);
 +    const float3 alongZ = normalize(gConstants.worldZ.xyz);
 +    return normalize(normal - alongX * slope.x - alongZ * slope.y);
@@ -4227,7 +4381,8 @@ index 0000000..f251243
 +            if ((amount > 0.0f) && (gConstants.water.w > 0.0f)) {
 +                // Waves: the water seen through bends with the slope, and the slopes facing the light
 +                // brighten while those facing away darken, with a glint where the light reflects.
-+                const float3 waved = WaveNormal(surface, normal, gConstants.water.w);
++                float foam;
++                const float3 waved = WaveNormal(surface, normal, gConstants.water.w, foam);
 +                const float3 bend = waved - normal;
 +                const float2 offset = float2(bend.x, bend.z) * (gConstants.projection.w * 0.04f) * saturate(600.0f / -surface.z);
 +                const int2 bent = clamp(int2(float2(pixel) + offset), int2(0, 0), int2(gConstants.projection.zw) - 1);
@@ -4240,6 +4395,7 @@ index 0000000..f251243
 +                const float shade = (dot(waved, light) - dot(normal, light)) * 0.6f;
 +                const float glint = pow(saturate(dot(reflect(normalize(surface), waved), light)), 48.0f);
 +                scene = scene * (1.0f + shade * amount) + float3(1.0f, 0.97f, 0.9f) * (glint * 0.5f * amount * saturate(gConstants.water.w * 2.0f));
++                scene = lerp(scene, float3(0.92f, 0.95f, 0.97f), foam * 0.45f * amount);
 +                normal = waved;
 +            }
 +            if ((amount > 0.0f) && (gConstants.water.x > 0.0f)) {

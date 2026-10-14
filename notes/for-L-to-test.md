@@ -1325,3 +1325,14 @@
   1. Graphics: Toon outlines 100, then Toon outline thickness 25, 100, 200
 - Look for: 25 is the old thin line, 100 the old thickest, 200 a bold cartoon line twice that. Thin things like posts keep their line attached. A saved thickness of 1 to 4 carries over as 25 to 100.
 - Status: waiting for L
+
+
+## T125 Water waves react to Banjo; effects measure distance right
+- Asked: 2026-10-14 12:20 UTC
+- Build: latest Windows CI build from main
+- Steps:
+  1. Graphics: Water waves 50 or more, Water reflections 100
+  2. Spiral Mountain: jump into the stream by the tunnel, swim up and down it, stop, then wade in the shallow edge
+  3. Also look over Fog, Depth of field and Ambient occlusion in a couple of places
+- Look for: Rings spread from where Banjo is (not behind him), a big splash ring when he jumps in, a V-shaped wake with a little foam behind him while he swims, and a small ring bobbing round him when he stops. No rings when he walks on dry land. The effects were reading the depth about twice too far, so fog may now start a little further out and focus sits right on Banjo.
+- Status: waiting for L

@@ -410,31 +410,39 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);
     }
 
-    // Ripples: while Banjo floats on the water a ring spreads from him as he moves (one every 0.3 s and 25
-    // units), or now and then while he stays still. The newest three are drawn.
+    // Ripples: a ring spreads from Banjo as he moves (one every 0.25 s and 20 units), or now and then while he
+    // stays still, and a big splash when he goes into the water. The shader draws them, his wake and the ring
+    // round him only on water near his height, so wading counts and walking on land doesn't. The newest three
+    // are drawn.
     {
-        struct Ripple { float x = 0.0f, z = 0.0f; std::chrono::steady_clock::time_point at{}; bool used = false; };
+        struct Ripple { float x = 0.0f, z = 0.0f; std::chrono::steady_clock::time_point at{}; bool used = false, splash = false; };
         static Ripple ripples[3];
         static int next = 0;
         static float last_x = 0.0f, last_z = 0.0f;
         static std::chrono::steady_clock::time_point last_at{};
+        static bool was_swimming = false;
         float pos[3];
-        if (water_waves_on && on_surface(state) && banjo_position(rdram, pos)) {
+        const bool swimming = in_water_state(state);
+        if (water_waves_on && banjo_position(rdram, pos)) {
             const float moved = std::hypot(pos[0] - last_x, pos[2] - last_z);
             const float since = std::chrono::duration<float>(now - last_at).count();
-            if ((since > 0.3f && moved > 25.0f) || (since > 1.5f)) {
-                ripples[next] = { pos[0], pos[2], now, true };
+            const bool splash = swimming && !was_swimming;
+            if (splash || (since > 0.25f && moved > 20.0f) || (since > 1.2f)) {
+                ripples[next] = { pos[0], pos[2], now, true, splash };
                 next = (next + 1) % 3;
                 last_x = pos[0];
                 last_z = pos[2];
                 last_at = now;
             }
         }
+        was_swimming = swimming;
         float x[3], z[3], age[3];
         for (int i = 0; i < 3; i++) {
             x[i] = ripples[i].x;
             z[i] = ripples[i].z;
-            age[i] = ripples[i].used ? std::chrono::duration<float>(now - ripples[i].at).count() : -1.0f;
+            const float seconds = std::chrono::duration<float>(now - ripples[i].at).count();
+            // A splash's age carries 4 more (see RippleSlope); old rings are left at their end.
+            age[i] = !ripples[i].used ? -1.0f : ripples[i].splash ? 4.0f + std::min(seconds, 3.9f) : std::min(seconds, 3.9f);
         }
         RT64::SetSceneWaterRipples(x, z, age);
     }
