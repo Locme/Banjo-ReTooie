@@ -37,6 +37,7 @@
 #include "tooie_effect_views.h"
 #include "tooie_fsr.h"
 #include "tooie_fxaa.h"
+#include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
@@ -102,9 +103,9 @@ namespace {
     std::atomic<bool> compare{false};
     bool created = false;
 
-    // Looked up each time: the tab list moves its configs as more tabs are added.
+    // Looked up each time: the tab list moves its configs as more tabs are added. The options live in the WIP tab.
     recomp::config::Config& graphics_config() {
-        return recompui::config::get_config(recompui::config::graphics::id);
+        return recompui::config::get_config(tooie::wip_tab_id);
     }
 
     void send() {

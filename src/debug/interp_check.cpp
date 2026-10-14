@@ -29,6 +29,7 @@
 
 #include "recompui/config.h"
 
+#include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
 #include "tooie_toast.h"
@@ -42,9 +43,9 @@ namespace {
     constexpr int mode_count = 6;
     bool created = false;
 
-    // Looked up each time: the tab list moves its configs as more tabs are added.
+    // Looked up each time: the tab list moves its configs as more tabs are added. The options live in the WIP tab.
     recomp::config::Config& graphics_config() {
-        return recompui::config::get_config(recompui::config::graphics::id);
+        return recompui::config::get_config(tooie::wip_tab_id);
     }
 
     // Through the option when it exists, so the menu follows the key; its callback sets the atomic.

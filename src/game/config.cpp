@@ -381,8 +381,6 @@ void tooie::init_config() {
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
     tooie::frame_overlay::add_option(graphics);
-    tooie::effect_views::add_option(graphics);
-    tooie::interp_check::add_options(graphics);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
@@ -416,6 +414,9 @@ void tooie::init_config() {
         "Discord status",
         "Shows the level you are playing in your Discord status while Discord is running.",
         true);
+    // Debug options (under the Debug heading): they moved here from Graphics.
+    tooie::effect_views::add_option(wip);
+    tooie::interp_check::add_options(wip);
 
     recompui::config::finalize();
     move_saved_options_to_graphics();
