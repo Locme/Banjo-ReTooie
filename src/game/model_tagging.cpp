@@ -375,6 +375,8 @@ namespace {
         std::vector<uint32_t> ids;
         uint32_t tint_frames;
         bool seen;
+        // Seen for two frames, so `step` is a real move.
+        bool step_known;
     };
     std::unordered_map<uint64_t, Track> tracks;
     uint64_t check_frame = 0;
@@ -388,6 +390,8 @@ namespace {
     constexpr float repeat_distance = 150.0f;
     // ...or, among drawings that mostly moved little, this much.
     constexpr float repeat_close = 40.0f;
+    // Game units a bone that swapped its list may be from where it was.
+    constexpr float swap_distance = 40.0f;
     // Above this many drawings now times last frame's, they keep draw order.
     constexpr size_t repeat_pairs_max = 16384;
 
@@ -999,18 +1003,17 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // A bone is named by the list it draws next, but some bones swap their
     // list from frame to frame (Banjo's face: eyes open, half shut, shut).
     // Such a bone's name changes, so RT64 found nothing to blend it with and
-    // it popped. A bone whose name was not drawn last frame, coming straight
-    // after the bone it followed last frame, takes the id of the bone that
-    // came next then, if that one is gone now: the same bone with a new list.
-    struct Sequence {
-        std::vector<std::pair<uint32_t, uint32_t>> bones; // name, id
-        std::unordered_map<uint32_t, size_t> where;
+    // it popped. Each copy's new names are paired with its names that are
+    // gone since last frame, by where the bones are, and keep that bone's id.
+    struct Named {
+        uint32_t id;
+        float pos[3];
     };
-    static std::unordered_map<uint64_t, Sequence> last_sequences;
-    std::unordered_map<uint64_t, Sequence> sequences;
-    std::unordered_map<uint64_t, size_t> sequence_cursor;
+    static std::unordered_map<uint64_t, std::unordered_map<uint32_t, Named>> last_named;
+    std::unordered_map<uint64_t, std::unordered_map<uint32_t, Named>> named;
+    std::unordered_map<size_t, uint32_t> carried_id;
     if (cut && !overlay) {
-        last_sequences.clear();
+        last_named.clear();
     }
     auto bone_name = [&](size_t index) {
         int b = commands[index].block;
@@ -1019,14 +1022,51 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     auto copy_key = [&](int b) {
         return ((uint64_t)blocks[b].model << 32) | blocks[b].instance;
     };
-    // The names drawn this frame, by copy.
-    std::unordered_map<uint64_t, std::unordered_map<uint32_t, bool>> names_now;
     if (!overlay) {
+        struct Fresh {
+            size_t index;
+            float pos[3];
+        };
+        std::unordered_map<uint64_t, std::vector<Fresh>> fresh;
+        std::unordered_map<uint64_t, std::unordered_map<uint32_t, bool>> names_now;
         for (size_t index = 0; index < commands.size(); index++) {
             const Command& c = commands[index];
             int b = c.block;
-            if ((c.w0 >> 24) == op_mtx && b >= 0 && blocks[b].model != 0 && (((c.w0 & 0xFF) ^ 1) & mtx_projection) == 0) {
-                names_now[copy_key(b)][bone_name(index)] = true;
+            if ((c.w0 >> 24) != op_mtx || b < 0 || blocks[b].model == 0 || (((c.w0 & 0xFF) ^ 1) & mtx_projection) != 0) {
+                continue;
+            }
+            uint64_t copy = copy_key(b);
+            uint32_t name = bone_name(index);
+            names_now[copy][name] = true;
+            auto last = last_named.find(copy);
+            if (last == last_named.end()) {
+                continue;
+            }
+            auto at = last->second.find(name);
+            if (at != last->second.end()) {
+                carried_id[index] = at->second.id;
+            }
+            else {
+                Fresh f{index, {}};
+                read_translation(rdram, c.w1 & 0x1FFFFFFF, f.pos);
+                fresh[copy].push_back(f);
+            }
+        }
+        for (auto& [copy, list] : fresh) {
+            std::vector<Named> gone;
+            for (const auto& [name, n] : last_named[copy]) {
+                if (names_now[copy].count(name) == 0) {
+                    gone.push_back(n);
+                }
+            }
+            std::vector<int> match = pair_nearest<Fresh, Named>(list, gone,
+                [](const Fresh& f) -> const float* { return f.pos; },
+                [](const Named& n) -> const float* { return n.pos; },
+                swap_distance, swap_distance);
+            for (size_t i = 0; i < list.size(); i++) {
+                if (match[i] >= 0) {
+                    carried_id[list[i].index] = gone[match[i]].id;
+                }
             }
         }
     }
@@ -1133,26 +1173,15 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 // A list drawn twice in a model (both hands, say) gets a second id
                 // (see repeat_slot).
                 id = make_id(key, repeat_slot[index], camera_generation);
-                uint32_t name = bone_name(index);
-                uint64_t copy = copy_key(b);
-                auto last_found = last_sequences.find(copy);
-                if (last_found != last_sequences.end()) {
-                    const Sequence& last = last_found->second;
-                    auto cursor = sequence_cursor.find(copy);
-                    size_t next = cursor != sequence_cursor.end() ? cursor->second + 1 : 0;
-                    auto at = last.where.find(name);
-                    if (at != last.where.end()) {
-                        sequence_cursor[copy] = at->second;
-                        id = last.bones[at->second].second;
-                    }
-                    else if (next < last.bones.size() && names_now[copy].count(last.bones[next].first) == 0) {
-                        sequence_cursor[copy] = next;
-                        id = last.bones[next].second;
-                    }
+                auto carried = carried_id.find(index);
+                if (carried != carried_id.end()) {
+                    id = carried->second;
                 }
-                Sequence& sequence = sequences[copy];
-                sequence.where[name] = sequence.bones.size();
-                sequence.bones.push_back({name, id});
+                if (!overlay) {
+                    Named& n = named[copy_key(b)][bone_name(index)];
+                    n.id = id;
+                    read_translation(rdram, c.w1 & 0x1FFFFFFF, n.pos);
+                }
                 if (log_ids) {
                     ids_now[blocks[b].model].push_back(id);
                 }
@@ -1280,7 +1309,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     step += d * d;
                 }
                 step = std::sqrt(step);
-                bool jump = !cut && !snap && step > std::max(jump_distance, 3.0f * track.step + 20.0f);
+                // A copy's first move is not compared: something that appears and
+                // then falls or flies off has no move the frame before.
+                bool jump = !cut && !snap && track.step_known && step > std::max(jump_distance, 3.0f * track.step + 20.0f);
                 size_t lost = 0;
                 if (!cut && !snap && block.ids.size() == track.ids.size()) {
                     for (uint32_t id : block.ids) {
@@ -1306,6 +1337,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             track.step = step;
             track.ids = std::move(block.ids);
+            track.step_known = !fresh;
             track.seen = true;
             if (track.tint_frames > 0) {
                 track.tint_frames--;
@@ -1335,7 +1367,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     }
 
     if (!overlay) {
-        last_sequences = std::move(sequences);
+        last_named = std::move(named);
     }
 
     if (log_ids && !overlay) {
