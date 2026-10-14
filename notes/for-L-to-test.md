@@ -1440,7 +1440,7 @@
 
 ## T136 Cutscene skip: title left alone, Start stops it, sound muted
 - Asked: 2026-10-14 20:05 UTC
-- Build: main @ (this commit) (also covers T131)
+- Build: main @ a47965a (also covers T131)
 - Steps:
   1. QOL: "Skip boss intros" and "Skip other cutscenes" on
   2. Start the game and press Start during the logos / title flight
