@@ -69,6 +69,7 @@ namespace {
 }
 
 void tooie::input::register_input() {
+    recompinput::set_game_input_section(tiptoe_input, "Movement");
     recompinput::set_game_input_name(tiptoe_input, "Tiptoe");
     recompinput::set_game_input_description(tiptoe_input,
         "Hold to tiptoe at any left stick tilt, so Banjo never creeps or runs by accident.");

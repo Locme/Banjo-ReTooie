@@ -1469,3 +1469,13 @@
   2. Same for 5 minutes with 120 FPS (Experimental)
 - Look for: Does the sound keep playing the whole time, and does the game no longer crash with "n_aspMain unhandled jump"? If it still breaks, send the session log and say roughly how many minutes in. Headless, Unlocked ran 3 minutes without a crash both before and after this fix, so I could not reproduce your crash here.
 - Status: waiting for L
+
+## T139 Noclip goes through walls; Tiptoe under Movement
+- Asked: 2026-10-14 20:25 UTC
+- Build: main after this commit
+- Steps:
+  1. Esc > Cheats: Enable cheats, Noclip = On, load a save
+  2. Walk into a wall, a cliff and a closed door; hold LT (Z) to sink through the floor and RT (R) to rise
+  3. Esc > Controls: look for Tiptoe under Movement (next to Run), not Hotkeys
+- Look for: Banjo walks straight through walls and scenery instead of stopping at them. Cause was that the game keeps its own "last valid position" for collision, which Noclip did not write, so walls pulled Banjo back. Headless in Mumbo's Skull, Banjo walked through the back wall (before: stopped at it). Not tried in water, doors with locked rooms or with Kazooie split up.
+- Status: waiting for L

@@ -117,6 +117,10 @@ namespace {
     // a pad) sinks and R (RT) rises; both are kept from the game while noclip is on.
     constexpr uint32_t pos_ptr_offset = 0xE4;
     constexpr uint32_t pos_offset = 0x4;
+    // The game's collision starts each frame from the position it last settled on (player +0x29C, and two
+    // older copies after the one player+0xE4 points at), not from the ones above. Without these written too,
+    // walls and floors pulled the player back every frame.
+    constexpr uint32_t last_pos_offset = 0x29C;
     constexpr uint32_t vel_x_offset = 0x10;
     constexpr uint32_t vel_z_offset = 0x18;
     constexpr float noclip_vertical_speed = 600.0f;
@@ -336,6 +340,9 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
             for (int k = 0; k < 3; k++) {
                 write_float(rdram, physics + pos_offset + 4 * k, anchor[k]);
                 write_float(rdram, pos2 + 4 * k, anchor[k]);
+                write_float(rdram, pos2 + 0xC + 4 * k, anchor[k]);
+                write_float(rdram, pos2 + 0x18 + 4 * k, anchor[k]);
+                write_float(rdram, player + last_pos_offset + 4 * k, anchor[k]);
             }
             write_float(rdram, physics + vel_y_offset, 0.0f);
         }

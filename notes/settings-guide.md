@@ -57,14 +57,11 @@ framework, not from this port's code, so it is not described here.
   - **Free camera speed**: Slow, Normal or Fast. Default: Normal.
   - **Free camera: invert left/right** and **invert up/down**. Default: off.
 
-## Controls: Hotkeys
+## Controls: Movement
 
 - **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
   click on a controller, nothing on the keyboard. Rebind it in the Controls tab
-  under Hotkeys. The game still sees every button as usual.
-
-## Controls: Movement
-
+  under Movement. The game still sees every button as usual.
 - **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
   Kazooie, with a sprint animation. Not bound by default: bind it in the
   Controls tab under Movement. Any stick tilt runs at full speed while it is

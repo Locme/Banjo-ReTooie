@@ -8,6 +8,11 @@ regenerated code, CI, notes and tooling are left out.
 Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
+### Cheats and controls
+
+- Noclip now passes through walls, scenery and floors; the game was pulling Banjo back to a collision position that Noclip did not write (T139).
+- Tiptoe's key binding is under Movement in the Controls tab, with Run (T139).
+
 ### Graphics
 
 - HD Shadows and Extended Draw Distance stop adding to a frame when the game's fixed drawing memory is nearly full (both together filled up to 87% of it headless, and past the end it tears or explodes models). Untested on PC (T120).
