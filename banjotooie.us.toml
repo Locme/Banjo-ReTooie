@@ -753,6 +753,13 @@ func = "func_800151BC"
 before_vram = 0x8001524C
 text = "tooie_frame_wait(rdram, ctx);"
 
+# Right after osViSwapBuffer: in the paced modes (40 to 240 FPS, Uncapped) ask
+# the runtime for a VI now, so the game needn't wait for the next timed one.
+[[patches.hook]]
+func = "func_800151BC"
+before_vram = 0x80015300
+text = "tooie_frame_swapped(rdram, ctx);"
+
 [[patches.hook]]
 func = "func_800A7D30"
 before_vram = 0x800A7D6C
@@ -772,11 +779,12 @@ func = "func_800D9004"
 before_vram = 0x800D9024
 text = "tooie_frame_seconds(rdram, ctx);"
 
-# func_8001546C is the game's VI thread. Above 60 FPS the runtime sends 2 or 4
-# times as many VIs: its clients get them all except the controller pak thread (only every
-# second or fourth; its queue is dropped from $a0 before the osSendMesg), and its
-# 600-VI (10 s) check is scaled. The scheduler must get every VI, or the game gets
-# a free framebuffer only 60 times a second.
+# func_8001546C is the game's VI thread. In the paced modes the runtime sends an
+# extra VI after each swap: its clients get them all except the controller pak
+# thread (only the timed ones; its queue is dropped from $a0 before the
+# osSendMesg), and each VI is noted as timed or extra before its 600-VI (10 s)
+# check. The scheduler must get every VI, or the game would wait for a free
+# framebuffer.
 [[patches.hook]]
 func = "func_8001546C"
 before_vram = 0x80015544
@@ -794,7 +802,7 @@ text = "tooie_vi_hang_limit(rdram, ctx);"
 
 # func_8001443C, the scheduler's VI handler: after it hands back the shown
 # framebuffer, the rest (its RSP and RDP time-outs, counted in VIs, the sound
-# timer and another timer) runs only on every second or fourth VI above 60 FPS.
+# timer and another timer) runs only on the timed VIs.
 [[patches.hook]]
 func = "func_8001443C"
 before_vram = 0x8001454C

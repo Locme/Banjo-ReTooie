@@ -37,8 +37,14 @@ so the submodules stay pinned to their upstream commits.
 
 * **VI rate multiplier** (`ultramodern/src/events.cpp`, `ultramodern.hpp`): `set_vi_rate_multiplier(n)`
   sends VIs 60 * n times a second (game time unchanged, unlike the speed multiplier) while the AI
-  messages stay at 60 a second. Game Frame Rate 120 FPS and Unlocked use 2 and 4
-  (`src/game/game_frame_rate.cpp`).
+  messages stay at 60 a second. No longer used by the game (Game Frame Rate used 2 and 4 before
+  the extra VIs below).
+
+* **Extra VIs** (`ultramodern/src/events.cpp`, `ultramodern.hpp`): `request_vi()` wakes the VI thread
+  to send a VI at once (swap in the next framebuffer, send the game's VI message) without moving the
+  timed VIs, sending an AI message or calling the VI callback; `get_timed_vi_count()` counts the
+  timed ones. Game Frame Rate 40 to 240 FPS and Uncapped ask for one after each swap, so the game
+  can make frames faster than 60 a second with the VIs left at 60 (`src/game/game_frame_rate.cpp`).
 
 * **Low input latency** (`ultramodern/src/events.cpp`, `ultramodern.hpp`): upstream queues each screen
   update before latching the framebuffer the game just swapped in, so a frame showed two VIs after
@@ -149,7 +155,9 @@ To change it: edit the files in `lib/RecompFrontend`, then
   writing a new workload or present while the GPU still used that slot spun on a mutex, keeping a core
   busy whenever the GPU was behind. It now sleeps on a condition variable that the barrier advance wakes.
 * **VI rate** (`src/hle/rt64_vi.cpp/.h`): `SetVIRate` replaces the fixed 60 VIs a second that
-  `logicalRateFromFactors` worked the game's frame rate out from, for Game Frame Rate 120 FPS and Unlocked.
+  `logicalRateFromFactors` worked the game's frame rate out from (no longer used by the game).
+  `SetFixedFrameRate` gives that rate outright (40 to 240) when Game Frame Rate paces the frames itself
+  with extra VIs, so Interpolation can still blend above it; 0 goes back to working it out.
 * **Camera split** (`src/common/rt64_math.cpp`, `matrixDecomposeViewProj`): Banjo-Tooie loads one
   combined view-projection matrix, which RT64 splits back into a view and a projection. The near and far
   scale was taken from row 0 alone (`vp[0][2] / -vp[0][3]`, the x of the camera's facing), so with the

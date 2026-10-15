@@ -18,22 +18,25 @@
 // VIs), so every game frame is the same length. Original leaves both alone.
 //
 // The game can't go faster than one frame per VI (after a swap it waits for
-// the VI that shows the new picture). For 120 FPS and Unlocked the runtime
-// sends VIs 2 or 4 times as often (ultramodern::set_vi_rate_multiplier; the
-// audio messages stay at 60 a second) and RT64 is told the new VI rate. The
-// game's step is then in 120ths or 240ths of a second, so a third hook, at the
-// end of func_800A7D30, writes the frame's real delta time (0x8012C760) and
-// whole 60ths for the frame count (0x8012C764, which can be 0 on some frames,
-// as the game's own pause path sets it). func_800D9004, which turns that count
-// into seconds, is hooked to give the delta time instead. 120 FPS waits one VI
-// (1/120 s) per frame and always steps 1/120 s; Unlocked waits one VI (1/240 s)
-// and steps by the VIs that really went by, so it runs as fast as the PC can
-// up to 240. Recorded scenes and demos keep the original pacing (their waits
-// are scaled by the multiplier). The scheduler's VI handler runs its timers and
-// time-outs (the sound among them) only on every second or fourth VI, so they
-// keep their 60-a-second pace.
+// the VI that shows the new picture). For 40, 120, 175, 240 FPS and Uncapped
+// the port paces the frames itself: the wait hook holds the game until the
+// frame's time comes (a fixed 1/40 to 1/240 s after the last one; Uncapped
+// doesn't wait at all) and lets it through without waiting for VIs, and right
+// after each swap a hook asks the runtime for an extra VI
+// (ultramodern::request_vi), so the new picture is shown and the game can go
+// on at once. The timed VIs stay at 60 a second, and the extra ones don't send
+// the audio messages. A third hook, at the end of func_800A7D30, writes the
+// frame's real delta time (0x8012C760: 1/40 to 1/240 s, or for Uncapped the
+// time the last frame really took) and whole 60ths for the frame count
+// (0x8012C764, which can be 0 on some frames, as the game's own pause path sets
+// it). func_800D9004, which turns that count into seconds, is hooked to give
+// the delta time instead. RT64 is told the fixed rate so the Interpolation
+// option can still blend frames above it. Recorded scenes and demos keep the
+// original pacing. The scheduler's VI handler runs its timers and time-outs
+// (the sound among them) only on the timed VIs, so they keep their 60-a-second
+// pace.
 //
-// TOOIE_GAME_FPS=30|60|120|unlocked picks a mode whatever the setting says, for headless
+// TOOIE_GAME_FPS=30|40|60|120|175|240|uncapped picks a mode whatever the setting says, for headless
 // runs. TOOIE_GAME_FPS_LOG=1 prints, every 2 s, the game frames counted, the
 // time steps the game asked for, the wait it asked for, how fast game time ran
 // against real time and how far Banjo moved per second of game time.
@@ -48,6 +51,7 @@
 #include <cstring>
 #include <deque>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -63,7 +67,7 @@
 
 namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
-    void SetVIRate(uint32_t rate);
+    void SetFixedFrameRate(uint32_t rate);
 }
 
 namespace {
@@ -83,11 +87,20 @@ namespace {
         if (std::strcmp(v, "30") == 0) {
             return Mode::Fps30;
         }
+        if (std::strcmp(v, "40") == 0) {
+            return Mode::Fps40;
+        }
         if (std::strcmp(v, "120") == 0) {
             return Mode::Fps120;
         }
-        if (std::strcmp(v, "unlocked") == 0) {
-            return Mode::Unlocked;
+        if (std::strcmp(v, "175") == 0) {
+            return Mode::Fps175;
+        }
+        if (std::strcmp(v, "240") == 0) {
+            return Mode::Fps240;
+        }
+        if (std::strcmp(v, "uncapped") == 0 || std::strcmp(v, "unlocked") == 0) {
+            return Mode::Uncapped;
         }
         return Mode::Original;
     }
@@ -118,7 +131,7 @@ namespace {
     // demo replay, counted down by each frame's time step.
     std::atomic<int> demo_frames{ 0 };
 
-    // VIs per game frame for the chosen mode, or 0 for Original (and while a demo plays).
+    // VIs per game frame for 30 and 60 FPS, or 0 for the other modes (and while a demo plays).
     int32_t locked_vis() {
         if (demo_frames.load() > 0) {
             return 0;
@@ -127,40 +140,92 @@ namespace {
             case Mode::Fps30:
                 return 2;
             case Mode::Fps60:
-            case Mode::Fps120:
-            case Mode::Unlocked:
                 return 1;
             default:
                 return 0;
         }
     }
 
-    // VIs a 60th of a second for the mode: 2 for 120 FPS, 4 for Unlocked.
-    uint32_t multiplier_for(Mode m) {
-        switch (m) {
+    // Frames a second for the modes the port paces itself (40, 120, 175, 240),
+    // -1 for Uncapped, 0 for the others (and while a demo plays).
+    int32_t paced_rate() {
+        if (demo_frames.load() > 0) {
+            return 0;
+        }
+        switch (mode()) {
+            case Mode::Fps40:
+                return 40;
             case Mode::Fps120:
-                return 2;
-            case Mode::Unlocked:
-                return 4;
+                return 120;
+            case Mode::Fps175:
+                return 175;
+            case Mode::Fps240:
+                return 240;
+            case Mode::Uncapped:
+                return -1;
             default:
-                return 1;
+                return 0;
         }
     }
 
-    // Sets the runtime's and RT64's VI rate when the mode changes. The game's VI
-    // counts are in these VIs from then on.
-    uint32_t apply_multiplier() {
-        static uint32_t applied = 1;
-        uint32_t wanted = multiplier_for(mode());
+    // True for the modes above 30 FPS (not while a demo plays).
+    bool above_30() {
+        return locked_vis() == 1 || paced_rate() != 0;
+    }
+
+    // Tells RT64 the game's frame rate when it is fixed and not a whole number
+    // of VIs (0 otherwise), for the Interpolation option.
+    void apply_fixed_rate(int32_t rate) {
+        static int32_t applied = 0;
+        int32_t wanted = rate > 0 ? rate : 0;
         if (wanted != applied) {
-            ultramodern::set_vi_rate_multiplier(wanted);
-            RT64::SetVIRate(60 * wanted);
+            RT64::SetFixedFrameRate((uint32_t)wanted);
             applied = wanted;
         }
-        return applied;
     }
 
-    // Above 60 FPS: the delta time and frame count the step hook worked out, written
+    double game_seconds_now() {
+        return std::chrono::duration<double>(ultramodern::game_time_now()).count();
+    }
+
+    // Holds the game until this frame's time: 1/rate s after the last frame's.
+    // Sleeps while more than 2 ms are left, then yields, as a sleep alone can
+    // be a millisecond or more late.
+    struct Pacer {
+        double next = 0.0;
+        int32_t rate = 0;
+        bool done = false;   // already paced this frame
+    };
+    Pacer pacer;
+
+    void pace_frame(int32_t rate) {
+        if (pacer.done) {
+            return;
+        }
+        pacer.done = true;
+        double now = game_seconds_now();
+        if (rate != pacer.rate || now - pacer.next > 0.1 || pacer.next - now > 1.0) {
+            // First paced frame, a new rate, or far behind (a load): start again from now.
+            pacer.next = now;
+        } else if (pacer.next > now) {
+            auto target = ultramodern::game_time_to_real(std::chrono::microseconds((int64_t)(pacer.next * 1e6)));
+            for (;;) {
+                auto left = target - std::chrono::high_resolution_clock::now();
+                if (left <= std::chrono::high_resolution_clock::duration::zero()) {
+                    break;
+                }
+                if (left > std::chrono::milliseconds(2)) {
+                    std::this_thread::sleep_for(left - std::chrono::microseconds(1500));
+                } else {
+                    std::this_thread::yield();
+                }
+            }
+        }
+        pacer.next += 1.0 / rate;
+        pacer.rate = rate;
+    }
+
+    // Paced modes: the delta time and frame count the step hook worked out, written
     // at the end of func_800A7D30 and given by func_800D9004 while they still hold.
     constexpr gpr delta_time_addr = (int32_t)0x8012C760;
     constexpr gpr frame_count_addr = (int32_t)0x8012C764;
@@ -169,8 +234,9 @@ namespace {
         bool pending = false;
         float delta = 0.0f;
         int32_t count = 0;
-        uint32_t carry = 0;   // VIs not yet counted as a whole 60th
+        double carry = 0.0;   // game time not yet counted as a whole 60th
         bool written = false;
+        double last_step = -1.0;   // game clock at the last frame step (Uncapped)
     };
     FineStep fine;
 
@@ -194,14 +260,11 @@ namespace {
         uint32_t frames = 0;
         std::array<uint32_t, 6> steps{};  // time steps the game asked for: 0, 1..4, 5+
         int32_t wait = 0;
-        uint32_t game_vis = 0;    // sum of the time steps used
         float banjo[3] = { 0, 0, 0 };
         float distance = 0.0f;    // how far Banjo moved
         bool has_banjo = false;
         // For timing scenes: game time since start, and the map and letterbox state last seen.
-        uint64_t total_vis = 0;   // in VIs at 60 * multiplier a second
         uint64_t total_frames = 0;
-        uint32_t multiplier = 1;
         double game_seconds = 0.0;   // game time in the last 2 s
         double total_seconds = 0.0;
         int map = -1;
@@ -236,15 +299,13 @@ namespace {
         return true;
     }
 
-    void log_frame(uint8_t* rdram, int32_t asked_step, int32_t used_step) {
+    // used: the frame's time step in seconds.
+    void log_frame(uint8_t* rdram, int32_t asked_step, double used) {
         Log& l = log();
         std::lock_guard lock{ l.mutex };
         l.frames++;
-        l.game_seconds += used_step > 0 ? used_step / (60.0 * ultramodern::get_vi_rate_multiplier()) : 0.0;
-        l.total_seconds += used_step > 0 ? used_step / (60.0 * ultramodern::get_vi_rate_multiplier()) : 0.0;
-        l.game_vis += used_step > 0 ? used_step : 0;
-        l.total_vis += used_step > 0 ? used_step : 0;
-        l.multiplier = ultramodern::get_vi_rate_multiplier();
+        l.game_seconds += used;
+        l.total_seconds += used;
         l.total_frames++;
         // Map changes and letterboxed scenes, stamped with game time, so a scene's
         // length in game time can be compared between modes.
@@ -270,20 +331,19 @@ namespace {
             }
             std::memcpy(l.banjo, pos, sizeof(pos));
             l.has_banjo = true;
-            if (std::getenv("TOOIE_POS_LOG")) { std::printf("[pos] t %.3f dt %.4f %.1f %.1f %.1f\n", l.total_seconds, used_step / (60.0 * ultramodern::get_vi_rate_multiplier()), pos[0], pos[1], pos[2]); }
+            if (std::getenv("TOOIE_POS_LOG")) { std::printf("[pos] t %.3f dt %.4f %.1f %.1f %.1f\n", l.total_seconds, used, pos[0], pos[1], pos[2]); }
         }
         l.steps[asked_step <= 0 ? 0 : (asked_step >= 5 ? 5 : asked_step)]++;
         auto now = std::chrono::steady_clock::now();
         double seconds = std::chrono::duration<double>(now - l.last).count();
         if (seconds >= 2.0) {
             double game_seconds = l.game_seconds;
-            std::printf("[game-fps] %.1f game fps | VIs x%u | steps asked 0:%u 1:%u 2:%u 3:%u 4:%u 5+:%u | step used %d | wait asked %d | game time x%.2f | Banjo %.0f units per game second\n",
-                l.frames / seconds, l.multiplier, l.steps[0], l.steps[1], l.steps[2], l.steps[3], l.steps[4], l.steps[5], used_step, l.wait,
+            std::printf("[game-fps] %.1f game fps | steps asked 0:%u 1:%u 2:%u 3:%u 4:%u 5+:%u | step used %.2f ms | wait asked %d | game time x%.2f | Banjo %.0f units per game second\n",
+                l.frames / seconds, l.steps[0], l.steps[1], l.steps[2], l.steps[3], l.steps[4], l.steps[5], used * 1000.0, l.wait,
                 game_seconds / seconds, game_seconds > 0.0 ? l.distance / game_seconds : 0.0);
             std::fflush(stdout);
             l.frames = 0;
             l.steps.fill(0);
-            l.game_vis = 0;
             l.game_seconds = 0.0;
             l.distance = 0.0f;
             l.last = now;
@@ -292,21 +352,21 @@ namespace {
 }
 
 namespace {
-    // Headless aid: TOOIE_UNLOCKED_STEPS=<n>[,<n>...] makes Unlocked step by
-    // these VIs (1/240 s each) in turn, whatever really went by, to test frame
-    // rates a slow PC can't reach (use with TOOIE_PAD_GAME_TIME=1).
-    int32_t forced_unlocked_step(int32_t step) {
-        static const std::vector<int32_t> steps = []() {
-            std::vector<int32_t> out;
-            if (const char* v = std::getenv("TOOIE_UNLOCKED_STEPS")) {
+    // Headless aid: TOOIE_UNCAPPED_FPS=<n>[,<n>...] makes Uncapped step as if
+    // these frame rates were reached, in turn, whatever really went by, to test
+    // frame rates a slow PC can't reach (use with TOOIE_PAD_GAME_TIME=1).
+    double forced_uncapped_step(double step) {
+        static const std::vector<double> steps = []() {
+            std::vector<double> out;
+            if (const char* v = std::getenv("TOOIE_UNCAPPED_FPS")) {
                 for (const char* p = v; *p;) {
                     char* end = nullptr;
-                    long n = std::strtol(p, &end, 10);
+                    double n = std::strtod(p, &end);
                     if (end == p) {
                         break;
                     }
-                    if (n > 0) {
-                        out.push_back((int32_t)n);
+                    if (n > 0.0) {
+                        out.push_back(1.0 / n);
                     }
                     p = (*end == ',') ? end + 1 : end;
                 }
@@ -322,19 +382,33 @@ namespace {
 }
 
 // func_800151BC, right after each call to func_80015184: $v0 holds the VIs the
-// game wants to wait between frames.
+// game wants to wait between frames (since the last swap, counted at 0x80079704;
+// it waits while 0x80079138 < $v0 - that count).
 extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
-    (void)rdram;
     if (logging()) {
         log().wait = (int32_t)ctx->r2;
     }
-    uint32_t multiplier = apply_multiplier();
+    int32_t rate = paced_rate();
+    apply_fixed_rate(rate);
     int32_t vis = locked_vis();
     if (vis != 0) {
         ctx->r2 = vis;
-    } else if (multiplier > 1) {
-        // A demo or recorded scene: its own wait, in the faster VIs.
-        ctx->r2 = (int32_t)ctx->r2 * (int32_t)multiplier;
+    } else if (rate != 0) {
+        if (rate > 0) {
+            pace_frame(rate);
+        }
+        // No VI wait: the extra VI after the last swap has shown it already.
+        ctx->r2 = (int32_t)MEM_W(0, (gpr)(int32_t)0x80079704) + (int32_t)MEM_W(0, (gpr)(int32_t)0x80079138);
+    }
+}
+
+// func_800151BC, right after osViSwapBuffer: in the paced modes ask for a VI now,
+// so the new picture is shown and the game can go on without waiting for one.
+extern "C" void tooie_frame_swapped(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    (void)ctx;
+    if (paced_rate() != 0) {
+        ultramodern::request_vi();
     }
 }
 
@@ -346,20 +420,21 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
         demo_frames--;
     }
     int32_t vis = locked_vis();
-    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
-    if (multiplier > 1) {
-        // Steps in VIs at 60 * multiplier a second: 1 for 120 FPS, the VIs that
-        // went by for Unlocked (and while a demo plays, which replaces it anyway).
-        int32_t step = (vis != 0 && mode() == Mode::Fps120) ? 1 : std::max(asked, 1);
-        if (vis != 0 && mode() == Mode::Unlocked) {
-            step = forced_unlocked_step(step);
-        }
-        step = std::min<int32_t>(step, 15 * (int32_t)multiplier);
-        fine.carry += (uint32_t)step;
-        fine.count = (int32_t)(fine.carry / multiplier);
-        fine.carry %= multiplier;
-        fine.delta = step / (60.0f * multiplier);
+    int32_t rate = paced_rate();
+    double now = game_seconds_now();
+    double since_last = fine.last_step >= 0.0 ? now - fine.last_step : 1.0 / 60.0;
+    fine.last_step = now;
+    if (rate != 0) {
+        // A fixed 1/rate s, or for Uncapped the time the last frame really took,
+        // up to 15/60 s as the game's own step.
+        double step = rate > 0 ? 1.0 / rate : forced_uncapped_step(since_last);
+        step = std::clamp(step, 0.0, 0.25);
+        fine.carry += step;
+        fine.count = (int32_t)std::floor(fine.carry * 60.0 + 1e-6);
+        fine.carry = std::max(0.0, fine.carry - fine.count / 60.0);
+        fine.delta = (float)step;
         fine.pending = true;
+        pacer.done = false;
         ctx->r2 = std::max(fine.count, 1);
         if (logging()) {
             log_frame(rdram, asked, step);
@@ -368,17 +443,18 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     }
     fine.pending = false;
     fine.written = false;
-    fine.carry = 0;
+    fine.carry = 0.0;
+    pacer.rate = 0;
     if (vis != 0) {
         ctx->r2 = vis;
     }
     if (logging()) {
-        log_frame(rdram, asked, (int32_t)ctx->r2);
+        log_frame(rdram, asked, (int32_t)ctx->r2 / 60.0);
     }
 }
 
 // func_800A7D30, after func_800D8FA0 has set the frame's delta time and count:
-// above 60 FPS, put in the finer ones.
+// in the paced modes, put in the finer ones.
 extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     tooie::debug::heap_check(rdram, "frame step");
@@ -397,11 +473,11 @@ extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     game_seconds_total.store(game_seconds_total.load() + delta);
 }
 
-// func_800D9004 before it returns: $f0 is the frame count times 1/60. Above 60
-// FPS give the delta time instead, while the values written above still hold
+// func_800D9004 before it returns: $f0 is the frame count times 1/60. In the
+// paced modes give the delta time instead, while the values written above still hold
 // (photo mode and the game's own pause path change them).
 extern "C" void tooie_frame_seconds(uint8_t* rdram, recomp_context* ctx) {
-    if (!fine.written || ultramodern::get_vi_rate_multiplier() <= 1) {
+    if (!fine.written) {
         return;
     }
     if (read_float(rdram, delta_time_addr) == fine.delta && (int32_t)MEM_W(0, frame_count_addr) == fine.count) {
@@ -412,23 +488,27 @@ extern "C" void tooie_frame_seconds(uint8_t* rdram, recomp_context* ctx) {
 // func_8001546C, the game's VI thread, passes each VI to the frame queue and to
 // its clients (0x80078F90: the scheduler, queue 0x800783D0, which hands back
 // shown framebuffers and starts the sound timer, and the controller pak thread,
-// queue 0x8007AEF0, which runs osPfsInit). Above 60 FPS that thread only gets every second or fourth
-// VI; the scheduler gets them all, or the game could not get a free framebuffer
-// more than 60 times a second, but skips its timers on the extra ones.
+// queue 0x8007AEF0, which runs osPfsInit). In the paced modes the runtime also
+// sends extra VIs right after each swap: the pak thread doesn't get those, and
+// the scheduler gets them all, so it hands back the shown framebuffer at once,
+// but skips its timers on them.
 constexpr uint32_t pak_vi_queue = 0x8007AEF0;
 constexpr uint32_t scheduler_queue = 0x800783D0;
-std::atomic<uint32_t> vi_tick{ 0 };
-// For each VI message the scheduler was sent (in order): whether it is one of the
-// 60-a-second ones. The scheduler takes them in the same order, so each of its VI
-// messages is matched to the VI it came from, even when it falls behind.
+// Whether the VI the game's VI thread is passing on is a timed one (60 a
+// second), worked out once per VI from the runtime's count of timed VIs: the
+// first VI message after a timed VI counts as it, so there is one a 60th.
+bool vi_is_timed = true;
+uint64_t timed_vis_seen = 0;
+// For each VI message the scheduler was sent (in order): whether it is a timed
+// one. The scheduler takes them in the same order, so each of its VI messages is
+// matched to the VI it came from, even when it falls behind.
 std::mutex scheduler_vis_mutex;
 std::deque<bool> scheduler_vis;
 
-// Before each client's osSendMesg ($a0 = its queue): drop the controller pak thread's on the skipped VIs.
+// Before each client's osSendMesg ($a0 = its queue): drop the controller pak thread's on the extra VIs.
 extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
-    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
-    if (multiplier > 1 && (uint32_t)ctx->r4 == pak_vi_queue && (vi_tick.load() % multiplier) != 0) {
+    if (!vi_is_timed && (uint32_t)ctx->r4 == pak_vi_queue) {
         ctx->r4 = 0;
     }
 }
@@ -436,23 +516,22 @@ extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
 // After each client's osSendMesg ($s0 = its entry, $v0 = 0 if the message went in):
 // note the scheduler's VI messages in order.
 extern "C" void tooie_vi_client_sent(uint8_t* rdram, recomp_context* ctx) {
-    uint32_t multiplier = ultramodern::get_vi_rate_multiplier();
     if ((uint32_t)MEM_W(0, ctx->r16) != scheduler_queue || (int32_t)ctx->r2 != 0) {
         return;
     }
     std::lock_guard lock{ scheduler_vis_mutex };
-    if (multiplier <= 1) {
+    if (paced_rate() == 0 && vi_is_timed) {
         scheduler_vis.clear();
         return;
     }
-    scheduler_vis.push_back((vi_tick.load() % multiplier) == 0);
+    scheduler_vis.push_back(vi_is_timed);
     while (scheduler_vis.size() > 64) {
         scheduler_vis.pop_front();
     }
 }
 
 // func_8001443C, the scheduler's VI handler, after it has handed back the shown
-// framebuffer: the rest runs only for the 60-a-second VIs, so it keeps its pace.
+// framebuffer: the rest runs only for the timed VIs, so it keeps its pace.
 // That rest counts down two time-outs in VIs, starts the sound timer every
 // second VI (osStopTimer, then osSetTimer about 6 ms on) and sets one more timer.
 // Run twice close together, it restarts the sound timer before it fires and a
@@ -467,17 +546,19 @@ extern "C" int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx) {
     if (scheduler_vis.empty()) {
         return 0;
     }
-    bool full = scheduler_vis.front();
+    bool timed = scheduler_vis.front();
     scheduler_vis.pop_front();
-    return full ? 0 : 1;
+    return timed ? 0 : 1;
 }
 
 // func_8001546C, once per VI, before it compares the VIs since the last frame with
-// 600 (10 s, $s6): keep that 10 s at the faster VI rate, and count the VI.
+// 600 (10 s, $s6): note whether this VI is a timed one.
 extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
-    vi_tick++;
-    ctx->r22 = 600 * (int32_t)ultramodern::get_vi_rate_multiplier();
+    (void)ctx;
+    uint64_t timed = ultramodern::get_timed_vi_count();
+    vi_is_timed = timed != timed_vis_seen;
+    timed_vis_seen = timed;
 }
 
 // func_8001608C, as the game replays a frame's recorded time step: attract
@@ -491,7 +572,7 @@ extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // Some animations step once per game frame instead of by the delta time, so
-// above 30 FPS they ran 2 to 8 times too fast. At 60, 120 and Unlocked these
+// above 30 FPS they ran too fast. Above 30 FPS these
 // gates let each one step only once per 1/30 s of game time, counted for each
 // object (by address) and once per game frame however often it is called.
 // Original and 30 FPS are unchanged.
@@ -507,7 +588,7 @@ namespace {
         // True when the object at this address should skip its step this frame.
         bool skip(uint8_t* rdram, uint32_t address) {
             std::lock_guard lock{ mutex };
-            if (locked_vis() != 1) {
+            if (!above_30()) {
                 gates.clear();
                 return false;
             }
@@ -574,16 +655,19 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
         option,
         "Game Frame Rate",
         "How often the game itself updates. <recomp-color primary>Original</recomp-color> follows the game's own timing, which moves between frame lengths. "
-        "<recomp-color primary>30 FPS</recomp-color>, <recomp-color primary>60 FPS</recomp-color> and <recomp-color primary>120 FPS</recomp-color> keep every game frame the same length. "
-        "<recomp-color primary>Unlocked</recomp-color> runs the game as fast as your PC can, up to 240. "
-        "<recomp-color warning>120 FPS and Unlocked are experimental: some objects may move at the wrong speed.</recomp-color> "
+        "<recomp-color primary>30</recomp-color> to <recomp-color primary>240 FPS</recomp-color> keep every game frame the same length. "
+        "<recomp-color primary>Uncapped</recomp-color> runs the game as fast as your PC can, with no limit. "
+        "<recomp-color warning>Above 60 FPS is experimental: some objects may move at the wrong speed.</recomp-color> "
         "This is not the Interpolation option, which adds in-between frames without changing the game.",
         {
             {Mode::Original, "Original", "Original"},
             {Mode::Fps30, "Fps30", "30 FPS"},
+            {Mode::Fps40, "Fps40", "40 FPS"},
             {Mode::Fps60, "Fps60", "60 FPS"},
             {Mode::Fps120, "Fps120", "120 FPS (Experimental)"},
-            {Mode::Unlocked, "Unlocked", "Unlocked (Experimental)"},
+            {Mode::Fps175, "Fps175", "175 FPS (Experimental)"},
+            {Mode::Fps240, "Fps240", "240 FPS (Experimental)"},
+            {Mode::Uncapped, "Unlocked", "Uncapped (Experimental)"},
         },
         Mode::Fps60);
 }

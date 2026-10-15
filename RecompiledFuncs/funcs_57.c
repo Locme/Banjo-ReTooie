@@ -1944,6 +1944,7 @@ L_800152D4:
     // 0x800152FC: lw          $a0, -0x7080($a0)
     ctx->r4 = MEM_W(ctx->r4, -0X7080);
     after_10:
+    tooie_frame_swapped(rdram, ctx);
     // 0x80015300: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);
     // 0x80015304: jal         0x8002F240

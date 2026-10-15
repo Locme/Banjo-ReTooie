@@ -2084,6 +2084,17 @@
   1. Same setup as your log of 2026-10-15 (4K, 120 fps, MSAA 2x, BT Reloaded and Smash Banjo on)
   2. Play normally for 10 minutes, then send console.log
 - Look for: the [vram] lines now also say "ours N MB in N allocations, N textures, N render targets". If "ours" climbs with VRAM, the renderer is leaking and the counts say what. If VRAM climbs and "ours" stays level, the graphics driver is holding the memory. Checked headless (software Vulkan, so not your NVIDIA driver): VRAM stays level for 3 minutes with the Enhanced preset, 4K, 120 fps, Smash Banjo, a test texture pack, cheats on, in Mayahem Temple and Isle o' Hags; your log climbs about 1 GB a minute in the same places.
+
+## T196 Game Frame Rate 30 / 40 / 60 / 120 / 175 / 240 / Uncapped
+- Asked: 2026-10-15 23:30 UTC
+- Build: your local build of main
+- Commit: (this change)
+- Steps:
+  1. Graphics: Game Frame Rate, try each of 40, 120, 175, 240 FPS and Uncapped (Interpolation Off, so the overlay shows the game's own rate)
+  2. In each, run, jump and swim for a minute in Spiral Mountain, and talk to someone
+  3. Uncapped: check the frame rate overlay goes past 240 where your PC can
+  4. Send the session log afterwards
+- Look for: The overlay holds the chosen rate (Uncapped as high as your PC goes); Banjo moves at the same speed in every mode; the sound stays right for 10 minutes or more (no crackle, no "[audio]" lines in the log); swimming behaves as at 60
 - Status: waiting for L
 
 ## T196 Hang watchdog catches game freezes, not only screen freezes

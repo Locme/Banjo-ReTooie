@@ -43,9 +43,9 @@ namespace {
         // Game Frame Rate (the port's own Graphics option), by its saved key.
         std::string game_rate = "?";
         try {
-            static const char* names[] = { "Original", "Fps30", "Fps60", "Fps120", "Unlocked" };
+            static const char* names[] = { "Original", "Fps30", "Fps60", "Fps120", "Uncapped", "Fps40", "Fps175", "Fps240" };
             uint32_t v = std::get<uint32_t>(recompui::config::get_graphics_config().get_option_value(tooie::game_frame_rate::option));
-            game_rate = v < 5 ? names[v] : std::to_string(v);
+            game_rate = v < 8 ? names[v] : std::to_string(v);
         } catch (...) {
         }
         return "game frame rate " + game_rate +

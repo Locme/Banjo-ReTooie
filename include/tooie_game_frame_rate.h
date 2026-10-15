@@ -10,7 +10,8 @@
 // updates, as opposed to the Interpolation option, which only changes how often
 // frames are presented and blended.
 namespace tooie::game_frame_rate {
-    enum class Mode : uint32_t { Original, Fps30, Fps60, Fps120, Unlocked };
+    // Values are saved by key; the new ones go at the end. Uncapped keeps the key "Unlocked".
+    enum class Mode : uint32_t { Original, Fps30, Fps60, Fps120, Uncapped, Fps40, Fps175, Fps240 };
     inline const std::string option = "game_frame_rate";
 
     // Adds the option to the Graphics tab. It applies from the next game frame.
