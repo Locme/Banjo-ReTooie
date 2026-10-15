@@ -134,6 +134,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
   isn't in RT64's database left the interpreter with no command table, and the next display list
   crashed (L's 2026-10-14 10:33 dump). It now keeps the last known microcode and logs
   "[rt64] Unknown microcode (text, data)" to console.log; with none known yet, lists are skipped.
+* **Texture dumps** (`src/hle/rt64_rdp_tmem.cpp`, `.h`): adds
+  `RT64::SetTextureDumpDirectory(folder, callback)`, which starts RT64's own
+  texture dumper (normally only in the debugger window) in that folder, or stops
+  it with an empty path. Each texture dumped the first time is also handed to the
+  callback with TMEM and its tile, so the game can save it as a PNG
+  (`src/game/texture_sweep.cpp`).
 * **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`): adds
   `RT64::RequestScreenshot(callback)`. The next presented frame's game image is
   copied to a read-back buffer before the UI is drawn over it, converted to

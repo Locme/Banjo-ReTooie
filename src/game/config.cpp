@@ -40,6 +40,7 @@
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
+#include "tooie_texture_sweep.h"
 
 namespace {
     void show_cheats_tab() {
@@ -211,6 +212,17 @@ void tooie::init_config() {
         "More game memory",
         "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
         true);
+
+    general.add_enum_option(
+        tooie::texture_dump_option,
+        "Texture dump",
+        "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. If the game stops during a sweep, it carries on from the next map when you load a file again.",
+        {
+            {tooie::TextureDump::Off, "Off", "Off"},
+            {tooie::TextureDump::WhilePlaying, "WhilePlaying", "While playing"},
+            {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
+        },
+        tooie::TextureDump::Off);
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");

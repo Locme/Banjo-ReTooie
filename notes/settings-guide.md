@@ -23,6 +23,18 @@ on a controller.
   play in a level. Pauses, menus and cutscenes don't count, and it never saves
   during them. A "Game saved" notice shows. Default: Off.
 
+- **Texture dump** (Developer): for making texture packs. Saves every texture
+  the game draws to the `texture_dump` folder in the app-data folder:
+  `texture_dump/png/<hash>.png` with an `rt64.json`, so that folder loads as an
+  RT64 texture pack, and RT64's raw dump files in `texture_dump/raw/` (feed them
+  to RT64's `texture_hasher` for Rice hashes). **While playing** saves what you
+  see. **Sweep all maps** warps through every map by itself (multiplayer maps
+  left out, cutscenes last) and turns the camera around in each, about 40
+  minutes; load a spare save file first. `texture_dump/sweep.txt` lists each map
+  and how many new textures it gave. If the game stops during a sweep, it
+  carries on after that map the next time a file is loaded; picking Sweep all
+  maps again starts a new one. Timer save waits while a sweep runs. Default: Off.
+
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.
 

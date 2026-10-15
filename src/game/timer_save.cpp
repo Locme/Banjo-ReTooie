@@ -25,6 +25,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "tooie_game.h"
+#include "tooie_texture_sweep.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -97,6 +98,10 @@ void tooie::timer_save_tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     if (now - last_save_time < interval) {
+        return;
+    }
+    // Not while a texture sweep warps around: the file would load in whatever map it reached.
+    if (tooie::texture_sweep::sweeping()) {
         return;
     }
     // Due. Wait for a frame of actual play: no pause, no cutscene, no map change.

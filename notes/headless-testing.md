@@ -37,6 +37,8 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   Several warps: `TOOIE_WARP=AF:0@15000,142:0@29000,...` (in time order).
   Code: `src/debug/warp.cpp`.
 
+- `TOOIE_TEXTURE_DUMP=play|sweep`: sets General > Texture dump whatever the setting says. `TOOIE_TEXTURE_SWEEP_MAPS=B8,142,AF` sweeps only those maps (hex), `TOOIE_TEXTURE_DUMP_DIR=<dir>` writes there instead of `texture_dump/` (keep it out of the repo: the textures are ROM data). Logs `[texture-dump]` and `[texture-sweep]`. Code: `src/game/texture_sweep.cpp`. A sweep needs a map with a file, so pair it with `TOOIE_WARP=AF:0@15000`.
+
 - `TOOIE_SCREENSHOT_AT=ms[,ms...]`: takes an F12 screenshot at those times
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.

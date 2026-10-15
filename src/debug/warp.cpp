@@ -45,6 +45,7 @@
 #include "tooie_achievements.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_picture_filters.h"
+#include "tooie_texture_sweep.h"
 
 namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
@@ -139,6 +140,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::jiggy_dance::tick(rdram, ctx);
     tooie::achievements::tick(rdram, ctx);
     tooie::hd_shadows::tick();
+    tooie::texture_sweep::tick(rdram);
     // Last: photo mode scales this frame's delta time.
     tooie::photo_mode::tick(rdram, ctx);
 

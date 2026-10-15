@@ -698,6 +698,131 @@ index 84f4e7c..2c35751 100644
          void clearExtended();
  
          // The expected size and order for the elements in each array are:
+diff --git a/src/hle/rt64_rdp_tmem.cpp b/src/hle/rt64_rdp_tmem.cpp
+index 6051f4e..6869d51 100644
+--- a/src/hle/rt64_rdp_tmem.cpp
++++ b/src/hle/rt64_rdp_tmem.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include <cassert>
+ #include <cinttypes>
++#include <mutex>
+ 
+ #include "xxHash/xxh3.h"
+ 
+@@ -14,8 +15,47 @@
+ #include "rt64_state.h"
+ 
+ namespace RT64 {
++    // Banjo-Tooie texture dumps.
++
++    namespace {
++        std::mutex dumpRequestMutex;
++        std::filesystem::path dumpRequestDirectory;
++        TextureDumpCallback dumpRequestCallback;
++        std::atomic<uint32_t> dumpRequestCounter = 0;
++        std::atomic<uint32_t> dumpCount = 0;
++    };
++
++    void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback) {
++        std::scoped_lock lock(dumpRequestMutex);
++        dumpRequestDirectory = directory;
++        dumpRequestCallback = std::move(callback);
++        dumpCount = 0;
++        dumpRequestCounter++;
++    }
++
++    uint32_t TextureDumpCount() {
++        return dumpCount.load();
++    }
++
+     // TextureManager
+ 
++    void TextureManager::syncDumpRequest(State *state) {
++        const uint32_t counter = dumpRequestCounter.load();
++        if (counter == dumpRequestSeen) {
++            return;
++        }
++
++        std::scoped_lock lock(dumpRequestMutex);
++        dumpRequestSeen = counter;
++        state->dumpingTexturesDirectory = dumpRequestDirectory;
++        dumpCallback = dumpRequestCallback;
++        dumpedSet.clear();
++        if (!dumpRequestDirectory.empty()) {
++            std::error_code ec;
++            std::filesystem::create_directories(dumpRequestDirectory, ec);
++        }
++    }
++
+     void TextureManager::uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash) {
+         if (hashSet.find(replacementHash) == hashSet.end()) {
+             hashSet.insert(replacementHash);
+@@ -24,6 +64,7 @@ namespace RT64 {
+     }
+ 
+     uint64_t TextureManager::uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut) {
++        syncDumpRequest(state);
+         XXH3_state_t xxh3;
+         XXH3_64bits_reset(&xxh3);
+         const uint8_t *TMEM = reinterpret_cast<const uint8_t *>(state->rdp->TMEM);
+@@ -50,6 +91,7 @@ namespace RT64 {
+     }
+ 
+     uint64_t TextureManager::uploadTexture(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint32_t tlut) {
++        syncDumpRequest(state);
+         const uint8_t *TMEM = reinterpret_cast<const uint8_t *>(state->rdp->TMEM);
+         uint64_t hash = TMEMHasher::hash(TMEM, loadTile, width, height, tlut, TMEMHasher::CurrentHashVersion);
+         if (hashSet.find(hash) == hashSet.end()) {
+@@ -187,6 +229,11 @@ namespace RT64 {
+             dumpTileStream << std::setw(4) << jroot << std::endl;
+             dumpTileStream.close();
+         }
++
++        dumpCount++;
++        if (dumpCallback) {
++            dumpCallback(state->dumpingTexturesDirectory / std::string(baseName), reinterpret_cast<const uint8_t *>(state->rdp->TMEM), loadTile, width, height, tlut);
++        }
+     }
+ 
+     void TextureManager::removeHashes(const std::vector<uint64_t> &hashes) {
+diff --git a/src/hle/rt64_rdp_tmem.h b/src/hle/rt64_rdp_tmem.h
+index 3708220..f2206f7 100644
+--- a/src/hle/rt64_rdp_tmem.h
++++ b/src/hle/rt64_rdp_tmem.h
+@@ -4,6 +4,9 @@
+ 
+ #pragma once
+ 
++#include <atomic>
++#include <filesystem>
++#include <functional>
+ #include <set>
+ 
+ #include "hle/rt64_draw_call.h"
+@@ -12,9 +15,22 @@
+ namespace RT64 {
+     struct State;
+ 
++    // Banjo-Tooie texture dumps: start RT64's texture dumper in a folder without the
++    // debugger window (an empty path stops it). Each texture dumped for the first time
++    // is also handed to the callback, on the renderer thread, with the whole of TMEM
++    // (4 KB) and the tile it is drawn from. basePath is the dump's path without its
++    // ".tmem" ending. TextureDumpCount() is how many textures were dumped since the last start.
++    typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut)> TextureDumpCallback;
++    void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback);
++    uint32_t TextureDumpCount();
++
+     struct TextureManager {
+         std::set<uint64_t> hashSet;
+         std::set<uint64_t> dumpedSet;
++        uint32_t dumpRequestSeen = 0;
++        TextureDumpCallback dumpCallback;
++
++        void syncDumpRequest(State *state);
+ 
+         void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
+         uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 2970e71..bc9b04b 100644
 --- a/src/hle/rt64_state.cpp
