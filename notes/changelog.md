@@ -17,6 +17,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- The frame rate overlay's two Interpolation lines are one: "Interpolation: Display, on: 6 models, 47 bones, 0 shadows, 1 camera cuts" or ", off".
+
 - Long drop-down lists in the menu (Effect debug view) scroll, and follow the pick when moving with a pad or the arrow keys; before, entries past the window edge couldn't be seen (T148).
 - Graphics > Debug > Effect debug view: shows any picture effect or filter on its own (all 13 scene effects plus sharpening, contrast, saturation, vignette, grain, SMAA, FXAA, FSR, CRT, 16-bit colour, colourblind and texture upscaling), or all of them off; F6 steps through the same list. Untested on PC (T140).
 - HD Shadows and Extended Draw Distance stop adding to a frame when the game's fixed drawing memory is nearly full (both together filled up to 87% of it headless, and past the end it tears or explodes models). Untested on PC (T120).

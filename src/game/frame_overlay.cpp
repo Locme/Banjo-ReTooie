@@ -562,18 +562,15 @@ namespace {
                 game_busy_ms / game_frames, std::clamp(game_busy_ms / (seconds * 10.0), 0.0, 100.0));
             text.back() += line;
         }
-        text.push_back("Interpolation: " + framerate_setting());
-
+        // One line: the setting, then whether it is blending and what it tagged.
         tooie::model_tagging::Stats tags = tooie::model_tagging::last_stats();
         if (tags.interpolating) {
-            std::snprintf(line, sizeof(line), "Interpolation on: %u models, %u bones, %u shadows",
-                tags.models, tags.bones, tags.shadows);
-            text.push_back(line);
-            std::snprintf(line, sizeof(line), "Camera cuts %u", tags.camera_cuts);
-            text.push_back(line);
+            std::snprintf(line, sizeof(line), ", on: %u models, %u bones, %u shadows, %u camera cuts",
+                tags.models, tags.bones, tags.shadows, tags.camera_cuts);
+            text.push_back("Interpolation: " + framerate_setting() + line);
         }
         else {
-            text.push_back("Interpolation off");
+            text.push_back("Interpolation: " + framerate_setting() + ", off");
         }
 
         text.push_back(stutter_line());
