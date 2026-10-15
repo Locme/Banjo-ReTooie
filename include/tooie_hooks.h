@@ -14,6 +14,8 @@ void tooie_read_overlay_key(uint8_t* rdram, recomp_context* ctx);
 void tooie_overlay_placed(uint8_t* rdram, recomp_context* ctx);
 void tooie_overlay_unloading(uint8_t* rdram, recomp_context* ctx);
 void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
+// Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
+void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Game frame rate (src/game/game_frame_rate.cpp): the wait between frames in func_800151BC, and the time step in func_800D8FA0.

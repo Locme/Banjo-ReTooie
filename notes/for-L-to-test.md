@@ -1626,3 +1626,12 @@
   3. Switch Banjo between Off, Overhead and Tilt while playing
 - Look for: With Off, Banjo has the game's simpler shadow while enemies keep their HD shadows; Overhead/Tilt bring his HD shadow back at once
 - Status: waiting for L
+
+## T154 Heap crash guard
+- Asked: 2026-10-15 UTC
+- Build: main @ (this commit)
+- Steps:
+  1. Play the way you were when it crashed (120 FPS, Display interpolation, More game memory on)
+  2. If the game carries on where it would have crashed, send logs/console.log
+- Look for: no crash at func_8001C0A0 / find_free_block; any `[heap]` lines in console.log say where the damage was, which helps find what writes over the heap
+- Status: waiting for L

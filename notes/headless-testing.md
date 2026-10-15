@@ -53,6 +53,10 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 - Heap check (src/debug/heap_check.cpp): every game frame the game's heap is walked and the first damage is logged as `[heap] damage found ...` with the blocks around it and the map; on by default (also on PCs, for crash reports). `TOOIE_HEAP_CHECK=1` also prints `[heap] ok` every 600 checks, `=0` turns it off. The heap starts at the address held at 0x8007E990 and its size is at 0x8007BF00.
 
+- Heap guard (src/game/heap_guard.cpp): before func_8001C0A0 walks the heap's block list, a next link that is outside the heap or doesn't link back is repaired and logged as `[heap] block ... repaired to ...`. `TOOIE_HEAP_BREAK=<n>` breaks a link on the nth walk (clears its top bit, as in L's 2026-10-15 crash, or writes `TOOIE_HEAP_BREAK_VALUE=<hex>`), to test the repair.
+
+- `TOOIE_FX_LOG=1`: prints `[fx]` twice a second from the scene effects pass: fog strength and start, Banjo's position, the camera's world position worked out from the view matrix, and the projection terms (lib-patches/rt64.patch, rt64_scene_effects.cpp).
+
 - `TOOIE_SET="<ms>:<option>=<value>[,...];<ms>:..."`: changes Graphics options at those times after the game started, the way the menu does (saved and applied at once), to test live switching. Enum options take the index of their choice (`game_frame_rate` 0 Original, 1 30 FPS, 2 60 FPS; `rr_option` 0 Original, 1 Display, 2 Manual), number options a number (`rr_manual_value=120`). Logs `[set]`. It saves graphics.json in the run folder, so put that back afterwards (src/debug/settings_script.cpp).
 
 - `TOOIE_FREE_CAMERA=1`: turns the free camera on whatever the setting says;

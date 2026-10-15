@@ -1734,10 +1734,10 @@ index bf7b669..2f2f9c9 100644
      }
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5affbee
+index 0000000..1d795b2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,743 @@
+@@ -0,0 +1,754 @@
 +//
 +// RT64
 +//
@@ -2224,6 +2224,17 @@ index 0000000..5affbee
 +            }
 +            else {
 +                constants.sun = { 0.0f, 0.0f, 1.0f, 0.0f };
++            }
++        }
++
++        {
++            static const bool fxLog = (getenv("TOOIE_FX_LOG") != nullptr);
++            static auto lastLog = std::chrono::steady_clock::now();
++            if (fxLog && (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500))) {
++                lastLog = std::chrono::steady_clock::now();
++                fprintf(stderr, "[fx] fog %.2f start %.0f player %.0f %.0f %.0f cam %.0f %.0f %.0f proj %.3f %.3f depth %.4f %.4f %.4f %.4f\n", constants.fog.x, constants.fog.y,
++                    settings.player[0], settings.player[1], settings.player[2], constants.worldX.w, constants.worldY.w, constants.worldZ.w,
++                    constants.projection.x, constants.projection.y, constants.depthTerms.x, constants.depthTerms.y, constants.depthTerms.z, constants.depthTerms.w);
 +            }
 +        }
 +

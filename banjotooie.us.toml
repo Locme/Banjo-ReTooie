@@ -547,6 +547,15 @@ func = "ovl_unload"
 before_vram = 0x800819E4
 text = "tooie_overlay_unloading(rdram, ctx);"
 
+# --- Heap guard (src/game/heap_guard.cpp) -----------------------------------
+# Before func_8001C0A0 walks the heap's block list (heap_alloc_sided's third kind
+# of allocation), repair a next link that points outside the heap or at a block
+# that doesn't link back (L's crash of 2026-10-15: a link that lost its top bit).
+[[patches.hook]]
+func = "func_8001C0A0"
+before_vram = 0x8001C0A0
+text = "tooie_heap_guard(rdram, ctx);"
+
 # --- Anti-tamper boot words (func_8001DE64) ---------------------------------
 # The CIC thread reads two words the IPL3 leaves in RDRAM through uncached
 # addresses (0xA02FB1F4, 0xA02FE1C0) and flags tampering unless they are

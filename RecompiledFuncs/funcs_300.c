@@ -2915,6 +2915,7 @@ L_800A4068:
 RECOMP_FUNC void func_8001C0A0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_heap_guard(rdram, ctx);
     // 0x8001C0A0: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x8001C0A4: sw          $s2, 0x20($sp)
