@@ -367,10 +367,11 @@ void tooie::init_config() {
     graphics.add_enum_option(
         tooie::hd_shadows::banjo_direction_option,
         "HD Shadows: Banjo",
-        "Where the light for Banjo's shadow comes from. Overhead: straight down, as in the original, right under him. Tilt: at an angle, so the shadow falls beside him; this makes it easier to see where Banjo is in 3D space.",
+        "Banjo's shadow (or whoever you play as). Overhead: the light comes straight down, as in the original, so the shadow sits right under him. Tilt: the light comes at an angle, so the shadow falls beside him; this makes it easier to see where Banjo is in 3D space. Off: Banjo keeps the game's own simpler shadow, while enemies and NPCs keep their HD shadows.",
         {
             {tooie::hd_shadows::Direction::Overhead, "Overhead", "Overhead"},
             {tooie::hd_shadows::Direction::Tilt, "Tilt", "Tilt"},
+            {tooie::hd_shadows::Direction::Off, "Off", "Off"},
         },
         tooie::hd_shadows::Direction::Overhead);
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);

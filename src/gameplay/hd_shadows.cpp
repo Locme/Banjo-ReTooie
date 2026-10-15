@@ -45,13 +45,17 @@ namespace {
         }
     }
 
-    bool tilted(const std::string& option) {
+    tooie::hd_shadows::Direction direction(const std::string& option) {
         try {
             return static_cast<tooie::hd_shadows::Direction>(std::get<uint32_t>(
-                recompui::config::get_config(recompui::config::graphics::id).get_option_value(option))) == tooie::hd_shadows::Direction::Tilt;
+                recompui::config::get_config(recompui::config::graphics::id).get_option_value(option)));
         } catch (...) {
-            return false;
+            return tooie::hd_shadows::Direction::Overhead;
         }
+    }
+
+    bool tilted(const std::string& option) {
+        return direction(option) == tooie::hd_shadows::Direction::Tilt;
     }
 
     // The Tilt light, towards the light and fixed in the world like a sun: about 35 degrees from
@@ -72,7 +76,8 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
             last_model = model;
         }
     }
-    if (hd_shadows_on()) {
+    // "HD Shadows: Banjo" Off leaves the game's shadow model and light for the player.
+    if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off) {
         MEM_W(0x1C8, ctx->r29) = MEM_W(0x1C4, ctx->r29);
         // $s0 is the light direction, a vector its callers (func_800A69F0 via func_800A6B24) build on
         // their stack for every shadow. Tilt replaces the default overhead light (0, 1, 0) only, so a
