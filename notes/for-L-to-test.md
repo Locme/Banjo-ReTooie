@@ -2157,3 +2157,12 @@
   3. Graphics > Fireflies off and on
 - Look for: Small yellow-green glows drifting and blinking round Banjo, a little above the ground, hidden behind walls and hills. None by day or on Hailfire Peaks. Too many, too few, too big or too small?
 - Status: waiting for L
+
+## T203 Smash Banjo v6: feet fur and backpack
+- Asked: 2026-10-15 23:50 UTC
+- Build: main, plus mods/Smash Banjo v6.zip from project files (take v1 to v5 out of the mods folder)
+- Steps:
+  1. Load a save with Smash Banjo on, look at his feet close up (photo mode), then walk and stop
+  2. Run, jump, flap and roll, and watch the backpack
+- Look for: Step 1, the fur round his ankles sits on his legs and turns with his feet, with no pink band under it. Step 2, the backpack stays on his back the way vanilla's does. Checked headless: no pink band at the ankles; backpack on his back in the flap; the run was not compared frame by frame with vanilla.
+- Status: waiting for L
