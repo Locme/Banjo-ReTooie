@@ -1964,3 +1964,14 @@
 - Checked headless: Stony in Mayahem Temple and the Daddy T-Rex in Terrydactyland, both ways; the line on the 1st change only; refused when not unlocked, in the air, while the caveman talks, and with the T-Rex against a wall. Not checked headless: the submarine, bee, van, washer, snowball, detonator and baby T-Rex (same game call), and how the refusal sound sounds.
 - Status: waiting for L
 
+
+## T185 Smash Banjo model mod
+- Asked: 2026-10-15 21:15 UTC
+- Build: main (pull and build), plus the mod zip from project files: mods/Smash Banjo v1.zip
+- Steps:
+  1. Put "Smash Banjo v1.zip" in the game's mods folder as it is (no unzipping) and start the game
+  2. Open the Mods menu: Smash Banjo is listed. Turn it on
+  3. Load a save and walk, run, jump, Feathery Flap, crouch and roll; let Banjo stand still to see him blink
+  4. Turn the mod off in the Mods menu, then go through a door or loading zone
+- Look for: Banjo and Kazooie use the Smash Ultimate model with its full-size textures, move with every animation, and blink. Step 4: the game's own model comes back after the next area load (the model is only read when an area loads). Known: a small gap on top of Banjo's head, rough fur edges, Smash-sized hands, Kazooie's Turbo Trainers and Wading Boots show as plain feet. Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced. Checked headless in Spiral Mountain (screenshot screens/smash-banjo/v1.png in project files).
+- Status: waiting for L

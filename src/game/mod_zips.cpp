@@ -1,11 +1,13 @@
-// Texture packs dropped into the mods folder as a .zip.
+// Texture packs and asset mods dropped into the mods folder as a .zip.
 //
 // The mod loader takes .nrm mods, .rtz texture packs and unpacked mod folders.
 // Texture packs made for RT64 are often shipped as a plain .zip with the pack
 // one folder down (BT Reloaded: "BANJO TOOIE/rt64.json", "BANJO TOOIE/mod.json"
-// and the PNGs). At startup, before the mods are scanned, every .zip in the
-// mods folder that holds an rt64.json is unpacked into a folder named after the
-// zip, which the loader then opens like any other mod folder. A marker file in
+// and the PNGs). Asset mods (model mods such as Smash Banjo) come the same way,
+// with an assets.json instead of or next to the rt64.json. At startup, before
+// the mods are scanned, every .zip in the mods folder that holds an rt64.json or
+// an assets.json is unpacked into a folder named after the zip, which the loader
+// then opens like any other mod folder. A marker file in
 // that folder remembers which zip (size and date) it came from, so the zip is
 // only unpacked again when it changes. A pack without a mod.json gets a small
 // one so the loader accepts the folder.
@@ -46,8 +48,8 @@ namespace {
         return out;
     }
 
-    // The folder inside the zip that holds rt64.json ("" for the root, else ending in '/').
-    // False if the zip has no rt64.json.
+    // The folder inside the zip that holds rt64.json or assets.json ("" for the root, else
+    // ending in '/'). False if the zip has neither.
     bool find_pack_root(mz_zip_archive& zip, std::string& root) {
         bool found = false;
         mz_uint count = mz_zip_reader_get_num_files(&zip);
@@ -57,11 +59,17 @@ namespace {
                 continue;
             }
             std::string entry = name;
-            const std::string file = "rt64.json";
-            if (entry.size() < file.size() || entry.compare(entry.size() - file.size(), file.size(), file) != 0) {
+            std::string dir;
+            bool matched = false;
+            for (const std::string file : {"rt64.json", "assets.json"}) {
+                if (entry.size() >= file.size() && entry.compare(entry.size() - file.size(), file.size(), file) == 0) {
+                    dir = entry.substr(0, entry.size() - file.size());
+                    matched = true;
+                }
+            }
+            if (!matched) {
                 continue;
             }
-            std::string dir = entry.substr(0, entry.size() - file.size());
             if (!dir.empty() && dir.back() != '/') {
                 continue;
             }
@@ -115,13 +123,13 @@ namespace {
         }
         std::string root;
         if (!find_pack_root(zip, root)) {
-            fprintf(stderr, "[mods] %s has no rt64.json, so it is not an RT64 texture pack; skipped\n",
+            fprintf(stderr, "[mods] %s has no rt64.json or assets.json, so it is not a texture pack or asset mod; skipped\n",
                 (const char*)zip_path.filename().u8string().c_str());
             mz_zip_reader_end(&zip);
             return;
         }
 
-        printf("[mods] unpacking texture pack %s (once; this can take a while)\n", (const char*)zip_path.filename().u8string().c_str());
+        printf("[mods] unpacking %s (once; this can take a while)\n", (const char*)zip_path.filename().u8string().c_str());
         fflush(stdout);
         fs::path temp = target;
         temp += ".unpacking";

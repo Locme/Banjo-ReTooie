@@ -43,7 +43,11 @@ on a controller.
   `mods/assets/`: it loads in place of the game's, at any size, the next time
   the game loads that asset (another area, or a restart). A model has to be in
   the game's own model format, and a character's model needs the bones its
-  animations expect, or the game can crash. Default: off.
+  animations expect, or the game can crash. Default: off. A model mod packs the same files as a
+  mod: a folder (or .zip) with mod.json, an `assets.json` and an `assets/`
+  folder of `asset_<id>.bin` files. It shows in the Mods menu, turns on and off
+  there, and wins over `mods/assets/` (the mod higher in the list wins when two
+  replace the same asset).
 
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.

@@ -43,6 +43,7 @@
 #include "recompinput/input_events.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
+#include "tooie_asset_mods.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
 #include "tooie_session_log.h"
@@ -591,6 +592,18 @@ void reorder_texture_pack(recomp::mods::ModContext&) {
     recompui::renderer::trigger_texture_pack_update();
 }
 
+void enable_asset_mod(recomp::mods::ModContext& context, const recomp::mods::ModHandle& mod) {
+    tooie::asset_mods::enable_mod(mod.manifest.mod_id, mod.manifest.mod_root_path, context.get_mod_order_index(mod.manifest.mod_id));
+}
+
+void disable_asset_mod(recomp::mods::ModContext&, const recomp::mods::ModHandle& mod) {
+    tooie::asset_mods::disable_mod(mod.manifest.mod_id);
+}
+
+void reorder_asset_mods(recomp::mods::ModContext& context) {
+    tooie::asset_mods::reorder([&](const std::string& mod_id) { return context.get_mod_order_index(mod_id); });
+}
+
 // Set by `--game bt`: start the game straight away when the ROM is installed,
 // skipping the launcher.
 bool autostart_game = false;
@@ -832,6 +845,17 @@ int main(int argc, char** argv) {
 
     // Register the .rtz texture pack file format with the previous content type as its only allowed content type.
     recomp::mods::register_mod_container_type("rtz", std::vector{ texture_pack_content_type_id }, false);
+
+    // Asset mods (models and other assets by id, src/game/asset_mods.cpp): a mod folder with an
+    // assets.json and an assets/ folder. One mod can be both this and a texture pack.
+    recomp::mods::ModContentType asset_mod_content_type{
+        .content_filename = "assets.json",
+        .allow_runtime_toggle = true,
+        .on_enabled = enable_asset_mod,
+        .on_disabled = disable_asset_mod,
+        .on_reordered = reorder_asset_mods,
+    };
+    recomp::mods::register_mod_content_type(asset_mod_content_type);
 
     recomp::start(
         project_version,

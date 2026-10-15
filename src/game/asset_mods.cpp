@@ -12,7 +12,11 @@
 // decompressed, as asset_<id>.bin (id in hex, 4 digits), with assets.txt listing id, kind and size.
 // Files that are already there are left alone. ROM data: it stays out of the repo.
 //
-// Replace: a file mods/assets/asset_<id>.bin is loaded in place of that asset, at any size. The game
+// Replace: a file mods/assets/asset_<id>.bin is loaded in place of that asset, at any size. A mod
+// can carry them too: a mod folder (or a .zip that mod_zips.cpp unpacks into one) with an
+// assets.json and an assets/ folder of asset_<id>.bin files. While that mod is on in the Mods menu
+// its files count, ahead of mods/assets, in the mod list's order. Switching it on or off counts
+// from the next time the game loads that asset (another area). The game
 // loads assets by id in func_800D5B34; banjotooie.us.toml hooks it before it fetches the asset
 // (0x800D5BF4). When a replacement exists the hook allocates game heap for it with the game's own
 // heap_alloc, copies the file in and skips to the end of the function, where the game records the
@@ -27,8 +31,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <fstream>
+#include <map>
 #include <mutex>
 #include <set>
 #include <string>
@@ -183,7 +190,13 @@ namespace {
     // ---- Replacement ----
 
     std::mutex mods_mutex;
-    std::set<uint32_t> replaced_ids;
+    std::map<uint32_t, fs::path> replaced_ids;
+    struct ModAssets {
+        std::string mod_id;
+        fs::path folder;
+        size_t order;
+    };
+    std::vector<ModAssets> mod_folders;
     steady::time_point last_scan;
     bool scanned = false;
 
@@ -194,22 +207,61 @@ namespace {
         }
         scanned = true;
         last_scan = now;
-        std::set<uint32_t> ids;
-        std::error_code ec;
-        for (const auto& entry : fs::directory_iterator(mods_folder(), ec)) {
-            std::string name = entry.path().filename().string();
-            unsigned id = 0;
-            char tail[8] = {};
-            if (std::sscanf(name.c_str(), "asset_%x%7s", &id, tail) == 2 && std::strcmp(tail, ".bin") == 0) {
-                ids.insert(id);
+        std::map<uint32_t, fs::path> ids;
+        std::vector<fs::path> folders;
+        for (const ModAssets& m : mod_folders) {
+            folders.push_back(m.folder);
+        }
+        folders.push_back(mods_folder());
+        for (const fs::path& folder : folders) {
+            std::error_code ec;
+            for (const auto& entry : fs::directory_iterator(folder, ec)) {
+                std::string name = entry.path().filename().string();
+                unsigned id = 0;
+                char tail[8] = {};
+                if (std::sscanf(name.c_str(), "asset_%x%7s", &id, tail) == 2 && std::strcmp(tail, ".bin") == 0) {
+                    ids.try_emplace(id, entry.path());  // the first folder that has it wins
+                }
             }
         }
         if (ids != replaced_ids) {
-            printf("[assets] %zu replacement assets in %s\n", ids.size(), mods_folder().string().c_str());
+            printf("[assets] %zu replacement assets (%zu from mods)\n", ids.size(), mod_folders.size());
             fflush(stdout);
         }
         replaced_ids = std::move(ids);
     }
+}
+
+void tooie::asset_mods::enable_mod(const std::string& mod_id, const std::filesystem::path& root, size_t order) {
+    std::error_code ec;
+    if (!fs::is_directory(root / "assets", ec)) {
+        fprintf(stderr, "[assets] mod %s has assets.json but no assets folder next to it\n", mod_id.c_str());
+        return;
+    }
+    std::lock_guard lock{mods_mutex};
+    std::erase_if(mod_folders, [&](const ModAssets& m) { return m.mod_id == mod_id; });
+    mod_folders.push_back({mod_id, root / "assets", order});
+    std::stable_sort(mod_folders.begin(), mod_folders.end(), [](const ModAssets& a, const ModAssets& b) { return a.order < b.order; });
+    scanned = false;
+    printf("[assets] mod %s on: its assets load in place of the game's\n", mod_id.c_str());
+    fflush(stdout);
+}
+
+void tooie::asset_mods::disable_mod(const std::string& mod_id) {
+    std::lock_guard lock{mods_mutex};
+    std::erase_if(mod_folders, [&](const ModAssets& m) { return m.mod_id == mod_id; });
+    scanned = false;
+    printf("[assets] mod %s off\n", mod_id.c_str());
+    fflush(stdout);
+}
+
+void tooie::asset_mods::reorder(const std::function<size_t(const std::string&)>& order_of) {
+    std::lock_guard lock{mods_mutex};
+    for (ModAssets& m : mod_folders) {
+        m.order = order_of(m.mod_id);
+    }
+    std::stable_sort(mod_folders.begin(), mod_folders.end(), [](const ModAssets& a, const ModAssets& b) { return a.order < b.order; });
+    scanned = false;
 }
 
 void tooie::asset_mods::tick() {
@@ -233,15 +285,18 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
     }
 
     std::vector<char> bytes;
+    fs::path path;
     {
         std::lock_guard lock{mods_mutex};
         rescan_if_due();
-        if (!replaced_ids.contains(id)) {
+        auto found = replaced_ids.find(id);
+        if (found == replaced_ids.end()) {
             return 0;
         }
+        path = found->second;
     }
     {
-        std::ifstream in(mods_folder() / file_name(id, ".bin"), std::ios::binary);
+        std::ifstream in(path, std::ios::binary);
         if (!in) {
             return 0;
         }

@@ -318,6 +318,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.89 Model mods: Smash Banjo and FBX Banjo (out of repo)
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15 (T185): Smash Banjo built from the Smash Ultimate rip L gave (Collada, 2K PNGs): rigged onto the player model 0x062A (68 bones, 14,110 vertices, 13,208 triangles, SKIN nodes at the joints, both eye selectors with blinks), 32x32 textures in the model and HD PNGs through an RT64 pack in the same mod. Shipped as a mod zip in project files (mods/Smash Banjo v1.zip); the converter is in project files tools/smash-rig/ (never in the repo). Game side: mods with an assets.json are a mod content type (src/main/main.cpp), toggled live, their assets/ folder searched before mods/assets (src/game/asset_mods.cpp), and zips holding an assets.json are unpacked (src/game/mod_zips.cpp). Checked headless in Spiral Mountain: idle, walk, flap, crouch, roll, blink, HD textures. Not done: solo Banjo / Kazooie, transformations, cutscene models, footwear. FBX Banjo not started.
 
 ## Stretch
 

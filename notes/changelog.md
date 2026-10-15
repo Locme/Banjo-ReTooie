@@ -24,6 +24,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Asset mods: a mod with an assets.json and an assets/ folder of asset_<id>.bin files (a model mod) can be dropped in the mods folder as a .zip and turned on and off in the Mods menu; its files load in place of the game's from the next area load. Smash Banjo (project files, mods/Smash Banjo v1.zip) is the first: the Smash Ultimate Banjo and Kazooie model with HD textures. Untested on PC (T185).
 - 3D grass, Breath of the Wild style: knee-high tufts of thin, arching blades, dark at the roots and lighter and yellower at the tips, with waves of wind rolling across the field. Banjo parts the grass round him and leaves a trail that springs back up over about a second. Untested on PC (T183).
 - Picture effects (Fog and the other scene effects) no longer cover the letterbox bars, which turned gray with Fog on; they stay inside the 3D picture. With frame smoothing, fog uses the same in-between camera the picture is drawn with. Untested on PC (T180).
 - Smoke and water droplets should no longer break into stripes with frame smoothing: an animation's next frame snaps instead of sliding across the texture. WIP > Debug > Texture slide blending turns all texture sliding off, to test. Untested on PC (T178).
