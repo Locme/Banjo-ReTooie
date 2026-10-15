@@ -2048,3 +2048,12 @@
 - Look for: the Banjo X look (colours, Kazooie's feathers, backpack, straps, belt), and anything that tears, pokes through or comes loose when he moves (straps and buckles most of all). His eyes stay open: the model has no blink. Checked headless: it loads and animates (walk, jump, flap, crouch, roll) with the HD textures matched; straps were only checked in motion at a distance.
 - Status: waiting for L
 
+
+## T192 Banjo X model mod, second rig (Banjo X Alt v1)
+- Asked: 2026-10-15 22:40 UTC
+- Build: main (pull and build), plus the mod zip from project files: mods/Banjo X Alt v1.zip
+- Steps:
+  1. Put "Banjo X Alt v1.zip" in the game's mods folder as it is (no unzipping). Turn off Smash Banjo and Banjo X in the Mods menu, then turn on "Banjo X (alt rig)"
+  2. Load a save and walk, run, jump, Feathery Flap, Talon Trot and roll; stand still to see Banjo blink; talk to someone or pick something up to see his mouth move
+  3. Compare it with Banjo X v1 (T191): both convert the same FBX; keep whichever looks better
+- Look for: the Banjo X model (from the FBX L supplied) with its full-size textures, moving with every animation. This rig also opens Banjo's lower jaw and Kazooie's lower beak, blinks Banjo's eyes (closed eyes are drawn in his fur colour), keeps the straps on the chest, and keeps the belt on the hips. Checked headless in Spiral Mountain: walking, Feathery Flap, Talon Trot and the beak attack animate (screenshot screens/banjo-x/alt-v1.png in project files). Kazooie's two tail-feather textures stay low resolution (the headless run never showed the tail, so their HD hashes are unknown). Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced.
