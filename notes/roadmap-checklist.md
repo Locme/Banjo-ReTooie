@@ -441,7 +441,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.20 Dialogue at 30 Hz with the text box opening at full rate
-- [ ] Done
+- [x] Done (T173: box and text already full rate; Graphics > Smooth talking heads toggle)
 - [ ] Approved by L
 
 ### 4.44 Smooth triangles (removed)

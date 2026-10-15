@@ -12,6 +12,8 @@
 namespace tooie::game_frame_rate {
     enum class Mode : uint32_t { Original, Fps30, Fps60, Fps120, Unlocked };
     inline const std::string option = "game_frame_rate";
+    // Talking-head portraits step every game frame above 30 FPS (else 30 a second).
+    inline const std::string smooth_talking_heads_option = "smooth_talking_heads";
 
     // Adds the option to the Graphics tab. It applies from the next game frame.
     void add_option(recomp::config::Config& graphics);

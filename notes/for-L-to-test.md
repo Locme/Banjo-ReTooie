@@ -1829,3 +1829,13 @@
   5. Visit other water you know (Jinjo Village, Jolly Roger's Lagoon, Terrydactyland) and flip Water back to Original to compare
 - Look for: Is the water clear in the shallows and darker in deep parts, with reflections at low angles, a sun glint, foam on the shores and rings round Banjo? Tell me anything that disappeared (the game's own ripple rings are replaced by ours), anything that should not have turned into water, and how the frame rate compares with Original. The surface does not move yet; that is the next step.
 - Status: waiting for L
+
+## T173 Smooth talking heads toggle (4.20)
+- Asked: 2026-10-15 19:00 UTC
+- Build: main (this commit)
+- Steps:
+  1. Pull main and build, Game frame rate 60
+  2. Talk to anyone with a talking head in the box (Klungo in Spiral Mountain, Bottles, Jamjars)
+  3. Flip Graphics > Smooth talking heads on and off while the box is open (it applies live)
+- Look for: The box, its opening and closing and the text already run at 60 either way. On, the head's mouth and blink move every frame but it also talks about twice as fast, because the mouth pictures are separate drawings. Tell me which you prefer, or whether the speed-up spoils it.
+- Status: waiting for L
