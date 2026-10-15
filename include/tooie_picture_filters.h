@@ -55,6 +55,7 @@ namespace tooie::picture_filters {
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";
+    inline const std::string sun_shadows_option = "sun_shadows";
     inline const std::string wave_speed_option = "water_wave_speed";
     inline const std::string grass_option = "grass_3d";
     inline const std::string grass_height_option = "grass_3d_height";

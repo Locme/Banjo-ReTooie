@@ -2534,10 +2534,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..1fcfb90
+index 0000000..2a31920
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,845 @@
+@@ -0,0 +1,866 @@
 +//
 +// RT64
 +//
@@ -2864,6 +2864,21 @@ index 0000000..1fcfb90
 +        effectsSettings.lightShafts = strength;
 +    }
 +
++    void SetSceneSunShadows(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.sunShadows = strength;
++    }
++
++    void SetSceneSun(bool custom, float x, float y, float z) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.customSun = custom;
++        if (custom) {
++            effectsSettings.sunDirection[0] = x;
++            effectsSettings.sunDirection[1] = y;
++            effectsSettings.sunDirection[2] = z;
++        }
++    }
++
 +    void SetSceneGrass(float amount, float height, float distance) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grass = amount;
@@ -3013,7 +3028,7 @@ index 0000000..1fcfb90
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -3093,7 +3108,8 @@ index 0000000..1fcfb90
 +            // The sun stands fairly low, to one side (the game has no sun of its own to follow), so it is
 +            // often in view: its direction in view space, through the view matrix (directions skip the
 +            // translation).
-+            const float sunWorld[3] = { 0.47f, 0.42f, -0.78f };
++            static const float fixedSun[3] = { 0.47f, 0.42f, -0.78f };
++            const float *sunWorld = settings.customSun ? settings.sunDirection : fixedSun;
 +            float sunView[3];
 +            for (int c = 0; c < 3; c++) {
 +                sunView[c] = sunWorld[0] * v[0][c] + sunWorld[1] * v[1][c] + sunWorld[2] * v[2][c];
@@ -3106,6 +3122,11 @@ index 0000000..1fcfb90
 +                sunView[2] = -1.0f;
 +            }
 +            const float sunLength = std::sqrt(sunView[0] * sunView[0] + sunView[1] * sunView[1] + sunView[2] * sunView[2]);
++            // Shadows fade out as the sun sets, gone once it is below the horizon.
++            const float worldLength = std::sqrt(sunWorld[0] * sunWorld[0] + sunWorld[1] * sunWorld[1] + sunWorld[2] * sunWorld[2]);
++            const float height = (worldLength > 1e-6f) ? sunWorld[1] / worldLength : 0.0f;
++            const float daylight = std::clamp(height / 0.15f, 0.0f, 1.0f);
++            constants.shadows = { settings.sunShadows * daylight, settings.sunShadowReach, 0.0f, 0.0f };
 +            if (sunLength > 1e-6f) {
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts };
 +            }
@@ -3385,10 +3406,10 @@ index 0000000..1fcfb90
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..685875c
+index 0000000..608de99
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,140 @@
 +//
 +// RT64
 +//
@@ -3435,6 +3456,10 @@ index 0000000..685875c
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
 +        float lightShafts = 0.0f;
++        float sunShadows = 0.0f;
++        float sunShadowReach = 900.0f;
++        bool customSun = false;
++        float sunDirection[3] = { 0.47f, 0.42f, -0.78f };
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -3475,6 +3500,12 @@ index 0000000..685875c
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
 +    void SetSceneLightShafts(float strength);
++    // Banjo-Tooie: sun shadows (0 off, 1 strongest): everything in the 3D world casts a shadow away from the
++    // sun onto what is behind it, found in the depth buffer.
++    void SetSceneSunShadows(float strength);
++    // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
++    // puts back the fixed sun. A sun below the horizon casts no shadows.
++    void SetSceneSun(bool custom, float x, float y, float z);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -5104,10 +5135,10 @@ index 74b1fa0..a51b5bc 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..c0d9417
+index 0000000..a6a63bf
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,737 @@
+@@ -0,0 +1,797 @@
 +//
 +// RT64
 +//
@@ -5563,6 +5594,63 @@ index 0000000..c0d9417
 +    return (gathered / total) * (gConstants.sun.w * onScreen * near * near * 1.4f);
 +}
 +
++// Sun shadows: from the surface, steps towards the sun and checks the depth buffer at each step; when
++// something stands in front of the step (but not so far in front that the ray passed behind it), the
++// surface is in its shadow. Surfaces turned away from the sun are shaded too, gently, so the dark side of
++// a thing meets its shadow on the ground.
++float SunShadow(int2 pixel, float depth) {
++    const float3 sun = gConstants.sun.xyz;
++    const float3 center = ViewPosition(pixel, depth);
++    const float distance = -center.z;
++    // Fades out with distance: far away the depth buffer is too coarse and the shadows too small to tell.
++    const float near = saturate(1.0f - (distance - 4000.0f) / 3000.0f);
++    if (near <= 0.0f) {
++        return 1.0f;
++    }
++    const float3 normal = ViewNormal(pixel, center);
++    const float facing = dot(normal, sun);
++    // Lifted off the surface a little (more further away, where the depth is coarser) so it doesn't shadow itself.
++    const float bias = 2.0f + distance * 0.004f;
++    const float3 start = center + normal * bias;
++    const float2 size = gConstants.projection.zw;
++    const float reach = gConstants.shadows.y;
++    const int Steps = 24;
++    // A different start for each pixel hides the steps.
++    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
++    float shadow = 0.0f;
++    [loop] for (int i = 0; i < Steps; i++) {
++        // Steps grow with distance, so close shadows are sharp and long ones still reach.
++        const float t = (float(i) + jitter) / float(Steps);
++        const float travelled = reach * t * t + 1.0f;
++        const float3 p = start + sun * travelled;
++        if (p.z > -1.0f) {
++            break;
++        }
++        const float2 ndc = float2(p.x * gConstants.projection.x / -p.z, p.y * gConstants.projection.y / -p.z);
++        if (any(abs(ndc) > 1.0f)) {
++            break;
++        }
++        const int2 at = int2(float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size);
++        const float sceneDepth = LoadDepth(at);
++        if (sceneDepth >= 0.99999f) {
++            continue;
++        }
++        const float scene = -ViewPosition(at, sceneDepth).z;
++        const float inFront = -p.z - scene;
++        // Something is in front of the step, and not much further in front than a thing's thickness.
++        const float thickness = 60.0f + travelled * 0.25f;
++        if ((inFront > bias) && (inFront < thickness)) {
++            // Softer the further the shadow falls from what casts it.
++            shadow = max(shadow, 1.0f - t * 0.6f);
++            if (shadow >= 0.99f) {
++                break;
++            }
++        }
++    }
++    const float turnedAway = saturate(-facing * 4.0f) * 0.6f;
++    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
++}
++
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
 +// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
 +// they are.
@@ -5733,6 +5821,9 @@ index 0000000..c0d9417
 +    float keep = 1.0f;
 +    if (gConstants.ambientOcclusion.x > 0.0f) {
 +        keep *= AmbientOcclusion(pixel, depth);
++    }
++    if ((gConstants.shadows.x > 0.0f) && (gConstants.view.x < 1.5f)) {
++        keep *= SunShadow(pixel, depth);
 +    }
 +
 +    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
@@ -6227,10 +6318,10 @@ index 0a5c332..0d29149 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..25f771e
+index 0000000..e9dc55e
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,62 @@
 +//
 +// RT64
 +//
@@ -6279,6 +6370,9 @@ index 0000000..25f771e
 +        float4 rippleX;
 +        float4 rippleZ;
 +        float4 rippleAge;
++        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
++        // units, then unused.
++        float4 shadows;
 +    };
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
