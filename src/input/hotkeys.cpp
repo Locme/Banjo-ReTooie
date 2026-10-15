@@ -52,6 +52,8 @@ void tooie::hotkeys::register_inputs() {
         "Writes the tagged models to interp_tags.txt next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::UNSAVE_TAG, "Unsave Tag",
         "Removes the picked model's tag, from the game and from interp_tags.txt.", SDL_SCANCODE_UNKNOWN, "Debug");
+    add(GameInput::MODEL_EFFECTS, "Model Effects",
+        "Turns the screen effects (ambient occlusion, outlines, fog, bloom and the rest) off and on for the picked model: it is drawn over them as the game draws it. Save Tags keeps it.", SDL_SCANCODE_UNKNOWN, "Debug");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {

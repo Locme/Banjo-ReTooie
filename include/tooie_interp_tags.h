@@ -34,6 +34,14 @@ namespace tooie::interp_tags {
     bool take_tag();
     bool take_save();
     bool take_unsave();
+    // The Model Effects key was pressed (turns the picked model's screen effects off or on).
+    bool take_effects();
+    // Models drawn without the screen effects (RT64 draws them after the effects pass).
+    bool any_no_effects();
+    bool no_effects_for(uint32_t model);
+    // Turns the picked model's screen effects off or on (in memory; Save Tags writes the file).
+    // Returns true when they are now off.
+    bool toggle_picked_effects();
     // Writes interp_tags.txt. Returns how many tags it holds.
     size_t save();
     // Removes the picked model's tag from the game and the file.

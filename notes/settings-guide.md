@@ -254,7 +254,8 @@ Hide HUD (F1), Speed-Up (F2, under Cheats), Frame Rate Overlay (F3), Photo Mode
 (F10), Screenshot (F12) under Hotkeys. The Debug section has no default keys;
 bind what you use: Effect Debug View (Shift steps back), Interpolation Check,
 Effect Compare, Blend Mode, Warp Again (needs the Warp tab on), Pick Model,
-Tag Model, Save Tags and Unsave Tag.
+Tag Model, Save Tags, Unsave Tag and Model Effects (the picked model skips the
+screen effects).
 
 ## Cheats
 

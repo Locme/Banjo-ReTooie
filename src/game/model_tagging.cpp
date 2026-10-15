@@ -28,6 +28,11 @@
 // rewritten while RT64 may still be reading the frame that uses it.
 //
 // Headless A/B hook: TOOIE_NO_MODEL_TAGS=1 turns the tagging off.
+//
+// Models picked for no screen effects (the Model Effects key, see
+// tooie_interp_tags.h) are marked here too, with interpolation on or off:
+// the command that starts the model (its segment 1) and the one after its
+// last are each wrapped in a small list that sets RT64's exclude flag first.
 
 #include <atomic>
 #include <algorithm>
@@ -78,6 +83,9 @@ namespace {
     constexpr uint32_t rt64_extended_opcode = 0x64;
     constexpr uint32_t rt64_hook_op_enable = 0x1;
     constexpr uint32_t g_ex_matrixgroup_v1 = 0x00000C;
+    // Banjo-Tooie's own (lib-patches/rt64.patch): the draws after it are left
+    // out of the screen effects (drawn after them) or not.
+    constexpr uint32_t g_ex_scene_effects_exclude_v1 = 0x000034;
     constexpr uint32_t g_ex_id_auto = 0xFFFFFFFF;
     constexpr uint32_t component_skip = 0;
     constexpr uint32_t component_interpolate = 1;
@@ -569,7 +577,12 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             tooie::toast::show(text);
         }
     }
-    if (!interpolation_on() || end <= start || blend_mode == 1) {
+    const bool effects_now = !overlay && tooie::interp_tags::take_effects();
+    const bool interpolating = interpolation_on() && end > start && blend_mode != 1;
+    // Without interpolation the scene is still read for the models drawn
+    // without effects and for the Pick Model and Model Effects keys.
+    const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now);
+    if (!interpolating && !excluding) {
         if (!overlay) {
             stat_models = 0;
             stat_bones = 0;
@@ -667,7 +680,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Manual tags (tooie_interp_tags.h): each model's print, and its tag.
     // The tags only count in the custom blend mode (normal plus the tags).
     const bool custom = blend_mode == tooie::interp_check::blend_custom;
-    const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids);
+    const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids ||
+        excluding);
     if (tags_wanted) {
         for (Block& block : blocks) {
             // Particles (fire, say) have a print too: their lists are built
@@ -779,6 +793,76 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 }
             }
         }
+    }
+
+    if (effects_now) {
+        uint32_t current_pick = tooie::interp_tags::picked();
+        if (current_pick == 0) {
+            tooie::toast::show("Pick a model first (Pick Model key)");
+        } else {
+            bool off = tooie::interp_tags::toggle_picked_effects();
+            char text[96];
+            std::snprintf(text, sizeof(text), "Model %08X: effects %s", current_pick, off ? "off" : "on");
+            tooie::toast::show(text);
+        }
+    }
+
+    // Models without the screen effects: the command that starts each one
+    // (its segment 1) and the command after its last are called through a
+    // small list that first sets RT64's exclude flag (on, then off). Reads the
+    // commands as they are now, so after the interpolation tags.
+    auto mark_no_effects = [&](uint32_t& cursor, uint32_t limit) {
+        if (!tooie::interp_tags::any_no_effects()) {
+            return;
+        }
+        std::vector<int> mark(commands.size(), -1);
+        for (size_t b = 0; b < blocks.size(); b++) {
+            const Block& block = blocks[b];
+            if (block.print == 0 || block.shadow || block.vertex_command == SIZE_MAX || !tooie::interp_tags::no_effects_for(block.print)) {
+                continue;
+            }
+            size_t last = block.vertex_command;
+            for (size_t i = block.vertex_command; i < commands.size(); i++) {
+                if (commands[i].block == (int)b) {
+                    last = i;
+                }
+            }
+            mark[block.vertex_command] = 1;
+            if (last + 1 < commands.size() && mark[last + 1] != 1) {
+                mark[last + 1] = 0;
+            }
+        }
+        for (size_t i = 0; i < commands.size(); i++) {
+            if (mark[i] < 0 || cursor + 32 > limit) {
+                continue;
+            }
+            const uint32_t p = start + (uint32_t)i * 8;
+            const uint32_t w0 = word(rdram, p);
+            const uint32_t op = w0 >> 24;
+            // Texture rectangles carry their coordinates in the commands after
+            // them; they are left as they are.
+            if (op == 0xE4 || op == 0xE5 || op == 0xE1 || op == 0xF1) {
+                continue;
+            }
+            const uint32_t list = cursor;
+            put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
+            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_scene_effects_exclude_v1, (uint32_t)mark[i]);
+            put(rdram, cursor + 16, w0, word(rdram, p + 4));
+            put(rdram, cursor + 24, op_enddl << 24, 0);
+            cursor += 32;
+            put(rdram, p, op_dl << 24, list);
+        }
+    };
+    if (!interpolating) {
+        slot = (slot + 1) % slot_count;
+        uint32_t cursor = list_area + slot * slot_size;
+        mark_no_effects(cursor, cursor + slot_size);
+        if (!overlay) {
+            stat_models = 0;
+            stat_bones = 0;
+            stat_shadows = 0;
+        }
+        return 0;
     }
 
     bool cut = false;
@@ -1697,6 +1781,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         stat_models = models - std::min(models, model_shadows);
         stat_bones = bones_tagged;
         stat_shadows = shadows_tagged + model_shadows;
+    }
+
+    if (!overlay) {
+        mark_no_effects(cursor, limit);
     }
 
     // Leave the rest of the frame with the defaults.

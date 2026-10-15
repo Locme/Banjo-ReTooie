@@ -1606,3 +1606,13 @@
   4. Tag any character that still looks wrong and send interp_tags.txt
 - Look for: Characters smooth, props crisp, no tears; whether the rule picked up every character (a 'character' is a model with two or more bones, so a one-piece enemy or NPC would snap: tag it and tell me which)
 - Status: waiting for L
+
+## T152 Bottles' glow without the box, and a Model Effects key
+- Asked: 2026-10-15 UTC
+- Build: main @ (this commit)
+- Steps:
+  1. Turn the effects on as you play (ambient occlusion, outlines, fog, bloom; any preset)
+  2. Watch Bottles' ghost (the Bottles' Revenge intro in Spiral Mountain, or wherever you saw it)
+  3. Controls > Debug: bind Pick Model and Model Effects; pick anything else that looks wrong under the effects and press Model Effects (the toast says effects off); Save Tags keeps it
+- Look for: no box or straight edges around his glow and the picture behind it stays sharp, with the effects still on everywhere else; a model you turn off is drawn plain with nothing else changing; tell me if the box still flashes for a moment while the angel turns into the devil
+- Status: waiting for L

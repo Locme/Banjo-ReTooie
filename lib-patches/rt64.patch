@@ -54,6 +54,32 @@ index 79dfc38..e1febf2 100644
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
+diff --git a/include/rt64_extended_gbi.h b/include/rt64_extended_gbi.h
+index d387090..9713eda 100644
+--- a/include/rt64_extended_gbi.h
++++ b/include/rt64_extended_gbi.h
+@@ -80,7 +80,9 @@
+ #define G_EX_SETVERTEXSEGMENT_V1        0x000031
+ #define G_EX_SETTEXCOORDWRAPPOINT_V1    0x000032
+ #define G_EX_SETRECTASPECT_V1           0x000033
+-#define G_EX_MAX                        0x000034
++// Banjo-Tooie: draws after this are left out of the screen-space scene effects (1) or not (0).
++#define G_EX_SETSCENEEFFECTSEXCLUDE_V1  0x000034
++#define G_EX_MAX                        0x000035
+ 
+ #define G_EX_ORIGIN_NONE            0x800
+ #define G_EX_ORIGIN_LEFT            0x0
+@@ -579,4 +581,10 @@ typedef union {
+         PARAM(aspect, 2, 0) \
+     )
+ 
++#define gEXSetSceneEffectsExclude(cmd, exclude) \
++    G_EX_COMMAND1(cmd, \
++        PARAM(RT64_EXTENDED_OPCODE, 8, 24) | PARAM(G_EX_SETSCENEEFFECTSEXCLUDE_V1, 24, 0), \
++        PARAM(exclude, 1, 0) \
++    )
++
+ #endif // RT64_EXTENDED_GBI
 diff --git a/src/common/rt64_math.cpp b/src/common/rt64_math.cpp
 index c20fb51..e14ac77 100644
 --- a/src/common/rt64_math.cpp
@@ -134,6 +160,43 @@ index c20fb51..e14ac77 100644
      }
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
+diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
+index 20c0d4d..cfcce95 100644
+--- a/src/gbi/rt64_gbi_extended.cpp
++++ b/src/gbi/rt64_gbi_extended.cpp
+@@ -331,6 +331,11 @@ namespace RT64 {
+             state->rdp->setRectAspect(aspect);
+         }
+ 
++        void setSceneEffectsExcludeV1(State *state, DisplayList **dl) {
++            const bool exclude = (*dl)->p1(0, 1);
++            state->rdp->setSceneEffectsExclude(exclude);
++        }
++
+         void noOpHook(State *state, DisplayList **dl) {
+             uint32_t magicNumber = (*dl)->p0(0, 24);
+             if (magicNumber == RT64_HOOK_MAGIC_NUMBER) {
+@@ -439,6 +444,7 @@ namespace RT64 {
+             Map[G_EX_SETVERTEXSEGMENT_V1] = &setVertexSegmentV1;
+             Map[G_EX_SETTEXCOORDWRAPPOINT_V1] = &setTexcoordWrapPointV1;
+             Map[G_EX_SETRECTASPECT_V1] = &setRectAspectV1;
++            Map[G_EX_SETSCENEEFFECTSEXCLUDE_V1] = &setSceneEffectsExcludeV1;
+             MapInitialized = true;
+         }
+     }
+diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
+index 0e62be1..3ec4c4c 100644
+--- a/src/hle/rt64_draw_call.h
++++ b/src/hle/rt64_draw_call.h
+@@ -65,6 +65,8 @@ namespace RT64 {
+         uint32_t forceUpscale2D : 1;
+         uint32_t forceTrueBilerp : 2;
+         uint32_t forceScaleLOD : 1;
++        // Banjo-Tooie: drawn after the scene effects instead of under them (see FramebufferRenderer).
++        uint32_t sceneEffectsExclude : 1;
+     };
+ 
+     struct DrawCall {
 diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
 index 87392d0..9aca6cd 100644
 --- a/src/hle/rt64_game_frame.cpp
@@ -607,6 +670,34 @@ index e08b02c..31d30f4 100644
          std::unique_ptr<Inspector> inspector;
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
+diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
+index a10c11a..9ab752e 100644
+--- a/src/hle/rt64_rdp.cpp
++++ b/src/hle/rt64_rdp.cpp
+@@ -1076,6 +1076,11 @@ namespace RT64 {
+         state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
+     }
+ 
++    void RDP::setSceneEffectsExclude(bool exclude) {
++        extended.drawExtendedFlags.sceneEffectsExclude = exclude;
++        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
++    }
++
+     void RDP::clearExtended() {
+         extended.scissorLeftOriginStack[0] = G_EX_ORIGIN_NONE;
+         extended.scissorRightOriginStack[0] = G_EX_ORIGIN_NONE;
+diff --git a/src/hle/rt64_rdp.h b/src/hle/rt64_rdp.h
+index 84f4e7c..2c35751 100644
+--- a/src/hle/rt64_rdp.h
++++ b/src/hle/rt64_rdp.h
+@@ -199,6 +199,7 @@ namespace RT64 {
+         void forceUpscale2D(bool force);
+         void forceTrueBilerp(uint8_t mode);
+         void forceScaleLOD(bool force);
++        void setSceneEffectsExclude(bool exclude);
+         void clearExtended();
+ 
+         // The expected size and order for the elements in each array are:
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 2970e71..bc9b04b 100644
 --- a/src/hle/rt64_state.cpp
@@ -797,7 +888,7 @@ index 69a82ac..f4f86fa 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..07cff69 100644
+index 9fae0d4..054fc91 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,7 @@
@@ -816,10 +907,19 @@ index 9fae0d4..07cff69 100644
  
  #include "rt64_descriptor_sets.h"
  #include "rt64_render_worker.h"
-@@ -465,12 +467,45 @@ namespace RT64 {
+@@ -169,6 +171,7 @@ namespace RT64 {
+     
+     void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
+         instanceDrawCallVector.clear();
++        instanceExcludedVector.clear();
+         hitGroupVector.clear();
+         renderIndicesVector.clear();
+         rspSmoothNormalVector.clear();
+@@ -465,12 +468,45 @@ namespace RT64 {
          return true;
      }
      
+-    void FramebufferRenderer::submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState) {
 +    void FramebufferRenderer::submitWaterMask(RenderWorker *worker, const Framebuffer &framebuffer, const RenderTargetDrawCall &targetDrawCall) {
 +        // Banjo-Tooie: the water's draws again, into the scene effects' water mask, each writing its own
 +        // depth (RasterPS with waterMask set), depth tested against the finished 3D world.
@@ -853,7 +953,7 @@ index 9fae0d4..07cff69 100644
 +        }
 +    }
 +
-     void FramebufferRenderer::submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState) {
++    void FramebufferRenderer::submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState, ExcludedDraws excludedDraws) {
          InstanceDrawCall::Type previousCallType = InstanceDrawCall::Type::Unknown;
          bool previousVertexTestZ = false;
          const RenderPipeline *previousPipeline = nullptr;
@@ -863,19 +963,44 @@ index 9fae0d4..07cff69 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -1250,6 +1285,8 @@ namespace RT64 {
+@@ -514,6 +550,13 @@ namespace RT64 {
+         
+         for (uint32_t i : rasterScene.instanceIndices) {
+             const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
++            if (excludedDraws != ExcludedDraws::All) {
++                const bool excluded = (i < instanceExcludedVector.size()) && (instanceExcludedVector[i] != 0);
++                if (excluded != (excludedDraws == ExcludedDraws::Only)) {
++                    continue;
++                }
++            }
++
+             switch (drawCall.type) {
+             case InstanceDrawCall::Type::IndexedTriangles: 
+             case InstanceDrawCall::Type::RawTriangles:
+@@ -1250,6 +1293,12 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +        const bool drawSceneEffects = sceneEffectsEnabled && (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
 +        int32_t rasterScenesDrawn = 0;
++        // Banjo-Tooie: the draws left out of the effects wait until after them, in their own order.
++        const bool deferExcluded = drawSceneEffects && targetDrawCall.hasExcludedInstances;
++        thread_local std::vector<uint32_t> scenesBeforeEffects;
++        scenesBeforeEffects.clear();
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1297,6 +1334,37 @@ namespace RT64 {
+@@ -1296,7 +1345,47 @@ namespace RT64 {
+             {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
-                 submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
+-                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
++                const bool beforeEffects = deferExcluded && (rasterScenesDrawn < targetDrawCall.sceneEffectsAfter);
++                if (beforeEffects) {
++                    scenesBeforeEffects.push_back(pair.first);
++                }
++
++                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState, beforeEffects ? ExcludedDraws::Skip : ExcludedDraws::All);
 +
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
@@ -906,17 +1031,22 @@ index 9fae0d4..07cff69 100644
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsData->viewTransforms[effectsIndex], shaderLibrary);
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
++                    for (uint32_t sceneIndex : scenesBeforeEffects) {
++                        submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
++                        submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, targetDrawCall.rasterScenes[sceneIndex], depthState, ExcludedDraws::Only);
++                    }
 +                }
              }
          }
      }
-@@ -1408,6 +1476,32 @@ namespace RT64 {
+@@ -1408,6 +1497,33 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
++        targetDrawCall.hasExcludedInstances = false;
 +        targetDrawCall.submissionFrame = p.submissionFrame;
 +        // The 3D world is open from its first perspective projection to the next projection that isn't one; it
 +        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
@@ -943,7 +1073,7 @@ index 9fae0d4..07cff69 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1550,29 @@ namespace RT64 {
+@@ -1456,6 +1572,29 @@ namespace RT64 {
                  continue;
              }
  
@@ -973,7 +1103,7 @@ index 9fae0d4..07cff69 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,6 +1864,18 @@ namespace RT64 {
+@@ -1747,8 +1886,29 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -991,8 +1121,19 @@ index 9fae0d4..07cff69 100644
 +                    }
                  }
  
++                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
++                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
++                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
++                    (instanceDrawCall.type != InstanceDrawCall::Type::FillRect) && (instanceDrawCall.type != InstanceDrawCall::Type::Raytracing) &&
++                    !((instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && instanceDrawCall.triangles.vertexTestZ);
++                instanceExcludedVector.resize(instanceIndex, 0);
++                instanceExcludedVector.push_back(excluded ? 1 : 0);
++                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
-@@ -1758,6 +1887,26 @@ namespace RT64 {
+                 globalCallIndex++;
+             }
+@@ -1758,6 +1918,26 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1020,10 +1161,10 @@ index 9fae0d4..07cff69 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..df41318 100644
+index 3add9c3..b19a880 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,18 @@ namespace RT64 {
+@@ -48,6 +48,21 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -1037,12 +1178,24 @@ index 3add9c3..df41318 100644
 +        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
 +        // scene effects' water mask.
 +        std::vector<uint32_t> waterInstances;
++        // Banjo-Tooie: some of the 3D world's draws were marked to be left out of the scene effects
++        // (G_EX_SETSCENEEFFECTSEXCLUDE_V1); they are drawn after the effects instead.
++        bool hasExcludedInstances = false;
 +        // The workload these draws come from.
 +        uint64_t submissionFrame = 0;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -123,6 +135,10 @@ namespace RT64 {
+@@ -67,6 +82,8 @@ namespace RT64 {
+         uint32_t textureCacheGlobalVersion = 0;
+         bool textureCacheReplacementMapEnabled = false;
+         std::vector<InstanceDrawCall> instanceDrawCallVector;
++        // Banjo-Tooie: 1 for each instance draw call left out of the scene effects.
++        std::vector<uint8_t> instanceExcludedVector;
+         std::vector<RenderPipelineProgram> hitGroupVector;
+         std::vector<interop::RenderIndices> renderIndicesVector;
+         std::vector<DynamicTextureView> dynamicTextureViewVector;
+@@ -123,6 +140,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -1053,10 +1206,19 @@ index 3add9c3..df41318 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -165,6 +181,7 @@ namespace RT64 {
+@@ -164,7 +185,15 @@ namespace RT64 {
+         void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
-         void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
+-        void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState);
++        // Banjo-Tooie: which draws to submit, for drawing the ones left out of the scene effects after them.
++        enum class ExcludedDraws {
++            All,
++            Skip,
++            Only
++        };
++
++        void submitRasterScene(RenderWorker *worker, const Framebuffer &framebuffer, RenderFramebufferStorage *fbStorage, const RasterScene &rasterScene, bool &depthState, ExcludedDraws excludedDraws = ExcludedDraws::All);
 +        void submitWaterMask(RenderWorker *worker, const Framebuffer &framebuffer, const RenderTargetDrawCall &targetDrawCall);
          void addFramebuffer(const DrawParams &p);
          void endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled);

@@ -9,8 +9,13 @@
 // The file is read at start over the built-in defaults below, so a tag made
 // in the game wins. L sends the file; its lines go into `defaults` to ship.
 //
-// Headless hook: TOOIE_TAG_KEYS="<ms>:pick;<ms>:tag;<ms>:save;<ms>:unsave;..." presses the keys at
-// those times after start.
+// The Model Effects key turns the screen effects off for the picked model
+// (whatever the blend mode): model_tagging.cpp marks its draws, and RT64
+// draws them after the effects instead of under them. It is saved as a third
+// word, "noeffects", on the model's line.
+//
+// Headless hook: TOOIE_TAG_KEYS="<ms>:pick;<ms>:tag;<ms>:save;<ms>:unsave;<ms>:effects;..." presses
+// the keys at those times after start.
 
 #include <atomic>
 #include <chrono>
@@ -23,6 +28,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "librecomp/game.hpp"
@@ -42,6 +48,13 @@ namespace {
     const Default defaults[] = {
         {0, 0},
     };
+    // Models drawn without the screen effects by default.
+    const uint32_t default_no_effects[] = {
+        // Bottles' ghost shimmer (Bottles' Revenge): a grid of quads in front of the camera that redraws the
+        // picture behind him wobbling. It writes a near depth over its whole box, so the effects took it for a
+        // wall in front of the camera: box edges, outlines and fog cut off around his glow (L, 2026-10-15).
+        0x3050A671,
+    };
 
     std::once_flag started;
     std::mutex lock;
@@ -49,7 +62,12 @@ namespace {
     // What interp_tags.txt holds (the tags as last read or written).
     std::unordered_map<uint32_t, int> saved;
     std::unordered_map<uint32_t, std::string> notes;
+    // Models drawn without the screen effects, live and as the file holds them.
+    std::unordered_set<uint32_t> no_effects;
+    std::unordered_set<uint32_t> saved_no_effects;
     std::atomic<bool> have_tags{false};
+    std::atomic<bool> have_no_effects{false};
+    std::atomic<bool> effects_pending{false};
     std::atomic<bool> pick_pending{false};
     std::atomic<bool> tag_pending{false};
     std::atomic<bool> save_pending{false};
@@ -78,14 +96,24 @@ namespace {
                 tags[d.model] = d.mode;
             }
         }
+        no_effects.clear();
+        for (uint32_t model : default_no_effects) {
+            no_effects.insert(model);
+        }
         std::ifstream in(file_path());
         std::string line;
         size_t read = 0;
         while (std::getline(in, line)) {
             char mode_word[32] = {};
+            char flag_word[32] = {};
             unsigned model = 0;
-            if (std::sscanf(line.c_str(), "%x %31s", &model, mode_word) != 2 || model == 0) {
+            if (std::sscanf(line.c_str(), "%x %31s %31s", &model, mode_word, flag_word) < 2 || model == 0) {
                 continue;
+            }
+            if (std::strcmp(flag_word, "noeffects") == 0) {
+                no_effects.insert(model);
+            } else {
+                no_effects.erase(model);
             }
             int mode = parse_mode(mode_word);
             if (mode < 0) {
@@ -103,7 +131,9 @@ namespace {
             read++;
         }
         saved = tags;
+        saved_no_effects = no_effects;
         have_tags = !tags.empty();
+        have_no_effects = !no_effects.empty();
         if (read != 0) {
             std::printf("[interp-tags] %zu tags read from interp_tags.txt\n", read);
         }
@@ -114,7 +144,8 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(file_path().parent_path(), ec);
         std::ofstream out(file_path());
-        out << "# Manual interpolation tags: <model> <mode>, modes default, snap, vertex, untagged.\n";
+        out << "# Manual interpolation tags: <model> <mode> [noeffects], modes default, snap, vertex, untagged;\n";
+        out << "# noeffects draws the model without the screen effects.\n";
         std::vector<uint32_t> models;
         for (const auto& [model, note] : notes) {
             models.push_back(model);
@@ -124,11 +155,17 @@ namespace {
                 models.push_back(model);
             }
         }
+        for (uint32_t model : no_effects) {
+            if (notes.find(model) == notes.end() && tags.find(model) == tags.end()) {
+                models.push_back(model);
+            }
+        }
         for (uint32_t model : models) {
             auto it = tags.find(model);
             int mode = it == tags.end() ? tooie::interp_tags::mode_default : it->second;
             char line[64];
-            std::snprintf(line, sizeof(line), "%08X %-8s", model, tooie::interp_tags::mode_name(mode));
+            std::snprintf(line, sizeof(line), "%08X %-8s%s", model, tooie::interp_tags::mode_name(mode),
+                no_effects.count(model) != 0 ? " noeffects" : "");
             out << line;
             auto note = notes.find(model);
             if (note != notes.end()) {
@@ -163,16 +200,19 @@ namespace {
         bool tag_was_down = false;
         bool save_was_down = false;
         bool unsave_was_down = false;
+        bool effects_was_down = false;
         for (;;) {
             std::this_thread::sleep_for(10ms);
             bool pick_down = tooie::hotkeys::down(recompinput::GameInput::PICK_MODEL);
             bool tag_down = tooie::hotkeys::down(recompinput::GameInput::TAG_MODEL);
             bool save_down = tooie::hotkeys::down(recompinput::GameInput::SAVE_TAGS);
             bool unsave_down = tooie::hotkeys::down(recompinput::GameInput::UNSAVE_TAG);
+            bool effects_down = tooie::hotkeys::down(recompinput::GameInput::MODEL_EFFECTS);
             int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
             while (!script.empty() && script.front().at <= ms) {
                 const std::string& key = script.front().key;
-                (key == "pick" ? pick_pending : key == "save" ? save_pending : key == "unsave" ? unsave_pending : tag_pending) = true;
+                (key == "pick" ? pick_pending : key == "save" ? save_pending : key == "unsave" ? unsave_pending :
+                    key == "effects" ? effects_pending : tag_pending) = true;
                 script.erase(script.begin());
             }
             if (pick_down && !pick_was_down) {
@@ -187,10 +227,14 @@ namespace {
             if (unsave_down && !unsave_was_down) {
                 unsave_pending = true;
             }
+            if (effects_down && !effects_was_down) {
+                effects_pending = true;
+            }
             pick_was_down = pick_down;
             tag_was_down = tag_down;
             save_was_down = save_down;
             unsave_was_down = unsave_down;
+            effects_was_down = effects_down;
         }
     }
 }
@@ -240,12 +284,53 @@ bool tooie::interp_tags::take_unsave() {
     return unsave_pending.exchange(false);
 }
 
+bool tooie::interp_tags::take_effects() {
+    return effects_pending.exchange(false);
+}
+
+bool tooie::interp_tags::any_no_effects() {
+    return have_no_effects.load(std::memory_order_relaxed);
+}
+
+bool tooie::interp_tags::no_effects_for(uint32_t model) {
+    if (!have_no_effects.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    std::lock_guard<std::mutex> guard(lock);
+    return no_effects.count(model) != 0;
+}
+
+bool tooie::interp_tags::toggle_picked_effects() {
+    std::lock_guard<std::mutex> guard(lock);
+    uint32_t model = picked_model.load();
+    if (model == 0) {
+        return false;
+    }
+    bool off = no_effects.count(model) == 0;
+    if (off) {
+        no_effects.insert(model);
+    } else {
+        no_effects.erase(model);
+    }
+    if (notes.find(model) == notes.end() && !picked_note.empty()) {
+        notes[model] = picked_note;
+    }
+    have_no_effects = !no_effects.empty();
+    std::printf("[interp-tags] model %08X: effects %s\n", model, off ? "off" : "on");
+    return off;
+}
+
 size_t tooie::interp_tags::save() {
     std::lock_guard<std::mutex> guard(lock);
     save_locked();
     saved = tags;
-    std::printf("[interp-tags] %zu tags saved to interp_tags.txt\n", tags.size());
-    return tags.size();
+    saved_no_effects = no_effects;
+    size_t count = tags.size();
+    for (uint32_t model : no_effects) {
+        count += tags.count(model) == 0 ? 1 : 0;
+    }
+    std::printf("[interp-tags] %zu tags saved to interp_tags.txt\n", count);
+    return count;
 }
 
 void tooie::interp_tags::unsave_picked() {
@@ -253,14 +338,21 @@ void tooie::interp_tags::unsave_picked() {
     uint32_t model = picked_model.load();
     tags.erase(model);
     notes.erase(model);
+    no_effects.erase(model);
     have_tags = !tags.empty();
+    have_no_effects = !no_effects.empty();
     // The file keeps the other saved tags as they are.
     std::unordered_map<uint32_t, int> live = std::move(tags);
+    std::unordered_set<uint32_t> live_no_effects = std::move(no_effects);
     tags = saved;
     tags.erase(model);
+    no_effects = saved_no_effects;
+    no_effects.erase(model);
     save_locked();
     saved = tags;
+    saved_no_effects = no_effects;
     tags = std::move(live);
+    no_effects = std::move(live_no_effects);
     std::printf("[interp-tags] model %08X: tag removed and unsaved\n", model);
 }
 
@@ -277,6 +369,12 @@ std::string tooie::interp_tags::describe(uint32_t model) {
         text += ", not saved yet";
     } else {
         text += std::string(" (saved as ") + mode_name(on_disk) + ")";
+    }
+    const bool fx_off = no_effects.count(model) != 0;
+    if (fx_off) {
+        text += saved_no_effects.count(model) != 0 ? ", effects off" : ", effects off (not saved yet)";
+    } else if (saved_no_effects.count(model) != 0) {
+        text += ", effects on (saved as off)";
     }
     return text;
 }
