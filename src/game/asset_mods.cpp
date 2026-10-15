@@ -8,7 +8,7 @@
 // 16-bit size (in 16-byte units) followed by raw deflate. Kind 10 (234 entries) is loaded another
 // way (_gldbDll_entrypoint_0) and is dumped as it is in the ROM.
 //
-// Dump: General > Developer > Dump assets writes every asset to asset_dump/ in the app-data folder,
+// Dump: DEV tab > Dump assets writes every asset to asset_dump/ in the app-data folder,
 // decompressed, as asset_<id>.bin (id in hex, 4 digits), with assets.txt listing id, kind and size.
 // Files that are already there are left alone. ROM data: it stays out of the repo.
 //
@@ -42,6 +42,7 @@
 #include "miniz.h"
 
 #include "tooie_asset_mods.h"
+#include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_toast.h"
 
@@ -173,7 +174,7 @@ namespace {
             return true;
         }
         try {
-            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::asset_dump_option));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::asset_dump_option));
         } catch (...) {
             return false;
         }

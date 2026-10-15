@@ -1,4 +1,4 @@
-// Texture dump and texture sweep (General > Developer > Texture dump), for making texture packs.
+// Texture dump and texture sweep (DEV tab > Texture dump), for making texture packs.
 //
 // "While playing" starts RT64's own texture dumper (lib-patches/rt64.patch adds
 // RT64::SetTextureDumpDirectory so it runs without the debugger window) in
@@ -49,6 +49,7 @@
 #include "common/rt64_load_types.h"
 
 #include "tooie_debug.h"
+#include "tooie_game.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_toast.h"
 
@@ -320,7 +321,7 @@ namespace {
         }
         uint32_t value = 0;
         try {
-            value = std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::texture_dump_option));
+            value = std::get<uint32_t>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::texture_dump_option));
         } catch (...) {
         }
         return static_cast<tooie::TextureDump>(value);

@@ -6,7 +6,7 @@
 
 #include "recomp.h"
 
-// Texture dump and texture sweep (src/game/texture_sweep.cpp), General > Developer:
+// Texture dump and texture sweep (src/game/texture_sweep.cpp), DEV tab:
 // saves every texture the game draws to texture_dump/ in the app-data folder, for
 // making texture packs. The sweep warps through every known map so nobody has to play.
 namespace tooie {

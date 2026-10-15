@@ -197,8 +197,8 @@ void tooie::init_config() {
     tooie::bottles_revenge::add_option(general);
     general.add_bool_option(
         tooie::wip_tab_option,
-        "WIP tab",
-        "Shows the WIP tab, with features that are still being worked on.",
+        "DEV tab",
+        "Shows the DEV tab, with features for developers and features that are still being worked on.",
         false);
     general.add_option_change_callback(tooie::wip_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
@@ -218,22 +218,6 @@ void tooie::init_config() {
         "More game memory",
         "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
         true);
-
-    general.add_enum_option(
-        tooie::texture_dump_option,
-        "Texture dump",
-        "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. If the game stops during a sweep, it carries on from the next map when you load a file again.",
-        {
-            {tooie::TextureDump::Off, "Off", "Off"},
-            {tooie::TextureDump::WhilePlaying, "WhilePlaying", "While playing"},
-            {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
-        },
-        tooie::TextureDump::Off);
-    general.add_bool_option(
-        tooie::asset_dump_option,
-        "Dump assets",
-        "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
-        false);
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
@@ -461,8 +445,24 @@ void tooie::init_config() {
     recompui::config::create_search_tab();
     recompui::config::create_mods_tab();
 
-    // Work-in-progress features (L, 2026-10-13), shown with General > WIP tab.
-    recomp::config::Config& wip = recompui::config::create_config_tab("WIP", tooie::wip_tab_id, false);
+    // Work-in-progress and developer features (L, 2026-10-13), shown with General > DEV tab.
+    recomp::config::Config& wip = recompui::config::create_config_tab("DEV", tooie::wip_tab_id, false);
+    // Dumps moved here from General (L, 2026-10-15): they are read from the DEV tab.
+    wip.add_enum_option(
+        tooie::texture_dump_option,
+        "Texture dump",
+        "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. If the game stops during a sweep, it carries on from the next map when you load a file again.",
+        {
+            {tooie::TextureDump::Off, "Off", "Off"},
+            {tooie::TextureDump::WhilePlaying, "WhilePlaying", "While playing"},
+            {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
+        },
+        tooie::TextureDump::Off);
+    wip.add_bool_option(
+        tooie::asset_dump_option,
+        "Dump assets",
+        "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
+        false);
     wip.add_bool_option(
         tooie::discord::presence_option,
         "Discord status",
