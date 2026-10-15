@@ -123,6 +123,13 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 ## rt64.patch
 
+* **Render to RAM switch** (`src/common/rt64_emulator_configuration.cpp/.h`, `src/hle/rt64_state.cpp`):
+  `SetRenderToRAM` turns RT64's copy of each frame back into RDRAM on or off while the game runs
+  (Graphics > Frame Read-Back, `src/display/frame_readback.cpp`, off by default). With it on, the
+  display list thread renders and waits for the GPU every frame.
+* **No spinning on a full queue** (`src/hle/rt64_workload_queue.cpp/.h`, `src/hle/rt64_present_queue.cpp/.h`):
+  writing a new workload or present while the GPU still used that slot spun on a mutex, keeping a core
+  busy whenever the GPU was behind. It now sleeps on a condition variable that the barrier advance wakes.
 * **VI rate** (`src/hle/rt64_vi.cpp/.h`): `SetVIRate` replaces the fixed 60 VIs a second that
   `logicalRateFromFactors` worked the game's frame rate out from, for Game Frame Rate 120 FPS and Unlocked.
 * **Camera split** (`src/common/rt64_math.cpp`, `matrixDecomposeViewProj`): Banjo-Tooie loads one

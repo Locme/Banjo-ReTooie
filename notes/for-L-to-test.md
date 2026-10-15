@@ -1709,3 +1709,13 @@
   3. Open the two .txt files in the benchmarks folder next to the exe
 - Look for: A toast when it starts and one naming the saved file. The .txt shows the average fps, 1% low, GPU time with each pass, and your settings; the .csv opens in a spreadsheet with a row every quarter second. Do the two runs show the setting's cost? Send them over if you'd like me to read them.
 - Status: waiting for L
+
+## T162 Faster rendering (Frame Read-Back off)
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Set Frame rate overlay to Full and note the fps and Input latency in a busy spot (Spiral Mountain, Jinjo Village, Witchyworld)
+  2. Graphics > Frame Read-Back is Off (the default). Compare with it On in the same spot (it changes live)
+  3. With it Off, play through things that reuse the picture: pause menu, a level change (jigsaw), Bottles' revenge or any flashback, photo mode, a boss intro
+- Look for: higher fps and lower Input latency with it Off? Anything black, frozen or showing an old picture with it Off that is right with it On? If so, where.
+- Status: waiting for L

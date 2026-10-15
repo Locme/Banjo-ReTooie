@@ -80,6 +80,51 @@ index d387090..9713eda 100644
 +    )
 +
  #endif // RT64_EXTENDED_GBI
+diff --git a/src/common/rt64_emulator_configuration.cpp b/src/common/rt64_emulator_configuration.cpp
+index 303113d..cae52d2 100644
+--- a/src/common/rt64_emulator_configuration.cpp
++++ b/src/common/rt64_emulator_configuration.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "rt64_emulator_configuration.h"
+ 
++#include <atomic>
++
+ namespace RT64 {
+     // EmulatorConfiguration
+ 
+@@ -13,4 +15,14 @@ namespace RT64 {
+         framebuffer.renderToRAM = true;
+         framebuffer.copyWithGPU = true;
+     }
++
++    static std::atomic<bool> renderToRAMEnabled{ true };
++
++    void SetRenderToRAM(bool enabled) {
++        renderToRAMEnabled = enabled;
++    }
++
++    bool GetRenderToRAM() {
++        return renderToRAMEnabled.load();
++    }
+ };
+\ No newline at end of file
+diff --git a/src/common/rt64_emulator_configuration.h b/src/common/rt64_emulator_configuration.h
+index 1fdd873..9b6b17b 100644
+--- a/src/common/rt64_emulator_configuration.h
++++ b/src/common/rt64_emulator_configuration.h
+@@ -23,4 +23,10 @@ namespace RT64 {
+ 
+         EmulatorConfiguration();
+     };
++
++    // Banjo-Tooie: whether each frame is copied back to RDRAM (render to RAM), changeable while the game runs.
++    // Off, RT64 renders on its own thread without waiting for the GPU and keeps framebuffers on the GPU;
++    // the game only loses frames it reads back with the CPU. A display list's gEXSetRenderToRAM still wins.
++    void SetRenderToRAM(bool enabled);
++    bool GetRenderToRAM();
+ };
+\ No newline at end of file
 diff --git a/src/common/rt64_math.cpp b/src/common/rt64_math.cpp
 index c20fb51..e14ac77 100644
 --- a/src/common/rt64_math.cpp
@@ -288,7 +333,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..c7638be 100644
+index 3227ab1..0a53383 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,12 +4,122 @@
@@ -414,7 +459,23 @@ index 3227ab1..c7638be 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -87,6 +197,10 @@ namespace RT64 {
+@@ -40,9 +150,14 @@ namespace RT64 {
+ 
+         // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
+         bool waitForBarrier;
++        // Banjo-Tooie: sleep until the barrier moves instead of spinning on the mutex, which kept a whole
++        // core busy whenever the GPU was the bottleneck. The timeout keeps the old behaviour as a fallback.
+         do {
+-            const std::scoped_lock lock(cursorMutex);
++            std::unique_lock lock(cursorMutex);
+             waitForBarrier = (nextWriteCursor == barrierCursor);
++            if (waitForBarrier) {
++                barrierCondition.wait_for(lock, std::chrono::milliseconds(2), [&]() { return nextWriteCursor != barrierCursor; });
++            }
+         } while (waitForBarrier);
+ 
+         // Modify the cursor and notify anything waiting on the queue.
+@@ -87,6 +202,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -425,7 +486,7 @@ index 3227ab1..c7638be 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +229,7 @@ namespace RT64 {
+@@ -115,6 +234,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -433,7 +494,7 @@ index 3227ab1..c7638be 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +327,31 @@ namespace RT64 {
+@@ -212,6 +332,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -465,7 +526,7 @@ index 3227ab1..c7638be 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +406,8 @@ namespace RT64 {
+@@ -266,6 +411,8 @@ namespace RT64 {
              }
          }
          
@@ -474,7 +535,7 @@ index 3227ab1..c7638be 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -310,6 +452,8 @@ namespace RT64 {
+@@ -310,6 +457,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -483,7 +544,7 @@ index 3227ab1..c7638be 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +483,109 @@ namespace RT64 {
+@@ -339,17 +488,109 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -593,7 +654,7 @@ index 3227ab1..c7638be 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +596,18 @@ namespace RT64 {
+@@ -360,12 +601,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -612,7 +673,7 @@ index 3227ab1..c7638be 100644
                  }
              }
  
-@@ -401,7 +643,41 @@ namespace RT64 {
+@@ -401,7 +648,41 @@ namespace RT64 {
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
@@ -654,8 +715,16 @@ index 3227ab1..c7638be 100644
              }
          }
      }
+@@ -428,6 +709,7 @@ namespace RT64 {
+     void PresentQueue::threadAdvanceBarrier() {
+         std::scoped_lock<std::mutex> cursorLock(cursorMutex);
+         barrierCursor = (barrierCursor + 1) % presents.size();
++        barrierCondition.notify_all();
+     }
+ 
+     void PresentQueue::threadLoop() {
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..dfae37a 100644
+index e08b02c..cad0222 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,8 +4,16 @@
@@ -720,7 +789,15 @@ index e08b02c..dfae37a 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -52,6 +98,12 @@ namespace RT64 {
+@@ -36,6 +82,7 @@ namespace RT64 {
+         int barrierCursor;
+         std::mutex cursorMutex;
+         std::condition_variable cursorCondition;
++        std::condition_variable barrierCondition;
+         uint64_t presentId;
+         std::mutex presentIdMutex;
+         std::condition_variable presentIdCondition;
+@@ -52,6 +99,12 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -887,7 +964,7 @@ index 3708220..f2206f7 100644
          void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
          uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
-index 2970e71..bc9b04b 100644
+index 2970e71..1f7f905 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
 @@ -4,6 +4,8 @@
@@ -899,9 +976,12 @@ index 2970e71..bc9b04b 100644
  #include <cassert>
  #include <cinttypes>
  
-@@ -820,7 +822,7 @@ namespace RT64 {
+@@ -818,9 +820,9 @@ namespace RT64 {
+ 
+         // Validate all tile copies to be used during the rendering.
          const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
-         const bool renderToRDRAM = extendedRenderToRAMSet ? (extended.renderToRAM != 0) : ext.emulatorConfig->framebuffer.renderToRAM;
+-        const bool renderToRDRAM = extendedRenderToRAMSet ? (extended.renderToRAM != 0) : ext.emulatorConfig->framebuffer.renderToRAM;
++        const bool renderToRDRAM = extendedRenderToRAMSet ? (extended.renderToRAM != 0) : (ext.emulatorConfig->framebuffer.renderToRAM && GetRenderToRAM());
          const bool warningsEnabled = ext.userConfig->developerMode;
 -        const bool linearFiltering = !ext.userConfig->threePointFiltering;
 +        const bool linearFiltering = !ext.userConfig->threePointFiltering || !PictureFiltersThreePoint();
@@ -980,10 +1060,15 @@ index 5b70e01..e0b2168 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..2f29494 100644
+index 5a331aa..8bb8f1a 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
-@@ -7,6 +7,7 @@
+@@ -4,9 +4,12 @@
+ 
+ #include "rt64_workload_queue.h"
+ 
++#include <chrono>
++
  #include "common/rt64_thread.h"
  
  #include "rt64_present_queue.h"
@@ -991,7 +1076,23 @@ index 5a331aa..2f29494 100644
  
  #define ENABLE_HIGH_RESOLUTION_RENDERER 1
  
-@@ -101,6 +102,7 @@ namespace RT64 {
+@@ -52,9 +55,14 @@ namespace RT64 {
+ 
+         // Stall the thread until the barrier is lifted if we're trying to write on a workload being used by the GPU.
+         bool waitForBarrier;
++        // Banjo-Tooie: sleep until the barrier moves instead of spinning on the mutex, which kept a whole
++        // core busy whenever the GPU was the bottleneck. The timeout keeps the old behaviour as a fallback.
+         do {
+-            const std::scoped_lock lock(cursorMutex);
++            std::unique_lock lock(cursorMutex);
+             waitForBarrier = (nextWriteCursor == barrierCursor);
++            if (waitForBarrier) {
++                barrierCondition.wait_for(lock, std::chrono::milliseconds(2), [&]() { return nextWriteCursor != barrierCursor; });
++            }
+         } while (waitForBarrier);
+ 
+         // Modify the cursor and notify anything waiting on the queue.
+@@ -101,6 +109,7 @@ namespace RT64 {
          rspProcessor = std::make_unique<RSPProcessor>(ext.device);
          vertexProcessor = std::make_unique<VertexProcessor>(ext.device);
          framebufferRenderer = std::make_unique<FramebufferRenderer>(ext.workloadGraphicsWorker, true, ext.createdGraphicsAPI, ext.shaderLibrary);
@@ -999,7 +1100,7 @@ index 5a331aa..2f29494 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -701,6 +703,7 @@ namespace RT64 {
+@@ -701,6 +710,7 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1007,7 +1108,7 @@ index 5a331aa..2f29494 100644
              framebufferRenderer->endFramebuffers(ext.workloadGraphicsWorker, &workload.drawBuffers, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
-@@ -838,6 +841,7 @@ namespace RT64 {
+@@ -838,6 +848,7 @@ namespace RT64 {
              }
  
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 1);
@@ -1015,7 +1116,7 @@ index 5a331aa..2f29494 100644
              ext.workloadGraphicsWorker->commandList->end();
              framebufferRenderer->waitForUploaders();
              ext.workloadGraphicsWorker->execute();
-@@ -848,6 +852,8 @@ namespace RT64 {
+@@ -848,6 +859,8 @@ namespace RT64 {
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -1024,6 +1125,26 @@ index 5a331aa..2f29494 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
+@@ -867,6 +880,7 @@ namespace RT64 {
+     void WorkloadQueue::threadAdvanceBarrier() {
+         std::scoped_lock<std::mutex> cursorLock(cursorMutex);
+         barrierCursor = (barrierCursor + 1) % workloads.size();
++        barrierCondition.notify_all();
+     }
+ 
+     void WorkloadQueue::threadAdvanceWorkloadId(uint64_t newWorkloadId) {
+diff --git a/src/hle/rt64_workload_queue.h b/src/hle/rt64_workload_queue.h
+index bde2f03..ea4d76b 100644
+--- a/src/hle/rt64_workload_queue.h
++++ b/src/hle/rt64_workload_queue.h
+@@ -67,6 +67,7 @@ namespace RT64 {
+         int barrierCursor;
+         std::mutex cursorMutex;
+         std::condition_variable cursorCondition;
++        std::condition_variable barrierCondition;
+         uint64_t workloadId;
+         uint64_t lastPresentId;
+         std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
 index 69a82ac..f4f86fa 100644
 --- a/src/render/rt64_descriptor_sets.h

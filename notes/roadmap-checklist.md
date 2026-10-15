@@ -387,6 +387,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [x] Done
 - [ ] Approved by L
 - 2026-10-15: claimed by the frame rate overlay thread. N64 version: keep RT64's specialised shaders between sessions (a list of the shader descriptions seen, compiled in the background at start), so first visits stutter less. timeBeginPeriod(1) is already in main.cpp.
+- 2026-10-15: Opus helper thread (other half, per-frame cost): Frame Read-Back off by default (no render to RAM) and no spinning on RT64's full queues; headless 14 to 28 fps. T162.
 
 - 2026-10-15 (T159): done. RT64 appends every new shader description to cache/shader_list.bin and submits the list again at start, so the shaders compile in the background (idle priority, the ubershader draws meanwhile). Headless: the second start compiled all 50 listed shaders in its first 5 s and none while playing. The other half (which options cost the most GPU time) is the Opus helper's.
 ### 4.33 Graphics API choice
