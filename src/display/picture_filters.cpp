@@ -58,7 +58,7 @@ namespace RT64 {
     void SetSceneModernWater(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
-    void SetSceneSunShadows(float strength);
+    void SetSceneSunShadows(float strength, bool onBanjo);
     void SetSceneGrass(float amount, float height, float distance);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
@@ -363,7 +363,7 @@ void tooie::picture_filters::apply() {
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
-    RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0));
+    RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true));
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 2500.0));
     modern_water = value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
@@ -736,6 +736,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sun shadows",
         "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. Drawn from what is on screen, so a shadow fades out when its caster leaves the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        sun_shadow_banjo_option,
+        "Sun shadow on Banjo",
+        "Whether Banjo casts a sun shadow too. Off leaves his to HD shadows or the game's own.",
+        true);
     graphics.add_number_option(
         light_shafts_option,
         "Light shafts",
@@ -807,7 +812,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &grass_option, &grass_height_option, &grass_distance_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &grass_option, &grass_height_option, &grass_distance_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -848,6 +853,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(heat_haze_option, section_option, false);
     graphics.add_option_hidden_dependency(light_shafts_option, section_option, false);
     graphics.add_option_hidden_dependency(sun_shadows_option, section_option, false);
+    graphics.add_option_hidden_dependency(sun_shadow_banjo_option, section_option, false);
     graphics.add_option_hidden_dependency(outline_thickness_option, section_option, false);
     graphics.add_option_hidden_dependency(outlines_option, section_option, false);
     graphics.add_option_hidden_dependency(rim_light_option, section_option, false);

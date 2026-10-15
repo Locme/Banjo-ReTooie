@@ -2829,10 +2829,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..b4eb2a4
+index 0000000..4f7b939
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1126 @@
+@@ -0,0 +1,1127 @@
 +//
 +// RT64
 +//
@@ -3209,9 +3209,10 @@ index 0000000..b4eb2a4
 +        effectsSettings.lightShafts = strength;
 +    }
 +
-+    void SetSceneSunShadows(float strength) {
++    void SetSceneSunShadows(float strength, bool onBanjo) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.sunShadows = strength;
++        effectsSettings.sunShadowOnBanjo = onBanjo;
 +    }
 +
 +    void SetSceneSun(bool custom, float x, float y, float z) {
@@ -3546,7 +3547,7 @@ index 0000000..b4eb2a4
 +            // Moonlight casts fainter shadows: as the tint darkens towards night (as DayNight in the shader).
 +            const float dayLuma = settings.dayTint[0] * 0.3f + settings.dayTint[1] * 0.5f + settings.dayTint[2] * 0.2f;
 +            const float moonlight = 1.0f - 0.6f * std::clamp((0.85f - dayLuma) / 0.45f, 0.0f, 1.0f);
-+            constants.shadows = { settings.sunShadows * daylight * moonlight, settings.sunShadowReach, dayPacked, 0.0f };
++            constants.shadows = { settings.sunShadows * daylight * moonlight, settings.sunShadowReach, dayPacked, settings.sunShadowOnBanjo ? 0.0f : 1.0f };
 +            if (sunLength > 1e-6f) {
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts * settings.dayShafts };
 +            }
@@ -3961,10 +3962,10 @@ index 0000000..b4eb2a4
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..45c6ee8
+index 0000000..f6d45f2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,168 @@
 +//
 +// RT64
 +//
@@ -4019,7 +4020,8 @@ index 0000000..45c6ee8
 +        bool modernWholeLevel = false;
 +        float lightShafts = 0.0f;
 +        float sunShadows = 0.0f;
-+        float sunShadowReach = 900.0f;
++        float sunShadowReach = 450.0f;
++        bool sunShadowOnBanjo = true;
 +        bool customSun = false;
 +        float sunDirection[3] = { 0.47f, 0.42f, -0.78f };
 +        // Banjo-Tooie: the day and night cycle's tint of the 3D world (off: none), and how much of the light
@@ -4076,7 +4078,8 @@ index 0000000..45c6ee8
 +    void SetSceneLightShafts(float strength);
 +    // Banjo-Tooie: sun shadows (0 off, 1 strongest): everything in the 3D world casts a shadow away from the
 +    // sun onto what is behind it, found in the depth buffer.
-+    void SetSceneSunShadows(float strength);
++    // onBanjo false leaves Banjo's own sun shadow out (HD shadows can give him one instead).
++    void SetSceneSunShadows(float strength, bool onBanjo = true);
 +    // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
 +    // puts back the fixed sun. A sun below the horizon casts no shadows.
 +    void SetSceneSun(bool custom, float x, float y, float z);
@@ -5863,10 +5866,10 @@ index 74b1fa0..a51b5bc 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..376472b
+index 0000000..c0e15a3
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1173 @@
+@@ -0,0 +1,1186 @@
 +//
 +// RT64
 +//
@@ -6680,6 +6683,9 @@ index 0000000..376472b
 +    const int Steps = 24;
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
++    // Banjo's own shadow can be left out (shadows.w > 0.5): what is drawn inside a capsule around him casts none.
++    const bool skipBanjo = (gConstants.shadows.w > 0.5f) && (gConstants.rippleAge.w > -1e8f);
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
 +    float shadow = 0.0f;
 +    [loop] for (int i = 0; i < Steps; i++) {
 +        // Steps grow with distance, so close shadows are sharp and long ones still reach.
@@ -6698,13 +6704,23 @@ index 0000000..376472b
 +        if (sceneDepth >= 0.99999f) {
 +            continue;
 +        }
-+        const float scene = -ViewPosition(at, sceneDepth).z;
-+        const float inFront = -p.z - scene;
-+        // Something is in front of the step, and not much further in front than a thing's thickness.
-+        const float thickness = 60.0f + travelled * 0.25f;
++        const float3 occluder = ViewPosition(at, sceneDepth);
++        const float inFront = -p.z - (-occluder.z);
++        // Something is in front of the step by no more than a thing's thickness. A fixed thickness: one that
++        // grew along the ray let a character's outline smear into a long dark block behind them.
++        const float thickness = 45.0f + distance * 0.01f;
 +        if ((inFront > bias) && (inFront < thickness)) {
-+            // Softer the further the shadow falls from what casts it.
-+            shadow = max(shadow, 1.0f - t * 0.6f);
++            if (skipBanjo) {
++                const float3 world = float3(dot(occluder, gConstants.worldX.xyz) + gConstants.worldX.w,
++                    dot(occluder, gConstants.worldY.xyz) + gConstants.worldY.w, dot(occluder, gConstants.worldZ.xyz) + gConstants.worldZ.w);
++                const float2 across = world.xz - banjo.xz;
++                if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
++                    continue;
++                }
++            }
++            // Softer the further the shadow falls from what casts it, and fading in over the first hits so
++            // the edge is a soft gradient rather than a dotted line.
++            shadow = min(1.0f, shadow + (1.0f - t * 0.6f) * 0.5f);
 +            if (shadow >= 0.99f) {
 +                break;
 +            }
@@ -7428,7 +7444,7 @@ index 0a5c332..df15569 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..d210217
+index 0000000..f2c2aca
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,70 @@
@@ -7483,7 +7499,7 @@ index 0000000..d210217
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 8 bits
-+        // each, steps of 0.005: exact as a float below 2^24), then unused.
++        // each, steps of 0.005: exact as a float below 2^24), then 1 to leave Banjo's own shadow out.
 +        float4 shadows;
 +    };
 +
