@@ -2136,3 +2136,12 @@
   3. Graphics > Lens Flare off and on
 - Look for: A bright sun disc in the sky (orange at sunset) that moves and sets below the horizon; soft coloured rings and a glare when you look at it, gone when a hill or wall hides it. No stars left over at sunset. Too strong or too weak?
 - Status: waiting for L
+
+## T201 Banjo X Alt v2: full detail, nothing simplified
+- Asked: 2026-10-15 23:40 UTC
+- Build: main, plus mods/Banjo X Alt v2.zip from project files (take Banjo X Alt v1.zip out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v2.zip" in the mods folder as it is. Turn off Smash Banjo and Banjo X, turn on "Banjo X (alt rig)"
+  2. Look at Banjo and Kazooie close up in photo mode, then walk, jump, Feathery Flap, Talon Trot and roll
+- Look for: every triangle of the FBX (42,433 triangles, 32,015 vertices; v1 was cut down). Same rig, jaw, blink and HD textures as v1 (T192). The model was too big for the game's draw-list index, so the first commands are stored before the list and reached with negative indices; if Banjo is invisible or only his belt shows, that trick fails on Windows. Checked headless in Spiral Mountain: loads from the zip, walks, jumps, flaps with Kazooie and crouches (screenshot screens/banjo-x/alt-v2.png).
+- Status: waiting for L
