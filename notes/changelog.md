@@ -26,7 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
-- Day and Night: night sounds, crickets and the odd owl at night and birdsong in the morning, quietly under the music (Graphics > Night Sounds, on). Untested on PC (T205).
+- Day and Night: night sounds, crickets and the odd owl at night and birdsong in the morning, quietly under the music (Graphics > Night Sounds, on). Untested on PC (T206).
 - Day and Night: fireflies drift and blink round Banjo at night (Graphics > Fireflies, on; not on Hailfire Peaks). Untested on PC (T202).
 - Day and Night: the sun shows in the sky as a disc that moves and sets, with a lens flare when you look towards it (Graphics > Lens Flare, on). Sun shadows now fade out as it sets, and the moon rises a little after. Untested on PC (T200).
 - 3D grass is now made of real blades, like the Godot grass shaders L pointed to: each blade is its own small 3D shape grown on the green ground, swaying in noise-driven wind, bending away from Banjo and his trail, dark at the root and bright at the tip. Untested on PC (T197).

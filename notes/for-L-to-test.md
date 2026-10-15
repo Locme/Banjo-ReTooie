@@ -2185,7 +2185,7 @@
 - Look for: Step 2, his brown fur (head, arms, back, legs) looks fuzzy with short strands standing out of it, most visible along his outline, and the strands stay on him as he moves instead of crawling. Kazooie, the shorts, backpack, gloves, boots and muzzle stay smooth. Step 3, longer or shorter fur, then none. Step 4, whether the Smash model's fur also grows strands (its fur colours may differ). Checked headless in Spiral Mountain (screenshot in project files, screenshots/banjo-fur/off-vs-on-headless.png). Cost there, software Vulkan at Original resolution: GPU 25 to 37 ms per frame, so tell me if your frame rate drops. Not checked: Windows with D3D12 (the shader is built there at runtime), the split-up Banjo and Kazooie, transformations (no fur by design).
 - Status: waiting for L
 
-## T205 Day and night: night sounds
+## T206 Day and night: night sounds
 - Asked: 2026-10-15 23:55 UTC
 - Build: main (pull and build)
 - Commit: "Day and night: crickets, owls and birdsong" on main
