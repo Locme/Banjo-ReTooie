@@ -2038,3 +2038,13 @@
 - Look for: Step 1, his whole face stays (only the eyes blink). Step 2, the straps stay on his shoulders. Step 3, the area reloads straight away (Banjo back at the area's entrance) with the model switched. Checked headless: the model loads and animates with the face in place; the idle with the hidden eyes and the menu switch were not reproduced headless.
 - Status: waiting for L
 
+## T191 Banjo X model mod v1
+- Asked: 2026-10-15 22:30 UTC
+- Build: main, plus mods/Banjo X v1.zip from project files (take Smash Banjo out of the mods folder, or switch it off in the Mods menu)
+- Steps:
+  1. Load a save in Spiral Mountain with Banjo X on and look at Banjo and Kazooie from the front, side and back
+  2. Walk, jump, flap, roll and crouch
+  3. Let Banjo stand still for the idle animations
+- Look for: the Banjo X look (colours, Kazooie's feathers, backpack, straps, belt), and anything that tears, pokes through or comes loose when he moves (straps and buckles most of all). His eyes stay open: the model has no blink. Checked headless: it loads and animates (walk, jump, flap, crouch, roll) with the HD textures matched; straps were only checked in motion at a distance.
+- Status: waiting for L
+
