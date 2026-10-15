@@ -117,6 +117,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   game hotkeys, `SAVE_STATE` (Insert) and `LOAD_STATE` (Home), named by `src/gameplay/save_state.cpp`.
 * **Frame Rate Overlay key** (same file): `FRAME_OVERLAY` (F3), named by `src/game/frame_overlay.cpp`.
 * **Debug and capture keys** (same file): `HIDE_HUD` (F1), `SCREENSHOT` (F12), `EFFECT_VIEW` (F6), `EFFECT_COMPARE` (F8), `INTERP_CHECK` (F7), `BLEND_MODE` (F5) and `WARP_AGAIN` (F9), named by `src/input/hotkeys.cpp`. The Controls tab lists the last four under a "Debug" heading.
+* **Sidebar layout** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `recompui/src/elements/ui_modal.{h,cpp}`,
+  `ui_tab_set.{h,cpp}`, `ui_config_page_options_menu.{h,cpp}`): `recompui::config::set_sidebar_layout(true)` draws the
+  settings tabs as a vertical list on the left (the header becomes a column, the quit and close buttons at its foot) and
+  each options page's description in a strip along the bottom instead of a column on the right. The modal and pages
+  check it on every update, so it switches while the menu is open (DEV > Sidebar menu (preview), `src/game/config.cpp`).
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 

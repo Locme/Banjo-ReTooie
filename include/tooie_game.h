@@ -74,6 +74,8 @@ namespace tooie {
     inline const std::string hd_shadows_option = "hd_shadows";
     // DEV tab, formerly WIP (src/game/config.cpp): its id, and the General toggle that shows it.
     inline const std::string wip_tab_id = "wip";
+    // DEV > Sidebar menu (preview): settings layout A, the tabs down the left and descriptions along the bottom.
+    inline const std::string sidebar_menu_option = "sidebar_menu";
     inline const std::string wip_tab_option = "wip_tab";
     // Cheats tab (src/game/cheats.cpp): the General toggle that shows it. Developer section.
     inline const std::string cheats_tab_option = "cheats_tab";

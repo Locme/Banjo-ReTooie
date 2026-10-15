@@ -393,7 +393,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..385bb5b 100644
+index 38b84f5..1bdc706 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -65,6 +65,8 @@ namespace recompui {
@@ -405,7 +405,7 @@ index 38b84f5..385bb5b 100644
              void toggle_fullscreen();
          }
  
-@@ -133,6 +135,18 @@ namespace recompui {
+@@ -133,6 +135,23 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -421,14 +421,20 @@ index 38b84f5..385bb5b 100644
 +        void set_option_display_before(const std::string &option_id, const std::string &before_id);
 +        const std::string *get_option_display_before(const std::string &option_id);
 +
++        // Layout A preview: the tabs as a sidebar on the left and the focused option's description in a
++        // strip along the bottom. Off draws the tabs across the top. Takes effect while the menu is open.
++        void set_sidebar_layout(bool enabled);
++        bool get_sidebar_layout();
++
          void set_tab(const std::string &id);
          void open();
          bool close();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..f7a4064 100644
+index 6c84c05..8afc29b 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
-@@ -1,7 +1,13 @@
+@@ -1,7 +1,14 @@
++#include <atomic>
 +#include <memory>
 +#include <unordered_map>
  #include "recompui/config.h"
@@ -442,7 +448,15 @@ index 6c84c05..f7a4064 100644
  #include "recompinput/profiles.h"
  #include "util/file.h"
  #include "librecomp/game.hpp"
-@@ -38,6 +44,98 @@ namespace recompui {
+@@ -16,6 +23,7 @@ struct PendingTab {
+ };
+ static std::vector<PendingTab> pending_tabs;
+ static bool loaded_configs = false;
++static std::atomic<bool> sidebar_layout{ false };
+ 
+ namespace recompui {
+     static recompui::TabbedModal *config_modal = nullptr;
+@@ -38,6 +46,98 @@ namespace recompui {
          throw std::runtime_error("No config with ID '" + id + "' has been added to the config modal.");
      }
  
@@ -541,7 +555,7 @@ index 6c84c05..f7a4064 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +219,28 @@ namespace recompui {
+@@ -121,6 +221,28 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -570,6 +584,21 @@ index 6c84c05..f7a4064 100644
      void config::set_tab_visible(const std::string &id, bool is_visible) {
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
+@@ -177,6 +299,14 @@ namespace recompui {
+         return config_modal->modal_root_context;
+     }
+ 
++    void config::set_sidebar_layout(bool enabled) {
++        sidebar_layout = enabled;
++    }
++
++    bool config::get_sidebar_layout() {
++        return sidebar_layout;
++    }
++
+     void config::set_tab(const std::string &id) {
+         if (config_modal == nullptr) {
+             throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
 index 86428c9..e9d03ad 100644
 --- a/recompui/src/config/ui_config_option.cpp
@@ -742,7 +771,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..ff125a2 100644
+index 6ba64e2..da607d8 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,7 @@
@@ -753,7 +782,63 @@ index 6ba64e2..ff125a2 100644
  
  
  namespace recompui {
-@@ -149,6 +152,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -21,6 +24,7 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+     description_container->set_line_height(28.0f);
+     description_container->set_padding(8.0f);
+     set_description_text("");
++    apply_description_strip(recompui::config::get_sidebar_layout());
+ 
+     if (config->requires_confirmation) {
+         add_footer();
+@@ -38,6 +42,37 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+     }
+ }
+ 
++// With the sidebar layout (Settings > DEV > Sidebar menu), the description sits in a strip along the
++// bottom of the page instead of a column on the right, so the options get the full width.
++void ConfigPageOptionsMenu::apply_description_strip(bool strip) {
++    description_strip = strip;
++    Element *right = body->get_right();
++    body->set_flex_direction(strip ? FlexDirection::Column : FlexDirection::Row);
++    if (strip) {
++        right->set_flex_grow(0.0f);
++        right->set_flex_shrink(0.0f);
++        right->set_flex_basis_auto();
++        right->set_height(132.0f);
++        right->set_padding_left(32.0f);
++        right->set_padding_right(32.0f);
++        right->set_padding_top(16.0f);
++        right->set_padding_bottom(16.0f);
++        right->set_border_top_width(theme::border::width);
++        right->set_border_top_color(theme::color::BorderSoft);
++        right->set_background_color(theme::color::BGShadow);
++        right->set_overflow_y(Overflow::Auto);
++    } else {
++        right->set_flex_grow(1.0f);
++        right->set_flex_shrink(1.0f);
++        right->set_flex_basis(100.0f, Unit::Percent);
++        right->set_height_auto();
++        right->set_padding(16.0f);
++        right->set_border_top_width(0.0f);
++        right->set_background_color(theme::color::Transparent);
++        right->set_overflow_y(Overflow::Visible);
++    }
++}
++
+ ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
+     for (auto *element : config_option_elements) {
+         if (element->get_option_id() == option_id) {
+@@ -109,6 +144,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+         break;
+     }
+     case EventType::Update: {
++        if (description_strip != recompui::config::get_sidebar_layout()) {
++            apply_description_strip(recompui::config::get_sidebar_layout());
++        }
+         if (apply_button != nullptr) {
+             bool apply_enabled = this->apply_button->is_enabled();
+             bool is_dirty = config->is_dirty();
+@@ -149,6 +187,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -764,16 +849,16 @@ index 6ba64e2..ff125a2 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -181,8 +188,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +223,30 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
 +        // Display order: the schema's, with options moved by set_option_display_before.
 +        std::vector<size_t> order;
-+        for (size_t i = 0; i < schema.options.size(); i++) {
+         for (size_t i = 0; i < schema.options.size(); i++) {
 +            order.push_back(i);
 +        }
-         for (size_t i = 0; i < schema.options.size(); i++) {
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
@@ -795,7 +880,7 @@ index 6ba64e2..ff125a2 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +262,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +297,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -803,6 +888,26 @@ index 6ba64e2..ff125a2 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
+diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
+index 49e05db..eb6a711 100644
+--- a/recompui/src/config/ui_config_page_options_menu.h
++++ b/recompui/src/config/ui_config_page_options_menu.h
+@@ -17,6 +17,7 @@ namespace recompui {
+         Element *description_container = nullptr;
+         std::string description_option_id = "";
+         Button *apply_button = nullptr;
++        bool description_strip = false;
+ 
+         virtual void process_event(const Event &e) override;
+         std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
+@@ -31,6 +32,7 @@ namespace recompui {
+         ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
+         void perform_option_render_updates();
+         void set_description_text(const std::string &text);
++        void apply_description_strip(bool strip);
+     public:
+         ConfigPageOptionsMenu(
+             ResourceId rid,
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
 index 4fdf81f..c87b8b5 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
@@ -1049,6 +1154,95 @@ index 34eec3f..1680b5f 100644
      float get_client_left();
      float get_client_top();
      float get_client_width();
+diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
+index b057f46..cc0f513 100644
+--- a/recompui/src/elements/ui_modal.cpp
++++ b/recompui/src/elements/ui_modal.cpp
+@@ -3,6 +3,7 @@
+ #include "ui_document.h"
+ #include "recompinput/recompinput.h"
+ #include "recompinput/profiles.h"
++#include "recompui/config.h"
+ 
+ namespace recompui {
+ 
+@@ -331,9 +332,63 @@ TabbedModal::TabbedModal(
+     }, "Next Tab");
+ }
+ 
++// Settings > DEV > Sidebar menu (preview): the tabs as a list down the left side instead of a row
++// across the top. Switched while the menu is open, so the header and tab set are restyled in place.
++void TabbedModal::apply_sidebar_layout(bool sidebar) {
++    sidebar_layout = sidebar;
++    const float border_width = theme::border::width;
++    modal_element->set_flex_direction(sidebar ? FlexDirection::Row : FlexDirection::Column);
++    modal_element->set_as_navigation_container(sidebar ? NavigationType::Horizontal : NavigationType::Vertical);
++
++    header->set_flex_direction(sidebar ? FlexDirection::Column : FlexDirection::Row);
++    header->set_align_items(sidebar ? AlignItems::Stretch : AlignItems::Center);
++    header->set_as_navigation_container(sidebar ? NavigationType::Vertical : NavigationType::Horizontal);
++    header->set_flex_shrink(sidebar ? 0.0f : 1.0f);
++    if (sidebar) {
++        header->set_width(280.0f);
++        header->set_height(100.0f, Unit::Percent);
++        header->set_padding(16.0f);
++        header->set_border_bottom_width(0.0f);
++        header->set_border_right_width(border_width);
++        header->set_border_right_color(theme::color::BorderSoft);
++        header->set_border_top_right_radius(0.0f);
++        header->set_border_bottom_left_radius(theme::border::radius_lg);
++    } else {
++        header->set_width(100.0f, Unit::Percent);
++        header->set_height_auto();
++        header->set_padding_top(0.0f);
++        header->set_padding_bottom(0.0f);
++        header->set_padding_left(tabs != nullptr ? 0.0f : 8.0f);
++        header->set_padding_right(8.0f);
++        header->set_border_right_width(0.0f);
++        header->set_border_bottom_width(border_width);
++        header->set_border_bottom_color(theme::color::BorderSoft);
++        header->set_border_top_right_radius(theme::border::radius_lg);
++        header->set_border_bottom_left_radius(0.0f);
++    }
++
++    Element *header_left = header->get_left();
++    header_left->set_flex_direction(sidebar ? FlexDirection::Column : FlexDirection::Row);
++    header_left->set_align_items(sidebar ? AlignItems::Stretch : AlignItems::Center);
++    header_left->set_as_navigation_container(sidebar ? NavigationType::Vertical : NavigationType::Horizontal);
++
++    if (sidebar) {
++        body->set_width_auto();
++    } else {
++        body->set_width(100.0f, Unit::Percent);
++    }
++
++    if (tabs != nullptr) {
++        tabs->set_vertical(sidebar);
++    }
++}
++
+ void TabbedModal::process_event(const Event &e) {
+     switch (e.type) {
+         case EventType::Update: {
++            if (sidebar_layout != recompui::config::get_sidebar_layout()) {
++                apply_sidebar_layout(recompui::config::get_sidebar_layout());
++            }
+             if (previous_tab_index != current_tab_index) {
+                 body->clear_children();
+                 if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
+diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
+index d065a14..b02dd48 100644
+--- a/recompui/src/elements/ui_modal.h
++++ b/recompui/src/elements/ui_modal.h
+@@ -102,6 +102,8 @@ namespace recompui {
+         TabSet *tabs = nullptr;
+         int previous_tab_index = -1;
+         int current_tab_index = -1;
++        bool sidebar_layout = false;
++        void apply_sidebar_layout(bool sidebar);
+         virtual void process_event(const Event &e) override;
+         std::string_view get_type_name() override { return "TabbedModal"; }
+         void on_tab_change(int tab_index);
 diff --git a/recompui/src/elements/ui_select.cpp b/recompui/src/elements/ui_select.cpp
 index e289e9e..d79a4a1 100644
 --- a/recompui/src/elements/ui_select.cpp
@@ -1154,6 +1348,104 @@ index cc4932c..4140c08 100644
  
          Style hover_style;
          Style focus_style;
+diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
+index 2c5dc52..14e8593 100644
+--- a/recompui/src/elements/ui_tab_set.cpp
++++ b/recompui/src/elements/ui_tab_set.cpp
+@@ -49,6 +49,41 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
+     add_style(&disabled_style, { disabled_state });
+ }
+ 
++void Tab::set_vertical(bool vertical) {
++    if (vertical) {
++        set_padding_top(12.0f);
++        set_padding_bottom(12.0f);
++        set_padding_left(20.0f);
++        set_padding_right(20.0f);
++        set_border_radius(theme::border::radius_md);
++        label->set_typography(theme::Typography::LabelMD);
++        indicator->set_top(10.0f);
++        indicator->set_bottom(10.0f);
++        indicator->set_left(4.0f);
++        indicator->unset_right();
++        indicator->set_width(3.0f);
++        indicator->set_height_auto();
++        indicator->set_border_radius(2.0f);
++        checked_style.set_background_color(theme::color::PrimaryA20);
++    } else {
++        set_padding_top(tab_vertical_padding);
++        set_padding_bottom(tab_vertical_padding);
++        set_padding_left(tab_horizontal_padding);
++        set_padding_right(tab_horizontal_padding);
++        set_border_radius(0.0f);
++        label->set_typography(theme::Typography::Header3);
++        indicator->unset_top();
++        indicator->set_bottom(2.0f);
++        indicator->set_left(0.0f);
++        indicator->set_right(0.0f);
++        indicator->set_width_auto();
++        indicator->set_height(2.0f);
++        indicator->set_border_radius(0.0f);
++        checked_style.set_background_color(theme::color::Transparent);
++    }
++    apply_styles();
++}
++
+ void Tab::set_visible(bool is_visible) {
+     visible = is_visible;
+     set_enabled(visible);
+@@ -131,6 +166,9 @@ int TabSet::add_tab(std::string_view text) {
+         set_active_tab(tab_index, true);
+     });
+     tabs.push_back(tab);
++    if (vertical) {
++        tab->set_vertical(true);
++    }
+     if (active_tab < 0) {
+         active_tab = 0;
+         tab->set_selected(true);
+@@ -194,6 +232,16 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+     return new_index;
+ }
+ 
++void TabSet::set_vertical(bool vertical) {
++    this->vertical = vertical;
++    set_flex_direction(vertical ? FlexDirection::Column : FlexDirection::Row);
++    set_gap(vertical ? 2.0f : 0.0f);
++    set_as_navigation_container(vertical ? NavigationType::Vertical : NavigationType::Horizontal);
++    for (Tab *tab : tabs) {
++        tab->set_vertical(vertical);
++    }
++}
++
+ void TabSet::set_tab_visible(int tab_index, bool is_visible) {
+     if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
+         return;
+diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
+index b8d3783..5cdf0c6 100644
+--- a/recompui/src/elements/ui_tab_set.h
++++ b/recompui/src/elements/ui_tab_set.h
+@@ -32,6 +32,8 @@ namespace recompui {
+         void set_selected(bool selected);
+         void set_visible(bool is_visible);
+         bool get_visible() { return visible; }
++        // Sidebar layout: a row of a vertical list, its selected mark down the left edge.
++        void set_vertical(bool vertical);
+     };
+ 
+     class TabSet : public Element {
+@@ -51,6 +53,11 @@ namespace recompui {
+         int get_active_tab() const { return active_tab; }
+         void set_tab_visible(int tab_index, bool is_visible);
+         int get_next_tab_in_direction(int index, int direction);
++        // Lays the tabs out top to bottom (the settings sidebar) instead of in a row.
++        void set_vertical(bool vertical);
++        bool is_vertical() const { return vertical; }
++    private:
++        bool vertical = false;
+     };
+ 
+ } // namespace recompui
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
 index a7954c7..8add9d9 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp

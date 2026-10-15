@@ -2067,3 +2067,13 @@
 - Look for: the lumpy look is gone or much smaller. The head keeps more of its shape (85% of the Smash triangles instead of 65%), the arms and hands 80% instead of 65%, and the fur lighting comes from a smoothed copy of the surface, so the sculpted fur bumps no longer show as dark and light patches. Checked headless: loads and animates (walk, flap, crouch, roll); 15,714 of 16,000 vertices.
 - Status: waiting for L
 
+## T194 Sidebar menu (preview), layout A steps 1 to 3
+- Asked: 2026-10-15 22:50 UTC
+- Build: main (pull and build)
+- Steps:
+  1. General > DEV tab on, then in the DEV tab turn on Sidebar menu (preview)
+  2. Move through the tabs with L and R, and through the options with the stick (and with the mouse)
+  3. Turn the switch off again
+- Look for: Step 1, the tabs move into a list down the left side at once, with the quit and close buttons at its bottom, and the options use the full width. Step 2, the selected option's description shows in a strip along the bottom and changes as you move. Step 3, the tabs go back across the top. Not restyled to the sketch yet (that is the next step). Checked headless with keyboard and mouse; not checked with a controller.
+- Status: waiting for L
+
