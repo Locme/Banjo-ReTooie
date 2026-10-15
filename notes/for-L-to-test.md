@@ -1664,7 +1664,7 @@
 - Steps:
   1. Overlay on Full (F3)
   2. In Spiral Mountain, turn Bloom, SMAA and Eye adaptation on and off in Graphics, and open photo mode (F10) with a filter
-- Look for: Two lines under the GPU time: "GPU 3D effects: ..." and "GPU per frame shown: ...", each listing only the passes that ran, in ms. A pass you turn off should disappear from its line, and the numbers should add up to less than the GPU line. Tell me which one is biggest on your PC; that's the effect costing the most.
+- Look for: Two lines under the GPU time: "GPU 3D effects: ..." and "GPU screen passes: ..." (renamed from "GPU per frame shown"), each listing only the passes that ran, in ms. A pass you turn off should disappear from its line, and the numbers should add up to less than the GPU line. Tell me which one is biggest on your PC; that's the effect costing the most.
 - Status: waiting for L
 
 ## T158 Low Input Latency
@@ -1800,4 +1800,11 @@
   2. Go to Spiral Mountain near Bottles' burnt body
   3. Turn the camera so the body, enemies or NPCs sit at the left, right and bottom edges, near and far
 - Look for: Do they stay whole right up to the edge, with no shadow left behind without its object? Any drop in frame rate?
+
+## T170 Frame rate overlay tidied (your "Overlay polish" pick)
+- Asked: 2026-10-15 18:11 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Overlay on Full (F3) and play a minute
+- Look for: The lines are in four groups with a small gap between them: frames (fps, worst frame, 1% low, input latency), GPU (total, 3D effects, screen passes, shader compiles), the game (game fps and CPU, interpolation, map, Banjo), and the PC (renderer, extras, audio, build). GPU lines for passes that are all off are hidden. "Game ... CPU" no longer drops to 0 ms now and then (it counted some waits twice). Below 4 fps the first line keeps the last frame rate instead of vanishing. Anything you'd like moved, renamed or left out?
 - Status: waiting for L

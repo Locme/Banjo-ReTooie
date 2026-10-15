@@ -196,7 +196,9 @@ Game Frame Rate.
 
 - **Frame rate overlay**: Off, Compact or Full. A small box in the top left
   corner, updated four times a second. **Compact** shows only the first line
-  below (frame rate, frame time and input latency). **Full** shows:
+  below (frame rate, frame time and input latency). **Full** shows, in four
+  groups with a small gap between them (frames; GPU; the game and where Banjo
+  is; the PC and the build):
   - the frame rate and frame time on screen (averaged over the last quarter
     second)
   - the worst frame time in that quarter second

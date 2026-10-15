@@ -91,6 +91,8 @@ namespace {
     // Wait for the UI to come up before building the overlay.
     constexpr auto ui_wait = 500ms;
     constexpr size_t max_lines = 20;
+    // Space between the groups of lines in Full.
+    constexpr float group_gap = 8.0f;
     // The frame time graph: one bar per presented frame, newest on the right.
     constexpr size_t graph_bars = 100;
     constexpr float graph_height = 40.0f;
@@ -545,7 +547,8 @@ namespace {
     };
     constexpr size_t frame_sections = 4;
 
-    // "GPU 3D effects: bloom 0.31, effects 1.20 ms" with the passes that ran, per game frame or present.
+    // "GPU 3D effects: bloom 0.31, effects 1.20 ms" with the passes that ran, per game frame or present;
+    // empty when none ran.
     std::string section_line(const RT64::FrameStats& frames, const char* label, size_t first, size_t last, uint32_t per) {
         std::string text;
         char part[48];
@@ -556,48 +559,71 @@ namespace {
             std::snprintf(part, sizeof(part), "%s%s %.2f", text.empty() ? "" : ", ", section_names[i], frames.sectionMs[i] / per);
             text += part;
         }
-        return std::string(label) + (text.empty() ? "none" : text + " ms");
+        return text.empty() ? std::string() : std::string(label) + text + " ms";
     }
 
-    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, double game_busy_ms, Mode mode) {
-        char line[160];
-        std::vector<std::string> text;
+    // The last frame rate line, kept for an update in which no frame was shown (below 4 fps).
+    std::string last_rate_line;
+    std::string last_worst_line;
 
+    // Full mode's lines in groups: frames, GPU, the game, where Banjo is, and the PC and build.
+    // A line holding a single space separates the groups (drawn as a gap, not a line).
+    std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, double game_busy_ms, Mode mode) {
+        char line[200];
+        std::vector<std::string> text;
+        const std::string gap = " ";
+
+        // Frames shown.
         if (frames.presents > 0) {
             double ms = frames.presentMs / frames.presents;
             std::snprintf(line, sizeof(line), "%.0f fps, %.2f ms frame time", 1000.0 / ms, ms);
-            text.push_back(line);
+            last_rate_line = line;
             std::snprintf(line, sizeof(line), "Worst frame %.2f ms", frames.worstPresentMs);
-            text.push_back(line);
+            last_worst_line = line;
         }
+        std::string rate = last_rate_line.empty() ? std::string("No frames shown yet") : last_rate_line;
         if (latency_frames > 0) {
-            double avg = latency_ms / latency_frames;
-            if (!text.empty()) {
-                std::snprintf(line, sizeof(line), ", input %.0f ms", avg);
-                text[0] += line;
-            }
-            std::snprintf(line, sizeof(line), "Input latency %.0f ms (worst %.0f ms), controller read to screen", avg, latency_worst);
-            text.insert(text.begin() + std::min<size_t>(2, text.size()), line);
+            std::snprintf(line, sizeof(line), ", input %.0f ms", latency_ms / latency_frames);
+            rate += line;
         }
-        else {
-            text.push_back("No frames presented");
-        }
+        text.push_back(rate);
         if (mode == Mode::Compact) {
-            text.resize(1);
             return text;
         }
+        if (!last_worst_line.empty()) {
+            text.push_back(last_worst_line);
+        }
+        text.push_back(stutter_line());
+        if (latency_frames > 0) {
+            std::snprintf(line, sizeof(line), "Input latency %.0f ms, worst %.0f ms (controller read to screen)",
+                latency_ms / latency_frames, latency_worst);
+            text.push_back(line);
+        }
+
+        // GPU.
+        text.push_back(gap);
         if (frames.gpuFrames > 0) {
             std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame", frames.gpuMs / frames.gpuFrames);
             text.push_back(line);
-            text.push_back(section_line(frames, "GPU 3D effects: ", 0, frame_sections, frames.gpuFrames));
+            std::string effects = section_line(frames, "GPU 3D effects: ", 0, frame_sections, frames.gpuFrames);
+            if (!effects.empty()) {
+                text.push_back(effects);
+            }
         }
         if (frames.presents > 0) {
-            text.push_back(section_line(frames, "GPU per frame shown: ", frame_sections, 10, frames.presents));
+            std::string passes = section_line(frames, "GPU screen passes: ", frame_sections, 10, frames.presents);
+            if (!passes.empty()) {
+                text.push_back(passes);
+            }
         }
+        text.push_back(shader_line());
+
+        // The game.
+        text.push_back(gap);
         std::snprintf(line, sizeof(line), "Game %.0f fps", seconds > 0.0 ? game_frames / seconds : 0.0);
         text.push_back(line);
         if (game_frames > 0 && seconds > 0.0) {
-            // The game's code ran whenever its idle thread wasn't waiting.
+            // The game's code ran whenever none of its threads was waiting.
             std::snprintf(line, sizeof(line), ", CPU %.2f ms per frame (busy %.0f%%)",
                 game_busy_ms / game_frames, std::clamp(game_busy_ms / (seconds * 10.0), 0.0, 100.0));
             text.back() += line;
@@ -605,8 +631,10 @@ namespace {
         // One line: the setting, then whether it is blending and what it tagged.
         tooie::model_tagging::Stats tags = tooie::model_tagging::last_stats();
         if (tags.interpolating) {
-            std::snprintf(line, sizeof(line), ", on: %u models, %u bones, %u shadows, %u camera cuts",
-                tags.models, tags.bones, tags.shadows, tags.camera_cuts);
+            auto plural = [](uint32_t n) { return n == 1 ? "" : "s"; };
+            std::snprintf(line, sizeof(line), ", on: %u model%s, %u bone%s, %u shadow%s, %u camera cut%s",
+                tags.models, plural(tags.models), tags.bones, plural(tags.bones), tags.shadows, plural(tags.shadows),
+                tags.camera_cuts, plural(tags.camera_cuts));
             text.push_back("Interpolation: " + framerate_setting() + line);
         }
         else {
@@ -614,16 +642,18 @@ namespace {
             const std::string setting = framerate_setting();
             text.push_back("Interpolation: " + (setting == "Off" ? setting : setting + ", off"));
         }
-
-        text.push_back(stutter_line());
-        text.push_back(shader_line());
         if (game_rdram != nullptr) {
             text.push_back(map_line(game_rdram));
             text.push_back(position_line(game_rdram));
         }
+
+        // The PC and the build.
+        text.push_back(gap);
         text.push_back(renderer_line());
         text.push_back(extras_line());
-        text.push_back(audio_text);
+        if (!audio_text.empty()) {
+            text.push_back(audio_text);
+        }
         text.push_back(std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")");
         return text;
     }
@@ -915,7 +945,9 @@ namespace {
             if (log && ++ticks % 8 == 0) {
                 std::string joined;
                 for (const std::string& line : format(frames, game_delta, game_seconds, game_busy_ms, Mode::Full)) {
-                    joined += (joined.empty() ? "" : " | ") + line;
+                    if (line != " ") {
+                        joined += (joined.empty() ? "" : " | ") + line;
+                    }
                 }
                 std::printf("[frames] %s\n", joined.c_str());
                 std::fflush(stdout);
@@ -935,10 +967,26 @@ namespace {
 
             std::vector<std::string> text = format(frames, game_delta, game_seconds, game_busy_ms, mode);
             overlay.context.open();
-            for (size_t i = 0; i < overlay.lines.size(); i++) {
-                bool used = i < text.size();
-                overlay.lines[i]->set_text(used ? text[i] : std::string());
-                overlay.lines[i]->set_display(used ? recompui::Display::Block : recompui::Display::None);
+            // A " " line is a gap: the next line gets a margin above it instead.
+            size_t used = 0;
+            bool gap = false;
+            for (const std::string& t : text) {
+                if (t == " ") {
+                    gap = true;
+                    continue;
+                }
+                if (used == overlay.lines.size()) {
+                    break;
+                }
+                overlay.lines[used]->set_text(t);
+                overlay.lines[used]->set_margin_top(gap ? group_gap : 0.0f);
+                overlay.lines[used]->set_display(recompui::Display::Block);
+                gap = false;
+                used++;
+            }
+            for (size_t i = used; i < overlay.lines.size(); i++) {
+                overlay.lines[i]->set_text(std::string());
+                overlay.lines[i]->set_display(recompui::Display::None);
             }
             overlay.graph->set_display(mode == Mode::Full ? recompui::Display::Flex : recompui::Display::None);
             if (mode == Mode::Full) {

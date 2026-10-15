@@ -21,6 +21,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Frame rate overlay: lines in four groups; game CPU time no longer drops to 0 ms (a wait was counted twice); the first line keeps the last frame rate below 4 fps (T170).
 - Benchmark key (F4): records the frame rate overlay's figures to benchmarks\ with a summary and the settings, for comparing settings or builds (T161).
 - Shaders met in earlier sessions are kept in cache\shader_list.bin and compile in the background at start, so first visits stutter less (roadmap 4.32, T159).
 - Frame rate overlay (Full): GPU time of each extra pass (water mask, eye adaptation, bloom, effects, SMAA, FXAA, photo filters, FSR, output, UI); roadmap 4.43's F3 timings (T157).
