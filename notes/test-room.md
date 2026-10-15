@@ -1,4 +1,4 @@
-# Test room (work in progress, paused 2026-10-14)
+# Test room
 
 Warp > Test > Test room warps to Quagmire (placeholder area) and spawns the
 line-up in `src/gameplay/test_room_actors.inc` in rows in front of Banjo, each
@@ -14,29 +14,32 @@ from the decompressed ROM (gemarkersDll at ROM 0x0214CDC0, table at +0x90) and
 ScriptHawk's model names. Generic data-driven enemies (Gruntlings and the like,
 overlay chbaddieDll) are not in that table and cannot be spawned this way.
 
-## Verified headless
+## Verified headless (2026-10-15, More game memory on)
 
-- Objects row (39 entries) spawns without a crash in Quagmire.
-- Transformation statues show the Van, Washing Machine, Bee, Snowball,
-  Mumbo, Kazooie, Banjo-Kazooie and Golden Goliath models.
-- Mumbo (0x190) alone spawns and stays.
+- The line-up is 104 entries: 14 transformation statues plus 90 objects,
+  characters and enemies. Three full runs in Quagmire with no crash; about 94
+  stay, and 10 leave on their own (Treble Clef nest, Wading Boots, Soggy,
+  Captain Blubber, Captain Blackeye, Scrut, Dippy, Dingpot, Inky, Blubbul).
+- 58 entries are commented out in `test_room_actors.inc` ("crashes here"):
+  they crash outside their home area. Most are actors that follow a route
+  through `subaddierouteDll` or `sucoaster`/`sucoasterfly` (their route data
+  only exists in their own map), the rest crash in their own update (missing
+  animation or prop data). Gruntydactyl, Guvnor and Keelhaul also write into
+  heap headers.
+- Crowd crashes (display list overflow, full animation caches) were fixed by
+  More game memory; with it off the room may crash.
 
-## Crash sweep so far (characters)
+## Finding which actor crashes
 
-Crash in their own update outside their home area (left out):
-Humba 0x2A1, Klungo (Spiral Mountain) 0x4EC, Dilberta 0x117, Chief Bloatazin
-0x115, Gobi 0x137, Mrs. Boggy 0x13F, Pawno 0x352, Tiptup 0x358/0x359,
-Chris P. Bacon 0x1BE, Seemee 0x295, Loggo 0x435, Mr. Fit 0x477, Alien Dad 0x45A.
+The headless sweep runs the room with `TOOIE_TEST_ROOM_ONLY=<ids>` (hex,
+comma separated) under gdb and removes the actor whose overlay shows in the
+crash backtrace. A crash in `subaddierouteDll` called from a shared helper
+names no actor: blame the last spawned actor whose overlay calls the route
+or coaster helpers (blaming the last spawned actor of any kind threw out ~20
+innocent ones). `TOOIE_TEST_ROOM_HEAPCHECK=1` walks the heap every frame.
 
-Not yet pinned down (the sweep may have blamed the wrong actor): crashes in
-subaddierouteDll (an actor that follows a route; seen with Billy Bob 0x150 and
-the Styracosaurus family 0x290-0x292 in the line-up), in
-func_800B27A0 (with Gruntilda 0x528 last spawned), and heap_alloc_sided (the
-game's heap running out when ~40 or more actors are spawned at once).
+## Ideas not done
 
-## Left to do
-
-- Finish the sweep (characters, then enemies and objects), attributing route
-  crashes properly, and split the room if the heap runs out.
-- Pick a roomier, flat area than Quagmire.
+- A roomier, flat area than Quagmire (the kickball arena, map 0xC6).
+- Spawning route actors in their home map, or with a stub route.
 - Headless check of the walk-up transformation switch.

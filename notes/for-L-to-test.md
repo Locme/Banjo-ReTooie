@@ -1753,3 +1753,14 @@
   3. Load a file in Spiral Mountain (or warp there)
 - Look for: about 10,000 files in asset_dump plus assets.txt. In Spiral Mountain, part of the ground (model 065E) is drawn as water (model 08C1) instead. Remove the file afterwards. Tell me which model you want to replace first.
 - Status: waiting for L
+
+## T165 Test room
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. General > Developer > More game memory is On (the default)
+  2. Load a save, open Warp, pick Test > Test room (the last entry)
+  3. Stand still while the rows fill in front of Banjo (a few seconds), then walk along them; walk up to a statue in the front row to turn into that form
+- Look for: rows of objects, characters and enemies, each idling on its spot, and 14 statues showing the transformations. Does the game stay up? Which ones look wrong, T-pose or float? 58 actors are left out because they crash outside their own level (list in notes/test-room.md and test_room_actors.inc).
+- Status: waiting for L
+
