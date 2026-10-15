@@ -2095,3 +2095,15 @@
   3. Optional check without waiting for a real freeze: in a command prompt in the exe's folder run `set TOOIE_TEST_HANG=game:60:20` then start BanjoTooieN64Recomp.exe; one minute after start the game freezes for 20 seconds on purpose
 - Look for: hangs.log names which part stopped: "the game sent no new frame" (the game itself, even while the picture still refreshes), "no frame was presented" (graphics or driver) or "the window stopped handling events". Under each entry are the named threads with the function each was in, and after 15 seconds a hang_*.dmp is written. Before, the watchdog only noticed the screen stopping, so a freeze inside the game, where the last picture keeps being shown, was never logged. Checked headless on Linux with fake game, screen and window freezes (each logged, and the "running again" line after) and 2 minutes of normal play with no false entries. The thread stacks and the dump are Windows only and were only compile-checked, not run.
 - Status: waiting for L
+
+## T197 3D grass as real blades (roadmap 4.47)
+- Asked: 2026-10-15 23:00 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > 3D grass to 100 (3D grass height 100, 3D grass distance 2500)
+  2. Spiral Mountain: stand on the meadow by Klungo and watch the grass, then walk and run through it and stop
+  3. Isle o' Hags and Mayahem Temple's courtyard: look at it close up and far away
+  4. Try 3D grass height 50, 150 and 200, and 3D grass distance 1000 and 5000, then set 3D grass to 0
+- Look for: Every blade a real 3D blade (it stands up off the ground and sticks out over ledges), swaying in waves of wind, bending away from Banjo and springing back behind him. Closer to the examples you sent? Anything off (too thin, too dense, too much wind, blades on things that aren't grass)? Frame rate with it on and off: this way of drawing needs geometry shaders and costs more than the layered grass, and lowering 3D grass distance makes it cheaper. Checked headless: blades in Spiral Mountain and an Isle o' Hags area, standing up over the ledge edges. Not checked: the motion (the container runs at about 1 frame a second with it on).
+- Status: waiting for L
+

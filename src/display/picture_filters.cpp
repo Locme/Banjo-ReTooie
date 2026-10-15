@@ -714,7 +714,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         grass_option,
         "3D grass",
-        "Tufts of tall grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others), in the style of Breath of the Wild: waves of wind roll across them, and they part round Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        "Real blades of grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others): wind rolls across them in waves, and they bend away from Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         grass_height_option,

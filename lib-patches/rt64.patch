@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..9f5f27b 100644
+index 79dfc38..578f7c2 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -115,7 +115,22 @@ index 79dfc38..9f5f27b 100644
          BYPRODUCTS ${OUTNAME}.rw.h)
      file(MAKE_DIRECTORY ${OUTPUT_DIR})
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.rw.c)
-@@ -289,6 +317,8 @@ if (WIN32)
+@@ -276,6 +304,14 @@ function(build_vertex_shader_spec_constants TARGETOBJ SHADERNAME)
+     endif()
+ endfunction()
+ 
++# Banjo-Tooie: geometry shaders, for D3D12 and Vulkan only (Metal has none).
++function(build_geometry_shader TARGETOBJ SHADERNAME)
++    if (WIN32)
++        build_shader_dxil(${TARGETOBJ} ${SHADERNAME} "${DXC_GS_OPTS}" ${ARGN})
++    endif()
++    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_GS_OPTS}" ${ARGN})
++endfunction()
++
+ function(build_compute_shader TARGETOBJ SHADERNAME)
+     build_shader(${TARGETOBJ} ${SHADERNAME} "${DXC_CS_OPTS}" ${ARGN})
+ endfunction()
+@@ -289,6 +325,8 @@ if (WIN32)
      set(SDL2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/include")
      set(SDL2_LIBRARIES "SDL2" "SDL2main")
      link_directories("${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/lib/x64")
@@ -124,7 +139,7 @@ index 79dfc38..9f5f27b 100644
  else()
      find_package(SDL2 REQUIRED)
  endif()
-@@ -301,7 +331,7 @@ add_compile_definitions(
+@@ -301,7 +339,7 @@ add_compile_definitions(
      IMGUI_IMPL_VULKAN_NO_PROTOTYPES
  )
  
@@ -133,7 +148,7 @@ index 79dfc38..9f5f27b 100644
      add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
      add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
  endif()
-@@ -389,6 +419,11 @@ set (SOURCES
+@@ -389,6 +427,11 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
@@ -145,7 +160,7 @@ index 79dfc38..9f5f27b 100644
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -445,9 +480,11 @@ target_link_libraries(rt64 nfd)
+@@ -445,9 +488,11 @@ target_link_libraries(rt64 nfd)
  target_link_libraries(rt64 libzstd_static)
  target_link_libraries(rt64 plume)
  
@@ -160,7 +175,16 @@ index 79dfc38..9f5f27b 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -543,11 +580,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -505,6 +550,8 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
+ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
+ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlatMS.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR" "-D MULTISAMPLING")
+ build_vertex_shader( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSDynamic.hlsl" "-D DYNAMIC_RENDER_PARAMS")
++# Banjo-Tooie: 3D grass blades.
++build_geometry_shader(rt64 "src/shaders/GrassGS.hlsl")
+ build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
+ build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
+ build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
+@@ -543,11 +590,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -1464,7 +1488,7 @@ index 69a82ac..a9076cb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..19f834a 100644
+index 9fae0d4..8beca06 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,9 @@
@@ -1488,7 +1512,7 @@ index 9fae0d4..19f834a 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +130,42 @@ namespace RT64 {
+@@ -125,6 +130,81 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -1528,10 +1552,49 @@ index 9fae0d4..19f834a 100644
 +        return (totalArea > 0.0f) && (flatArea >= 0.5f * totalArea);
 +    }
 +
++    // Banjo-Tooie: the passes of real 3D grass blades a ground draw needs: the most any of its triangles facing up
++    // within the grass's reach needs (GrassGS.hlsl), or 0 for none. Level ground has no model transform, so its
++    // positions are already in the world.
++    static uint32_t grassBladePasses(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
++        const uint32_t start = call.meshDesc.faceIndicesStart;
++        const uint32_t end = start + call.callDesc.triangleCount * 3;
++        if (end > drawData.faceIndices.size()) {
++            return 0;
++        }
++        const hlslpp::float3 camera(frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w);
++        const float reach = frameParams.grassParams.z;
++        uint32_t passes = 0;
++        for (uint32_t i = start; i < end; i += 3) {
++            hlslpp::float3 p[3];
++            for (uint32_t k = 0; k < 3; k++) {
++                const uint32_t v = drawData.faceIndices[i + k];
++                if ((v * 3 + 2) >= drawData.posFloats.size()) {
++                    return 0;
++                }
++                p[k] = hlslpp::float3(drawData.posFloats[v * 3 + 0], drawData.posFloats[v * 3 + 1], drawData.posFloats[v * 3 + 2]);
++            }
++            const hlslpp::float3 n = hlslpp::cross(p[1] - p[0], p[2] - p[0]);
++            const float nLength = float(hlslpp::length(n));
++            if ((nLength <= 1e-4f) || (std::abs(float(n.y)) < 0.6f * nLength)) {
++                continue;
++            }
++            const hlslpp::float3 center = (p[0] + p[1] + p[2]) / 3.0f;
++            const float radius = std::max({ float(hlslpp::length(p[0] - center)), float(hlslpp::length(p[1] - center)), float(hlslpp::length(p[2] - center)) });
++            const float distanceToCamera = std::max(float(hlslpp::length(center - camera)) - radius, 0.0f);
++            if (distanceToCamera > reach) {
++                continue;
++            }
++            const float low[2] = { std::min({ float(p[0].x), float(p[1].x), float(p[2].x) }), std::min({ float(p[0].z), float(p[1].z), float(p[2].z) }) };
++            const float high[2] = { std::max({ float(p[0].x), float(p[1].x), float(p[2].x) }), std::max({ float(p[0].z), float(p[1].z), float(p[2].z) }) };
++            passes = std::max(passes, SceneGrassBladePasses(low, high, distanceToCamera, frameParams.grassBlades.x));
++        }
++        return passes;
++    }
++
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +210,9 @@ namespace RT64 {
+@@ -169,6 +249,9 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1541,7 +1604,7 @@ index 9fae0d4..19f834a 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -465,12 +509,54 @@ namespace RT64 {
+@@ -465,12 +548,54 @@ namespace RT64 {
          return true;
      }
      
@@ -1598,7 +1661,7 @@ index 9fae0d4..19f834a 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +600,17 @@ namespace RT64 {
+@@ -514,6 +639,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1616,12 +1679,27 @@ index 9fae0d4..19f834a 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -578,6 +675,18 @@ namespace RT64 {
+@@ -578,6 +714,33 @@ namespace RT64 {
  
                  drawCallTriangles(drawCall);
  
 +                // Banjo-Tooie: 3D grass, the same triangles again as shells further up each time.
-+                if ((grassShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0)) {
++                if ((grassShells > 0) && (grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0)) {
++                    // Real blades, grown over the same triangles by a geometry shader, in as many passes as they need.
++                    const uint32_t passes = instanceGrassVector[i];
++                    worker->commandList->setPipeline(grassBladePipeline);
++                    previousPipeline = grassBladePipeline;
++                    rasterParams.grassShells = passes | RASTER_GRASS_BLADES;
++                    for (uint32_t pass = 1; pass <= passes; pass++) {
++                        rasterParams.grassShell = pass;
++                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                        drawCallTriangles(drawCall);
++                    }
++                    rasterParams.grassShell = 0;
++                    rasterParams.grassShells = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
++                else if ((grassShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0)) {
 +                    rasterParams.grassShells = grassShells;
 +                    for (uint32_t shell = 1; shell <= grassShells; shell++) {
 +                        rasterParams.grassShell = shell;
@@ -1635,7 +1713,7 @@ index 9fae0d4..19f834a 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1359,66 @@ namespace RT64 {
+@@ -1250,6 +1413,66 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -1702,7 +1780,7 @@ index 9fae0d4..19f834a 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1465,56 @@ namespace RT64 {
+@@ -1296,9 +1519,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1760,7 +1838,15 @@ index 9fae0d4..19f834a 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1408,6 +1624,57 @@ namespace RT64 {
+@@ -1354,6 +1624,7 @@ namespace RT64 {
+         postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
+         postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
+         postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
++        grassBladePipeline = rasterShaderUber->grassBladePipeline.get();
+ 
+         // Make a new render target draw call.
+         RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
+@@ -1408,6 +1679,57 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -1818,7 +1904,7 @@ index 9fae0d4..19f834a 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1723,39 @@ namespace RT64 {
+@@ -1456,6 +1778,39 @@ namespace RT64 {
                  continue;
              }
  
@@ -1858,7 +1944,7 @@ index 9fae0d4..19f834a 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +1982,20 @@ namespace RT64 {
+@@ -1682,6 +2037,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -1879,7 +1965,7 @@ index 9fae0d4..19f834a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2061,60 @@ namespace RT64 {
+@@ -1747,7 +2116,64 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -1933,14 +2019,18 @@ index 9fae0d4..19f834a 100644
 +                    }
 +                    grass = (off < 1e-3f) && gm.zCmp() && gm.zUpd() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        !interop::Blender::usesAlphaBlend(gm);
++                }
++                uint8_t grassValue = grass ? 1 : 0;
++                if (grass && (grassBladePipeline != nullptr)) {
++                    grassValue = uint8_t(std::min(grassBladePasses(drawData, call, frameParams), 255u));
                  }
 +                instanceGrassVector.resize(instanceIndex, 0);
-+                instanceGrassVector.push_back(grass ? 1 : 0);
++                instanceGrassVector.push_back(grassValue);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,6 +2125,29 @@ namespace RT64 {
+@@ -1758,6 +2184,29 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1971,7 +2061,7 @@ index 9fae0d4..19f834a 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..d76d477 100644
+index 3add9c3..4e9a8d5 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,30 @@ namespace RT64 {
@@ -2005,13 +2095,14 @@ index 3add9c3..d76d477 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +91,15 @@ namespace RT64 {
+@@ -67,6 +91,16 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
 +        // Banjo-Tooie: 1 for each instance draw call left out of the scene effects.
 +        std::vector<uint8_t> instanceExcludedVector;
 +        // Banjo-Tooie: 1 for draws that get 3D grass shells over them (level ground of the 3D world).
++        // Banjo-Tooie: for each instance, 0, or 1 for 3D grass shells over it, or the passes of real blades grown on it.
 +        std::vector<uint8_t> instanceGrassVector;
 +        // Banjo-Tooie: Modern water: the game's water draws left out of the framebuffer being recorded (1 each).
 +        std::vector<uint8_t> instanceWaterSkipVector;
@@ -2021,7 +2112,16 @@ index 3add9c3..d76d477 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -123,6 +156,10 @@ namespace RT64 {
+@@ -87,6 +121,8 @@ namespace RT64 {
+         RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
+         RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
+         RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
++        // Banjo-Tooie: 3D grass as real blades (null without geometry shaders: shells instead).
++        RenderPipeline *grassBladePipeline = nullptr;
+         std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
+         std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
+         std::unique_ptr<RenderTexture> dummyColorTarget;
+@@ -123,6 +159,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2032,7 +2132,7 @@ index 3add9c3..d76d477 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +201,15 @@ namespace RT64 {
+@@ -164,7 +204,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -2708,6 +2808,95 @@ index 5bc3a2a..c6c5ec2 100644
 +    void SetStretchPerspective(bool stretch);
  };
 \ No newline at end of file
+diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
+index 721a01e..4c58375 100644
+--- a/src/render/rt64_raster_shader.cpp
++++ b/src/render/rt64_raster_shader.cpp
+@@ -19,7 +19,9 @@
+ #include "shaders/PostBlendDitherNoiseAddPS.hlsl.spirv.h"
+ #include "shaders/PostBlendDitherNoiseSubPS.hlsl.spirv.h"
+ #include "shaders/PostBlendDitherNoiseSubNegativePS.hlsl.spirv.h"
++#include "shaders/GrassGS.hlsl.spirv.h"
+ #ifdef _WIN32
++#   include "shaders/GrassGS.hlsl.dxil.h"
+ #   include "shaders/RasterPSLibrary.hlsl.dxil.h"
+ #   include "shaders/RasterPSLibraryMS.hlsl.dxil.h"
+ #   include "shaders/RasterVSLibrary.hlsl.dxil.h"
+@@ -326,6 +328,7 @@ namespace RT64 {
+         pipelineDesc.primitiveTopology = RenderPrimitiveTopology::TRIANGLE_LIST;
+         pipelineDesc.vertexShader = c.vertexShader;
+         pipelineDesc.pixelShader = c.pixelShader;
++        pipelineDesc.geometryShader = c.geometryShader;
+         pipelineDesc.specConstants = c.specConstants.data();
+         pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
+ 
+@@ -449,7 +452,9 @@ namespace RT64 {
+         FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
+         RenderPipelineLayoutBuilder layoutBuilder;
+         layoutBuilder.begin(false, true);
+-        layoutBuilder.addPushConstant(0, 0, sizeof(interop::RasterParams), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL);
++        // Banjo-Tooie: the 3D grass blades' geometry shader reads the push constants too.
++        const bool grassBlades = device->getCapabilities().geometryShader && ((shaderFormat == RenderShaderFormat::SPIRV) || (shaderFormat == RenderShaderFormat::DXIL));
++        layoutBuilder.addPushConstant(0, 0, sizeof(interop::RasterParams), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL | (grassBlades ? RenderShaderStageFlag::GEOMETRY : RenderShaderStageFlag::NONE));
+         layoutBuilder.addDescriptorSet(descriptorCommonSet);
+         layoutBuilder.addDescriptorSet(descriptorTextureSet);
+         layoutBuilder.addDescriptorSet(descriptorTextureSet);
+@@ -483,6 +488,31 @@ namespace RT64 {
+             threadIndex = (threadIndex + 1) % threadCount;
+         }
+ 
++        // Banjo-Tooie: the 3D grass blades: depth tested and written, both faces, alpha blended like the ground.
++        if (grassBlades) {
++            switch (shaderFormat) {
++#   ifdef _WIN32
++            case RenderShaderFormat::DXIL:
++                grassGeometryShader = device->createShader(GrassGSBlobDXIL, std::size(GrassGSBlobDXIL), "GSMain", shaderFormat);
++                break;
++#   endif
++            case RenderShaderFormat::SPIRV:
++                grassGeometryShader = device->createShader(GrassGSBlobSPIRV, std::size(GrassGSBlobSPIRV), "GSMain", shaderFormat);
++                break;
++            default:
++                break;
++            }
++
++            if (grassGeometryShader != nullptr) {
++                PipelineCreation grassCreation = creation;
++                grassCreation.geometryShader = grassGeometryShader.get();
++                grassCreation.zCmp = true;
++                grassCreation.zUpd = true;
++                grassCreation.cvgAdd = false;
++                grassBladePipeline = RasterShader::createPipeline(grassCreation);
++            }
++        }
++
+         // Spawn the threads that will compile all the pipelines.
+         pipelineThreads.clear();
+         pipelineThreads.resize(pipelineThreadCreations.size());
+diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
+index 3b991ff..6a469af 100644
+--- a/src/render/rt64_raster_shader.h
++++ b/src/render/rt64_raster_shader.h
+@@ -44,6 +44,8 @@ namespace RT64 {
+         const RenderPipelineLayout *pipelineLayout;
+         const RenderShader *vertexShader;
+         const RenderShader *pixelShader;
++        // Banjo-Tooie: the 3D grass blades' geometry shader, or none.
++        const RenderShader *geometryShader = nullptr;
+         bool alphaBlend;
+         bool culling;
+         bool NoN;
+@@ -90,6 +92,10 @@ namespace RT64 {
+         std::vector<std::unique_ptr<std::thread>> pipelineThreads;
+         std::unique_ptr<RenderShader> vertexShader;
+         std::unique_ptr<RenderShader> pixelShader;
++        // Banjo-Tooie: 3D grass blades, grown by a geometry shader over the ground's triangles (null when the
++        // device has no geometry shaders; the grass then falls back to shells).
++        std::unique_ptr<RenderShader> grassGeometryShader;
++        std::unique_ptr<RenderPipeline> grassBladePipeline;
+ 
+         RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
+         ~RasterShaderUber();
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
 index bf7b669..6b8bcbd 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
@@ -2911,10 +3100,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..4f7b939
+index 0000000..869586d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1127 @@
+@@ -0,0 +1,1210 @@
 +//
 +// RT64
 +//
@@ -3326,9 +3515,68 @@ index 0000000..4f7b939
 +    // Enough shells that the knee-high blades look solid from the side.
 +    static constexpr uint32_t GrassShells = 24;
 +
++    // Real blades (GrassGS.hlsl): the finest grid's cell size, and how many blades a pass can grow on a triangle.
++    static constexpr float GrassBladeCell = 3.0f;
++    static constexpr uint32_t GrassBladeInvocations = 32;
++    static constexpr uint32_t GrassBladesPerInvocation = 14;
++    static constexpr uint32_t GrassBladeMaxPasses = 24;
++
++    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear) {
++        // As GrassCellSize in GrassGS.hlsl: the passes the triangle's grid needs at its distance, at most GrassBladeMaxPasses.
++        const float cell = GrassBladeCell * std::exp2(std::max(std::floor(std::log2(std::max(distanceToCamera, 1.0f) / lodNear)), 0.0f));
++        const float cells = (std::floor((high[0] - low[0]) / cell) + 2.0f) * (std::floor((high[1] - low[1]) / cell) + 2.0f);
++        const float perPass = float(GrassBladeInvocations * GrassBladesPerInvocation);
++        return std::clamp(uint32_t(std::ceil(cells / perPass)), 1u, GrassBladeMaxPasses);
++    }
++
 +    uint32_t SceneGrassShells() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return (effectsSettings.grass > 0.0f) ? GrassShells : 0;
++    }
++
++    // Gauss-Jordan elimination with partial pivoting; false when the matrix can't be inverted.
++    static bool InvertMatrix4(const double (&m)[4][4], double (&out)[4][4]) {
++        double a[4][8];
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                a[r][c] = m[r][c];
++                a[r][c + 4] = (r == c) ? 1.0 : 0.0;
++            }
++        }
++        for (int c = 0; c < 4; c++) {
++            int pivot = c;
++            for (int r = c + 1; r < 4; r++) {
++                if (std::abs(a[r][c]) > std::abs(a[pivot][c])) {
++                    pivot = r;
++                }
++            }
++            if (std::abs(a[pivot][c]) < 1e-12) {
++                return false;
++            }
++            if (pivot != c) {
++                for (int k = 0; k < 8; k++) {
++                    std::swap(a[c][k], a[pivot][k]);
++                }
++            }
++            const double d = a[c][c];
++            for (int k = 0; k < 8; k++) {
++                a[c][k] /= d;
++            }
++            for (int r = 0; r < 4; r++) {
++                if ((r != c) && (a[r][c] != 0.0)) {
++                    const double f = a[r][c];
++                    for (int k = 0; k < 8; k++) {
++                        a[r][k] -= f * a[c][k];
++                    }
++                }
++            }
++        }
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                out[r][c] = a[r][c + 4];
++            }
++        }
++        return true;
 +    }
 +
 +    bool ComputeSceneGrass(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
@@ -3363,6 +3611,27 @@ index 0000000..4f7b939
 +            clip[2] * viewportScale.z + clip[3] * viewportTranslate.z,
 +            clip[3]
 +        };
++
++        // Real blades (GrassGS.hlsl): the whole map from world space to those positions, and back.
++        double toClip[4][4];
++        for (int j = 0; j < 4; j++) {
++            float c[4];
++            for (int k = 0; k < 4; k++) {
++                c[k] = rowVector ? viewProj.m[j][k] : viewProj.m[k][j];
++            }
++            toClip[0][j] = c[0] * (viewportScale.x / halfWidth) + c[3] * ((viewportTranslate.x - halfWidth) / halfWidth);
++            toClip[1][j] = c[1] * (viewportScale.y / halfHeight) - c[3] * ((viewportTranslate.y - halfHeight) / halfHeight);
++            toClip[2][j] = c[2] * viewportScale.z + c[3] * viewportTranslate.z;
++            toClip[3][j] = c[3];
++        }
++        double inverse[4][4];
++        if (!InvertMatrix4(toClip, inverse)) {
++            return false;
++        }
++        for (int r = 0; r < 4; r++) {
++            frameParams.grassWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
++            frameParams.grassClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
++        }
 +
 +        frameParams.grassDepthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
 +        frameParams.grassProjection = { m[0][0], m[1][1], viewportWidth, viewportHeight };
@@ -3399,6 +3668,9 @@ index 0000000..4f7b939
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
++        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
++        // second, and the finest grid's cells 3 units wide.
++        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -4044,10 +4316,10 @@ index 0000000..4f7b939
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f6d45f2
+index 0000000..9a6fe4c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,171 @@
 +//
 +// RT64
 +//
@@ -4188,6 +4460,9 @@ index 0000000..f6d45f2
 +    void SetSceneGrass(float amount, float height, float distance);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
++    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
++    // camera needs (GrassGS.hlsl grows up to 448 a pass), with the grid coarsening from lodNear on.
++    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear);
 +    // Fills the frame's grass terms from the 3D world's projection (as adjusted for the aspect ratio), view,
 +    // view-projection and viewport (as the RSP used them), the framebuffer's resolution in game pixels and
 +    // the size of its viewport in target pixels. False when there is no grass to draw this frame.
@@ -5487,10 +5762,10 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/Grass.hlsli b/src/shaders/Grass.hlsli
 new file mode 100644
-index 0000000..d52d51d
+index 0000000..8735575
 --- /dev/null
 +++ b/src/shaders/Grass.hlsli
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,197 @@
 +//
 +// RT64
 +//
@@ -5661,6 +5936,295 @@ index 0000000..d52d51d
 +    }
 +
 +    return false;
++}
++
++// Smooth value noise over the world's x and z.
++float GrassPatchNoise(float2 p) {
++    const float2 i = floor(p);
++    const float2 f = frac(p);
++    const float2 u = f * f * (3.0f - 2.0f * f);
++    return lerp(lerp(GrassHash(i).x, GrassHash(i + float2(1.0f, 0.0f)).x, u.x), lerp(GrassHash(i + float2(0.0f, 1.0f)).x, GrassHash(i + 1.0f).x, u.x), u.y);
++}
++
++// A real blade (GrassGS.hlsl): kept only when the ground at its root (baseColor, from the root's texture
++// coordinates) is green, then shaded dark at the root to bright and warm at the tip by its height over the root,
++// with broad patches of lighter, yellower grass across the field.
++bool GrassBlade(float3 world, float3 baseColor, float rootY, inout float3 color) {
++    if (!((baseColor.g - max(baseColor.r, baseColor.b) > 0.03f) && (baseColor.g > baseColor.b * 1.25f))) {
++        return false;
++    }
++
++    const float t = saturate((world.y - rootY) / max(FrParams.grassParams.x, 1.0f));
++    const float patch = smoothstep(0.5f, 0.85f, GrassPatchNoise(world.xz / 240.0f + 17.0f));
++    const float variation = GrassPatchNoise(world.xz / 37.0f);
++    float3 shade = color * lerp(0.42f, 1.08f, t) * lerp(0.9f, 1.08f, variation);
++    shade = lerp(shade, shade * float3(1.3f, 1.24f, 0.62f) + float3(0.045f, 0.05f, 0.0f), t * t * 0.8f);
++    shade = lerp(shade, shade * float3(1.18f, 1.15f, 0.7f) + float3(0.03f, 0.03f, 0.0f), patch * 0.6f * t);
++    color = shade;
++    return true;
++}
+diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
+new file mode 100644
+index 0000000..c7b9680
+--- /dev/null
++++ b/src/shaders/GrassGS.hlsl
+@@ -0,0 +1,257 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: 3D grass as real blades. Each triangle of the level's green ground is drawn again through this
++// geometry shader, which grows blades on it: one per cell of a grid over the world's x and z (coarser further
++// away), each a flat, tapering blade of two segments and a tip, turned any way, leaning in the wind (a noise
++// field rolling across the field) and pushed away from Banjo and his trail. The blades keep the ground's own
++// texture coordinates and colours at their root, so the pixel shader colours them from the ground under them
++// (and keeps only green ground); the root's height goes in the flat colour's alpha (RasterPS.hlsl).
++//
++// Every blade is 5 vertices of 14 values, 14 blades to an invocation (the 1024 values a geometry shader may
++// output), 32 invocations a triangle, and the draw is repeated for as many passes as its largest triangle needs
++// (RasterParams.grassShell is the pass, 1 to the count in grassShells' low bits).
++
++#include "shared/rt64_raster_params.h"
++
++#include "FbRendererCommon.hlsli"
++
++[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
++
++#define GRASS_BLADES_PER_INVOCATION 14
++#define GRASS_INVOCATIONS 32
++#define GRASS_PASS_MASK 0xFFFFu
++
++static const uint GrassTrailPoints = 12;
++
++struct GrassVertex {
++    float4 position : SV_POSITION;
++    float2 uv : TEXCOORD;
++    float4 smoothColor : COLOR0;
++    nointerpolation float4 flatColor : COLOR1;
++};
++
++float GrassHash1(float3 p) {
++    uint3 c = uint3(int3(p) + 0x8000);
++    uint h = c.x * 0x8DA6B343u ^ c.y * 0xD8163841u ^ c.z * 0xCB1AB31Fu;
++    h ^= h >> 13;
++    h *= 0x5BD1E995u;
++    h ^= h >> 15;
++    return float(h & 0xFFFFu) / 65535.0f;
++}
++
++float4 GrassHash4(float3 p) {
++    return float4(GrassHash1(p), GrassHash1(p + 101.0f), GrassHash1(p + 211.0f), GrassHash1(p + 307.0f));
++}
++
++// Smooth value noise, for the wind.
++float GrassNoise(float2 p) {
++    const float2 i = floor(p);
++    const float2 f = frac(p);
++    const float2 u = f * f * (3.0f - 2.0f * f);
++    const float a = GrassHash1(float3(i, 7.0f));
++    const float b = GrassHash1(float3(i + float2(1.0f, 0.0f), 7.0f));
++    const float c = GrassHash1(float3(i + float2(0.0f, 1.0f), 7.0f));
++    const float d = GrassHash1(float3(i + float2(1.0f, 1.0f), 7.0f));
++    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
++}
++
++float4 GrassToClip(float3 world) {
++    const float4 w = float4(world, 1.0f);
++    return float4(dot(FrParams.grassWorldToClip[0], w), dot(FrParams.grassWorldToClip[1], w), dot(FrParams.grassWorldToClip[2], w), dot(FrParams.grassWorldToClip[3], w));
++}
++
++float4 GrassDirToClip(float3 dir) {
++    const float4 d = float4(dir, 0.0f);
++    return float4(dot(FrParams.grassWorldToClip[0], d), dot(FrParams.grassWorldToClip[1], d), dot(FrParams.grassWorldToClip[2], d), dot(FrParams.grassWorldToClip[3], d));
++}
++
++float3 GrassToWorld(float4 clip) {
++    const float4 w = float4(dot(FrParams.grassClipToWorld[0], clip), dot(FrParams.grassClipToWorld[1], clip), dot(FrParams.grassClipToWorld[2], clip), dot(FrParams.grassClipToWorld[3], clip));
++    return w.xyz / w.w;
++}
++
++// The ground's position as RasterVS made it, back to the same space before its screen scale and offset.
++float4 GrassUnscale(float4 position) {
++#ifdef __spirv__
++    position.y = -position.y;
++#endif
++    position.xy = (position.xy - gConstants.screenOffset * position.w) / gConstants.screenScale;
++    return position;
++}
++
++float4 GrassRescale(float4 position) {
++    position.xy = position.xy * gConstants.screenScale + gConstants.screenOffset * position.w;
++#ifdef __spirv__
++    position.y = -position.y;
++#endif
++    return position;
++}
++
++// The cell size for a triangle this far from the camera: doubled for every doubling of distance past the near
++// distance, then again until the triangle's cells fit in the passes drawn.
++float GrassCellSize(float distanceToCamera, float2 extent, float capacity) {
++    float cell = FrParams.grassBlades.w * exp2(max(floor(log2(max(distanceToCamera, 1.0f) / FrParams.grassBlades.x)), 0.0f));
++    for (int i = 0; i < 8; i++) {
++        const float2 cells = floor(extent / cell) + 2.0f;
++        if (cells.x * cells.y <= capacity) {
++            break;
++        }
++        cell *= 2.0f;
++    }
++    return cell;
++}
++
++void GrassEmit(inout TriangleStream<GrassVertex> stream, GrassVertex root, float4 rootClip, float3 offset) {
++    GrassVertex v = root;
++    v.position = GrassRescale(rootClip + GrassDirToClip(offset));
++    stream.Append(v);
++}
++
++[maxvertexcount(GRASS_BLADES_PER_INVOCATION * 5)]
++[instance(GRASS_INVOCATIONS)]
++void GSMain(triangle GrassVertex input[3], uint instance : SV_GSInstanceID, inout TriangleStream<GrassVertex> stream) {
++    const uint passes = max(gConstants.grassShells & GRASS_PASS_MASK, 1u);
++    const uint pass = gConstants.grassShell - 1;
++    const float4 params = FrParams.grassParams;
++
++    float4 clip[3];
++    float3 world[3];
++    for (int k = 0; k < 3; k++) {
++        clip[k] = GrassUnscale(input[k].position);
++        world[k] = GrassToWorld(clip[k]);
++    }
++
++    // Ground facing up only.
++    const float3 normal = cross(world[1] - world[0], world[2] - world[0]);
++    const float normalLength = length(normal);
++    if ((normalLength <= 1e-4f) || (abs(normal.y) < 0.6f * normalLength)) {
++        return;
++    }
++
++    // How far the triangle is from the camera, and its grid.
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
++    const float radius = max(max(distance(world[0], center), distance(world[1], center)), distance(world[2], center));
++    const float triangleDistance = max(distance(center, camera) - radius, 0.0f);
++    if (triangleDistance > params.z) {
++        return;
++    }
++
++    const float2 low = min(min(world[0].xz, world[1].xz), world[2].xz);
++    const float2 high = max(max(world[0].xz, world[1].xz), world[2].xz);
++    const float capacity = float(passes * GRASS_INVOCATIONS * GRASS_BLADES_PER_INVOCATION);
++    const float cell = GrassCellSize(triangleDistance, high - low, capacity);
++    const float2 first = floor(low / cell);
++    const float2 count = floor(high / cell) - first + 1.0f;
++    const uint cellCount = uint(count.x * count.y);
++    const uint start = (pass * GRASS_INVOCATIONS + instance) * GRASS_BLADES_PER_INVOCATION;
++    if (start >= cellCount) {
++        return;
++    }
++
++    // For telling which side of each edge a point lies on, in x and z.
++    const float2 a = world[0].xz, b = world[1].xz, c = world[2].xz;
++    const float area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
++    if (abs(area) < 1e-4f) {
++        return;
++    }
++
++    const float4 wind = FrParams.grassWind;
++    const float2 windDir = normalize(wind.xy);
++    const float time = wind.z;
++    const float height = params.x;
++    const float4 trailBounds = FrParams.grassTrailBounds;
++    const float trailRadius = FrParams.grassPlayer.w;
++
++    for (uint i = 0; i < GRASS_BLADES_PER_INVOCATION; i++) {
++        const uint index = start + i;
++        if (index >= cellCount) {
++            break;
++        }
++
++        const float2 cellIndex = first + float2(index % uint(count.x), index / uint(count.x));
++        const float4 r = GrassHash4(float3(cellIndex, cell));
++        if (r.w > params.w) {
++            continue;
++        }
++
++        // A point somewhere in the cell, if it is in this triangle.
++        const float2 spot = (cellIndex + 0.1f + 0.8f * r.xy) * cell;
++        const float w1 = ((spot.x - a.x) * (c.y - a.y) - (c.x - a.x) * (spot.y - a.y)) / area;
++        const float w2 = ((b.x - a.x) * (spot.y - a.y) - (spot.x - a.x) * (b.y - a.y)) / area;
++        const float w0 = 1.0f - w1 - w2;
++        if ((w0 < 0.0f) || (w1 < 0.0f) || (w2 < 0.0f)) {
++            continue;
++        }
++
++        const float3 root = world[0] * w0 + world[1] * w1 + world[2] * w2;
++        const float cameraDistance = distance(root, camera);
++        const float fade = saturate(1.0f - cameraDistance / params.z);
++        if (fade < 0.02f) {
++            continue;
++        }
++
++        GrassVertex v;
++        v.position = 0.0f;
++        v.uv = input[0].uv * w0 + input[1].uv * w1 + input[2].uv * w2;
++        v.smoothColor = input[0].smoothColor * w0 + input[1].smoothColor * w1 + input[2].smoothColor * w2;
++        v.flatColor = float4(input[0].flatColor.rgb, root.y);
++        const float4 rootClip = clip[0] * w0 + clip[1] * w1 + clip[2] * w2;
++
++        // Wind: a noise field drifting along the wind bends the blades, with a quick flutter of their own.
++        const float2 windUV = root.xz / FrParams.grassBlades.y + windDir * time * FrParams.grassBlades.z;
++        const float gust = GrassNoise(windUV) * 0.75f + GrassNoise(windUV * 2.7f + 13.0f) * 0.25f;
++        float2 bend = windDir * wind.w * (0.04f + 0.32f * gust);
++        bend += float2(-windDir.y, windDir.x) * 0.06f * sin(time * 4.0f + r.z * 6.2832f);
++
++        // Pushed away from Banjo and where he has just been.
++        float pressed = 0.0f;
++        if (all(root.xz >= trailBounds.xy) && all(root.xz <= trailBounds.zw)) {
++            float2 push = 0.0f;
++            for (uint t = 0; t <= GrassTrailPoints; t++) {
++                const float4 trail = (t == GrassTrailPoints) ? float4(FrParams.grassPlayer.xyz, 1.0f) : FrParams.grassTrail[t];
++                if ((trail.w == 0.0f) || (trail.z < -1e8f) || (abs(root.y - trail.z) > 80.0f)) {
++                    continue;
++                }
++
++                const float2 away = root.xz - trail.xy;
++                const float awayLength = length(away);
++                if (awayLength >= trailRadius) {
++                    continue;
++                }
++
++                const float strength = trail.w * smoothstep(trailRadius, 0.0f, awayLength);
++                push += (awayLength > 0.001f ? away / awayLength : windDir) * strength;
++                pressed = max(pressed, strength);
++            }
++            bend = lerp(bend, 0.0f, saturate(pressed)) + push * 1.1f;
++        }
++
++        // A little lean of its own, then no further over than lying almost flat.
++        const float yaw = r.z * 6.2832f;
++        const float2 facing = float2(cos(yaw), sin(yaw));
++        bend += float2(-facing.y, facing.x) * (r.x - 0.5f) * 0.35f;
++        const float bendLength = length(bend);
++        if (bendLength > 0.95f) {
++            bend *= 0.95f / bendLength;
++        }
++
++        const float bladeHeight = height * lerp(0.6f, 1.0f, r.y) * lerp(0.35f, 1.0f, fade);
++        const float bladeWidth = cell * 0.8f * lerp(0.75f, 1.25f, r.x);
++        const float lean = min(length(bend), 0.95f);
++        const float rise = bladeHeight * sqrt(1.0f - lean * lean * 0.85f);
++        const float3 side = float3(facing.x, 0.0f, facing.y) * (bladeWidth * 0.5f);
++        const float3 tipBend = float3(bend.x, 0.0f, bend.y) * bladeHeight;
++        const float3 middle = float3(0.0f, rise * 0.55f, 0.0f) + tipBend * 0.3f;
++        const float3 tip = float3(0.0f, rise, 0.0f) + tipBend;
++
++        GrassEmit(stream, v, rootClip, -side);
++        GrassEmit(stream, v, rootClip, side);
++        GrassEmit(stream, v, rootClip, middle - side * 0.75f);
++        GrassEmit(stream, v, rootClip, middle + side * 0.75f);
++        GrassEmit(stream, v, rootClip, tip);
++        stream.RestartStrip();
++    }
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
@@ -5886,7 +6450,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..8ba08bb 100644
+index e7895c3..29c0eef 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,7 @@
@@ -5897,7 +6461,7 @@ index e7895c3..8ba08bb 100644
  #include "Library.hlsli"
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
-@@ -49,6 +50,18 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -49,8 +50,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
  {
      const OtherMode otherMode = { rp.omL, rp.omH };
@@ -5914,14 +6478,24 @@ index e7895c3..8ba08bb 100644
 +    }
 +
  #if defined(DYNAMIC_RENDER_PARAMS)
-     if ((otherMode.cycleType() != G_CYC_COPY) && renderFlagCulling(rp.flags) && isFrontFace) {
+-    if ((otherMode.cycleType() != G_CYC_COPY) && renderFlagCulling(rp.flags) && isFrontFace) {
++    // (Banjo-Tooie: 3D grass blades show both faces.)
++    if ((otherMode.cycleType() != G_CYC_COPY) && renderFlagCulling(rp.flags) && isFrontFace && (gConstants.grassShell == 0)) {
          return false;
-@@ -254,6 +267,13 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+     }
+ #endif
+@@ -254,6 +268,19 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
-+    // Banjo-Tooie: a 3D grass shell keeps only the blades crossing it, on green ground facing up.
-+    if (gConstants.grassShell != 0) {
++    // Banjo-Tooie: a 3D grass blade grown from green ground is shaded from its root to its tip; a 3D grass shell
++    // keeps only the blades crossing it, on green ground facing up.
++    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0)) {
++        if (!GrassBlade(grassWorld, combinerColor.rgb, vertexFlatColor.a, resultColor.rgb)) {
++            return false;
++        }
++    }
++    else if (gConstants.grassShell != 0) {
 +        if (!GrassShell(grassWorld, grassDx, grassDy, combinerColor.rgb, float(gConstants.grassShell) / float(gConstants.grassShells), resultColor.rgb)) {
 +            return false;
 +        }
@@ -5930,7 +6504,7 @@ index e7895c3..8ba08bb 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +281,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +288,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -5953,7 +6527,7 @@ index e7895c3..8ba08bb 100644
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..a51b5bc 100644
+index 74b1fa0..984dc66 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -19,6 +19,11 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
@@ -5962,7 +6536,7 @@ index 74b1fa0..a51b5bc 100644
          ndcPos.xyz *= ndcPos.w;
 +
 +        // Banjo-Tooie: a 3D grass shell, moved straight up in the world by its share of the blade height.
-+        if (gConstants.grassShell != 0) {
++        if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0)) {
 +            ndcPos += FrParams.grassClipUp * (float(gConstants.grassShell) / float(gConstants.grassShells));
 +        }
      }
@@ -7434,10 +8008,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..71fdf04 100644
+index 2e62aaf..5a174dc 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,29 @@ namespace interop {
+@@ -13,6 +13,36 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -7464,6 +8038,13 @@ index 2e62aaf..71fdf04 100644
 +        float4 grassTrail[12];
 +        // The box (world x and z, low then high) the trail and Banjo press grass in; nothing outside it is pressed.
 +        float4 grassTrailBounds;
++        // Real blades (GrassGS.hlsl): world to clip space (as RasterVS's positions before their screen scale and
++        // offset; clip = dot(row, world)) and back, and the distance the grid starts coarsening at, the size of
++        // the wind's noise in world units, how fast it drifts, and the finest grid's cell size (a blade is 0.8 of a
++        // cell wide).
++        float4 grassWorldToClip[4];
++        float4 grassClipToWorld[4];
++        float4 grassBlades;
      };
  #ifdef HLSL_CPU
  };
@@ -7529,18 +8110,25 @@ index 0000000..93ea5da
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..df15569 100644
+index 0a5c332..3568125 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -11,7 +11,12 @@ namespace interop {
+@@ -9,9 +9,19 @@
+ #ifdef HLSL_CPU
+ namespace interop {
  #endif
++    // Banjo-Tooie: set in grassShells when the redraw grows real 3D grass blades (GrassGS.hlsl) instead of a shell;
++    // grassShell is then the pass and the low bits of grassShells the pass count.
++#define RASTER_GRASS_BLADES 0x80000000u
++
      struct RasterParams {
          uint renderIndex;
 -        uint3 padding;
 +        // Banjo-Tooie: 1 while redrawing water into the scene effects' water mask (the draw outputs its depth), 2
 +        // into Modern water's colours (its own colour and blending alpha).
 +        uint waterMask;
-+        // Banjo-Tooie: 3D grass: which shell of the blades this redraw is (1 to grassShells; 0 the ground itself).
++        // Banjo-Tooie: 3D grass: which shell of the blades this redraw is (1 to grassShells; 0 the ground itself),
++        // or with RASTER_GRASS_BLADES which pass of blades.
 +        uint grassShell;
 +        uint grassShells;
          float2 screenScale;
