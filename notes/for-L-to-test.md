@@ -1919,3 +1919,14 @@
   3. If the fog still switches on and off: set Interpolation (frame smoothing) Off and watch the same spot again
 - Look for: Step 1, the bars stay black. Step 2, distant scenery keeps its fog every frame. Step 3 tells whether the flicker comes from frame smoothing: say whether Off stops it. Checked headless: bars black with Fog 100 in the intro; fog steady in Mayahem Temple with smoothing on, zooming and orbiting. Not checked headless: the on and off flicker itself (not reproduced here).
 - Status: waiting for L
+
+## T181 Modern water going back to the original
+- Asked: 2026-10-15 20:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Water: Modern. In Spiral Mountain, stand on the path by the pool next to the big tree trunk (where your burst of 22:05 was) and move the camera round the pool for a minute
+  2. Do the same with frame smoothing on, as you had it
+- Look for: the pool and the waterfalls keep the new water every frame (shore foam line, darker surface), never the game's own water. If it still goes back, send logs/console.log: lines starting with [modern water] say when it stopped replacing the water and why.
+- Checked headless: the pool by the trunk stays Modern from above and from the bank, and the console line reads "replacing". Not reproduced headless: the switch back itself. Two things changed that can cause it: water drawn in an earlier part of a split picture is now left out there too (it showed the game's water under the new water), and T180 (merged before this) gives the effects the smoothed camera, the likely cause of the same on and off switching L saw with the fog.
+- Status: waiting for L
+

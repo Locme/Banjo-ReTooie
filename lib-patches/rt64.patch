@@ -1442,7 +1442,7 @@ index 69a82ac..a9076cb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..639e899 100644
+index 9fae0d4..248590f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,9 @@
@@ -1570,7 +1570,7 @@ index 9fae0d4..639e899 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1323,44 @@ namespace RT64 {
+@@ -1250,6 +1323,66 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -1603,19 +1603,41 @@ index 9fae0d4..639e899 100644
 +        thread_local std::vector<uint32_t> scenesBeforeEffects;
 +        scenesBeforeEffects.clear();
 +        // Banjo-Tooie: Modern water leaves the game's water out; the effects pass draws new water from the mask.
-+        skippingWater = drawSceneEffects && !targetDrawCall.waterInstances.empty() && (targetDrawCall.sceneEffectsDrawData != nullptr) && SceneModernWater();
++        // An earlier part of the picture whose water went to a later part's effects leaves it out as well, or
++        // the game's water shows under the new water.
++        const bool modernWater = sceneEffectsEnabled && SceneModernWater();
++        const bool handedOn = modernWater && (colorTarget != nullptr) && !targetDrawCall.waterHandedOn.empty() && SceneEffectsWanted(depthTarget);
++        skippingWater = (drawSceneEffects && !targetDrawCall.waterInstances.empty() && (targetDrawCall.sceneEffectsDrawData != nullptr) && modernWater) || handedOn;
 +        if (skippingWater) {
 +            instanceWaterSkipVector.assign(instanceDrawCallVector.size(), 0);
-+            for (uint32_t i : targetDrawCall.waterInstances) {
-+                if (i < instanceWaterSkipVector.size()) {
-+                    instanceWaterSkipVector[i] = 1;
++            for (const std::vector<uint32_t> *list : { &targetDrawCall.waterInstances, &targetDrawCall.waterHandedOn }) {
++                for (uint32_t i : *list) {
++                    if (i < instanceWaterSkipVector.size()) {
++                        instanceWaterSkipVector[i] = 1;
++                    }
 +                }
++            }
++        }
++
++        // Modern water's state in the console when it changes (at most twice a second), for reports of the
++        // game's water showing instead: how many water draws the picture has, and those left out and why.
++        if (modernWater && drawSceneEffects) {
++            static int lastState = -1;
++            static std::chrono::steady_clock::time_point lastLog;
++            const int state = (skippingWater ? 1 : 0) | (targetDrawCall.waterInstances.empty() ? 2 : 0) | ((targetDrawCall.waterLeftOutClosed > 0) ? 4 : 0) | (handedOn ? 8 : 0);
++            const auto now = std::chrono::steady_clock::now();
++            if ((state != lastState) && (now - lastLog > std::chrono::milliseconds(500))) {
++                fprintf(stderr, "[modern water] %s: %zu water draws%s, left out %u drawn after the 3D world closed and %u small\n",
++                    skippingWater ? "replacing" : "not replacing", targetDrawCall.waterInstances.size(), handedOn ? " (some from an earlier part)" : "",
++                    targetDrawCall.waterLeftOutClosed, targetDrawCall.waterLeftOutSmall);
++                lastState = state;
++                lastLog = now;
 +            }
 +        }
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1407,56 @@ namespace RT64 {
+@@ -1296,9 +1429,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1673,13 +1695,16 @@ index 9fae0d4..639e899 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1408,6 +1566,54 @@ namespace RT64 {
+@@ -1408,6 +1588,57 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
++        targetDrawCall.waterHandedOn.clear();
++        targetDrawCall.waterLeftOutClosed = 0;
++        targetDrawCall.waterLeftOutSmall = 0;
 +        targetDrawCall.hasExcludedInstances = false;
 +        targetDrawCall.submissionFrame = p.submissionFrame;
 +        targetDrawCall.sceneEffectsArea = RenderRect(0, 0, 0, 0);
@@ -1728,7 +1753,7 @@ index 9fae0d4..639e899 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1662,39 @@ namespace RT64 {
+@@ -1456,6 +1687,39 @@ namespace RT64 {
                  continue;
              }
  
@@ -1768,7 +1793,7 @@ index 9fae0d4..639e899 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +1921,20 @@ namespace RT64 {
+@@ -1682,6 +1946,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -1789,7 +1814,7 @@ index 9fae0d4..639e899 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2000,51 @@ namespace RT64 {
+@@ -1747,7 +2025,60 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -1805,8 +1830,18 @@ index 9fae0d4..639e899 100644
 +                    {
 +                        targetDrawCall.waterInstances.push_back(instanceIndex);
 +                    }
-                 }
- 
++                    else if ((proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
++                        om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) && interop::Blender::usesAlphaBlend(om))
++                    {
++                        if (!worldOpen) {
++                            targetDrawCall.waterLeftOutClosed++;
++                        }
++                        else if (call.callDesc.triangleCount < 4) {
++                            targetDrawCall.waterLeftOutSmall++;
++                        }
++                    }
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -1833,15 +1868,14 @@ index 9fae0d4..639e899 100644
 +                    }
 +                    grass = (off < 1e-3f) && gm.zCmp() && gm.zUpd() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        !interop::Blender::usesAlphaBlend(gm);
-+                }
+                 }
 +                instanceGrassVector.resize(instanceIndex, 0);
 +                instanceGrassVector.push_back(grass ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-             }
-@@ -1758,6 +2054,26 @@ namespace RT64 {
+@@ -1758,6 +2089,29 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1860,6 +1894,9 @@ index 9fae0d4..639e899 100644
 +                    (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget))
 +                {
 +                    targetDrawCall.waterInstances.insert(targetDrawCall.waterInstances.begin(), earlier.waterInstances.begin(), earlier.waterInstances.end());
++                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
++                    targetDrawCall.waterLeftOutSmall += earlier.waterLeftOutSmall;
++                    earlier.waterHandedOn = std::move(earlier.waterInstances);
 +                    earlier.waterInstances.clear();
 +                    earlier.sceneEffectsAfter = -1;
 +                }
@@ -1869,10 +1906,10 @@ index 9fae0d4..639e899 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..03cb8e4 100644
+index 3add9c3..d76d477 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,24 @@ namespace RT64 {
+@@ -48,6 +48,30 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -1886,6 +1923,12 @@ index 3add9c3..03cb8e4 100644
 +        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
 +        // scene effects' water mask.
 +        std::vector<uint32_t> waterInstances;
++        // Water this part of the picture draws but handed to a later part's effects (see addFramebuffer):
++        // Modern water leaves it out here too.
++        std::vector<uint32_t> waterHandedOn;
++        // Draws that looked like water but were left out: drawn while the 3D world was closed, or too small.
++        uint32_t waterLeftOutClosed = 0;
++        uint32_t waterLeftOutSmall = 0;
 +        // Banjo-Tooie: some of the 3D world's draws were marked to be left out of the scene effects
 +        // (G_EX_SETSCENEEFFECTSEXCLUDE_V1); they are drawn after the effects instead.
 +        bool hasExcludedInstances = false;
@@ -1897,7 +1940,7 @@ index 3add9c3..03cb8e4 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +85,15 @@ namespace RT64 {
+@@ -67,6 +91,15 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -1913,7 +1956,7 @@ index 3add9c3..03cb8e4 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -123,6 +150,10 @@ namespace RT64 {
+@@ -123,6 +156,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -1924,7 +1967,7 @@ index 3add9c3..03cb8e4 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +195,15 @@ namespace RT64 {
+@@ -164,7 +201,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
