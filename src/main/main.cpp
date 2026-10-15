@@ -215,6 +215,9 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 
 void update_gfx(void*) {
     recompinput::handle_events();
+#ifdef __ANDROID__
+    tooie::android::update_touch();
+#endif
 }
 
 static SDL_AudioCVT audio_convert;

@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.FrameLayout;
 
 import org.libsdl.app.SDLActivity;
 
@@ -29,6 +30,10 @@ public class GameActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         unpackGameFiles();
         super.onCreate(savedInstanceState);
+        if (getPackageManager().hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) {
+            addContentView(new TouchOverlay(this), new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        }
     }
 
     @Override

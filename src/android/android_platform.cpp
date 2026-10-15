@@ -1,7 +1,11 @@
+#include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
+
+#include <jni.h>
 
 #include "SDL.h"
 #include "SDL_system.h"
@@ -13,6 +17,35 @@ namespace fs = std::filesystem;
 
 namespace {
     fs::path app_folder;
+
+    // Touch state written by TouchOverlay.java (the UI thread) and read by the game's graphics thread.
+    // Buttons are the TouchOverlay.BTN_* bits; sticks are -32768..32767 with up and left negative.
+    std::atomic<uint32_t> touch_buttons{0};
+    std::atomic<int32_t> touch_left_x{0};
+    std::atomic<int32_t> touch_left_y{0};
+    std::atomic<int32_t> touch_right_x{0};
+    std::atomic<int32_t> touch_right_y{0};
+
+    // A virtual game controller, which the game reads like a real pad: the touch controls then use
+    // recompinput's default controller mapping with no changes to it.
+    SDL_Joystick* touch_pad = nullptr;
+    bool touch_pad_tried = false;
+
+    void attach_touch_pad() {
+        touch_pad_tried = true;
+        SDL_VirtualJoystickDesc desc{};
+        desc.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+        desc.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+        desc.naxes = SDL_CONTROLLER_AXIS_MAX;
+        desc.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+        desc.name = "Banjo-Tooie touch controls";
+        int index = SDL_JoystickAttachVirtualEx(&desc);
+        if (index < 0) {
+            fprintf(stderr, "[android] touch controls: %s\n", SDL_GetError());
+            return;
+        }
+        touch_pad = SDL_JoystickOpen(index);
+    }
 
     const char* rom_error_text(recomp::RomValidationError error) {
         switch (error) {
@@ -70,4 +103,36 @@ bool tooie::android::install_picked_rom(std::u8string game_id) {
     std::printf("[android] ROM refused: %s\n", rom_error_text(result));
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Banjo-Tooie", rom_error_text(result), nullptr);
     return false;
+}
+
+void tooie::android::update_touch() {
+    if (!touch_pad_tried) {
+        attach_touch_pad();
+    }
+    if (touch_pad == nullptr) {
+        return;
+    }
+    const uint32_t buttons = touch_buttons.load();
+    // Button bits as TouchOverlay.java sets them.
+    constexpr uint32_t BTN_A = 1 << 0, BTN_B = 1 << 1, BTN_START = 1 << 2, BTN_L = 1 << 3, BTN_R = 1 << 4, BTN_Z = 1 << 5;
+    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_A, (buttons & BTN_A) ? 1 : 0);
+    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_B, (buttons & BTN_B) ? 1 : 0);
+    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_START, (buttons & BTN_START) ? 1 : 0);
+    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER, (buttons & BTN_L) ? 1 : 0);
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, (buttons & BTN_R) ? 32767 : 0);
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT, (buttons & BTN_Z) ? 32767 : 0);
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_LEFTX, touch_left_x.load());
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_LEFTY, touch_left_y.load());
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_RIGHTX, touch_right_x.load());
+    SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_RIGHTY, touch_right_y.load());
+}
+
+// Called by TouchOverlay.java on every change. The names must match that class, in package io.github.locme.banjotooie.
+extern "C" JNIEXPORT void JNICALL
+Java_io_github_locme_banjotooie_TouchOverlay_nativeSetState(JNIEnv*, jclass, jint buttons, jint left_x, jint left_y, jint right_x, jint right_y) {
+    touch_buttons.store(static_cast<uint32_t>(buttons));
+    touch_left_x.store(left_x);
+    touch_left_y.store(left_y);
+    touch_right_x.store(right_x);
+    touch_right_y.store(right_y);
 }

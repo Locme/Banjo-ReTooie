@@ -1772,7 +1772,7 @@
   2. Open the `android` folder in Android Studio, connect the phone with USB debugging on, and press Run (the first build takes a while)
   3. Pair a controller with the phone
   4. When the app asks, pick your Banjo-Tooie ROM
-- Look for: Does the build finish? Does the game reach the title screen with picture and sound, and does Start on the controller work? If the build fails, send the first red error from Android Studio's Build window. If the app closes, send `logs/console.log` from Android/data/io.github.locme.banjotooie/files on the phone. There are no touch controls yet, and switching away from the app mid-game may close it.
+- Look for: Does the build finish? Does the game reach the title screen with picture and sound, and does Start on the controller work? If the build fails, send the first red error from Android Studio's Build window. If the app closes, send `logs/console.log` from Android/data/io.github.locme.banjotooie/files on the phone. Touch controls are on screen (first guess at the layout): does the stick and A/B/Start respond, and do they cover the picture badly? Tell me your phone model and Android version. Switching away from the app mid-game may close it.
 - Status: waiting for L
 
 ## T168 Totals checklist, step 3: the list behind each row
