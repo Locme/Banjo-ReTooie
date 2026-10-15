@@ -574,6 +574,11 @@ with open(out_path, "w") as out:
         flag = d[0] * 8 + d[1] + 0x28 if d and d[0] else -1
         w(f"    {flag if flag < 0 else hex(flag)}, // {it} {flag_names.get(flag, '')}\n")
     w("};\n\n")
+    # Item names as the randomizer gives them (for "needs ..." hints).
+    w("static const char* const item_display[] = {\n")
+    for it in items:
+        w(f"    \"{item_names.get(it, it)}\",\n")
+    w("};\n\n")
     # Jamjars' prices in notes, in the unrandomized game (WorldOrder.generate_jamjars_costs), by LocationId.
     w("static const int silo_cost[] = {\n")
     for l in loc_list:

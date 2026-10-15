@@ -1731,7 +1731,7 @@
 - Look for: Short blades on the green ground that sway a little, flattened in a small circle round Banjo's feet. None on characters (Klungo, Grublins), walls, rock, paths or water. They shrink away with distance instead of popping. Changes apply at once and 0 is the plain ground again. Frame rate with it on? A few blades on paths with green in them (moss between Mayahem's cobbles) are expected.
 - Status: waiting for L
 
-## T163 Totals checklist, step 2: what you can get now
+## T167 Totals checklist, step 2: what you can get now (was T163, which 3D grass also uses)
 - Asked: 2026-10-15 18:10 UTC
 - Build: latest Windows build from main
 - Commit: "Totals checklist, step 2" on main
@@ -1774,3 +1774,20 @@
   4. When the app asks, pick your Banjo-Tooie ROM
 - Look for: Does the build finish? Does the game reach the title screen with picture and sound, and does Start on the controller work? If the build fails, send the first red error from Android Studio's Build window. If the app closes, send `logs/console.log` from Android/data/io.github.locme.banjotooie/files on the phone. There are no touch controls yet, and switching away from the app mid-game may close it.
 - Status: waiting for L
+
+## T168 Totals checklist, step 3: the list behind each row
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Commit: "Totals checklist, step 3" on main
+- Steps:
+  1. Load a save part-way through, pause, View Totals, and go to a world you have visited
+  2. A small blue dash marks a row of the table. Move it with D-pad up/down, C-up/C-down or the stick up/down. "A - SEE LIST" sits under the table
+  3. Press A: the table turns into a list of that row's items by name. Green is GET NOW, white is LATER, yellow is DONE; GET NOW comes first. Notes are listed by spot ("SECOND STAIRS NOTES") with how many are left there
+  4. Move down the list. On a white (LATER) item the bottom says what it still needs, for example "NEEDS GRIP GRAB", "NEEDS 15 MORE NOTES" or "NEEDS DETONATOR FORM". Hints only show for the item you pick
+  5. Press B: back to the table, still on the Totals page. Press B again: the pause menu goes back as usual
+  6. On Game Totals, A lists the row for every world you have visited (worlds you haven't been to stay hidden)
+  7. Unpause with Start straight after, and check A and the stick work in the game right away
+  8. QOL > Totals checklist off: no dash, no list, and A, B and the stick act as before
+- Look for: a hint that is wrong (tell me the world, the item and the hint). "NEEDS MORE THAN ONE THING" means no single move, form or area unlocks it on its own. Also tell me if the big counters on the left (4/10 and so on) ever vanish while a list is open: it happened in 2 of 6 headless runs at the same moment and not in the others, so I could not pin it to the list
+- Status: waiting for L
+
