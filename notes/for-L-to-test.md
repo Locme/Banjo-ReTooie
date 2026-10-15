@@ -1909,3 +1909,13 @@
 - Look for: the crash in the NVIDIA driver (nvoglv64.dll) or "vmaCreateImage failed" lines in console.log
 - Status: waiting for L
 
+
+## T180 Fog: black letterbox bars, and the fog switching on and off
+- Asked: 2026-10-15 20:40 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Fog on (Graphics > Lighting, Water, Fog), then watch a cutscene with letterbox bars
+  2. In Mayahem Temple (or where you saw it), walk and move the camera as in your burst of 21:40, with frame smoothing on as you had it
+  3. If the fog still switches on and off: set Interpolation (frame smoothing) Off and watch the same spot again
+- Look for: Step 1, the bars stay black. Step 2, distant scenery keeps its fog every frame. Step 3 tells whether the flicker comes from frame smoothing: say whether Off stops it. Checked headless: bars black with Fog 100 in the intro; fog steady in Mayahem Temple with smoothing on, zooming and orbiting. Not checked headless: the on and off flicker itself (not reproduced here).
+- Status: waiting for L

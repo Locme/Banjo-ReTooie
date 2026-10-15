@@ -22,6 +22,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Picture effects (Fog and the other scene effects) no longer cover the letterbox bars, which turned gray with Fog on; they stay inside the 3D picture. With frame smoothing, fog uses the same in-between camera the picture is drawn with. Untested on PC (T180).
 - Smoke and water droplets should no longer break into stripes with frame smoothing: an animation's next frame snaps instead of sliding across the texture. WIP > Debug > Texture slide blending turns all texture sliding off, to test. Untested on PC (T178).
 
 - Graphics > Day and Night (off by default): a day and night cycle in Spiral Mountain, the Isle o' Hags outside, Mayahem Temple, Jolly Roger's Lagoon, Terrydactyland, Hailfire Peaks and Cloud Cuckooland. Sunrise and sunset turn the light warm, night is dark blue with stars and a moon, and the sun moves for sun shadows and light shafts. Cycle runs a day in Day Length minutes (24 by default); Morning, Sunset and Night hold one time. Rooms, underwater areas, Witchyworld and Cauldron Keep keep their own look. Untested on PC (T174).

@@ -1442,18 +1442,20 @@ index 69a82ac..a9076cb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6c8ca09 100644
+index 9fae0d4..639e899 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,9 @@
  //
  
  #include "rt64_framebuffer_renderer.h"
++#include <chrono>
++#include <cstdio>
 +#include "rt64_scene_effects.h"
  
  #include "../include/rt64_extended_gbi.h"
  
-@@ -12,8 +13,10 @@
+@@ -12,8 +15,10 @@
  #include "gbi/rt64_f3d.h"
  #include "shared/rt64_framebuffer_params.h"
  #include "shared/rt64_raster_params.h"
@@ -1464,7 +1466,7 @@ index 9fae0d4..6c8ca09 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -169,6 +172,9 @@ namespace RT64 {
+@@ -169,6 +174,9 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1474,7 +1476,7 @@ index 9fae0d4..6c8ca09 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -465,12 +471,54 @@ namespace RT64 {
+@@ -465,12 +473,54 @@ namespace RT64 {
          return true;
      }
      
@@ -1531,7 +1533,7 @@ index 9fae0d4..6c8ca09 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +562,17 @@ namespace RT64 {
+@@ -514,6 +564,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1549,7 +1551,7 @@ index 9fae0d4..6c8ca09 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -578,6 +637,18 @@ namespace RT64 {
+@@ -578,6 +639,18 @@ namespace RT64 {
  
                  drawCallTriangles(drawCall);
  
@@ -1568,11 +1570,33 @@ index 9fae0d4..6c8ca09 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1321,22 @@ namespace RT64 {
+@@ -1250,6 +1323,44 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +        const bool drawSceneEffects = sceneEffectsEnabled && (colorTarget != nullptr) && (targetDrawCall.sceneEffectsAfter > 0) && SceneEffectsWanted(depthTarget);
++        // TOOIE_FX_LOG: on the frame buffer the effects read the depth of, why the effects were or weren't drawn.
++        {
++            static const bool fxLog = (getenv("TOOIE_FX_LOG") != nullptr);
++            if (fxLog && (depthTarget != nullptr) && (depthTarget->addressForName == GetSceneEffects().depthAddress)) {
++                static uint32_t drawn = 0, noAfter = 0, notWanted = 0, total = 0;
++                static auto lastLog = std::chrono::steady_clock::now();
++                total++;
++                static uint32_t excludedFrames = 0;
++                if (targetDrawCall.hasExcludedInstances && drawSceneEffects) excludedFrames++;
++                if (drawSceneEffects) drawn++;
++                else if (targetDrawCall.sceneEffectsAfter <= 0) noAfter++;
++                else notWanted++;
++                if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500)) {
++                    lastLog = std::chrono::steady_clock::now();
++                    extern std::atomic<uint32_t> sceneEffectsRecorded;
++                    static const auto t0 = std::chrono::steady_clock::now();
++                    fprintf(stderr, "[fx-draw] %lld ms: %u frames: effects %u (excluded draws in %u), recorded %u, no world end %u, not wanted %u (after %d of %zu scenes)\n", (long long)std::chrono::duration_cast<std::chrono::milliseconds>(lastLog - t0).count(), total, drawn, excludedFrames, sceneEffectsRecorded.exchange(0), noAfter, notWanted,
++                        targetDrawCall.sceneEffectsAfter, targetDrawCall.rasterScenes.size());
++                    drawn = noAfter = notWanted = total = excludedFrames = 0;
++                }
++            }
++        }
 +        int32_t rasterScenesDrawn = 0;
 +        // Banjo-Tooie: the draws left out of the effects wait until after them, in their own order.
 +        const bool deferExcluded = drawSceneEffects && targetDrawCall.hasExcludedInstances;
@@ -1591,7 +1615,7 @@ index 9fae0d4..6c8ca09 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1383,51 @@ namespace RT64 {
+@@ -1296,9 +1407,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1630,7 +1654,12 @@ index 9fae0d4..6c8ca09 100644
 +                            }
 +                        }
 +                        SetSceneEffectsWorkload(targetDrawCall.submissionFrame);
-+                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsData->viewTransforms[effectsIndex], shaderLibrary);
++                        // The view the processor used too (the in-between one when frames are interpolated), so the
++                        // depth turns back into the world positions it was drawn from.
++                        static const bool rawView = (getenv("TOOIE_FX_RAW_VIEW") != nullptr);
++                        const interop::float4x4 &effectsView = (!rawView && (effectsIndex < effectsData->modViewTransforms.size())) ?
++                            effectsData->modViewTransforms[effectsIndex] : effectsData->viewTransforms[effectsIndex];
++                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea);
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                    for (uint32_t sceneIndex : scenesBeforeEffects) {
@@ -1644,7 +1673,7 @@ index 9fae0d4..6c8ca09 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1408,6 +1537,33 @@ namespace RT64 {
+@@ -1408,6 +1566,54 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -1653,6 +1682,7 @@ index 9fae0d4..6c8ca09 100644
 +        targetDrawCall.waterInstances.clear();
 +        targetDrawCall.hasExcludedInstances = false;
 +        targetDrawCall.submissionFrame = p.submissionFrame;
++        targetDrawCall.sceneEffectsArea = RenderRect(0, 0, 0, 0);
 +        // The 3D world is open from its first perspective projection to the next projection that isn't one; it
 +        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
 +        // his 2D glow), so the effects go after the last of them, not before the HUD's 3D models.
@@ -1674,11 +1704,31 @@ index 9fae0d4..6c8ca09 100644
 +                }
 +            }
 +        }
++        // TOOIE_FX_LOG: the frame's perspective projections (depth terms, draws, depth writes) and the world's.
++        {
++            static const bool fxLog = (getenv("TOOIE_FX_LOG") != nullptr);
++            static auto lastLog = std::chrono::steady_clock::now();
++            if (fxLog && (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500))) {
++                lastLog = std::chrono::steady_clock::now();
++                fprintf(stderr, "[fx-proj] world %d of %u:", worldProjection, fbPair.projectionCount);
++                for (uint32_t pr = 0; pr < fbPair.projectionCount; pr++) {
++                    const Projection &proj = fbPair.projections[pr];
++                    uint32_t zupd = 0;
++                    for (uint32_t d = 0; d < proj.gameCallCount; d++) {
++                        zupd += proj.gameCalls[d].shaderDesc.otherMode.zUpd() ? 1 : 0;
++                    }
++                    const interop::float4x4 &m = drawData.projTransforms[proj.transformsIndex];
++                    fprintf(stderr, " [%u %s calls %u zupd %u m22 %.4f m32 %.2f m23 %.2f]", pr,
++                        (proj.type == Projection::Type::Perspective) ? "persp" : "other", proj.gameCallCount, zupd, m.m[2][2], m.m[3][2], m.m[2][3]);
++                }
++                fprintf(stderr, "\n");
++            }
++        }
 +        int32_t worldEnd = -1;
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1612,39 @@ namespace RT64 {
+@@ -1456,6 +1662,39 @@ namespace RT64 {
                  continue;
              }
  
@@ -1718,7 +1768,28 @@ index 9fae0d4..6c8ca09 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1747,8 +1936,51 @@ namespace RT64 {
+@@ -1682,6 +1921,20 @@ namespace RT64 {
+                         if (usesViewport) {
+                             triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
+                         }
++
++                        // Banjo-Tooie: the world's area for the scene effects.
++                        if ((proj.type == Projection::Type::Perspective) && call.shaderDesc.otherMode.zUpd() && !triangles.scissor.isEmpty()) {
++                            RenderRect &area = targetDrawCall.sceneEffectsArea;
++                            if (area.isEmpty()) {
++                                area = triangles.scissor;
++                            }
++                            else {
++                                area.left = std::min(area.left, triangles.scissor.left);
++                                area.top = std::min(area.top, triangles.scissor.top);
++                                area.right = std::max(area.right, triangles.scissor.right);
++                                area.bottom = std::max(area.bottom, triangles.scissor.bottom);
++                            }
++                        }
+                         
+                         if (triangles.vertexTestZ && usesViewport) {
+                             instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
+@@ -1747,8 +2000,51 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -1770,7 +1841,7 @@ index 9fae0d4..6c8ca09 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,6 +1990,26 @@ namespace RT64 {
+@@ -1758,6 +2054,26 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -1798,10 +1869,10 @@ index 9fae0d4..6c8ca09 100644
  
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..e6c774b 100644
+index 3add9c3..03cb8e4 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,21 @@ namespace RT64 {
+@@ -48,6 +48,24 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -1818,12 +1889,15 @@ index 3add9c3..e6c774b 100644
 +        // Banjo-Tooie: some of the 3D world's draws were marked to be left out of the scene effects
 +        // (G_EX_SETSCENEEFFECTSEXCLUDE_V1); they are drawn after the effects instead.
 +        bool hasExcludedInstances = false;
++        // Banjo-Tooie: the screen area the 3D world's depth-writing draws cover (their scissors together). The
++        // effects stay inside it, so the letterbox bars of a cutscene, outside the world, stay black.
++        RenderRect sceneEffectsArea = RenderRect(0, 0, 0, 0);
 +        // The workload these draws come from.
 +        uint64_t submissionFrame = 0;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +82,15 @@ namespace RT64 {
+@@ -67,6 +85,15 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -1839,7 +1913,7 @@ index 3add9c3..e6c774b 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -123,6 +147,10 @@ namespace RT64 {
+@@ -123,6 +150,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -1850,7 +1924,7 @@ index 3add9c3..e6c774b 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +192,15 @@ namespace RT64 {
+@@ -164,7 +195,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -2647,10 +2721,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5dfd89d
+index 0000000..a13e480
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1066 @@
+@@ -0,0 +1,1078 @@
 +//
 +// RT64
 +//
@@ -3206,10 +3280,13 @@ index 0000000..5dfd89d
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
++    std::atomic<uint32_t> sceneEffectsRecorded{ 0 };
++
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
-+        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary)
++        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area)
 +    {
 +
++        sceneEffectsRecorded++;
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        if (effectsWorkloadKnown) {
 +            UsePlayerFrame(settings, effectsWorkload);
@@ -3700,7 +3777,16 @@ index 0000000..5dfd89d
 +
 +        commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
 +        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(colorTarget->width), float(colorTarget->height)));
-+        commandList->setScissors(RenderRect(0, 0, colorTarget->width, colorTarget->height));
++        // Only over the 3D world's area: outside it (a cutscene's letterbox bars) there is no depth, so the
++        // sky's share of the fog would turn the black bars grey.
++        RenderRect effectsArea(0, 0, int32_t(colorTarget->width), int32_t(colorTarget->height));
++        if (!area.isEmpty()) {
++            effectsArea.left = std::max(effectsArea.left, area.left);
++            effectsArea.top = std::max(effectsArea.top, area.top);
++            effectsArea.right = std::min(effectsArea.right, area.right);
++            effectsArea.bottom = std::min(effectsArea.bottom, area.bottom);
++        }
++        commandList->setScissors(effectsArea);
 +        commandList->setPipeline(shaderLibrary->sceneEffects.pipeline.get());
 +        commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
 +        commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
@@ -3719,7 +3805,7 @@ index 0000000..5dfd89d
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..a2c9d12
+index 0000000..45c6ee8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
 @@ -0,0 +1,166 @@
@@ -3887,7 +3973,7 @@ index 0000000..a2c9d12
 +    // no framebuffer set. projection is the 3D world's projection; when it isn't a perspective one
 +    // nothing is drawn.
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
-+        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary);
++        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area);
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
 index d1c5273..d1a10a8 100644

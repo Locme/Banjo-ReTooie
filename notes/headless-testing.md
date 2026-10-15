@@ -59,7 +59,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 - Heap guard (src/game/heap_guard.cpp): before func_8001C0A0 walks the heap's block list, a next link that is outside the heap or doesn't link back is repaired and logged as `[heap] block ... repaired to ...`. `TOOIE_HEAP_BREAK=<n>` breaks a link on the nth walk (clears its top bit, as in L's 2026-10-15 crash, or writes `TOOIE_HEAP_BREAK_VALUE=<hex>`), to test the repair.
 
-- `TOOIE_FX_LOG=1`: prints `[fx]` twice a second from the scene effects pass: fog strength and start, Banjo's position, the camera's world position worked out from the view matrix, and the projection terms (lib-patches/rt64.patch, rt64_scene_effects.cpp).
+- `TOOIE_FX_LOG=1`: prints `[fx]` twice a second from the scene effects pass (fog strength and start, Banjo's position, the camera's world position worked out from the view matrix, the projection terms), `[fx-proj]` (a frame's perspective projections and which is the world's) and `[fx-draw]` (on the world's frame buffer: frames with the effects drawn, recorded, or skipped and why) (lib-patches/rt64.patch). `TOOIE_FX_RAW_VIEW=1` makes the effects use the game's own camera instead of the in-between camera that frame smoothing draws with, to compare the two.
 
 - `TOOIE_SET="<ms>:<option>=<value>[,...];<ms>:..."`: changes Graphics options at those times after the game started, the way the menu does (saved and applied at once), to test live switching. Enum options take the index of their choice (`game_frame_rate` 0 Original, 1 30 FPS, 2 60 FPS; `rr_option` 0 Original, 1 Display, 2 Manual), number options a number (`rr_manual_value=120`). Logs `[set]`. It saves graphics.json in the run folder, so put that back afterwards (src/debug/settings_script.cpp).
 
