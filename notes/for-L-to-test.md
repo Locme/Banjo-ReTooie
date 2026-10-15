@@ -815,7 +815,8 @@
   1. Play at your usual frame rate above Original (170)
   2. Walk around the places where you saw meshes suddenly stretch, and the Cave of Horrors where the black artifacts were
 - Look for: Do models still stretch into a broken shape for a moment? Do the black artifacts still appear? If yes, where, and on which model?
-- Status: waiting for L
+- Status: answered 2026-10-15 15:59 UTC
+- L's result: resolved
 
 ## T77 Detailed nests and Mayahem Temple stairs (4.27)
 - Asked: 2026-10-14 05:45 UTC
@@ -1346,7 +1347,8 @@
   2. Load a save that starts in Jinjo Village, and play a while in Jinjo Village and Mayahem Temple with your usual settings (HD Shadows on)
   3. Warp to Cloud Cuckooland from the menu and spin the camera for a minute
 - Look for: Do models still explode into giant shapes, and does the screen still flash black?
-- Status: waiting for L
+- Status: answered 2026-10-15 15:59 UTC
+- L's result: resolved
 
 ## T127 HD Shadows spikes at high refresh
 - Asked: 2026-10-14 16:10 UTC
