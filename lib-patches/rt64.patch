@@ -393,6 +393,24 @@ index 0e62be1..3ec4c4c 100644
      };
  
      struct DrawCall {
+diff --git a/src/hle/rt64_framebuffer_manager.cpp b/src/hle/rt64_framebuffer_manager.cpp
+index d7caa12..739a975 100644
+--- a/src/hle/rt64_framebuffer_manager.cpp
++++ b/src/hle/rt64_framebuffer_manager.cpp
+@@ -811,6 +811,13 @@ namespace RT64 {
+         tileCopy.usedHeight = height;
+         tileCopy.usedTimestamp = usedTimestamp;
+ 
++        // Banjo-Tooie: record the size here too. With rendering to RAM off (SetRenderToRAM), this manager never
++        // runs createTileCopySetup, which is where the size was set, so no tile copy ever matched for reuse and
++        // every frame made new ones: the workload queue gave each new id a new texture and video memory ran out
++        // (the pause menu, which copies the frame for its background, grew by about 5 MB a second).
++        tileCopy.textureWidth = textureWidth;
++        tileCopy.textureHeight = textureHeight;
++
+         return newId;
+     }
+ 
 diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
 index 87392d0..e0773c0 100644
 --- a/src/hle/rt64_game_frame.cpp

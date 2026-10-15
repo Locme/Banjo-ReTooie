@@ -1896,3 +1896,16 @@
   3. If they still stripe: Esc > WIP > Debug > Texture slide blending: Off, and watch again (it applies at once)
 - Look for: Step 2, the smoke and droplets look as they do with smoothing off (the renderer no longer slides an animation's next frame across the texture). Step 3 tells whether what is left comes from texture sliding: say whether Off fixes it, and whether scrolling water (waterfalls, rivers) looks choppier with it Off. Checked headless: builds and renders Spiral Mountain with the option on and off. Not checked headless: the stripes themselves (not reproduced here).
 - Status: waiting for L
+
+## T179 Totals crash: video memory running out
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Commit: "Fix video memory filling up with Frame Read-Back off" on main
+- Steps:
+  1. Same settings as when it crashed (1440p, Frame Read-Back off, the default)
+  2. Pause, View Totals, and leave it open for 5 minutes, turning pages now and then
+  3. Watch the game's memory in Task Manager (Performance > GPU > Dedicated GPU memory): it should stay level instead of climbing
+  4. Play for a while too: before the fix memory also crept up slowly in normal play, and the frame rate dropped the longer a session ran
+- Look for: the crash in the NVIDIA driver (nvoglv64.dll) or "vmaCreateImage failed" lines in console.log
+- Status: waiting for L
+
