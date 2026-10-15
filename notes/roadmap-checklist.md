@@ -384,10 +384,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - 2026-10-15: claimed by the Opus helper thread (L picked it). Graphics > Low Input Latency (default on) shows each frame at the next VI instead of one later (about 17 ms sooner); T158. Late frame start is not done: the game starts its next frame when the last one has rendered, so headless here was too slow to tune it.
 
 ### 4.32 Performance defaults
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 - 2026-10-15: claimed by the frame rate overlay thread. N64 version: keep RT64's specialised shaders between sessions (a list of the shader descriptions seen, compiled in the background at start), so first visits stutter less. timeBeginPeriod(1) is already in main.cpp.
 
+- 2026-10-15 (T159): done. RT64 appends every new shader description to cache/shader_list.bin and submits the list again at start, so the shaders compile in the background (idle priority, the ubershader draws meanwhile). Headless: the second start compiled all 50 listed shaders in its first 5 s and none while playing. The other half (which options cost the most GPU time) is the Opus helper's.
 ### 4.33 Graphics API choice
 - [x] Done
 - [ ] Approved by L

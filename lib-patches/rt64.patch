@@ -2055,18 +2055,43 @@ index 0000000..e400499
 +    };
 +};
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
-index bf7b669..2f2f9c9 100644
+index bf7b669..6b8bcbd 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
 +++ b/src/render/rt64_raster_shader_cache.cpp
-@@ -5,6 +5,7 @@
+@@ -4,11 +4,32 @@
+ 
  #include "rt64_raster_shader_cache.h"
  
++#include <cstdio>
++#include <vector>
++
  #include "common/rt64_thread.h"
 +#include "hle/rt64_present_queue.h"
  
  #define ENABLE_OPTIMIZED_SHADER_GENERATION
  
-@@ -66,6 +67,8 @@ namespace RT64 {
+ namespace RT64 {
++    namespace {
++        std::mutex shaderListMutex;
++        std::filesystem::path shaderListPath;
++
++        // "BTSL", then the format version and the size of a ShaderDescription; a list written by a
++        // build whose descriptions differ is started over.
++        constexpr uint32_t ShaderListMagic = 0x4C535442;
++        constexpr uint32_t ShaderListVersion = 1;
++        // Far more than a full playthrough meets; past it, nothing more is added.
++        constexpr uint32_t ShaderListLimit = 50000;
++    }
++
++    void SetShaderListPath(const std::filesystem::path &path) {
++        const std::scoped_lock lock(shaderListMutex);
++        shaderListPath = path;
++    }
++
+     // RasterShaderCache::CompilationThread
+     
+     RasterShaderCache::CompilationThread::CompilationThread(RasterShaderCache *shaderCache) {
+@@ -66,6 +87,8 @@ namespace RT64 {
                      const std::unique_lock<std::mutex> lock(shaderCache->GPUShadersMutex);
                      shaderCache->GPUShaders[shaderDesc.hash()] = std::move(newShader);
                  }
@@ -2075,6 +2100,124 @@ index bf7b669..2f2f9c9 100644
              }
          }
      }
+@@ -109,6 +132,66 @@ namespace RT64 {
+         if (shaderFormat == RenderShaderFormat::SPIRV) {
+             optimizerCacheSPIRV.initialize();
+         }
++
++        loadShaderList();
++    }
++
++    void RasterShaderCache::loadShaderList() {
++        std::filesystem::path path;
++        {
++            const std::scoped_lock lock(shaderListMutex);
++            path = shaderListPath;
++        }
++
++        if (path.empty()) {
++            return;
++        }
++
++        std::vector<ShaderDescription> descs;
++        bool valid = false;
++        {
++            std::ifstream in(path, std::ios::binary);
++            uint32_t header[3] = {};
++            if (in.read(reinterpret_cast<char *>(header), sizeof(header)) &&
++                (header[0] == ShaderListMagic) && (header[1] == ShaderListVersion) && (header[2] == sizeof(ShaderDescription)))
++            {
++                valid = true;
++                ShaderDescription desc;
++                while ((descs.size() < ShaderListLimit) && in.read(reinterpret_cast<char *>(&desc), sizeof(desc))) {
++                    descs.push_back(desc);
++                }
++            }
++        }
++
++        {
++            const std::unique_lock<std::mutex> queueLock(submissionMutex);
++            listedHashes.clear();
++            for (const ShaderDescription &desc : descs) {
++                listedHashes[desc.hash()] = true;
++            }
++
++            listCount = uint32_t(descs.size());
++            listFile.close();
++            if (valid) {
++                listFile.open(path, std::ios::binary | std::ios::app);
++            }
++            else {
++                std::error_code ec;
++                std::filesystem::create_directories(path.parent_path(), ec);
++                listFile.open(path, std::ios::binary | std::ios::trunc);
++                const uint32_t header[3] = { ShaderListMagic, ShaderListVersion, uint32_t(sizeof(ShaderDescription)) };
++                listFile.write(reinterpret_cast<const char *>(header), sizeof(header));
++                listFile.flush();
++            }
++        }
++
++        for (const ShaderDescription &desc : descs) {
++            submit(desc);
++        }
++
++        if (!descs.empty()) {
++            fprintf(stdout, "[shaders] compiling %zu shaders from the shader list in the background\n", descs.size());
++        }
+     }
+ 
+     void RasterShaderCache::submit(const ShaderDescription &desc) {
+@@ -123,6 +206,15 @@ namespace RT64 {
+             }
+ 
+             found = true;
++
++            // A shader not on the list yet goes on it, written at once so a crash keeps it.
++            bool &listed = listedHashes[shaderHash];
++            if (!listed && listFile.is_open() && (listCount < ShaderListLimit)) {
++                listed = true;
++                listCount++;
++                listFile.write(reinterpret_cast<const char *>(&desc), sizeof(desc));
++                listFile.flush();
++            }
+         }
+ 
+         // Push a new shader compilation to the queue.
+diff --git a/src/render/rt64_raster_shader_cache.h b/src/render/rt64_raster_shader_cache.h
+index 5c40c18..df8eb33 100644
+--- a/src/render/rt64_raster_shader_cache.h
++++ b/src/render/rt64_raster_shader_cache.h
+@@ -16,6 +16,12 @@
+ #include "rt64_raster_shader.h"
+ 
+ namespace RT64 {
++    // Banjo-Tooie: the shader list. Every shader description submitted is appended to this file,
++    // and the next start submits the whole list again, so the shaders a player has already met
++    // compile in the background before they are needed instead of on the first visit. Set it before
++    // the renderer starts; an empty path (the default) keeps no list.
++    void SetShaderListPath(const std::filesystem::path &path);
++
+     struct RasterShaderCache {
+         struct CompilationThread {
+             RasterShaderCache *shaderCache;
+@@ -45,6 +51,9 @@ namespace RT64 {
+         std::unique_ptr<ShaderCompiler> shaderCompiler;
+         RenderMultisampling multisampling;
+         bool usesHDR = false;
++        std::unordered_map<uint64_t, bool> listedHashes;
++        std::ofstream listFile;
++        uint32_t listCount = 0;
+         
+         RasterShaderCache(uint32_t threadCount, uint32_t ubershaderThreadCount);
+         ~RasterShaderCache();
+@@ -55,5 +64,6 @@ namespace RT64 {
+         RasterShader *getGPUShader(const ShaderDescription &desc);
+         RasterShaderUber *getGPUShaderUber() const;
+         uint32_t shaderCount();
++        void loadShaderList();
+     };
+ };
+\ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
 index 0000000..0ce2948

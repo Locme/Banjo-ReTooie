@@ -1676,4 +1676,12 @@
   2. Play for a minute at your usual settings: jump, turn the camera, run around
   3. Switch Low Input Latency Off and play the same minute, then back On (it changes live)
 - Look for: does Banjo answer the buttons and stick a little quicker with it on? Any flicker, a frame jumping back, or a torn picture with it on that is not there with it off? (The overlay's Input latency figure can't show this change: it was measuring from the wrong frame before, so compare by feel.)
+
+## T159 Shaders kept between sessions (roadmap 4.32)
+- Asked: 2026-10-15 16:32 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Overlay on Full (F3). Start the game, play into two or three areas, quit
+  2. Start again and go back to the same areas
+- Look for: The second start, "Shaders compiled" jumps right at the start (the saved shaders compiling in the background) and then stays near 0 in the areas you visited before; first visits that hitched should hitch less. The list is cache\shader_list.bin next to the exe; deleting it starts over. Tell me if the game takes longer to start or anything looks different.
 - Status: waiting for L

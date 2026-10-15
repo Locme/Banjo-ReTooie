@@ -109,6 +109,11 @@ ultramodern::input::connected_device_info_t get_connected_device_info(int contro
 
 #include "icon_bytes.h"
 
+namespace RT64 {
+    // lib/rt64/src/render/rt64_raster_shader_cache.h (from lib-patches/rt64.patch).
+    void SetShaderListPath(const std::filesystem::path &path);
+}
+
 #if defined(__gnu_linux__)
 bool SetImageAsIcon(const char* filename, SDL_Window* window)
 {
@@ -716,6 +721,9 @@ int main(int argc, char** argv) {
     const std::filesystem::path app_folder = tooie::resolve_app_folder();
     recomp::register_config_path(app_folder);
     tooie::install_crash_handler(app_folder);
+    // RT64 keeps the shaders met in earlier sessions here and compiles them again in the
+    // background at start (roadmap 4.32), so a first visit to an area stutters less.
+    RT64::SetShaderListPath(app_folder / "cache" / "shader_list.bin");
 #ifdef _WIN32
     // The Windows build has no console, so keep what the game and the runtime
     // print (errors before an abort, among others) in logs/console.log.

@@ -214,6 +214,15 @@ To change it: edit the files in `lib/RecompFrontend`, then
   live texture upscaling in the texture cache (`src/shaders/TextureUpscaleCS.hlsl`, an own edge-directed 2x from the published xBR rule, upscales stored as each texture's replacement; `RT64::SetTextureUpscale(1|2|4)`),
   so the HUD drawn after it is left alone.
 
+* **Frame stats for the frame rate overlay** (`src/hle/rt64_present_queue.cpp/.h`, `RT64::TakeFrameStats`): present
+  intervals, GPU time, input latency, shader compiles, and the GPU time of each extra pass
+  (`src/render/rt64_gpu_sections.h`: timestamps around the water mask, eye adaptation, bloom and effects passes and
+  around SMAA, FXAA, photo filters, FSR, the output and the UI).
+* **Shader list** (`src/render/rt64_raster_shader_cache.cpp/.h`, `RT64::SetShaderListPath`): every shader description
+  submitted is appended to `cache/shader_list.bin`; at start the list is submitted again, so those shaders compile in
+  the background before they are needed (roadmap 4.32). A list from a build whose `ShaderDescription` differs in
+  size is started over.
+
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
 need `git -C lib/rt64 add -N <file>` first, or the diff leaves them out.
