@@ -314,6 +314,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.47 3D grass (requested 2026-10-13, not built)
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: claimed by the Second Opus helper thread (in progress).
 
 ### 4.59 Mouse aiming
 - [x] Done (T64)
