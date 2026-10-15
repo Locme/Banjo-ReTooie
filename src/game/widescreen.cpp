@@ -27,6 +27,23 @@
 
 namespace {
     constexpr float original_aspect = 4.0f / 3.0f;
+
+    // Extra degrees around a widened view. In a wide window, models near the edges were dropped
+    // while still partly on screen (Bottles' burnt body lost its parts at the bottom-left corner,
+    // and with HD shadows only its shadow stayed): the game tests each model with a sphere that
+    // can be smaller than the model (61 units for that body), and the planes sit right on the
+    // picture's edge. The sides get this margin and the top and bottom half of it; it costs a few
+    // more models drawn just outside the picture.
+    constexpr float wide_margin_degrees = 10.0f;
+
+    float side_angle(float aspect_times_half_fov) {
+        const float scale = tooie::widescreen_scale();
+        float angle = aspect_times_half_fov * scale;
+        if (scale > 1.0f) {
+            angle += wide_margin_degrees;
+        }
+        return std::min(angle, 89.0f);
+    }
 }
 
 // How much wider than 4:3 RT64 draws the picture.
@@ -106,7 +123,7 @@ extern "C" void func_800CA218(uint8_t* rdram, recomp_context* ctx) {
         return (gpr)(int32_t)bits;
     };
 
-    // camera + 0x104 = (0, 1, 0) turned by half_fov.
+    // camera + 0x104 = (0, 1, 0) turned by half_fov (and half the margin in a wide view).
     ctx->r4 = camera + 0x104;
     ctx->r5 = float_bits(0.0f);
     ctx->r6 = float_bits(1.0f);
@@ -114,7 +131,7 @@ extern "C" void func_800CA218(uint8_t* rdram, recomp_context* ctx) {
     func_800EFA4C(rdram, ctx);
     ctx->r4 = camera + 0x104;
     ctx->r5 = camera + 0x104;
-    ctx->r6 = (gpr)(int32_t)half_fov_bits;
+    ctx->r6 = float_bits(tooie::widescreen_scale() > 1.0f ? std::min(half_fov + wide_margin_degrees * 0.5f, 89.0f) : half_fov);
     func_800EF8BC(rdram, ctx);
 
     // camera + 0xF8 = (-1, 0, 0) turned by aspect * half_fov.
@@ -123,8 +140,7 @@ extern "C" void func_800CA218(uint8_t* rdram, recomp_context* ctx) {
     ctx->r6 = float_bits(0.0f);
     ctx->r7 = float_bits(0.0f);
     func_800EFA4C(rdram, ctx);
-    float angle = load_float(rdram, camera, 0xE8) * tooie::widescreen_scale() * half_fov;
-    angle = std::min(angle, 89.0f);
+    float angle = side_angle(load_float(rdram, camera, 0xE8) * half_fov);
     ctx->r4 = camera + 0xF8;
     ctx->r5 = camera + 0xF8;
     ctx->r6 = float_bits(angle);
@@ -147,8 +163,7 @@ extern "C" void func_800CA1B0(uint8_t* rdram, recomp_context* ctx) {
     ctx->r6 = float_bits(0.0f);
     ctx->r7 = float_bits(0.0f);
     func_800EFA4C(rdram, ctx);
-    float angle = load_float(rdram, camera, 0xE4) * 0.5f * load_float(rdram, camera, 0xE8) * tooie::widescreen_scale();
-    angle = std::min(angle, 89.0f);
+    float angle = side_angle(load_float(rdram, camera, 0xE4) * 0.5f * load_float(rdram, camera, 0xE8));
     ctx->r4 = camera + 0xF8;
     ctx->r5 = camera + 0xF8;
     ctx->r6 = float_bits(angle);
