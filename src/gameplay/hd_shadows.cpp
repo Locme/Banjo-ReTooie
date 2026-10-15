@@ -104,7 +104,7 @@ namespace {
     int shadows_this_frame = 0;
     // TOOIE_SHADOW_LOG=1: why actors got no shadow, counted per reason and printed every 2 s.
     const bool shadow_log = std::getenv("TOOIE_SHADOW_LOG") != nullptr;
-    enum Outcome { NoModel, NoFloor, Steep, Offscreen, TooSmall, NoRoom, Drawn, OutcomeCount };
+    enum Outcome { NoModel, NoFloor, Steep, Offscreen, TooSmall, NoRoom, Drawn, Lit, OutcomeCount };
     int outcomes[OutcomeCount] = {};
     void count(Outcome outcome) {
         outcomes[outcome]++;
@@ -164,6 +164,50 @@ namespace {
         return 152.0f + (x - 152.0f) / tooie::widescreen_scale();
     }
 
+    // The nearest of the level's lights (lamps, fires) that reaches the point, found as
+    // func_800A6B24 does for the player's shadow: l is the direction from the light to the point.
+    // Returns false when no light reaches it.
+    bool level_light(uint8_t* rdram, recomp_context* ctx, gpr frame, const float point[3], float reach, float l[3]) {
+        const gpr light_pos = frame + 0x1A0;  // vec3
+        const gpr light_range = frame + 0x1B0;  // inner, outer range, intensity
+        float best = 0.0f;
+        bool found = false;
+        ctx->r4 = 0;
+        ctx->r5 = 1;
+        func_800C8760(rdram, ctx);
+        for (int guard = 0; ctx->r2 != 0 && guard < 64; guard++) {
+            const gpr light = (int32_t)(uint32_t)ctx->r2;
+            ctx->r4 = light;
+            func_800C89A8(rdram, ctx);
+            if ((ctx->r2 & 0x8) == 0) {
+                ctx->r4 = light;
+                ctx->r5 = light_pos;
+                func_800C8800(rdram, ctx);
+                ctx->r4 = light;
+                ctx->r5 = light_range;
+                func_800C8898(rdram, ctx);
+                const float d[3] = {
+                    point[0] - load_float(rdram, light_pos),
+                    point[1] - load_float(rdram, light_pos + 4),
+                    point[2] - load_float(rdram, light_pos + 8),
+                };
+                const float dist = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                if (dist > 0.0f && dist < load_float(rdram, light_range + 4) + reach && (!found || dist < best)) {
+                    best = dist;
+                    found = true;
+                    for (int i = 0; i < 3; i++) {
+                        l[i] = d[i] / dist;
+                    }
+                }
+            }
+            ctx->r4 = light;
+            ctx->r5 = 0;
+            ctx->r6 = 1;
+            func_800C878C(rdram, ctx);
+        }
+        return found;
+    }
+
     // The shadow for one actor. ctx is a scratch copy; frame is free RDRAM stack space.
     void draw_actor_shadow(uint8_t* rdram, recomp_context* ctx, gpr actor, gpr frame, uint32_t draw_callback, uint32_t drawn) {
         const gpr start = frame + 0x40;     // vec3
@@ -209,10 +253,32 @@ namespace {
             return;  // a wall or a steep slope
         }
 
+        // The model's size, for the light's reach and the area to paste (func_800A6250 after the draw).
+        ctx->r4 = model;
+        func_800B2840(rdram, ctx);
+        ctx->r4 = ctx->r2;
+        func_800B2354(rdram, ctx);
+        const float radius = ctx->f0.fl * scale;
+
         // Flatten along the light l onto the floor plane: M = I - n l / (l . n), as func_800A6250
-        // (row i, column j at i * 0x10 + j * 4). Overhead is l = (0, 1, 0).
-        static const float overhead_light[3] = {0.0f, 1.0f, 0.0f};
-        const float* l = tilted(tooie::hd_shadows::enemy_direction_option) ? tilt_light : overhead_light;
+        // (row i, column j at i * 0x10 + j * 4). A level light in reach wins, as for the player;
+        // otherwise overhead, l = (0, 1, 0), or Tilt. A light too close to the floor's plane
+        // would stretch the shadow out of sight, so it is lifted towards overhead.
+        float l[3] = {0.0f, 1.0f, 0.0f};
+        const float center[3] = {x, y + radius * 0.5f, z};
+        if (level_light(rdram, ctx, frame, center, radius, l)) {
+            count(Lit);
+            if (l[1] < 0.0f) {
+                for (float& c : l) c = -c;  // a light below: the same line through the point
+            }
+            if (l[1] < 0.5f) {
+                l[1] = 0.5f;
+                const float len = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
+                for (float& c : l) c /= len;
+            }
+        } else if (tilted(tooie::hd_shadows::enemy_direction_option)) {
+            std::memcpy(l, tilt_light, sizeof(l));
+        }
         const float n[3] = {nx, ny, nz};
         const float inv = 1.0f / (l[0] * nx + l[1] * ny + l[2] * nz);
         ctx->r4 = flatten;
@@ -241,12 +307,6 @@ namespace {
         ctx->r6 = flatten;
         func_800F27D4(rdram, ctx);
 
-        // The model's size, for the area to paste (func_800A6250 after the draw).
-        ctx->r4 = model;
-        func_800B2840(rdram, ctx);
-        ctx->r4 = ctx->r2;
-        func_800B2354(rdram, ctx);
-        const float radius = ctx->f0.fl * scale;
         for (int i = 0; i < 8; i++) {
             const gpr corner = corners + i * 12;
             store_vec(rdram, corner, (i & 4) ? -radius : radius, (i & 2) ? 0.0f : radius, (i & 1) ? -radius : radius);
@@ -344,8 +404,8 @@ void tooie::hd_shadows::tick() {
     if (shadow_log) {
         static int frames = 0;
         if (++frames >= 60) {
-            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d, no room %d\n",
-                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall], outcomes[NoRoom]);
+            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d, no room %d, lit by a level light %d\n",
+                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall], outcomes[NoRoom], outcomes[Lit]);
             std::fflush(stdout);
             std::memset(outcomes, 0, sizeof(outcomes));
             frames = 0;
