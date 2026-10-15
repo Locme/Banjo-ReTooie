@@ -351,7 +351,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 8 Android port
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-15 (L: "Start working on a Android port"): first milestone is an arm64 APK that boots to the title screen with a controller. android/ is an Android Studio project that builds the same CMake game as libmain.so with SDL 2.30.9 and FreeType 2.13.3 from source; the ROM is picked on first start (LauncherActivity). Not built in the cloud box (it cannot download the NDK); every game source file was compile-checked against Android's C library headers there. Not done: touch controls, leaving the app mid-game, in-game file pickers.
+- 2026-10-15 (L: "Start working on a Android port"): first milestone is an arm64 APK that boots to the title screen with a controller. android/ is an Android Studio project that builds the same CMake game as libmain.so with SDL 2.30.9 and FreeType 2.13.3 from source; the ROM is picked on first start (LauncherActivity). Not built in the cloud box (it cannot download the NDK); every game source file was compile-checked against Android's C library headers there. Not done: touch controls, leaving the app mid-game, in-game file pickers. T166.
 
 ### 4.97 Requested or planned but not started (carry onto the roadmap)
 - [ ] Done

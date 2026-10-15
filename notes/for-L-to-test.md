@@ -1764,3 +1764,13 @@
 - Look for: rows of objects, characters and enemies, each idling on its spot, and 14 statues showing the transformations. Does the game stay up? Which ones look wrong, T-pose or float? 58 actors are left out because they crash outside their own level (list in notes/test-room.md and test_room_actors.inc).
 - Status: waiting for L
 
+## T166 Android: build the APK and reach the title screen
+- Asked: 2026-10-15 UTC
+- Build: build it yourself from latest main in Android Studio (BUILDING.md, "Android" section). The cloud box cannot download Google's Android tools, so this APK has never been built yet.
+- Steps:
+  1. Install Android Studio. In Tools > SDK Manager > SDK Tools, tick NDK (Side by side) 27.2.12479018 and CMake 3.22.1
+  2. Open the `android` folder in Android Studio, connect the phone with USB debugging on, and press Run (the first build takes a while)
+  3. Pair a controller with the phone
+  4. When the app asks, pick your Banjo-Tooie ROM
+- Look for: Does the build finish? Does the game reach the title screen with picture and sound, and does Start on the controller work? If the build fails, send the first red error from Android Studio's Build window. If the app closes, send `logs/console.log` from Android/data/io.github.locme.banjotooie/files on the phone. There are no touch controls yet, and switching away from the app mid-game may close it.
+- Status: waiting for L

@@ -117,6 +117,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   game hotkeys, `SAVE_STATE` (Insert) and `LOAD_STATE` (Home), named by `src/gameplay/save_state.cpp`.
 * **Frame Rate Overlay key** (same file): `FRAME_OVERLAY` (F3), named by `src/game/frame_overlay.cpp`.
 * **Debug and capture keys** (same file): `HIDE_HUD` (F1), `SCREENSHOT` (F12), `EFFECT_VIEW` (F6), `EFFECT_COMPARE` (F8), `INTERP_CHECK` (F7), `BLEND_MODE` (F5) and `WARP_AGAIN` (F9), named by `src/input/hotkeys.cpp`. The Controls tab lists the last four under a "Debug" heading.
+* **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
+  Android too (the game's CMakeLists builds SDL there).
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
@@ -229,6 +231,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
   submitted is appended to `cache/shader_list.bin`; at start the list is submitted again, so those shaders compile in
   the background before they are needed (roadmap 4.32). A list from a build whose `ShaderDescription` differs in
   size is started over.
+* **Android build** (`CMakeLists.txt`, `src/hle/rt64_application_window.cpp`,
+  `src/tools/file_to_c/file_to_c.cmake`): a cross build cannot run the `file_to_c` tool it builds, so
+  `RT64_FILE_TO_C` is a CMake script with the same output there (the desktop builds still use the tool);
+  the shader compiler (DXC) is picked by the build machine; the native file dialogs and the texture tools are
+  left out; the SDL window path (`RT64_SDL_WINDOW_VULKAN`) is used on Android instead of a stub that stopped
+  the build.
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
@@ -243,6 +251,9 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
   buffer (`vkCmdCopyImageToBuffer`). Its D3D12 version no longer sets sample
   positions for a destination that is a buffer (it dereferenced a null
   texture). The screenshot read-back needs both.
+
+* **Android** (`CMakeLists.txt`, `plume_render_interface_types.h`): the SDL Vulkan surface is used on Android
+  too, so the window handle is the SDL window there, as on Linux.
 
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.
