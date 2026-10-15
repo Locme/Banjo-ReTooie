@@ -2008,3 +2008,13 @@
 - Look for: Step 1, the beams of sunlight look as the game draws them (soft, see-through light), with no waves, reflections or glassy bending on or under them. Step 2, the pool still has the Modern look. Checked headless: in Mumbo's Skull no draws count as water now; the Spiral Mountain pool still says "replacing" in the console.
 - Status: waiting for L
 
+
+## T188 Sun shadow beside Banjo fixed, and a Sun shadow on Banjo switch
+- Asked: 2026-10-15 21:44 UTC
+- Build: 25724df (main)
+- Steps:
+  1. Sun shadows on (Graphics, Photo Filters)
+  2. Stand Banjo on grass in sunlight and look from above
+  3. Turn Sun shadow on Banjo off and on
+- Look for: No dark streaky block beside Banjo; his sun shadow is a small soft shape. With the switch off he casts no sun shadow (HD shadows still give him one).
+- Status: waiting for L
