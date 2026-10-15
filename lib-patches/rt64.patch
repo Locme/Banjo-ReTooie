@@ -2566,10 +2566,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c42b2ea
+index 0000000..531d226
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,921 @@
+@@ -0,0 +1,924 @@
 +//
 +// RT64
 +//
@@ -3204,7 +3204,10 @@ index 0000000..c42b2ea
 +                }
 +                dayPacked = 1.0f + float(packed);
 +            }
-+            constants.shadows = { settings.sunShadows * daylight, settings.sunShadowReach, dayPacked, 0.0f };
++            // Moonlight casts fainter shadows: as the tint darkens towards night (as DayNight in the shader).
++            const float dayLuma = settings.dayTint[0] * 0.3f + settings.dayTint[1] * 0.5f + settings.dayTint[2] * 0.2f;
++            const float moonlight = 1.0f - 0.6f * std::clamp((0.85f - dayLuma) / 0.45f, 0.0f, 1.0f);
++            constants.shadows = { settings.sunShadows * daylight * moonlight, settings.sunShadowReach, dayPacked, 0.0f };
 +            if (sunLength > 1e-6f) {
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts * settings.dayShafts };
 +            }
