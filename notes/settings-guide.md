@@ -72,6 +72,17 @@ framework, not from this port's code, so it is not described here.
   when picked) and DONE (yellow); B goes back to the table. Default: Off (L, 2026-10-15).
 - **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound
   by default) run faster as Banjo-Kazooie, Banjo or Kazooie. Default: On.
+- **Transform anywhere**: On or Off. On lets the Transform key (Controls tab,
+  Movement; T on the keyboard, not bound on a controller) change Banjo-Kazooie
+  into the world's Humba Wumba form where he stands, with the game's own spin-up
+  transformation, and change him back. A world's form works only after you have
+  jumped in that world's Humba pool and changed at least once, and only in that
+  world. Terrydactyland gives the Daddy T-Rex once Mumbo has made Humba's tent
+  big, the baby T-Rex before that; the Daddy T-Rex is refused where it has no
+  room. Humba says her line for the form on the 1st, 3rd, 5th change. Refused,
+  with a sound, in the air, swimming, while talking or in a cutscene (the
+  submarine is the other way round: it changes in water only). Golden Goliath
+  and Dragon Kazooie are not part of it. Default: Off.
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.
@@ -93,6 +104,10 @@ framework, not from this port's code, so it is not described here.
 - **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
   click on a controller, nothing on the keyboard. Rebind it in the Controls tab
   under Movement. The game still sees every button as usual.
+- **Transform**: with QOL > Transform anywhere on, changes Banjo into the
+  world's Humba Wumba form where he stands, and back. Default: T on the
+  keyboard, nothing on a controller. Rebind it in the Controls tab under
+  Movement.
 - **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
   Kazooie, with a sprint animation. Not bound by default: bind it in the
   Controls tab under Movement. Any stick tilt runs at full speed while it is

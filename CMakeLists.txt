@@ -295,6 +295,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/speedup.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/mix_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/photo_mode.cpp

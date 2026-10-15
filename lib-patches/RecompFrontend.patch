@@ -45,14 +45,14 @@ index 1961e29..6060abf 100644
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..2b7c9d6 100644
+index f5ed6c0..62ba2e7 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,37 @@ namespace recompinput {
+@@ -37,10 +37,38 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
-+    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state, frame rate overlay, benchmark, run and fine aim keys). Games set their names,
++    // Hotkeys a game adds of its own (Banjo-Tooie: the speed-up, tiptoe, photo mode, save state, frame rate overlay, benchmark, run, fine aim and transform keys). Games set their names,
 +    // descriptions and default bindings with set_game_input_name/description and
 +    // set_default_mapping_for_keyboard/controller.
 +    #define DEFINE_GAME_HOTKEY_INPUTS() \
@@ -76,7 +76,8 @@ index f5ed6c0..2b7c9d6 100644
 +        DEFINE_INPUT(SAVE_TAGS, 0, "Save Tags") \
 +        DEFINE_INPUT(UNSAVE_TAG, 0, "Unsave Tag") \
 +        DEFINE_INPUT(MODEL_EFFECTS, 0, "Model Effects") \
-+        DEFINE_INPUT(BENCHMARK, 0, "Benchmark")
++        DEFINE_INPUT(BENCHMARK, 0, "Benchmark") \
++        DEFINE_INPUT(TRANSFORM, 0, "Transform")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -87,7 +88,7 @@ index f5ed6c0..2b7c9d6 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +154,10 @@ namespace recompinput {
+@@ -127,6 +155,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);

@@ -1951,3 +1951,16 @@
   4. Try 3D grass height 150 and 200, then set 3D grass to 0
 - Look for: Knee-high tufts of thin blades arching out, dark at the roots and lighter at the tips. Waves of wind rolling across the field. Grass pressed down and out of the way round Banjo, with a trail behind him that springs back up over about a second. Is it close enough to Breath of the Wild, and is anything off (too dense, too thin, too tall, the wind too strong or too weak)? Frame rate with it on compared with off? It costs more than the T163 version (24 layers instead of 16); lower 3D grass distance if it is too slow. Checked headless: the look and the pressed-down patch round Banjo in Spiral Mountain. Not checked headless: the motion itself (the container runs at a few frames a second).
 - Status: waiting for L
+## T184 Transform anywhere
+- Asked: 2026-10-15 21:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. QOL > Transform anywhere: On. On a controller, bind Controls > Movement > Transform to a button (the keyboard has T)
+  2. In a world where you have already changed in Humba's pool (Mayahem Temple, Stony, for example), stand anywhere outside and press Transform
+  3. Press it again to change back, then change once more
+  4. Press it while jumping, while swimming and in a world whose Humba you have not used yet
+  5. If you have Terrydactyland: with Humba's tent big you get the Daddy T-Rex; try it out in the open and pressed against a wall
+- Look for: Banjo spins up and comes down as the form where he stood, and back. Humba's "WUMBA CALL THIS..." line shows after the 1st change and not the 2nd, and her face goes away when the text ends. Step 4 plays a sound and does nothing: say whether that sound fits, or name one you would rather have. Step 5: the T-Rex against a wall is refused with the sound. Also say whether the change takes too long.
+- Checked headless: Stony in Mayahem Temple and the Daddy T-Rex in Terrydactyland, both ways; the line on the 1st change only; refused when not unlocked, in the air, while the caveman talks, and with the T-Rex against a wall. Not checked headless: the submarine, bee, van, washer, snowball, detonator and baby T-Rex (same game call), and how the refusal sound sounds.
+- Status: waiting for L
+

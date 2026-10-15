@@ -25,6 +25,7 @@
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
+#include "tooie_transform_anywhere.h"
 #include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
@@ -139,6 +140,7 @@ void tooie::init_config() {
     tooie::frame_overlay::register_input();
     tooie::input::register_input();
     tooie::hold_to_run::register_input();
+    tooie::transform_anywhere::register_input();
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
@@ -305,6 +307,11 @@ void tooie::init_config() {
         "Running",
         "Hold the Run key (Controls tab, Movement; not bound by default) to run faster as Banjo-Kazooie, Banjo or Kazooie. Off turns running off.",
         true);
+    qol.add_bool_option(
+        tooie::transform_anywhere::option,
+        "Transform anywhere",
+        "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
+        false);
     qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals checklist",
