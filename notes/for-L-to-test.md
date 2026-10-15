@@ -1998,3 +1998,13 @@
   6. Open the pause menu Totals: your Jiggies and Cheato pages have not changed
 - Look for: Each of the four races starts and can be raced to the end without a crash. Winning gives no Jiggy or Cheato page (practice run), and if your file has not met Mary yet she is still caged afterwards. Checked headless from Spiral Mountain with no progress: all four start, and a scripted A mash won the GGM first race.
 - Status: waiting for L
+
+## T187 Light beams no longer drawn as water (Modern water)
+- Asked: 2026-10-15 21:35 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Water: Modern. Go into Mumbo's Skull in Terrydactyland, where your screenshot of 21:13 was
+  2. Then check some real water still gets the new look (the Spiral Mountain pool)
+- Look for: Step 1, the beams of sunlight look as the game draws them (soft, see-through light), with no waves, reflections or glassy bending on or under them. Step 2, the pool still has the Modern look. Checked headless: in Mumbo's Skull no draws count as water now; the Spiral Mountain pool still says "replacing" in the console.
+- Status: waiting for L
+
