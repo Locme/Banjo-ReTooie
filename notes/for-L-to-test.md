@@ -1635,3 +1635,13 @@
   2. If the game carries on where it would have crashed, send logs/console.log
 - Look for: no crash at func_8001C0A0 / find_free_block; any `[heap]` lines in console.log say where the damage was, which helps find what writes over the heap
 - Status: waiting for L
+
+## T155 More game memory: 48 sound voices, 8x drawing buffers
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. General > Developer > More game memory on (the default), start the game
+  2. Play somewhere loud and busy (Witchyworld, a boss fight, lots of eggs and enemies at once), with Sound > Mix rate on Original, then on High (restart after changing it)
+  3. Switch More game memory off, restart, and play the same spot
+- Look for: with it on, sounds that used to cut out or skip in busy moments now play; music keeps all its instruments. No crackle, missing sounds or crashes. With it off, the game sounds as before.
+- Status: waiting for L

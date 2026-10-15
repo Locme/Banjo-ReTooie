@@ -16,6 +16,8 @@
 //   game's own clamp and rounding, and put back when the pull ends.
 // - The audio heap (0x22A00 bytes at 0x80046A88, under 0x200 bytes left over) moves to a bigger one, as
 //   the longer delay lines need more.
+// - With General > More game memory on, the heap and buffers move even at 22 kHz: the synthesizer then
+//   gets 48 voices instead of 24 and 180 sample DMA buffers instead of 90 (their list at 0x80EE0000).
 // The RSP reaches only the first 16 MB, so the new memory sits at physical 0xE00000, below the model
 // tagging lists at 0xF00000. The setting is read when the game sets up its sound, at boot.
 
@@ -40,18 +42,26 @@ namespace {
     constexpr uint32_t fx_section_words = 8;
     constexpr uint32_t original_heap_size = 0x22A00;
 
+    // Sized for 44.1 kHz and for More game memory's 48 voices and 180 sample DMA buffers.
     constexpr uint32_t region_start = 0x00E00000;
-    constexpr uint32_t heap_size = 0x30000;
-    constexpr uint32_t cmd_list_size = 0x10000;
+    constexpr uint32_t heap_size = 0x80000;
+    constexpr uint32_t cmd_list_size = 0x20000;
     constexpr uint32_t ai_buffer_size = 0x2000;          // 1840 samples * 4 bytes, rounded up
     constexpr uint32_t heap_offset = 0;
     constexpr uint32_t cmd_list_offset = heap_offset + heap_size;
     constexpr uint32_t ai_buffer_offset = cmd_list_offset + 2 * cmd_list_size;
-    constexpr uint32_t region_size = ai_buffer_offset + 3 * ai_buffer_size;
+    // The sample DMA buffers' list (180 entries of 0x14 bytes): the generated code in func_8001268C and
+    // func_80012D4C points at 0x80EE0000 when More game memory is on (banjotooie.us.toml).
+    constexpr uint32_t dma_list_offset = 0xE0000;
+    constexpr uint32_t dma_list_size = 180 * 0x14;
+    constexpr uint32_t region_size = dma_list_offset + dma_list_size;
+    static_assert(ai_buffer_offset + 3 * ai_buffer_size <= dma_list_offset, "audio buffers run into the DMA list");
     static_assert(region_start + region_size <= 0x00F00000, "audio memory runs into the model tagging lists");
 
     // 1 at the original rate, 2 at 44.1 kHz. Fixed at boot.
     uint32_t factor = 1;
+    // Whether the audio heap and buffers moved to the region above (44.1 kHz or More game memory).
+    bool relocated = false;
 
     gpr kseg0(uint32_t physical) {
         return (gpr)(int32_t)(0x80000000u | physical);
@@ -83,20 +93,23 @@ uint32_t tooie::mix_rate::extra_region_start() {
 }
 
 uint32_t tooie::mix_rate::extra_region_size() {
-    return factor == 2 ? region_size : 0;
+    return relocated ? region_size : 0;
 }
 
 // func_800125B0, after the audio heap is set up and before func_8001268C builds the synthesizer.
 extern "C" void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* /*ctx*/) {
     factor = high_picked() ? 2 : 1;
     fprintf(stderr, "[mix rate] %u Hz\n", 22050 * factor);
-    if (factor == 1) {
+    // More game memory (src/game/more_memory.cpp) gives the synthesizer 48 voices and 180 sample DMA
+    // buffers, which need the bigger heap too. Its generated code expects the move, so it always happens then.
+    const bool more_memory = tooie_more_memory() != 0;
+    if (factor == 1 && !more_memory) {
         return;
     }
     std::memset(rdram + region_start, 0, region_size);
 
     // The audio heap is still empty here: point it at the bigger memory.
-    if ((uint32_t)MEM_W(8, heap_addr) != original_heap_size || MEM_W(0, heap_addr) != MEM_W(4, heap_addr)) {
+    if (!more_memory && ((uint32_t)MEM_W(8, heap_addr) != original_heap_size || MEM_W(0, heap_addr) != MEM_W(4, heap_addr))) {
         fprintf(stderr, "[mix rate] audio heap is not as expected, staying at 22050 Hz\n");
         factor = 1;
         return;
@@ -104,6 +117,10 @@ extern "C" void tooie_mix_rate_heap(uint8_t* rdram, recomp_context* /*ctx*/) {
     MEM_W(0, heap_addr) = (int32_t)kseg0(region_start + heap_offset);
     MEM_W(4, heap_addr) = (int32_t)kseg0(region_start + heap_offset);
     MEM_W(8, heap_addr) = (int32_t)heap_size;
+    relocated = true;
+    if (factor == 1) {
+        return;
+    }
 
     // Reverb delays are in samples: double them so the echoes keep their timing.
     uint32_t sections = (uint32_t)MEM_W(0, fx_params_addr);
@@ -126,7 +143,7 @@ extern "C" void tooie_mix_rate_frequency(uint8_t* rdram, recomp_context* ctx) {
 
 // func_8001268C, after the command lists and AI buffers are assigned: swap in the bigger ones.
 extern "C" void tooie_mix_rate_buffers(uint8_t* rdram, recomp_context* /*ctx*/) {
-    if (factor == 1) {
+    if (!relocated) {
         return;
     }
     for (uint32_t i = 0; i < 2; i++) {

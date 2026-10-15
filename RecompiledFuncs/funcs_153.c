@@ -2135,10 +2135,10 @@ RECOMP_FUNC void func_8001268C(uint8_t* rdram, recomp_context* ctx) {
     ctx->r8 = S32(0X8004 << 16);
     // 0x80012704: lui         $t1, 0x8004
     ctx->r9 = S32(0X8004 << 16);
-    // 0x80012708: addiu       $v0, $zero, 0x18
-    ctx->r2 = ADD32(0, 0X18);
-    // 0x8001270C: addiu       $t6, $zero, 0x80
-    ctx->r14 = ADD32(0, 0X80);
+    // 0x80012708: addiu       $v0, $zero, 0x30
+    if (tooie_more_memory()) ctx->r2 = ADD32(0, 0X30); else ctx->r2 = ADD32(0, 0X18);
+    // 0x8001270C: addiu       $t6, $zero, 0x100
+    if (tooie_more_memory()) ctx->r14 = ADD32(0, 0X100); else ctx->r14 = ADD32(0, 0X80);
     // 0x80012710: addiu       $t7, $zero, 0x1
     ctx->r15 = ADD32(0, 0X1);
     // 0x80012714: addiu       $t8, $t8, 0x2D4C
@@ -2188,22 +2188,22 @@ RECOMP_FUNC void func_8001268C(uint8_t* rdram, recomp_context* ctx) {
     // 0x8001275C: or          $a1, $s3, $zero
     ctx->r5 = ctx->r19 | 0;
     after_4:
-    // 0x80012760: lui         $v0, 0x8007
-    ctx->r2 = S32(0X8007 << 16);
-    // 0x80012764: addiu       $v0, $v0, -0x65C0
-    ctx->r2 = ADD32(ctx->r2, -0X65C0);
-    // 0x80012768: lui         $s1, 0x8007
-    ctx->r17 = S32(0X8007 << 16);
-    // 0x8001276C: lui         $s0, 0x8007
-    ctx->r16 = S32(0X8007 << 16);
+    // 0x80012760: lui         $v0, 0x80EE
+    if (tooie_more_memory()) ctx->r2 = S32(0X80EE << 16); else ctx->r2 = S32(0X8007 << 16);
+    // 0x80012764: addiu       $v0, $v0, 0x0
+    if (tooie_more_memory()) ctx->r2 = ADD32(ctx->r2, 0X0); else ctx->r2 = ADD32(ctx->r2, -0X65C0);
+    // 0x80012768: lui         $s1, 0x80EE
+    if (tooie_more_memory()) ctx->r17 = S32(0X80EE << 16); else ctx->r17 = S32(0X8007 << 16);
+    // 0x8001276C: lui         $s0, 0x80EE
+    if (tooie_more_memory()) ctx->r16 = S32(0X80EE << 16); else ctx->r16 = S32(0X8007 << 16);
     // 0x80012770: sw          $zero, 0x4($v0)
     MEM_W(0X4, ctx->r2) = 0;
     // 0x80012774: sw          $zero, 0x0($v0)
     MEM_W(0X0, ctx->r2) = 0;
-    // 0x80012778: addiu       $s0, $s0, -0x65AC
-    ctx->r16 = ADD32(ctx->r16, -0X65AC);
-    // 0x8001277C: addiu       $s1, $s1, -0x65C0
-    ctx->r17 = ADD32(ctx->r17, -0X65C0);
+    // 0x80012778: addiu       $s0, $s0, 0x14
+    if (tooie_more_memory()) ctx->r16 = ADD32(ctx->r16, 0X14); else ctx->r16 = ADD32(ctx->r16, -0X65AC);
+    // 0x8001277C: addiu       $s1, $s1, 0x0
+    if (tooie_more_memory()) ctx->r17 = ADD32(ctx->r17, 0X0); else ctx->r17 = ADD32(ctx->r17, -0X65C0);
     // 0x80012780: or          $s2, $zero, $zero
     ctx->r18 = 0 | 0;
 L_80012784:
@@ -2237,8 +2237,8 @@ L_80012784:
     after_6:
     // 0x800127AC: addiu       $s2, $s2, 0x1
     ctx->r18 = ADD32(ctx->r18, 0X1);
-    // 0x800127B0: slti        $at, $s2, 0x59
-    ctx->r1 = SIGNED(ctx->r18) < 0X59 ? 1 : 0;
+    // 0x800127B0: slti        $at, $s2, 0xB3
+    if (tooie_more_memory()) ctx->r1 = SIGNED(ctx->r18) < 0XB3 ? 1 : 0; else ctx->r1 = SIGNED(ctx->r18) < 0X59 ? 1 : 0;
     // 0x800127B4: addiu       $s1, $s1, 0x14
     ctx->r17 = ADD32(ctx->r17, 0X14);
     // 0x800127B8: addiu       $s0, $s0, 0x14

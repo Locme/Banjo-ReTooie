@@ -903,29 +903,29 @@ RECOMP_FUNC void func_8001A3A0(uint8_t* rdram, recomp_context* ctx) {
     // 0x8001A3B4: nop
 
     // 0x8001A3B8: jal         0x8001ACCC
-    // 0x8001A3BC: lui         $a0, 0x2
-    if (tooie_more_memory()) ctx->r4 = S32(0X2 << 16); else ctx->r4 = ADD32(0, 0X76C0);
+    // 0x8001A3BC: lui         $a0, 0x4
+    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = ADD32(0, 0X76C0);
     heap_alloc(rdram, ctx);
         goto after_0;
-    // 0x8001A3BC: lui         $a0, 0x2
-    if (tooie_more_memory()) ctx->r4 = S32(0X2 << 16); else ctx->r4 = ADD32(0, 0X76C0);
+    // 0x8001A3BC: lui         $a0, 0x4
+    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = ADD32(0, 0X76C0);
     after_0:
     // 0x8001A3C0: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);
     // 0x8001A3C4: sw          $v0, -0x4330($at)
     MEM_W(-0X4330, ctx->r1) = ctx->r2;
     // 0x8001A3C8: jal         0x8001ACCC
-    // 0x8001A3CC: lui         $a0, 0x2
-    if (tooie_more_memory()) ctx->r4 = S32(0X2 << 16); else ctx->r4 = ADD32(0, 0X76C0);
+    // 0x8001A3CC: lui         $a0, 0x4
+    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = ADD32(0, 0X76C0);
     heap_alloc(rdram, ctx);
         goto after_1;
-    // 0x8001A3CC: lui         $a0, 0x2
-    if (tooie_more_memory()) ctx->r4 = S32(0X2 << 16); else ctx->r4 = ADD32(0, 0X76C0);
+    // 0x8001A3CC: lui         $a0, 0x4
+    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = ADD32(0, 0X76C0);
     after_1:
     // 0x8001A3D0: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);
-    // 0x8001A3D4: lui         $a0, 0x4
-    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = S32(0X1 << 16);
+    // 0x8001A3D4: lui         $a0, 0x9
+    if (tooie_more_memory()) ctx->r4 = S32(0X9 << 16); else ctx->r4 = S32(0X1 << 16);
     // 0x8001A3D8: sw          $v0, -0x432C($at)
     MEM_W(-0X432C, ctx->r1) = ctx->r2;
     // 0x8001A3DC: jal         0x8001ACCC
@@ -938,8 +938,8 @@ RECOMP_FUNC void func_8001A3A0(uint8_t* rdram, recomp_context* ctx) {
     after_2:
     // 0x8001A3E4: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);
-    // 0x8001A3E8: lui         $a0, 0x4
-    if (tooie_more_memory()) ctx->r4 = S32(0X4 << 16); else ctx->r4 = S32(0X1 << 16);
+    // 0x8001A3E8: lui         $a0, 0x9
+    if (tooie_more_memory()) ctx->r4 = S32(0X9 << 16); else ctx->r4 = S32(0X1 << 16);
     // 0x8001A3EC: sw          $v0, -0x4328($at)
     MEM_W(-0X4328, ctx->r1) = ctx->r2;
     // 0x8001A3F0: jal         0x8001ACCC
@@ -955,24 +955,24 @@ RECOMP_FUNC void func_8001A3A0(uint8_t* rdram, recomp_context* ctx) {
     // 0x8001A3FC: sw          $v0, -0x4324($at)
     MEM_W(-0X4324, ctx->r1) = ctx->r2;
     // 0x8001A400: jal         0x8001ACCC
-    // 0x8001A404: addiu       $a0, $zero, 0x6B80
-    if (tooie_more_memory()) ctx->r4 = ADD32(0, 0X6B80); else ctx->r4 = ADD32(0, 0X1AE0);
+    // 0x8001A404: ori         $a0, $zero, 0xD700
+    if (tooie_more_memory()) ctx->r4 = 0 | 0XD700; else ctx->r4 = ADD32(0, 0X1AE0);
     heap_alloc(rdram, ctx);
         goto after_4;
-    // 0x8001A404: addiu       $a0, $zero, 0x6B80
-    if (tooie_more_memory()) ctx->r4 = ADD32(0, 0X6B80); else ctx->r4 = ADD32(0, 0X1AE0);
+    // 0x8001A404: ori         $a0, $zero, 0xD700
+    if (tooie_more_memory()) ctx->r4 = 0 | 0XD700; else ctx->r4 = ADD32(0, 0X1AE0);
     after_4:
     // 0x8001A408: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);
     // 0x8001A40C: sw          $v0, -0x4320($at)
     MEM_W(-0X4320, ctx->r1) = ctx->r2;
     // 0x8001A410: jal         0x8001ACCC
-    // 0x8001A414: addiu       $a0, $zero, 0x6B80
-    if (tooie_more_memory()) ctx->r4 = ADD32(0, 0X6B80); else ctx->r4 = ADD32(0, 0X1AE0);
+    // 0x8001A414: ori         $a0, $zero, 0xD700
+    if (tooie_more_memory()) ctx->r4 = 0 | 0XD700; else ctx->r4 = ADD32(0, 0X1AE0);
     heap_alloc(rdram, ctx);
         goto after_5;
-    // 0x8001A414: addiu       $a0, $zero, 0x6B80
-    if (tooie_more_memory()) ctx->r4 = ADD32(0, 0X6B80); else ctx->r4 = ADD32(0, 0X1AE0);
+    // 0x8001A414: ori         $a0, $zero, 0xD700
+    if (tooie_more_memory()) ctx->r4 = 0 | 0XD700; else ctx->r4 = ADD32(0, 0X1AE0);
     after_5:
     // 0x8001A418: lui         $at, 0x8008
     ctx->r1 = S32(0X8008 << 16);

@@ -107,7 +107,7 @@ ignored = [
 ]
 
 # --- Bigger game heap (func_8001E7E0, func_8001E830) -------------------------
-# These three sections (heap, frame buffers, animation caches) are switched by
+# These sections (heap, frame buffers, sound voices, animation caches) are switched by
 # General > More game memory: the generated code holds both values at each
 # patched instruction, "if (tooie_more_memory()) <patched> else <original>"
 # (hand edits, src/game/more_memory.cpp). Redo them after regenerating.
@@ -144,41 +144,109 @@ value = 0x34424800
 # of fixed heap buffers: 0x76C0 bytes of display list (3800 commands), 0x12C00
 # of matrices and 0x1AE0 of vertices. Nothing checks the end, so a crowded scene
 # (many characters at once) writes past them into the next heap block and a later
-# heap_alloc_sided crashes. Make them 0x20000, 0x42C00 and 0x6B80 (about 4x),
-# about 0.7 MB more out of the 10 MB the bigger heap above adds.
+# heap_alloc_sided crashes. Make them 0x40000, 0x92C00 and 0xD700 (about 8x),
+# about 1.7 MB more out of the 10 MB the bigger heap above adds.
 
-# addiu $a0, $zero, 0x76C0 -> lui $a0, 0x2 (display list, both buffers)
+# addiu $a0, $zero, 0x76C0 -> lui $a0, 0x4 (display list, both buffers)
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A3BC
-value = 0x3C040002
+value = 0x3C040004
 
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A3CC
-value = 0x3C040002
+value = 0x3C040004
 
-# lui $a0, 0x1 -> lui $a0, 0x4 (with ori 0x2C00: matrices, both buffers)
+# lui $a0, 0x1 -> lui $a0, 0x9 (with ori 0x2C00: matrices, both buffers)
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A3D4
-value = 0x3C040004
+value = 0x3C040009
 
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A3E8
-value = 0x3C040004
+value = 0x3C040009
 
-# addiu $a0, $zero, 0x1AE0 -> addiu $a0, $zero, 0x6B80 (vertices, both buffers)
+# addiu $a0, $zero, 0x1AE0 -> ori $a0, $zero, 0xD700 (vertices, both buffers)
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A404
-value = 0x24046B80
+value = 0x3404D700
 
 [[patches.instruction]]
 func = "func_8001A3A0"
 vram = 0x8001A414
-value = 0x24046B80
+value = 0x3404D700
+
+# --- More sound voices and sample DMA buffers (func_8001268C, func_80012D4C) --
+# The synthesizer is set up with 24 voices (maxVVoices and maxPVoices) and 128
+# updates, and 90 sample DMA buffers of 0x200 bytes kept in a static list at
+# 0x80069A40 (0x14 bytes each). With more sounds at once than voices, the extra
+# ones are dropped. Give it 48 voices, 256 updates and 180 DMA buffers, their
+# list moved to 0x80EE0000 (src/gameplay/mix_rate.cpp moves the audio heap and
+# command lists into 0x80E00000-0x80F00000 first, as they need more room).
+
+# addiu $v0, $zero, 0x18 -> 0x30 (maxVVoices and maxPVoices)
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x80012708
+value = 0x24020030
+
+# addiu $t6, $zero, 0x80 -> 0x100 (maxUpdates)
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x8001270C
+value = 0x240E0100
+
+# The DMA list's head and first link: 0x80069A40 / 0x80069A54 -> 0x80EE0000 / 0x80EE0014
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x80012760
+value = 0x3C0280EE
+
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x80012764
+value = 0x24420000
+
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x80012768
+value = 0x3C1180EE
+
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x8001276C
+value = 0x3C1080EE
+
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x80012778
+value = 0x26100014
+
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x8001277C
+value = 0x26310000
+
+# slti $at, $s2, 0x59 -> 0xB3 (179 links, 180 buffers)
+[[patches.instruction]]
+func = "func_8001268C"
+vram = 0x800127B0
+value = 0x2A4100B3
+
+# The DMA callback's first free buffer: 0x80069A40 -> 0x80EE0000
+[[patches.instruction]]
+func = "func_80012D4C"
+vram = 0x80012D5C
+value = 0x3C0F80EE
+
+[[patches.instruction]]
+func = "func_80012D4C"
+vram = 0x80012D68
+value = 0x25EF0000
 
 # --- Bigger animation caches (func_800D56C4 to func_800D731C) ----------------
 # Two fixed caches hold the animations in use. Animation files: 130 slots

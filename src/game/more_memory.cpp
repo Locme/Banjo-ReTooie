@@ -4,9 +4,10 @@
 // with fixed caches for the animations in use. A crowded scene (many characters at once) overflows
 // the display list buffer into the heap and fills the animation caches, and the game crashes. With
 // this setting on, the generated code uses the values in banjotooie.us.toml's "Bigger game heap",
-// "Bigger frame buffers" and "Bigger animation caches" sections instead of the game's own: a 12.8 MB
-// heap up to 0x80E00000, about 4x the frame buffers, and room for 240 animation files and 1023
-// animations in the 16 KB below the heap.
+// "Bigger frame buffers", "More sound voices" and "Bigger animation caches" sections instead of the
+// game's own: a 12.8 MB heap up to 0x80E00000, about 8x the frame buffers, 48 sound voices instead
+// of 24 with 180 sample DMA buffers (the audio heap moves with them, src/gameplay/mix_rate.cpp), and
+// room for 240 animation files and 1023 animations in the 16 KB below the heap.
 //
 // The heap is laid out when the game boots, so the setting is read once, the first time the
 // generated code asks (the heap setup at boot), and holds until the game is started again.

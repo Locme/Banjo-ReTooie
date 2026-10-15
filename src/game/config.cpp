@@ -209,7 +209,7 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::more_memory::option,
         "More game memory",
-        "Gives the game a bigger memory heap and bigger buffers for drawing and animations, so scenes crowded with characters do not crash. Takes effect the next time the game starts.",
+        "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
         true);
 
     // Section headings in the General tab (the controls and sliders above them have none).
