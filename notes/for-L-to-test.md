@@ -1808,3 +1808,12 @@
   1. Overlay on Full (F3) and play a minute
 - Look for: The lines are in four groups with a small gap between them: frames (fps, worst frame, 1% low, input latency), GPU (total, 3D effects, screen passes, shader compiles), the game (game fps and CPU, interpolation, map, Banjo), and the PC (renderer, extras, audio, build). GPU lines for passes that are all off are hidden. "Game ... CPU" no longer drops to 0 ms now and then (it counted some waits twice). Below 4 fps the first line keeps the last frame rate instead of vanishing. Anything you'd like moved, renamed or left out?
 - Status: waiting for L
+
+## T171 Real-time sun shadows on everything
+- Asked: 2026-10-15 18:35 UTC
+- Build: c109431 (main)
+- Steps:
+  1. Graphics: turn on Photo Filters, set Sun shadows to 60 (or pick the Enhanced preset)
+  2. Walk around Spiral Mountain and Plateau, then a cave level
+- Look for: Do Banjo, enemies, posts and scenery cast shadows that move with them? Any flicker, dotted edges or shadows in odd places (caves)? Frame rate with it on vs off?
+- Status: waiting for L
