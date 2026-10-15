@@ -3114,10 +3114,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..869586d
+index 0000000..202bc71
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1210 @@
+@@ -0,0 +1,1215 @@
 +//
 +// RT64
 +//
@@ -3510,8 +3510,9 @@ index 0000000..869586d
 +        }
 +    }
 +
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts) {
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare) {
 +        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayFlare = flare;
 +        effectsSettings.timeOfDay = enabled;
 +        for (int i = 0; i < 3; i++) {
 +            effectsSettings.dayTint[i] = enabled ? std::clamp(tint[i], 0.0f, 1.27f) : 1.0f;
@@ -3892,11 +3893,14 @@ index 0000000..869586d
 +            for (int c = 0; c < 3; c++) {
 +                sunView[c] = sunWorld[0] * v[0][c] + sunWorld[1] * v[1][c] + sunWorld[2] * v[2][c];
 +            }
-+            // Headless test hook: TOOIE_SUN_FRONT puts the sun just right of and above the middle of the screen.
-+            static const bool sunFront = (getenv("TOOIE_SUN_FRONT") != nullptr);
-+            if (sunFront) {
-+                sunView[0] = 0.2f;
-+                sunView[1] = 0.25f;
++            // Headless test hook: TOOIE_SUN_FRONT puts the sun just right of and above the middle of the screen,
++            // or at TOOIE_SUN_FRONT=<x>,<y> (view space, the camera looking down -z).
++            static const char *sunFrontValue = getenv("TOOIE_SUN_FRONT");
++            if (sunFrontValue != nullptr) {
++                float x = 0.2f, y = 0.25f;
++                sscanf(sunFrontValue, "%f,%f", &x, &y);
++                sunView[0] = x;
++                sunView[1] = y;
 +                sunView[2] = -1.0f;
 +            }
 +            const float sunLength = std::sqrt(sunView[0] * sunView[0] + sunView[1] * sunView[1] + sunView[2] * sunView[2]);
@@ -3910,11 +3914,12 @@ index 0000000..869586d
 +                for (int c = 0; c < 3; c++) {
 +                    packed = (packed << 8) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 200.0f), 0L, 255L));
 +                }
-+                dayPacked = 1.0f + float(packed);
++                // Negative: no lens flare.
++                dayPacked = (1.0f + float(packed)) * (settings.dayFlare ? 1.0f : -1.0f);
 +            }
 +            // Moonlight casts fainter shadows: as the tint darkens towards night (as DayNight in the shader).
-+            const float dayLuma = settings.dayTint[0] * 0.3f + settings.dayTint[1] * 0.5f + settings.dayTint[2] * 0.2f;
-+            const float moonlight = 1.0f - 0.6f * std::clamp((0.85f - dayLuma) / 0.45f, 0.0f, 1.0f);
++            const float dayBrightest = std::max(settings.dayTint[0], std::max(settings.dayTint[1], settings.dayTint[2]));
++            const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
 +            constants.shadows = { settings.sunShadows * daylight * moonlight, settings.sunShadowReach, dayPacked, settings.sunShadowOnBanjo ? 0.0f : 1.0f };
 +            if (sunLength > 1e-6f) {
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts * settings.dayShafts };
@@ -4330,10 +4335,10 @@ index 0000000..869586d
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..9a6fe4c
+index 0000000..c365c07
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,173 @@
 +//
 +// RT64
 +//
@@ -4397,6 +4402,7 @@ index 0000000..9a6fe4c
 +        bool timeOfDay = false;
 +        float dayTint[3] = { 1.0f, 1.0f, 1.0f };
 +        float dayShafts = 1.0f;
++        bool dayFlare = true;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4454,8 +4460,9 @@ index 0000000..9a6fe4c
 +    // Banjo-Tooie: the day and night cycle. The 3D world is multiplied by tint (0 to 1.27 each), its brightest
 +    // parts less so the darker it is; the sky darkens more, to stars and a moon (the SetSceneSun direction) at
 +    // night, and glows warm round the sun when the tint is warm. The fog takes the tint too. shafts (0 to 1)
-+    // scales the light shafts, so the moon gives none.
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts);
++    // scales the light shafts, so the moon gives none. By day the sun shows as a disc, with a lens flare when
++    // flare is on and nothing hides it.
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -6558,10 +6565,10 @@ index 74b1fa0..984dc66 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..c0e15a3
+index 0000000..10f71dc
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1186 @@
+@@ -0,0 +1,1249 @@
 +//
 +// RT64
 +//
@@ -6623,10 +6630,10 @@ index 0000000..c0e15a3
 +    return lerp(lerp(color, tinted, tint), float3(0.36f, 0.6f, 0.74f), haze);
 +}
 +
-+// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 8-bit channels (steps of 0.005).
-+// False (and no tint) while the cycle is off.
++// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 8-bit channels (steps of 0.005),
++// negative for no lens flare. False (and no tint) while the cycle is off.
 +bool DayTint(out float3 tint) {
-+    const float packedFloat = gConstants.shadows.z;
++    const float packedFloat = abs(gConstants.shadows.z);
 +    tint = 1.0f;
 +    if (packedFloat < 1.0f) {
 +        return false;
@@ -6636,9 +6643,10 @@ index 0000000..c0e15a3
 +    return true;
 +}
 +
-+// How much of the night has come in, from how dark the tint is (0 day, 1 night).
++// How much of the night has come in, from how dark the tint's brightest channel is (0 day, 1 night), so a warm
++// sunset still counts as day.
 +float DayNight(float3 tint) {
-+    return saturate((0.85f - dot(tint, float3(0.3f, 0.5f, 0.2f))) / 0.45f);
++    return saturate((0.97f - max(tint.r, max(tint.g, tint.b))) / 0.3f);
 +}
 +
 +// The world under the tint. The brightest parts (lamps, lava, glowing things) keep more of their light the darker
@@ -6689,6 +6697,15 @@ index 0000000..c0e15a3
 +        const float disc = smoothstep(0.99925f, 0.99945f, toward);
 +        sky = lerp(sky, float3(0.92f, 0.94f, 1.0f), disc * night);
 +        sky += float3(0.25f, 0.3f, 0.45f) * pow(toward, 40.0f) * 0.35f * night;
++    }
++
++    // The sun by day: a bright disc with a glow round it, orange when low and warm.
++    const float day = 1.0f - night;
++    if (day > 0.0f) {
++        const float3 sunColor = lerp(float3(1.0f, 0.97f, 0.88f), float3(1.0f, 0.62f, 0.3f), glow);
++        const float disc = smoothstep(0.99955f, 0.99975f, toward);
++        sky = lerp(sky, sunColor * 1.3f, disc * day);
++        sky += sunColor * (pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f) * day;
 +    }
 +    return sky;
 +}
@@ -7308,6 +7325,56 @@ index 0000000..c0e15a3
 +    return lerp(inside, above * lerp(1.0f.xxx, hue * 1.4f, 0.25f) * 1.1f, window);
 +}
 +
++// Lens flare by day: soft rings along the line from the sun through the middle of the screen, while the sun
++// is on screen and the sky shows where it is.
++float3 DayFlare(int2 pixel, float3 tint) {
++    const float3 sun = gConstants.sun.xyz;
++    if ((gConstants.shadows.z <= 0.0f) || (sun.z > -0.05f)) {
++        return 0.0f;
++    }
++    const float day = 1.0f - DayNight(tint);
++    if (day <= 0.0f) {
++        return 0.0f;
++    }
++    const float2 size = gConstants.projection.zw;
++    const float2 ndc = float2(sun.x * gConstants.projection.x / -sun.z, sun.y * gConstants.projection.y / -sun.z);
++    const float2 sunScreen = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++    if (any(sunScreen < 0.0f) || any(sunScreen >= size)) {
++        return 0.0f;
++    }
++    // How much of the sun is in clear sky: five taps round it.
++    const float spread = size.y * 0.006f;
++    float clear = 0.0f;
++    [unroll] for (int i = 0; i < 5; i++) {
++        const float2 offset = (i == 0) ? float2(0.0f, 0.0f) : (i == 1) ? float2(spread, 0.0f) : (i == 2) ? float2(-spread, 0.0f) : (i == 3) ? float2(0.0f, spread) : float2(0.0f, -spread);
++        clear += (LoadDepth(int2(sunScreen + offset)) >= 0.99999f) ? 0.2f : 0.0f;
++    }
++    // Weaker as the sun nears the edge of the screen.
++    const float2 fromMiddle = (sunScreen - size * 0.5f) / (size * 0.5f);
++    const float edge = saturate(1.6f - length(fromMiddle));
++    const float strength = clear * edge * day;
++    if (strength <= 0.0f) {
++        return 0.0f;
++    }
++    const float glow = saturate((tint.r - tint.b) * 2.2f);
++    const float2 axis = size * 0.5f - sunScreen;
++    float3 flare = 0.0f;
++    // Rings: where along the line (0 the sun, 1 the middle, 2 the far side) and size (screen heights), then colour.
++    const float2 rings[5] = { float2(0.45f, 0.035f), float2(0.8f, 0.07f), float2(1.2f, 0.025f), float2(1.55f, 0.1f), float2(1.9f, 0.05f) };
++    const float3 colours[5] = { float3(1.0f, 0.85f, 0.6f), float3(0.5f, 0.8f, 1.0f), float3(1.0f, 0.6f, 0.9f), float3(0.6f, 1.0f, 0.7f), float3(1.0f, 0.75f, 0.5f) };
++    [unroll] for (int r = 0; r < 5; r++) {
++        const float2 centre = sunScreen + axis * rings[r].x;
++        const float radius = rings[r].y * size.y;
++        const float d = length(float2(pixel) + 0.5f - centre) / radius;
++        // A soft disc with a slightly brighter rim.
++        const float ring = saturate(1.0f - d) * 0.6f + saturate(1.0f - abs(d - 0.9f) * 8.0f) * 0.4f;
++        flare += lerp(colours[r], float3(1.0f, 0.6f, 0.3f), glow * 0.5f) * ring;
++    }
++    // A faint glare spread round the sun over the scenery too.
++    const float glare = saturate(1.0f - length(float2(pixel) - sunScreen) / (size.y * 0.35f));
++    return (flare * 0.45f + float3(1.0f, 0.9f, 0.75f) * (glare * glare * 0.4f)) * strength;
++}
++
 +// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
 +// through and fading with each step, so light streams through gaps between things against the sky.
 +float3 LightShafts(int2 pixel) {
@@ -7563,6 +7630,9 @@ index 0000000..c0e15a3
 +    const bool daytime = DayTint(dayTint);
 +    // The glow of what was bright before the tint dims with it.
 +    bloom *= dayTint;
++    if (daytime && (gConstants.view.x < 1.5f)) {
++        bloom += DayFlare(pixel, dayTint);
++    }
 +    // Light shafts are added the same way.
 +    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 1.5f)) {
 +        // Less on the sky itself, so the beams show over the scenery rather than the sky washing out.
@@ -8150,7 +8220,7 @@ index 0a5c332..3568125 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f2c2aca
+index 0000000..027cb9b
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,70 @@
@@ -8205,7 +8275,7 @@ index 0000000..f2c2aca
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 8 bits
-+        // each, steps of 0.005: exact as a float below 2^24), then 1 to leave Banjo's own shadow out.
++        // each, steps of 0.005: exact as a float below 2^24; negative for no lens flare), then 1 to leave Banjo's own shadow out.
 +        float4 shadows;
 +    };
 +

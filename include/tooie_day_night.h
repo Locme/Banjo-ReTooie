@@ -12,6 +12,8 @@ namespace tooie::day_night {
     inline const std::string option = "day_night";
     // How long a whole day and night takes, in minutes of play.
     inline const std::string length_option = "day_night_length";
+    // Lens flare towards the sun by day.
+    inline const std::string flare_option = "day_night_flare";
 
     void add_options(recomp::config::Config& graphics);
     // Call once per frame from the game thread (tooie_warp_tick).

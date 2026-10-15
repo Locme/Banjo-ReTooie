@@ -2125,4 +2125,14 @@
   3. Uncapped: check the frame rate overlay goes past 240 where your PC can
   4. Send the session log afterwards
 - Look for: The overlay holds the chosen rate (Uncapped as high as your PC goes); Banjo moves at the same speed in every mode; the sound stays right for 10 minutes or more (no crackle, no "[audio]" lines in the log); swimming behaves as at 60
+
+## T200 Day and night: sun, lens flare
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Commit: "Day and night: a sun in the sky and a lens flare" on main
+- Steps:
+  1. Graphics > Day and Night: Cycle (Day Length 4) or Morning / Sunset, in Spiral Mountain or Jinjo Village
+  2. Turn the camera towards the sun (east in the morning, west at sunset)
+  3. Graphics > Lens Flare off and on
+- Look for: A bright sun disc in the sky (orange at sunset) that moves and sets below the horizon; soft coloured rings and a glare when you look at it, gone when a hill or wall hides it. No stars left over at sunset. Too strong or too weak?
 - Status: waiting for L

@@ -26,7 +26,7 @@
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
-    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts);
+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare);
     void SetSceneSun(bool custom, float x, float y, float z);
 }
 
@@ -115,6 +115,14 @@ namespace {
         }
     }
 
+    bool lens_flare() {
+        try {
+            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::day_night::flare_option));
+        } catch (...) {
+            return true;
+        }
+    }
+
     bool cycles(uint16_t map) {
         return std::find(std::begin(cycling_maps), std::end(cycling_maps), map) != std::end(cycling_maps);
     }
@@ -182,7 +190,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
-            RT64::SetSceneTimeOfDay(false, none, 1.0f);
+            RT64::SetSceneTimeOfDay(false, none, 1.0f, false);
             RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
         }
         return;
@@ -198,20 +206,23 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // a little to the south (+z) so it is never straight overhead. At night the moon takes the opposite path.
     const float angle = 2.0f * 3.14159265f * (t - 0.25f);
     const float height = std::sin(angle);
-    float direction[3] = { std::cos(angle) * 0.85f, height, 0.45f };
-    if (height < 0.0f) {
+    // The sky (sun disc, lens flare) and the sun shadows follow where it really is, so it sets below the
+    // horizon; the moon takes over a little after.
+    float sky[3] = { std::cos(angle) * 0.85f, height, 0.45f };
+    if (height < -0.1f) {
         // The moon keeps lower, so it is often in view.
-        direction[0] = -direction[0];
-        direction[1] = -direction[1] * 0.55f;
+        sky[0] = -sky[0];
+        sky[1] = -sky[1] * 0.55f;
     }
-    // Something to cast shadows with: never lower than about 10 degrees.
-    direction[1] = std::max(direction[1], 0.18f);
+    normalize(sky);
+    // For sun_direction (HD shadows): something to cast shadows with, never lower than about 10 degrees.
+    float direction[3] = { sky[0], std::max(sky[1], 0.18f), sky[2] };
     normalize(direction);
     // Light shafts from the sun only, fading out as it nears the horizon.
     const float shafts = smooth(height / 0.2f);
 
-    RT64::SetSceneTimeOfDay(true, look.tint, shafts);
-    RT64::SetSceneSun(true, direction[0], direction[1], direction[2]);
+    RT64::SetSceneTimeOfDay(true, look.tint, shafts, lens_flare());
+    RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
     {
         std::lock_guard lock{mutex};
         active = (amount >= 1.0f);
@@ -266,4 +277,10 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "Minutes of play for a whole day and night with <recomp-color primary>Cycle</recomp-color>. About a third of it is night.",
         4, 60, 1, 0, false, 24);
     graphics.add_option_hidden_dependency(length_option, option, Mode::Off);
+    graphics.add_bool_option(
+        flare_option,
+        "Lens Flare",
+        "With Day and Night on, soft rings of light cross the screen when you look towards the sun and nothing hides it.",
+        true);
+    graphics.add_option_hidden_dependency(flare_option, option, Mode::Off);
 }

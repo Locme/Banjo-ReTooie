@@ -184,6 +184,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   Witchyworld and Cauldron Keep never change. Applies at once. Default: Off.
 - **Day Length**: minutes of play for a whole day with Cycle, 4 to 60.
   Default: 24.
+- **Lens Flare**: with Day and Night on, soft rings of light and a glare when
+  you look towards the sun and nothing hides it. Default: on.
 
 ## Graphics: Game Frame Rate and Interpolation
 

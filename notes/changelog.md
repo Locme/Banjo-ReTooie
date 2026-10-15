@@ -26,6 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: the sun shows in the sky as a disc that moves and sets, with a lens flare when you look towards it (Graphics > Lens Flare, on). Sun shadows now fade out as it sets, and the moon rises a little after. Untested on PC (T200).
 - 3D grass is now made of real blades, like the Godot grass shaders L pointed to: each blade is its own small 3D shape grown on the green ground, swaying in noise-driven wind, bending away from Banjo and his trail, dark at the root and bright at the tip. Untested on PC (T197).
 - The intro ("Two years have passed..") stretches its cloud backdrop across a wide window instead of showing the backdrop's ends and black past them (T189).
 - Asset mods: a mod with an assets.json and an assets/ folder of asset_<id>.bin files (a model mod) can be dropped in the mods folder as a .zip and turned on and off in the Mods menu; its files load in place of the game's from the next area load. Smash Banjo (project files, mods/Smash Banjo v1.zip) is the first: the Smash Ultimate Banjo and Kazooie model with HD textures. Untested on PC (T185).
