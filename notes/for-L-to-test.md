@@ -1585,3 +1585,13 @@
   5. Save Tags writes interp_tags.txt; Unsave Tag removes the picked model's tag from the game and the file
 - Look for: No yellow quads or broken parts while a model is highlighted; the tags only show in custom; the saved note on the pick toast is right
 - Status: waiting for L
+
+## T150 HD Shadows in widescreen: shadows land under characters
+- Asked: 2026-10-15 00:56 UTC
+- Build: main @ 75bfb6b
+- Steps:
+  1. Window or fullscreen at 21:9 (also try 16:9)
+  2. Graphics: HD Shadows on
+  3. Stand so Banjo is off to one side of the screen (turn the camera), and look at enemies near the left and right edges
+- Look for: Banjo's and enemies' shadows are whole and sit under them anywhere on screen; no cut-off shadow or dotted light patch beside Banjo
+- Status: waiting for L
