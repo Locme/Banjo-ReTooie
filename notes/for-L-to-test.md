@@ -1598,7 +1598,7 @@
 
 ## T151 Custom blend mode as the default: models snap, characters vertex blend, particles taggable
 - Asked: 2026-10-15 10:51 UTC
-- Build: main @ next push
+- Build: main @ d085dcd
 - Steps:
   1. Start the game: Graphics > Debug shows the blend mode on custom
   2. Play CCL and a busy level: props and the sky snap to the game's frames, the camera blends, and every character (NPCs, enemies, bosses, Banjo) blends smoothly with no stretched triangles
