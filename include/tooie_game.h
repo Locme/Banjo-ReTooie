@@ -103,6 +103,12 @@ namespace tooie {
     void install_crash_handler(const std::filesystem::path& app_folder);
     // Lines (build, settings) written under every crash entry; see tooie_session_log.h.
     void set_crash_context(const std::string& text);
+    // For the hang watchdog (watchdog.cpp). The function and module an address is in, as the crash
+    // log writes it (Windows; elsewhere just the address).
+    void describe_code_address(void* addr, char* out, size_t size);
+    // Writes logs/hang_<time>.dmp with every thread's stack and report_text as its comment, keeping
+    // the newest 3. Returns its path, or empty if none was written (always empty off Windows).
+    std::string write_hang_dump(const std::string& report_text);
 }
 
 #endif

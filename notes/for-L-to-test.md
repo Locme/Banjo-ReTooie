@@ -2085,3 +2085,13 @@
   2. Play normally for 10 minutes, then send console.log
 - Look for: the [vram] lines now also say "ours N MB in N allocations, N textures, N render targets". If "ours" climbs with VRAM, the renderer is leaking and the counts say what. If VRAM climbs and "ours" stays level, the graphics driver is holding the memory. Checked headless (software Vulkan, so not your NVIDIA driver): VRAM stays level for 3 minutes with the Enhanced preset, 4K, 120 fps, Smash Banjo, a test texture pack, cheats on, in Mayahem Temple and Isle o' Hags; your log climbs about 1 GB a minute in the same places.
 - Status: waiting for L
+
+## T196 Hang watchdog catches game freezes, not only screen freezes
+- Asked: 2026-10-15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Play as usual. When the game freezes, wait 15 seconds before closing it
+  2. Send logs\hangs.log and the newest logs\hang_*.dmp
+  3. Optional check without waiting for a real freeze: in a command prompt in the exe's folder run `set TOOIE_TEST_HANG=game:60:20` then start BanjoTooieN64Recomp.exe; one minute after start the game freezes for 20 seconds on purpose
+- Look for: hangs.log names which part stopped: "the game sent no new frame" (the game itself, even while the picture still refreshes), "no frame was presented" (graphics or driver) or "the window stopped handling events". Under each entry are the named threads with the function each was in, and after 15 seconds a hang_*.dmp is written. Before, the watchdog only noticed the screen stopping, so a freeze inside the game, where the last picture keeps being shown, was never logged. Checked headless on Linux with fake game, screen and window freezes (each logged, and the "running again" line after) and 2 minutes of normal play with no false entries. The thread stacks and the dump are Windows only and were only compile-checked, not run.
+- Status: waiting for L

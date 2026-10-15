@@ -44,6 +44,24 @@ namespace {
 
     // Minidumps are tens of MB each; older ones are deleted at start so these many are kept.
     constexpr size_t dumps_kept = 5;
+    // Hang dumps (write_hang_dump) are kept apart from crash dumps, fewer of them.
+    constexpr size_t hang_dumps_kept = 3;
+
+    // Deletes all but the newest `keep` logs/<prefix>*.dmp (names sort by date).
+    void prune_dumps(const char* prefix, size_t keep) {
+        std::error_code ec;
+        std::vector<fs::path> dumps;
+        for (const auto& entry : fs::directory_iterator(fs::path(logs_dir), ec)) {
+            const std::string name = entry.path().filename().string();
+            if (name.rfind(prefix, 0) == 0 && entry.path().extension() == ".dmp") {
+                dumps.push_back(entry.path());
+            }
+        }
+        std::sort(dumps.begin(), dumps.end());
+        for (size_t i = 0; i + keep < dumps.size(); i++) {
+            fs::remove(dumps[i], ec);
+        }
+    }
 
     void timestamp(char* out, size_t size) {
         std::time_t t = std::time(nullptr);
@@ -113,6 +131,31 @@ namespace {
     }
 
 #ifdef _WIN32
+    // DbgHelp is single threaded and the hang watchdog uses it too (describe_code_address, write_hang_dump).
+    // A crash waits a little for the watchdog to finish, then goes ahead anyway.
+    std::atomic_flag dbghelp_busy;
+
+    struct DbgHelpLock {
+        bool held = false;
+        explicit DbgHelpLock(int wait_ms) {
+            for (int waited = 0; ; waited++) {
+                if (!dbghelp_busy.test_and_set()) {
+                    held = true;
+                    return;
+                }
+                if (waited >= wait_ms) {
+                    return;
+                }
+                Sleep(1);
+            }
+        }
+        ~DbgHelpLock() {
+            if (held) {
+                dbghelp_busy.clear();
+            }
+        }
+    };
+
     // Best effort name of the function containing an address: the recompiled code is linked into the exe,
     // so func_80XXXXXX names come out of the PDB when it sits next to the exe.
     void describe_address(void* addr, char* out, size_t size) {
@@ -231,6 +274,7 @@ namespace {
         if (crashing.test_and_set()) {
             return;
         }
+        DbgHelpLock dbghelp(2000);
         char ts[32];
         timestamp(ts, sizeof(ts));
 
@@ -356,6 +400,56 @@ namespace {
 #endif
 }
 
+#ifdef _WIN32
+void tooie::describe_code_address(void* addr, char* out, size_t size) {
+    DbgHelpLock dbghelp(5000);
+    describe_address(addr, out, size);
+}
+
+std::string tooie::write_hang_dump(const std::string& report_text) {
+    prune_dumps("hang_", hang_dumps_kept - 1);
+    char ts[32];
+    timestamp(ts, sizeof(ts));
+    char dump_name[1200];
+    std::snprintf(dump_name, sizeof(dump_name), "%s\\hang_%s.dmp", logs_dir, ts);
+    HANDLE file = CreateFileA(dump_name, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        return {};
+    }
+    // The hang report rides along as the dump's comment, like a crash log (tools/read_dump.py prints it).
+    std::string comment = report_text;
+    MINIDUMP_USER_STREAM stream{};
+    stream.Type = CommentStreamA;
+    stream.BufferSize = static_cast<ULONG>(comment.size() + 1);
+    stream.Buffer = comment.data();
+    MINIDUMP_USER_STREAM_INFORMATION streams{};
+    streams.UserStreamCount = 1;
+    streams.UserStreamArray = &stream;
+    bool dumped;
+    {
+        DbgHelpLock dbghelp(5000);
+        // No exception: every other thread is suspended and saved with its own registers and stack.
+        dumped = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
+            static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo),
+            nullptr, &streams, nullptr) != FALSE;
+    }
+    CloseHandle(file);
+    if (!dumped) {
+        std::remove(dump_name);
+        return {};
+    }
+    return dump_name;
+}
+#else
+void tooie::describe_code_address(void* addr, char* out, size_t size) {
+    std::snprintf(out, size, "%p", addr);
+}
+
+std::string tooie::write_hang_dump(const std::string&) {
+    return {};
+}
+#endif
+
 void tooie::set_crash_context(const std::string& text) {
     int next = 1 - context_index.load();
     std::snprintf(context[next], sizeof(context[next]), "%s", text.c_str());
@@ -385,17 +479,7 @@ void tooie::install_crash_handler(const fs::path& app_folder) {
         marker << "started " << ts << "\n";
     }
     // Keep room for this run's dump: delete all but the newest dumps_kept - 1 (names sort by date).
-    std::vector<fs::path> dumps;
-    for (const auto& entry : fs::directory_iterator(logs, ec)) {
-        const std::string name = entry.path().filename().string();
-        if (name.rfind("crash_", 0) == 0 && entry.path().extension() == ".dmp") {
-            dumps.push_back(entry.path());
-        }
-    }
-    std::sort(dumps.begin(), dumps.end());
-    for (size_t i = 0; i + (dumps_kept - 1) < dumps.size(); i++) {
-        fs::remove(dumps[i], ec);
-    }
+    prune_dumps("crash_", dumps_kept - 1);
     std::atexit(clean_exit);
     install_handlers();
 }

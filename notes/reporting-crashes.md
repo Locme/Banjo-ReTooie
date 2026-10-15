@@ -12,7 +12,13 @@ exe you ran. For a local build from `build.bat` that is the folder under `Releas
    - `console.log`: everything the game printed. Since 227db85 it is kept here.
      It starts with the build and the settings, and notes each setting you
      change while playing.
-   - `hangs.log`: freezes of 5 seconds or more, written by the watchdog.
+   - `hangs.log`: freezes, written by the watchdog. It says which part stopped:
+     the game (3 seconds without a new game frame, even if the screen still
+     refreshes), the screen (3 seconds without a presented frame) or the window
+     (8 seconds without handling events). On Windows each entry lists where
+     every named thread was at that moment, with function names.
+   - the newest `hang_*.dmp` file, if there is one: written when a freeze lasts
+     15 seconds. The newest 3 are kept.
    - the newest `crash_*.dmp` file, if there is one. The game keeps only the
      newest 5 dumps (about 40 MB each) and deletes older ones at start.
 3. Keep `BanjoTooieN64Recomp.pdb` next to the exe. Without it, crash

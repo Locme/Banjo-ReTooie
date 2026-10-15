@@ -5,12 +5,18 @@
 
 #include "ultramodern/renderer_context.hpp"
 
-// Hang watchdog (src/debug/watchdog.cpp). It never stops or alters the game: it only
-// writes a note to logs/hangs.log when no frame has been presented for a few seconds.
+// Hang watchdog (src/debug/watchdog.cpp). It never stops or alters the game: it only writes to
+// logs/hangs.log (and, for a long hang on Windows, logs/hang_<time>.dmp) when the game stops sending
+// frames, the screen stops being presented, or the window stops handling events.
 namespace tooie::watchdog {
-    // Starts the watchdog thread (safe to call more than once). It arms itself when the
-    // first frame is presented, so it stays quiet if frames are never reported.
+    // Starts the watchdog thread (safe to call more than once). Each watched part arms itself at
+    // its first sign of life, so nothing is reported before it has started.
     void start();
+
+    // Called by the main thread's event loop each time round (update_gfx in main.cpp).
+    void note_window_update();
+    // Called on the game thread each controller read; only used by TOOIE_TEST_HANG=game:...
+    void note_game_input();
 
     // What the renderer reported at the last presented frame (the frame rate overlay shows it).
     struct RendererInfo {

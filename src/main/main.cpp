@@ -215,6 +215,7 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 }
 
 void update_gfx(void*) {
+    tooie::watchdog::note_window_update();
     recompinput::handle_events();
 #ifdef __ANDROID__
     tooie::android::update_touch();
@@ -814,7 +815,10 @@ int main(int argc, char** argv) {
     };
 
     ultramodern::input::callbacks_t input_callbacks{
-        .poll_input = recompinput::poll_inputs,
+        .poll_input = [] {
+            tooie::watchdog::note_game_input();
+            recompinput::poll_inputs();
+        },
         .get_input = tooie::debug::get_n64_input,
         .set_rumble = recompinput::set_rumble,
         .get_connected_device_info = get_connected_device_info,
