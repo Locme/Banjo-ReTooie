@@ -2173,4 +2173,14 @@
   1. Load a save with Smash Banjo on, look at his feet close up (photo mode), then walk and stop
   2. Run, jump, flap and roll, and watch the backpack
 - Look for: Step 1, the fur round his ankles sits on his legs and turns with his feet, with no pink band under it. Step 2, the backpack stays on his back the way vanilla's does. Checked headless: no pink band at the ankles; backpack on his back in the flap; the run was not compared frame by frame with vanilla.
+
+## T205 Banjo fur
+- Asked: 2026-10-15 23:30 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Photo Filters on, then set Banjo fur to 100 (Banjo fur length stays at 100)
+  2. Walk round Spiral Mountain, turn the camera close behind Banjo and to his side, jump and roll
+  3. Try Banjo fur length at 50 and 200, then Banjo fur at 0
+  4. If you can, once more with Smash Banjo on (Mods menu)
+- Look for: Step 2, his brown fur (head, arms, back, legs) looks fuzzy with short strands standing out of it, most visible along his outline, and the strands stay on him as he moves instead of crawling. Kazooie, the shorts, backpack, gloves, boots and muzzle stay smooth. Step 3, longer or shorter fur, then none. Step 4, whether the Smash model's fur also grows strands (its fur colours may differ). Checked headless in Spiral Mountain (screenshot in project files, screenshots/banjo-fur/off-vs-on-headless.png). Cost there, software Vulkan at Original resolution: GPU 25 to 37 ms per frame, so tell me if your frame rate drops. Not checked: Windows with D3D12 (the shader is built there at runtime), the split-up Banjo and Kazooie, transformations (no fur by design).
 - Status: waiting for L

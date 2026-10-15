@@ -60,6 +60,7 @@ namespace RT64 {
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo);
     void SetSceneGrass(float amount, float height, float distance, float density);
+    void SetSceneFur(float amount, float length);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
     bool GetSceneCameraHeight(float *height);
@@ -93,6 +94,7 @@ namespace {
     std::atomic<bool> water_waves_on{false};
     // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
     std::atomic<bool> modern_water{false};
+    std::atomic<bool> banjo_fur{false};
     float heat_haze_sent = -1.0f;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
@@ -254,6 +256,7 @@ namespace {
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
+        { &tooie::picture_filters::banjo_fur_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
@@ -366,6 +369,12 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true));
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0));
+    double fur = value<double>(banjo_fur_option, 0.0);
+    if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
+        fur = std::atof(forced);
+    }
+    banjo_fur = fur > 0.0;
+    RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0));
     modern_water = value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
@@ -398,6 +407,10 @@ void tooie::picture_filters::effect_changed() {
         }
     } catch (...) {
     }
+}
+
+bool tooie::picture_filters::banjo_fur_on() {
+    return banjo_fur;
 }
 
 bool tooie::picture_filters::applying_effects_preset() {
@@ -732,6 +745,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
         10, 200, 5, 0, false, 100);
     graphics.add_number_option(
+        banjo_fur_option,
+        "Banjo fur",
+        "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots. Kazooie, his shorts and his backpack are left as they are. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        banjo_fur_length_option,
+        "Banjo fur length",
+        "How long Banjo's fur is, in percent. 100 is short and fluffy.",
+        25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
         heat_haze_option,
         "Heat haze",
         "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers, more in the distance. 0 is off.",
@@ -817,7 +840,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -877,5 +900,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_height_option, section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, section_option, false);
     graphics.add_option_hidden_dependency(grass_density_option, section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_option, section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_length_option, section_option, false);
     graphics.add_option_hidden_dependency(dither16_option, section_option, false);
 }

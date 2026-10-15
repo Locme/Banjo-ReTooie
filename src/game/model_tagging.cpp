@@ -44,6 +44,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iterator>
 #include <string>
 #include <unordered_map>
@@ -58,6 +59,7 @@
 #include "tooie_interp_check.h"
 #include "tooie_interp_tags.h"
 #include "tooie_model_tagging.h"
+#include "tooie_picture_filters.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -86,6 +88,8 @@ namespace {
     // Banjo-Tooie's own (lib-patches/rt64.patch): the draws after it are left
     // out of the screen effects (drawn after them) or not.
     constexpr uint32_t g_ex_scene_effects_exclude_v1 = 0x000034;
+    // ...and the draws after it get Banjo's fur shells (1) or not (0).
+    constexpr uint32_t g_ex_fur_shells_v1 = 0x000035;
     constexpr uint32_t g_ex_id_auto = 0xFFFFFFFF;
     constexpr uint32_t component_skip = 0;
     constexpr uint32_t component_interpolate = 1;
@@ -582,7 +586,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Without interpolation the scene is still read for the models drawn
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now);
-    if (!interpolating && !excluding) {
+    // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
+    const bool fur = !overlay && end > start && tooie::picture_filters::banjo_fur_on();
+    if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
             stat_bones = 0;
@@ -853,10 +859,93 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             put(rdram, p, op_dl << 24, list);
         }
     };
+    // Banjo's fur: the player's model (Banjo-Kazooie or Banjo alone) is the copy of a model with many bones
+    // nearest to where Banjo stands. The command that starts it (its segment 1) and the one after its last are
+    // called through a small list that first sets RT64's fur flag (on, then off).
+    auto mark_fur = [&](uint32_t& cursor, uint32_t limit) {
+        if (!fur) {
+            return;
+        }
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if (player < 0x80000000u || player >= 0x80800000u) {
+            return;
+        }
+        const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
+        if (transform < 0x80000000u || transform >= 0x80800000u) {
+            return;
+        }
+        // The form byte (ScriptHawk's character_state): 1 Banjo-Kazooie, 10 Banjo alone.
+        const uint8_t form = (uint8_t)MEM_B(0, (int32_t)0x80136F63);
+        if (form != 1 && form != 10) {
+            return;
+        }
+        float at[3];
+        for (int k = 0; k < 3; k++) {
+            const uint32_t bits = (uint32_t)MEM_W(4 * k, (int32_t)transform);
+            std::memcpy(&at[k], &bits, sizeof(float));
+        }
+        int best = -1;
+        float best_distance = 150.0f * 150.0f;
+        for (size_t b = 0; b < blocks.size(); b++) {
+            const Block& block = blocks[b];
+            if (block.shadow || block.model == 0 || !block.have_pos || block.matrices < 20 || block.vertex_command == SIZE_MAX) {
+                continue;
+            }
+            float d = 0.0f;
+            for (int k = 0; k < 3; k++) {
+                d += (block.pos[k] - at[k]) * (block.pos[k] - at[k]);
+            }
+            if (d < best_distance) {
+                best_distance = d;
+                best = (int)b;
+            }
+        }
+        static const bool log_fur = std::getenv("TOOIE_FUR_LOG") != nullptr;
+        if (log_fur) {
+            static uint32_t logged = 0;
+            if ((logged++ % 60) == 0) {
+                std::fprintf(stderr, "[fur] form %u, Banjo at %.0f,%.0f,%.0f, model %s", form, at[0], at[1], at[2], best < 0 ? "not found" : "found");
+                if (best >= 0) {
+                    std::fprintf(stderr, " %.0f units off (%u matrices)", std::sqrt(best_distance), blocks[best].matrices);
+                }
+                std::fprintf(stderr, "\n");
+            }
+        }
+        if (best < 0 || cursor + 64 > limit) {
+            return;
+        }
+        size_t first = blocks[best].vertex_command;
+        size_t last = first;
+        for (size_t i = first; i < commands.size(); i++) {
+            if (commands[i].block == best) {
+                last = i;
+            }
+        }
+        const size_t marks[2] = { first, last + 1 };
+        for (int m = 0; m < 2; m++) {
+            if (marks[m] >= commands.size()) {
+                continue;
+            }
+            const uint32_t p = start + (uint32_t)marks[m] * 8;
+            const uint32_t w0 = word(rdram, p);
+            const uint32_t op = w0 >> 24;
+            if (op == 0xE4 || op == 0xE5 || op == 0xE1 || op == 0xF1) {
+                continue;
+            }
+            const uint32_t list = cursor;
+            put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
+            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, m == 0 ? 1u : 0u);
+            put(rdram, cursor + 16, w0, word(rdram, p + 4));
+            put(rdram, cursor + 24, op_enddl << 24, 0);
+            cursor += 32;
+            put(rdram, p, op_dl << 24, list);
+        }
+    };
     if (!interpolating) {
         slot = (slot + 1) % slot_count;
         uint32_t cursor = list_area + slot * slot_size;
         mark_no_effects(cursor, cursor + slot_size);
+        mark_fur(cursor, cursor + slot_size);
         if (!overlay) {
             stat_models = 0;
             stat_bones = 0;
@@ -1785,6 +1874,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
 
     if (!overlay) {
         mark_no_effects(cursor, limit);
+        mark_fur(cursor, limit);
     }
 
     // Leave the rest of the frame with the defaults.
