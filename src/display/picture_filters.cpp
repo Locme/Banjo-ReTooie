@@ -712,12 +712,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         fog_option,
         "Fog",
-        "Distance fog over the 3D world, thickening past its start distance. The game's own fog stays as it is. 0 is off.",
+        "Distance fog over the 3D world, measured from Banjo, so moving the camera doesn't change it. It thickens past its start distance. The game's own fog stays as it is. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         fog_start_option,
         "Fog start distance",
-        "How far from the camera the fog begins, in the game's units (Banjo is about 150 tall).",
+        "How far from Banjo the fog begins, in the game's units (Banjo is about 150 tall).",
         0, 6000, 250, 0, false, 1500);
     graphics.add_enum_option(
         fog_colour_option,
