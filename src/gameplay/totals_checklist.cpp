@@ -34,6 +34,7 @@ namespace {
     // PauseState (decomp include/gc/newpause.h).
     constexpr uint32_t pause_page = 0x0;
     constexpr uint32_t pause_sub_page = 0x1;
+    constexpr uint32_t pause_title_step = 0x1A;     // MovePageHeaderTrigger: 0..10 as the title comes in
     constexpr uint32_t pause_draw_header = 0x1B;
     constexpr uint8_t page_totals = 3;
 
@@ -139,7 +140,7 @@ namespace {
     uint32_t put_string(uint8_t* rdram, uint32_t& offset, const std::string& text) {
         const uint32_t start = offset;
         const size_t length = std::min<size_t>(text.size(), 63);
-        if (start + length + 1 > string_area_size) {
+        if (start + length + 1 > string_area_size - 8) {   // the last 8 bytes hold sprite coordinates
             return 0;
         }
         for (size_t i = 0; i < length; i++) {
@@ -155,8 +156,15 @@ namespace {
     // after func_800B8C50) to black.
     // right_align: x is where the text ends (func_800B8CFC measures a string in the current font
     // and size).
+    // How far the page title has come in (0..1, gcnewpause's MovePageHeaderTrigger / 10): the extra
+    // lines fade and rise in with it, and go out with it when the page turns or Totals closes.
+    float page_in = 1.0f;
+    int rise = 0;
+
     void print(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, uint32_t& offset,
-               int colour, float size, int x, int y, const std::string& text, bool right_align = false) {
+               int colour, float size, int x, int y, const std::string& text, bool right_align = false,
+               bool dim = false) {
+        y += rise;
         const uint32_t addr = put_string(rdram, offset, text);
         if (addr == 0) {
             return;
@@ -172,16 +180,40 @@ namespace {
             if (right_align && pass == 0) {
                 x -= (int32_t)call(rdram, ctx, func_800B8CFC, addr);
             }
+            // Rows not picked are faded back, as the pause menu does with the options not picked.
+            const float alpha = (shadow ? 160.0f : 255.0f) * page_in * (dim ? 0.55f : 1.0f);
+            MEM_B(text_alpha, text_settings) = (int8_t)(uint8_t)alpha;
             if (shadow) {
                 MEM_B(0, text_settings) = 0;
                 MEM_B(1, text_settings) = 0;
                 MEM_B(2, text_settings) = 0;
-                MEM_B(text_alpha, text_settings) = (int8_t)0xA0;
             }
             call(rdram, ctx, func_800B7F14, gfx);
             call(rdram, ctx, func_800B8E28, gfx, (uint32_t)(x + (shadow ? 1 : 0)), (uint32_t)(y + (shadow ? 1 : 0)), addr);
             call(rdram, ctx, func_800B811C, gfx);
         }
+    }
+
+    // The pause menu's own button art (the same set as its B button, asset 0xB59): 0xB58 is the blue
+    // A button, four frames of it turning. Drawn at half size beside the picked row, it says "press A
+    // here" the way the B button at the bottom says "press B to go back".
+    constexpr uint32_t sprite_a_button = 0xB58;
+
+    void draw_a_button(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, int x, int y, int64_t ms) {
+        if (page_in < 1.0f) {
+            return;
+        }
+        const uint32_t image = call(rdram, ctx, func_800D674C, sprite_a_button);
+        if (image == 0) {
+            return;
+        }
+        const gpr image_addr = (gpr)(int32_t)image;
+        const gpr coords = string_area + (string_area_size - 8);   // Coords2D, in quarter pixels
+        MEM_W(0, coords) = x * 4;
+        MEM_W(4, coords) = (y + rise) * 4;
+        call(rdram, ctx, func_800E2568, (uint32_t)(MEM_H(8, image_addr) * 2), (uint32_t)(MEM_H(0xA, image_addr) * 2));
+        const uint32_t frames = std::max<uint32_t>(1, (uint16_t)MEM_H(0, image_addr));
+        call(rdram, ctx, func_800E30E0, gfx, image, (uint32_t)((ms / 150) % frames), (uint32_t)coords);
     }
 
     struct Count {
@@ -823,7 +855,9 @@ namespace {
     // List layout: up to list_rows names under the title; the picked one's status and hint below.
     // The first row sits beside the game's notes counter, so it is kept narrower.
     constexpr int list_rows = 8;
-    constexpr int marker_x = 84;
+    // The A button beside the picked row of the table (its sprite is placed by its middle).
+    constexpr int button_x = block_x - 13;
+    constexpr int button_dy = -8;
     constexpr int narrow_width = 205 - block_x;
     constexpr int wide_width = 242 - block_x;
 
@@ -835,7 +869,6 @@ namespace {
             return;
         }
         const int count = (int)list.entries.size();
-        print(rdram, ctx, gfx, offset, colour_white, text_scale, now_x, header_y, "B - BACK", true);
         if (list.cursor < list.top) {
             list.top = list.cursor;
         } else if (list.cursor >= list.top + list_rows) {
@@ -849,10 +882,8 @@ namespace {
             }
             const int colour = e.status == status_now ? colour_green : e.status == status_done ? colour_yellow : colour_white;
             const int y = block_y + line_height * row;
-            if (list.top + row == list.cursor) {
-                print(rdram, ctx, gfx, offset, colour_blue, text_scale, marker_x, y, "-");
-            }
-            print(rdram, ctx, gfx, offset, colour, text_scale, block_x, y, e.fitted[which]);
+            const bool picked = list.top + row == list.cursor;
+            print(rdram, ctx, gfx, offset, colour, text_scale, block_x, y, e.fitted[which], false, !picked);
         }
 
         // The picked entry.
@@ -926,6 +957,8 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
     if (!checklist.valid) {
         evaluate(rdram, ctx);
     }
+    page_in = std::min(1.0f, MEM_BU(pause_title_step, pause) / 10.0f);
+    rise = (int)((1.0f - page_in) * 12.0f + 0.5f);
 
     // The pad filter's presses since the last frame.
     const int steps = moves_down.exchange(0);
@@ -1003,7 +1036,7 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
     for (int line = 0; line < line_count; line++) {
         const Shown& r = shown[line];
         if (line == table_cursor) {
-            print(rdram, ctx, gfx, offset, colour_blue, text_scale, marker_x, block_y + line_height * line, "-");
+            draw_a_button(rdram, ctx, gfx, button_x, block_y + line_height * line + button_dy, now_ms());
         }
         print_row(rdram, ctx, gfx, offset, line, r.name, r.c, r.now);
         if (r.c.got < r.c.total) {
@@ -1028,9 +1061,6 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
             print(rdram, ctx, gfx, offset, colour_yellow, text_scale, block_x, y, "MOVE ON FOR NOW");
         }
         y += line_height;
-    }
-    if (line_count > 0) {
-        print(rdram, ctx, gfx, offset, colour_white, text_scale, block_x, y, "A - SEE LIST");
     }
 }
 

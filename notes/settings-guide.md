@@ -66,7 +66,8 @@ framework, not from this port's code, so it is not described here.
   Totals): how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos
   and Jamjars moves are still to find, or DONE, and in green how many of those
   you can get now with what you have. A line under the table says MORE TO GET
-  HERE, MOVE ON FOR NOW or ALL DONE HERE. Up/down picks a row and A lists
+  HERE, MOVE ON FOR NOW or ALL DONE HERE. Up/down moves the A button beside a
+  row and A lists
   its items by name: GET NOW (green), LATER (white, with what it still needs
   when picked) and DONE (yellow); B goes back to the table. Default: On.
 - **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound

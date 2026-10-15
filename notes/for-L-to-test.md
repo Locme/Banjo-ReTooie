@@ -1781,13 +1781,13 @@
 - Commit: "Totals checklist, step 3" on main
 - Steps:
   1. Load a save part-way through, pause, View Totals, and go to a world you have visited
-  2. A small blue dash marks a row of the table. Move it with D-pad up/down, C-up/C-down or the stick up/down. "A - SEE LIST" sits under the table
-  3. Press A: the table turns into a list of that row's items by name. Green is GET NOW, white is LATER, yellow is DONE; GET NOW comes first. Notes are listed by spot ("SECOND STAIRS NOTES") with how many are left there
+  2. The game's own blue A button (the same art as the green B button at the bottom) turns beside one row of the table. Move it with D-pad up/down, C-up/C-down or the stick up/down. The table fades and rises in with the page title, and goes out with it when you turn the page
+  3. Press A: the table turns into a list of that row's items by name. Green is GET NOW, white is LATER, yellow is DONE; GET NOW comes first. The picked item is bright and the others are faded back, like the options in the pause menu. Notes are listed by spot ("SECOND STAIRS NOTES") with how many are left there
   4. Move down the list. On a white (LATER) item the bottom says what it still needs, for example "NEEDS GRIP GRAB", "NEEDS 15 MORE NOTES" or "NEEDS DETONATOR FORM". Hints only show for the item you pick
   5. Press B: back to the table, still on the Totals page. Press B again: the pause menu goes back as usual
   6. On Game Totals, A lists the row for every world you have visited (worlds you haven't been to stay hidden)
   7. Unpause with Start straight after, and check A and the stick work in the game right away
-  8. QOL > Totals checklist off: no dash, no list, and A, B and the stick act as before
+  8. QOL > Totals checklist off: no table, no A button, no list, and A, B and the stick act as before
 - Look for: a hint that is wrong (tell me the world, the item and the hint). "NEEDS MORE THAN ONE THING" means no single move, form or area unlocks it on its own. Also tell me if the big counters on the left (4/10 and so on) ever vanish while a list is open: it happened in 2 of 6 headless runs at the same moment and not in the others, so I could not pin it to the list
 - Status: waiting for L
 
