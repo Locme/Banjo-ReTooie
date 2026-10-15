@@ -12,4 +12,7 @@ namespace tooie::hd_shadows {
 
     // Call once per frame from the game thread (tooie_warp_tick): resets the per-frame shadow count.
     void tick();
+    // Call with the 3D scene's display list once it is complete (physical start and end): moves
+    // the player's shadow paste to where a wide window shows the shadow.
+    void fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end);
 }

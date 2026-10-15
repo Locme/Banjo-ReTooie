@@ -111,6 +111,9 @@ namespace {
     // shadow passes it to the renderer: fetching it again (func_800D674C) in the same frame marks
     // it as drawn twice, and the model cache then dropped models still in use (crash, objects gone).
     uint32_t drawn_model = 0;
+    // The display list spans of this frame's actor shadow pastes, already placed for the window
+    // shape (paste_x), so fix_pastes leaves them alone.
+    std::vector<std::pair<uint32_t, uint32_t>> actor_pastes;
     // True while an actor is drawn into the shadow buffer.
     bool in_shadow_pass = false;
 
@@ -144,6 +147,16 @@ namespace {
         MEM_W(0, cmd) = w0;
         MEM_W(4, cmd) = w1;
         MEM_W(0, gfx_head) = (uint32_t)(cmd + 8);
+    }
+
+    // Where a screen x (the game's 4:3 view, 0 to 304) has to go in the shadow paste. With a wide
+    // window RT64 draws the 3D view, and so the shadow in its buffer, squeezed towards the middle,
+    // but it stretches the paste's rectangles (they read a framebuffer) across the whole width. So
+    // the rectangle is squeezed the same way here, or it covers the wrong place and cuts the shadow.
+    // The actor shadows below use it directly; the player's paste (func_800A6250) is moved
+    // afterwards by tooie::hd_shadows::fix_pastes.
+    float paste_x(float x) {
+        return 152.0f + (x - 152.0f) / tooie::widescreen_scale();
     }
 
     // The shadow for one actor. ctx is a scratch copy; frame is free RDRAM stack space.
@@ -257,8 +270,8 @@ namespace {
             if (i == 0 || sy < min_y) min_y = sy;
             if (i == 0 || sy > max_y) max_y = sy;
         }
-        min_x = std::clamp(min_x, 0.0f, 304.0f);
-        max_x = std::clamp(max_x, 0.0f, 304.0f);
+        min_x = std::clamp(paste_x(min_x), 0.0f, 304.0f);
+        max_x = std::clamp(paste_x(max_x), 0.0f, 304.0f);
         min_y = std::clamp(min_y, 0.0f, 228.0f);
         max_y = std::clamp(max_y, 0.0f, 228.0f);
         if (max_x - min_x < 1.0f || max_y - min_y < 1.0f) {
@@ -313,7 +326,9 @@ namespace {
         MEM_W(0x10, ctx->r29) = (uint32_t)((int)max_x - x0);
         MEM_W(0x14, ctx->r29) = (uint32_t)((int)max_y - y0);
         MEM_W(0x18, ctx->r29) = 0xFF;
+        const uint32_t paste_start = MEM_W(0, gfx_head) & 0x1FFFFFFF;
         func_800A5EC4(rdram, ctx);
+        actor_pastes.push_back({paste_start, (uint32_t)MEM_W(0, gfx_head) & 0x1FFFFFFF});
         shadows_this_frame++;
         count(Drawn);
     }
@@ -386,3 +401,62 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
         MEM_W(i * 4, actor) = saved[i];
     }
 }
+
+// The shadow pastes left in the 3D scene's display list (start to end, physical addresses): each
+// reads the 8-bit shadow buffer (TIMG 0xFD48012F) with LOADTILE, SETTILESIZE and TEXRECT strips.
+// The player's, from func_800A6250, are placed for a 4:3 view, so with a wide window they are
+// moved sideways by as much as paste_x moves their middle; the strips keep their width, which is
+// wider than the squeezed shadow needs. The actor pastes were placed already and are skipped.
+void tooie::hd_shadows::fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end) {
+    const auto skip = std::move(actor_pastes);
+    actor_pastes.clear();
+    if (tooie::widescreen_scale() <= 1.0f || start >= end || end > 0x800000) {
+        return;
+    }
+    auto word = [&](uint32_t phys) { return (uint32_t)MEM_W(0, (gpr)(int32_t)(phys | 0x80000000)); };
+    auto set_word = [&](uint32_t phys, uint32_t value) { MEM_W(0, (gpr)(int32_t)(phys | 0x80000000)) = value; };
+    for (uint32_t cmd = start; cmd + 8 <= end; cmd += 8) {
+        if (word(cmd) != 0xFD48012F) {
+            continue;
+        }
+        bool ours = false;
+        for (const auto& span : skip) {
+            ours |= cmd >= span.first && cmd < span.second;
+        }
+        // The paste's commands, up to the first that is none of them.
+        uint32_t last = cmd + 8;
+        int dx = 0;
+        bool have_dx = false;
+        for (; last + 8 <= end; last += 8) {
+            const uint32_t op = word(last) >> 24;
+            if (op == 0xE4 && !have_dx) {
+                const int lrx = (word(last) >> 12) & 0xFFF, ulx = (word(last + 4) >> 12) & 0xFFF;
+                const float middle = (ulx + lrx) / 8.0f;
+                dx = (int)std::lround((paste_x(middle) - middle) * 4.0f);
+                dx = std::clamp(dx, -ulx, std::max(-ulx, 304 * 4 - lrx));
+                have_dx = true;
+            }
+            if (op != 0xF5 && op != 0xE6 && op != 0xE7 && op != 0xE8 && op != 0xF4 && op != 0xF2 && op != 0xE4 && op != 0xE1 && op != 0xF1) {
+                break;
+            }
+        }
+        if (!ours && dx != 0) {
+            for (uint32_t c = cmd + 8; c < last; c += 8) {
+                const uint32_t w0 = word(c), w1 = word(c + 4), op = w0 >> 24;
+                auto move12 = [&](uint32_t w) { return (w & ~(0xFFFu << 12)) | ((((w >> 12) & 0xFFF) + dx) & 0xFFF) << 12; };
+                if (op == 0xF4 || op == 0xF2) {
+                    set_word(c, move12(w0));
+                    set_word(c + 4, move12(w1));
+                } else if (op == 0xE4) {
+                    set_word(c, move12(w0));
+                    set_word(c + 4, move12(w1));
+                } else if (op == 0xE1) {
+                    // s in 10.5: the texture moves with the rectangle.
+                    set_word(c + 4, (w1 & 0xFFFF) | ((((w1 >> 16) + dx * 8) & 0xFFFF) << 16));
+                }
+            }
+        }
+        cmd = last - 8;
+    }
+}
+
