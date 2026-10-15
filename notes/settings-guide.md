@@ -156,6 +156,15 @@ F12 screenshots are taken before these filters, so they don't show them.
   shadow model (works in every transformation); enemies and NPCs, which have
   no shadow on N64, get one too (up to 12 per frame, straight down onto the
   floor). Applies at once. Default: off.
+- **Day and Night**: a day and night cycle in the levels that are daytime under
+  an open sky (Spiral Mountain, Isle o' Hags outside, Mayahem Temple, Jolly
+  Roger's Lagoon, Terrydactyland, Hailfire Peaks, Cloud Cuckooland). Cycle runs
+  the clock on game time; Morning, Sunset and Night hold one time of day. The 3D
+  world and sky are tinted (not the HUD), night has stars and a moon, and the
+  sun moves for Sun shadows and Light shafts. Rooms, underwater areas,
+  Witchyworld and Cauldron Keep never change. Applies at once. Default: Off.
+- **Day Length**: minutes of play for a whole day with Cycle, 4 to 60.
+  Default: 24.
 
 ## Graphics: Game Frame Rate and Interpolation
 

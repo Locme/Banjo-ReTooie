@@ -5,6 +5,7 @@
 
 #include "tooie_game.h"
 #include "tooie_hd_shadows.h"
+#include "tooie_day_night.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_music_player.h"
 #include "tooie_mix_rate.h"
@@ -401,6 +402,7 @@ void tooie::init_config() {
         },
         tooie::hd_shadows::Direction::Overhead);
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
+    tooie::day_night::add_options(graphics);
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",

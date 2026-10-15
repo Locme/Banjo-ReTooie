@@ -152,3 +152,5 @@ Details are in `include/trace.h`, `src/debug/trace.cpp` and
 - `TOOIE_BURST=<from ms>:<to ms>`: acts as F12 held over that window. Holding F12 for half a second keeps every presented frame, shrunk 4x, in a ring of the last 150; letting go writes them to `screenshots/burst-<stamp>/000.png...` (src/game/screenshot.cpp). For glitches that last a frame or two.
 
 - `TOOIE_BENCHMARK=<seconds>`: records a benchmark (the Benchmark key's files in `benchmarks/`) for that long from the first game frame; the log prints `[benchmark] saved ...`.
+
+- `TOOIE_DAY_NIGHT=<0 Off, 1 Cycle, 2 Morning, 3 Sunset, 4 Night>`: Graphics > Day and Night whatever the setting says; `TOOIE_TIME_OF_DAY=<0 to 1>` starts the clock there (0 midnight, 0.5 noon), `TOOIE_DAY_LENGTH=<minutes>` (can be below the menu's 4, e.g. 0.5) and `TOOIE_DAY_NIGHT_LOG=1` logs `[day-night]` every second of game time: map, time, tint and sun (src/gameplay/day_night.cpp). Night in Spiral Mountain: `TOOIE_DAY_NIGHT=4 TOOIE_WARP=AF:0@15000 TOOIE_SCREENSHOT_AT=55000`. The tint is packed in the scene effects' `shadows.z` push constant (lib-patches/rt64.patch).

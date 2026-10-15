@@ -2566,10 +2566,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c557c9c
+index 0000000..c42b2ea
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,902 @@
+@@ -0,0 +1,921 @@
 +//
 +// RT64
 +//
@@ -2936,6 +2936,15 @@ index 0000000..c557c9c
 +        }
 +    }
 +
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.timeOfDay = enabled;
++        for (int i = 0; i < 3; i++) {
++            effectsSettings.dayTint[i] = enabled ? std::clamp(tint[i], 0.0f, 1.27f) : 1.0f;
++        }
++        effectsSettings.dayShafts = enabled ? std::clamp(shafts, 0.0f, 1.0f) : 1.0f;
++    }
++
 +    void SetSceneGrass(float amount, float height, float distance) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grass = amount;
@@ -3087,7 +3096,7 @@ index 0000000..c557c9c
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -3116,7 +3125,9 @@ index 0000000..c557c9c
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
 +        constants.view = { float(settings.view), settings.compare ? 1.0f : 0.0f, seconds, settings.heatHaze };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
-+        constants.fogColor = { settings.fogColor[0], settings.fogColor[1], settings.fogColor[2],
++        // The fog darkens with the time of day as the sky does.
++        const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
++        constants.fogColor = { settings.fogColor[0] * fogTint[0], settings.fogColor[1] * fogTint[1], settings.fogColor[2] * fogTint[2],
 +            (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * (std::round(settings.outlineThickness * 4.0f) - 1.0f)) : 0.0f };
 +
 +        constants.bloom = { settings.bloom, settings.depthOfFieldOnBanjo ? -settings.depthOfField : settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
@@ -3185,9 +3196,17 @@ index 0000000..c557c9c
 +            const float worldLength = std::sqrt(sunWorld[0] * sunWorld[0] + sunWorld[1] * sunWorld[1] + sunWorld[2] * sunWorld[2]);
 +            const float height = (worldLength > 1e-6f) ? sunWorld[1] / worldLength : 0.0f;
 +            const float daylight = std::clamp(height / 0.15f, 0.0f, 1.0f);
-+            constants.shadows = { settings.sunShadows * daylight, settings.sunShadowReach, 0.0f, 0.0f };
++            float dayPacked = 0.0f;
++            if (settings.timeOfDay) {
++                uint32_t packed = 0;
++                for (int c = 0; c < 3; c++) {
++                    packed = (packed << 8) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 200.0f), 0L, 255L));
++                }
++                dayPacked = 1.0f + float(packed);
++            }
++            constants.shadows = { settings.sunShadows * daylight, settings.sunShadowReach, dayPacked, 0.0f };
 +            if (sunLength > 1e-6f) {
-+                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts };
++                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts * settings.dayShafts };
 +            }
 +            else {
 +                constants.sun = { 0.0f, 0.0f, 1.0f, 0.0f };
@@ -3250,7 +3269,7 @@ index 0000000..c557c9c
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -3474,10 +3493,10 @@ index 0000000..c557c9c
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..66b2af1
+index 0000000..613351a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,159 @@
 +//
 +// RT64
 +//
@@ -3530,6 +3549,11 @@ index 0000000..66b2af1
 +        float sunShadowReach = 900.0f;
 +        bool customSun = false;
 +        float sunDirection[3] = { 0.47f, 0.42f, -0.78f };
++        // Banjo-Tooie: the day and night cycle's tint of the 3D world (off: none), and how much of the light
++        // shafts' strength its sun gives.
++        bool timeOfDay = false;
++        float dayTint[3] = { 1.0f, 1.0f, 1.0f };
++        float dayShafts = 1.0f;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -3581,6 +3605,11 @@ index 0000000..66b2af1
 +    // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
 +    // puts back the fixed sun. A sun below the horizon casts no shadows.
 +    void SetSceneSun(bool custom, float x, float y, float z);
++    // Banjo-Tooie: the day and night cycle. The 3D world is multiplied by tint (0 to 1.27 each), its brightest
++    // parts less so the darker it is; the sky darkens more, to stars and a moon (the SetSceneSun direction) at
++    // night, and glows warm round the sun when the tint is warm. The fog takes the tint too. shafts (0 to 1)
++    // scales the light shafts, so the moon gives none.
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -5219,10 +5248,10 @@ index 74b1fa0..a51b5bc 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..5c962f3
+index 0000000..2a08c93
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,926 @@
+@@ -0,0 +1,1007 @@
 +//
 +// RT64
 +//
@@ -5280,6 +5309,76 @@ index 0000000..5c962f3
 +    // Thickens within the few hundred units of a pool, not only across a whole level.
 +    const float haze = (1.0f - pow(1.0f - saturate(gConstants.bloom.w), 4.0f)) * (1.0f - exp(-distance / 900.0f));
 +    return lerp(lerp(color, tinted, tint), float3(0.36f, 0.6f, 0.74f), haze);
++}
++
++// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 8-bit channels (steps of 0.005).
++// False (and no tint) while the cycle is off.
++bool DayTint(out float3 tint) {
++    const float packedFloat = gConstants.shadows.z;
++    tint = 1.0f;
++    if (packedFloat < 1.0f) {
++        return false;
++    }
++    const uint packed = uint(packedFloat - 1.0f + 0.5f);
++    tint = float3(float((packed >> 16) & 255u), float((packed >> 8) & 255u), float(packed & 255u)) / 200.0f;
++    return true;
++}
++
++// How much of the night has come in, from how dark the tint is (0 day, 1 night).
++float DayNight(float3 tint) {
++    return saturate((0.85f - dot(tint, float3(0.3f, 0.5f, 0.2f))) / 0.45f);
++}
++
++// The world under the tint. The brightest parts (lamps, lava, glowing things) keep more of their light the darker
++// it gets, so they stand out at night.
++// Colours fade towards grey as night comes in, as moonlight does, so the tint reads as blue rather than as a
++// darker version of the day's colours.
++float3 DayWorld(float3 color, float3 tint) {
++    const float night = DayNight(tint);
++    const float bright = smoothstep(0.7f, 0.98f, max(color.r, max(color.g, color.b)));
++    const float3 faded = lerp(color, dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, 0.5f * night * (1.0f - bright));
++    return faded * lerp(tint, 1.0f, bright * night * 0.6f);
++}
++
++float DayHash(float3 p) {
++    p = frac(p * 0.3183099f + 0.1f) * 17.0f;
++    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
++}
++
++// The sky under the tint: it darkens more than the world, glows warm round the sun near the horizon when the tint
++// is warm (sunrise and sunset), and at night shows stars fixed in the world and the moon (the sun constant's
++// direction, which the cycle points at the moon at night).
++float3 DaySky(float3 color, int2 pixel, float3 tint) {
++    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
++    const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
++    const float3 world = normalize(float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)));
++    const float night = DayNight(tint);
++    float3 sky = lerp(color, dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, 0.6f * night) * pow(tint, 1.7f);
++
++    const float toward = saturate(dot(look, gConstants.sun.xyz));
++    const float horizon = 1.0f - saturate(abs(world.y) * 2.5f);
++    const float glow = saturate((tint.r - tint.b) * 2.2f) * (1.0f - night);
++    sky += float3(1.0f, 0.55f, 0.25f) * glow * (pow(toward, 3.0f) * 0.6f + 0.25f) * horizon;
++
++    if ((night > 0.0f) && (world.y > 0.0f)) {
++        // One star at most in each cell of a grid round the camera, at a random place in it, twinkling.
++        const float3 grid = world * 160.0f;
++        const float3 cell = floor(grid);
++        const float pick = DayHash(cell);
++        if (pick > 0.9f) {
++            const float3 place = cell + 0.5f + (float3(DayHash(cell + 17.0f), DayHash(cell + 31.0f), DayHash(cell + 53.0f)) - 0.5f) * 0.6f;
++            // About a pixel and a half to three pixels across at 1080p, whatever the resolution's step.
++            const float size = (0.18f + 0.18f * DayHash(cell + 71.0f)) * saturate(1080.0f / gConstants.projection.w) * 1.4f;
++            const float twinkle = 0.7f + 0.3f * sin(gConstants.view.z * 3.0f + pick * 400.0f);
++            const float star = saturate(1.0f - length(grid - place) / size) * twinkle;
++            sky += float3(0.9f, 0.93f, 1.0f) * (star * 1.6f) * night * saturate(world.y * 5.0f);
++        }
++        // The moon, with a faint halo.
++        const float disc = smoothstep(0.99925f, 0.99945f, toward);
++        sky = lerp(sky, float3(0.92f, 0.94f, 1.0f), disc * night);
++        sky += float3(0.25f, 0.3f, 0.45f) * pow(toward, 40.0f) * 0.35f * night;
++    }
++    return sky;
 +}
 +
 +float LoadDepth(int2 pixel) {
@@ -5988,6 +6087,10 @@ index 0000000..5c962f3
 +    if (gConstants.bloom.x > 0.0f) {
 +        bloom = gBloom.SampleLevel(LinearSampler, uv, 0).rgb * gConstants.bloom.x;
 +    }
++    float3 dayTint;
++    const bool daytime = DayTint(dayTint);
++    // The glow of what was bright before the tint dims with it.
++    bloom *= dayTint;
 +    // Light shafts are added the same way.
 +    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 1.5f)) {
 +        // Less on the sky itself, so the beams show over the scenery rather than the sky washing out.
@@ -5997,7 +6100,7 @@ index 0000000..5c962f3
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.5f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f)) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.5f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -6007,6 +6110,9 @@ index 0000000..5c962f3
 +        }
 +        if (redraw) {
 +            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, abs(gConstants.bloom.y), gConstants.bloom.y < 0.0f) : gColor.Load(int3(pixel, 0)).rgb;
++            if (daytime) {
++                scene = DaySky(scene, pixel, dayTint);
++            }
 +            if (gConstants.bloom.z > 0.0f) {
 +                scene = Adapt(scene);
 +            }
@@ -6136,6 +6242,10 @@ index 0000000..5c962f3
 +                const float fresnel = 0.25f + 0.75f * pow(1.0f - saturate(dot(-normalize(surface), normal)), 3.0f);
 +                scene = lerp(scene, reflection.rgb, saturate(gConstants.water.x * amount * fresnel * reflection.a));
 +            }
++        }
++        if (daytime) {
++            scene = DayWorld(scene, dayTint);
++            rim *= dayTint;
 +        }
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
@@ -6532,10 +6642,10 @@ index 0a5c332..df15569 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..9fb2fa1
+index 0000000..6d6b105
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,64 @@
 +//
 +// RT64
 +//
@@ -6586,7 +6696,8 @@ index 0000000..9fb2fa1
 +        float4 rippleZ;
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
-+        // units, then unused.
++        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 8 bits
++        // each, steps of 0.005: exact as a float below 2^24), then unused.
 +        float4 shadows;
 +    };
 +

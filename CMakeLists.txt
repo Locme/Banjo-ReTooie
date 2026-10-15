@@ -329,6 +329,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/display/gfx_budget.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/day_night.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hd_shadows.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/cutscene_skip.cpp

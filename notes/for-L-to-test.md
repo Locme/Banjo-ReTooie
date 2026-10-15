@@ -1839,3 +1839,17 @@
   3. Flip Graphics > Smooth talking heads on and off while the box is open (it applies live)
 - Look for: The box, its opening and closing and the text already run at 60 either way. On, the head's mouth and blink move every frame but it also talks about twice as fast, because the mouth pictures are separate drawings. Tell me which you prefer, or whether the speed-up spoils it.
 - Status: waiting for L
+
+
+## T174 Day and night cycle in the sunny outdoor levels
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Commit: "Day and night cycle" on main
+- Steps:
+  1. Graphics > Day and Night: pick Night, go to Spiral Mountain or Jinjo Village
+  2. Then Sunset, then Morning, then Off (it changes at once, easing over half a second)
+  3. Pick Cycle and set Day Length to 4 (the shortest) and play outside for 4 minutes to see a whole day: sunrise, day, sunset, night
+  4. Go into a room (Bottles' house, a Jinjo house) and into Witchyworld or Cauldron Keep with Night picked
+  5. With Photo Filters on, also try Sun shadows and Light shafts at Sunset and in Cycle
+- Look for: Night should be dark blue with a starry sky and a moon, but still easy to play in; lamps and glowing things stay bright. Sunset should turn the light warm with an orange glow low in the sky. The HUD, rooms, underwater areas, Witchyworld and Cauldron Keep never change. Sun shadows and light shafts follow the sun as it moves; at night there are no light shafts. Is night too dark or too light, and is the 24-minute default day a good length?
+- Status: waiting for L
