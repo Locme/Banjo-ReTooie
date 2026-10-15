@@ -2156,6 +2156,14 @@
   2. Walk round the open grass and look about
   3. Graphics > Fireflies off and on
 - Look for: Small yellow-green glows drifting and blinking round Banjo, a little above the ground, hidden behind walls and hills. None by day or on Hailfire Peaks. Too many, too few, too big or too small?
+
+## T204 3D grass density slider
+- Asked: 2026-10-15 23:35 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > 3D grass to 100, then go to Spiral Mountain's meadow by Klungo
+  2. Move Graphics > 3D grass density from 100 down to 10 and up to 200 while watching the grass
+- Look for: lower numbers grow fewer, more spread-out blades (the ground shows between them) and run faster; higher numbers grow a thicker carpet and cost more. It changes live, with no restart. The blades stay the same width at every density. Which number looks right to you? I can make it the default. Checked headless at 30, 50 and 200 in Spiral Mountain.
 - Status: waiting for L
 
 ## T203 Smash Banjo v6: feet fur and backpack

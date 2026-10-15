@@ -1502,7 +1502,7 @@ index 69a82ac..a9076cb 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..8beca06 100644
+index 9fae0d4..ed6b312 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,9 @@
@@ -1600,7 +1600,7 @@ index 9fae0d4..8beca06 100644
 +            }
 +            const float low[2] = { std::min({ float(p[0].x), float(p[1].x), float(p[2].x) }), std::min({ float(p[0].z), float(p[1].z), float(p[2].z) }) };
 +            const float high[2] = { std::max({ float(p[0].x), float(p[1].x), float(p[2].x) }), std::max({ float(p[0].z), float(p[1].z), float(p[2].z) }) };
-+            passes = std::max(passes, SceneGrassBladePasses(low, high, distanceToCamera, frameParams.grassBlades.x));
++            passes = std::max(passes, SceneGrassBladePasses(low, high, distanceToCamera, frameParams.grassBlades.x, frameParams.grassBlades.w));
 +        }
 +        return passes;
 +    }
@@ -3114,10 +3114,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a410a10
+index 0000000..225ac1a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1218 @@
+@@ -0,0 +1,1219 @@
 +//
 +// RT64
 +//
@@ -3521,25 +3521,26 @@ index 0000000..a410a10
 +        effectsSettings.dayShafts = enabled ? std::clamp(shafts, 0.0f, 1.0f) : 1.0f;
 +    }
 +
-+    void SetSceneGrass(float amount, float height, float distance) {
++    void SetSceneGrass(float amount, float height, float distance, float density) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grass = amount;
 +        effectsSettings.grassHeight = height;
 +        effectsSettings.grassDistance = distance;
++        effectsSettings.grassDensity = std::clamp(density, 0.1f, 2.0f);
 +    }
 +
 +    // Enough shells that the knee-high blades look solid from the side.
 +    static constexpr uint32_t GrassShells = 24;
 +
-+    // Real blades (GrassGS.hlsl): the finest grid's cell size, and how many blades a pass can grow on a triangle.
++    // Real blades (GrassGS.hlsl): the finest grid's cell size at density 1, and how many blades a pass can grow on a triangle.
 +    static constexpr float GrassBladeCell = 3.0f;
 +    static constexpr uint32_t GrassBladeInvocations = 32;
 +    static constexpr uint32_t GrassBladesPerInvocation = 14;
 +    static constexpr uint32_t GrassBladeMaxPasses = 24;
 +
-+    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear) {
++    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell) {
 +        // As GrassCellSize in GrassGS.hlsl: the passes the triangle's grid needs at its distance, at most GrassBladeMaxPasses.
-+        const float cell = GrassBladeCell * std::exp2(std::max(std::floor(std::log2(std::max(distanceToCamera, 1.0f) / lodNear)), 0.0f));
++        const float cell = baseCell * std::exp2(std::max(std::floor(std::log2(std::max(distanceToCamera, 1.0f) / lodNear)), 0.0f));
 +        const float cells = (std::floor((high[0] - low[0]) / cell) + 2.0f) * (std::floor((high[1] - low[1]) / cell) + 2.0f);
 +        const float perPass = float(GrassBladeInvocations * GrassBladesPerInvocation);
 +        return std::clamp(uint32_t(std::ceil(cells / perPass)), 1u, GrassBladeMaxPasses);
@@ -3677,7 +3678,7 @@ index 0000000..a410a10
 +        frameParams.grassWorldZ = { z0, z1, z2, -(v[3][0] * z0 + v[3][1] * z1 + v[3][2] * z2) };
 +
 +        // A tuft of five blades every 6 units (Banjo is about 150 tall); fewer cells hold one at lower amounts.
-+        frameParams.grassParams = { height, 1.0f / 6.0f, std::max(settings.grassDistance, 100.0f), 0.35f + 0.65f * std::min(settings.grass, 1.0f) };
++        frameParams.grassParams = { height, std::sqrt(settings.grassDensity) / 6.0f, std::max(settings.grassDistance, 100.0f), 0.35f + 0.65f * std::min(settings.grass, 1.0f) };
 +        frameParams.grassPlayer = { settings.player[0], settings.player[2], settings.player[1], 45.0f };
 +
 +        // A breeze from one side; Grass.hlsli rolls waves across the field along it.
@@ -3685,8 +3686,8 @@ index 0000000..a410a10
 +        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
 +        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
-+        // second, and the finest grid's cells 3 units wide.
-+        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell };
++        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
++        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell / std::sqrt(settings.grassDensity) };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -4338,10 +4339,10 @@ index 0000000..a410a10
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..e8ec594
+index 0000000..228df3f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,176 @@
 +//
 +// RT64
 +//
@@ -4415,6 +4416,7 @@ index 0000000..e8ec594
 +        float grass = 0.0f;
 +        float grassHeight = 1.0f;
 +        float grassDistance = 2500.0f;
++        float grassDensity = 1.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -4482,13 +4484,13 @@ index 0000000..e8ec594
 +    void NoteSceneWorkloadSubmitted(uint64_t workloadId);
 +    void SetSceneEffectsWorkload(uint64_t workloadId);
 +    // Banjo-Tooie: 3D grass on green, level ground of the 3D world (0 off, 1 the most blades), blade height
-+    // (1 normal) and the distance from the camera they fade out by, in world units.
-+    void SetSceneGrass(float amount, float height, float distance);
++    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal).
++    void SetSceneGrass(float amount, float height, float distance, float density);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
-+    // camera needs (GrassGS.hlsl grows up to 448 a pass), with the grid coarsening from lodNear on.
-+    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear);
++    // camera needs (GrassGS.hlsl grows up to 448 a pass), with the finest grid's cells baseCell wide, coarsening from lodNear on.
++    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell);
 +    // Fills the frame's grass terms from the 3D world's projection (as adjusted for the aspect ratio), view,
 +    // view-projection and viewport (as the RSP used them), the framebuffer's resolution in game pixels and
 +    // the size of its viewport in target pixels. False when there is no grass to draw this frame.
@@ -5991,10 +5993,10 @@ index 0000000..8735575
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..c7b9680
+index 0000000..f2fe725
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,258 @@
 +//
 +// RT64
 +//
@@ -6236,7 +6238,8 @@ index 0000000..c7b9680
 +        }
 +
 +        const float bladeHeight = height * lerp(0.6f, 1.0f, r.y) * lerp(0.35f, 1.0f, fade);
-+        const float bladeWidth = cell * 0.8f * lerp(0.75f, 1.25f, r.x);
++        // As wide as at density 1 whatever the density, widening as the grid coarsens with distance.
++        const float bladeWidth = 2.4f * (cell / FrParams.grassBlades.w) * lerp(0.75f, 1.25f, r.x);
 +        const float lean = min(length(bend), 0.95f);
 +        const float rise = bladeHeight * sqrt(1.0f - lean * lean * 0.85f);
 +        const float3 side = float3(facing.x, 0.0f, facing.y) * (bladeWidth * 0.5f);

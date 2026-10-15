@@ -64,6 +64,7 @@ namespace tooie::picture_filters {
     inline const std::string water_option = "water_style";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
+    inline const std::string grass_density_option = "grass_3d_density";
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
