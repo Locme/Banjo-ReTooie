@@ -60,11 +60,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - Partial (2026-10-13): Fill works through Settings > Graphics > Aspect Ratio = Expand (RT64 widens the picture; the game's culling now widens with it, src/game/widescreen.cpp). 4:3 is Aspect Ratio = Original. The HUD stays in the middle 4:3. Letterbox 16:9 added (2026-10-13): Aspect Ratio now reads 4:3 / Fill / Letterbox 16:9. HUD at the edges added (2026-10-13, src/game/hud_edges.cpp): Settings > Graphics > HUD Placement. Original keeps the HUD in the 4:3 middle, 16:9 spreads it up to 16:9, Expand to the window edges. Verified headless in a 16:9 window (paused in Spiral Mountain).
 
-### 4.30 Cutscene audio sync and N64 intro pacing
-- [ ] Done
-- [ ] Approved by L
-- 2026-10-14: not needed on N64 (L: audio sync only affects the XBLA version). Dropped.
-
 ### 4.52 Text speed
 - [x] Done
 - Note: QOL tab "Text speed" (1x/2x/4x/Instant) and `--dialogue_text_speed 1|2|4|instant`. Hooks the zoombox print timer; verified headless in the new-game intro (Klungo's lines print whole on Instant).
@@ -74,11 +69,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [x] Done
 - [ ] Approved by L
 - 2026-10-13: QOL > Free camera (on by default, L's pick), with Free camera speed (Slow/Normal/Fast) and invert left/right and up/down. The right stick turns the camera smoothly around Banjo and tilts it; pushing on past the lowest tilt slides the camera in to a quarter of the distance, past the highest it pulls out to 1.6x. Once used, the yaw is held in world space until a cutscene, a fixed camera or another area; first person is left to the game and the held yaw comes back after it. Walking follows the turned camera. Walls and floors pull the camera in with the game's own camera line test. While it is on, the right stick no longer acts as C buttons in normal play (clicking the right stick still gives C-up, so first person; L's pick, 2026-10-13). 2026-10-13 fix: the camera keeps its own height and aim, so it no longer tips towards the floor on its own. Code: src/gameplay/free_camera.cpp, hook in func_8010FC38. Verified headless in Spiral Mountain (turning, tilting, close-in, pull-out, first person, walking in the camera's direction). Not checked: flying, transformations, multiplayer split screen, feel on a real pad (T23).
-
-### 4.66 Held sounds / "full-length sounds" (removed) and the Beak Barge investigation
-- [ ] Done
-- [ ] Approved by L
-- 2026-10-14: nothing to port (the XBLA fix was removed). The open question is whether the Beak Barge volume drop with the right stick held forward happens here, where the game's own N64 mixer runs: if it does, it is how the N64 game behaves. Asked L to check (T70).
 
 ### 4.67 "Enable cheats" gate
 - [x] Done
@@ -134,11 +124,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 
 ## Mid
 
-### 4.6 Start-menu renames: "PC Settings" and "Exit"
-- [ ] Done
-- [ ] Approved by L
-- 2026-10-14: deferred. Settings already open from Esc, F5 and the controller hotkey. A "Settings" row in the game's pause menu needs a new text entry (rows name their text by id), a layout change and a function hook (the main thread owns the hook file); the pause overlay's option table (D_80802070, rows of icon/text/function/sub-option/are-you-sure) was not found in memory headless yet.
-
 ### 4.13 Timer save
 - [x] Done
 - Note: General > Timer save (Off/5/10/30/60/120 min, default Off). Counts the game's own play time (no pauses, menus or cutscenes) and calls _glsavegame_entrypoint_7(slot), the save half of the pause menu's Save and quit. Verified headless with TOOIE_TIMER_SAVE_SECONDS=10: new game, Spiral Mountain, the save file was rewritten every 10 s of play, and after a restart file 1 loaded straight into Spiral Mountain.
@@ -158,10 +143,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 
 ### 4.26 Extended draw distance
 - [x] Done
-- [ ] Approved by L
-
-### 4.27 Detailed nests and Mayahem Temple stairs
-- [ ] Done
 - [ ] Approved by L
 
 ### 4.28 High-detail models always
@@ -328,11 +309,6 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - 2026-10-14: first part built (T60). The Photo Mode key (F10, or the controller's Share/Misc button; bindable under Controls > Hotkeys) freezes the game by scaling its delta time (0x8012C760), hides the HUD and the area name, and flies the camera: left stick moves, right stick looks, Z/R down/up (a held move speeds up after a second), L hide Banjo (skips the player draws func_800F5008 / func_800F50D0), A screenshot, D-pad up HUD, D-pad down orbit Banjo (Z/R closer/further), D-pad left/right zoom (the field of view, via tooie_set_fov), Start frozen / 1/8 / 1/4, B back. Code: src/gameplay/photo_mode.cpp, camera written from the free camera's hook. Verified headless in Spiral Mountain. Camera collision (QOL > Photo mode camera collision, on): moves are swept with the game's camera line test and slide along what they hit; in orbit the line from Banjo pulls the camera in. Filters: QOL > Photo filter (10 looks) and Photo exposure / contrast / saturation / warmth / vignette / film grain, drawn by an RT64 pass after SMAA (lib-patches/rt64.patch, PhotoGradePS.hlsl) only while photo mode is on, so screenshots show them; changed from the menu. Crop and grid (2026-10-14, T62): QOL > Photo crop (16:9, 2.39:1, 4:3, 1:1, 4:5, 9:16) shades outside the frame in the same RT64 pass and screenshots keep only the frame (src/game/screenshot.cpp); QOL > Photo grid draws rule-of-thirds lines inside it, left out of the frame a screenshot is taken from. Checked headless: 4:5 gave a 730x912 screenshot without the grid while the window showed it. Depth of field (2026-10-14, T65): QOL > Photo depth of field (0-100) keeps the nearest thing in a small box at the middle of the picture sharp and blurs by distance from it; the game's depth buffer (pointer at 0x8007BCC4) is copied to colour in RT64's present pass and read by the same photo pass. Checked headless in Spiral Mountain at 80: cliff at the middle sharp, nearer platform and sky blurred. Tilt (2026-10-14, T65): QOL > Photo tilt (-45 to 45 degrees) writes the camera's roll (+0x20); checked headless at 20, the picture turns clockwise. Not built yet: the in-mode D-pad list (the settings are QOL rows that apply live instead).
  Photo panel (2026-10-14, T85): while photo mode is on, a list at the top left (src/ui/photo_panel.cpp, a UI layer, so never in screenshots) shows Zoom, Camera (free / orbit Banjo), Time, HUD, Banjo, Filter, Exposure, Contrast, Saturation, Warmth, Vignette, Film grain, Depth of field, Tilt, Crop and Grid with the controls under it; D-pad up/down picks a row, left/right changes it (held repeats; zoom held), L hides the list. The rows write the same QOL options as the menu. D-pad up/down no longer toggle HUD/orbit and L no longer hides Banjo: those are rows now. Checked headless: five D-pad downs and two rights set Filter to Black and white, and the A screenshot showed the filter without the list. Left out from XBLA: right-stick click to level and unzoom (set Tilt to 0 and Zoom back by hand), and the WASD/QE keyboard layout (keyboard keys follow the N64 bindings).
-### 4.85 Achievements pop-up
-- [ ] Done
-- [ ] Approved by L
-- 2026-10-14: owned by the Super Opus 64 helper thread (XBLA achievement back-port and pop-ups).
-
 ### 4.88 Asset dump and replacement
 - [ ] Done
 - [ ] Approved by L
@@ -396,18 +372,10 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - 2026-10-14: claimed by the Opus helper thread with 4.10. The Graphics API row was hidden in the menu (upstream); it now shows in Graphics with Vulkan (default) and D3D12 on Windows (default set by the Sonnet Tasks lane). Untested on D3D12 until L tries it, so the default stays Vulkan. T93.
 
-### 4.34 Anti-aliasing, supersampling, upscaling
-- [ ] Done
-- [ ] Approved by L
-
 ### 4.49 Texture dumping and replacement
 - [x] Done
 - [ ] Approved by L
 - 2026-10-15 (T156): General > Developer > Texture dump: While playing, or Sweep all maps (warps through every map and turns the camera). Uses RT64's own dumper (rt64.patch adds RT64::SetTextureDumpDirectory) and also saves each texture as texture_dump/png/<RT64 hash>.png with an rt64.json, so the folder loads as a texture pack; RT64's raw dump files go to texture_dump/raw for texture_hasher. Replacement is RT64's pack support (packs in the mods folder, BT Reloaded loads). Code: src/game/texture_sweep.cpp.
-
-### 4.87 Mod folders
-- [ ] Done
-- [ ] Approved by L
 
 ## Dropped
 
@@ -472,6 +440,38 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 - 2026-10-15: bee wing clipping is resolved (L).
 
 ### 4.38 Sun shadows
+- [ ] Done
+- [ ] Approved by L
+
+### 4.30 Cutscene audio sync and N64 intro pacing
+- [ ] Done
+- [ ] Approved by L
+- 2026-10-14: not needed on N64 (L: audio sync only affects the XBLA version). Dropped.
+
+### 4.66 Held sounds / "full-length sounds" (removed) and the Beak Barge investigation
+- [ ] Done
+- [ ] Approved by L
+- 2026-10-14: nothing to port (the XBLA fix was removed). The open question is whether the Beak Barge volume drop with the right stick held forward happens here, where the game's own N64 mixer runs: if it does, it is how the N64 game behaves. Asked L to check (T70).
+
+### 4.6 Start-menu renames: "PC Settings" and "Exit"
+- [ ] Done
+- [ ] Approved by L
+- 2026-10-14: deferred. Settings already open from Esc, F5 and the controller hotkey. A "Settings" row in the game's pause menu needs a new text entry (rows name their text by id), a layout change and a function hook (the main thread owns the hook file); the pause overlay's option table (D_80802070, rows of icon/text/function/sub-option/are-you-sure) was not found in memory headless yet.
+
+### 4.27 Detailed nests and Mayahem Temple stairs
+- [ ] Done
+- [ ] Approved by L
+
+### 4.85 Achievements pop-up
+- [ ] Done
+- [ ] Approved by L
+- 2026-10-14: owned by the Super Opus 64 helper thread (XBLA achievement back-port and pop-ups).
+
+### 4.34 Anti-aliasing, supersampling, upscaling
+- [ ] Done
+- [ ] Approved by L
+
+### 4.87 Mod folders
 - [ ] Done
 - [ ] Approved by L
 
