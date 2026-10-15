@@ -188,6 +188,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   you look towards the sun and nothing hides it. Default: on.
 - **Fireflies**: with Day and Night on, small glowing fireflies drift round
   Banjo at night (not on Hailfire Peaks). Default: on.
+- **Night Sounds**: with Day and Night on, crickets and the odd owl at night
+  and birdsong in the morning, quietly under the music. Default: on.
 
 ## Graphics: Game Frame Rate and Interpolation
 

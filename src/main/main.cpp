@@ -50,6 +50,7 @@
 #include "tooie_watchdog.h"
 #include "tooie_api_restart.h"
 #include "tooie_debug.h"
+#include "tooie_day_night.h"
 #ifdef __ANDROID__
 #include "tooie_android.h"
 #endif
@@ -303,6 +304,10 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
         swap_buffer[i + 1 + duplicated_input_frames * input_channels] = audio_data[i + 0] * (0.5f / 32768.0f) * cur_main_volume;
     }
     
+    // Crickets, owls and birds with the day and night cycle.
+    tooie::night_sounds::mix(swap_buffer.data() + duplicated_input_frames * input_channels, sample_count / input_channels,
+        sample_rate, cur_main_volume);
+
     // TODO handle cases where a chunk is smaller than the duplicated frame count.
     assert(sample_count > duplicated_input_frames * input_channels);
 

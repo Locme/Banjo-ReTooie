@@ -1,6 +1,7 @@
 #pragma once
 
 // Day and night cycle (src/gameplay/day_night.cpp), Graphics tab, off by default.
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -16,6 +17,8 @@ namespace tooie::day_night {
     inline const std::string flare_option = "day_night_flare";
     // Fireflies round Banjo at night.
     inline const std::string fireflies_option = "day_night_fireflies";
+    // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).
+    inline const std::string sounds_option = "day_night_sounds";
 
     void add_options(recomp::config::Config& graphics);
     // Call once per frame from the game thread (tooie_warp_tick).
@@ -25,4 +28,11 @@ namespace tooie::day_night {
     bool sun_direction(float out[3]);
     // The time of day, 0 to 1 from midnight (0.5 is noon). False as for sun_direction.
     bool time_of_day(float& out);
+}
+
+namespace tooie::night_sounds {
+    // How much of each to play, 0 to 1. From day_night::tick on the game thread.
+    void set(float crickets, float owls, float birds);
+    // Adds them to interleaved stereo float samples at the given rate (main.cpp queue_samples, audio thread).
+    void mix(float* stereo, size_t frames, uint32_t rate, float volume);
 }

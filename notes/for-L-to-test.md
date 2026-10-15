@@ -2184,3 +2184,15 @@
   4. If you can, once more with Smash Banjo on (Mods menu)
 - Look for: Step 2, his brown fur (head, arms, back, legs) looks fuzzy with short strands standing out of it, most visible along his outline, and the strands stay on him as he moves instead of crawling. Kazooie, the shorts, backpack, gloves, boots and muzzle stay smooth. Step 3, longer or shorter fur, then none. Step 4, whether the Smash model's fur also grows strands (its fur colours may differ). Checked headless in Spiral Mountain (screenshot in project files, screenshots/banjo-fur/off-vs-on-headless.png). Cost there, software Vulkan at Original resolution: GPU 25 to 37 ms per frame, so tell me if your frame rate drops. Not checked: Windows with D3D12 (the shader is built there at runtime), the split-up Banjo and Kazooie, transformations (no fur by design).
 - Status: waiting for L
+
+## T205 Day and night: night sounds
+- Asked: 2026-10-15 23:55 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: crickets, owls and birdsong" on main
+- Steps:
+  1. Graphics > Day and Night: Night in Spiral Mountain or Jinjo Village, stand still for a minute
+  2. Graphics > Day and Night: Morning, stand still for a minute
+  3. Graphics > Night Sounds off and on
+- Look for: Step 1, crickets chirping quietly under the music and now and then an owl's "hoo ... hu-hoooo". Step 2, birds singing short phrases. Too loud, too quiet, or do they sound fake? None on Hailfire Peaks' Icy Side; no crickets on Lava Side or in Cloud Cuckooland. They stop in the pause menu. The sounds are made in code (nothing taken from the game or elsewhere). Previews: previews/day-night/night.wav and morning.wav in project files (played louder than in the game). Checked headless: the cycle fades the crickets out and the birds in at dawn; the sound itself was not heard.
+- Status: waiting for L
+

@@ -187,6 +187,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
             std::lock_guard lock{mutex};
             active = false;
         }
+        tooie::night_sounds::set(0.0f, 0.0f, 0.0f);
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
@@ -225,6 +226,24 @@ void tooie::day_night::tick(uint8_t* rdram) {
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
     RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
+
+    // Night sounds: crickets and owls through the night, birds from dawn into the morning and a few through
+    // the day. Quiet while the game stands still (the pause menu). No crickets on Hailfire Peaks or in Cloud
+    // Cuckooland, and nothing living on the Icy Side.
+    float sounds[3] = { 0.0f, 0.0f, 0.0f };
+    if (option_on(tooie::day_night::sounds_option) && dt > 0.0f) {
+        const float night = 1.0f - smooth((t - 0.20f) / 0.06f) + smooth((t - 0.76f) / 0.06f);
+        const float morning = smooth((t - 0.22f) / 0.05f) * (1.0f - 0.75f * smooth((t - 0.36f) / 0.09f)) *
+            (1.0f - smooth((t - 0.68f) / 0.06f));
+        const bool hailfire = (map == 0x127) || (map == 0x128);
+        const float crickets = (hailfire || map == 0x136) ? 0.0f : night;
+        const float owls = (map == 0x128) ? 0.0f : night;
+        const float birds = (map == 0x128) ? 0.0f : morning;
+        sounds[0] = crickets * amount;
+        sounds[1] = owls * amount;
+        sounds[2] = birds * amount;
+    }
+    tooie::night_sounds::set(sounds[0], sounds[1], sounds[2]);
     {
         std::lock_guard lock{mutex};
         active = (amount >= 1.0f);
@@ -236,8 +255,9 @@ void tooie::day_night::tick(uint8_t* rdram) {
         static uint32_t logged_ms = 0;
         if (ms - logged_ms >= 1000) {
             logged_ms = ms;
-            fprintf(stderr, "[day-night] map %X time %.3f tint %.2f %.2f %.2f sun %.2f %.2f %.2f shafts %.2f\n",
-                map, t, look.tint[0], look.tint[1], look.tint[2], direction[0], direction[1], direction[2], shafts);
+            fprintf(stderr, "[day-night] map %X time %.3f tint %.2f %.2f %.2f sun %.2f %.2f %.2f shafts %.2f sounds %.2f %.2f %.2f\n",
+                map, t, look.tint[0], look.tint[1], look.tint[2], direction[0], direction[1], direction[2], shafts,
+                sounds[0], sounds[1], sounds[2]);
         }
     }
 }
@@ -291,4 +311,10 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, small glowing fireflies drift round Banjo at night (not on Hailfire Peaks).",
         true);
     graphics.add_option_hidden_dependency(fireflies_option, option, Mode::Off);
+    graphics.add_bool_option(
+        sounds_option,
+        "Night Sounds",
+        "With Day and Night on, crickets and the odd owl at night and birdsong in the morning, quietly under the music.",
+        true);
+    graphics.add_option_hidden_dependency(sounds_option, option, Mode::Off);
 }
