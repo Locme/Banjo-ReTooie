@@ -35,6 +35,7 @@
 #include "tooie_hooks.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_gfx_budget.h"
+#include "tooie_day_night.h"
 
 namespace {
     bool hd_shadows_on() {
@@ -61,6 +62,20 @@ namespace {
     // The Tilt light, towards the light and fixed in the world like a sun: about 35 degrees from
     // straight up, so a shadow falls beside what casts it (towards -X, -Z) instead of under it.
     constexpr float tilt_light[3] = {0.47f, 0.82f, 0.33f};
+
+    // The Tilt light now: the day and night cycle's sun (or moon) while it runs, lifted to at least 0.5
+    // so low sun doesn't stretch the shadow out of sight; otherwise the fixed one.
+    void tilt_direction(float out[3]) {
+        if (!tooie::day_night::sun_direction(out)) {
+            std::memcpy(out, tilt_light, sizeof(tilt_light));
+            return;
+        }
+        if (out[1] < 0.5f) {
+            out[1] = 0.5f;
+            const float len = std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+            for (int i = 0; i < 3; i++) out[i] /= len;
+        }
+    }
 }
 
 extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
@@ -87,9 +102,11 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
         float light_y;
         std::memcpy(&light_y, &light_y_bits, sizeof(light_y));
         if (tilted(tooie::hd_shadows::banjo_direction_option) && light_y > 0.999f) {
+            float tilt[3];
+            tilt_direction(tilt);
             for (int i = 0; i < 3; i++) {
                 uint32_t bits;
-                std::memcpy(&bits, &tilt_light[i], sizeof(bits));
+                std::memcpy(&bits, &tilt[i], sizeof(bits));
                 MEM_W(i * 4, light) = bits;
             }
         }
@@ -277,7 +294,7 @@ namespace {
                 for (float& c : l) c /= len;
             }
         } else if (tilted(tooie::hd_shadows::enemy_direction_option)) {
-            std::memcpy(l, tilt_light, sizeof(l));
+            tilt_direction(l);
         }
         const float n[3] = {nx, ny, nz};
         const float inv = 1.0f / (l[0] * nx + l[1] * ny + l[2] * nz);
