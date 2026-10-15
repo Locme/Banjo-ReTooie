@@ -771,7 +771,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..da607d8 100644
+index 6ba64e2..77dd36f 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,7 @@
@@ -790,7 +790,7 @@ index 6ba64e2..da607d8 100644
  
      if (config->requires_confirmation) {
          add_footer();
-@@ -38,6 +42,37 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+@@ -38,6 +42,45 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
      }
  }
  
@@ -811,7 +811,7 @@ index 6ba64e2..da607d8 100644
 +        right->set_padding_bottom(16.0f);
 +        right->set_border_top_width(theme::border::width);
 +        right->set_border_top_color(theme::color::BorderSoft);
-+        right->set_background_color(theme::color::BGShadow);
++        right->set_background_color(theme::color::Background2);
 +        right->set_overflow_y(Overflow::Auto);
 +    } else {
 +        right->set_flex_grow(1.0f);
@@ -823,12 +823,20 @@ index 6ba64e2..da607d8 100644
 +        right->set_background_color(theme::color::Transparent);
 +        right->set_overflow_y(Overflow::Visible);
 +    }
++    if (page_title != nullptr) {
++        page_title->set_display(strip ? Display::Block : Display::None);
++    }
++    // A thin line under each option, as in the sketch.
++    for (ConfigOptionElement *element : config_option_elements) {
++        element->set_border_bottom_width(strip ? theme::border::width : 0.0f);
++        element->set_border_bottom_color(theme::color::BorderSoft);
++    }
 +}
 +
  ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
      for (auto *element : config_option_elements) {
          if (element->get_option_id() == option_id) {
-@@ -109,6 +144,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +152,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -838,7 +846,7 @@ index 6ba64e2..da607d8 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +187,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +195,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -849,16 +857,29 @@ index 6ba64e2..da607d8 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -181,8 +223,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +223,12 @@ void ConfigPageOptionsMenu::render_config_options() {
+         body_left_scroll->set_overflow_y(Overflow::Auto);
+         body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
+ 
++        // The tab's name as a heading, shown with the sidebar layout.
++        page_title = context.create_element<Label>(body_left_scroll, config->name, theme::Typography::Header2);
++        page_title->set_display(Display::None);
++        page_title->set_margin_bottom(12.0f);
++        page_title->set_padding_left(8.0f);
++
+         config_option_elements.clear();
+         bound_on_option_hover = [this](const std::string &option_id) {
+             this->on_option_hover(option_id);
+@@ -181,8 +237,30 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
 +        // Display order: the schema's, with options moved by set_option_display_before.
 +        std::vector<size_t> order;
-         for (size_t i = 0; i < schema.options.size(); i++) {
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            order.push_back(i);
 +        }
-+        for (size_t i = 0; i < schema.options.size(); i++) {
+         for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
@@ -880,7 +901,7 @@ index 6ba64e2..da607d8 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +297,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +311,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -889,18 +910,19 @@ index 6ba64e2..da607d8 100644
              element->update_hidden();
              config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..eb6a711 100644
+index 49e05db..e99f88b 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
-@@ -17,6 +17,7 @@ namespace recompui {
+@@ -17,6 +17,8 @@ namespace recompui {
          Element *description_container = nullptr;
          std::string description_option_id = "";
          Button *apply_button = nullptr;
 +        bool description_strip = false;
++        Element *page_title = nullptr;
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -31,6 +32,7 @@ namespace recompui {
+@@ -31,6 +33,7 @@ namespace recompui {
          ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
@@ -1155,7 +1177,7 @@ index 34eec3f..1680b5f 100644
      float get_client_top();
      float get_client_width();
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..cc0f513 100644
+index b057f46..be5ea67 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,7 @@
@@ -1166,7 +1188,76 @@ index b057f46..cc0f513 100644
  
  namespace recompui {
  
-@@ -331,9 +332,63 @@ TabbedModal::TabbedModal(
+@@ -311,6 +312,68 @@ Modal *Modal::create_modal(ModalType modal_type) {
+     return modal;
+ }
+ 
++// The sidebar's search box: opens the Search tab, whose own text box does the searching.
++class SidebarSearch : public Element {
++protected:
++    std::function<void()> on_press;
++    Style hover_style;
++    Style focus_style;
++
++    void process_event(const Event &e) override {
++        switch (e.type) {
++        case EventType::Click:
++            on_press();
++            break;
++        case EventType::Hover:
++            set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
++            break;
++        case EventType::Focus:
++            set_style_enabled(focus_state, std::get<EventFocus>(e.variant).active);
++            break;
++        default:
++            break;
++        }
++    }
++    std::string_view get_type_name() override { return "SidebarSearch"; }
++public:
++    SidebarSearch(ResourceId rid, Element *parent, std::function<void()> on_press) :
++        Element(rid, parent, Events(EventType::Click, EventType::Hover, EventType::Focus), "button", false),
++        on_press(std::move(on_press))
++    {
++        set_display(Display::None);
++        set_position(Position::Relative);
++        set_height(44.0f);
++        set_padding_left(16.0f);
++        set_padding_right(16.0f);
++        set_margin_bottom(16.0f);
++        set_border_width(theme::border::width);
++        set_border_radius(theme::border::radius_md);
++        set_border_color(theme::color::BorderSoft);
++        set_background_color(theme::color::Background3);
++        set_color(theme::color::TextInactive);
++        set_focusable(true);
++        set_tab_index_auto();
++        set_cursor(Cursor::Pointer);
++        hover_style.set_color(theme::color::Text);
++        focus_style.set_color(theme::color::Text);
++        focus_style.set_border_color(theme::color::Secondary);
++        add_style(&hover_style, { hover_state });
++        add_style(&focus_style, { focus_state });
++
++        ContextId context = get_current_context();
++        Element *row = context.create_element<Element>(this, 0, "div", false);
++        row->set_display(Display::Flex);
++        row->set_align_items(AlignItems::Center);
++        row->set_height(100.0f, Unit::Percent);
++        Element *label = context.create_element<Label>(row, "Search settings", theme::Typography::LabelSM);
++        label->set_white_space(WhiteSpace::Nowrap);
++    }
++    void set_active(bool active) {
++        set_border_color(active ? theme::color::Primary : theme::color::BorderSoft);
++        set_background_color(active ? theme::color::PrimaryA30 : theme::color::Background3);
++    }
++};
++
+ TabbedModal::TabbedModal(
+     ResourceId rid,
+     Document *parent,
+@@ -331,9 +394,86 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -1186,6 +1277,7 @@ index b057f46..cc0f513 100644
 +        header->set_width(280.0f);
 +        header->set_height(100.0f, Unit::Percent);
 +        header->set_padding(16.0f);
++        header->set_background_color(theme::color::Background2);
 +        header->set_border_bottom_width(0.0f);
 +        header->set_border_right_width(border_width);
 +        header->set_border_right_color(theme::color::BorderSoft);
@@ -1203,6 +1295,7 @@ index b057f46..cc0f513 100644
 +        header->set_border_bottom_color(theme::color::BorderSoft);
 +        header->set_border_top_right_radius(theme::border::radius_lg);
 +        header->set_border_bottom_left_radius(0.0f);
++        header->set_background_color(theme::color::BGShadow);
 +    }
 +
 +    Element *header_left = header->get_left();
@@ -1218,7 +1311,21 @@ index b057f46..cc0f513 100644
 +
 +    if (tabs != nullptr) {
 +        tabs->set_vertical(sidebar);
++        // The search box at the top of the sidebar takes the Search tab's place in the list.
++        tabs->set_tab_listed(get_tab_index("search"), !sidebar);
 +    }
++    if (sidebar_search != nullptr) {
++        sidebar_search->set_display((sidebar && get_tab_index("search") >= 0) ? Display::Block : Display::None);
++    }
++}
++
++int TabbedModal::get_tab_index(const std::string &id) const {
++    for (int i = 0; i < static_cast<int>(tab_contexts.size()); i++) {
++        if (tab_contexts[i].id == id) {
++            return i;
++        }
++    }
++    return -1;
 +}
 +
  void TabbedModal::process_event(const Event &e) {
@@ -1227,18 +1334,39 @@ index b057f46..cc0f513 100644
 +            if (sidebar_layout != recompui::config::get_sidebar_layout()) {
 +                apply_sidebar_layout(recompui::config::get_sidebar_layout());
 +            }
++            if (sidebar_search != nullptr) {
++                bool active = current_tab_index >= 0 && current_tab_index == get_tab_index("search");
++                if (active != sidebar_search_active) {
++                    sidebar_search_active = active;
++                    static_cast<SidebarSearch *>(sidebar_search)->set_active(active);
++                }
++            }
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
+@@ -404,6 +544,10 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+     ContextId context = get_current_context();
+     if (tabs == nullptr) {
+         header->set_padding_left(0.0f); // tabs hug to left side
++        // Shown above the tabs with the sidebar layout only.
++        sidebar_search = context.create_element<SidebarSearch>(header->get_left(), [this]() {
++            this->set_selected_tab(std::string{"search"});
++        });
+         tabs = context.create_element<TabSet>(header->get_left());
+         tabs->set_change_tab_callback([this](int tab_index) {
+             this->on_tab_change(tab_index);
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..b02dd48 100644
+index d065a14..7d6a77f 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -102,6 +102,8 @@ namespace recompui {
+@@ -102,6 +102,11 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
 +        bool sidebar_layout = false;
++        Element *sidebar_search = nullptr;
++        bool sidebar_search_active = false;
++        int get_tab_index(const std::string &id) const;
 +        void apply_sidebar_layout(bool sidebar);
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "TabbedModal"; }
@@ -1349,7 +1477,7 @@ index cc4932c..4140c08 100644
          Style hover_style;
          Style focus_style;
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..14e8593 100644
+index 2c5dc52..e41ac65 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
 @@ -49,6 +49,41 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
@@ -1371,7 +1499,7 @@ index 2c5dc52..14e8593 100644
 +        indicator->set_width(3.0f);
 +        indicator->set_height_auto();
 +        indicator->set_border_radius(2.0f);
-+        checked_style.set_background_color(theme::color::PrimaryA20);
++        checked_style.set_background_color(theme::color::PrimaryA30);
 +    } else {
 +        set_padding_top(tab_vertical_padding);
 +        set_padding_bottom(tab_vertical_padding);
@@ -1404,7 +1532,7 @@ index 2c5dc52..14e8593 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +232,16 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +232,26 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -1418,11 +1546,21 @@ index 2c5dc52..14e8593 100644
 +    }
 +}
 +
++void TabSet::set_tab_listed(int tab_index, bool listed) {
++    if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
++        return;
++    }
++    Tab *tab = tabs[tab_index];
++    if (tab->get_visible()) {
++        tab->set_display(listed ? Display::Block : Display::None);
++    }
++}
++
  void TabSet::set_tab_visible(int tab_index, bool is_visible) {
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..5cdf0c6 100644
+index b8d3783..a4577bb 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
 @@ -32,6 +32,8 @@ namespace recompui {
@@ -1434,13 +1572,15 @@ index b8d3783..5cdf0c6 100644
      };
  
      class TabSet : public Element {
-@@ -51,6 +53,11 @@ namespace recompui {
+@@ -51,6 +53,13 @@ namespace recompui {
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
          int get_next_tab_in_direction(int index, int direction);
 +        // Lays the tabs out top to bottom (the settings sidebar) instead of in a row.
 +        void set_vertical(bool vertical);
 +        bool is_vertical() const { return vertical; }
++        // Leaves a tab out of the list without hiding it from L and R (the sidebar's search box stands in for it).
++        void set_tab_listed(int tab_index, bool listed);
 +    private:
 +        bool vertical = false;
      };

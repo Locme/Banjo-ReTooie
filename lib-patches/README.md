@@ -122,6 +122,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   settings tabs as a vertical list on the left (the header becomes a column, the quit and close buttons at its foot) and
   each options page's description in a strip along the bottom instead of a column on the right. The modal and pages
   check it on every update, so it switches while the menu is open (DEV > Sidebar menu (preview), `src/game/config.cpp`).
+  In that layout a "Search settings" box at the top of the sidebar stands in for the Search tab's row (L and R still
+  reach the tab, `TabSet::set_tab_listed`), and each options page shows its tab's name as a heading and a line under
+  each option.
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 

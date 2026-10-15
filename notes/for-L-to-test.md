@@ -2074,7 +2074,7 @@
   1. General > DEV tab on, then in the DEV tab turn on Sidebar menu (preview)
   2. Move through the tabs with L and R, and through the options with the stick (and with the mouse)
   3. Turn the switch off again
-- Look for: Step 1, the tabs move into a list down the left side at once, with the quit and close buttons at its bottom, and the options use the full width. Step 2, the selected option's description shows in a strip along the bottom and changes as you move. Step 3, the tabs go back across the top. Not restyled to the sketch yet (that is the next step). Checked headless with keyboard and mouse; not checked with a controller.
+- Look for: Step 1, the tabs move into a list down the left side at once, with a "Search settings" box at the top (it opens the Search tab) and the quit and close buttons at the bottom; each page shows its tab's name as a heading, with a thin line under each option. Step 2, the selected option's description shows in a strip along the bottom and changes as you move. Step 3, the tabs go back across the top as before. Checked headless with keyboard and mouse; not checked with a controller.
 - Status: waiting for L
 
 ## T195 Frame rate dropping after a while: what is filling video memory
