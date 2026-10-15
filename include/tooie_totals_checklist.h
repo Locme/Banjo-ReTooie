@@ -5,7 +5,8 @@
 
 namespace tooie::totals_checklist {
     // QOL option id (bool, on by default).
-    inline const std::string option = "totals_checklist";
+    // Renamed from "totals_checklist" when the default became Off, so a saved On from before starts Off too.
+    inline const std::string option = "totals_checklist_v2";
 
     // Pad filter (src/debug/pad_script.cpp): on a Totals world page, up/down picks a row of the table
     // and A opens its list; in the list up/down scroll and B goes back. Those presses are kept from

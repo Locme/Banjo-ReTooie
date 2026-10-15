@@ -109,14 +109,14 @@ namespace {
     constexpr int colour_blue = 0xC28;
 
     bool enabled(Clock::time_point now) {
-        static bool cached = true;
+        static bool cached = false;
         static Clock::time_point cached_at{};
         if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
             cached_at = now;
             try {
                 cached = std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::totals_checklist::option));
             } catch (...) {
-                cached = true;
+                cached = false;
             }
         }
         return cached;

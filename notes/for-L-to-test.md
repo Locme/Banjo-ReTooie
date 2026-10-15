@@ -1930,3 +1930,13 @@
 - Checked headless: the pool by the trunk stays Modern from above and from the bank, and the console line reads "replacing". Not reproduced headless: the switch back itself. Two things changed that can cause it: water drawn in an earlier part of a split picture is now left out there too (it showed the game's water under the new water), and T180 (merged before this) gives the effects the smoothed camera, the likely cause of the same on and off switching L saw with the fog.
 - Status: waiting for L
 
+
+## T182 Totals checklist off by default, and the 8 FPS
+- Asked: 2026-10-15 20:35 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Play as you did when the game ran at 8 FPS, with the frame rate overlay on
+  2. Pause and go to View Totals: the pages look like the original game, with no LEFT HERE table (QOL > Totals checklist now starts Off, even if you had it On)
+  3. If the game is still at 8 FPS: say where (only paused on Totals, in all of the pause menu, or while playing), then turn QOL > Totals checklist On and Off again and say whether the frame rate changes
+- Look for: whether the 8 FPS is gone. Headless, the checklist on or off made no difference to the frame rate, paused or playing; the slow settings found there were Graphics > 3D grass (19 to 7 FPS), Sun shadows and Modern water.
+- Status: waiting for L

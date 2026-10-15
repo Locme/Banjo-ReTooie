@@ -69,7 +69,7 @@ framework, not from this port's code, so it is not described here.
   HERE, MOVE ON FOR NOW or ALL DONE HERE. Up/down moves the A button beside a
   row and A lists
   its items by name: GET NOW (green), LATER (white, with what it still needs
-  when picked) and DONE (yellow); B goes back to the table. Default: On.
+  when picked) and DONE (yellow); B goes back to the table. Default: Off (L, 2026-10-15).
 - **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound
   by default) run faster as Banjo-Kazooie, Banjo or Kazooie. Default: On.
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
