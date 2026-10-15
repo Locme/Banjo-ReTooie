@@ -742,6 +742,8 @@ int main(int argc, char** argv) {
 
     // Register fonts.
     recompui::register_primary_font("InterVariable.ttf", "Inter Variable");
+    // Lettering of the settings sidebar layout (Apache 2.0, assets/LuckiestGuy-LICENSE.txt).
+    recompui::register_extra_font("LuckiestGuy-Regular.ttf");
 
     // Register configuration path.
     const std::filesystem::path app_folder = tooie::resolve_app_folder();

@@ -771,18 +771,20 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..77dd36f 100644
+index 6ba64e2..7e94744 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
-@@ -1,4 +1,7 @@
+@@ -1,4 +1,9 @@
 +#include <algorithm>
  #include "ui_config_page_options_menu.h"
 +#include "elements/ui_container.h"
 +#include "recompui/config.h"
++#include "recompui/recompui.h"
++#include "elements/ui_sidebar_style.h"
  
  
  namespace recompui {
-@@ -21,6 +24,7 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,6 +26,7 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -790,7 +792,7 @@ index 6ba64e2..77dd36f 100644
  
      if (config->requires_confirmation) {
          add_footer();
-@@ -38,6 +42,45 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+@@ -38,6 +44,61 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
      }
  }
  
@@ -810,8 +812,10 @@ index 6ba64e2..77dd36f 100644
 +        right->set_padding_top(16.0f);
 +        right->set_padding_bottom(16.0f);
 +        right->set_border_top_width(theme::border::width);
-+        right->set_border_top_color(theme::color::BorderSoft);
-+        right->set_background_color(theme::color::Background2);
++        right->set_border_top_width(2.0f);
++        right->set_border_top_color(sidebar_style::gold_soft);
++        right->set_background_color(sidebar_style::sidebar);
++        right->set_color(sidebar_style::cream);
 +        right->set_overflow_y(Overflow::Auto);
 +    } else {
 +        right->set_flex_grow(1.0f);
@@ -821,22 +825,36 @@ index 6ba64e2..77dd36f 100644
 +        right->set_padding(16.0f);
 +        right->set_border_top_width(0.0f);
 +        right->set_background_color(theme::color::Transparent);
++        right->set_color(theme::color::Text);
 +        right->set_overflow_y(Overflow::Visible);
 +    }
 +    if (page_title != nullptr) {
 +        page_title->set_display(strip ? Display::Block : Display::None);
 +    }
-+    // A thin line under each option, as in the sketch.
++    // A thin gold line under each option, and the section headings in the sidebar's lettering.
 +    for (ConfigOptionElement *element : config_option_elements) {
 +        element->set_border_bottom_width(strip ? theme::border::width : 0.0f);
-+        element->set_border_bottom_color(theme::color::BorderSoft);
++        element->set_border_bottom_color(sidebar_style::gold_faint);
++        if (element->group_heading != nullptr) {
++            Element *heading = element->group_heading;
++            if (strip) {
++                heading->set_font_family(sidebar_style::font);
++                heading->set_font_weight(400);
++                heading->set_letter_spacing(1.0f);
++                heading->set_color(sidebar_style::orange);
++            } else {
++                heading->set_typography(theme::Typography::Header3);
++                heading->set_font_family(recompui::get_primary_font_family());
++                heading->set_color(theme::color::Primary);
++            }
++        }
 +    }
 +}
 +
  ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
      for (auto *element : config_option_elements) {
          if (element->get_option_id() == option_id) {
-@@ -109,6 +152,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +170,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -846,7 +864,7 @@ index 6ba64e2..77dd36f 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +195,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +213,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -857,20 +875,25 @@ index 6ba64e2..77dd36f 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +223,12 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +241,17 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
 +        // The tab's name as a heading, shown with the sidebar layout.
 +        page_title = context.create_element<Label>(body_left_scroll, config->name, theme::Typography::Header2);
 +        page_title->set_display(Display::None);
++        page_title->set_font_family(sidebar_style::font);
++        page_title->set_font_weight(400);
++        page_title->set_font_size(56.0f);
++        page_title->set_letter_spacing(2.0f);
++        page_title->set_color(sidebar_style::gold);
 +        page_title->set_margin_bottom(12.0f);
 +        page_title->set_padding_left(8.0f);
 +
          config_option_elements.clear();
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +237,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +260,30 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -901,7 +924,7 @@ index 6ba64e2..77dd36f 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +311,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +334,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -1177,18 +1200,19 @@ index 34eec3f..1680b5f 100644
      float get_client_top();
      float get_client_width();
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..be5ea67 100644
+index b057f46..bd7a9ba 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
 +#include "recompui/config.h"
++#include "ui_sidebar_style.h"
  
  namespace recompui {
  
-@@ -311,6 +312,68 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +313,72 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
@@ -1226,17 +1250,16 @@ index b057f46..be5ea67 100644
 +        set_padding_left(16.0f);
 +        set_padding_right(16.0f);
 +        set_margin_bottom(16.0f);
-+        set_border_width(theme::border::width);
++        set_border_width(2.0f);
 +        set_border_radius(theme::border::radius_md);
-+        set_border_color(theme::color::BorderSoft);
-+        set_background_color(theme::color::Background3);
-+        set_color(theme::color::TextInactive);
++        set_border_color(sidebar_style::gold_soft);
++        set_background_color(sidebar_style::parchment);
++        set_color(sidebar_style::brown_text);
 +        set_focusable(true);
 +        set_tab_index_auto();
 +        set_cursor(Cursor::Pointer);
-+        hover_style.set_color(theme::color::Text);
-+        focus_style.set_color(theme::color::Text);
-+        focus_style.set_border_color(theme::color::Secondary);
++        hover_style.set_border_color(sidebar_style::gold);
++        focus_style.set_border_color(sidebar_style::orange);
 +        add_style(&hover_style, { hover_state });
 +        add_style(&focus_style, { focus_state });
 +
@@ -1247,17 +1270,22 @@ index b057f46..be5ea67 100644
 +        row->set_height(100.0f, Unit::Percent);
 +        Element *label = context.create_element<Label>(row, "Search settings", theme::Typography::LabelSM);
 +        label->set_white_space(WhiteSpace::Nowrap);
++        label->set_font_family(sidebar_style::font);
++        label->set_font_weight(400);
++        label->set_font_size(22.0f);
++        label->set_letter_spacing(1.0f);
++        label->set_padding_top(4.0f);
 +    }
 +    void set_active(bool active) {
-+        set_border_color(active ? theme::color::Primary : theme::color::BorderSoft);
-+        set_background_color(active ? theme::color::PrimaryA30 : theme::color::Background3);
++        set_border_color(active ? sidebar_style::orange : sidebar_style::gold_soft);
++        set_background_color(active ? sidebar_style::gold : sidebar_style::parchment);
 +    }
 +};
 +
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -331,9 +394,86 @@ TabbedModal::TabbedModal(
+@@ -331,9 +399,95 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -1268,19 +1296,28 @@ index b057f46..be5ea67 100644
 +    const float border_width = theme::border::width;
 +    modal_element->set_flex_direction(sidebar ? FlexDirection::Row : FlexDirection::Column);
 +    modal_element->set_as_navigation_container(sidebar ? NavigationType::Horizontal : NavigationType::Vertical);
++    if (sidebar) {
++        modal_element->set_background_color(sidebar_style::panel);
++        modal_element->set_border_color(sidebar_style::gold);
++        modal_element->set_border_width(3.0f);
++    } else {
++        modal_element->set_background_color(theme::color::ModalOverlay);
++        modal_element->set_border_color(theme::color::Border);
++        modal_element->set_border_width(theme::border::width);
++    }
 +
 +    header->set_flex_direction(sidebar ? FlexDirection::Column : FlexDirection::Row);
 +    header->set_align_items(sidebar ? AlignItems::Stretch : AlignItems::Center);
 +    header->set_as_navigation_container(sidebar ? NavigationType::Vertical : NavigationType::Horizontal);
 +    header->set_flex_shrink(sidebar ? 0.0f : 1.0f);
 +    if (sidebar) {
-+        header->set_width(280.0f);
++        header->set_width(300.0f);
 +        header->set_height(100.0f, Unit::Percent);
 +        header->set_padding(16.0f);
-+        header->set_background_color(theme::color::Background2);
++        header->set_background_color(sidebar_style::sidebar);
 +        header->set_border_bottom_width(0.0f);
-+        header->set_border_right_width(border_width);
-+        header->set_border_right_color(theme::color::BorderSoft);
++        header->set_border_right_width(2.0f);
++        header->set_border_right_color(sidebar_style::gold_soft);
 +        header->set_border_top_right_radius(0.0f);
 +        header->set_border_bottom_left_radius(theme::border::radius_lg);
 +    } else {
@@ -1344,7 +1381,7 @@ index b057f46..be5ea67 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -404,6 +544,10 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,6 +558,10 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -1476,45 +1513,99 @@ index cc4932c..4140c08 100644
  
          Style hover_style;
          Style focus_style;
+diff --git a/recompui/src/elements/ui_sidebar_style.h b/recompui/src/elements/ui_sidebar_style.h
+new file mode 100644
+index 0000000..e5b6a0c
+--- /dev/null
++++ b/recompui/src/elements/ui_sidebar_style.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include "ui_types.h"
++
++// Colours and font of the settings menu's sidebar layout (Settings > DEV > Sidebar menu), in the style of
++// Banjo-Tooie's own menus: warm brown panels, gold lettering and a Jiggy on the picked tab.
++namespace recompui::sidebar_style {
++    inline const Color panel{ 40, 22, 10, 240 };
++    inline const Color sidebar{ 66, 36, 14, 255 };
++    inline const Color gold{ 255, 196, 48, 255 };
++    inline const Color gold_soft{ 255, 196, 48, 70 };
++    inline const Color gold_faint{ 255, 196, 48, 32 };
++    inline const Color orange{ 238, 122, 20, 255 };
++    inline const Color cream{ 252, 238, 204, 255 };
++    inline const Color cream_dim{ 252, 238, 204, 170 };
++    inline const Color brown_text{ 74, 34, 8, 255 };
++    inline const Color parchment{ 246, 228, 184, 255 };
++    // Luckiest Guy (Apache 2.0, assets/LuckiestGuy-LICENSE.txt), registered by the game.
++    inline constexpr const char *font = "Luckiest Guy";
++}
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..e41ac65 100644
+index 2c5dc52..2271509 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
-@@ -49,6 +49,41 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
+@@ -1,5 +1,8 @@
+ #include "ui_tab_set.h"
+ #include "ui_utils.h"
++#include "ui_svg.h"
++#include "ui_sidebar_style.h"
++#include "recompui/recompui.h"
+ 
+ namespace recompui {
+ 
+@@ -49,6 +52,60 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
      add_style(&disabled_style, { disabled_state });
  }
  
 +void Tab::set_vertical(bool vertical) {
++    this->vertical = vertical;
 +    if (vertical) {
-+        set_padding_top(12.0f);
-+        set_padding_bottom(12.0f);
-+        set_padding_left(20.0f);
-+        set_padding_right(20.0f);
++        if (jiggy == nullptr) {
++            jiggy = get_current_context().create_element<Svg>(this, "icons/Jiggy.svg");
++            jiggy->set_position(Position::Absolute);
++            jiggy->set_left(10.0f);
++            jiggy->set_top(50.0f, Unit::Percent);
++            jiggy->set_width(30.0f);
++            jiggy->set_height(30.0f);
++            jiggy->set_margin_top(-15.0f);
++        }
++        jiggy->set_display(is_selected ? Display::Block : Display::None);
++        set_padding_top(10.0f);
++        set_padding_bottom(8.0f);
++        set_padding_left(48.0f);
++        set_padding_right(16.0f);
 +        set_border_radius(theme::border::radius_md);
++        set_border_width(2.0f);
++        set_border_color(theme::color::Transparent);
++        set_color(sidebar_style::cream_dim);
 +        label->set_typography(theme::Typography::LabelMD);
-+        indicator->set_top(10.0f);
-+        indicator->set_bottom(10.0f);
-+        indicator->set_left(4.0f);
-+        indicator->unset_right();
-+        indicator->set_width(3.0f);
-+        indicator->set_height_auto();
-+        indicator->set_border_radius(2.0f);
-+        checked_style.set_background_color(theme::color::PrimaryA30);
++        label->set_font_family(sidebar_style::font);
++        label->set_font_weight(400);
++        label->set_font_size(28.0f);
++        label->set_letter_spacing(1.0f);
++        indicator->set_display(Display::None);
++        hover_style.set_color(sidebar_style::cream);
++        checked_style.set_color(sidebar_style::brown_text);
++        checked_style.set_background_color(sidebar_style::gold);
++        checked_style.set_border_color(sidebar_style::orange);
 +    } else {
++        if (jiggy != nullptr) {
++            jiggy->set_display(Display::None);
++        }
 +        set_padding_top(tab_vertical_padding);
 +        set_padding_bottom(tab_vertical_padding);
 +        set_padding_left(tab_horizontal_padding);
 +        set_padding_right(tab_horizontal_padding);
 +        set_border_radius(0.0f);
++        set_border_width(0.0f);
++        set_color(theme::color::TextInactive);
 +        label->set_typography(theme::Typography::Header3);
-+        indicator->unset_top();
-+        indicator->set_bottom(2.0f);
-+        indicator->set_left(0.0f);
-+        indicator->set_right(0.0f);
-+        indicator->set_width_auto();
-+        indicator->set_height(2.0f);
-+        indicator->set_border_radius(0.0f);
++        label->set_font_family(recompui::get_primary_font_family());
++        indicator->set_display(Display::Block);
++        hover_style.set_color(theme::color::WhiteA80);
++        checked_style.set_color(theme::color::White);
 +        checked_style.set_background_color(theme::color::Transparent);
++        checked_style.set_border_color(theme::color::Transparent);
++        pulsing_style.set_border_color(theme::color::Transparent);
 +    }
 +    apply_styles();
 +}
@@ -1522,7 +1613,32 @@ index 2c5dc52..e41ac65 100644
  void Tab::set_visible(bool is_visible) {
      visible = is_visible;
      set_enabled(visible);
-@@ -131,6 +166,9 @@ int TabSet::add_tab(std::string_view text) {
+@@ -88,6 +145,14 @@ void Tab::process_event(const Event &e) {
+     case EventType::Update:
+         if (is_style_enabled(focus_state)) {
+             recompui::Color pulse_color = recompui::get_pulse_color(750);
++            if (vertical) {
++                // Sidebar: the outline pulses, so the text stays readable on the gold of the picked tab.
++                pulsing_style.set_color(is_selected ? sidebar_style::brown_text : sidebar_style::cream);
++                pulsing_style.set_border_color(pulse_color);
++                apply_styles();
++                queue_update();
++                break;
++            }
+             pulsing_style.set_color(pulse_color);
+             if (is_selected) {
+                 indicator->set_background_color(pulse_color);
+@@ -105,6 +170,9 @@ void Tab::process_event(const Event &e) {
+ 
+ void Tab::set_selected(bool enable) {
+     is_selected = enable;
++    if (jiggy != nullptr) {
++        jiggy->set_display(vertical && enable ? Display::Block : Display::None);
++    }
+     set_as_primary_focus(enable);
+     set_style_enabled(checked_state, enable);
+     indicator->set_background_color(enable ? theme::color::BorderSolid : theme::color::Transparent);
+@@ -131,6 +199,9 @@ int TabSet::add_tab(std::string_view text) {
          set_active_tab(tab_index, true);
      });
      tabs.push_back(tab);
@@ -1532,7 +1648,7 @@ index 2c5dc52..e41ac65 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +232,26 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +265,26 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -1560,10 +1676,19 @@ index 2c5dc52..e41ac65 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..a4577bb 100644
+index b8d3783..8ebd65d 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
-@@ -32,6 +32,8 @@ namespace recompui {
+@@ -18,6 +18,8 @@ namespace recompui {
+         on_change_tab_callback on_select_tab;
+         Element *label = nullptr;
+         Element *indicator = nullptr;
++        Element *jiggy = nullptr;
++        bool vertical = false;
+ 
+         bool visible = true;
+ 
+@@ -32,6 +34,8 @@ namespace recompui {
          void set_selected(bool selected);
          void set_visible(bool is_visible);
          bool get_visible() { return visible; }
@@ -1572,7 +1697,7 @@ index b8d3783..a4577bb 100644
      };
  
      class TabSet : public Element {
-@@ -51,6 +53,13 @@ namespace recompui {
+@@ -51,6 +55,13 @@ namespace recompui {
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
          int get_next_tab_in_direction(int index, int direction);

@@ -104,6 +104,8 @@ randomizer's Banjo-Tooie world, MIT (licence text at the top of that file).
 * The [Banjo-Tooie Archipelago world](https://github.com/jjjj12212/AP_Banjo-Tooie)
   and its authors: the rules behind the Totals checklist's NOW column.
 * PromptFont by Yukari "Shinmera" Hafner.
+* Luckiest Guy by Astigmatic (Apache 2.0, `assets/LuckiestGuy-LICENSE.txt`): the
+  lettering of the settings menu's sidebar layout.
 * [SDL](https://www.libsdl.org/) (zlib licence): windows, input and sound; the
   Android build also uses SDL's Android Java code (`android/app/src/main/java/org/libsdl/app`).
 * [FreeType](https://freetype.org/): menu fonts (built from source for Android).

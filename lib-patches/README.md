@@ -124,7 +124,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   check it on every update, so it switches while the menu is open (DEV > Sidebar menu (preview), `src/game/config.cpp`).
   In that layout a "Search settings" box at the top of the sidebar stands in for the Search tab's row (L and R still
   reach the tab, `TabSet::set_tab_listed`), and each options page shows its tab's name as a heading and a line under
-  each option.
+  each option. The layout is styled after Banjo-Tooie's menus (`recompui/src/elements/ui_sidebar_style.h`): brown
+  panels with a gold border, gold "Luckiest Guy" lettering (the game registers the font), and the picked tab filled
+  gold with a Jiggy (`assets/icons/Jiggy.svg`); turning it off puts the old colours and font back.
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 
