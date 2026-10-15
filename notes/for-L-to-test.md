@@ -1700,3 +1700,12 @@
 - Next steps (not in this build): a "NOW" column with how many you can get with the moves you have, a "time to move on" line, and A on a row for the list with hints
 - Status: waiting for L
 
+## T161 Benchmark key (F4)
+- Asked: 2026-10-15 16:46 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Stand somewhere busy (Spiral Mountain by the waterfall), press F4, play or stand still for about 30 s, press F4 again
+  2. Change one setting (for example Bloom or SMAA) and do the same at the same spot
+  3. Open the two .txt files in the benchmarks folder next to the exe
+- Look for: A toast when it starts and one naming the saved file. The .txt shows the average fps, 1% low, GPU time with each pass, and your settings; the .csv opens in a spreadsheet with a row every quarter second. Do the two runs show the setting's cost? Send them over if you'd like me to read them.
+- Status: waiting for L

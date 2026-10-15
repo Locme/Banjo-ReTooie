@@ -228,6 +228,10 @@ Game Frame Rate.
   - a graph of the last 100 frame times, newest on the right. Twice the usual
     frame time fills it; a hitch is drawn in red.
   Default: Off.
+- **Benchmark key** (F4, rebindable under Hotkeys in the Controls tab): records
+  the overlay's figures to `benchmarks\` next to the exe until pressed again, then
+  writes a summary with the settings (notes/keys.md). Use it to compare two
+  settings or two builds on the same spot.
 - **Frame Rate Overlay key** (F3, rebindable under Hotkeys in the Controls
   tab): steps the overlay through Off, Compact and Full while you play, with
   a notice. It lasts for the session; the setting decides how the next

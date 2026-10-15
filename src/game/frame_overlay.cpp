@@ -27,7 +27,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <deque>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -92,6 +96,7 @@ namespace {
     constexpr float graph_height = 40.0f;
     constexpr auto key_poll = 16ms;
     constexpr auto overlay_input = recompinput::GameInput::FRAME_OVERLAY;
+    constexpr auto benchmark_input = recompinput::GameInput::BENCHMARK;
     // How far back the 1% low and the hitch count look.
     constexpr auto stutter_window = 5s;
     // A hitch: a frame more than this many times the median frame.
@@ -149,8 +154,8 @@ namespace {
         return setting_mode();
     }
 
-    // Whether any key or button bound to Frame Rate Overlay (Controls tab, Hotkeys) is held.
-    bool key_down() {
+    // Whether any key or button bound to this input (Controls tab, Hotkeys) is held.
+    bool key_down(recompinput::GameInput input) {
         // Pressing the key to bind it in the Controls tab should not switch the overlay.
         if (recompinput::binding::is_binding()) {
             return false;
@@ -161,17 +166,25 @@ namespace {
                 continue;
             }
             for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
-                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, overlay_input, b));
+                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, input, b));
             }
         }
         return down;
     }
 
+    void toggle_benchmark();
+
     void key_worker() {
         bool was_down = false;
+        bool benchmark_was_down = false;
         for (;;) {
             std::this_thread::sleep_for(key_poll);
-            bool down = key_down();
+            bool benchmark_down = key_down(benchmark_input);
+            if (benchmark_down && !benchmark_was_down) {
+                toggle_benchmark();
+            }
+            benchmark_was_down = benchmark_down;
+            bool down = key_down(overlay_input);
             if (down && !was_down) {
                 Mode next = (Mode)(((uint32_t)current_mode() + 1) % 3);
                 hotkey_mode.store((int)next, std::memory_order_relaxed);
@@ -615,6 +628,229 @@ namespace {
         return text;
     }
 
+    // Benchmark (the Benchmark key, F4): records what the overlay measures to
+    // benchmarks/benchmark_<date>.csv, one row per update (four a second), and on
+    // stopping writes a summary with the settings next to it (.txt), so two settings
+    // or two builds can be compared on the same PC. TOOIE_BENCHMARK=<seconds> records
+    // that long from the first game frame, for headless runs.
+    struct Benchmark {
+        std::FILE* csv = nullptr;
+        std::filesystem::path path;
+        clock_type::time_point started;
+        std::string map_at_start;
+        std::vector<float> intervals;
+        uint32_t presents = 0;
+        double present_ms = 0.0;
+        double worst_ms = 0.0;
+        uint32_t gpu_frames = 0;
+        double gpu_ms = 0.0;
+        double section_ms[10] = {};
+        uint32_t latency_frames = 0;
+        double latency_ms = 0.0;
+        uint64_t shader_compiles = 0;
+        uint64_t game_frames = 0;
+        double busy_ms = 0.0;
+        uint64_t last_frames = 0;
+        uint64_t last_idle_ns = 0;
+        clock_type::time_point last_tick;
+    };
+    std::mutex benchmark_mutex;
+    Benchmark benchmark;
+    // Set by the key thread, acted on by the update thread.
+    std::atomic<bool> benchmark_toggle{false};
+
+    void toggle_benchmark() {
+        benchmark_toggle.store(true, std::memory_order_relaxed);
+    }
+
+    std::string date_stamp() {
+        std::time_t t = std::time(nullptr);
+        std::tm tm{};
+#ifdef _WIN32
+        localtime_s(&tm, &t);
+#else
+        localtime_r(&t, &tm);
+#endif
+        char text[32];
+        std::strftime(text, sizeof(text), "%Y-%m-%d_%H-%M-%S", &tm);
+        return text;
+    }
+
+    void start_benchmark(uint64_t game_frames, uint64_t idle_ns) {
+        std::filesystem::path dir = recomp::get_config_path() / "benchmarks";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        Benchmark b;
+        b.path = dir / ("benchmark_" + date_stamp());
+        std::filesystem::path csv_path = b.path;
+        csv_path += ".csv";
+#ifdef _WIN32
+        b.csv = _wfopen(csv_path.c_str(), L"w");
+#else
+        b.csv = std::fopen(csv_path.c_str(), "w");
+#endif
+        if (b.csv == nullptr) {
+            tooie::toast::show("Benchmark not started: can't write to the benchmarks folder");
+            return;
+        }
+        std::fprintf(b.csv, "seconds,fps,frame_ms,worst_frame_ms,gpu_ms_per_game_frame");
+        for (const char* name : section_names) {
+            std::string column = name;
+            std::replace(column.begin(), column.end(), ' ', '_');
+            std::fprintf(b.csv, ",gpu_%s_ms", column.c_str());
+        }
+        std::fprintf(b.csv, ",game_fps,game_cpu_ms,input_latency_ms,shader_compiles,map,x,y,z\n");
+        b.started = clock_type::now();
+        b.last_tick = b.started;
+        b.map_at_start = game_rdram != nullptr ? map_line(game_rdram) : std::string("Map unknown");
+        b.last_frames = game_frames;
+        b.last_idle_ns = idle_ns;
+        {
+            std::lock_guard lock{ benchmark_mutex };
+            benchmark = std::move(b);
+        }
+        tooie::toast::show("Benchmark recording (press again to stop)");
+    }
+
+    std::string summary_text(const Benchmark& b, double seconds) {
+        std::vector<float> sorted = b.intervals;
+        std::sort(sorted.begin(), sorted.end());
+        char line[256];
+        std::string text = "Banjo-Tooie N64 Recomp benchmark\n\n";
+        text += std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")\n";
+        std::snprintf(line, sizeof(line), "Length %.1f s, started in %s, ended in %s\n\n", seconds,
+            b.map_at_start.c_str(), game_rdram != nullptr ? map_line(game_rdram).c_str() : "Map unknown");
+        text += line;
+        if (b.presents > 0) {
+            double ms = b.present_ms / b.presents;
+            std::snprintf(line, sizeof(line), "Frames shown %u: %.1f fps average, %.2f ms\n", b.presents, 1000.0 / ms, ms);
+            text += line;
+        }
+        if (!sorted.empty()) {
+            float median = sorted[sorted.size() / 2];
+            float low1 = sorted[std::min(sorted.size() - 1, sorted.size() * 99 / 100)];
+            float low01 = sorted[std::min(sorted.size() - 1, sorted.size() * 999 / 1000)];
+            size_t hitches = (size_t)(sorted.end() - std::upper_bound(sorted.begin(), sorted.end(), median * hitch_factor));
+            std::snprintf(line, sizeof(line), "Median frame %.2f ms; 1%% low %.1f fps (%.2f ms); 0.1%% low %.1f fps (%.2f ms); worst %.2f ms; %zu hitches\n",
+                median, 1000.0f / low1, low1, 1000.0f / low01, low01, sorted.back(), hitches);
+            text += line;
+        }
+        if (b.gpu_frames > 0) {
+            std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame\n", b.gpu_ms / b.gpu_frames);
+            text += line;
+            for (size_t i = 0; i < 10; i++) {
+                uint32_t per = i < frame_sections ? b.gpu_frames : b.presents;
+                if (b.section_ms[i] > 0.0 && per > 0) {
+                    std::snprintf(line, sizeof(line), "  %s %.3f ms\n", section_names[i], b.section_ms[i] / per);
+                    text += line;
+                }
+            }
+        }
+        if (b.game_frames > 0) {
+            std::snprintf(line, sizeof(line), "Game %.1f fps, CPU %.2f ms per frame\n", b.game_frames / seconds, b.busy_ms / b.game_frames);
+            text += line;
+        }
+        if (b.latency_frames > 0) {
+            std::snprintf(line, sizeof(line), "Input latency %.1f ms average\n", b.latency_ms / b.latency_frames);
+            text += line;
+        }
+        std::snprintf(line, sizeof(line), "Shader compiles %llu\n\n", (unsigned long long)b.shader_compiles);
+        text += line;
+        text += "Framerate: " + framerate_setting() + "\n";
+        text += renderer_line() + "\n";
+        text += extras_line() + "\n\n";
+        // The whole Graphics tab, as saved.
+        std::ifstream graphics(recomp::get_config_path() / "graphics.json");
+        if (graphics) {
+            text += "graphics.json:\n";
+            text += std::string(std::istreambuf_iterator<char>(graphics), std::istreambuf_iterator<char>());
+            text += "\n";
+        }
+        return text;
+    }
+
+    void stop_benchmark() {
+        Benchmark b;
+        {
+            std::lock_guard lock{ benchmark_mutex };
+            b = std::move(benchmark);
+            benchmark = Benchmark();
+        }
+        if (b.csv == nullptr) {
+            return;
+        }
+        std::fclose(b.csv);
+        double seconds = std::chrono::duration<double>(clock_type::now() - b.started).count();
+        std::filesystem::path txt_path = b.path;
+        txt_path += ".txt";
+        std::ofstream txt(txt_path);
+        txt << summary_text(b, seconds);
+        std::string name = b.path.filename().string();
+        std::printf("[benchmark] saved %s.csv and .txt (%.1f s)\n", b.path.string().c_str(), seconds);
+        std::fflush(stdout);
+        tooie::toast::show("Benchmark saved: benchmarks\\" + name + ".txt");
+    }
+
+    void benchmark_tick(const RT64::FrameStats& frames, uint64_t game_frames, uint64_t idle_ns, clock_type::time_point now) {
+        std::lock_guard lock{ benchmark_mutex };
+        Benchmark& b = benchmark;
+        if (b.csv == nullptr) {
+            return;
+        }
+        double tick_s = std::max(std::chrono::duration<double>(now - b.last_tick).count(), 0.001);
+        b.last_tick = now;
+        uint64_t frames_delta = game_frames - b.last_frames;
+        double idle_ms = (idle_ns - b.last_idle_ns) / 1e6;
+        double busy = std::max(0.0, tick_s * 1000.0 - idle_ms);
+        b.last_frames = game_frames;
+        b.last_idle_ns = idle_ns;
+
+        b.intervals.insert(b.intervals.end(), frames.intervals.begin(), frames.intervals.end());
+        b.presents += frames.presents;
+        b.present_ms += frames.presentMs;
+        b.worst_ms = std::max(b.worst_ms, frames.worstPresentMs);
+        b.gpu_frames += frames.gpuFrames;
+        b.gpu_ms += frames.gpuMs;
+        for (size_t i = 0; i < 10; i++) {
+            b.section_ms[i] += frames.sectionMs[i];
+        }
+        b.latency_frames += frames.latencyFrames;
+        b.latency_ms += frames.latencyMs;
+        b.shader_compiles += frames.shaderCompiles;
+        b.game_frames += frames_delta;
+        b.busy_ms += busy;
+
+        double seconds = std::max(std::chrono::duration<double>(now - b.started).count(), 0.0);
+        double frame_ms = frames.presents > 0 ? frames.presentMs / frames.presents : 0.0;
+        std::fprintf(b.csv, "%.2f,%.1f,%.3f,%.3f,%.3f", seconds, frame_ms > 0.0 ? 1000.0 / frame_ms : 0.0, frame_ms,
+            frames.worstPresentMs, frames.gpuFrames > 0 ? frames.gpuMs / frames.gpuFrames : 0.0);
+        for (size_t i = 0; i < 10; i++) {
+            uint32_t per = i < frame_sections ? frames.gpuFrames : frames.presents;
+            std::fprintf(b.csv, ",%.3f", per > 0 ? frames.sectionMs[i] / per : 0.0);
+        }
+        float x = 0, y = 0, z = 0;
+        uint16_t map = 0;
+        if (game_rdram != nullptr) {
+            map = tooie::debug::current_map(game_rdram);
+            uint32_t player = read_word(game_rdram, player_table);
+            uint32_t transform = valid_ptr(player) ? read_word(game_rdram, player + player_transform) : 0;
+            if (valid_ptr(transform)) {
+                x = read_float(game_rdram, transform);
+                y = read_float(game_rdram, transform + 4);
+                z = read_float(game_rdram, transform + 8);
+            }
+        }
+        std::fprintf(b.csv, ",%.1f,%.2f,%.1f,%u,%X,%.0f,%.0f,%.0f\n", frames_delta / tick_s,
+            frames_delta > 0 ? busy / frames_delta : 0.0,
+            frames.latencyFrames > 0 ? frames.latencyMs / frames.latencyFrames : 0.0, frames.shaderCompiles, map, x, y, z);
+        std::fflush(b.csv);
+    }
+
+    bool benchmark_running() {
+        std::lock_guard lock{ benchmark_mutex };
+        return benchmark.csv != nullptr;
+    }
+
     void worker() {
         Overlay overlay;
         struct GameSample {
@@ -636,6 +872,26 @@ namespace {
             auto now = clock_type::now();
             add_intervals(frames.intervals, now);
             add_shaders(frames.shaderCompiles, now);
+
+            // The Benchmark key, or TOOIE_BENCHMARK=<seconds> once the game is running.
+            static const char* auto_benchmark = std::getenv("TOOIE_BENCHMARK");
+            static clock_type::time_point auto_stop{};
+            if (auto_benchmark != nullptr && auto_stop == clock_type::time_point{} && game_frames > 0) {
+                auto_stop = now + std::chrono::milliseconds((int64_t)(std::atof(auto_benchmark) * 1000.0));
+                start_benchmark(game_frames, idle_ns);
+            }
+            else if (auto_benchmark != nullptr && auto_stop != clock_type::time_point{} && now >= auto_stop && benchmark_running()) {
+                stop_benchmark();
+            }
+            if (benchmark_toggle.exchange(false, std::memory_order_relaxed)) {
+                if (benchmark_running()) {
+                    stop_benchmark();
+                }
+                else {
+                    start_benchmark(game_frames, idle_ns);
+                }
+            }
+            benchmark_tick(frames, game_frames, idle_ns, now);
             add_latency(frames);
             static int mod_ticks = 0;
             if (mod_ticks++ % 8 == 0) {
@@ -695,6 +951,12 @@ namespace {
 }
 
 void tooie::frame_overlay::register_input() {
+    recompinput::set_game_input_name(benchmark_input, "Benchmark");
+    recompinput::set_game_input_description(benchmark_input,
+        "Starts and stops recording the frame rate overlay's figures to the benchmarks folder, with a summary and your settings, for comparing settings or builds.");
+    recompinput::set_default_mapping_for_keyboard(benchmark_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F4) });
+    recompinput::set_default_mapping_for_controller(benchmark_input, {});
+
     recompinput::set_game_input_name(overlay_input, "Frame Rate Overlay");
     recompinput::set_game_input_description(overlay_input,
         "Steps the frame rate overlay through Off, Compact and Full for this session. The Graphics tab sets how it starts.");
