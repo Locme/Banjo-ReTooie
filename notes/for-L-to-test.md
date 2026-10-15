@@ -1719,3 +1719,17 @@
   3. With it Off, play through things that reuse the picture: pause menu, a level change (jigsaw), Bottles' revenge or any flashback, photo mode, a boss intro
 - Look for: higher fps and lower Input latency with it Off? Anything black, frozen or showing an old picture with it Off that is right with it On? If so, where.
 - Status: waiting for L
+
+## T163 Totals checklist, step 2: what you can get now
+- Asked: 2026-10-15 18:10 UTC
+- Build: latest Windows build from main
+- Commit: "Totals checklist, step 2" on main
+- Steps:
+  1. Load a save part-way through, pause, View Totals, and step through the worlds
+  2. The table now has a green NOW column: how many of what is left you can get with the moves, transformations and areas you have now. "-" means none yet; Notes count in notes
+  3. Under the table: "MORE TO GET HERE" (green) when something can be got, "MOVE ON FOR NOW" (yellow) when the rest needs something you don't have yet, "ALL DONE HERE" when the world is finished
+  4. Game Totals shows "NEW WORLD READY" when you have the Jiggies for the next world Jiggywiggy hasn't opened
+  5. Learn a move or pay Mumbo or Humba a Glowbo, then look again: rows that needed it gain NOW numbers
+- Look for: A world that says MOVE ON FOR NOW while you know something there can be got (or the other way round): tell me the world and the item and I'll check its rule. Moves count as gettable when you have enough notes for Jamjars and can reach the silo. A Glowbo not yet given to Mumbo or Humba counts as one you can give
+- Status: waiting for L
+

@@ -79,7 +79,9 @@ submodule. Inter and Noto Emoji are under the SIL Open Font License; PromptFont
 ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
 `assets/icons/` come from BanjoRecomp (GPL-3.0). SMAA in `lib/smaa/` is
 MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
-(`lib/fsr/LICENSE.txt`).
+(`lib/fsr/LICENSE.txt`). The Totals checklist's rules
+(`src/gameplay/totals_rules.inc`) are translated from the Archipelago
+randomizer's Banjo-Tooie world, MIT (licence text at the top of that file).
 
 ## Credits
 
@@ -97,6 +99,8 @@ MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
 * [ScriptHawk](https://github.com/Isotarge/ScriptHawk) by Isotarge: map and flag
   data.
 * retroben, illusion and wedarobi: facts from the Xenia Banjo-Tooie game patch.
+* The [Banjo-Tooie Archipelago world](https://github.com/jjjj12212/AP_Banjo-Tooie)
+  and its authors: the rules behind the Totals checklist's NOW column.
 * PromptFont by Yukari "Shinmera" Hafner.
 * [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
   Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.

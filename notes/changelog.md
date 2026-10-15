@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Totals checklist: a green NOW column says how many of what is left in a world you can get with the moves, transformations and areas you have now, and a line under the table says MORE TO GET HERE, MOVE ON FOR NOW or ALL DONE HERE; Game Totals says NEW WORLD READY when Jiggywiggy can open the next world. The rules come from the Banjo-Tooie Archipelago randomizer (MIT). Untested on PC (T163).
 - QOL > Totals checklist (on by default): each world's Totals page in the pause menu has a "LEFT HERE" table with how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos and Jamjars moves are still to find there; Game Totals has the same for the whole game. Untested on PC (T160).
 - Noclip now passes through walls, scenery and floors; the game was pulling Banjo back to a collision position that Noclip did not write (T139).
 - Tiptoe's key binding is under Movement in the Controls tab, with Run (T139).
