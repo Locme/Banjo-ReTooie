@@ -55,6 +55,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
+    void SetSceneModernWater(bool enabled);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength);
     void SetSceneGrass(float amount, float height, float distance);
@@ -89,6 +90,8 @@ namespace {
     std::atomic<float> heat_haze{0.0f};
     std::atomic<float> underwater_distortion{0.3f};
     std::atomic<bool> water_waves_on{false};
+    // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
+    std::atomic<bool> modern_water{false};
     float heat_haze_sent = -1.0f;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
@@ -250,6 +253,7 @@ namespace {
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
+        { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -361,7 +365,12 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0));
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 2500.0));
-    water_waves_on = value<double>(water_waves_option, 0.0) > 0.0;
+    modern_water = value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
+    if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
+        modern_water = std::atoi(forced) != 0;
+    }
+    RT64::SetSceneModernWater(modern_water);
+    water_waves_on = (value<double>(water_waves_option, 0.0) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
     RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
@@ -687,6 +696,15 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Water wave speed",
         "How fast the water waves move, in percent. 100 is normal.",
         25, 200, 5, 0, false, 100);
+    graphics.add_enum_option(
+        water_option,
+        "Water",
+        "<recomp-color primary>Original</recomp-color> is the game's own water. <recomp-color primary>Modern</recomp-color> replaces it with new water: clear in the shallows and darker with depth in each level's own colour, bent by rolling waves, reflecting the sky and scenery more at low angles, with the sun's glint, foam along the shores and rings, a wake and splashes round the player. Modern makes its own reflections, so Water reflections is not used; its waves follow Water waves (50 when that is 0) and Water wave speed. Under water, the game's water surface is kept for now. Drawn on the picture, so the player still floats at the same height.",
+        {
+            {Water::Original, "Original", "Original"},
+            {Water::Modern, "Modern", "Modern"},
+        },
+        Water::Original);
     graphics.add_number_option(
         grass_option,
         "3D grass",
@@ -783,7 +801,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &grass_option, &grass_height_option, &grass_distance_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &grass_option, &grass_height_option, &grass_distance_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

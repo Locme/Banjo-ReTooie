@@ -1817,3 +1817,15 @@
   2. Walk around Spiral Mountain and Plateau, then a cave level
 - Look for: Do Banjo, enemies, posts and scenery cast shadows that move with them? Any flicker, dotted edges or shadows in odd places (caves)? Frame rate with it on vs off?
 - Status: waiting for L
+
+## T172 Modern water (first look)
+- Asked: 2026-10-15 18:48 UTC
+- Build: main (this commit)
+- Steps:
+  1. Pull main and build
+  2. Graphics > Water: Modern (just under Water wave speed; it shows even with Photo Filters off)
+  3. Swim in the Spiral Mountain pool by the waterfall cave and look around at low and steep angles
+  4. Walk along the shore, then dive and come back up
+  5. Visit other water you know (Jinjo Village, Jolly Roger's Lagoon, Terrydactyland) and flip Water back to Original to compare
+- Look for: Is the water clear in the shallows and darker in deep parts, with reflections at low angles, a sun glint, foam on the shores and rings round Banjo? Tell me anything that disappeared (the game's own ripple rings are replaced by ours), anything that should not have turned into water, and how the frame rate compares with Original. The surface does not move yet; that is the next step.
+- Status: waiting for L

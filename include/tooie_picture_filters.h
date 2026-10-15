@@ -19,6 +19,7 @@ namespace tooie::picture_filters {
     enum class TextureUpscale : uint32_t { Off, Double, Quadruple };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
     enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
+    enum class Water : uint32_t { Original, Modern };
 
     inline const std::string preset_option = "effects_preset";
     // Photo Filters toggle: hides the filter options below it (the filters stay on).
@@ -58,6 +59,8 @@ namespace tooie::picture_filters {
     inline const std::string sun_shadows_option = "sun_shadows";
     inline const std::string wave_speed_option = "water_wave_speed";
     inline const std::string grass_option = "grass_3d";
+    // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
+    inline const std::string water_option = "water_style";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
 
