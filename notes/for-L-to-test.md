@@ -1875,3 +1875,14 @@
   4. Float on top and look down at the floor in shallow water
 - Look for: Do bright moving light patterns (caustics) play on the floor under water, seen from above and from below? Looking up from under the surface: a bright, wobbling window onto the world above straight up, and a dark mirror further out? Anything that looks wrong at the edges of pools?
 - Status: waiting for L
+
+## T177 Bottles' Revenge intro warp
+- Asked: 2026-10-15 20:13 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Load a save file that has never had Bottles' Revenge on, and go to any area but Spiral Mountain
+  2. Esc > General > Cut Content: Bottles' Revenge: On
+  3. Watch the intro, then play on
+  4. Turn it off and on again, and load the file again later
+- Look for: Turning it on takes you to Spiral Mountain, where Bottles' ghost turns into Devil Bottles; when the scene ends you are back in the area you were in, at the entrance you came in by. After that (once the file is saved) it never warps you again. Checked headless: from Mayahem Temple the warp, the whole scene and the trip back all worked, and a second visit in the same run did not warp again. Not checked headless: a real save file over two sessions.
+- Status: waiting for L

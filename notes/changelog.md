@@ -78,6 +78,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Unlock everything (a6d5d1d). Untested on PC (T56).
 - Cheato effects written up from fan wiki pages (7e1ab37), shown in the cheat menu (d9ada2c), and moved to their own Cheato tab (b64fd23). Effects are not checked in this port.
 - Cut Content: Bottles' Revenge, the cut two-player mode (accf3f7). Untested on PC (T61).
+- Bottles' Revenge: a save file that has not seen the mode's intro is taken to Spiral Mountain to watch it once, then brought back. Untested on PC (T177).
 - Save states (c433c88). Untested on PC (T63).
 - Split up anywhere, as above.
 

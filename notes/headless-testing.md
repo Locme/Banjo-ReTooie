@@ -139,7 +139,7 @@ Use the call profiler to see which functions run while something is on screen.
 
 Details are in `include/trace.h`, `src/debug/trace.cpp` and
 `tools/trace_diff.py`.
-- `TOOIE_BOTTLES=1`: turns on Cut Content: Bottles' Revenge (src/gameplay/bottles_revenge.cpp); Devil Bottles spawns in the next area loaded (checked at Mayahem Temple, map 0xB8).
+- `TOOIE_BOTTLES=1`: turns on Cut Content: Bottles' Revenge (src/gameplay/bottles_revenge.cpp); Devil Bottles spawns in the next area loaded (checked at Mayahem Temple, map 0xB8). Outside Spiral Mountain it first warps there for the mode's intro if game flag 0xCA is unset, then back (`[bottles] intro ...` lines); `TOOIE_WARP=B8:0@15000` with A pressed every 2 s from 50 s shows the whole trip in about 300 s.
 - `TOOIE_SAVESTATE=<save ms>:<load ms>[:<load ms>...]`: saves, then loads at those times (src/gameplay/save_state.cpp). `TOOIE_SAVESTATE_LOG=1` lists the game threads and the queue each waits on at each save and load.
 - `TOOIE_AIM_TEST=<dx>,<dy>,<from ms>,<to ms>`: adds that mouse motion (pixels) to each pad read in that window; `TOOIE_AIM_LOG=1` logs the first-person angles (src/input/motion_aim.cpp).
 - `TOOIE_RAMDUMP=<ms>[,<ms>...]`: writes RDRAM as the game sees it (big-endian) to `ramdump_<ms>.bin` in the working folder at those times, for finding values by diffing (src/gameplay/save_state.cpp).
