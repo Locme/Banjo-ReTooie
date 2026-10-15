@@ -2107,3 +2107,11 @@
 - Look for: Every blade a real 3D blade (it stands up off the ground and sticks out over ledges), swaying in waves of wind, bending away from Banjo and springing back behind him. Closer to the examples you sent? Anything off (too thin, too dense, too much wind, blades on things that aren't grass)? Frame rate with it on and off: this way of drawing needs geometry shaders and costs more than the layered grass, and lowering 3D grass distance makes it cheaper. Checked headless: blades in Spiral Mountain and an Isle o' Hags area, standing up over the ledge edges. Not checked: the motion (the container runs at about 1 frame a second with it on).
 - Status: waiting for L
 
+## T198 Smash Banjo v5: full detail, Smash-size hands, no red fringe
+- Asked: 2026-10-15 23:20 UTC
+- Build: main, plus mods/Smash Banjo v5.zip from project files (take v1 to v4 out of the mods folder). No new code: no DEV setting is needed.
+- Steps:
+  1. Load a save with Smash Banjo on and compare him close up (photo mode) with the Smash render you sent: front, side and back
+  2. Walk, jump, flap, roll and crouch
+- Look for: every Smash vertex is in (17,957 vertices, 20,291 triangles, no simplifying), hands and arms at their Smash size (v2 to v4 shrank them), no red or pink fringe at the fur edges, fur shading smooth. Checked headless: loads and animates (walk, flap, crouch, roll) in Spiral Mountain.
+- Status: waiting for L
