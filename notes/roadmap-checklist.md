@@ -305,6 +305,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Done
 - [ ] Approved by L
 - Partial (2026-10-14, T80): F6 steps through the scene effects pass's views (effects alone, depth: near white, far dark, sky blue, normals, off) and F8 splits the picture (scene effects and photo grade passes on the left half, original on the right, a white line between); src/display/effect_views.cpp, lib-patches/rt64.patch. The volumetric view has nothing to show (no volumetrics built). F3 per-effect GPU times not started (the frame rate overlay is another thread's).
+- 2026-10-15: F3 per-effect GPU times claimed by the frame rate overlay thread.
 
 ### 4.46 Real-time water waves (requested 2026-10-13, not built)
 - [x] Done

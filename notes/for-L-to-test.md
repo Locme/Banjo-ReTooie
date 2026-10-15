@@ -1657,4 +1657,12 @@
   3. Set it to Sweep all maps, close the menu and leave it running (about 40 minutes; a notice shows each map)
   4. Afterwards set it to Off
 - Look for: `texture_dump/png` fills with PNGs that look like the game's textures, and `rt64.json` is there. During the sweep, each map loads, the camera turns around, and it moves on; at the end it says "Texture sweep finished" and goes back where you started. If the game crashes in a map, load the file again with the option still on: it should carry on from the next map. Send `texture_dump/sweep.txt` either way.
+
+## T157 Frame rate overlay: GPU time of each effect (roadmap 4.43)
+- Asked: 2026-10-15 16:07 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Overlay on Full (F3)
+  2. In Spiral Mountain, turn Bloom, SMAA and Eye adaptation on and off in Graphics, and open photo mode (F10) with a filter
+- Look for: Two lines under the GPU time: "GPU 3D effects: ..." and "GPU per frame shown: ...", each listing only the passes that ran, in ms. A pass you turn off should disappear from its line, and the numbers should add up to less than the GPU line. Tell me which one is biggest on your PC; that's the effect costing the most.
 - Status: waiting for L

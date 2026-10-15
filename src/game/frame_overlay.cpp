@@ -1,6 +1,6 @@
 // Frame rate overlay: one Graphics option that shows, in the top left corner,
 // the frame rate and frame time actually presented, the worst frame, the GPU
-// time, the game's own frame rate and CPU time, the Interpolation setting and what
+// time and that of each of the port's extra passes (bloom, SMAA, ...), the game's own frame rate and CPU time, the Interpolation setting and what
 // frame interpolation tagged; then the 1% low, hitches and shader compiles over the last 5 s, the
 // map and Banjo's position, the renderer, and whether speed-up, cheats or
 // mods are on (so a screenshot of a glitch carries what is needed to find it);
@@ -72,6 +72,8 @@ namespace RT64 {
         double latencyMs = 0.0;
         double worstLatencyMs = 0.0;
         uint32_t shaderCompiles = 0;
+        double sectionMs[10] = {};
+        uint32_t sectionCount[10] = {};
     };
     FrameStats TakeFrameStats();
     void NoteInputRead(int64_t steadyNs);
@@ -84,7 +86,7 @@ namespace {
     constexpr auto update_interval = 250ms;
     // Wait for the UI to come up before building the overlay.
     constexpr auto ui_wait = 500ms;
-    constexpr size_t max_lines = 18;
+    constexpr size_t max_lines = 20;
     // The frame time graph: one bar per presented frame, newest on the right.
     constexpr size_t graph_bars = 100;
     constexpr float graph_height = 40.0f;
@@ -523,6 +525,27 @@ namespace {
         return line;
     }
 
+    // The port's extra GPU passes, in RT64::GpuSection order: the first four are recorded with
+    // the game's frame, the rest at each present.
+    constexpr const char* section_names[10] = {
+        "water mask", "eye adaptation", "bloom", "effects", "SMAA", "FXAA", "photo filters", "FSR", "output", "UI"
+    };
+    constexpr size_t frame_sections = 4;
+
+    // "GPU 3D effects: bloom 0.31, effects 1.20 ms" with the passes that ran, per game frame or present.
+    std::string section_line(const RT64::FrameStats& frames, const char* label, size_t first, size_t last, uint32_t per) {
+        std::string text;
+        char part[48];
+        for (size_t i = first; i < last; i++) {
+            if (frames.sectionCount[i] == 0 || per == 0) {
+                continue;
+            }
+            std::snprintf(part, sizeof(part), "%s%s %.2f", text.empty() ? "" : ", ", section_names[i], frames.sectionMs[i] / per);
+            text += part;
+        }
+        return std::string(label) + (text.empty() ? "none" : text + " ms");
+    }
+
     std::vector<std::string> format(const RT64::FrameStats& frames, uint64_t game_frames, double seconds, double game_busy_ms, Mode mode) {
         char line[160];
         std::vector<std::string> text;
@@ -553,6 +576,10 @@ namespace {
         if (frames.gpuFrames > 0) {
             std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame", frames.gpuMs / frames.gpuFrames);
             text.push_back(line);
+            text.push_back(section_line(frames, "GPU 3D effects: ", 0, frame_sections, frames.gpuFrames));
+        }
+        if (frames.presents > 0) {
+            text.push_back(section_line(frames, "GPU per frame shown: ", frame_sections, 10, frames.presents));
         }
         std::snprintf(line, sizeof(line), "Game %.0f fps", seconds > 0.0 ? game_frames / seconds : 0.0);
         text.push_back(line);
@@ -680,7 +707,7 @@ void tooie::frame_overlay::add_option(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         option,
         "Frame rate overlay",
-        "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, shader compiles, GPU time, the game's own frame rate and CPU time, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
+        "<recomp-color primary>Compact</recomp-color> shows the frame rate and frame time. <recomp-color primary>Full</recomp-color> adds stutter, shader compiles, GPU time with each effect's share, the game's own frame rate and CPU time, frame interpolation, the map and Banjo's position, the renderer, speed-up, cheats and mods, audio, the build and a frame time graph. F3 steps through them while you play.",
         {
             {Mode::Off, "Off", "Off"},
             {Mode::Compact, "Compact", "Compact"},

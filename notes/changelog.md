@@ -17,6 +17,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Frame rate overlay (Full): GPU time of each extra pass (water mask, eye adaptation, bloom, effects, SMAA, FXAA, photo filters, FSR, output, UI); roadmap 4.43's F3 timings (T157).
 - The frame rate overlay's two Interpolation lines are one: "Interpolation: Display, on: 6 models, 47 bones, 0 shadows, 1 camera cuts" or ", off".
 
 - Long drop-down lists in the menu (Effect debug view) scroll, and follow the pick when moving with a pad or the arrow keys; before, entries past the window edge couldn't be seen (T148).

@@ -187,6 +187,13 @@ Game Frame Rate.
     was made from that read. Your monitor's own delay and the controller's
     are not included.
   - the GPU time per game frame
+  - the GPU time of each of the port's extra passes that ran, in ms: on
+    the game's frame the water mask, eye adaptation, bloom and the effects
+    pass (fog, ambient occlusion, outlines, rim light and the other scene
+    effects share that one pass, so they show as one figure); on each frame
+    shown SMAA, FXAA, photo filters, FSR, the output to the window and the UI
+    (menus, notices and this overlay). The rest of the GPU time is the game's
+    own drawing.
   - the game's own frame rate (the frames it really makes; with Interpolation
     on, the rest are in-between frames), counted over the last
     2 seconds (over a quarter second a 30 fps game read as 28 and 32)
