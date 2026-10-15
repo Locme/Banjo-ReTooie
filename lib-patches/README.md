@@ -261,5 +261,10 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
 * **Android** (`CMakeLists.txt`, `plume_render_interface_types.h`): the SDL Vulkan surface is used on Android
   too, so the window handle is the SDL window there, as on Linux.
 
+* **Video memory log**: `plume::GetVideoMemoryUse` reports device-local memory in use and the
+  driver's budget (VK_EXT_memory_budget is enabled when the driver has it), for the `[vram]` lines
+  from `src/debug/vram_log.cpp`. Failed presents and image acquires (other than out of date) are
+  logged; they were silent, so a lost GPU left no trace in console.log.
+
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.

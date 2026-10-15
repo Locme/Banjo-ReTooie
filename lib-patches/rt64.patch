@@ -4587,7 +4587,7 @@ index 95618bc..d5eb4dd 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..28ca5f0 100644
+index 0848f3e..449ae45 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -20,6 +20,8 @@
@@ -4599,7 +4599,7 @@ index 0848f3e..28ca5f0 100644
  #define ONLY_USE_LOW_MIP_CACHE 0
  
  namespace RT64 {
-@@ -29,6 +31,22 @@ namespace RT64 {
+@@ -29,6 +31,36 @@ namespace RT64 {
      static const uint32_t TextureDataPitchAlignment = 256;
      static const uint32_t TextureDataPlacementAlignment = 512;
  
@@ -4619,10 +4619,44 @@ index 0848f3e..28ca5f0 100644
 +        return TextureUpscaleFactor;
 +    }
 +
++    // Banjo-Tooie: a lower cap on the replacement pool while the texture sweep warps from map to map.
++    static std::atomic<uint64_t> ReplacementPoolLimit = 0;
++
++    void SetReplacementPoolLimit(uint64_t bytes) {
++        ReplacementPoolLimit = bytes;
++    }
++
++    // Banjo-Tooie: the replacement pool's size as of the last eviction pass, for logs.
++    static std::atomic<uint64_t> ReplacementPoolReported = 0;
++
++    uint64_t GetReplacementPoolSize() {
++        return ReplacementPoolReported;
++    }
++
      ReplacementMap::ReplacementMap() {
          // Empty constructor.
      }
-@@ -980,8 +998,17 @@ namespace RT64 {
+@@ -66,7 +98,9 @@ namespace RT64 {
+     }
+ 
+     void ReplacementMap::evict(std::vector<Texture *> &evictedTextures) {
+-        while ((cachedTexturePoolSize > maxTexturePoolSize) && !unusedTextureList.empty()) {
++        const uint64_t limit = ReplacementPoolLimit.load();
++        const uint64_t maxSize = (limit > 0) ? std::min(limit, maxTexturePoolSize) : maxTexturePoolSize;
++        while ((cachedTexturePoolSize > maxSize) && !unusedTextureList.empty()) {
+             // Push texture to the eviction list.
+             Texture *lastUnusedTexture = unusedTextureList.back();
+             evictedTextures.emplace_back(lastUnusedTexture);
+@@ -81,6 +115,8 @@ namespace RT64 {
+             unusedTextureList.pop_back();
+             cachedTexturePoolSize -= lastUnusedTexture->memorySize;
+         }
++
++        ReplacementPoolReported = cachedTexturePoolSize;
+     }
+ 
+     bool ReplacementMap::saveDatabase(std::ostream &stream) {
+@@ -980,8 +1016,17 @@ namespace RT64 {
          std::vector<RenderTextureBarrier> beforeDecodeBarriers;
          std::vector<RenderTextureBarrier> afterDecodeBarriers;
          std::vector<uint8_t> replacementBytes;
@@ -4640,7 +4674,7 @@ index 0848f3e..28ca5f0 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1018,15 @@ namespace RT64 {
+@@ -991,10 +1036,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -4658,7 +4692,7 @@ index 0848f3e..28ca5f0 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1222,6 +1254,24 @@ namespace RT64 {
+@@ -1222,6 +1272,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -4683,7 +4717,7 @@ index 0848f3e..28ca5f0 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1280,7 @@ namespace RT64 {
+@@ -1230,6 +1298,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -4691,7 +4725,7 @@ index 0848f3e..28ca5f0 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1258,6 +1309,110 @@ namespace RT64 {
+@@ -1258,6 +1327,110 @@ namespace RT64 {
          }
      }
  
@@ -4803,10 +4837,10 @@ index 0848f3e..28ca5f0 100644
          assert(!decodeTMEM || ((width > 0) && (height > 0)));
  
 diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
-index 9131697..d2968c7 100644
+index 9131697..4d50a97 100644
 --- a/src/render/rt64_texture_cache.h
 +++ b/src/render/rt64_texture_cache.h
-@@ -151,6 +151,11 @@ namespace RT64 {
+@@ -151,6 +151,16 @@ namespace RT64 {
          size_t getMaxIndex() const;
      };
  
@@ -4815,10 +4849,15 @@ index 9131697..d2968c7 100644
 +    void SetTextureUpscale(uint32_t factor);
 +    uint32_t GetTextureUpscale();
 +
++    // Banjo-Tooie: caps the texture pack's replacement pool below its usual size (2/3 of video memory). 0 lifts the cap.
++    // Unused replacements over the cap are freed the next time new ones are loaded.
++    void SetReplacementPoolLimit(uint64_t bytes);
++    uint64_t GetReplacementPoolSize();
++
      struct TextureCache {
          struct StreamDescription {
              uint32_t fileSystemIndex = 0;
-@@ -205,6 +210,11 @@ namespace RT64 {
+@@ -205,6 +215,11 @@ namespace RT64 {
          std::vector<std::unique_ptr<RenderBuffer>> tmemUploadResources;
          std::vector<std::unique_ptr<RenderBuffer>> replacementUploadResources;
          std::vector<std::unique_ptr<TextureDecodeDescriptorSet>> descriptorSets;
@@ -4830,7 +4869,7 @@ index 9131697..d2968c7 100644
          std::mutex uploadQueueMutex;
          std::condition_variable uploadQueueChanged;
          std::condition_variable uploadQueueFinished;
-@@ -233,6 +243,10 @@ namespace RT64 {
+@@ -233,6 +248,10 @@ namespace RT64 {
          TextureCache(RenderWorker *directWorker, RenderWorker *copyWorker, uint32_t threadCount, const ShaderLibrary *shaderLibrary);
          ~TextureCache();
          void uploadThreadLoop();

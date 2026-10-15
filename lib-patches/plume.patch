@@ -59,10 +59,77 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..f515dc3 100644
+index f1dd503..c3c096f 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
-@@ -3229,6 +3229,27 @@ namespace plume {
+@@ -11,6 +11,7 @@
+ #include "plume_vulkan.h"
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <cmath>
+ #include <climits>
+ #include <unordered_map>
+@@ -87,10 +88,37 @@ namespace plume {
+         VK_KHR_PRESENT_ID_EXTENSION_NAME,
+         VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
+         VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
++        // Banjo-Tooie: real video memory use and budget for the [vram] log.
++        VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
+         // Vulkan spec requires this to be enabled if supported by the driver.
+         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
+     };
+ 
++    // Banjo-Tooie: video memory use for logs. The device that made the allocator last.
++    static std::atomic<VulkanDevice *> MemoryReportDevice = nullptr;
++
++    bool GetVideoMemoryUse(uint64_t &usage, uint64_t &budget) {
++        usage = 0;
++        budget = 0;
++        VulkanDevice *device = MemoryReportDevice.load();
++        if ((device == nullptr) || (device->allocator == VK_NULL_HANDLE)) {
++            return false;
++        }
++
++        const VkPhysicalDeviceMemoryProperties *properties = nullptr;
++        vmaGetMemoryProperties(device->allocator, &properties);
++        VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
++        vmaGetHeapBudgets(device->allocator, budgets);
++        for (uint32_t i = 0; i < properties->memoryHeapCount; i++) {
++            if (properties->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
++                usage += budgets[i].usage;
++                budget += budgets[i].budget;
++            }
++        }
++
++        return true;
++    }
++
+     // Common functions.
+ 
+     static uint32_t roundUp(uint32_t value, uint32_t powerOf2Alignment) {
+@@ -2294,6 +2322,10 @@ namespace plume {
+ #else
+         if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
+ #endif
++            // Banjo-Tooie: out of date is normal on a resize; anything else (device lost, out of memory) is logged.
++            if (res != VK_ERROR_OUT_OF_DATE_KHR) {
++                fprintf(stderr, "vkQueuePresentKHR failed with error code 0x%X.\n", res);
++            }
+             return false;
+         }
+ 
+@@ -2488,6 +2520,9 @@ namespace plume {
+         VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
+         VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
+         if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
++            if (res != VK_ERROR_OUT_OF_DATE_KHR) {
++                fprintf(stderr, "vkAcquireNextImageKHR failed with error code 0x%X.\n", res);
++            }
+             return false;
+         }
+ 
+@@ -3229,6 +3264,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -90,3 +157,43 @@ index f1dd503..f515dc3 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
+@@ -4084,6 +4140,7 @@ namespace plume {
+ 
+         VmaAllocatorCreateInfo allocatorInfo = {};
+         allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
++        allocatorInfo.flags |= (supportedOptionalExtensions.find(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) != supportedOptionalExtensions.end()) ? VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT : 0;
+         allocatorInfo.physicalDevice = physicalDevice;
+         allocatorInfo.device = vk;
+         allocatorInfo.pVulkanFunctions = &vmaFunctions;
+@@ -4097,6 +4154,8 @@ namespace plume {
+             return;
+         }
+ 
++        MemoryReportDevice = this;
++
+         // Find the biggest device local memory available on the device.
+         VkDeviceSize memoryHeapSize = 0;
+         const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
+@@ -4433,6 +4492,8 @@ namespace plume {
+         nullBuffer = nullptr; // force destruction before destroying allocator
+ 
+         if (allocator != VK_NULL_HANDLE) {
++            VulkanDevice *reportDevice = this;
++            MemoryReportDevice.compare_exchange_strong(reportDevice, nullptr);
+             vmaDestroyAllocator(allocator);
+             allocator = VK_NULL_HANDLE;
+         }
+diff --git a/plume_vulkan.h b/plume_vulkan.h
+index 0a1edbe..65123b8 100644
+--- a/plume_vulkan.h
++++ b/plume_vulkan.h
+@@ -42,6 +42,9 @@
+ #endif
+ 
+ namespace plume {
++    // Banjo-Tooie: video memory in use and the budget the driver gives this process, summed over the device-local heaps.
++    bool GetVideoMemoryUse(uint64_t &usage, uint64_t &budget);
++
+     struct VulkanCommandQueue;
+     struct VulkanDevice;
+     struct VulkanInterface;

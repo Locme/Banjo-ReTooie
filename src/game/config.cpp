@@ -453,7 +453,7 @@ void tooie::init_config() {
     wip.add_enum_option(
         tooie::texture_dump_option,
         "Texture dump",
-        "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. If the game stops during a sweep, it carries on from the next map when you load a file again.",
+        "Saves every texture the game draws to the texture_dump folder, for making texture packs: each as a PNG named by its RT64 hash, with an rt64.json, plus RT64's raw dump files. <recomp-color primary>While playing</recomp-color> saves what you see as you play. <recomp-color primary>Sweep all maps</recomp-color> warps through every map by itself and turns the camera around in each, which takes about 40 minutes; load a spare save file first, since the game may save in odd places. The sweep only runs when you pick it: after a restart, or once it is done, it stays idle until you pick it again. If the game stopped during a sweep, picking it again carries on from the next map.",
         {
             {tooie::TextureDump::Off, "Off", "Off"},
             {tooie::TextureDump::WhilePlaying, "WhilePlaying", "While playing"},

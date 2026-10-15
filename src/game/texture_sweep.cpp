@@ -13,10 +13,17 @@
 // "Sweep all maps" also warps to every map in map_names.inc (multiplayer maps, the title
 // screen and the game select left out; cutscene maps last), waits for the map to load and
 // fade in, holds C-right to turn the camera around, and moves on. Progress is written to
-// texture_dump/sweep.txt as it goes. If the game stops during a sweep, the next start
-// with the option still on resumes after the map it stopped in and skips that map. When
-// the sweep is done it warps back to where it started; the option then acts as "While
-// playing" until it is changed. Picking "Sweep all maps" again starts a new sweep.
+// texture_dump/sweep.txt as it goes. A sweep only runs when the option is picked while the
+// game is running: left on from an earlier run it does nothing, not even dumping, so it never
+// warps anyone around in normal play. Picking it again after the game stopped mid-sweep
+// carries on after the map it stopped in and skips that map. When the sweep is done it warps
+// back to where it started and stops dumping; the option then does nothing until picked again.
+//
+// Warping through maps every few seconds loads a texture pack's replacements much faster
+// than normal play. RT64 keeps replacements nobody uses until its pool (2/3 of video memory)
+// fills, and with a 4K pack on top of large framebuffers that ran L's GPU out of memory
+// (vmaCreateImage 0xFFFFFFFE, then a driver crash). While a sweep runs, the pool is capped at
+// sweep_pool_limit so the last maps' replacements are freed as new ones load.
 //
 // Everything written is ROM-derived: it stays in the app-data folder, never in the repo.
 //
@@ -52,6 +59,7 @@
 #include "tooie_game.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_toast.h"
+#include "tooie_vram_log.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_STATIC
@@ -61,6 +69,8 @@ namespace RT64 {
     // lib/rt64/src/hle/rt64_rdp_tmem.h (from lib-patches/rt64.patch).
     typedef std::function<void(const std::filesystem::path &basePath, const uint8_t *tmem, const LoadTile &loadTile, uint16_t width, uint16_t height, uint32_t tlut)> TextureDumpCallback;
     void SetTextureDumpDirectory(const std::filesystem::path &directory, TextureDumpCallback callback);
+    // lib/rt64/src/render/rt64_texture_cache.h (from lib-patches/rt64.patch).
+    void SetReplacementPoolLimit(uint64_t bytes);
 }
 
 namespace {
@@ -77,12 +87,15 @@ namespace {
 #include "map_names.inc"
     };
 
-    // Not swept: the title screen and game select (no file being played there) and the
+    // Not swept: the title screen and game select (no file being played there), the
     // multiplayer arenas, which set up two to four players and share their textures with
-    // the one-player maps.
+    // the one-player maps, and cutscenes that crash when entered straight from another map
+    // (0xAC, Banjo's house is destroyed: its intro character plays an animation the earlier
+    // intro scenes set up, and reads a null pointer in chanim_entrypoint_6 without them).
     constexpr uint16_t skipped_maps[] = {
         0x158, 0x18B,
         0x164, 0x165, 0x166, 0x17B, 0x17C, 0x182, 0x183, 0x188, 0x189,
+        0xAC,
     };
 
     // ---- Texture decoding (lib/rt64/src/shaders/TextureDecoder.hlsli and Formats.hlsli) ----
@@ -376,6 +389,7 @@ namespace {
     constexpr auto turn_pulse = 400ms;
     constexpr auto turn_press = 150ms;
     constexpr uint16_t c_right = 0x0001;
+    constexpr uint64_t sweep_pool_limit = 1024ull * 1024 * 1024;
 
     struct Target {
         uint16_t map;
@@ -385,6 +399,9 @@ namespace {
     fs::path root;
     bool dumping = false;
     bool first_tick = true;
+    // Set when "Sweep all maps" is picked in this run; cleared when the sweep ends.
+    bool armed = false;
+    bool pool_capped = false;
     tooie::TextureDump last_value = tooie::TextureDump::Off;
     Phase phase = Phase::Idle;
     std::vector<Target> targets;
@@ -501,10 +518,6 @@ namespace {
             }
             log_line("resume, " + std::to_string(left.size()) + " of " + std::to_string(targets.size()) + " maps left");
             targets = std::move(left);
-        } else if (progress == Progress::Finished) {
-            // Nothing to resume: a finished sweep stays finished until the option is picked again.
-            phase = Phase::Done;
-            return;
         } else {
             std::error_code ec;
             fs::remove(root / "sweep.txt", ec);
@@ -525,8 +538,8 @@ namespace {
             if (start_map != 0 && start_map != tooie::debug::current_map(rdram)) {
                 tooie::debug::request_warp(start_map, 0);
             }
-            write_pack_database(root / "png");
             enter(Phase::Done);
+            armed = false;
             return;
         }
         const Target& t = targets[next_target];
@@ -539,7 +552,8 @@ namespace {
 
     void finish_map(const char* word) {
         const Target& t = targets[next_target];
-        log_line(std::string(word) + " " + hex(t.map) + " " + std::to_string(new_pngs.load() - pngs_at_map_start) + " new textures");
+        const std::string vram = tooie::vram_log::summary();
+        log_line(std::string(word) + " " + hex(t.map) + " " + std::to_string(new_pngs.load() - pngs_at_map_start) + " new textures" + (vram.empty() ? "" : ", " + vram));
         next_target++;
     }
 
@@ -589,7 +603,22 @@ namespace {
 }
 
 void tooie::texture_sweep::tick(uint8_t* rdram) {
-    const tooie::TextureDump value = option_value();
+    tooie::TextureDump value = option_value();
+    if (value == tooie::TextureDump::SweepAllMaps && !first_tick && last_value != tooie::TextureDump::SweepAllMaps) {
+        armed = true;
+    }
+    if (value == tooie::TextureDump::SweepAllMaps && std::getenv("TOOIE_TEXTURE_DUMP") != nullptr && first_tick) {
+        // Headless runs set the sweep from the environment: that counts as picking it.
+        armed = true;
+    }
+    const tooie::TextureDump picked = value;
+    if (value == tooie::TextureDump::SweepAllMaps && !armed) {
+        // Left on from an earlier run, or finished: nothing runs until it is picked again.
+        if (first_tick) {
+            tooie::toast::show("Texture sweep is idle after a restart: pick it again in General to carry on");
+        }
+        value = tooie::TextureDump::Off;
+    }
     const bool want_dump = value != tooie::TextureDump::Off;
     if (want_dump && !dumping) {
         root = dump_folder();
@@ -598,23 +627,29 @@ void tooie::texture_sweep::tick(uint8_t* rdram) {
     }
 
     if (value == tooie::TextureDump::SweepAllMaps) {
-        if (first_tick || last_value != tooie::TextureDump::SweepAllMaps) {
-            // On at start-up: carry on with an unfinished sweep. Picked now: a new sweep.
-            begin_sweep(first_tick);
-            if (!first_tick && !tooie::debug::can_warp()) {
+        if (phase == Phase::Idle || phase == Phase::Done) {
+            // Picked: carry on with an unfinished sweep, or start a new one.
+            begin_sweep(true);
+            if (!tooie::debug::can_warp()) {
                 tooie::toast::show("Texture sweep: load a save file to start");
             }
         }
         sweep_tick(rdram);
-    } else if (last_value == tooie::TextureDump::SweepAllMaps) {
+    } else if (phase != Phase::Idle && phase != Phase::Done) {
         stop_sweep();
+    }
+
+    const bool cap = value == tooie::TextureDump::SweepAllMaps;
+    if (cap != pool_capped) {
+        RT64::SetReplacementPoolLimit(cap ? sweep_pool_limit : 0);
+        pool_capped = cap;
     }
 
     if (!want_dump && dumping) {
         stop_dumping(root);
         dumping = false;
     }
-    last_value = value;
+    last_value = picked;
     first_tick = false;
 }
 

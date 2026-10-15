@@ -1974,6 +1974,16 @@
   3. Load a save and walk, run, jump, Feathery Flap, crouch and roll; let Banjo stand still to see him blink
   4. Turn the mod off in the Mods menu, then go through a door or loading zone
 - Look for: Banjo and Kazooie use the Smash Ultimate model with its full-size textures, move with every animation, and blink. Step 4: the game's own model comes back after the next area load (the model is only read when an area loads). Known: a small gap on top of Banjo's head, rough fur edges, Smash-sized hands, Kazooie's Turbo Trainers and Wading Boots show as plain feet. Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced. Checked headless in Spiral Mountain (screenshot screens/smash-banjo/v1.png in project files).
+
+
+## T186 Texture sweep: video memory, freezes and the cutscene crash
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Same setup as before (BT Reloaded 4K pack, your usual graphics settings). Load a spare save file
+  2. DEV > Texture dump: pick Sweep all maps and leave it running
+  3. If it freezes or crashes, start the game again: the sweep should stay idle (a notice says so) until you pick it again, then carry on from the next map
+- Look for: no freeze or crash for the whole sweep. It no longer stops at Star Spinner (Saucer) or at "Banjo's house is destroyed" (that cutscene is now skipped). console.log has `[vram]` lines (use, budget and texture pack size), and every `done` line in sweep.txt ends with the VRAM figures. Send console.log and sweep.txt either way.
 - Status: waiting for L
 
 ## T186 Race Warps (Canary Mary's races from the Warp tab)
