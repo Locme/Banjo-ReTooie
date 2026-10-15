@@ -16,8 +16,10 @@
 //                                 (warp there with TOOIE_WARP)
 //   TOOIE_TEST_ROOM_ONLY=a,b,...  spawn only these actor ids (hex)
 //   TOOIE_TEST_ROOM_SKIP=a,b,...  leave these actor ids out (hex)
+//   TOOIE_TEST_ROOM_RATE=n        spawn n actors a frame (default 4; 1 pins a crash on the actor just spawned)
 //   TOOIE_TEST_ROOM_LOG=1         log each spawn and every 2 s which actors are still there
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -96,10 +98,12 @@ namespace {
     std::set<uint16_t> only;
     std::set<uint16_t> skip;
     bool log_on = false;
+    int spawn_rate = spawns_per_frame;
+    bool heap_check_on = false;
     std::chrono::steady_clock::time_point last_log;
 
     bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x80800000u;
+        return p >= 0x80000000u && p < 0x81000000u;
     }
 
     uint32_t read_word(uint8_t* rdram, uint32_t addr) {
@@ -144,6 +148,10 @@ namespace {
         read_ids("TOOIE_TEST_ROOM_ONLY", only);
         read_ids("TOOIE_TEST_ROOM_SKIP", skip);
         log_on = std::getenv("TOOIE_TEST_ROOM_LOG") != nullptr;
+        heap_check_on = std::getenv("TOOIE_TEST_ROOM_HEAPCHECK") != nullptr;
+        if (const char* v = std::getenv("TOOIE_TEST_ROOM_RATE")) {
+            spawn_rate = std::max(1, std::atoi(v));
+        }
     }
 
     // Lays the slots out in rows facing Banjo, from his position and facing.
@@ -242,6 +250,72 @@ namespace {
         for (int i = 0; i < count; i++) {
             fn(array + object_base + (uint32_t)i * object_size);
         }
+    }
+
+    // Debug aid (TOOIE_TEST_ROOM_HEAPCHECK=1): walks the game's heap block list (decomp include/memory.h:
+    // the heap pointer at 0x8007E990, its size at 0x8007BF00, each block header { prev, next, ... }) and
+    // returns the address of the first broken link, or 0 if the list is whole.
+    uint32_t heap_check(uint8_t* rdram) {
+        const uint32_t start = read_word(rdram, 0x8007E990);
+        const uint32_t end = start + read_word(rdram, 0x8007BF00);
+        uint32_t cur = start;
+        for (int n = 0; n < 200000; n++) {
+            const uint32_t next = read_word(rdram, cur + 4);
+            if (next == end) {
+                // The free list: each empty block's prev_free (+0x10) must point back.
+                uint32_t f = read_word(rdram, start + 0x14), prev = start;
+                const uint32_t last = end - 0x20;
+                for (int m = 0; m < 200000 && f != last; m++) {
+                    if (f < start || f >= end || read_word(rdram, f + 0x10) != prev ||
+                        ((read_word(rdram, f + 0xC) >> 6) & 3) != 0 || read_word(rdram, read_word(rdram, f) + 4) != f) {
+                        return 0x1 | f;
+                    }
+                    prev = f;
+                    f = read_word(rdram, f + 0x14);
+                }
+                return 0;
+            }
+            if (next <= cur || next > end || read_word(rdram, next) != cur) {
+                return cur;
+            }
+            // An empty block (state 0, bits 6-7 of the word at +0xC) must be on the free list.
+            if (cur != start && ((read_word(rdram, cur + 0xC) >> 6) & 3) == 0) {
+                const uint32_t nf = read_word(rdram, cur + 0x14), pf = read_word(rdram, cur + 0x10);
+                if (nf < start || nf >= end || pf < start || pf >= end || read_word(rdram, pf + 0x14) != cur) {
+                    return 0x2 | cur;
+                }
+            }
+            cur = next;
+        }
+        return cur;
+    }
+
+    // Debug aid: prints the broken block's header and the block before it.
+    void heap_dump(uint8_t* rdram, uint32_t bad) {
+        const uint32_t b = bad & ~3u;
+        const uint32_t prev = read_word(rdram, b);
+        for (uint32_t x : { prev, b }) {
+            if (!valid_ptr(x)) {
+                continue;
+            }
+            printf("[test-room]   block %08X: %08X %08X %08X %08X  %08X %08X\n", x, read_word(rdram, x), read_word(rdram, x + 4),
+                read_word(rdram, x + 8), read_word(rdram, x + 12), read_word(rdram, x + 16), read_word(rdram, x + 20));
+        }
+        fflush(stdout);
+    }
+
+    // The largest free block, from the heap's free list (FIRST_BLOCK()->next_free, each empty block's
+    // next_free at +0x14, until LAST_BLOCK() at the heap's end - 0x20), as heap_largest_free counts it.
+    uint32_t largest_free(uint8_t* rdram) {
+        const uint32_t start = read_word(rdram, 0x8007E990);
+        const uint32_t last = start + read_word(rdram, 0x8007BF00) - 0x20;
+        uint32_t largest = 0;
+        uint32_t cur = read_word(rdram, start + 0x14);
+        for (int n = 0; n < 200000 && cur != last && valid_ptr(cur); n++) {
+            largest = std::max(largest, read_word(rdram, cur + 4) - cur);
+            cur = read_word(rdram, cur + 0x14);
+        }
+        return largest;
     }
 
     // Banjo's position, if there is a player.
@@ -349,12 +423,20 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     if (filling) {
-        for (int n = 0; n < spawns_per_frame && next_spawn < slots.size(); n++, next_spawn++) {
+        for (int n = 0; n < spawn_rate && next_spawn < slots.size(); n++, next_spawn++) {
             Slot& slot = slots[next_spawn];
             const Entry& entry = entries[slot.entry];
             if (log_on) {
                 printf("[test-room] spawning 0x%X %s\n", entry.id, entry.name);
                 fflush(stdout);
+            }
+            if (heap_check_on) {
+                if (uint32_t bad = heap_check(rdram)) {
+                    printf("[test-room] heap broken at 0x%08X before spawning 0x%X %s\n", bad, entry.id, entry.name);
+                    heap_dump(rdram, bad);
+                    fflush(stdout);
+                    heap_check_on = false;
+                }
             }
             const uint32_t object = spawn(rdram, ctx, entry.id, slot.pos, slot.yaw);
             if (valid_ptr(object)) {
@@ -370,6 +452,14 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
                 printf("[test-room] spawned 0x%X %s -> 0x%08X\n", entry.id, entry.name, object);
                 fflush(stdout);
             }
+            if (heap_check_on) {
+                if (uint32_t bad = heap_check(rdram)) {
+                    printf("[test-room] heap broken at 0x%08X right after spawning 0x%X %s\n", bad, entry.id, entry.name);
+                    heap_dump(rdram, bad);
+                    fflush(stdout);
+                    heap_check_on = false;
+                }
+            }
         }
         if (next_spawn >= slots.size()) {
             filling = false;
@@ -380,6 +470,14 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
+    if (heap_check_on && !slots.empty()) {
+        if (uint32_t bad = heap_check(rdram)) {
+            printf("[test-room] heap broken at 0x%08X at the start of a frame (last spawned: %zu)\n", bad, next_spawn);
+            heap_dump(rdram, bad);
+            fflush(stdout);
+            heap_check_on = false;
+        }
+    }
     if (!slots.empty()) {
         hold(rdram);
         if (!filling) {
@@ -395,7 +493,13 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
             for (const Slot& slot : slots) {
                 alive += (slot.marker != 0 && !slot.gone) ? 1 : 0;
             }
-            printf("[test-room] %d of %zu actors present\n", alive, slots.size());
+            // The game's heap: bytes free and the largest free block.
+            recomp_context saved = *ctx;
+            heap_bytes_free(rdram, ctx);
+            const uint32_t free_bytes = (uint32_t)ctx->r2;
+            *ctx = saved;
+            printf("[test-room] %d of %zu actors present, heap %u KB free (largest block %u KB)\n", alive, slots.size(),
+                free_bytes / 1024, largest_free(rdram) / 1024);
             fflush(stdout);
         }
     }
