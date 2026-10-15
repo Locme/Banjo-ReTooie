@@ -1647,3 +1647,14 @@
   3. Switch More game memory off, restart, and play the same spot
 - Look for: with it on, sounds that used to cut out or skip in busy moments now play; music keeps all its instruments. No crackle, missing sounds or crashes. With it off, the game sounds as before.
 - Status: waiting for L
+
+## T156 Texture dump and texture sweep
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Load a spare save file (the sweep warps everywhere and the game may save in odd places)
+  2. General > Developer > Texture dump: While playing. Walk around for a minute, then open the `texture_dump` folder in the app-data folder (next to `screenshots`)
+  3. Set it to Sweep all maps, close the menu and leave it running (about 40 minutes; a notice shows each map)
+  4. Afterwards set it to Off
+- Look for: `texture_dump/png` fills with PNGs that look like the game's textures, and `rt64.json` is there. During the sweep, each map loads, the camera turns around, and it moves on; at the end it says "Texture sweep finished" and goes back where you started. If the game crashes in a map, load the file again with the option still on: it should carry on from the next map. Send `texture_dump/sweep.txt` either way.
+- Status: waiting for L
