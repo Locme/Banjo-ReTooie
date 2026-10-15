@@ -84,6 +84,9 @@ int tooie_split_join_check(uint8_t* rdram, recomp_context* ctx);
 void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx);
 // Same file: $v0 is the animation file about to be evaluated for the animation in $s0.
 void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx);
+// Totals checklist (src/gameplay/totals_checklist.cpp): end of the pause menu's draw
+// (gcnewpause_entrypoint_3); $s0 is the PauseState, 0x20($sp) the display list pointer's address.
+void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx);
 // Whether Hide HUD (or photo mode) has the HUD hidden (src/game/hide_hud.cpp).
 int tooie_hud_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).

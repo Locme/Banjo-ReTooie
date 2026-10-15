@@ -1180,3 +1180,11 @@ text = "tooie_actor_draw_distance(rdram, ctx);"
 func = "bsjig_entrypoint_9"
 before_vram = 0x80800480
 text = "tooie_jiggy_dance_init(rdram, ctx);"
+
+# --- Totals checklist (src/gameplay/totals_checklist.cpp) ---------------------
+# End of the pause menu's draw (gcnewpause_entrypoint_3), after the page title: $s0 is the
+# PauseState and 0x20($sp) holds the display list pointer's address.
+[[patches.hook]]
+func = "gcnewpause_entrypoint_3"
+before_vram = 0x80800520
+text = "tooie_totals_checklist_draw(rdram, ctx);"

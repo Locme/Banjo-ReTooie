@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- QOL > Totals checklist (on by default): each world's Totals page in the pause menu has a "LEFT HERE" table with how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos and Jamjars moves are still to find there; Game Totals has the same for the whole game. Untested on PC (T160).
 - Noclip now passes through walls, scenery and floors; the game was pulling Banjo back to a collision position that Noclip did not write (T139).
 - Tiptoe's key binding is under Movement in the Controls tab, with Run (T139).
 - Graphics > Debug has Effect compare, Interpolation check and an Interpolation blend mode list beside the Effect debug view (T143).

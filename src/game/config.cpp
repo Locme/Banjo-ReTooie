@@ -24,6 +24,7 @@
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
+#include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_frame_overlay.h"
@@ -315,6 +316,11 @@ void tooie::init_config() {
         tooie::hold_to_run::option,
         "Running",
         "Hold the Run key (Controls tab, Movement; not bound by default) to run faster as Banjo-Kazooie, Banjo or Kazooie. Off turns running off.",
+        true);
+    qol.add_bool_option(
+        tooie::totals_checklist::option,
+        "Totals checklist",
+        "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
         true);
     qol.add_enum_option(
         tooie::canary_mary::mode_option,

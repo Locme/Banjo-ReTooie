@@ -51,6 +51,10 @@ framework, not from this port's code, so it is not described here.
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
   Hold is the original: hold Z to keep trotting. Default: Toggle.
+- **Totals checklist**: On or Off. On adds a "LEFT HERE" table to every
+  world's page in the pause menu's Totals (and "LEFT IN THE GAME" to Game
+  Totals): how many Jiggies, Honeycombs, Cheato pages, Glowbos, Notes, Jinjos
+  and Jamjars moves are still to find, or DONE. Default: On.
 - **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound
   by default) run faster as Banjo-Kazooie, Banjo or Kazooie. Default: On.
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up

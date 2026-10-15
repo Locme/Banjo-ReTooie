@@ -105,6 +105,34 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     frame_counter = 0;
 
+    // TOOIE_SET_FLAGS=<flag>[-<flag>][,...] (hex): sets those game flags once a map is loaded, for
+    // headless tests that need progress (the Totals checklist, src/gameplay/totals_checklist.cpp).
+    static bool test_flags_done = false;
+    if (!test_flags_done && tooie::debug::can_warp()) {
+        test_flags_done = true;
+        if (const char* list = std::getenv("TOOIE_SET_FLAGS")) {
+            int count = 0;
+            for (const char* p = list; *p;) {
+                char* end = nullptr;
+                const long first = std::strtol(p, &end, 16);
+                long last = first;
+                if (*end == '-') {
+                    last = std::strtol(end + 1, &end, 16);
+                }
+                for (long f = first; f <= last; f++) {
+                    flag_set(rdram, ctx, (int32_t)f, true);
+                    count++;
+                }
+                p = (*end == ',') ? end + 1 : end;
+                if (end == p && *p) {
+                    break;
+                }
+            }
+            std::printf("[flags] set %d flags from TOOIE_SET_FLAGS\n", count);
+            std::fflush(stdout);
+        }
+    }
+
     // Unlock everything, once each time the option is switched on (while a save is being played).
     static bool unlock_was_on = false;
     const bool unlock_on = tooie::cheats::is_on("cheat_unlock_everything");

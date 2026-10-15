@@ -1685,3 +1685,18 @@
   2. Start again and go back to the same areas
 - Look for: The second start, "Shaders compiled" jumps right at the start (the saved shaders compiling in the background) and then stays near 0 in the areas you visited before; first visits that hitched should hitch less. The list is cache\shader_list.bin next to the exe; deleting it starts over. Tell me if the game takes longer to start or anything looks different.
 - Status: waiting for L
+
+## T160 Totals checklist, step 1: what is left
+- Asked: 2026-10-15 16:55 UTC
+- Build: latest Windows build from main
+- Commit: "Totals checklist, step 1" on main
+- Steps:
+  1. Load a save, pause, View Totals
+  2. Each world's page has a small "LEFT HERE" table in the middle: Jiggies, Honeycombs, Pages (Cheato), Glowbos, Notes, Jinjos and Moves (Jamjars), each with how many are left in that world, or a yellow DONE
+  3. Game Totals has the same table as "LEFT IN THE GAME"
+  4. Check one world against what you know you have: the numbers should be the world's total minus the page's own counters
+  5. Esc > QOL > Totals checklist: Off. The table is gone; turn it back On
+- Look for: Does the table cover any of the game's counters with your aspect ratio (widescreen on and off)? Is the text big enough to read?
+- Next steps (not in this build): a "NOW" column with how many you can get with the moves you have, a "time to move on" line, and A on a row for the list with hints
+- Status: waiting for L
+

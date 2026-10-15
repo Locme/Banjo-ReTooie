@@ -4618,6 +4618,7 @@ L_8080050C:
     // 0x8080051C: lw          $a1, 0x20($sp)
     ctx->r5 = MEM_W(ctx->r29, 0X20);
     after_3:
+    tooie_totals_checklist_draw(rdram, ctx);
     // 0x80800520: lw          $ra, 0x1C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X1C);
     // 0x80800524: lw          $s0, 0x18($sp)
