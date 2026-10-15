@@ -16,6 +16,7 @@
 
 #include "recomp.h"
 #include "tooie_debug.h"
+#include "tooie_toast.h"
 
 namespace {
     uint32_t heap_start = 0;
@@ -83,6 +84,7 @@ void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
         reported = true;
         fprintf(stderr, "[heap] damage found at %s (check %u, map %03X): %s\n", where, checks,
             (unsigned)(uint16_t)MEM_HU(0, (gpr)(int32_t)0x80132DC2), problem);
+        tooie::toast::show("HEAP error: damage found (details in console.log)");
         dump(rdram, "bad", bad);
         if (before) dump(rdram, "before", before);
         std::fflush(stderr);

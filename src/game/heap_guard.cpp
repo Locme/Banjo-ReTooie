@@ -10,7 +10,7 @@
 // outside the heap, backwards, or at a block that doesn't point back is repaired from the block that
 // does point back (the link with its top bit restored, or else the first header found after this block
 // whose previous link is this block). Each repair is logged as [heap], with the bad value, to help find
-// the writer. A list that can't be repaired is left as it was.
+// the writer, and shown in game as a "HEAP error" notice. A list that can't be repaired is left as it was.
 
 #include <cstdint>
 #include <cstdio>
@@ -18,6 +18,7 @@
 
 #include "recomp.h"
 #include "tooie_hooks.h"
+#include "tooie_toast.h"
 
 namespace {
     constexpr uint32_t heap_start_address = 0x8007E990; // D_8007E990, the heap's start
@@ -86,11 +87,13 @@ extern "C" void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx) {
         if (fixed == 0) {
             std::printf("[heap] block %08X has a broken next link %08X; no block links back, left as it was\n", cur, next);
             std::fflush(stdout);
+            tooie::toast::show("HEAP error: could not repair it, the game may crash");
             return;
         }
         std::printf("[heap] block %08X had a broken next link %08X; repaired to %08X\n", cur, next, fixed);
         std::fflush(stdout);
         MEM_W(0, (int32_t)(cur + 4)) = (int32_t)fixed;
+        tooie::toast::show("HEAP error repaired (details in console.log)");
         cur = fixed;
     }
 }
