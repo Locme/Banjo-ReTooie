@@ -1853,3 +1853,14 @@
   5. With Photo Filters on, also try Sun shadows and Light shafts at Sunset and in Cycle
 - Look for: Night should be dark blue with a starry sky and a moon, but still easy to play in; lamps and glowing things stay bright. Sunset should turn the light warm with an orange glow low in the sky. The HUD, rooms, underwater areas, Witchyworld and Cauldron Keep never change. Sun shadows and light shafts follow the sun as it moves; at night there are no light shafts. Is night too dark or too light, and is the 24-minute default day a good length?
 - Status: waiting for L
+
+## T175 Modern water moves and reacts to Banjo
+- Asked: 2026-10-15 19:13 UTC
+- Build: main (this commit)
+- Steps:
+  1. Pull main and build, Graphics > Water: Modern
+  2. Swim around the Spiral Mountain pool, then stop and float still
+  3. Jump or fall into the water from the bank
+  4. Look at the water from a low angle near the surface
+- Look for: Does the surface visibly rise and fall, with ripples spreading from Banjo as he swims, a bigger splash when he lands in the water and a gentle bob when he floats still? Is Banjo's body under the water seen through it, without a white patch round him? Frame rate compared with Original?
+- Status: waiting for L

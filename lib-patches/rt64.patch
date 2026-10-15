@@ -1283,10 +1283,10 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..0182540 100644
+index 69a82ac..a9076cb 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -659,6 +659,73 @@ namespace RT64 {
+@@ -659,6 +659,75 @@ namespace RT64 {
          }
      };
  
@@ -1337,6 +1337,7 @@ index 69a82ac..0182540 100644
 +        uint32_t gAdapted;
 +        uint32_t gWater;
 +        uint32_t gWaterColor;
++        uint32_t gWaterRipples;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1346,6 +1347,7 @@ index 69a82ac..0182540 100644
 +            gAdapted = builder.addTexture(5);
 +            gWater = builder.addTexture(6);
 +            gWaterColor = builder.addTexture(7);
++            gWaterRipples = builder.addTexture(8);
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
 +            builder.addImmutableSampler(3, linearSampler);
@@ -2566,10 +2568,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..531d226
+index 0000000..c5740d5
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,924 @@
+@@ -0,0 +1,1052 @@
 +//
 +// RT64
 +//
@@ -2594,6 +2596,9 @@ index 0000000..531d226
 +
 +namespace RT64 {
 +    namespace {
++        // Modern water's ripple grid round the player: cells across, and world units per cell.
++        constexpr uint32_t RippleCells = 256;
++        constexpr float RippleCellSize = 3.0f;
 +        std::mutex effectsMutex;
 +        SceneEffectsSettings effectsSettings;
 +
@@ -2637,6 +2642,21 @@ index 0000000..531d226
 +            std::unique_ptr<RenderFramebuffer> waterColorFramebuffer;
 +            const RenderTexture *sceneSetWaterColor = nullptr;
 +            bool waterColorDrawn = false;
++            // Modern water's ripple simulation: two grids (height, speed) stepped back and forth, ending each frame
++            // in [0], which the pass reads; where the grid's corner is, in cells; steps owed at 120 a second.
++            std::unique_ptr<RenderTexture> rippleTexture[2];
++            std::unique_ptr<RenderFramebuffer> rippleFramebuffer[2];
++            std::unique_ptr<SmaaDescriptorSet> rippleSet[2];
++            const RenderTexture *sceneSetRipples = nullptr;
++            int32_t rippleCornerX = 0;
++            int32_t rippleCornerZ = 0;
++            bool rippleCornerKnown = false;
++            float rippleSteps = 0.0f;
++            std::chrono::steady_clock::time_point rippleLast;
++            float ripplePlayerX = 0.0f;
++            float ripplePlayerZ = 0.0f;
++            float rippleSplashX = 1e9f;
++            float rippleSplashZ = 1e9f;
 +            // Eye adaptation: the measured brightness [0], the adapted one [1] (with this frame's measured one
 +            // beside it) and a copy of last frame's [2].
 +            std::unique_ptr<RenderTexture> luminanceTexture[3];
@@ -3429,6 +3449,104 @@ index 0000000..531d226
 +            bloomPass(res.bloomCombineSet.get(), res.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
 +        }
 +
++        // Modern water's ripples: the player pushes the water of a grid that follows them (RippleCells cells of
++        // RippleCellSize world units), stepped at 120 a second in pairs so it always ends in [0].
++        if (res.rippleTexture[0] == nullptr) {
++            for (int i = 0; i < 2; i++) {
++                res.rippleTexture[i] = worker->device->createTexture(RenderTextureDesc::ColorTarget(RippleCells, RippleCells, RenderFormat::R32G32_FLOAT));
++                res.rippleTexture[i]->setName("Scene Effects Water Ripples");
++                const RenderTexture *texture = res.rippleTexture[i].get();
++                res.rippleFramebuffer[i] = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
++            }
++            for (int i = 0; i < 2; i++) {
++                res.rippleSet[i] = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
++                    shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
++                for (uint32_t slot : { res.rippleSet[i]->gTexture0, res.rippleSet[i]->gTexture1, res.rippleSet[i]->gTexture2 }) {
++                    res.rippleSet[i]->setTexture(slot, res.rippleTexture[i].get(), RenderTextureLayout::SHADER_READ);
++                }
++            }
++            for (int i = 0; i < 2; i++) {
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.rippleTexture[i].get(), RenderTextureLayout::COLOR_WRITE));
++                commandList->setFramebuffer(res.rippleFramebuffer[i].get());
++                commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++                commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.rippleTexture[i].get(), RenderTextureLayout::SHADER_READ));
++            }
++            res.rippleLast = std::chrono::steady_clock::now();
++        }
++        const bool havePlayer = settings.player[1] > -1e8f;
++        if (settings.modernWater && havePlayer) {
++            const auto now = std::chrono::steady_clock::now();
++            const float seconds = std::min(std::chrono::duration<float>(now - res.rippleLast).count(), 0.1f);
++            res.rippleLast = now;
++            // The grid's corner, whole cells, so the player stays near its middle.
++            const int32_t cornerX = int32_t(std::floor(settings.player[0] / RippleCellSize)) - int32_t(RippleCells / 2);
++            const int32_t cornerZ = int32_t(std::floor(settings.player[2] / RippleCellSize)) - int32_t(RippleCells / 2);
++            int32_t shiftX = res.rippleCornerKnown ? (cornerX - res.rippleCornerX) : 0;
++            int32_t shiftZ = res.rippleCornerKnown ? (cornerZ - res.rippleCornerZ) : 0;
++            // A jump across the level (a warp) starts calm.
++            if ((std::abs(shiftX) > int32_t(RippleCells / 4)) || (std::abs(shiftZ) > int32_t(RippleCells / 4))) {
++                shiftX = int32_t(RippleCells);
++                shiftZ = int32_t(RippleCells);
++            }
++            res.rippleCornerX = cornerX;
++            res.rippleCornerZ = cornerZ;
++            res.rippleCornerKnown = true;
++
++            // How fast the player moves, and whether they just splashed in (the newest ring marked as a splash).
++            const float dx = settings.player[0] - res.ripplePlayerX;
++            const float dz = settings.player[2] - res.ripplePlayerZ;
++            res.ripplePlayerX = settings.player[0];
++            res.ripplePlayerZ = settings.player[2];
++            const float speed = (seconds > 0.0f) ? std::min(std::sqrt(dx * dx + dz * dz) / seconds, 2000.0f) : 0.0f;
++            bool splash = false;
++            for (int i = 0; i < 3; i++) {
++                const float packed = settings.rippleAge[i];
++                if ((packed >= 4.0f) && (packed - 4.0f < 0.3f) &&
++                    ((std::abs(settings.rippleX[i] - res.rippleSplashX) > 1.0f) || (std::abs(settings.rippleZ[i] - res.rippleSplashZ) > 1.0f))) {
++                    splash = true;
++                    res.rippleSplashX = settings.rippleX[i];
++                    res.rippleSplashZ = settings.rippleZ[i];
++                }
++            }
++
++            res.rippleSteps += seconds * 120.0f;
++            int steps = int(res.rippleSteps / 2.0f) * 2;
++            res.rippleSteps -= float(steps);
++            steps = std::min(steps, 12);
++            if (steps > 0) {
++                GpuSectionScope timed(WorkloadGpuSections(), GpuSection::WaterMask, commandList);
++                commandList->setViewports(RenderViewport(0.0f, 0.0f, float(RippleCells), float(RippleCells)));
++                commandList->setScissors(RenderRect(0, 0, RippleCells, RippleCells));
++                commandList->setPipeline(shaderLibrary->luminance.pipeline.get());
++                commandList->setGraphicsPipelineLayout(shaderLibrary->luminance.pipelineLayout.get());
++                commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++                // A moving player keeps pushing (a wake); one standing still bobs a little.
++                const float bob = 0.012f * std::sin(float(std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0)) * 5.0f);
++                const float push = std::min(speed / 300.0f, 1.0f) * 0.1f + bob;
++                for (int step = 0; step < steps; step++) {
++                    const int from = step & 1;
++                    const int to = from ^ 1;
++                    commandList->barriers(RenderBarrierStage::GRAPHICS, {
++                        RenderTextureBarrier(res.rippleTexture[from].get(), RenderTextureLayout::SHADER_READ),
++                        RenderTextureBarrier(res.rippleTexture[to].get(), RenderTextureLayout::COLOR_WRITE)
++                    });
++                    interop::BloomCB simConstants;
++                    simConstants.params = { 1.0f / float(RippleCells), RippleCellSize, 7.0f, 0.0f };
++                    simConstants.waterSim = { (step == 0) ? float(shiftX) : 0.0f, (step == 0) ? float(shiftZ) : 0.0f,
++                        settings.player[0] / RippleCellSize - float(cornerX), settings.player[2] / RippleCellSize - float(cornerZ) };
++                    simConstants.waterPush = { push, 5.0f, (splash && (step == 0)) ? 3.0f : 0.0f, 0.995f };
++                    commandList->setFramebuffer(res.rippleFramebuffer[to].get());
++                    commandList->setGraphicsDescriptorSet(res.rippleSet[from]->get(), 0);
++                    commandList->setGraphicsPushConstants(0, &simConstants);
++                    commandList->drawInstanced(3, 1, 0, 0);
++                }
++                commandList->barriers(RenderBarrierStage::GRAPHICS, {
++                    RenderTextureBarrier(res.rippleTexture[0].get(), RenderTextureLayout::SHADER_READ),
++                    RenderTextureBarrier(res.rippleTexture[1].get(), RenderTextureLayout::SHADER_READ)
++                });
++            }
++        }
++
 +        // The pass's inputs: the depth target, the bloom and the scene so far (the bloom stands in when unused).
 +        const RenderTexture *color = (source != nullptr) ? source : res.bloomTexture[0].get();
 +        const RenderTexture *adapted = res.luminanceTexture[1].get();
@@ -3444,8 +3562,18 @@ index 0000000..531d226
 +        RenderTexture *waterColor = res.waterColorTexture.get();
 +        constants.water = { (waterDrawn && !modern && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (waterDrawn ? 1.0f : 0.0f), settings.bounceLight,
 +            modern ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
++        if (modern) {
++            // Modern water reads the ripple grid instead of the rings: its corner in world x and z, its cell size,
++            // and 1 when it holds this player's ripples.
++            constants.rippleX.x = float(res.rippleCornerX) * RippleCellSize;
++            constants.rippleZ.x = float(res.rippleCornerZ) * RippleCellSize;
++            constants.rippleX.y = RippleCellSize;
++            constants.rippleZ.y = float(RippleCells);
++            constants.rippleX.z = (res.rippleCornerKnown && havePlayer) ? 1.0f : 0.0f;
++        }
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
-+            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor)) {
++            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
++            (res.sceneSetRipples != res.rippleTexture[0].get())) {
 +            if (res.sceneSet != nullptr) {
 +                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
 +            }
@@ -3463,6 +3591,8 @@ index 0000000..531d226
 +            res.sceneSetWater = water;
 +            res.sceneSet->setTexture(res.sceneSet->gWaterColor, waterColor, RenderTextureLayout::SHADER_READ, res.waterColorTextureView.get());
 +            res.sceneSetWaterColor = waterColor;
++            res.sceneSet->setTexture(res.sceneSet->gWaterRipples, res.rippleTexture[0].get(), RenderTextureLayout::SHADER_READ);
++            res.sceneSetRipples = res.rippleTexture[0].get();
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
@@ -4510,10 +4640,10 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/BloomPS.hlsl b/src/shaders/BloomPS.hlsl
 new file mode 100644
-index 0000000..4c50800
+index 0000000..75eb198
 --- /dev/null
 +++ b/src/shaders/BloomPS.hlsl
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,122 @@
 +//
 +// RT64
 +//
@@ -4558,6 +4688,37 @@ index 0000000..4c50800
 +        const float rate = (measured < 0.03f) ? 0.0f : (1.0f - exp(-seconds * ((measured > previous) ? 2.0f : 0.25f)));
 +        const float adapted = (previous > 0.0f) ? lerp(previous, measured, rate) : measured;
 +        return float4(adapted, measured, 0.0f, 1.0f);
++    }
++    if (pass == 7) {
++        // Modern water's ripples: one step of the wave equation on the grid (r height, g speed), read from where
++        // the grid was before it moved with the player, pushed down where the player is.
++        const int2 size = int2(round(1.0f / texel));
++        const int2 cell = int2(pos.xy);
++        const int2 from = cell + int2(gConstants.waterSim.xy);
++        float2 state = 0.0f;
++        float neighbours = 0.0f;
++        if (all(from >= 0) && all(from < size)) {
++            state = gTexture0.Load(int3(from, 0)).rg;
++            [unroll] for (int i = 0; i < 4; i++) {
++                const int2 n = from + ((i == 0) ? int2(1, 0) : (i == 1) ? int2(-1, 0) : (i == 2) ? int2(0, 1) : int2(0, -1));
++                neighbours += (all(n >= 0) && all(n < size)) ? gTexture0.Load(int3(n, 0)).r : 0.0f;
++            }
++        }
++        float h = state.r;
++        float v = state.g;
++        v += (neighbours - 4.0f * h) * 0.45f;
++        // The player: pushed down at their spot, softly round its edge.
++        const float d = length(float2(cell) + 0.5f - gConstants.waterSim.zw);
++        const float r = max(gConstants.waterPush.y, 1.0f);
++        v -= gConstants.waterPush.x * exp(-(d * d) / (r * r));
++        // A splash pushes a wider patch much harder for one step.
++        v -= gConstants.waterPush.z * exp(-(d * d) / (4.0f * r * r));
++        v *= gConstants.waterPush.w;
++        h = (h + v) * 0.9995f;
++        // Calm towards the grid's edges, so nothing reflects off them.
++        const float2 edge = min(float2(cell), float2(size - 1 - cell)) / (float2(size) * 0.12f);
++        const float calm = saturate(min(edge.x, edge.y));
++        return float4(h * calm, v * calm, 0.0f, 1.0f);
 +    }
 +    if (pass == 0) {
 +        float3 color = 0.0f;
@@ -5251,10 +5412,10 @@ index 74b1fa0..a51b5bc 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2a08c93
+index 0000000..27a587b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1007 @@
+@@ -0,0 +1,1096 @@
 +//
 +// RT64
 +//
@@ -5283,6 +5444,8 @@ index 0000000..2a08c93
 +Texture2D<float4> gWater : register(t6);
 +Texture2D<float4> gWaterColor : register(t7);
 +#endif
++// Modern water's ripple grid round the player: height and speed per cell (rippleX/Z.x hold its corner).
++Texture2D<float2> gWaterRipples : register(t8);
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -5766,15 +5929,97 @@ index 0000000..2a08c93
 +    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 +}
 +
++// The water waves' height at a world x and z (as WaveSlope), in world units.
++float WaveHeight(float2 p, float t, float footprint) {
++    const float2 dirs[4] = { float2(0.8f, 0.6f), float2(0.6f, 0.8f), float2(0.97f, 0.26f), float2(-0.5f, 0.87f) };
++    const float lengths[4] = { 230.0f, 140.0f, 83.0f, 51.0f };
++    const float heights[4] = { 1.0f, 0.7f, 0.45f, 0.3f };
++    float h = 0.0f;
++    [unroll] for (int i = 0; i < 4; i++) {
++        const float k = 6.2831853f / lengths[i];
++        const float omega = k * sqrt(lengths[i]) * 6.0f;
++        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
++        h += (0.2f * heights[i] * visible / k) * sin(k * dot(dirs[i], p) - omega * t);
++    }
++    return h;
++}
++
++// Modern water's ripples from the player at a world x and z: height (x), slope along x and z (yz) and how
++// fast the water moves there (w, for foam). Zero away from the grid, or on water far from the player's height.
++float4 Ripples(float2 p, float waterY) {
++    const float playerY = gConstants.rippleAge.w;
++    if ((gConstants.rippleX.z < 0.5f) || (playerY < -1e8f) || (waterY < playerY - 60.0f) || (waterY > playerY + 160.0f)) {
++        return 0.0f;
++    }
++    const float cell = gConstants.rippleX.y;
++    const float cells = gConstants.rippleZ.y;
++    const float2 at = (p - float2(gConstants.rippleX.x, gConstants.rippleZ.x)) / cell;
++    if (any(at < 1.0f) || any(at > cells - 1.0f)) {
++        return 0.0f;
++    }
++    const float2 uv = at / cells;
++    const float2 texel = 1.0f / cells;
++    const float2 c = gWaterRipples.SampleLevel(LinearSampler, uv, 0);
++    const float hx = gWaterRipples.SampleLevel(LinearSampler, uv + float2(texel.x, 0.0f), 0).r - gWaterRipples.SampleLevel(LinearSampler, uv - float2(texel.x, 0.0f), 0).r;
++    const float hz = gWaterRipples.SampleLevel(LinearSampler, uv + float2(0.0f, texel.y), 0).r - gWaterRipples.SampleLevel(LinearSampler, uv - float2(0.0f, texel.y), 0).r;
++    // Kept gentle: steep slopes right where the player pushes would mirror the sky over their body.
++    float2 slope = float2(hx, hz) / (2.0f * cell);
++    slope *= min(1.0f, 0.3f / max(length(slope), 1e-4f));
++    return float4(clamp(c.r, -6.0f, 6.0f), slope, abs(c.g));
++}
++
++// Modern water's surface height above the flat surface at a world x and z (waves and ripples).
++float ModernHeight(float2 p, float waterY, float strength, float footprint) {
++    return WaveHeight(p, gConstants.ambientOcclusion.z, footprint) * strength + Ripples(p, waterY).x;
++}
++
 +// Modern water (Graphics > Water): the game's water isn't drawn, so the scene here is what lies under the
 +// surface. The water is drawn over it: the floor seen through the surface, bent by the waves and fading into
 +// the water's own colour with depth (from the game's water colour, so each level keeps its look), the sky
 +// and scenery reflected more at low angles, the sun's glint, and foam along the shore and round the player.
 +float3 ModernWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
 +    const float3 v = normalize(surface);
++    const float3 up = normalize(gConstants.worldY.xyz);
++    const float strength = gConstants.water.w;
++    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
++    const float waterY = dot(surface, gConstants.worldY.xyz) + gConstants.worldY.w;
++
++    // The moving surface: the flat surface raised and lowered by the waves and ripples. Where the eye's ray first
++    // meets it is found by stepping along the ray through the band they can reach.
++    const float band = 9.0f * strength + 6.0f;
++    const float along = dot(v, up);
++    if (abs(along) > 0.02f) {
++        const float tFlat = length(surface);
++        // From above the band down to below it (along is negative looking down).
++        const float tStart = tFlat + band / along;
++        const float tEnd = tFlat - band / along;
++        float tPrev = tStart;
++        float fPrev = band;
++        float tHit = tFlat;
++        [loop] for (int i = 1; i <= 10; i++) {
++            const float t = lerp(tStart, tEnd, float(i) / 10.0f);
++            const float3 q = v * t;
++            const float3 w = WorldPosition(q);
++            const float f = (w.y - waterY) - ModernHeight(w.xz, waterY, strength, footprint);
++            if (f <= 0.0f) {
++                tHit = lerp(tPrev, t, fPrev / max(fPrev - f, 1e-4f));
++                break;
++            }
++            tPrev = t;
++            fPrev = f;
++        }
++        surface = v * tHit;
++    }
 +    const float distance = -surface.z;
-+    float foam;
-+    const float3 n = WaveNormal(surface, normal, gConstants.water.w, foam);
++
++    // The surface's slope: the waves' and the ripples', with a little foam where the ripples move fast.
++    const float3 world = WorldPosition(surface);
++    const float4 ripple = Ripples(world.xz, waterY);
++    const float2 slope = WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * strength + ripple.yz;
++    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
++    // Not on the player's own spot: the water there is over their body, and foam would paint it white.
++    const float awayFromPlayer = saturate((length(world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 30.0f) / 25.0f);
++    const float foam = (saturate((ripple.w - 0.3f) * 1.2f) + saturate((length(ripple.yz) - 0.6f) * 0.6f)) * awayFromPlayer;
 +
 +    // The water's colour: the game's, averaged over a few nearby water pixels so its scrolling texture
 +    // doesn't show through, and kept fairly saturated so each level's water stays its own colour.
@@ -5785,11 +6030,14 @@ index 0000000..2a08c93
 +        const int2 offset = (i == 0) ? int2(0, 0) : (i == 1) ? int2(reach, 0) : (i == 2) ? int2(-reach, 0) : (i == 3) ? int2(0, reach) : int2(0, -reach);
 +        float d;
 +        if (LoadWater(pixel + offset, d)) {
-+            tint += LoadWaterColor(pixel + offset).rgb;
-+            tintWeight += 1.0f;
++            // The game's own white ripple rings and splashes are left out of the water's colour.
++            const float3 c = LoadWaterColor(pixel + offset).rgb;
++            const float w = saturate((0.7f - dot(c, float3(0.299f, 0.587f, 0.114f))) * 5.0f) + 0.001f;
++            tint += c * w;
++            tintWeight += w;
 +        }
 +    }
-+    tint = (tintWeight > 0.0f) ? tint / tintWeight : float3(0.2f, 0.4f, 0.5f);
++    tint = (tintWeight > 0.01f) ? tint / tintWeight : float3(0.2f, 0.4f, 0.5f);
 +    const float luma = dot(tint, float3(0.299f, 0.587f, 0.114f));
 +    const float3 hue = saturate(lerp(luma.xxx, tint, 1.35f));
 +    // Deep water: the game's colour, darker. Shallow water: a clear, slightly coloured lens over the floor.
@@ -5845,7 +6093,9 @@ index 0000000..2a08c93
 +    const float t = gConstants.ambientOcclusion.z;
 +    const float2 p = surfaceWorld.xz;
 +    const float pattern = WaterNoise(p / 18.0f + float2(t * 0.15f, 0.0f)) * 0.6f + WaterNoise(p / 7.0f - float2(0.0f, t * 0.3f)) * 0.4f;
-+    const float shore = (sceneDepth < 0.99999f) ? saturate(1.0f - floorDepth / 22.0f) : 0.0f;
++    // Not round the player: there the thing just under the surface is their body, not the shore.
++    const float nearPlayer = (gConstants.rippleAge.w > -1e8f) ? saturate((length(p - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 60.0f) / 30.0f) : 1.0f;
++    const float shore = (sceneDepth < 0.99999f) ? saturate(1.0f - floorDepth / 22.0f) * nearPlayer : 0.0f;
 +    const float shoreFoam = saturate((shore * 1.2f - (1.0f - pattern) * 1.0f) * 2.5f) * saturate(1.5f - distance / 4000.0f);
 +    const float allFoam = saturate(max(shoreFoam, foam * (0.15f + 0.45f * pattern)));
 +    color = lerp(color, float3(0.93f, 0.96f, 0.98f), allFoam * 0.7f);
@@ -6645,10 +6895,10 @@ index 0a5c332..df15569 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..6d6b105
+index 0000000..d210217
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,70 @@
 +//
 +// RT64
 +//
@@ -6707,8 +6957,14 @@ index 0000000..6d6b105
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
 +    // quarter of the size, 1 blur across, 2 blur down, 3 measure the average brightness, 4 move the adapted
 +    // brightness towards it, 5 down to an eighth, 6 the quarter and eighth glows together), then the brightness threshold (0 to 1), or for pass 4 how far to move (0 to 1).
++    // Pass 7 is Modern water's ripple simulation on a grid round the player (height, speed per cell): params.y
++    // is unused, waterSim holds how many cells the grid moved since the last step (x, z: read from there), then
++    // the player in grid cells, and waterPush how hard the player pushes the water down this step, over how
++    // many cells, a splash's extra push, then how much of each cell's movement is kept per step.
 +    struct BloomCB {
 +        float4 params;
++        float4 waterSim;
++        float4 waterPush;
 +    };
 +#ifdef HLSL_CPU
 +};
