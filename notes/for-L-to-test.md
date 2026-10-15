@@ -1791,3 +1791,13 @@
 - Look for: a hint that is wrong (tell me the world, the item and the hint). "NEEDS MORE THAN ONE THING" means no single move, form or area unlocks it on its own. Also tell me if the big counters on the left (4/10 and so on) ever vanish while a list is open: it happened in 2 of 6 headless runs at the same moment and not in the others, so I could not pin it to the list
 - Status: waiting for L
 
+
+## T169 Models no longer cut off at the screen edge in Fill
+- Asked: 2026-10-15 17:41 UTC
+- Build: a63d67e (main)
+- Steps:
+  1. Set Aspect Ratio to Fill, HD shadows on
+  2. Go to Spiral Mountain near Bottles' burnt body
+  3. Turn the camera so the body, enemies or NPCs sit at the left, right and bottom edges, near and far
+- Look for: Do they stay whole right up to the edge, with no shadow left behind without its object? Any drop in frame rate?
+- Status: waiting for L
