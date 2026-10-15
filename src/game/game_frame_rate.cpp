@@ -55,6 +55,7 @@
 #include "recomp.h"
 #include "recompui/config.h"
 
+#include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_hooks.h"
@@ -380,6 +381,7 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
 // above 60 FPS, put in the finer ones.
 extern "C" void tooie_frame_step_done(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    tooie::debug::heap_check(rdram, "frame step");
     game_frames_stepped++;
     if (!fine.pending) {
         game_seconds_total.store(game_seconds_total.load() + read_float(rdram, delta_time_addr));

@@ -4,6 +4,8 @@
 #include <cstdint>
 
 namespace tooie::debug {
+    // Walks the game heap once per frame and logs the first damage (src/debug/heap_check.cpp).
+    void heap_check(uint8_t* rdram, const char* where);
     // Parses a --pad-script argument (see src/debug/pad_script.cpp).
     bool parse_pad_script(const char* script);
     // Player input with any scripted input added, for the runtime's callbacks.
