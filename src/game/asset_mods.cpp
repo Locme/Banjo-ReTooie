@@ -15,8 +15,9 @@
 // Replace: a file mods/assets/asset_<id>.bin is loaded in place of that asset, at any size. A mod
 // can carry them too: a mod folder (or a .zip that mod_zips.cpp unpacks into one) with an
 // assets.json and an assets/ folder of asset_<id>.bin files. While that mod is on in the Mods menu
-// its files count, ahead of mods/assets, in the mod list's order. Switching it on or off counts
-// from the next time the game loads that asset (another area). The game
+// its files count, ahead of mods/assets, in the mod list's order. Switching it on or off in a level
+// reloads the area (the game's own map change, back in through the exit last used), so a model
+// mod shows or goes at once; elsewhere it counts from the next area load. The game
 // loads assets by id in func_800D5B34; banjotooie.us.toml hooks it before it fetches the asset
 // (0x800D5BF4). When a replacement exists the hook allocates game heap for it with the game's own
 // heap_alloc, copies the file in and skips to the end of the function, where the game records the
@@ -49,6 +50,7 @@
 #include "miniz.h"
 
 #include "tooie_asset_mods.h"
+#include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_toast.h"
@@ -197,6 +199,10 @@ namespace {
         size_t order;
     };
     std::vector<ModAssets> mod_folders;
+    // A mod was switched on or off: reload the area so its models load again.
+    std::atomic<bool> refresh_wanted{false};
+    // The game-state block: +0x13 is the exit the area was entered by.
+    constexpr gpr game_state_addr = (int32_t)0x80127630;
     steady::time_point last_scan;
     bool scanned = false;
 
@@ -243,6 +249,7 @@ void tooie::asset_mods::enable_mod(const std::string& mod_id, const std::filesys
     mod_folders.push_back({mod_id, root / "assets", order});
     std::stable_sort(mod_folders.begin(), mod_folders.end(), [](const ModAssets& a, const ModAssets& b) { return a.order < b.order; });
     scanned = false;
+    refresh_wanted = true;
     printf("[assets] mod %s on: its assets load in place of the game's\n", mod_id.c_str());
     fflush(stdout);
 }
@@ -251,6 +258,7 @@ void tooie::asset_mods::disable_mod(const std::string& mod_id) {
     std::lock_guard lock{mods_mutex};
     std::erase_if(mod_folders, [&](const ModAssets& m) { return m.mod_id == mod_id; });
     scanned = false;
+    refresh_wanted = true;
     printf("[assets] mod %s off\n", mod_id.c_str());
     fflush(stdout);
 }
@@ -264,7 +272,15 @@ void tooie::asset_mods::reorder(const std::function<size_t(const std::string&)>&
     scanned = false;
 }
 
-void tooie::asset_mods::tick() {
+void tooie::asset_mods::tick(uint8_t* rdram) {
+    // Mods switched on at startup land here on the title screen, where nothing needs reloading.
+    if (refresh_wanted.exchange(false) && tooie::debug::can_warp()) {
+        uint16_t map = tooie::debug::current_map(rdram);
+        uint8_t exit = MEM_B(0x13, game_state_addr);
+        printf("[assets] reloading the area (map 0x%X, exit %u) for the switched mod\n", map, exit);
+        fflush(stdout);
+        tooie::debug::request_warp(map, exit);
+    }
     bool want = dump_wanted();
     if (want && !dump_requested_before && !dump_running.exchange(true)) {
         std::thread(dump_all).detach();

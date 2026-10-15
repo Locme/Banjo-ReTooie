@@ -2,6 +2,7 @@
 #define __TOOIE_ASSET_MODS_H__
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -14,8 +15,9 @@ namespace tooie {
 }
 
 namespace tooie::asset_mods {
-    // Call once per frame from the game thread (tooie_warp_tick): starts the dump when it is switched on.
-    void tick();
+    // Call once per frame from the game thread (tooie_warp_tick): starts the dump when it is switched
+    // on, and reloads the area after an asset mod was switched on or off.
+    void tick(uint8_t* rdram);
 
     // The asset mod content type (main.cpp): a mod with an assets.json was switched on or off,
     // or the mod list was reordered. `order` is the mod's place in the mod list.

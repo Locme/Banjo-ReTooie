@@ -151,7 +151,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::hd_shadows::tick();
     tooie::vram_log::start();
     tooie::texture_sweep::tick(rdram);
-    tooie::asset_mods::tick();
+    tooie::asset_mods::tick(rdram);
     tooie::test_room::tick(rdram, ctx);
     // Before the warp below, which it may ask for.
     tooie::race_warp::tick(rdram, ctx);

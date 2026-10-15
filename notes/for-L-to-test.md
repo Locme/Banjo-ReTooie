@@ -2027,3 +2027,14 @@
   2. Start a new game, or warp to the intro ("Two years have passed..")
 - Look for: The cloud backdrop fills the whole width, with no slanted panel ends and no black at the sides. Spiral Mountain afterwards looks normal (not stretched).
 - Status: waiting for L
+
+## T190 Smash Banjo v3: face, straps, and switching it on or off
+- Asked: 2026-10-15 22:15 UTC
+- Build: main (pull and build), plus mods/Smash Banjo v3.zip from project files (take v1 and v2 out of the mods folder)
+- Steps:
+  1. Load a save in a level with Smash Banjo on and let Banjo stand still until his idle animations play (the one where his face went missing)
+  2. Walk, roll and flap, and watch the backpack straps
+  3. In a level, open the Mods menu and switch Smash Banjo off, then on again
+- Look for: Step 1, his whole face stays (only the eyes blink). Step 2, the straps stay on his shoulders. Step 3, the area reloads straight away (Banjo back at the area's entrance) with the model switched. Checked headless: the model loads and animates with the face in place; the idle with the hidden eyes and the menu switch were not reproduced headless.
+- Status: waiting for L
+
