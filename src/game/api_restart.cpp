@@ -134,6 +134,10 @@ void tooie::api_restart::relaunch_if_requested(int argc, char** argv) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
     }
+#elif defined(__ANDROID__)
+    // The Android build only has Vulkan, so no restart is ever asked for.
+    (void)argc;
+    (void)argv;
 #else
     (void)argc;
     std::fflush(stdout);

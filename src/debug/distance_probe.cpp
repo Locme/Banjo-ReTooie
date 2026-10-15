@@ -15,7 +15,7 @@
 #include <vector>
 #include <algorithm>
 
-#if defined(__linux__)
+#if defined(__GLIBC__)
 #include <dlfcn.h>
 #include <execinfo.h>
 #endif
@@ -39,7 +39,7 @@ namespace {
         // Recompiled calls are plain C calls ($ra is not set), so take the
         // host caller of the helper: frame 0 is note(), 1 the helper (the hook and note are inlined into it), 2 its caller.
         uintptr_t caller = 0;
-#if defined(__linux__)
+#if defined(__GLIBC__)
         void* frames[4] = {};
         int n = backtrace(frames, 4);
         caller = n >= 3 ? (uintptr_t)frames[2] : 0;

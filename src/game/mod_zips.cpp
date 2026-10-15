@@ -27,7 +27,8 @@ namespace {
     std::string zip_stamp(const fs::path& zip) {
         std::error_code ec;
         auto size = fs::file_size(zip, ec);
-        auto time = fs::last_write_time(zip, ec).time_since_epoch().count();
+        // The tick count is a 128-bit integer with libc++ (Android), which std::to_string does not take.
+        auto time = static_cast<long long>(fs::last_write_time(zip, ec).time_since_epoch().count());
         return std::to_string(size) + " " + std::to_string(time);
     }
 

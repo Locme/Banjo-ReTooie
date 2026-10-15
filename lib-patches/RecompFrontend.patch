@@ -1,3 +1,16 @@
+diff --git a/recompinput/CMakeLists.txt b/recompinput/CMakeLists.txt
+index 899372b..04da5c7 100644
+--- a/recompinput/CMakeLists.txt
++++ b/recompinput/CMakeLists.txt
+@@ -42,7 +42,7 @@ target_include_directories(recompinput PRIVATE
+ 
+ if (WIN32)
+     target_include_directories(recompinput PRIVATE ${sdl2_SOURCE_DIR}/include)
+-elseif (APPLE OR CMAKE_SYSTEM_NAME MATCHES "Linux")
++elseif (APPLE OR ANDROID OR CMAKE_SYSTEM_NAME MATCHES "Linux")
+     target_include_directories(recompinput PRIVATE ${SDL2_INCLUDE_DIRS})
+ endif()
+ 
 diff --git a/recompinput/include/recompinput/extra_buttons.h b/recompinput/include/recompinput/extra_buttons.h
 new file mode 100644
 index 0000000..56f8df6
@@ -364,6 +377,19 @@ index c89956e..e781099 100644
 +            }
              check_buttons(profile_index_cont);
              check_buttons(profile_index_kb);
+ 
+diff --git a/recompui/CMakeLists.txt b/recompui/CMakeLists.txt
+index 4dce8e0..15bd9e3 100644
+--- a/recompui/CMakeLists.txt
++++ b/recompui/CMakeLists.txt
+@@ -106,7 +106,7 @@ target_include_directories(recompui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include
+ 
+ if (WIN32)
+     target_include_directories(recompui PRIVATE ${sdl2_SOURCE_DIR}/include)
+-elseif (APPLE OR CMAKE_SYSTEM_NAME MATCHES "Linux")
++elseif (APPLE OR ANDROID OR CMAKE_SYSTEM_NAME MATCHES "Linux")
+     target_include_directories(recompui PRIVATE ${SDL2_INCLUDE_DIRS})
+ endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
 index 38b84f5..385bb5b 100644

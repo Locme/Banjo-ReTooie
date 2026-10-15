@@ -1,8 +1,117 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..e1febf2 100644
+index 79dfc38..fd77910 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -389,6 +389,11 @@ set (SOURCES
+@@ -57,6 +57,17 @@ elseif (APPLE)
+         set (DXC "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/arm64:${ZLIB_PATH}" "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/arm64/dxc-macos")
+         set (SPIRVCROSS "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/spirv-cross/lib/arm64:$ENV{DYLD_LIBRARY_PATH}" "${PROJECT_SOURCE_DIR}/src/contrib/spirv-cross/bin/arm64/spirv-cross")
+     endif()
++elseif (ANDROID)
++    # Cross build: the shader compiler runs on the build machine, so pick it by the host.
++    if (CMAKE_HOST_WIN32)
++        set (DXC "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/x64/dxc.exe")
++    elseif (CMAKE_HOST_APPLE)
++        set (DXC "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/arm64/dxc-macos")
++    elseif (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
++        set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/x64" "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/x64/dxc-linux")
++    else()
++        set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/arm64/dxc-linux")
++    endif()
+ else()
+     if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+         set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/x64" "${PROJECT_SOURCE_DIR}/src/contrib/dxc/bin/x64/dxc-linux")
+@@ -69,12 +80,25 @@ set(ZSTD_LEGACY_SUPPORT OFF)
+ set(ZSTD_BUILD_STATIC ON)
+ set(ZSTD_BUILD_SHARED OFF)
+ 
+-add_subdirectory(src/tools/file_to_c)
++# file_to_c turns shader binaries into C arrays at build time. A cross build (Android) cannot run a
++# tool built for the target, so it uses a CMake script with the same output instead.
++# The command is cached so the shader functions find it from any directory.
++if (CMAKE_CROSSCOMPILING)
++    set(RT64_FILE_TO_C "${CMAKE_COMMAND}" -P "${PROJECT_SOURCE_DIR}/src/tools/file_to_c/file_to_c.cmake" CACHE INTERNAL "")
++    set(RT64_FILE_TO_C_DEPENDS "${PROJECT_SOURCE_DIR}/src/tools/file_to_c/file_to_c.cmake" CACHE INTERNAL "")
++else()
++    add_subdirectory(src/tools/file_to_c)
++    set(RT64_FILE_TO_C file_to_c CACHE INTERNAL "")
++    set(RT64_FILE_TO_C_DEPENDS file_to_c CACHE INTERNAL "")
++endif()
+ add_subdirectory(src/contrib/re-spirv)
+-add_subdirectory(src/contrib/nativefiledialog-extended)
++# Android has no native file dialogs; the game supplies its own nfd target there.
++if (NOT ANDROID)
++    add_subdirectory(src/contrib/nativefiledialog-extended)
++endif()
+ add_subdirectory(src/contrib/zstd/build/cmake)
+ 
+-if (CMAKE_SYSTEM_NAME MATCHES "Linux" AND RT64_SDL_WINDOW_VULKAN)
++if ((CMAKE_SYSTEM_NAME MATCHES "Linux" OR ANDROID) AND RT64_SDL_WINDOW_VULKAN)
+     set(PLUME_SDL_VULKAN_ENABLED TRUE)
+ elseif (APPLE)
+     set(PLUME_APPLE_RETINA_ENABLED OFF)
+@@ -118,8 +142,8 @@ function(build_shader_spirv_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+         COMMAND ${DXC} ${DXC_SPV_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.spv
+         DEPENDS ${FILENAME})
+     add_custom_command(OUTPUT ${OUTNAME}.spirv.c
+-        COMMAND file_to_c ${OUTNAME}.spv ${TARGET_NAME}BlobSPIRV ${OUTNAME}.spirv.c ${OUTNAME}.spirv.h
+-        DEPENDS ${OUTNAME}.spv file_to_c
++        COMMAND ${RT64_FILE_TO_C} ${OUTNAME}.spv ${TARGET_NAME}BlobSPIRV ${OUTNAME}.spirv.c ${OUTNAME}.spirv.h
++        DEPENDS ${OUTNAME}.spv ${RT64_FILE_TO_C_DEPENDS}
+         BYPRODUCTS ${OUTNAME}.spirv.h)
+     target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.spirv.c)
+ endfunction()
+@@ -129,8 +153,8 @@ function(build_shader_dxil_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+         COMMAND ${DXC} ${DXC_DXIL_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.dxil
+         DEPENDS ${FILENAME})
+     add_custom_command(OUTPUT ${OUTNAME}.dxil.c
+-        COMMAND file_to_c ${OUTNAME}.dxil ${TARGET_NAME}BlobDXIL ${OUTNAME}.dxil.c ${OUTNAME}.dxil.h
+-        DEPENDS ${OUTNAME}.dxil file_to_c
++        COMMAND ${RT64_FILE_TO_C} ${OUTNAME}.dxil ${TARGET_NAME}BlobDXIL ${OUTNAME}.dxil.c ${OUTNAME}.dxil.h
++        DEPENDS ${OUTNAME}.dxil ${RT64_FILE_TO_C_DEPENDS}
+         BYPRODUCTS ${OUTNAME}.dxil.h)
+     target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.dxil.c)
+ endfunction()
+@@ -149,8 +173,8 @@ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+             COMMAND xcrun -sdk macosx metallib ${OUTNAME}.ir -o ${OUTNAME}.metallib
+             DEPENDS ${OUTNAME}.ir)
+     add_custom_command(OUTPUT ${OUTNAME}.metal.c
+-            COMMAND file_to_c ${OUTNAME}.metallib ${TARGET_NAME}BlobMSL ${OUTNAME}.metal.c ${OUTNAME}.metal.h
+-            DEPENDS ${OUTNAME}.metallib file_to_c
++            COMMAND ${RT64_FILE_TO_C} ${OUTNAME}.metallib ${TARGET_NAME}BlobMSL ${OUTNAME}.metal.c ${OUTNAME}.metal.h
++            DEPENDS ${OUTNAME}.metallib ${RT64_FILE_TO_C_DEPENDS}
+             BYPRODUCTS ${OUTNAME}.metal.h)
+     target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.metal.c)
+ endfunction()
+@@ -243,8 +267,8 @@ function(preprocess_shader TARGETOBJ SHADERNAME)
+     cmake_path(GET OUTNAME PARENT_PATH OUTPUT_DIR)
+     preprocess(${FILENAME} ${OUTNAME}.rw ${DXC_COMMON_OPTS})
+     add_custom_command(OUTPUT ${OUTNAME}.rw.c
+-        COMMAND file_to_c ${OUTNAME}.rw ${TARGET_NAME}Text ${OUTNAME}.rw.c ${OUTNAME}.rw.h
+-        DEPENDS ${OUTNAME}.rw file_to_c
++        COMMAND ${RT64_FILE_TO_C} ${OUTNAME}.rw ${TARGET_NAME}Text ${OUTNAME}.rw.c ${OUTNAME}.rw.h
++        DEPENDS ${OUTNAME}.rw ${RT64_FILE_TO_C_DEPENDS}
+         BYPRODUCTS ${OUTNAME}.rw.h)
+     file(MAKE_DIRECTORY ${OUTPUT_DIR})
+     target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.rw.c)
+@@ -289,6 +313,8 @@ if (WIN32)
+     set(SDL2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/include")
+     set(SDL2_LIBRARIES "SDL2" "SDL2main")
+     link_directories("${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/lib/x64")
++elseif (ANDROID)
++    # The game builds SDL itself on Android and sets SDL2_INCLUDE_DIRS before adding RT64.
+ else()
+     find_package(SDL2 REQUIRED)
+ endif()
+@@ -301,7 +327,7 @@ add_compile_definitions(
+     IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+ )
+ 
+-if (CMAKE_SYSTEM_NAME MATCHES "Linux" AND RT64_SDL_WINDOW_VULKAN)
++if ((CMAKE_SYSTEM_NAME MATCHES "Linux" OR ANDROID) AND RT64_SDL_WINDOW_VULKAN)
+     add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
+     add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
+ endif()
+@@ -389,6 +415,11 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
@@ -14,7 +123,22 @@ index 79dfc38..e1febf2 100644
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -543,11 +548,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -445,9 +476,11 @@ target_link_libraries(rt64 nfd)
+ target_link_libraries(rt64 libzstd_static)
+ target_link_libraries(rt64 plume)
+ 
+-# Add tools.
+-add_subdirectory(src/tools/texture_hasher)
+-add_subdirectory(src/tools/texture_packer)
++# Add tools (desktop only; nothing on Android runs them).
++if (NOT ANDROID)
++    add_subdirectory(src/tools/texture_hasher)
++    add_subdirectory(src/tools/texture_packer)
++endif()
+ 
+ # Add any Apple-specific source files and libraries
+ if (APPLE)
+@@ -543,11 +576,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -229,6 +353,19 @@ index 20c0d4d..cfcce95 100644
              MapInitialized = true;
          }
      }
+diff --git a/src/hle/rt64_application_window.cpp b/src/hle/rt64_application_window.cpp
+index 08f83e5..2bfdba4 100755
+--- a/src/hle/rt64_application_window.cpp
++++ b/src/hle/rt64_application_window.cpp
+@@ -103,7 +103,7 @@ namespace RT64 {
+         bounds.top = rect.top;
+         bounds.width = rect.right - rect.left;
+         bounds.height = rect.bottom - rect.top;
+-#   elif defined(__ANDROID__)
++#   elif defined(__ANDROID__) && !defined(RT64_SDL_WINDOW_VULKAN)
+         static_assert(false && "Android unimplemented");
+ #   elif defined(__linux__) || defined(__APPLE__)
+         if (SDL_VideoInit(nullptr) != 0) {
 diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
 index 0e62be1..3ec4c4c 100644
 --- a/src/hle/rt64_draw_call.h
@@ -6198,3 +6335,43 @@ index b51cf09..a2b8354 100644
      };
  #ifdef HLSL_CPU
  };
+diff --git a/src/tools/file_to_c/file_to_c.cmake b/src/tools/file_to_c/file_to_c.cmake
+new file mode 100644
+index 0000000..05cb897
+--- /dev/null
++++ b/src/tools/file_to_c/file_to_c.cmake
+@@ -0,0 +1,34 @@
++# The same output as file_to_c.cpp, for cross builds (Android) where a tool built for the target
++# cannot run on the build machine.
++# Usage: cmake -P file_to_c.cmake <input file> <array name> <output C file> <output C header>
++set(input_path "${CMAKE_ARGV3}")
++set(array_name "${CMAKE_ARGV4}")
++set(output_c_path "${CMAKE_ARGV5}")
++set(output_h_path "${CMAKE_ARGV6}")
++if (NOT output_h_path)
++    message(FATAL_ERROR "Usage: cmake -P file_to_c.cmake [input file] [array name] [output C file] [output C header]")
++endif()
++
++file(SIZE "${input_path}" size)
++if (size EQUAL 0)
++    message(FATAL_ERROR "Failed to open file ${input_path}! (Or it's empty)")
++endif()
++file(READ "${input_path}" hex HEX)
++string(REGEX REPLACE "([0-9a-f][0-9a-f])" "(char)0x\\1," bytes "${hex}")
++
++file(WRITE "${output_c_path}"
++    "#include <stddef.h>\n"
++    "extern const char ${array_name}[${size}];\n"
++    "const char ${array_name}[${size}] = {${bytes}};\n"
++    "extern const size_t ${array_name}_size;\n"
++    "const size_t ${array_name}_size = sizeof(${array_name}) / sizeof(${array_name}[0]);\n")
++file(WRITE "${output_h_path}"
++    "#ifdef __cplusplus\n"
++    "  extern \"C\" {\n"
++    "#endif\n"
++    "#include <stddef.h>\n"
++    "extern const char ${array_name}[${size}];\n"
++    "extern const size_t ${array_name}_size;\n"
++    "#ifdef __cplusplus\n"
++    "  }\n"
++    "#endif\n")

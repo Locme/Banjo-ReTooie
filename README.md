@@ -25,6 +25,8 @@ emulator at runtime.
 
 Early bring-up. See [`notes/roadmap-checklist.md`](notes/roadmap-checklist.md)
 for the feature roadmap and [`BUILDING.md`](BUILDING.md) for how to build.
+An Android build (64-bit ARM phones with Vulkan, Android 10 or newer) is in its
+first stage: see the Android section of [`BUILDING.md`](BUILDING.md).
 
 ## Running
 
@@ -102,6 +104,9 @@ randomizer's Banjo-Tooie world, MIT (licence text at the top of that file).
 * The [Banjo-Tooie Archipelago world](https://github.com/jjjj12212/AP_Banjo-Tooie)
   and its authors: the rules behind the Totals checklist's NOW column.
 * PromptFont by Yukari "Shinmera" Hafner.
+* [SDL](https://www.libsdl.org/) (zlib licence): windows, input and sound; the
+  Android build also uses SDL's Android Java code (`android/app/src/main/java/org/libsdl/app`).
+* [FreeType](https://freetype.org/): menu fonts (built from source for Android).
 * [SMAA](https://github.com/iryoku/smaa) by Jorge Jimenez, Jose I. Echevarria,
   Belen Masia, Fernando Navarro and Diego Gutierrez: the SMAA Anti-Aliasing option.
 * [FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR)

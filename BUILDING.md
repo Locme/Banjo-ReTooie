@@ -85,6 +85,36 @@ cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER
 cmake --build build-cmake --target BanjoTooieN64Recomp
 ```
 
+## Android (early: aims to boot to the title screen)
+
+The `android/` folder is an Android Studio project. It builds the same game code
+for 64-bit ARM phones (`arm64-v8a`, Android 10 or newer with Vulkan) as
+`libmain.so`, next to SDL2, and packs `assets/` into the APK.
+
+Install:
+
+* [Android Studio](https://developer.android.com/studio). In **Tools > SDK Manager >
+  SDK Tools**, tick **NDK (Side by side)** 27.2.12479018 and **CMake** 3.22.1.
+* Git, with the submodules fetched (`git submodule update --init --recursive`).
+  The first build also downloads SDL 2.30.9 and FreeType 2.13.3 with Git.
+
+Open the `android` folder in Android Studio, connect the phone with USB debugging
+on, and press **Run**. Or build from a command line in `android/`:
+
+```bat
+gradlew assembleRelease
+```
+
+The APK is `android\app\build\outputs\apk\release\app-release.apk` (signed with
+the debug key, so it installs without a release key).
+
+The first time the app starts it asks for your Banjo-Tooie ROM (US release) and
+copies it in. Saves, settings, mods and `logs\console.log` are in
+`Android/data/io.github.locme.banjotooie/files` on the phone's storage.
+
+Not done yet: touch controls (use a controller), and leaving the app while the
+game runs (switching away may close or crash it).
+
 ## Regenerating the recompiled code
 
 Only needed after changing `banjotooie.us.toml`, `n_aspMain.us.toml`,

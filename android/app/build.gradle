@@ -1,0 +1,66 @@
+// The Android build of the port (android/README.md). The game itself is the same CMake project as the
+// desktop builds (../../CMakeLists.txt), built for arm64 phones as libmain.so.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'io.github.locme.banjotooie'
+    compileSdk 34
+    ndkVersion '27.2.12479018'
+
+    defaultConfig {
+        applicationId 'io.github.locme.banjotooie'
+        // Android 10: every phone from then on has Vulkan 1.1, which RT64 needs.
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+        externalNativeBuild {
+            cmake {
+                // libc++ is shared because SDL2 and the game are separate libraries.
+                arguments '-DANDROID_STL=c++_shared', '-DANDROID_PLATFORM=android-29'
+                targets 'BanjoTooieN64Recomp', 'SDL2'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so the APK installs without setting up a release key.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path '../../CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs += layout.buildDirectory.dir('generated/game_assets')
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// The menus read assets/ and recompcontrollerdb.txt from the working directory. They go into the APK as
+// game_files/, and GameActivity unpacks them into the app's internal folder before the game starts.
+def copyGameAssets = tasks.register('copyGameAssets', Copy) {
+    from('../../assets') { into 'game_files/assets' }
+    from('../../recompcontrollerdb.txt') { into 'game_files' }
+    into layout.buildDirectory.dir('generated/game_assets')
+}
+tasks.named('preBuild') { dependsOn copyGameAssets }

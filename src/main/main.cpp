@@ -17,7 +17,10 @@
 #include "ultramodern/ultra64.h"
 #include "ultramodern/ultramodern.hpp"
 #include "ultramodern/config.hpp"
+// Android starts the game through SDLActivity, which calls SDL_main: SDL.h renames main() there.
+#ifndef __ANDROID__
 #define SDL_MAIN_HANDLED
+#endif
 #ifdef _WIN32
 #include "SDL.h"
 #else
@@ -46,6 +49,9 @@
 #include "tooie_watchdog.h"
 #include "tooie_api_restart.h"
 #include "tooie_debug.h"
+#ifdef __ANDROID__
+#include "tooie_android.h"
+#endif
 #include "librecomp/game.hpp"
 #include "librecomp/mods.hpp"
 #include "librecomp/helpers.hpp"
@@ -191,7 +197,7 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 #if defined(_WIN32)
     HICON new_icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(APP_ICON));
     SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_SMALL2, (LPARAM)(new_icon));
-#elif defined(__linux__)
+#elif defined(__gnu_linux__)
     SetImageAsIcon("icons/app.png", window);
 #endif
 
@@ -613,6 +619,9 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
 #define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
 
 int main(int argc, char** argv) {
+#ifdef __ANDROID__
+    tooie::android::setup_paths();
+#endif
     tooie::api_restart::remember_launch_dir();
     for (int i = 1; i + 1 < argc; i++) {
         if (strcmp(argv[i], "--game") == 0 && strcmp(argv[i + 1], "bt") == 0) {
@@ -743,6 +752,13 @@ int main(int argc, char** argv) {
     for (const auto& game : supported_games) {
         recomp::register_game(game);
     }
+#ifdef __ANDROID__
+    if (!tooie::android::install_picked_rom(supported_games[0].game_id)) {
+        return EXIT_FAILURE;
+    }
+    // There is no launcher choice to make on a phone: go straight into the game once the ROM is in.
+    autostart_game = true;
+#endif
 
     recompui::register_ui_exports();
 

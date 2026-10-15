@@ -39,3 +39,13 @@ portable.txt
 build-trace/
 banjotooie.trace.toml
 /build-log.txt
+
+# Android build output (android/)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.idea/
+android/*.iml
+android/app/*.iml

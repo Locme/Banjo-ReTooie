@@ -1,3 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0789c20..23bf6f6 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,6 +14,10 @@ if(APPLE)
+ endif()
+ 
+ string(COMPARE EQUAL ${CMAKE_SYSTEM_NAME} "Linux" IS_LINUX)
++# Android draws through an SDL window as well (Banjo-Tooie port).
++if(ANDROID)
++    set(IS_LINUX TRUE)
++endif()
+ 
+ # Project options
+ include(CMakeDependentOption)
 diff --git a/plume_d3d12.cpp b/plume_d3d12.cpp
 index 2cdcf18..82c1b03 100644
 --- a/plume_d3d12.cpp
@@ -21,6 +36,28 @@ index 2cdcf18..82c1b03 100644
      }
  
      void D3D12CommandList::copyBuffer(const RenderBuffer *dstBuffer, const RenderBuffer *srcBuffer) {
+diff --git a/plume_render_interface_types.h b/plume_render_interface_types.h
+index 9dcfedf..1f863f3 100644
+--- a/plume_render_interface_types.h
++++ b/plume_render_interface_types.h
+@@ -17,7 +17,7 @@
+ 
+ #if defined(_WIN64)
+ #include <Windows.h>
+-#elif defined(__ANDROID__)
++#elif defined(__ANDROID__) && !defined(PLUME_SDL_VULKAN_ENABLED)
+ #include "android/native_window.h"
+ #elif defined(__linux__) && !defined(PLUME_SDL_VULKAN_ENABLED)
+ #include "X11/Xlib.h"
+@@ -37,7 +37,7 @@ namespace plume {
+ #if defined(_WIN64)
+     // Native HWND handle to the target window.
+     typedef HWND RenderWindow;
+-#elif defined(__ANDROID__)
++#elif defined(__ANDROID__) && !defined(PLUME_SDL_VULKAN_ENABLED)
+     typedef ANativeWindow* RenderWindow;
+ #elif defined(PLUME_SDL_VULKAN_ENABLED)
+     typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
 index f1dd503..f515dc3 100644
 --- a/plume_vulkan.cpp

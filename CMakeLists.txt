@@ -172,6 +172,54 @@ function(apply_nested_patch name dir)
 endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
 
+# Android (android/ is the Gradle project that drives this build): SDL, FreeType and a stand-in for the
+# desktop file dialogs are built here, since the NDK has none of them. Pinned to fixed versions.
+if (ANDROID)
+    include(FetchContent)
+
+    # SDL2 as a shared library: SDLActivity (android/app/src/main/java/org/libsdl/app, copied from this
+    # same SDL release) loads libSDL2.so and then the game, libmain.so.
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(sdl2
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-2.30.9
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(sdl2)
+    # Gives both <SDL.h> and <SDL2/SDL.h>, as the desktop builds have.
+    set(SDL2_INCLUDE_DIRS "$<TARGET_PROPERTY:SDL2,INTERFACE_INCLUDE_DIRECTORIES>")
+
+    # FreeType for the menu fonts (RmlUi finds it with find_package(Freetype)).
+    set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(freetype
+        GIT_REPOSITORY https://github.com/freetype/freetype.git
+        GIT_TAG VER-2-13-3
+        GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(freetype)
+    # Point FindFreetype at this build, so it reports FreeType as found and uses the freetype target.
+    set(FREETYPE_INCLUDE_DIR_ft2build "${freetype_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+    set(FREETYPE_INCLUDE_DIR_freetype2 "${freetype_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+    set(FREETYPE_LIBRARY freetype CACHE STRING "" FORCE)
+    if (NOT TARGET Freetype::Freetype)
+        add_library(Freetype::Freetype ALIAS freetype)
+    endif()
+
+    # RT64 never builds zstd dictionaries, and their code needs qsort_r, which Android only has from API 36.
+    set(ZSTD_BUILD_DICTBUILDER OFF CACHE BOOL "" FORCE)
+
+    # No native file dialogs on Android: the ROM is picked in Java before the game starts.
+    add_library(nfd STATIC ${CMAKE_SOURCE_DIR}/src/android/nfd_android.cpp)
+    target_include_directories(nfd PUBLIC ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/nativefiledialog-extended/src/include)
+
+    add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
+    add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
+endif()
+
 # iryoku/smaa, for the SMAA passes rt64.patch adds.
 set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
 # AMD FidelityFX FSR 1, for the FSR passes rt64.patch adds.
@@ -213,7 +261,13 @@ file(GLOB FUNC_CXX_SOURCES ${RECOMP_FUNCS_DIR}/*.cpp)
 target_sources(RecompiledFuncs PRIVATE ${FUNC_C_SOURCES} ${FUNC_CXX_SOURCES})
 
 # Main executable
-add_executable(BanjoTooieN64Recomp)
+if (ANDROID)
+    # SDLActivity loads the game as libmain.so and calls its SDL_main.
+    add_library(BanjoTooieN64Recomp SHARED)
+    set_target_properties(BanjoTooieN64Recomp PROPERTIES OUTPUT_NAME main)
+else()
+    add_executable(BanjoTooieN64Recomp)
+endif()
 
 set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
@@ -326,9 +380,10 @@ target_include_directories(BanjoTooieN64Recomp PRIVATE
 )
 
 # Generate icon_bytes.c from the app icon PNG.
+# RT64_FILE_TO_C is RT64's file_to_c tool, or on Android a CMake script with the same output.
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.h
-    COMMAND file_to_c ${CMAKE_SOURCE_DIR}/icons/app.png icon_bytes ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.h
-    DEPENDS ${CMAKE_SOURCE_DIR}/icons/app.png
+    COMMAND ${RT64_FILE_TO_C} ${CMAKE_SOURCE_DIR}/icons/app.png icon_bytes ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.h
+    DEPENDS ${CMAKE_SOURCE_DIR}/icons/app.png ${RT64_FILE_TO_C_DEPENDS}
 )
 
 target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/icon_bytes.c)
@@ -440,6 +495,12 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(BanjoTooieN64Recomp PRIVATE "-latomic -static-libstdc++" ${CMAKE_DL_LIBS} Threads::Threads)
 endif()
 
+if (ANDROID)
+    target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_SOURCE_DIR}/src/android/android_platform.cpp)
+    target_include_directories(BanjoTooieN64Recomp PRIVATE ${SDL2_INCLUDE_DIRS})
+    target_link_libraries(BanjoTooieN64Recomp PRIVATE SDL2 freetype android log ${CMAKE_DL_LIBS})
+endif()
+
 # TODO fix the rt64 CMake script so that this doesn't need to be duplicated here
 # For DXC
 set (DXC_COMMON_OPTS "-I${PROJECT_SOURCE_DIR}/src")
@@ -454,6 +515,17 @@ set (DXC_RT_OPTS "${DXC_COMMON_OPTS}" "-D" "RT_SHADER" "-T" "lib_6_3" "-fspv-tar
 if (${WIN32})
     set (DXC "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxc.exe")
     add_compile_definitions(NOMINMAX)
+elseif (ANDROID)
+    # Cross build: run the shader compiler made for the build machine.
+    if (CMAKE_HOST_WIN32)
+        set (DXC "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxc.exe")
+    elseif (CMAKE_HOST_APPLE)
+        set (DXC "DYLD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/arm64/dxc-macos")
+    elseif (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+        set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/x64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxc-linux")
+    else()
+        set (DXC "LD_LIBRARY_PATH=${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/lib/arm64" "${PROJECT_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/arm64/dxc-linux")
+    endif()
 else()
     if (APPLE)
         # Apple's binary is universal, so it'll work on both x86_64 and arm64
@@ -477,6 +549,14 @@ set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
 
+if (ANDROID)
+    # SDL copies its headers into its build folder while building; these include them without linking SDL.
+    add_dependencies(plume sdl_headers_copy)
+    add_dependencies(rt64 sdl_headers_copy)
+    add_dependencies(recompui sdl_headers_copy)
+    add_dependencies(recompinput sdl_headers_copy)
+endif()
+
 target_link_libraries(BanjoTooieN64Recomp PRIVATE
     RecompiledFuncs
     recompui
@@ -499,8 +579,8 @@ foreach(NRM_FILE ${NRM_FILES})
 
     add_custom_command(
         OUTPUT ${OUT_C} ${OUT_H}
-        COMMAND file_to_c ${NRM_FILE} ${NRM_NAME} ${OUT_C} ${OUT_H}
-        DEPENDS ${NRM_FILE}
+        COMMAND ${RT64_FILE_TO_C} ${NRM_FILE} ${NRM_NAME} ${OUT_C} ${OUT_H}
+        DEPENDS ${NRM_FILE} ${RT64_FILE_TO_C_DEPENDS}
     )
 
     list(APPEND GENERATED_NRM_SOURCES ${OUT_C})
@@ -512,9 +592,12 @@ target_sources(BanjoTooieN64Recomp PRIVATE ${SOURCES})
 
 # The menus load assets/ (styles, fonts, icons) from the working directory, and the game moves to
 # its own folder when that has none, so the exe in the build folder also runs on its own.
-add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:BanjoTooieN64Recomp>/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/recompcontrollerdb.txt" $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+# (Android packs them into the APK instead, android/app/build.gradle.)
+if (NOT ANDROID)
+    add_custom_command(TARGET BanjoTooieN64Recomp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:BanjoTooieN64Recomp>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/recompcontrollerdb.txt" $<TARGET_FILE_DIR:BanjoTooieN64Recomp>)
+endif()
 
 # Release builds stamp their version from the environment (set by CI).
 if (DEFINED ENV{TOOIE_VERSION})
