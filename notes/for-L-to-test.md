@@ -1609,7 +1609,7 @@
 
 ## T152 Bottles' glow without the box, and a Model Effects key
 - Asked: 2026-10-15 UTC
-- Build: main @ (this commit)
+- Build: main @ 113fd0d
 - Steps:
   1. Turn the effects on as you play (ambient occlusion, outlines, fog, bloom; any preset)
   2. Watch Bottles' ghost (the Bottles' Revenge intro in Spiral Mountain, or wherever you saw it)
