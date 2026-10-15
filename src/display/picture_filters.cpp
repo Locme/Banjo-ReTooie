@@ -56,6 +56,7 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneModernWater(bool enabled);
+    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength);
     void SetSceneGrass(float amount, float height, float distance);
@@ -480,6 +481,11 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     if (underwater_amount != underwater_sent) {
         underwater_sent = underwater_amount;
         RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);
+    }
+    // Modern water's caustics under the water: how far under, the surface's height and whether the whole level is.
+    if (modern_water) {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        RT64::SetSceneModernUnderwater(underwater_amount, water_surface, (map == 0x1A8) || (map == 0x1A9));
     }
 
     // Ripples: a ring spreads from Banjo as he moves (one every 0.25 s and 20 units), or now and then while he

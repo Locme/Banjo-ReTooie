@@ -1864,3 +1864,14 @@
   4. Look at the water from a low angle near the surface
 - Look for: Does the surface visibly rise and fall, with ripples spreading from Banjo as he swims, a bigger splash when he lands in the water and a gentle bob when he floats still? Is Banjo's body under the water seen through it, without a white patch round him? Frame rate compared with Original?
 - Status: waiting for L
+
+## T176 Modern water from below, and caustics
+- Asked: 2026-10-15 19:28 UTC
+- Build: main (this commit)
+- Steps:
+  1. Pull main and build, Graphics > Water: Modern
+  2. In Atlantis or the Sea Bottom, swim near the floor
+  3. In a pool you can dive in (Spiral Mountain pool, Jolly Roger's harbour), dive and look up at the surface
+  4. Float on top and look down at the floor in shallow water
+- Look for: Do bright moving light patterns (caustics) play on the floor under water, seen from above and from below? Looking up from under the surface: a bright, wobbling window onto the world above straight up, and a dark mirror further out? Anything that looks wrong at the edges of pools?
+- Status: waiting for L

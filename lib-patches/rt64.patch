@@ -2568,10 +2568,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c5740d5
+index 0000000..5dfd89d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1052 @@
+@@ -0,0 +1,1066 @@
 +//
 +// RT64
 +//
@@ -2808,6 +2808,13 @@ index 0000000..c5740d5
 +    void SetSceneModernWater(bool enabled) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.modernWater = enabled;
++    }
++
++    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.modernUnderwater = amount;
++        effectsSettings.modernSurfaceY = surfaceY;
++        effectsSettings.modernWholeLevel = wholeLevel;
 +    }
 +
 +    bool SceneModernWater() {
@@ -3560,11 +3567,18 @@ index 0000000..c5740d5
 +        res.waterColorDrawn = false;
 +        RenderTexture *water = res.waterTexture.get();
 +        RenderTexture *waterColor = res.waterColorTexture.get();
-+        constants.water = { (waterDrawn && !modern && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (waterDrawn ? 1.0f : 0.0f), settings.bounceLight,
-+            modern ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
-+        if (modern) {
++        // water.y 3: Modern water with no water drawn this frame (its caustics under the water still show).
++        const bool modernOn = settings.modernWater;
++        constants.water = { (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? 1.0f : 0.0f)), settings.bounceLight,
++            modernOn ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
++        if (modernOn) {
 +            // Modern water reads the ripple grid instead of the rings: its corner in world x and z, its cell size,
-+            // and 1 when it holds this player's ripples.
++            // and 1 when it holds this player's ripples; then how far under water (z), the surface's height (x)
++            // and 1 for a whole level under water (y) in rippleAge.
++            constants.rippleZ.z = settings.modernUnderwater;
++            constants.rippleAge.x = settings.modernSurfaceY;
++            constants.rippleAge.y = settings.modernWholeLevel ? 1.0f : 0.0f;
++            constants.rippleAge.z = 0.0f;
 +            constants.rippleX.x = float(res.rippleCornerX) * RippleCellSize;
 +            constants.rippleZ.x = float(res.rippleCornerZ) * RippleCellSize;
 +            constants.rippleX.y = RippleCellSize;
@@ -3626,10 +3640,10 @@ index 0000000..c5740d5
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..613351a
+index 0000000..a2c9d12
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,166 @@
 +//
 +// RT64
 +//
@@ -3677,6 +3691,11 @@ index 0000000..613351a
 +        float waterWaves = 0.0f;
 +        // Modern water: the game's water isn't drawn; the pass draws its own in its place.
 +        bool modernWater = false;
++        // Modern water under the water: how far into the underwater look (0 to 1), the water's surface height and
++        // whether the whole level is under water (Atlantis, the Sea Bottom).
++        float modernUnderwater = 0.0f;
++        float modernSurfaceY = 0.0f;
++        bool modernWholeLevel = false;
 +        float lightShafts = 0.0f;
 +        float sunShadows = 0.0f;
 +        float sunShadowReach = 900.0f;
@@ -3730,6 +3749,8 @@ index 0000000..613351a
 +    void SetSceneModernWater(bool enabled);
 +    // Whether the game's water draws are left out this frame (Modern water, with the effects pass drawing).
 +    bool SceneModernWater();
++    // Modern water's caustics while under water: how far under (0 to 1), the surface's height, a whole level under water.
++    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
 +    void SetSceneLightShafts(float strength);
 +    // Banjo-Tooie: sun shadows (0 off, 1 strongest): everything in the 3D world casts a shadow away from the
@@ -5412,10 +5433,10 @@ index 74b1fa0..a51b5bc 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..27a587b
+index 0000000..376472b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1096 @@
+@@ -0,0 +1,1173 @@
 +//
 +// RT64
 +//
@@ -5973,6 +5994,27 @@ index 0000000..27a587b
 +    return WaveHeight(p, gConstants.ambientOcclusion.z, footprint) * strength + Ripples(p, waterY).x;
 +}
 +
++// Caustics: the bright, wobbling net of light the waves focus onto what is under the water (0 to about 1.5),
++// over the world's x and z.
++float Caustics(float2 p, float t) {
++    float2 q = p / 70.0f;
++    float light = 0.0f;
++    [unroll] for (int i = 0; i < 3; i++) {
++        q += float2(sin(q.y * 1.7f + t * 0.9f + float(i)), cos(q.x * 1.3f - t * 0.7f + float(i) * 1.9f)) * 0.55f;
++        light += 1.0f / (1.0f + 14.0f * abs(sin(q.x * 2.3f) + sin(q.y * 2.1f)));
++    }
++    return saturate(light * 0.75f - 0.2f) * 1.5f;
++}
++
++// How strongly caustics light a point under the water: on what faces up, fading with depth below the surface.
++float CausticsAt(int2 pixel, float3 view, float depthBelow) {
++    if (depthBelow <= 0.0f) {
++        return 0.0f;
++    }
++    const float facing = saturate(dot(ViewNormal(pixel, view), normalize(gConstants.worldY.xyz)) * 1.5f - 0.2f);
++    return Caustics(WorldPosition(view).xz, gConstants.ambientOcclusion.z) * facing * exp(-depthBelow / 400.0f) * saturate(depthBelow / 15.0f);
++}
++
 +// Modern water (Graphics > Water): the game's water isn't drawn, so the scene here is what lies under the
 +// surface. The water is drawn over it: the floor seen through the surface, bent by the waves and fading into
 +// the water's own colour with depth (from the game's water colour, so each level keeps its look), the sky
@@ -6068,6 +6110,14 @@ index 0000000..27a587b
 +        }
 +    }
 +
++    // The waves' light dancing on the floor.
++    // Gentler on the player's own body just under the surface, where they whitened the shoulders.
++    const float3 surfaceAt = WorldPosition(surface);
++    const float clearOfPlayer = (gConstants.rippleAge.w > -1e8f) ? saturate((length(surfaceAt.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 50.0f) / 40.0f) : 1.0f;
++    if (sceneDepth < 0.99999f) {
++        below *= 1.0f + (0.15f + 0.4f * clearOfPlayer) * CausticsAt(pixel, ViewPosition(pixel, sceneDepth), floorDepth);
++    }
++
 +    // Light fades through the water: red first, then green, so deep water turns the game's colour.
 +    // Stylised: clearer than real water, so the floor of a pool shows a few hundred units down.
 +    const float3 absorb = (1.15f - hue) * (1.0f / 450.0f) + 1.0f / 1800.0f;
@@ -6095,11 +6145,42 @@ index 0000000..27a587b
 +    const float pattern = WaterNoise(p / 18.0f + float2(t * 0.15f, 0.0f)) * 0.6f + WaterNoise(p / 7.0f - float2(0.0f, t * 0.3f)) * 0.4f;
 +    // Not round the player: there the thing just under the surface is their body, not the shore.
 +    const float nearPlayer = (gConstants.rippleAge.w > -1e8f) ? saturate((length(p - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 60.0f) / 30.0f) : 1.0f;
-+    const float shore = (sceneDepth < 0.99999f) ? saturate(1.0f - floorDepth / 22.0f) * nearPlayer : 0.0f;
++    const float shore = (sceneDepth < 0.99999f) ? saturate(1.0f - floorDepth / 16.0f) * nearPlayer : 0.0f;
 +    const float shoreFoam = saturate((shore * 1.2f - (1.0f - pattern) * 1.0f) * 2.5f) * saturate(1.5f - distance / 4000.0f);
 +    const float allFoam = saturate(max(shoreFoam, foam * (0.15f + 0.45f * pattern)));
-+    color = lerp(color, float3(0.93f, 0.96f, 0.98f), allFoam * 0.7f);
++    color = lerp(color, float3(0.93f, 0.96f, 0.98f), allFoam * 0.55f);
 +    return color;
++}
++
++// Modern water's surface seen from under it: straight up, a bright window onto the world above, bent by the
++// waves; further out the surface mirrors the water below (total internal reflection), dark in its colour.
++float3 ModernWaterBelow(int2 pixel, float3 surface, float3 normal, float3 scene) {
++    const float3 v = normalize(surface);
++    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
++    const float3 world = WorldPosition(surface);
++    const float waterY = world.y;
++    const float4 ripple = Ripples(world.xz, waterY);
++    const float2 slope = WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * gConstants.water.w + ripple.yz;
++    const float3 n = normalize(normal + normalize(gConstants.worldX.xyz) * slope.x + normalize(gConstants.worldZ.xyz) * slope.y);
++
++    // The water's colour, as from above.
++    const float3 tint = LoadWaterColor(pixel).rgb;
++    const float luma = dot(tint, float3(0.299f, 0.587f, 0.114f));
++    const float3 hue = saturate(lerp(luma.xxx, tint, 1.35f));
++    const float3 deep = hue * 0.45f + float3(0.02f, 0.05f, 0.08f);
++
++    // The world above, through the window, bent strongly by the waves.
++    const float3 bend = n - normal;
++    const int2 bent = clamp(int2(float2(pixel) + float2(bend.x, -bend.y) * gConstants.projection.w * 0.12f), int2(0, 0), int2(gConstants.projection.zw) - 1);
++    float bentWater;
++    const float3 above = LoadWater(bent, bentWater) ? gColor.Load(int3(bent, 0)).rgb : scene;
++    const float facing = saturate(dot(-v, n));
++    // Snell's window: about 49 degrees either side of straight up.
++    const float window = smoothstep(0.6f, 0.72f, facing);
++    // Outside it, the water below is mirrored.
++    const float4 mirrored = WaterReflection(surface, n);
++    const float3 inside = lerp(deep, mirrored.rgb * lerp(1.0f.xxx, hue, 0.4f), mirrored.a * 0.6f);
++    return lerp(inside, above * lerp(1.0f.xxx, hue * 1.4f, 0.25f) * 1.1f, window);
 +}
 +
 +// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
@@ -6459,12 +6540,29 @@ index 0000000..27a587b
 +            // anything else the game drew as water (waterfalls, and the surface seen from under it) is put back
 +            // as the game drew it, from its colour and blending alpha.
 +            float waterDepth;
-+            if (LoadWater(pixel, waterDepth)) {
++            if ((gConstants.water.y < 2.5f) && LoadWater(pixel, waterDepth)) {
 +                float3 surface, normal;
 +                const float amount = WaterAmount(pixel, depth, surface, normal);
 +                const float4 game = LoadWaterColor(pixel);
 +                const float3 original = lerp(scene, game.rgb, saturate(game.a));
-+                scene = (amount > 0.0f) ? lerp(original, ModernWater(pixel, depth, surface, normal, scene), amount) : original;
++                // The camera's height against the surface's: from under it the surface is seen from below.
++                float3 flatSurface = ViewPosition(pixel, waterDepth);
++                const bool fromBelow = gConstants.worldY.w < dot(flatSurface, gConstants.worldY.xyz) + gConstants.worldY.w;
++                if (fromBelow) {
++                    // Facing up in the world, whichever side the camera is on.
++                    float3 n = normalize(gConstants.worldY.xyz);
++                    const float flat = (amount > 0.0f) ? 1.0f : saturate((abs(dot(normal, n)) - 0.45f) * 4.0f);
++                    scene = (flat > 0.0f) ? lerp(original, ModernWaterBelow(pixel, flatSurface, -n, scene), flat) : original;
++                }
++                else {
++                    scene = (amount > 0.0f) ? lerp(original, ModernWater(pixel, depth, surface, normal, scene), amount) : original;
++                }
++            }
++            else if ((gConstants.rippleZ.z > 0.0f) && (depth < 0.99999f)) {
++                // Under the water: caustics on what faces up below the surface.
++                const float3 view = ViewPosition(pixel, depth);
++                const float below = (gConstants.rippleAge.y > 0.5f) ? 300.0f : (gConstants.rippleAge.x - WorldPosition(view).y);
++                scene *= 1.0f + 0.6f * gConstants.rippleZ.z * CausticsAt(pixel, view, below);
 +            }
 +        }
 +        else if ((gConstants.water.x > 0.0f) || (gConstants.water.w > 0.0f)) {
