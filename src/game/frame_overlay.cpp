@@ -570,7 +570,9 @@ namespace {
             text.push_back("Interpolation: " + framerate_setting() + line);
         }
         else {
-            text.push_back("Interpolation: " + framerate_setting() + ", off");
+            // With the setting itself Off, "Off, off" says it twice.
+            const std::string setting = framerate_setting();
+            text.push_back("Interpolation: " + (setting == "Off" ? setting : setting + ", off"));
         }
 
         text.push_back(stutter_line());
