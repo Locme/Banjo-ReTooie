@@ -109,17 +109,6 @@ namespace {
         }
     }
 
-    bool smooth_talking_heads() {
-        if (!created) {
-            return false;
-        }
-        try {
-            return std::get<bool>(recompui::config::get_graphics_config().get_option_value(tooie::game_frame_rate::smooth_talking_heads_option));
-        } catch (...) {
-            return false;
-        }
-    }
-
     // Game frames stepped so far (tooie_frame_step_done).
     std::atomic<uint32_t> game_frames_stepped{ 0 };
     // Game time so far, in seconds (tooie_frame_step_done).
@@ -557,13 +546,7 @@ namespace {
 // Talking-head portraits (the zoombox overlay): func_8080156C_gczoombox moves a
 // portrait's mouth (+0x1CF, following the mouth pattern at +0xF0 indexed by
 // +0x1D0) and its blink one step per game frame ($a0 = the box).
-// Smooth talking heads (default off): they step every game frame instead of 30
-// times a second. The mouth pattern (+0x1D0) moves on when the mouth reaches
-// its frame, so they also talk faster (twice at 60 FPS).
 extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
-    if (smooth_talking_heads()) {
-        return 0;
-    }
     return portrait_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
@@ -603,12 +586,4 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
             {Mode::Unlocked, "Unlocked", "Unlocked (Experimental)"},
         },
         Mode::Fps60);
-    graphics.add_bool_option(
-        smooth_talking_heads_option,
-        "Smooth talking heads",
-        "Above 30 FPS, the talking heads in dialogue boxes move their mouths and blink every frame instead of 30 times a second. "
-        "Their pictures are separate drawings, so this also makes them talk faster (twice as fast at 60 FPS). "
-        "The box, its opening and closing, and the text already run at the full frame rate either way.",
-        false);
 }
-

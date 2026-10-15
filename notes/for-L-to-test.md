@@ -1838,7 +1838,7 @@
   2. Talk to anyone with a talking head in the box (Klungo in Spiral Mountain, Bottles, Jamjars)
   3. Flip Graphics > Smooth talking heads on and off while the box is open (it applies live)
 - Look for: The box, its opening and closing and the text already run at 60 either way. On, the head's mouth and blink move every frame but it also talks about twice as fast, because the mouth pictures are separate drawings. Tell me which you prefer, or whether the speed-up spoils it.
-- Status: waiting for L
+- Status: L 2026-10-15 19:49: did not work out; option removed
 
 
 ## T174 Day and night cycle in the sunny outdoor levels
