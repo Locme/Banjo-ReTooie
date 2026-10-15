@@ -47,7 +47,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::PICK_MODEL, "Pick Model",
         "Steps a green highlight through the models on screen, nearest the middle first, for tagging how one blends between game frames.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::TAG_MODEL, "Tag Model",
-        "Steps the picked model's blend between game frames: default, snap, vertex, untagged. Shows in the custom blend mode.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Steps the picked model's blend between game frames: default (the custom rule: characters blend with vertices, the rest snaps), snap, vertex, untagged. Shows in the custom blend mode.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::SAVE_TAGS, "Save Tags",
         "Writes the tagged models to interp_tags.txt next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::UNSAVE_TAG, "Unsave Tag",

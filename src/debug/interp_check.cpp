@@ -39,7 +39,8 @@ namespace {
 
     std::once_flag started;
     std::atomic<bool> on{false};
-    std::atomic<int> mode{0};
+    // Starts in the custom mode (L, 2026-10-15).
+    std::atomic<int> mode{5};
     constexpr int mode_count = 6;
     bool created = false;
 
@@ -122,9 +123,9 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
         blend_option,
         "Interpolation blend mode",
         "For testing. How frames between two game frames are blended, to find what blends wrong. "
-        "<recomp-color primary>normal</recomp-color> is the setting the game ships with. <recomp-color primary>custom</recomp-color> is normal plus the models you tagged with the Pick Model and Tag Model keys (interp_tags.txt). The Blend Mode key (bind one in the Debug section of the Controls tab) steps through them. Starts on normal each launch.",
+        "<recomp-color primary>custom</recomp-color> is the setting the game ships with: models snap to the game's own frames and the camera blends, but characters (models with bones) blend with their vertices too, and a model you tagged with the Pick Model and Tag Model keys (interp_tags.txt) does as its tag says. <recomp-color primary>normal</recomp-color> blends every model without vertex blending. The Blend Mode key (bind one in the Debug section of the Controls tab) steps through them. Starts on custom each launch.",
         options,
-        0u);
+        5u);
     graphics.add_option_change_callback(blend_option,
         [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context == recomp::config::OptionChangeContext::Temporary) {
@@ -132,7 +133,7 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
                 return;
             }
             const auto* v = std::get_if<uint32_t>(&value);
-            mode = ((v != nullptr) && (*v < (uint32_t)mode_count)) ? (int)*v : 0;
+            mode = ((v != nullptr) && (*v < (uint32_t)mode_count)) ? (int)*v : 5;
         });
 }
 
@@ -145,7 +146,7 @@ void tooie::interp_check::start() {
         if (const char* v = std::getenv("TOOIE_BLEND_MODE"); v != nullptr) {
             mode = std::atoi(v) % mode_count;
         }
-        // Left on last time, they start off again.
+        // Left on last time, they start on their defaults again.
         set_on(on.load());
         set_mode(mode.load());
         std::thread(worker).detach();
@@ -162,7 +163,7 @@ const char* tooie::interp_check::blend_mode_name(int m) {
         case 2: return "tags, with vertex blending";
         case 3: return "camera untagged";
         case 4: return "models snap, camera blends";
-        case 5: return "custom (normal plus your tags)";
+        case 5: return "custom (models snap, characters blend, your tags)";
         default: return "normal";
     }
 }

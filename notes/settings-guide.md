@@ -238,10 +238,14 @@ Game Frame Rate.
   Interpolation Check key switches it too. Shows nothing at Original. Starts Off each launch.
 - **Interpolation blend mode** (Graphics > Debug): a list of the six ways
   in-between frames are blended (normal, no tags, tags with vertex blending,
-  camera untagged, models snap, custom). Custom is normal plus the models you
-  tagged in the game (see the Pick Model and Tag Model keys in keys.md); the
-  tags live in `interp_tags.txt` next to the save files. Starts on normal
-  each launch. The Blend Mode key steps through them.
+  camera untagged, models snap, custom). Custom is the default: models snap
+  to the game's own frames and the camera blends, but characters (models
+  with bones: NPCs, enemies, bosses, the player) blend with their vertices,
+  and a model or particle you tagged in the game (see the Pick Model and Tag
+  Model keys in keys.md) does as its tag says; the tags live in
+  `interp_tags.txt` next to the save files. Normal blends every model
+  without vertex blending. Starts on custom each launch. The Blend Mode key
+  steps through them.
 
 ## Controls: Hotkeys and Debug
 

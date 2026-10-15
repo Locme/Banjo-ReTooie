@@ -18,13 +18,13 @@ namespace tooie::interp_check {
     // Starts watching the key (once).
     void start();
     bool enabled();
-    // The Blend Mode key (unbound unless set in the Controls tab) or the menu picks a blend mode for finding what blends wrong (0 = normal):
+    // The Blend Mode key (unbound unless set in the Controls tab) or the menu picks a blend mode for finding what blends wrong (5 = custom, the default; 0 = normal):
     // 1 no tags (RT64's own matching), 2 tags with vertex blending (off since
     // it tore the sky),
-    // 3 camera untagged, 4 models snap (camera still blends), 5 custom (normal plus the manual tags).
+    // 3 camera untagged, 4 models snap (camera still blends), 5 custom (the default: models snap, characters blend with vertices, manual tags decide).
     int blend_mode();
     const char* blend_mode_name(int mode);
-    // 5 custom: normal plus the manual tags (tooie_interp_tags.h).
+    // 5 custom (the default): models snap, characters (2+ matrices) blend with their vertices, the manual tags (tooie_interp_tags.h) decide for their models.
     inline constexpr int blend_custom = 5;
     void set_blend_mode(int mode);
 }

@@ -216,9 +216,12 @@ namespace {
                 uint32_t w0 = word(rdram, phys);
                 uint32_t w1 = word(rdram, phys + 4);
                 uint32_t op = w0 >> 24;
-                mix(w0);
+                // Texture words change as a texture animates (fire, water),
+                // and colours as a thing flashes: only their opcodes count.
+                bool texture = op == 0xF5 || op == 0xF2 || op == 0xF3 || op == 0xF4 || op == 0xF0 || op == 0xFA || op == 0xFB;
                 bool address = op == op_vtx || op == op_dl || op == op_mtx || op == op_moveword || op == 0xDC || op == 0xFD || op == 0xFE || op == op_setcimg || op == 0x04;
-                if (!address) {
+                mix(texture ? op << 24 : w0);
+                if (!address && !texture) {
                     mix(w1);
                 }
                 if (op == op_dl) {
@@ -667,7 +670,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids);
     if (tags_wanted) {
         for (Block& block : blocks) {
-            if (block.model != 0 && block.first_phys != 0) {
+            // Particles (fire, say) have a print too: their lists are built
+            // each frame but read the same with the addresses left out.
+            if ((block.model != 0 || (block.textures == 0 && block.matrices != 0)) && block.first_phys != 0) {
                 block.print = model_print(rdram, block.first_phys);
                 block.tag_mode = custom ? tooie::interp_tags::mode_of(block.print) : tooie::interp_tags::mode_default;
                 if (log_ids && block.tag_mode != tooie::interp_tags::mode_default) {
@@ -681,8 +686,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     // Headless: each print once, with where it was seen.
                     static std::unordered_set<uint32_t> printed;
                     if (printed.insert(block.print).second) {
-                        std::fprintf(stderr, "[print] model %08X list %08X map %X at %.0f,%.0f,%.0f (%u matrices)\n", block.print, block.first_phys,
-                            tooie::debug::current_map(rdram), block.pos[0], block.pos[1], block.pos[2], block.matrices);
+                        std::fprintf(stderr, "[print] %s %08X list %08X map %X at %.0f,%.0f,%.0f (%u matrices)\n", block.model != 0 ? "model" : "particle",
+                            block.print, block.first_phys, tooie::debug::current_map(rdram), block.pos[0], block.pos[1], block.pos[2], block.matrices);
                     }
                 }
             }
@@ -705,7 +710,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         };
         std::vector<Candidate> candidates;
         for (const Block& block : blocks) {
-            if (block.model == 0 || block.matrices == 0 || block.shadow || block.print == 0 || !block.have_pos) {
+            if (block.matrices == 0 || block.shadow || block.print == 0 || !block.have_pos) {
                 continue;
             }
             bool seen = false;
@@ -744,8 +749,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             const Candidate& c = candidates[next];
             char note[96];
-            std::snprintf(note, sizeof(note), " map %X at %.0f,%.0f,%.0f (%u matrices)", tooie::debug::current_map(rdram),
-                c.block->pos[0], c.block->pos[1], c.block->pos[2], c.block->matrices);
+            std::snprintf(note, sizeof(note), " map %X at %.0f,%.0f,%.0f (%u matrices%s)", tooie::debug::current_map(rdram),
+                c.block->pos[0], c.block->pos[1], c.block->pos[2], c.block->matrices, c.block->model == 0 ? ", particle" : "");
             tooie::interp_tags::set_picked(c.print, note);
             char text[128];
             std::snprintf(text, sizeof(text), "Picked model %08X (%zu of %zu): %s", c.print, next + 1, candidates.size(),
@@ -960,6 +965,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // are still blended, see below.
     const bool game_select = !overlay && tooie::debug::current_map(rdram) == game_select_map;
     const bool snap = (cut && !overlay) || game_select || blend_mode == 4;
+    // The custom blend mode's baseline (L, 2026-10-15): models snap and the
+    // camera blends, as mode 4, except that characters (models with bones,
+    // two matrices or more) blend with their vertex positions, and a tag
+    // from interp_tags.txt decides for its model.
+    const bool snap_rest = snap || custom;
 
     slot = (slot + 1) % slot_count;
     uint32_t cursor = list_area + slot * slot_size;
@@ -1352,8 +1362,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         bool projection = (params & mtx_projection) != 0;
         // A model tagged "untagged" is left to RT64's own matching.
         bool model = b >= 0 && blocks[b].model != 0 && !projection && blocks[b].tag_mode != tooie::interp_tags::mode_untagged;
-        bool particle = particle_id[index] != 0;
-        bool tag = model || particle || (snap && !projection && !overlay);
+        bool particle = particle_id[index] != 0 && !(b >= 0 && blocks[b].tag_mode == tooie::interp_tags::mode_untagged);
+        bool tag = model || particle || (snap_rest && !projection && !overlay);
         // The perspective camera gets an id that changes at each cut, so RT64
         // does not blend the camera across it.
         bool tag_camera = projection && (params & mtx_load) != 0 && !camera_tagged && have_camera && blend_mode != 3;
@@ -1435,8 +1445,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             // The model's manual tag (interp_tags.txt): snap draws it at the
             // game's rate, vertex blends its vertex positions too.
-            const int tag_mode = model ? blocks[b].tag_mode : tooie::interp_tags::mode_default;
-            const bool model_snap = snap || tag_mode == tooie::interp_tags::mode_snap;
+            int tag_mode = (model || particle) && b >= 0 ? blocks[b].tag_mode : tooie::interp_tags::mode_default;
+            if (custom && tag_mode == tooie::interp_tags::mode_default) {
+                // The custom rule: characters blend with vertices, the rest
+                // (props, particles) snaps; a tag overrides it.
+                tag_mode = model && blocks[b].matrices >= 2 ? tooie::interp_tags::mode_vertex : tooie::interp_tags::mode_snap;
+            }
+            const bool model_snap = snap || tag_mode == tooie::interp_tags::mode_snap || (!model && !particle && snap_rest);
             uint32_t components = model_snap ? component_skip : component_interpolate;
             put(rdram, cursor, group_word0(), id);
             // A particle's quad is rebuilt each frame; only its place blends.
@@ -1445,7 +1460,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             // and models whose vertex set changes with the view (the sky
             // dome's parts) then tear for a game frame (L, 2026-10-14, F8
             // bisect). Blend mode 2 turns it back on for comparison.
-            uint32_t vertices = model_snap || particle || (blend_mode != 2 && tag_mode != tooie::interp_tags::mode_vertex) ?
+            uint32_t vertices = model_snap || (blend_mode != 2 && tag_mode != tooie::interp_tags::mode_vertex) ?
                 component_skip : component_interpolate;
             // A shadow's bones are flat, so they cannot be split into turn and
             // scale (that put spikes in the shadow between frames): blended
@@ -1577,13 +1592,13 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         };
         for (size_t bi = 0; bi < blocks.size(); bi++) {
             Block& block = blocks[bi];
-            if (block.model == 0 || block.matrices == 0) {
+            if (block.matrices == 0) {
                 continue;
             }
             if (picked_print != 0 && block.print == picked_print && !block.shadow) {
                 recolor(bi, 0x00FF0000);
             }
-            if (!checking) {
+            if (!checking || block.model == 0) {
                 continue;
             }
             uint64_t key = ((uint64_t)block.model << 32) | block.instance;

@@ -1595,3 +1595,14 @@
   3. Stand so Banjo is off to one side of the screen (turn the camera), and look at enemies near the left and right edges
 - Look for: Banjo's and enemies' shadows are whole and sit under them anywhere on screen; no cut-off shadow or dotted light patch beside Banjo
 - Status: waiting for L
+
+## T151 Custom blend mode as the default: models snap, characters vertex blend, particles taggable
+- Asked: 2026-10-15 10:51 UTC
+- Build: main @ next push
+- Steps:
+  1. Start the game: Graphics > Debug shows the blend mode on custom
+  2. Play CCL and a busy level: props and the sky snap to the game's frames, the camera blends, and every character (NPCs, enemies, bosses, Banjo) blends smoothly with no stretched triangles
+  3. Pick a fire or dust effect with Pick Model: it highlights green and the toast says particle; Tag Model gives it vertex or snap and the change shows at once
+  4. Tag any character that still looks wrong and send interp_tags.txt
+- Look for: Characters smooth, props crisp, no tears; whether the rule picked up every character (a 'character' is a model with two or more bones, so a one-piece enemy or NPC would snap: tag it and tell me which)
+- Status: waiting for L
