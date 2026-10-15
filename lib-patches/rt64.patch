@@ -2872,6 +2872,43 @@ index 5c40c18..df8eb33 100644
      };
  };
 \ No newline at end of file
+diff --git a/src/render/rt64_render_target.cpp b/src/render/rt64_render_target.cpp
+index 81917bc..179c3ff 100644
+--- a/src/render/rt64_render_target.cpp
++++ b/src/render/rt64_render_target.cpp
+@@ -3,6 +3,7 @@
+ //
+ 
+ #include "rt64_render_target.h"
++#include "rt64_texture.h"
+ 
+ #include <algorithm>
+ 
+@@ -20,11 +21,16 @@ namespace RT64 {
+     
+     const long RenderTarget::MaxDimension = 0x4000L;
+ 
++    // Banjo-Tooie: live counts for the [vram] log (declared in rt64_texture.h).
++    std::atomic<int64_t> LiveTextureCount = 0;
++    std::atomic<int64_t> LiveRenderTargetCount = 0;
++
+     RenderTarget::RenderTarget(uint32_t addressForName, Framebuffer::Type type, const RenderMultisampling &multisampling, bool usesHDR) {
+         this->addressForName = addressForName;
+         this->type = type;
+         this->multisampling = multisampling;
+         this->usesHDR = usesHDR;
++        LiveRenderTargetCount++;
+ 
+ #if PRINT_CONSTRUCTOR_DESTRUCTOR
+         fprintf(stdout, "RenderTarget(0x%p)\n", this);
+@@ -32,6 +38,7 @@ namespace RT64 {
+     }
+ 
+     RenderTarget::~RenderTarget() {
++        LiveRenderTargetCount--;
+ #if PRINT_CONSTRUCTOR_DESTRUCTOR
+         fprintf(stdout, "~RenderTarget(0x%p)\n", this);
+ #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
 index 0000000..4f7b939
@@ -4666,10 +4703,32 @@ index 0000000..4cf5377
 +    };
 +};
 diff --git a/src/render/rt64_texture.h b/src/render/rt64_texture.h
-index 95618bc..d5eb4dd 100644
+index 95618bc..f298779 100644
 --- a/src/render/rt64_texture.h
 +++ b/src/render/rt64_texture.h
-@@ -21,5 +21,7 @@ namespace RT64 {
+@@ -7,8 +7,21 @@
+ #include "common/rt64_load_types.h"
+ #include "common/rt64_plume.h"
+ 
++#include <atomic>
++
+ namespace RT64 {
++    // Banjo-Tooie: live counts for the [vram] log (src/debug/vram_log.cpp).
++    extern std::atomic<int64_t> LiveTextureCount;
++    extern std::atomic<int64_t> LiveRenderTargetCount;
++
++    struct TextureLiveCounter {
++        TextureLiveCounter() { LiveTextureCount++; }
++        TextureLiveCounter(const TextureLiveCounter &) { LiveTextureCount++; }
++        ~TextureLiveCounter() { LiveTextureCount--; }
++    };
++
+     struct Texture {
++        TextureLiveCounter liveCounter;
+         uint64_t creationFrame = 0;
+         std::unique_ptr<RenderTexture> texture;
+         std::unique_ptr<RenderTexture> tmem;
+@@ -21,5 +34,7 @@ namespace RT64 {
          uint64_t memorySize = 0;
          std::vector<uint8_t> bytesTMEM;
          bool decodeTMEM = false;

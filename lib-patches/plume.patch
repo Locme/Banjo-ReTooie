@@ -59,7 +59,7 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..c3c096f 100644
+index f1dd503..86bf70a 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
 @@ -11,6 +11,7 @@
@@ -70,7 +70,7 @@ index f1dd503..c3c096f 100644
  #include <cmath>
  #include <climits>
  #include <unordered_map>
-@@ -87,10 +88,37 @@ namespace plume {
+@@ -87,10 +88,63 @@ namespace plume {
          VK_KHR_PRESENT_ID_EXTENSION_NAME,
          VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
          VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
@@ -105,10 +105,36 @@ index f1dd503..c3c096f 100644
 +        return true;
 +    }
 +
++    // Banjo-Tooie: what our own allocations add up to in the device-local heaps, so a log can
++    // tell a leak of ours (these grow with the use) from memory the driver holds by itself.
++    bool GetVideoMemoryDetail(uint64_t &allocationBytes, uint64_t &allocationCount, uint64_t &blockBytes) {
++        allocationBytes = 0;
++        allocationCount = 0;
++        blockBytes = 0;
++        VulkanDevice *device = MemoryReportDevice.load();
++        if ((device == nullptr) || (device->allocator == VK_NULL_HANDLE)) {
++            return false;
++        }
++
++        const VkPhysicalDeviceMemoryProperties *properties = nullptr;
++        vmaGetMemoryProperties(device->allocator, &properties);
++        VmaBudget budgets[VK_MAX_MEMORY_HEAPS] = {};
++        vmaGetHeapBudgets(device->allocator, budgets);
++        for (uint32_t i = 0; i < properties->memoryHeapCount; i++) {
++            if (properties->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
++                allocationBytes += budgets[i].statistics.allocationBytes;
++                allocationCount += budgets[i].statistics.allocationCount;
++                blockBytes += budgets[i].statistics.blockBytes;
++            }
++        }
++
++        return true;
++    }
++
      // Common functions.
  
      static uint32_t roundUp(uint32_t value, uint32_t powerOf2Alignment) {
-@@ -2294,6 +2322,10 @@ namespace plume {
+@@ -2294,6 +2348,10 @@ namespace plume {
  #else
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
  #endif
@@ -119,7 +145,7 @@ index f1dd503..c3c096f 100644
              return false;
          }
  
-@@ -2488,6 +2520,9 @@ namespace plume {
+@@ -2488,6 +2546,9 @@ namespace plume {
          VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
          VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
@@ -129,7 +155,7 @@ index f1dd503..c3c096f 100644
              return false;
          }
  
-@@ -3229,6 +3264,27 @@ namespace plume {
+@@ -3229,6 +3290,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -157,7 +183,7 @@ index f1dd503..c3c096f 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
-@@ -4084,6 +4140,7 @@ namespace plume {
+@@ -4084,6 +4166,7 @@ namespace plume {
  
          VmaAllocatorCreateInfo allocatorInfo = {};
          allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
@@ -165,7 +191,7 @@ index f1dd503..c3c096f 100644
          allocatorInfo.physicalDevice = physicalDevice;
          allocatorInfo.device = vk;
          allocatorInfo.pVulkanFunctions = &vmaFunctions;
-@@ -4097,6 +4154,8 @@ namespace plume {
+@@ -4097,6 +4180,8 @@ namespace plume {
              return;
          }
  
@@ -174,7 +200,7 @@ index f1dd503..c3c096f 100644
          // Find the biggest device local memory available on the device.
          VkDeviceSize memoryHeapSize = 0;
          const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
-@@ -4433,6 +4492,8 @@ namespace plume {
+@@ -4433,6 +4518,8 @@ namespace plume {
          nullBuffer = nullptr; // force destruction before destroying allocator
  
          if (allocator != VK_NULL_HANDLE) {

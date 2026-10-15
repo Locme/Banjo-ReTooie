@@ -2077,3 +2077,11 @@
 - Look for: Step 1, the tabs move into a list down the left side at once, with the quit and close buttons at its bottom, and the options use the full width. Step 2, the selected option's description shows in a strip along the bottom and changes as you move. Step 3, the tabs go back across the top. Not restyled to the sketch yet (that is the next step). Checked headless with keyboard and mouse; not checked with a controller.
 - Status: waiting for L
 
+## T195 Frame rate dropping after a while: what is filling video memory
+- Asked: 2026-10-15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Same setup as your log of 2026-10-15 (4K, 120 fps, MSAA 2x, BT Reloaded and Smash Banjo on)
+  2. Play normally for 10 minutes, then send console.log
+- Look for: the [vram] lines now also say "ours N MB in N allocations, N textures, N render targets". If "ours" climbs with VRAM, the renderer is leaking and the counts say what. If VRAM climbs and "ours" stays level, the graphics driver is holding the memory. Checked headless (software Vulkan, so not your NVIDIA driver): VRAM stays level for 3 minutes with the Enhanced preset, 4K, 120 fps, Smash Banjo, a test texture pack, cheats on, in Mayahem Temple and Isle o' Hags; your log climbs about 1 GB a minute in the same places.
+- Status: waiting for L
