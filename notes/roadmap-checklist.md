@@ -386,6 +386,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.32 Performance defaults
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: claimed by the frame rate overlay thread. N64 version: keep RT64's specialised shaders between sessions (a list of the shader descriptions seen, compiled in the background at start), so first visits stutter less. timeBeginPeriod(1) is already in main.cpp.
 
 ### 4.33 Graphics API choice
 - [x] Done
