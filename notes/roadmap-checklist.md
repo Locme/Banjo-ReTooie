@@ -449,10 +449,12 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.93 Sound command queue guard
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: written for the XBLA sound code, not used here. The N64 sound task guard is 0ba964f (T147).
 
 ### 4.94 Sound list loop guard
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: written for the XBLA sound code, not used here. The N64 sound task guard is 0ba964f (T147).
 
 ### 4.39 Sun flare through walls fix
 L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for instance is not relevant in this Project"). Leave unticked.
@@ -462,6 +464,7 @@ L ruled this not relevant to this project on 2026-10-13 ("Sunglare fix for insta
 ### 4.96 Small fixes (XBLA or SDK)
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: bee wing clipping is resolved (L).
 
 ### 4.38 Sun shadows
 - [ ] Done
