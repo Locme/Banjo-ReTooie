@@ -18,6 +18,7 @@
 #include "recompui/config.h"
 
 #include "tooie_hooks.h"
+#include "tooie_game.h"
 #include "tooie_more_memory.h"
 
 namespace {
@@ -25,7 +26,7 @@ namespace {
 
     bool setting() {
         try {
-            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::more_memory::option));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::more_memory::option));
         } catch (...) {
             return true;
         }

@@ -213,11 +213,6 @@ void tooie::init_config() {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_cheats_tab();
         });
-    general.add_bool_option(
-        tooie::more_memory::option,
-        "More game memory",
-        "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
-        true);
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
@@ -458,6 +453,11 @@ void tooie::init_config() {
             {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
         },
         tooie::TextureDump::Off);
+    wip.add_bool_option(
+        tooie::more_memory::option,
+        "More game memory",
+        "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
+        true);
     wip.add_bool_option(
         tooie::asset_dump_option,
         "Dump assets",
