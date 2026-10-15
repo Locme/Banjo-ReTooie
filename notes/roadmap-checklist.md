@@ -339,6 +339,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.88 Asset dump and replacement
 - [ ] Done
 - [ ] Approved by L
+- 2026-10-15: claimed by the texture sweep thread (in progress).
 
 ### 4.89 Model mods: Smash Banjo and FBX Banjo (out of repo)
 - [ ] Done
@@ -395,8 +396,9 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 
 ### 4.49 Texture dumping and replacement
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
+- 2026-10-15 (T156): General > Developer > Texture dump: While playing, or Sweep all maps (warps through every map and turns the camera). Uses RT64's own dumper (rt64.patch adds RT64::SetTextureDumpDirectory) and also saves each texture as texture_dump/png/<RT64 hash>.png with an rt64.json, so the folder loads as a texture pack; RT64's raw dump files go to texture_dump/raw for texture_hasher. Replacement is RT64's pack support (packs in the mods folder, BT Reloaded loads). Code: src/game/texture_sweep.cpp.
 
 ### 4.87 Mod folders
 - [ ] Done
