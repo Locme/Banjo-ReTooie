@@ -26,7 +26,7 @@
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
-    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare);
+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies);
     void SetSceneSun(bool custom, float x, float y, float z);
 }
 
@@ -115,9 +115,9 @@ namespace {
         }
     }
 
-    bool lens_flare() {
+    bool option_on(const std::string& id) {
         try {
-            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::day_night::flare_option));
+            return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
         } catch (...) {
             return true;
         }
@@ -190,7 +190,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
-            RT64::SetSceneTimeOfDay(false, none, 1.0f, false);
+            RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false);
             RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
         }
         return;
@@ -221,7 +221,9 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Light shafts from the sun only, fading out as it nears the horizon.
     const float shafts = smooth(height / 0.2f);
 
-    RT64::SetSceneTimeOfDay(true, look.tint, shafts, lens_flare());
+    // No fireflies on Hailfire Peaks (lava and ice).
+    const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
+    RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
     {
         std::lock_guard lock{mutex};
@@ -283,4 +285,10 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, soft rings of light cross the screen when you look towards the sun and nothing hides it.",
         true);
     graphics.add_option_hidden_dependency(flare_option, option, Mode::Off);
+    graphics.add_bool_option(
+        fireflies_option,
+        "Fireflies",
+        "With Day and Night on, small glowing fireflies drift round Banjo at night (not on Hailfire Peaks).",
+        true);
+    graphics.add_option_hidden_dependency(fireflies_option, option, Mode::Off);
 }

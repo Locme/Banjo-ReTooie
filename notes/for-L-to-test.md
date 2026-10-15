@@ -2145,3 +2145,15 @@
   2. Look at Banjo and Kazooie close up in photo mode, then walk, jump, Feathery Flap, Talon Trot and roll
 - Look for: every triangle of the FBX (42,433 triangles, 32,015 vertices; v1 was cut down). Same rig, jaw, blink and HD textures as v1 (T192). The model was too big for the game's draw-list index, so the first commands are stored before the list and reached with negative indices; if Banjo is invisible or only his belt shows, that trick fails on Windows. Checked headless in Spiral Mountain: loads from the zip, walks, jumps, flaps with Kazooie and crouches (screenshot screens/banjo-x/alt-v2.png).
 - Status: waiting for L
+
+
+## T202 Day and night: fireflies
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Commit: "Day and night: fireflies at night" on main
+- Steps:
+  1. Graphics > Day and Night: Night (or Cycle) in Spiral Mountain, Jinjo Village, Mayahem Temple or Terrydactyland
+  2. Walk round the open grass and look about
+  3. Graphics > Fireflies off and on
+- Look for: Small yellow-green glows drifting and blinking round Banjo, a little above the ground, hidden behind walls and hills. None by day or on Hailfire Peaks. Too many, too few, too big or too small?
+- Status: waiting for L

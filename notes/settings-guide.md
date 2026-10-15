@@ -186,6 +186,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   Default: 24.
 - **Lens Flare**: with Day and Night on, soft rings of light and a glare when
   you look towards the sun and nothing hides it. Default: on.
+- **Fireflies**: with Day and Night on, small glowing fireflies drift round
+  Banjo at night (not on Hailfire Peaks). Default: on.
 
 ## Graphics: Game Frame Rate and Interpolation
 

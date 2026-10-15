@@ -14,6 +14,8 @@ namespace tooie::day_night {
     inline const std::string length_option = "day_night_length";
     // Lens flare towards the sun by day.
     inline const std::string flare_option = "day_night_flare";
+    // Fireflies round Banjo at night.
+    inline const std::string fireflies_option = "day_night_fireflies";
 
     void add_options(recomp::config::Config& graphics);
     // Call once per frame from the game thread (tooie_warp_tick).

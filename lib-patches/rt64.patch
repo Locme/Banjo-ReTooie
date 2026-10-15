@@ -3114,10 +3114,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..202bc71
+index 0000000..a410a10
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1215 @@
+@@ -0,0 +1,1218 @@
 +//
 +// RT64
 +//
@@ -3510,9 +3510,10 @@ index 0000000..202bc71
 +        }
 +    }
 +
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare) {
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayFlare = flare;
++        effectsSettings.dayFireflies = fireflies;
 +        effectsSettings.timeOfDay = enabled;
 +        for (int i = 0; i < 3; i++) {
 +            effectsSettings.dayTint[i] = enabled ? std::clamp(tint[i], 0.0f, 1.27f) : 1.0f;
@@ -3912,8 +3913,10 @@ index 0000000..202bc71
 +            if (settings.timeOfDay) {
 +                uint32_t packed = 0;
 +                for (int c = 0; c < 3; c++) {
-+                    packed = (packed << 8) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 200.0f), 0L, 255L));
++                    packed = (packed << 7) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 100.0f), 0L, 127L));
 +                }
++                // Then two flags: fireflies, and one spare.
++                packed = (packed << 2) | (settings.dayFireflies ? 1u : 0u);
 +                // Negative: no lens flare.
 +                dayPacked = (1.0f + float(packed)) * (settings.dayFlare ? 1.0f : -1.0f);
 +            }
@@ -4335,10 +4338,10 @@ index 0000000..202bc71
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c365c07
+index 0000000..e8ec594
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,175 @@
 +//
 +// RT64
 +//
@@ -4403,6 +4406,7 @@ index 0000000..c365c07
 +        float dayTint[3] = { 1.0f, 1.0f, 1.0f };
 +        float dayShafts = 1.0f;
 +        bool dayFlare = true;
++        bool dayFireflies = false;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4462,7 +4466,8 @@ index 0000000..c365c07
 +    // night, and glows warm round the sun when the tint is warm. The fog takes the tint too. shafts (0 to 1)
 +    // scales the light shafts, so the moon gives none. By day the sun shows as a disc, with a lens flare when
 +    // flare is on and nothing hides it.
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare);
++    // fireflies: small glowing fireflies drift round Banjo at night.
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -6565,10 +6570,10 @@ index 74b1fa0..984dc66 100644
      // Apply screen scale and offset.
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..10f71dc
+index 0000000..7cb4470
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1249 @@
+@@ -0,0 +1,1310 @@
 +//
 +// RT64
 +//
@@ -6630,16 +6635,20 @@ index 0000000..10f71dc
 +    return lerp(lerp(color, tinted, tint), float3(0.36f, 0.6f, 0.74f), haze);
 +}
 +
-+// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 8-bit channels (steps of 0.005),
-+// negative for no lens flare. False (and no tint) while the cycle is off.
-+bool DayTint(out float3 tint) {
++// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 7-bit channels (steps of 0.01) and
++// two flags (bit 0 fireflies), negative for no lens flare. False (and no tint) while the cycle is off.
++uint DayPacked() {
 +    const float packedFloat = abs(gConstants.shadows.z);
++    return (packedFloat < 1.0f) ? 0u : uint(packedFloat - 1.0f + 0.5f);
++}
++
++bool DayTint(out float3 tint) {
 +    tint = 1.0f;
-+    if (packedFloat < 1.0f) {
++    if (abs(gConstants.shadows.z) < 1.0f) {
 +        return false;
 +    }
-+    const uint packed = uint(packedFloat - 1.0f + 0.5f);
-+    tint = float3(float((packed >> 16) & 255u), float((packed >> 8) & 255u), float(packed & 255u)) / 200.0f;
++    const uint packed = DayPacked();
++    tint = float3(float((packed >> 16) & 127u), float((packed >> 9) & 127u), float((packed >> 2) & 127u)) / 100.0f;
 +    return true;
 +}
 +
@@ -7375,6 +7384,63 @@ index 0000000..10f71dc
 +    return (flare * 0.45f + float3(1.0f, 0.9f, 0.75f) * (glare * glare * 0.4f)) * strength;
 +}
 +
++// Fireflies at night: one at most in each 220-unit square of the ground round Banjo (a 7 by 7 block of squares,
++// fixed in the world), drifting a little above his height and blinking slowly. Each is projected onto the
++// screen and drawn as a small glow, hidden behind whatever is nearer.
++float3 DayFireflies(int2 pixel, float depth, float3 tint) {
++    const float night = DayNight(tint);
++    if (((DayPacked() & 1u) == 0u) || (night <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
++        return 0.0f;
++    }
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++    // View space from world space: the inverse of the view-to-world rows (a rotation and a scale).
++    const float scale = 1.0f / dot(gConstants.worldX.xyz, gConstants.worldX.xyz);
++    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
++    const float sceneZ = (depth >= 0.99999f) ? -1e9f : ViewPosition(pixel, depth).z;
++    const float2 size = gConstants.projection.zw;
++    const float time = gConstants.view.z;
++    const float Cell = 220.0f;
++    const float2 home = floor(banjo.xz / Cell);
++    float3 glow = 0.0f;
++    [loop] for (int cz = -3; cz <= 3; cz++) {
++        [loop] for (int cx = -3; cx <= 3; cx++) {
++            const float2 cell = home + float2(cx, cz);
++            const float3 seed = float3(cell, 7.0f);
++            const float pick = DayHash(seed);
++            if (pick < 0.2f) {
++                continue;
++            }
++            const float a = DayHash(seed + 11.0f), b = DayHash(seed + 23.0f), c = DayHash(seed + 37.0f);
++            // A slow wander round a home spot in the square.
++            const float3 world = float3((cell.x + 0.2f + 0.6f * a) * Cell + sin(time * (0.3f + 0.2f * b) + a * 40.0f) * 45.0f,
++                banjo.y + 30.0f + 110.0f * c + sin(time * (0.5f + 0.3f * a) + b * 30.0f) * 18.0f,
++                (cell.y + 0.2f + 0.6f * b) * Cell + cos(time * (0.25f + 0.2f * c) + c * 50.0f) * 45.0f);
++            const float3 d = world - origin;
++            const float3 v = (gConstants.worldX.xyz * d.x + gConstants.worldY.xyz * d.y + gConstants.worldZ.xyz * d.z) * scale;
++            if (v.z > -20.0f) {
++                continue;
++            }
++            // Hidden behind nearer scenery.
++            if (sceneZ > v.z + 10.0f) {
++                continue;
++            }
++            const float2 ndc = float2(v.x * gConstants.projection.x / -v.z, v.y * gConstants.projection.y / -v.z);
++            const float2 at = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++            // About 7 units across, never under 2.5 pixels (at 1080 rows); a soft halo four times as wide.
++            const float radius = max(7.0f * gConstants.projection.y / -v.z * size.y * 0.5f, 2.5f * size.y / 1080.0f);
++            const float r = length(float2(pixel) + 0.5f - at) / radius;
++            if (r > 4.0f) {
++                continue;
++            }
++            const float blink = saturate(sin(time * (0.8f + 0.6f * pick) + a * 60.0f) * 1.5f + 0.5f);
++            const float fade = saturate(1.0f - length(world.xz - banjo.xz) / (Cell * 3.2f));
++            const float halo = saturate(1.0f - r / 4.0f);
++            glow += float3(0.75f, 1.0f, 0.35f) * (saturate(1.2f - r) + 0.35f * halo * halo) * blink * fade;
++        }
++    }
++    return glow * night * 2.5f;
++}
++
 +// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
 +// through and fading with each step, so light streams through gaps between things against the sky.
 +float3 LightShafts(int2 pixel) {
@@ -7631,7 +7697,7 @@ index 0000000..10f71dc
 +    // The glow of what was bright before the tint dims with it.
 +    bloom *= dayTint;
 +    if (daytime && (gConstants.view.x < 1.5f)) {
-+        bloom += DayFlare(pixel, dayTint);
++        bloom += DayFlare(pixel, dayTint) + DayFireflies(pixel, depth, dayTint);
 +    }
 +    // Light shafts are added the same way.
 +    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 1.5f)) {
@@ -8220,10 +8286,10 @@ index 0a5c332..3568125 100644
      };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..027cb9b
+index 0000000..08d06e0
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,71 @@
 +//
 +// RT64
 +//
@@ -8274,8 +8340,9 @@ index 0000000..027cb9b
 +        float4 rippleZ;
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
-+        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 8 bits
-+        // each, steps of 0.005: exact as a float below 2^24; negative for no lens flare), then 1 to leave Banjo's own shadow out.
++        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 7 bits
++        // each, steps of 0.01, then two flags, bit 0 fireflies: exact as a float below 2^24; negative for no lens
++        // flare), then 1 to leave Banjo's own shadow out.
 +        float4 shadows;
 +    };
 +
