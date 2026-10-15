@@ -18,6 +18,8 @@ void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
+// Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.
+int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx);
 // Game frame rate (src/game/game_frame_rate.cpp): the wait between frames in func_800151BC, and the time step in func_800D8FA0.
 void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx);
 void tooie_frame_step(uint8_t* rdram, recomp_context* ctx);

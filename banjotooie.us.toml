@@ -1188,3 +1188,11 @@ text = "tooie_jiggy_dance_init(rdram, ctx);"
 func = "gcnewpause_entrypoint_3"
 before_vram = 0x80800520
 text = "tooie_totals_checklist_draw(rdram, ctx);"
+
+# --- Asset replacement (src/game/asset_mods.cpp) -------------------------------
+# Load asset by id: before the asset is fetched, a file mods/assets/asset_<id>.bin is loaded in its place
+# (game heap, any size) and the function skips to where it records the asset's address ($a3).
+[[patches.hook]]
+func = "func_800D5B34"
+before_vram = 0x800D5BF4
+text = "if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;"

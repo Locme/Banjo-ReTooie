@@ -340,7 +340,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.88 Asset dump and replacement
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-15: claimed by the texture sweep thread (in progress).
+- 2026-10-15 (T164): General > Developer > Dump assets writes all 10,266 assets (1,145 models) to asset_dump/asset_<id>.bin with assets.txt (id, kind, size), unpacked from the ROM's asset table (0x5180). Files named asset_<id>.bin in mods/assets load in place of the game's at any size: banjotooie.us.toml hooks the load-by-id function func_800D5B34, which allocates game heap for the file. Checked headless in Spiral Mountain: replacing model 0x065E with 0x08C1 drew water in place of that ground. A character model swapped for a static one crashes (it needs the bones its animations expect). Code: src/game/asset_mods.cpp.
 
 ### 4.89 Model mods: Smash Banjo and FBX Banjo (out of repo)
 - [ ] Done

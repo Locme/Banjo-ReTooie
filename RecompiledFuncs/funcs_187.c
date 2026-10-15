@@ -1984,6 +1984,7 @@ L_800D5BA4:
     // 0x800D5BF0: sw          $t7, 0x20($sp)
     MEM_W(0X20, ctx->r29) = ctx->r15;
 L_800D5BF4:
+    if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;
     // 0x800D5BF4: jal         0x800E4AF0
     // 0x800D5BF8: lw          $a0, 0x30($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X30);

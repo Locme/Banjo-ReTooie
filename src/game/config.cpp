@@ -44,6 +44,7 @@
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
 #include "tooie_texture_sweep.h"
+#include "tooie_asset_mods.h"
 
 namespace {
     void show_cheats_tab() {
@@ -226,6 +227,11 @@ void tooie::init_config() {
             {tooie::TextureDump::SweepAllMaps, "SweepAllMaps", "Sweep all maps"},
         },
         tooie::TextureDump::Off);
+    general.add_bool_option(
+        tooie::asset_dump_option,
+        "Dump assets",
+        "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
+        false);
 
     // Section headings in the General tab (the controls and sliders above them have none).
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");

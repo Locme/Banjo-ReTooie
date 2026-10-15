@@ -1733,3 +1733,12 @@
 - Look for: A world that says MOVE ON FOR NOW while you know something there can be got (or the other way round): tell me the world and the item and I'll check its rule. Moves count as gettable when you have enough notes for Jamjars and can reach the silo. A Glowbo not yet given to Mumbo or Humba counts as one you can give
 - Status: waiting for L
 
+## T164 Asset dump and model replacement (roadmap 4.88)
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. General > Developer > Dump assets on. Wait for the "Assets dumped" notice, then open the `asset_dump` folder in the app-data folder (next to `screenshots`)
+  2. Make a folder `mods/assets` in the app-data folder. Copy `asset_08C1.bin` from asset_dump into it and rename the copy `asset_065E.bin` (any model file renamed to another model's id works)
+  3. Load a file in Spiral Mountain (or warp there)
+- Look for: about 10,000 files in asset_dump plus assets.txt. In Spiral Mountain, part of the ground (model 065E) is drawn as water (model 08C1) instead. Remove the file afterwards. Tell me which model you want to replace first.
+- Status: waiting for L

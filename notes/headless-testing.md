@@ -39,6 +39,8 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 - `TOOIE_TEXTURE_DUMP=play|sweep`: sets General > Texture dump whatever the setting says. `TOOIE_TEXTURE_SWEEP_MAPS=B8,142,AF` sweeps only those maps (hex), `TOOIE_TEXTURE_DUMP_DIR=<dir>` writes there instead of `texture_dump/` (keep it out of the repo: the textures are ROM data). Logs `[texture-dump]` and `[texture-sweep]`. Code: `src/game/texture_sweep.cpp`. A sweep needs a map with a file, so pair it with `TOOIE_WARP=AF:0@15000`.
 
+- `TOOIE_ASSET_DUMP=1`: dumps every asset whatever General > Dump assets says (to `TOOIE_ASSET_DUMP_DIR` if set). `TOOIE_ASSET_MODS_DIR=<dir>` reads replacements from there instead of `mods/assets`, and `TOOIE_ASSET_LOG=1` logs every asset the game loads by id with its kind (`[assets] load 0x08C1 (..., kind 0)`; kind 0 is a model). Code: `src/game/asset_mods.cpp`. Spiral Mountain loads 37 models; replacing 0x065E with 0x08C1 showed water in place of the ground, and replacing 0x062A with a static model crashed.
+
 - `TOOIE_SCREENSHOT_AT=ms[,ms...]`: takes an F12 screenshot at those times
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.

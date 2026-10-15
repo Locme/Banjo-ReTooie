@@ -35,6 +35,16 @@ on a controller.
   carries on after that map the next time a file is loaded; picking Sweep all
   maps again starts a new one. Timer save waits while a sweep runs. Default: Off.
 
+- **Dump assets** (Developer): writes every game asset (models, animations,
+  sprites, text and the rest, 10,266 files) to the `asset_dump` folder in the
+  app-data folder as `asset_<id>.bin` (id in hex), with `assets.txt` listing
+  id, kind and size (kind 0 is a model). Takes a few seconds; files already
+  there are kept. To **replace** an asset, put an edited `asset_<id>.bin` in
+  `mods/assets/`: it loads in place of the game's, at any size, the next time
+  the game loads that asset (another area, or a restart). A model has to be in
+  the game's own model format, and a character's model needs the bones its
+  animations expect, or the game can crash. Default: off.
+
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.
 
