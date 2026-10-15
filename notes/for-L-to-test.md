@@ -1967,13 +1967,13 @@
 
 ## T185 Smash Banjo model mod
 - Asked: 2026-10-15 21:15 UTC
-- Build: main (pull and build), plus the mod zip from project files: mods/Smash Banjo v1.zip
+- Build: main (pull and build), plus the mod zip from project files: mods/Smash Banjo v2.zip
 - Steps:
-  1. Put "Smash Banjo v1.zip" in the game's mods folder as it is (no unzipping) and start the game
+  1. Put "Smash Banjo v2.zip" in the game's mods folder as it is (no unzipping) and start the game
   2. Open the Mods menu: Smash Banjo is listed. Turn it on
   3. Load a save and walk, run, jump, Feathery Flap, crouch and roll; let Banjo stand still to see him blink
   4. Turn the mod off in the Mods menu, then go through a door or loading zone
-- Look for: Banjo and Kazooie use the Smash Ultimate model with its full-size textures, move with every animation, and blink. Step 4: the game's own model comes back after the next area load (the model is only read when an area loads). Known: a small gap on top of Banjo's head, rough fur edges, Smash-sized hands, Kazooie's Turbo Trainers and Wading Boots show as plain feet. Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced. Checked headless in Spiral Mountain (screenshot screens/smash-banjo/v1.png in project files).
+- Look for: Banjo and Kazooie use the Smash Ultimate model with its full-size textures, move with every animation, and blink. Step 4: the game's own model comes back after the next area load (the model is only read when an area loads). v2 (2026-10-15 21:40) fixes the gap on top of Banjo's head, smooths the fur edges, makes the hands smaller and the arms slimmer, and puts Kazooie's shoes and boots back (the game's own models on the new legs). Remove v1 from the mods folder first. Also look for: Kazooie's Springy Step Shoes, Turbo Trainers and Wading Boots on her feet; those were only checked offline, not in the game. Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced. Checked headless in Spiral Mountain (screenshot screens/smash-banjo/v2.png in project files).
 
 
 ## T186 Texture sweep: video memory, freezes and the cutscene crash
