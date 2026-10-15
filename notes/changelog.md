@@ -21,6 +21,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Smoke and water droplets should no longer break into stripes with frame smoothing: an animation's next frame snaps instead of sliding across the texture. WIP > Debug > Texture slide blending turns all texture sliding off, to test. Untested on PC (T178).
+
 - Graphics > Day and Night (off by default): a day and night cycle in Spiral Mountain, the Isle o' Hags outside, Mayahem Temple, Jolly Roger's Lagoon, Terrydactyland, Hailfire Peaks and Cloud Cuckooland. Sunrise and sunset turn the light warm, night is dark blue with stars and a moon, and the sun moves for sun shadows and light shafts. Cycle runs a day in Day Length minutes (24 by default); Morning, Sunset and Night hold one time. Rooms, underwater areas, Witchyworld and Cauldron Keep keep their own look. Untested on PC (T174).
 - Frame rate overlay: lines in four groups; game CPU time no longer drops to 0 ms (a wait was counted twice); the first line keeps the last frame rate below 4 fps (T170).
 - Benchmark key (F4): records the frame rate overlay's figures to benchmarks\ with a summary and the settings, for comparing settings or builds (T161).

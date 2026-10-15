@@ -1886,3 +1886,13 @@
   4. Turn it off and on again, and load the file again later
 - Look for: Turning it on takes you to Spiral Mountain, where Bottles' ghost turns into Devil Bottles; when the scene ends you are back in the area you were in, at the entrance you came in by. After that (once the file is saved) it never warps you again. Checked headless: from Mayahem Temple the warp, the whole scene and the trip back all worked, and a second visit in the same run did not warp again. Not checked headless: a real save file over two sessions.
 - Status: waiting for L
+
+## T178 Smoke and water droplets with frame smoothing
+- Asked: 2026-10-15 20:25 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Frame rate above Original, smoothing on, where the smoke and water droplets broke into stripes before
+  2. Watch them as they were
+  3. If they still stripe: Esc > WIP > Debug > Texture slide blending: Off, and watch again (it applies at once)
+- Look for: Step 2, the smoke and droplets look as they do with smoothing off (the renderer no longer slides an animation's next frame across the texture). Step 3 tells whether what is left comes from texture sliding: say whether Off fixes it, and whether scrolling water (waterfalls, rivers) looks choppier with it Off. Checked headless: builds and renders Spiral Mountain with the option on and off. Not checked headless: the stripes themselves (not reproduced here).
+- Status: waiting for L

@@ -44,6 +44,7 @@
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
+#include "tooie_texture_slide.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_asset_mods.h"
 
@@ -470,6 +471,7 @@ void tooie::init_config() {
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);
+    tooie::texture_slide::add_option(wip);
 
     recompui::config::finalize();
     move_saved_options_to_graphics();
@@ -478,6 +480,7 @@ void tooie::init_config() {
     move_saved_discord_option();
     tooie::picture_filters::apply();
     tooie::smaa::apply();
+    tooie::texture_slide::apply();
     tooie::fxaa::apply();
     tooie::fsr::apply();
     tooie::low_latency::apply();

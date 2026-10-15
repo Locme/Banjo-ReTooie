@@ -205,7 +205,7 @@ index d387090..9713eda 100644
 +
  #endif // RT64_EXTENDED_GBI
 diff --git a/src/common/rt64_emulator_configuration.cpp b/src/common/rt64_emulator_configuration.cpp
-index 303113d..cae52d2 100644
+index 303113d..088fd41 100644
 --- a/src/common/rt64_emulator_configuration.cpp
 +++ b/src/common/rt64_emulator_configuration.cpp
 @@ -4,6 +4,8 @@
@@ -217,7 +217,7 @@ index 303113d..cae52d2 100644
  namespace RT64 {
      // EmulatorConfiguration
  
-@@ -13,4 +15,14 @@ namespace RT64 {
+@@ -13,4 +15,24 @@ namespace RT64 {
          framebuffer.renderToRAM = true;
          framebuffer.copyWithGPU = true;
      }
@@ -231,13 +231,23 @@ index 303113d..cae52d2 100644
 +    bool GetRenderToRAM() {
 +        return renderToRAMEnabled.load();
 +    }
++
++    static std::atomic<bool> tileInterpolationEnabled{ true };
++
++    void SetTileInterpolation(bool enabled) {
++        tileInterpolationEnabled = enabled;
++    }
++
++    bool GetTileInterpolation() {
++        return tileInterpolationEnabled.load();
++    }
  };
 \ No newline at end of file
 diff --git a/src/common/rt64_emulator_configuration.h b/src/common/rt64_emulator_configuration.h
-index 1fdd873..9b6b17b 100644
+index 1fdd873..3518bb7 100644
 --- a/src/common/rt64_emulator_configuration.h
 +++ b/src/common/rt64_emulator_configuration.h
-@@ -23,4 +23,10 @@ namespace RT64 {
+@@ -23,4 +23,14 @@ namespace RT64 {
  
          EmulatorConfiguration();
      };
@@ -247,6 +257,10 @@ index 1fdd873..9b6b17b 100644
 +    // the game only loses frames it reads back with the CPU. A display list's gEXSetRenderToRAM still wins.
 +    void SetRenderToRAM(bool enabled);
 +    bool GetRenderToRAM();
++
++    // Banjo-Tooie: whether texture moves (tile scrolls) are slid between game frames, changeable while the game runs.
++    void SetTileInterpolation(bool enabled);
++    bool GetTileInterpolation();
  };
 \ No newline at end of file
 diff --git a/src/common/rt64_math.cpp b/src/common/rt64_math.cpp
@@ -380,21 +394,55 @@ index 0e62be1..3ec4c4c 100644
  
      struct DrawCall {
 diff --git a/src/hle/rt64_game_frame.cpp b/src/hle/rt64_game_frame.cpp
-index 87392d0..9aca6cd 100644
+index 87392d0..e0773c0 100644
 --- a/src/hle/rt64_game_frame.cpp
 +++ b/src/hle/rt64_game_frame.cpp
-@@ -2,6 +2,10 @@
+@@ -2,6 +2,12 @@
  // RT64
  //
  
 +#include <cstdio>
 +#include <cstdlib>
 +#include <algorithm>
++#include <cmath>
 +
++#include "common/rt64_emulator_configuration.h"
  #include "common/rt64_math.h"
  
  #include "rt64_game_frame.h"
-@@ -744,12 +748,20 @@ namespace RT64 {
+@@ -673,6 +679,31 @@ namespace RT64 {
+             curTileMap.prevUlt = curTile.ult - curTileMap.deltaUlt;
+             curTileMap.prevLrs = curTile.lrs - curTileMap.deltaLrs;
+             curTileMap.prevLrt = curTile.lrt - curTileMap.deltaLrt;
++            // Banjo-Tooie: a jump of half the drawn width or height or more in one game frame is an animation
++            // stepping to its next frame on a sheet (smoke, splashes), not a scroll. Blending it slid the texture
++            // across its clamped edge between frames, which showed as stripes; such a tile is drawn as it is.
++            const float drawnWidth = std::abs(curTile.lrs - curTile.uls);
++            const float drawnHeight = std::abs(curTile.lrt - curTile.ult);
++            const bool flipS = (drawnWidth > 0.0f) && ((std::abs(deltaUls) * 2.0f >= drawnWidth) || (std::abs(deltaLrs) * 2.0f >= drawnWidth));
++            const bool flipT = (drawnHeight > 0.0f) && ((std::abs(deltaUlt) * 2.0f >= drawnHeight) || (std::abs(deltaLrt) * 2.0f >= drawnHeight));
++            static const bool tileLog = getenv("TOOIE_TILE_LOG") != nullptr;
++            if (tileLog && tileScrolled) {
++                fprintf(stderr, "[tile] cms %u cmt %u masks %u maskt %u size %.0fx%.0f delta %.1f,%.1f %s\n", curTile.cms, curTile.cmt, curTile.masks, curTile.maskt,
++                    drawnWidth, drawnHeight, deltaUls, deltaUlt, (flipS || flipT) ? "flip" : "scroll");
++            }
++            if (flipS || flipT) {
++                curTileMap.deltaUls = 0.0f;
++                curTileMap.deltaUlt = 0.0f;
++                curTileMap.deltaLrs = 0.0f;
++                curTileMap.deltaLrt = 0.0f;
++                curTileMap.prevUls = curTile.uls;
++                curTileMap.prevUlt = curTile.ult;
++                curTileMap.prevLrs = curTile.lrs;
++                curTileMap.prevLrt = curTile.lrt;
++                curTileMap.mapped = true;
++                firstCurWorkloadMap.prevTilesMapped[indices.second] = true;
++                continue;
++            }
+             curTileMap.deltaUls = wrappedUls || (abs(deltaUls) >= curTile.masks * 2) ? curTileMap.deltaUls : deltaUls;
+             curTileMap.deltaUlt = wrappedUlt || (abs(deltaUlt) >= curTile.maskt * 2) ? curTileMap.deltaUlt : deltaUlt;
+             curTileMap.deltaLrs = wrappedLrs || (abs(deltaLrs) >= curTile.masks * 2) ? curTileMap.deltaLrs : deltaLrs;
+@@ -744,12 +775,20 @@ namespace RT64 {
                  const float *curPosFloatsRef = &curPosFloats[curVertexIndex * 3];
                  const float *prevPosFloatsRef = &prevPosFloats[prevVertexIndex * 3];
                  float *curVelFloatsRef = &curVelFloats[curVertexIndex * 3];
@@ -415,6 +463,19 @@ index 87392d0..9aca6cd 100644
                  modifiedBuffers.positionVelocity = true;
              }
          }
+@@ -802,6 +841,12 @@ namespace RT64 {
+                 doTileMatching = doTileMatching || (group.tileInterpolation == G_EX_COMPONENT_AUTO);
+             }
+ 
++            // Banjo-Tooie: Texture slide blending off snaps every texture move.
++            if (!GetTileInterpolation()) {
++                doTileInterpolation = false;
++                doTileMatching = false;
++            }
++
+             hashMap.emplace(hashFromCall(call, matrixIdHash), GameCallMap{ sceneProjIndex, c, doTransformMatching, doTileInterpolation, doTileMatching });
+         }
+     }
 diff --git a/src/hle/rt64_interpreter.cpp b/src/hle/rt64_interpreter.cpp
 index dccaa87..4440507 100644
 --- a/src/hle/rt64_interpreter.cpp

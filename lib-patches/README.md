@@ -129,6 +129,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `SetRenderToRAM` turns RT64's copy of each frame back into RDRAM on or off while the game runs
   (Graphics > Frame Read-Back, `src/display/frame_readback.cpp`, off by default). With it on, the
   display list thread renders and waits for the GPU every frame.
+* **Texture slides** (`src/hle/rt64_game_frame.cpp`, `src/common/rt64_emulator_configuration.cpp/.h`):
+  with frame smoothing, a texture move of half the drawn width or height or more in one game frame is
+  an animation stepping to its next frame on a sheet (smoke, splashes), so it snaps instead of sliding
+  through the frames between. `SetTileInterpolation` turns all texture sliding off while the game runs
+  (WIP > Debug > Texture slide blending, `src/debug/texture_slide.cpp`). `TOOIE_TILE_LOG=1` logs each
+  texture move RT64 sees.
 * **No spinning on a full queue** (`src/hle/rt64_workload_queue.cpp/.h`, `src/hle/rt64_present_queue.cpp/.h`):
   writing a new workload or present while the GPU still used that slot spun on a mutex, keeping a core
   busy whenever the GPU was behind. It now sleeps on a condition variable that the barrier advance wakes.
