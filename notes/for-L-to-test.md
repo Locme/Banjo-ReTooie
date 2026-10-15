@@ -1616,3 +1616,13 @@
   3. Controls > Debug: bind Pick Model and Model Effects; pick anything else that looks wrong under the effects and press Model Effects (the toast says effects off); Save Tags keeps it
 - Look for: no box or straight edges around his glow and the picture behind it stays sharp, with the effects still on everywhere else; a model you turn off is drawn plain with nothing else changing; tell me if the box still flashes for a moment while the angel turns into the devil
 - Status: waiting for L
+
+## T153 HD Shadows off for Banjo only
+- Asked: 2026-10-15 11:58 UTC
+- Build: 8340566
+- Steps:
+  1. Graphics: HD Shadows on, HD Shadows: Banjo = Off
+  2. Play a level with enemies (Spiral Mountain grublins)
+  3. Switch Banjo between Off, Overhead and Tilt while playing
+- Look for: With Off, Banjo has the game's simpler shadow while enemies keep their HD shadows; Overhead/Tilt bring his HD shadow back at once
+- Status: waiting for L
