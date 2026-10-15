@@ -357,19 +357,23 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ## Free
 
 ### 4.1 Platform boot (Windows D3D12/Vulkan, Linux Vulkan)
-- [ ] Done
+- [x] Done
+- 2026-10-15: Windows and Linux builds boot in CI and headless; on main.
 - [ ] Approved by L
 
 ### 4.8 F5 "PC Settings" window (ImGui) and the SDK overlays
-- [ ] Done
+- [x] Done
+- 2026-10-15: F5 opens the settings window (with Esc and the controller hotkey); on main.
 - [ ] Approved by L
 
 ### 4.9 Config file and option table (BanjoTooieConfig)
-- [ ] Done
+- [x] Done
+- 2026-10-15: Options are saved next to the exe and read live; on main.
 - [ ] Approved by L
 
 ### 4.23 Window mode: fullscreen or windowed, live
-- [ ] Done
+- [x] Done
+- 2026-10-15: F11 and Alt+Enter toggle fullscreen; on main.
 - [ ] Approved by L
 
 ### 4.31 Low input latency and late frame start
