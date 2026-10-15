@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..fd77910 100644
+index 79dfc38..9f5f27b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -49,9 +49,19 @@ index 79dfc38..fd77910 100644
      set(PLUME_SDL_VULKAN_ENABLED TRUE)
  elseif (APPLE)
      set(PLUME_APPLE_RETINA_ENABLED OFF)
-@@ -118,8 +142,8 @@ function(build_shader_spirv_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+@@ -113,13 +137,17 @@ set (DXC_CS_OPTS "${DXC_COMMON_OPTS}" "-E" "CSMain" "-T cs_6_3")
+ set (DXC_GS_OPTS "${DXC_COMMON_OPTS}" "-E" "GSMain" "-T gs_6_3")
+ set (DXC_RT_OPTS "${DXC_COMMON_OPTS}" "-D" "RT_SHADER" "-T" "lib_6_3" "-fspv-target-env=vulkan1.1spirv1.4" "-fspv-extension=SPV_KHR_ray_tracing" "-fspv-extension=SPV_EXT_descriptor_indexing")
+ 
++# Banjo-Tooie: shaders are rebuilt when a file they include changes, not only their own file, so a change
++# to an .hlsli or shared header can't leave a build running stale shaders.
++file(GLOB RT64_SHADER_INCLUDES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/src/shaders/*.hlsli" "${PROJECT_SOURCE_DIR}/src/shared/*.h")
++
+ function(build_shader_spirv_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+     add_custom_command(OUTPUT ${OUTNAME}.spv
          COMMAND ${DXC} ${DXC_SPV_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.spv
-         DEPENDS ${FILENAME})
+-        DEPENDS ${FILENAME})
++        DEPENDS ${FILENAME} ${RT64_SHADER_INCLUDES})
      add_custom_command(OUTPUT ${OUTNAME}.spirv.c
 -        COMMAND file_to_c ${OUTNAME}.spv ${TARGET_NAME}BlobSPIRV ${OUTNAME}.spirv.c ${OUTNAME}.spirv.h
 -        DEPENDS ${OUTNAME}.spv file_to_c
@@ -60,9 +70,12 @@ index 79dfc38..fd77910 100644
          BYPRODUCTS ${OUTNAME}.spirv.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.spirv.c)
  endfunction()
-@@ -129,8 +153,8 @@ function(build_shader_dxil_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+@@ -127,10 +155,10 @@ endfunction()
+ function(build_shader_dxil_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+     add_custom_command(OUTPUT ${OUTNAME}.dxil
          COMMAND ${DXC} ${DXC_DXIL_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.dxil
-         DEPENDS ${FILENAME})
+-        DEPENDS ${FILENAME})
++        DEPENDS ${FILENAME} ${RT64_SHADER_INCLUDES})
      add_custom_command(OUTPUT ${OUTNAME}.dxil.c
 -        COMMAND file_to_c ${OUTNAME}.dxil ${TARGET_NAME}BlobDXIL ${OUTNAME}.dxil.c ${OUTNAME}.dxil.h
 -        DEPENDS ${OUTNAME}.dxil file_to_c
@@ -71,7 +84,16 @@ index 79dfc38..fd77910 100644
          BYPRODUCTS ${OUTNAME}.dxil.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.dxil.c)
  endfunction()
-@@ -149,8 +173,8 @@ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+@@ -138,7 +166,7 @@ endfunction()
+ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+     add_custom_command(OUTPUT ${OUTNAME}.spv
+             COMMAND ${DXC} ${DXC_SPV_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.spv
+-            DEPENDS ${FILENAME})
++            DEPENDS ${FILENAME} ${RT64_SHADER_INCLUDES})
+     add_custom_command(OUTPUT ${OUTNAME}.metal
+             COMMAND spirv_cross_msl ${OUTNAME}.spv ${OUTNAME}.metal
+             DEPENDS ${OUTNAME}.spv spirv_cross_msl)
+@@ -149,8 +177,8 @@ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
              COMMAND xcrun -sdk macosx metallib ${OUTNAME}.ir -o ${OUTNAME}.metallib
              DEPENDS ${OUTNAME}.ir)
      add_custom_command(OUTPUT ${OUTNAME}.metal.c
@@ -82,7 +104,7 @@ index 79dfc38..fd77910 100644
              BYPRODUCTS ${OUTNAME}.metal.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.metal.c)
  endfunction()
-@@ -243,8 +267,8 @@ function(preprocess_shader TARGETOBJ SHADERNAME)
+@@ -243,8 +271,8 @@ function(preprocess_shader TARGETOBJ SHADERNAME)
      cmake_path(GET OUTNAME PARENT_PATH OUTPUT_DIR)
      preprocess(${FILENAME} ${OUTNAME}.rw ${DXC_COMMON_OPTS})
      add_custom_command(OUTPUT ${OUTNAME}.rw.c
@@ -93,7 +115,7 @@ index 79dfc38..fd77910 100644
          BYPRODUCTS ${OUTNAME}.rw.h)
      file(MAKE_DIRECTORY ${OUTPUT_DIR})
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.rw.c)
-@@ -289,6 +313,8 @@ if (WIN32)
+@@ -289,6 +317,8 @@ if (WIN32)
      set(SDL2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/include")
      set(SDL2_LIBRARIES "SDL2" "SDL2main")
      link_directories("${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/lib/x64")
@@ -102,7 +124,7 @@ index 79dfc38..fd77910 100644
  else()
      find_package(SDL2 REQUIRED)
  endif()
-@@ -301,7 +327,7 @@ add_compile_definitions(
+@@ -301,7 +331,7 @@ add_compile_definitions(
      IMGUI_IMPL_VULKAN_NO_PROTOTYPES
  )
  
@@ -111,7 +133,7 @@ index 79dfc38..fd77910 100644
      add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
      add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
  endif()
-@@ -389,6 +415,11 @@ set (SOURCES
+@@ -389,6 +419,11 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
@@ -123,7 +145,7 @@ index 79dfc38..fd77910 100644
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -445,9 +476,11 @@ target_link_libraries(rt64 nfd)
+@@ -445,9 +480,11 @@ target_link_libraries(rt64 nfd)
  target_link_libraries(rt64 libzstd_static)
  target_link_libraries(rt64 plume)
  
@@ -138,7 +160,7 @@ index 79dfc38..fd77910 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -543,11 +576,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,11 +580,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -2764,10 +2786,10 @@ index 5c40c18..df8eb33 100644
 \ No newline at end of file
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a13e480
+index 0000000..b4eb2a4
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1078 @@
+@@ -0,0 +1,1126 @@
 +//
 +// RT64
 +//
@@ -3175,8 +3197,8 @@ index 0000000..a13e480
 +        effectsSettings.grassDistance = distance;
 +    }
 +
-+    // Enough shells that the blades look solid from the side at the tallest setting.
-+    static constexpr uint32_t GrassShells = 16;
++    // Enough shells that the knee-high blades look solid from the side.
++    static constexpr uint32_t GrassShells = 24;
 +
 +    uint32_t SceneGrassShells() {
 +        const std::scoped_lock lock(effectsMutex);
@@ -3202,7 +3224,7 @@ index 0000000..a13e480
 +
 +        // The full blade height straight up in world space, in the game's clip space, then as RasterVS has its
 +        // positions: the RSP's screen position (ndc * viewport scale + translate) back over the resolution, times w.
-+        const float height = 16.0f * settings.grassHeight;
++        const float height = 36.0f * settings.grassHeight;
 +        float clip[4];
 +        for (int c = 0; c < 4; c++) {
 +            clip[c] = height * (rowVector ? viewProj.m[1][c] : viewProj.m[c][1]);
@@ -3243,14 +3265,62 @@ index 0000000..a13e480
 +        frameParams.grassWorldY = { y0, y1, y2, -(v[3][0] * y0 + v[3][1] * y1 + v[3][2] * y2) };
 +        frameParams.grassWorldZ = { z0, z1, z2, -(v[3][0] * z0 + v[3][1] * z1 + v[3][2] * z2) };
 +
-+        // About one blade every 4.5 units (Banjo is about 150 tall); fewer cells hold one at lower amounts.
-+        frameParams.grassParams = { height, 1.0f / 4.5f, std::max(settings.grassDistance, 100.0f), 0.3f + 0.7f * std::min(settings.grass, 1.0f) };
-+        frameParams.grassPlayer = { settings.player[0], settings.player[2], settings.player[1], 70.0f };
++        // A tuft of five blades every 6 units (Banjo is about 150 tall); fewer cells hold one at lower amounts.
++        frameParams.grassParams = { height, 1.0f / 6.0f, std::max(settings.grassDistance, 100.0f), 0.35f + 0.65f * std::min(settings.grass, 1.0f) };
++        frameParams.grassPlayer = { settings.player[0], settings.player[2], settings.player[1], 45.0f };
 +
-+        // A breeze from one side, gusting slowly.
++        // A breeze from one side; Grass.hlsli rolls waves across the field along it.
 +        static const auto startTime = std::chrono::steady_clock::now();
-+        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
-+        frameParams.grassWind = { 0.6f, 0.35f, seconds, 0.0f };
++        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
++        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
++
++        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
++        struct TrailPoint { float x, y, z, time; };
++        static TrailPoint trail[12] = {};
++        static uint32_t trailNext = 0;
++        static float trailLast = -1.0f;
++        const bool havePlayer = settings.player[1] > -1e8f;
++        if (havePlayer && (now - trailLast >= 0.1f)) {
++            const TrailPoint &last = trail[(trailNext + 11) % 12];
++            const float dx = settings.player[0] - last.x, dy = settings.player[1] - last.y, dz = settings.player[2] - last.z;
++            const float moved = std::sqrt(dx * dx + dy * dy + dz * dz);
++            if (moved > 400.0f) {
++                // A warp or a new map: the old trail is somewhere else.
++                for (TrailPoint &point : trail) {
++                    point.time = 0.0f;
++                }
++            }
++            if ((last.time == 0.0f) || (moved > 3.0f)) {
++                trail[trailNext] = { settings.player[0], settings.player[1], settings.player[2], std::max(now, 1e-3f) };
++                trailNext = (trailNext + 1) % 12;
++            }
++            trailLast = now;
++        }
++        float low[2] = { 1e30f, 1e30f }, high[2] = { -1e30f, -1e30f };
++        if (havePlayer) {
++            low[0] = high[0] = settings.player[0];
++            low[1] = high[1] = settings.player[2];
++        }
++        for (uint32_t i = 0; i < 12; i++) {
++            const TrailPoint &point = trail[i];
++            const float age = now - point.time;
++            float pressed = 0.0f;
++            if (havePlayer && (point.time > 0.0f) && (age < 2.0f)) {
++                // Held down briefly, then a damped spring back up that just overshoots.
++                const float t = std::max(age - 0.15f, 0.0f);
++                pressed = std::exp(-2.6f * t) * std::cos(3.4f * t);
++                if (std::abs(pressed) < 1e-3f) {
++                    pressed = 0.0f;
++                }
++            }
++            frameParams.grassTrail[i] = { point.x, point.z, point.y, pressed };
++            if (pressed != 0.0f) {
++                low[0] = std::min(low[0], point.x); low[1] = std::min(low[1], point.z);
++                high[0] = std::max(high[0], point.x); high[1] = std::max(high[1], point.z);
++            }
++        }
++        const float trailRadius = frameParams.grassPlayer.w;
++        frameParams.grassTrailBounds = { low[0] - trailRadius, low[1] - trailRadius, high[0] + trailRadius, high[1] + trailRadius };
 +        return true;
 +    }
 +
@@ -5228,22 +5298,28 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/Grass.hlsli b/src/shaders/Grass.hlsli
 new file mode 100644
-index 0000000..f21bc98
+index 0000000..d52d51d
 --- /dev/null
 +++ b/src/shaders/Grass.hlsli
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,171 @@
 +//
 +// RT64
 +//
 +
-+// Banjo-Tooie: 3D grass. The level's ground draws are drawn again as shells, each moved further up by its
-+// share of the blade height (RasterVS.hlsl); each shell keeps only where a blade crosses it, so a stack of
-+// them reads as a field of blades. Blades stand in a grid over the world's x and z, one per cell at most,
-+// lean with the wind and away from Banjo, thin towards their tips and shrink away with distance.
++// Banjo-Tooie: 3D grass, in the style of Breath of the Wild's fields. The level's ground draws are drawn
++// again as shells, each moved further up by its share of the blade height (RasterVS.hlsl); each shell keeps
++// only where a blade crosses it, so a stack of them reads as a field of blades. The blades grow in tufts,
++// one tuft per cell of a grid over the world's x and z: five thin, flat blades that arc out from the middle and
++// taper to a point. Wind waves roll across the field and bend them, and they are pushed down and away round
++// Banjo and along the trail he leaves, springing back up behind him. Dark at the roots, lighter and yellower
++// at the tips, and shorter with distance.
 +
 +#pragma once
 +
 +#include "FbRendererCommon.hlsli"
++
++static const uint GrassTrailPoints = 12;
++static const uint GrassTuftBlades = 5;
 +
 +// The world position at a pixel of a shell, from its depth, as SceneEffectsPS.hlsl works out view positions.
 +float3 GrassWorldPosition(float4 pixelPosition) {
@@ -5270,7 +5346,7 @@ index 0000000..f21bc98
 +    return float3(h & 0xFFFF, h2 & 0xFFFF, h3 & 0xFFFF) / 65535.0f;
 +}
 +
-+// Whether a shell's pixel at height share (0 to 1) is part of a blade; if so, darkens the colour towards the roots.
++// Whether a shell's pixel at height share (0 to 1) is part of a blade; if so, shades it from root to tip.
 +bool GrassShell(float3 world, float3 worldDx, float3 worldDy, float3 baseColor, float share, inout float3 color) {
 +    // Green ground only (grass, not dirt, rock or paths).
 +    if (!((baseColor.g - max(baseColor.r, baseColor.b) > 0.03f) && (baseColor.g > baseColor.b * 1.25f))) {
@@ -5286,52 +5362,116 @@ index 0000000..f21bc98
 +
 +    // Shorter blades further away, gone by the fade distance.
 +    const float4 params = FrParams.grassParams;
++    const float height = params.x;
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    const float fade = saturate(1.0f - distance(world, camera) / params.z);
++    const float cameraDistance = distance(world, camera);
++    const float fade = saturate(1.0f - cameraDistance / params.z);
++    // Further away the blades widen, so they don't thin to flickering lines.
++    const float widen = 1.0f + cameraDistance / 700.0f;
 +    if (fade < 0.05f) {
 +        return false;
 +    }
 +
-+    // Leaning: the tip stands off its root, more the higher up the blade.
-+    const float bend = share * share;
++    // Wind: a slow wave rolling across the field along the wind, a faster cross wave, and a little flutter.
 +    const float4 wind = FrParams.grassWind;
-+    const float gust = 0.5f + 0.5f * sin(wind.z * 1.7f + dot(world.xz, float2(0.013f, 0.007f)));
-+    float2 lean = wind.xy * (0.4f + 0.6f * gust) * 5.0f;
++    const float2 windDir = normalize(wind.xy);
++    const float2 windSide = float2(-windDir.y, windDir.x);
++    const float time = wind.z;
++    const float along = dot(world.xz, windDir);
++    const float across = dot(world.xz, windSide);
++    const float wave = 0.5f + 0.5f * sin(along * (6.2832f / 320.0f) - time * 1.9f + 0.8f * sin(across * (6.2832f / 900.0f)));
++    const float ripple = 0.5f + 0.5f * sin(dot(world.xz, float2(0.043f, -0.061f)) - time * 3.1f);
++    const float push = wave * wave * 0.75f + ripple * 0.25f;
++    float2 lean = windDir * height * wind.w * (0.08f + 0.42f * push);
++    lean += windSide * height * 0.05f * sin(time * 4.3f + along * 0.11f + across * 0.07f);
 +
-+    // Pressed down and away around Banjo, near his height.
-+    const float4 player = FrParams.grassPlayer;
++    // Pressed down and away round Banjo and along his trail; older trail points spring back (and overshoot a little).
++    const float groundY = world.y - share * height;
++    const float radius = FrParams.grassPlayer.w;
 +    float flatten = 0.0f;
-+    if (player.z > -1e8f) {
-+        const float2 away = world.xz - player.xy;
++    float2 pushed = 0.0f;
++    const float4 bounds = FrParams.grassTrailBounds;
++    const bool nearTrail = all(world.xz >= bounds.xy) && all(world.xz <= bounds.zw);
++    for (uint i = 0; nearTrail && (i <= GrassTrailPoints); i++) {
++        const float4 trail = (i == GrassTrailPoints) ? float4(FrParams.grassPlayer.xyz, 1.0f) : FrParams.grassTrail[i];
++        if ((trail.w == 0.0f) || (trail.z < -1e8f) || (abs(groundY - trail.z) > 80.0f)) {
++            continue;
++        }
++
++        const float2 away = world.xz - trail.xy;
 +        const float awayLength = length(away);
-+        const float groundY = world.y - share * params.x;
-+        if ((awayLength < player.w) && (abs(groundY - player.z) < 80.0f)) {
-+            flatten = 1.0f - awayLength / player.w;
-+            lean += (awayLength > 0.001f ? away / awayLength : float2(0.0f, 0.0f)) * flatten * 10.0f;
++        if (awayLength >= radius) {
++            continue;
++        }
++
++        const float k = 1.0f - awayLength / radius;
++        const float strength = trail.w * k * k * (3.0f - 2.0f * k);
++        pushed += (awayLength > 0.001f ? away / awayLength : windDir) * strength;
++        flatten = max(flatten, strength);
++    }
++
++    // Under Banjo the blades lie nearly flat; the wind matters less there.
++    lean = lerp(lean, 0.0f, saturate(flatten)) + pushed * height * 0.95f;
++    const float leanLength = length(lean);
++    if (leanLength > height * 0.95f) {
++        lean *= height * 0.95f / leanLength;
++    }
++
++    // A leaning blade's tip is lower, so the shells it reaches are fewer.
++    const float leanShare = min(leanLength / height, 0.95f);
++    const float tallness = fade * (1.0f - 0.55f * leanShare * leanShare) * (1.0f - 0.45f * saturate(flatten));
++
++    // The blades curve: the higher up, the further the shell's point is from the blade's root. Blades arc out
++    // of their tuft by up to half a cell. Tufts sit 0.2 to 0.8 of the way across their cell, so the four
++    // cells nearest the point hold every tuft that can reach it.
++    const float2 root = (world.xz - lean * pow(share, 1.5f)) * params.y;
++    const float2 first = floor(root - 0.5f);
++    const float reach = 0.5f * saturate(share * share / max(0.1f * tallness * tallness, 1e-4f)) + 0.15f * widen;
++    for (int c = 0; c < 4; c++) {
++        const float2 cell = first + float2(c & 1, c >> 1);
++        const float3 tuft = GrassHash(cell);
++        const float2 local = root - cell;
++        const float2 center = 0.2f + 0.6f * tuft.yz;
++        const float3 tuft2 = GrassHash(cell + 7919.0f);
++        const float tuftHeight = lerp(0.7f, 1.0f, tuft2.x) * tallness;
++        const float2 toCenter = local - center;
++        if ((tuft.x > params.w) || (share > tuftHeight) || (dot(toCenter, toCenter) > reach * reach)) {
++            continue;
++        }
++
++        // The blades fan out evenly round the tuft (a turn of a fifth each), each nudged a little.
++        float2 dir = float2(cos(tuft2.y * 6.2832f), sin(tuft2.y * 6.2832f));
++        for (uint b = 0; b < GrassTuftBlades; b++) {
++            dir = float2(dir.x * 0.309f - dir.y * 0.951f, dir.x * 0.951f + dir.y * 0.309f);
++            const float3 r = GrassHash(cell + float(b + 1) * 131.0f);
++            const float bladeHeight = tuftHeight * lerp(0.45f, 1.0f, r.z);
++            if (share > bladeHeight) {
++                continue;
++            }
++
++            // h runs from 0 at the root to 1 at the tip. The blade arcs out from the tuft's middle.
++            const float h = share / bladeHeight;
++            const float2 bladeDir = normalize(dir + (r.xy - 0.5f) * 0.6f);
++            const float2 d = toCenter - bladeDir * (0.05f * r.y + (0.12f + 0.33f * r.y) * h * h);
++
++            // Flat and wide across, thin through, tapering to a point.
++            const float halfWidth = (0.06f * pow(1.0f - h, 0.8f) + 0.01f) * widen;
++            const float halfThickness = 0.035f * widen;
++            if ((abs(dot(d, float2(-bladeDir.y, bladeDir.x))) > halfWidth) || (abs(dot(d, bladeDir)) > halfThickness)) {
++                continue;
++            }
++
++            // Dark at the roots, lighter and yellower at the tips; each blade a little different, and
++            // brighter where the wind lays the blades over.
++            float3 shade = color * lerp(0.4f, 1.05f, h) * lerp(0.85f, 1.12f, r.z);
++            shade = lerp(shade, shade * float3(1.3f, 1.22f, 0.65f) + float3(0.04f, 0.045f, 0.0f), h * h * 0.75f);
++            shade *= 1.0f + 0.16f * push * h * (1.0f - saturate(flatten));
++            color = shade;
++            return true;
 +        }
 +    }
 +
-+    const float2 root = (world.xz - lean * bend) * params.y;
-+    const float2 cell = floor(root);
-+    const float3 r = GrassHash(cell);
-+    const float3 r2 = GrassHash(cell + 4099.0f);
-+    if (r2.x > params.w) {
-+        return false;
-+    }
-+
-+    const float blade = lerp(0.45f, 1.0f, r.z) * fade * (1.0f - 0.8f * flatten);
-+    if (share > blade) {
-+        return false;
-+    }
-+
-+    const float2 center = 0.3f + 0.4f * r.xy;
-+    const float radius = 0.3f * (1.0f - share / blade) + 0.04f;
-+    if (length(frac(root) - center) > radius) {
-+        return false;
-+    }
-+
-+    color *= lerp(0.55f, 1.15f, share / blade) * lerp(0.88f, 1.08f, r2.y);
-+    return true;
++    return false;
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
@@ -7092,10 +7232,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..954151d 100644
+index 2e62aaf..71fdf04 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,24 @@ namespace interop {
+@@ -13,6 +13,29 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -7115,8 +7255,13 @@ index 2e62aaf..954151d 100644
 +        float4 grassParams;
 +        // Banjo's world x, z and y (y below -1e8 when there is no Banjo), then how far blades bend away from him.
 +        float4 grassPlayer;
-+        // The wind's direction (world x and z, scaled by how far it bends the tips), a time in seconds, unused.
++        // The wind's direction (world x and z), a time in seconds, then how hard it blows (0 to 1).
 +        float4 grassWind;
++        // Where Banjo has just been: world x, z and y, then how pressed down the grass still is there (1 just
++        // trodden on, going to 0 as it springs back, a little below 0 as it overshoots; exactly 0 is unused).
++        float4 grassTrail[12];
++        // The box (world x and z, low then high) the trail and Banjo press grass in; nothing outside it is pressed.
++        float4 grassTrailBounds;
      };
  #ifdef HLSL_CPU
  };

@@ -1940,3 +1940,14 @@
   3. If the game is still at 8 FPS: say where (only paused on Totals, in all of the pause menu, or while playing), then turn QOL > Totals checklist On and Off again and say whether the frame rate changes
 - Look for: whether the 8 FPS is gone. Headless, the checklist on or off made no difference to the frame rate, paused or playing; the slow settings found there were Graphics > 3D grass (19 to 7 FPS), Sun shadows and Modern water.
 - Status: waiting for L
+
+## T183 3D grass, Breath of the Wild style (roadmap 4.47)
+- Asked: 2026-10-15 20:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > 3D grass to 100 (3D grass height 100, 3D grass distance 2500)
+  2. Spiral Mountain: stand on the meadow by Klungo and watch the grass for a few seconds, then walk and run through it and stop
+  3. Isle o' Hags (Jinjo Village) and Mayahem Temple's courtyard: look at it close up and far away
+  4. Try 3D grass height 150 and 200, then set 3D grass to 0
+- Look for: Knee-high tufts of thin blades arching out, dark at the roots and lighter at the tips. Waves of wind rolling across the field. Grass pressed down and out of the way round Banjo, with a trail behind him that springs back up over about a second. Is it close enough to Breath of the Wild, and is anything off (too dense, too thin, too tall, the wind too strong or too weak)? Frame rate with it on compared with off? It costs more than the T163 version (24 layers instead of 16); lower 3D grass distance if it is too slow. Checked headless: the look and the pressed-down patch round Banjo in Spiral Mountain. Not checked headless: the motion itself (the container runs at a few frames a second).
+- Status: waiting for L
