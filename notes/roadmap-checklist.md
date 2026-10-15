@@ -312,10 +312,10 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - 2026-10-14 (T95): Graphics > Water waves (0-100, default off; Enhanced preset 50) and Water wave speed (25-200%). Route 2 of the handoff, as an RT64 normal-map pass rather than moving vertices: in the scene effects pass, on the water mask's flat surfaces (4.45), four travelling waves (mostly one way, wavelengths 230 to 51 units) over the world's x and z give a normal; the water seen through bends with it, slopes facing the light brighten and the others darken, with a glint, and water reflections use the same waves. World x and z come from RT64's view matrix (its inverse, sent with the pass), so the waves stay in place as the camera turns. Small waves fade out with distance. Collision is untouched and the surface doesn't move, so Banjo floats as before (risk f). Checked headless in the Spiral Mountain pool behind the waterfall with F8 compare.
 
-### 4.47 3D grass (requested 2026-10-13, not built)
-- [ ] Done
+### 4.47 3D grass (requested 2026-10-13)
+- [x] Done (T163)
 - [ ] Approved by L
-- 2026-10-15: claimed by the Second Opus helper thread (in progress).
+- 2026-10-15 (T163): Graphics > 3D grass (0-100, default off; under Photo Filters), 3D grass height (25-200%) and 3D grass distance (500-6000 units, default 2500). An RT64 shell pass: every opaque, textured draw of the level's own geometry (world matrix identity, so characters and props with a model transform are left out) is drawn again 16 times, each moved straight up by a 16th of the blade height in the vertex shader (RasterVS, clip-space offset from the RSP's view-projection and viewport). Each shell's pixel shader (Grass.hlsli) keeps only pixels on green ground facing up (combiner colour, normal from the world position's slopes) where a blade crosses it: one blade per 4.5-unit cell over world x and z, thinning to its tip, leaning with a slow breeze and away from Banjo (pressed down within 70 units of him), shorter with distance and gone by the fade distance. Shells are drawn straight after their ground draw, so water, shadows and decals still go over them. Checked headless in Spiral Mountain (Klungo and Grublins untouched, blades round Banjo's feet, 4 min run), Jinjo Village and Mayahem Temple. Code: lib-patches/rt64.patch (Grass.hlsli, rt64_scene_effects.cpp ComputeSceneGrass, rt64_framebuffer_renderer.cpp), src/display/picture_filters.cpp. Screens: /mnt/project-files/screens/n64-3d-grass-*.png.
 
 ### 4.59 Mouse aiming
 - [x] Done (T64)

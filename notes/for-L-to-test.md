@@ -1718,6 +1718,17 @@
   2. Graphics > Frame Read-Back is Off (the default). Compare with it On in the same spot (it changes live)
   3. With it Off, play through things that reuse the picture: pause menu, a level change (jigsaw), Bottles' revenge or any flashback, photo mode, a boss intro
 - Look for: higher fps and lower Input latency with it Off? Anything black, frozen or showing an old picture with it Off that is right with it On? If so, where.
+
+## T163 3D grass (roadmap 4.47)
+- Asked: 2026-10-15 17:05 UTC
+- Build: latest Windows build from main
+- Commit: "3D grass" on main
+- Steps:
+  1. Graphics > Photo Filters on, then 3D grass to 100 (3D grass height 100, 3D grass distance 2500)
+  2. Spiral Mountain: walk onto the meadow by Klungo and stand still, then walk around
+  3. Isle o' Hags (Jinjo Village) and Mayahem Temple's courtyard: look at the grass from up close and far away
+  4. Change 3D grass height and distance while playing, then set 3D grass to 0
+- Look for: Short blades on the green ground that sway a little, flattened in a small circle round Banjo's feet. None on characters (Klungo, Grublins), walls, rock, paths or water. They shrink away with distance instead of popping. Changes apply at once and 0 is the plain ground again. Frame rate with it on? A few blades on paths with green in them (moss between Mayahem's cobbles) are expected.
 - Status: waiting for L
 
 ## T163 Totals checklist, step 2: what you can get now
