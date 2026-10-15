@@ -1629,7 +1629,7 @@
 
 ## T154 Heap crash guard
 - Asked: 2026-10-15 UTC
-- Build: main @ (this commit)
+- Build: main @ 7c099f9
 - Steps:
   1. Play the way you were when it crashed (120 FPS, Display interpolation, More game memory on)
   2. If the game carries on where it would have crashed, send logs/console.log
