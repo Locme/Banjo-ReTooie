@@ -2663,6 +2663,51 @@ index 0000000..e400499
 +            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth);
 +    };
 +};
+diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
+index e842dcc..7538751 100644
+--- a/src/render/rt64_projection_processor.cpp
++++ b/src/render/rt64_projection_processor.cpp
+@@ -7,7 +7,15 @@
+ #include "common/rt64_math.h"
+ #include "hle/rt64_workload_queue.h"
+ 
++#include <atomic>
++
+ namespace RT64 {
++    static std::atomic<bool> stretchPerspective{ false };
++
++    void SetStretchPerspective(bool stretch) {
++        stretchPerspective.store(stretch, std::memory_order_relaxed);
++    }
++
+     inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
+         matrix[0][0] *= aspectRatioScale;
+         matrix[1][0] *= aspectRatioScale;
+@@ -98,6 +106,10 @@ namespace RT64 {
+                 }
+             }
+  
++            if (stretchPerspective.load(std::memory_order_relaxed) && (proj.type == Projection::Type::Perspective)) {
++                adjustAspectRatio = false;
++            }
++
+             float projRatioScale = adjustAspectRatio ? (1.0f / p.aspectRatioScale) : 1.0f;
+             interop::float4x4 &viewMatrix = drawData.modViewTransforms[proj.transformsIndex];
+             interop::float4x4 &projMatrix = drawData.modProjTransforms[proj.transformsIndex];
+diff --git a/src/render/rt64_projection_processor.h b/src/render/rt64_projection_processor.h
+index 5bc3a2a..c6c5ec2 100644
+--- a/src/render/rt64_projection_processor.h
++++ b/src/render/rt64_projection_processor.h
+@@ -30,4 +30,8 @@ namespace RT64 {
+         void processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex);
+         void upload(const ProcessParams &p);
+     };
++
++    // Banjo-Tooie: while on, perspective views are stretched across a wide picture instead of widened (the
++    // intro's backdrop only covers a 4:3 view). Set by the game every frame.
++    void SetStretchPerspective(bool stretch);
+ };
+\ No newline at end of file
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
 index bf7b669..6b8bcbd 100644
 --- a/src/render/rt64_raster_shader_cache.cpp

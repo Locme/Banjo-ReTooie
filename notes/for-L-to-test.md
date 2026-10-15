@@ -2018,3 +2018,12 @@
   3. Turn Sun shadow on Banjo off and on
 - Look for: No dark streaky block beside Banjo; his sun shadow is a small soft shape. With the switch off he casts no sun shadow (HD shadows still give him one).
 - Status: waiting for L
+
+## T189 Intro backdrop stretched to widescreen
+- Asked: 2026-10-15 22:10 UTC
+- Build: next build from main
+- Steps:
+  1. Aspect Ratio Expand, a wide window (your 3440x1440)
+  2. Start a new game, or warp to the intro ("Two years have passed..")
+- Look for: The cloud backdrop fills the whole width, with no slanted panel ends and no black at the sides. Spiral Mountain afterwards looks normal (not stretched).
+- Status: waiting for L

@@ -23,7 +23,12 @@
 #include "funcs.h"
 #include "recompui/recompui.h"
 #include "ultramodern/config.hpp"
+#include "tooie_debug.h"
 #include "tooie_game.h"
+
+namespace RT64 {
+    void SetStretchPerspective(bool stretch);
+}
 
 namespace {
     constexpr float original_aspect = 4.0f / 3.0f;
@@ -44,6 +49,15 @@ namespace {
         }
         return std::min(angle, 89.0f);
     }
+}
+
+// The intro ("Two years have passed..", map 0xA1) films a backdrop of cloud
+// panels built for a 4:3 view: widened, the picture shows the panels' ends
+// and black past them. On that map the 3D view is stretched to the window
+// instead (RT64 skips its aspect adjustment for perspective views).
+void tooie::widescreen_tick(uint8_t* rdram) {
+    constexpr uint16_t intro_map = 0xA1;
+    RT64::SetStretchPerspective(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
 }
 
 // How much wider than 4:3 RT64 draws the picture.
