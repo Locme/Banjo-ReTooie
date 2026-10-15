@@ -2196,3 +2196,14 @@
 - Look for: Step 1, crickets chirping quietly under the music and now and then an owl's "hoo ... hu-hoooo". Step 2, birds singing short phrases. Too loud, too quiet, or do they sound fake? None on Hailfire Peaks' Icy Side; no crickets on Lava Side or in Cloud Cuckooland. They stop in the pause menu. The sounds are made in code (nothing taken from the game or elsewhere). Previews: previews/day-night/night.wav and morning.wav in project files (played louder than in the game). Checked headless: the cycle fades the crickets out and the birds in at dawn; the sound itself was not heard.
 - Status: waiting for L
 
+## T207 Day and night: volumetric clouds
+- Asked: 2026-10-16 00:10 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: volumetric clouds" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, then Sunset, then Night, in Spiral Mountain or the Isle o' Hags, and look up at the sky
+  2. Stand still for a minute and watch them move
+  3. Graphics > Clouds off and on, and check the frame rate with them on
+- Look for: Soft, rounded clouds over the game's own sky, drifting slowly: white with grey undersides by day, orange and pink at sunset, dark and hiding the stars at night. Too many, too few, too dark? Does the frame rate drop with them on? None in Cloud Cuckooland. Known: the lens flare still shows when a cloud covers the sun. Checked headless at morning, sunset and night: [clouds-morning-on-off.png](screens/day-night/clouds-morning-on-off.png), [clouds-sunset-night.png](screens/day-night/clouds-sunset-night.png) in project files (the green sky is the no-save warp, not the clouds). Speed not measured.
+- Status: waiting for L
+

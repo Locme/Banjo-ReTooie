@@ -26,7 +26,7 @@
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
-    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies);
+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
 }
 
@@ -191,7 +191,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
-            RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false);
+            RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false, false);
             RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
         }
         return;
@@ -224,7 +224,9 @@ void tooie::day_night::tick(uint8_t* rdram) {
 
     // No fireflies on Hailfire Peaks (lava and ice).
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
-    RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies);
+    // No clouds in Cloud Cuckooland, which is up in them.
+    const bool clouds = option_on(tooie::day_night::clouds_option) && (map != 0x136);
+    RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies, clouds);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
 
     // Night sounds: crickets and owls through the night, birds from dawn into the morning and a few through
@@ -311,6 +313,12 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, small glowing fireflies drift round Banjo at night (not on Hailfire Peaks).",
         true);
     graphics.add_option_hidden_dependency(fireflies_option, option, Mode::Off);
+    graphics.add_bool_option(
+        clouds_option,
+        "Clouds",
+        "With Day and Night on, soft 3D clouds drift across the sky, lit by the sun and the moon (not in Cloud Cuckooland).",
+        true);
+    graphics.add_option_hidden_dependency(clouds_option, option, Mode::Off);
     graphics.add_bool_option(
         sounds_option,
         "Night Sounds",

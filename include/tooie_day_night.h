@@ -17,6 +17,8 @@ namespace tooie::day_night {
     inline const std::string flare_option = "day_night_flare";
     // Fireflies round Banjo at night.
     inline const std::string fireflies_option = "day_night_fireflies";
+    // Soft 3D clouds across the sky.
+    inline const std::string clouds_option = "day_night_clouds";
     // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).
     inline const std::string sounds_option = "day_night_sounds";
 

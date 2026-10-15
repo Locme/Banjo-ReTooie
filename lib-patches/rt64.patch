@@ -3395,10 +3395,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..f71229b
+index 0000000..8ee5153
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1271 @@
+@@ -0,0 +1,1272 @@
 +//
 +// RT64
 +//
@@ -3791,10 +3791,11 @@ index 0000000..f71229b
 +        }
 +    }
 +
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies) {
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayFlare = flare;
 +        effectsSettings.dayFireflies = fireflies;
++        effectsSettings.dayClouds = clouds;
 +        effectsSettings.timeOfDay = enabled;
 +        for (int i = 0; i < 3; i++) {
 +            effectsSettings.dayTint[i] = enabled ? std::clamp(tint[i], 0.0f, 1.27f) : 1.0f;
@@ -4249,8 +4250,8 @@ index 0000000..f71229b
 +                for (int c = 0; c < 3; c++) {
 +                    packed = (packed << 7) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 100.0f), 0L, 127L));
 +                }
-+                // Then two flags: fireflies, and one spare.
-+                packed = (packed << 2) | (settings.dayFireflies ? 1u : 0u);
++                // Then two flags: fireflies and clouds.
++                packed = (packed << 2) | (settings.dayClouds ? 2u : 0u) | (settings.dayFireflies ? 1u : 0u);
 +                // Negative: no lens flare.
 +                dayPacked = (1.0f + float(packed)) * (settings.dayFlare ? 1.0f : -1.0f);
 +            }
@@ -4672,10 +4673,10 @@ index 0000000..f71229b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..a8c6a88
+index 0000000..2915c52
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,189 @@
 +//
 +// RT64
 +//
@@ -4741,6 +4742,7 @@ index 0000000..a8c6a88
 +        float dayShafts = 1.0f;
 +        bool dayFlare = true;
 +        bool dayFireflies = false;
++        bool dayClouds = false;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4804,7 +4806,8 @@ index 0000000..a8c6a88
 +    // scales the light shafts, so the moon gives none. By day the sun shows as a disc, with a lens flare when
 +    // flare is on and nothing hides it.
 +    // fireflies: small glowing fireflies drift round Banjo at night.
-+    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies);
++    // clouds: a layer of soft 3D clouds drifting across the sky, lit by the sun or the moon.
++    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -7085,10 +7088,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..7cb4470
+index 0000000..f2af2c3
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1310 @@
+@@ -0,0 +1,1406 @@
 +//
 +// RT64
 +//
@@ -7189,6 +7192,95 @@ index 0000000..7cb4470
 +    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
 +}
 +
++// Day and night cycle's clouds: value noise on a lattice, smooth between its points (0 to 1).
++float CloudNoise(float3 p) {
++    const float3 i = floor(p);
++    float3 f = p - i;
++    f = f * f * (3.0f - 2.0f * f);
++    const int3 c = int3(i);
++    float v[8];
++    [unroll]
++    for (int k = 0; k < 8; k++) {
++        uint3 q = uint3(c + int3(k & 1, (k >> 1) & 1, (k >> 2) & 1));
++        uint h = q.x * 73856093u ^ q.y * 19349663u ^ q.z * 83492791u;
++        h = (h ^ (h >> 13)) * 0x5bd1e995u;
++        h ^= h >> 15;
++        v[k] = float(h & 0xFFFFu) / 65535.0f;
++    }
++    const float x00 = lerp(v[0], v[1], f.x);
++    const float x10 = lerp(v[2], v[3], f.x);
++    const float x01 = lerp(v[4], v[5], f.x);
++    const float x11 = lerp(v[6], v[7], f.x);
++    return lerp(lerp(x00, x10, f.y), lerp(x01, x11, f.y), f.z);
++}
++
++// How thick the cloud is at a point of the layer (in layer units, 0 at its floor, 1 at its top), 0 for clear air.
++float CloudDensity(float3 p, int octaves) {
++    const float time = gConstants.view.z;
++    // Drifts slowly with the wind, the small shapes a little faster so the clouds churn as they go.
++    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f);
++    float n = CloudNoise(p * 0.55f + wind) * 0.6f;
++    n += CloudNoise(p * 1.4f + wind * 1.6f + 13.7f) * 0.27f;
++    if (octaves > 2) {
++        n += CloudNoise(p * 3.6f + wind * 2.5f + 41.3f) * 0.13f;
++    }
++    // Round bottoms that thin out towards the top.
++    const float height = saturate(p.y);
++    const float shape = smoothstep(0.0f, 0.18f, height) * smoothstep(1.0f, 0.45f, height);
++    return saturate((n - 0.52f) * 3.5f) * shape;
++}
++
++// Soft clouds over the sky, marched through a layer above the camera. Returns the cloud's colour and how much it
++// covers (0 to 1). Lit from the sun by day (warm at sunrise and sunset, a bright edge round it when it is behind
++// them) and faintly from the moon at night, and they darken with the tint like the rest of the sky.
++float4 DayClouds(float3 world, float3 sunWorld, float3 tint, float glow, int2 pixel) {
++    if (world.y < 0.015f) {
++        return 0.0f;
++    }
++    const float night = DayNight(tint);
++    // The layer from 1 to 1.6 (in its own units) above the camera; walking about moves it a little.
++    const float3 camera = float3(gConstants.worldX.w, 0.0f, gConstants.worldZ.w) / 9000.0f;
++    const float start = 1.0f / world.y;
++    const float end = min(1.6f / world.y, start + 3.0f);
++    const int steps = 10;
++    const float stride = (end - start) / steps;
++    // A different start in each pixel, so the steps don't show as bands.
++    float t = start + stride * DayHash(float3(pixel, 7.0f));
++    const float3 sunColor = lerp(float3(1.0f, 0.96f, 0.9f), float3(1.0f, 0.6f, 0.32f), glow);
++    const float3 light = lerp(sunColor * 1.15f, float3(0.32f, 0.38f, 0.55f), night);
++    const float3 ambient = lerp(float3(0.62f, 0.68f, 0.8f), float3(0.08f, 0.1f, 0.16f), night);
++    // Brighter looking towards the light (light through the cloud's edges).
++    const float toward = dot(world, sunWorld);
++    const float phase = 0.55f + 0.9f * pow(saturate(toward), 8.0f);
++    float transmittance = 1.0f;
++    float3 color = 0.0f;
++    [loop]
++    for (int i = 0; i < steps; i++) {
++        float3 p = world * t + camera;
++        p.y = world.y * t - 1.0f;
++        p.y /= 0.6f;
++        const float density = CloudDensity(p, 3);
++        if (density > 0.01f) {
++            // How much cloud lies between here and the light.
++            const float toLight = CloudDensity(p + sunWorld * 0.25f, 2) + CloudDensity(p + sunWorld * 0.6f, 2) * 0.6f;
++            const float lit = exp(-toLight * 3.0f);
++            // A darker underside.
++            const float base = lerp(0.6f, 1.0f, saturate(p.y));
++            const float3 c = (light * lit * phase + ambient * base) * pow(tint, 1.2f);
++            const float alpha = 1.0f - exp(-density * stride * 6.0f);
++            color += c * alpha * transmittance;
++            transmittance *= 1.0f - alpha;
++            if (transmittance < 0.03f) {
++                break;
++            }
++        }
++        t += stride;
++    }
++    // Thin out into the distance, so the layer doesn't end in a line at the horizon.
++    const float fade = smoothstep(0.015f, 0.12f, world.y);
++    return float4(color, 1.0f - transmittance) * fade;
++}
++
 +// The sky under the tint: it darkens more than the world, glows warm round the sun near the horizon when the tint
 +// is warm (sunrise and sunset), and at night shows stars fixed in the world and the moon (the sun constant's
 +// direction, which the cycle points at the moon at night).
@@ -7230,6 +7322,13 @@ index 0000000..7cb4470
 +        const float disc = smoothstep(0.99955f, 0.99975f, toward);
 +        sky = lerp(sky, sunColor * 1.3f, disc * day);
 +        sky += sunColor * (pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f) * day;
++    }
++
++    // Clouds in front of all of it.
++    if ((DayPacked() & 2u) != 0u) {
++        const float3 sunWorld = normalize(float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz)));
++        const float4 clouds = DayClouds(world, sunWorld, tint, glow, pixel);
++        sky = sky * (1.0f - clouds.a) + clouds.rgb;
 +    }
 +    return sky;
 +}
@@ -8813,7 +8912,7 @@ index 0a5c332..c4e4004 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..08d06e0
+index 0000000..0cf11ea
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,71 @@
@@ -8868,7 +8967,7 @@ index 0000000..08d06e0
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 7 bits
-+        // each, steps of 0.01, then two flags, bit 0 fireflies: exact as a float below 2^24; negative for no lens
++        // each, steps of 0.01, then two flags, bit 0 fireflies, bit 1 clouds: exact as a float below 2^24; negative for no lens
 +        // flare), then 1 to leave Banjo's own shadow out.
 +        float4 shadows;
 +    };
