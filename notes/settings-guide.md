@@ -369,7 +369,8 @@ as they are.
   the row goes back to Off when Enable cheats is turned off.
 - **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
   to. The Warp Again key (Debug section of the Controls tab) repeats the last
-  warp. Default: off.
+  warp. Its last group, Race Warps, starts one of Canary Mary's four races as
+  a practice run (your file is not changed and no prize is given). Default: off.
 - **Stop 'n' Swop items**: marks the blue and pink Stop 'n' Swop mystery eggs as
   collected, without a Banjo-Kazooie save. Only these two flags are set; the
   yellow egg and the other items are not covered yet.

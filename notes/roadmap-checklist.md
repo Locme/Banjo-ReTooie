@@ -300,10 +300,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [ ] Approved by L
 - 2026-10-14 (T64, with 4.58/4.59): in first person the mouse and a controller's gyro turn the view directly (src/input/motion_aim.cpp), on top of the stick. The source angles are the dynamic camera's +0xBC pitch / +0xC0 yaw (found by RDRAM diffs, checked by writing them headless: the view, Banjo's yaw and the up/down limits of -68 and 70 follow). Strength: General > Mouse Sensitivity (default 0, off; non-zero locks the cursor while playing) and Gyro Sensitivity (default 25%), both RecompFrontend's own rows. QOL > "Mouse and gyro aim: invert up/down". Checked headless with scripted mouse motion; real mouse and gyro not checked.
 
-### 4.81 Debug section with race warps (parked)
-- [ ] Done
+### 4.81 Debug section with race warps
+- [x] Done
 - [ ] Approved by L
 - 2026-10-14: tried and parked. Warping straight to the race maps (0x16F, 0x170 mine cart, 0x161 clouds) works but Mary and the race are not there unless her flags are set: 0x066 (freed) and 0x507 (ready to race) for the mine cart, 0x504 for the clouds, plus the 3-bit race state at flag 0xA4C (mine cart) or 0xA37 (clouds) set to 1 (all read back fine after setting). With those set the game crashes at the cart's init (func_80802068_chhandcart calling func_800EE88C on a missing cube-search prop 0x313/0x314 in the race map), so the race can't be entered from a warp yet. Canary Cave (0xDB) in the Warp tab starts the races normally.
+- 2026-10-15 (T186): built. Warp > Race Warps, the last group of the Warp tab, has Glitter Gulch Mine first and second race and Cloud Cuckooland first and second race (Canary Mary's four races; the game has no others). Cause of the old crash: the race state is in the level's own flag bank, which entering another level clears, so a warp from outside GGM arrived with it at 0. A race warp now goes to Mary's map first (GGM 0xC7, CCL 0x136), sets the race state there with the game's setter, has the flag getter report Mary freed and the right Jiggy and Cheato pages for that race, and warps to the race map at exit 1, as Mary does. Practice runs: leaving the race map puts the race state and result back and the file is untouched, so no prize is given. Checked headless from Spiral Mountain with no file progress: all four races start with the countdown, Mary wins if Banjo doesn't pump, and a scripted A mash won the GGM first race and came back to GGM with no Jiggy. Code: src/gameplay/race_warp.cpp.
 
 ### 4.82 Photo mode
 - [x] Done

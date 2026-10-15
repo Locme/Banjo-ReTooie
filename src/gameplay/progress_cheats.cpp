@@ -8,6 +8,7 @@
 
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
+#include "tooie_race_warp.h"
 #include "tooie_hooks.h"
 #include "tooie_progress_cheats.h"
 
@@ -225,6 +226,11 @@ extern "C" void tooie_flag_get_enter(uint8_t* rdram, recomp_context* ctx) {
 }
 
 extern "C" void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx) {
+    bool race_value = false;
+    if (tooie::race_warp::override_flag(pending_flag, race_value)) {
+        ctx->r2 = race_value ? 1 : 0;
+        return;
+    }
     if (pending_flag >= first_move_flag && pending_flag <= last_move_flag && tooie::cheats::is_on("cheat_all_moves")) {
         ctx->r2 = 1;
     }

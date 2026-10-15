@@ -1975,3 +1975,16 @@
   4. Turn the mod off in the Mods menu, then go through a door or loading zone
 - Look for: Banjo and Kazooie use the Smash Ultimate model with its full-size textures, move with every animation, and blink. Step 4: the game's own model comes back after the next area load (the model is only read when an area loads). Known: a small gap on top of Banjo's head, rough fur edges, Smash-sized hands, Kazooie's Turbo Trainers and Wading Boots show as plain feet. Solo Banjo, solo Kazooie, transformations and cutscene models are not replaced. Checked headless in Spiral Mountain (screenshot screens/smash-banjo/v1.png in project files).
 - Status: waiting for L
+
+## T186 Race Warps (Canary Mary's races from the Warp tab)
+- Asked: 2026-10-15 21:17 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Turn on Cheats > Enable cheats and Cheats > Warp tab, then load any save
+  2. Open the Warp tab and scroll to the bottom: Race Warps has four entries
+  3. Pick Glitter Gulch Mine: first race. You land by Mary in Glitter Gulch Mine, then go straight into the race with the 3, 2, 1 countdown
+  4. Race her (mash A), win or lose, and you come back to Glitter Gulch Mine
+  5. Do the same for Glitter Gulch Mine: second race and both Cloud Cuckooland races
+  6. Open the pause menu Totals: your Jiggies and Cheato pages have not changed
+- Look for: Each of the four races starts and can be raced to the end without a crash. Winning gives no Jiggy or Cheato page (practice run), and if your file has not met Mary yet she is still caged afterwards. Checked headless from Spiral Mountain with no progress: all four start, and a scripted A mash won the GGM first race.
+- Status: waiting for L
