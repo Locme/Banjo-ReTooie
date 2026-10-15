@@ -302,10 +302,10 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - 2026-10-14 (T71): Graphics > Effects preset: Custom, Original (every effect off), Enhanced (SMAA High, ambient occlusion 50, sharpening 30), Retro (N64 16-bit colour Console, CRT, 3-point filtering). It sets the options through update_option_value, so the menu shows the new values, and saves once; changing any effect it covers by hand makes it Custom. Brightness, colourblind and fog colour/start are left alone. Sun shadows aren't in it (4.98 not built). Checked headless with TOOIE_PRESET_TEST (saved graphics.json values for each preset). Code: src/display/picture_filters.cpp.
 
 ### 4.43 F8 split-screen compare, F3 per-effect GPU times, F6 debug views
-- [ ] Done
+- [x] Done
 - [ ] Approved by L
 - Partial (2026-10-14, T80): F6 steps through the scene effects pass's views (effects alone, depth: near white, far dark, sky blue, normals, off) and F8 splits the picture (scene effects and photo grade passes on the left half, original on the right, a white line between); src/display/effect_views.cpp, lib-patches/rt64.patch. The volumetric view has nothing to show (no volumetrics built). F3 per-effect GPU times not started (the frame rate overlay is another thread's).
-- 2026-10-15: F3 per-effect GPU times claimed by the frame rate overlay thread.
+- 2026-10-15 (T157, dbf160b): F3 per-effect GPU times done: the frame rate overlay's Full mode (F3) lists the GPU time of each extra pass that ran (water mask, eye adaptation, bloom, the effects pass, SMAA, FXAA, photo filters, FSR, output, UI). Fog, AO, outlines and the other scene effects share one shader pass, so they show as one figure.
 
 ### 4.46 Real-time water waves (requested 2026-10-13, not built)
 - [x] Done
