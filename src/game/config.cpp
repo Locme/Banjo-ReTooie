@@ -36,6 +36,7 @@
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
+#include "tooie_low_latency.h"
 #include "tooie_fsr.h"
 #include "tooie_effect_views.h"
 #include "tooie_hotkeys.h"
@@ -414,6 +415,7 @@ void tooie::init_config() {
     tooie::fsr::add_option(graphics);
     tooie::game_frame_rate::add_option(graphics);
     recompui::config::graphics::add_interpolation_options(graphics);
+    tooie::low_latency::add_option(graphics);
     tooie::frame_overlay::add_option(graphics);
 
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
@@ -462,4 +464,5 @@ void tooie::init_config() {
     tooie::smaa::apply();
     tooie::fxaa::apply();
     tooie::fsr::apply();
+    tooie::low_latency::apply();
 }

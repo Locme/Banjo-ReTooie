@@ -18,6 +18,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Graphics
 
 - Frame rate overlay (Full): GPU time of each extra pass (water mask, eye adaptation, bloom, effects, SMAA, FXAA, photo filters, FSR, output, UI); roadmap 4.43's F3 timings (T157).
+- Graphics > Low Input Latency (on by default): each finished frame shows at the next screen refresh, as on the N64, instead of one refresh later, so controls react about 17 ms sooner at Original, 30 and 60 FPS (4 ms at Unlocked). Headless, every frame now shows 1 VI after the game swaps it in instead of 2. Untested on PC (T158).
 - The frame rate overlay's two Interpolation lines are one: "Interpolation: Display, on: 6 models, 47 bones, 0 shadows, 1 camera cuts" or ", off".
 
 - Long drop-down lists in the menu (Effect debug view) scroll, and follow the pick when moving with a pad or the arrow keys; before, entries past the window edge couldn't be seen (T148).

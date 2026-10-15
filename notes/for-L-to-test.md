@@ -1666,3 +1666,14 @@
   2. In Spiral Mountain, turn Bloom, SMAA and Eye adaptation on and off in Graphics, and open photo mode (F10) with a filter
 - Look for: Two lines under the GPU time: "GPU 3D effects: ..." and "GPU per frame shown: ...", each listing only the passes that ran, in ms. A pass you turn off should disappear from its line, and the numbers should add up to less than the GPU line. Tell me which one is biggest on your PC; that's the effect costing the most.
 - Status: waiting for L
+
+## T158 Low Input Latency
+- Asked: 2026-10-15 UTC
+- Build: latest Windows build from main
+- XBLA history: report §4.31
+- Steps:
+  1. Graphics > Low Input Latency is On (the default). Set Frame rate overlay to Full
+  2. Play for a minute at your usual settings: jump, turn the camera, run around
+  3. Switch Low Input Latency Off and play the same minute, then back On (it changes live)
+- Look for: does Banjo answer the buttons and stick a little quicker with it on? Any flicker, a frame jumping back, or a torn picture with it on that is not there with it off? (The overlay's Input latency figure can't show this change: it was measuring from the wrong frame before, so compare by feel.)
+- Status: waiting for L

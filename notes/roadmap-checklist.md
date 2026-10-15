@@ -381,7 +381,7 @@ Numbers are the feature numbers in the handoff report, Section 4.
 ### 4.31 Low input latency and late frame start
 - [ ] Done
 - [ ] Approved by L
-- 2026-10-15: claimed by the Opus helper thread (L picked it).
+- 2026-10-15: claimed by the Opus helper thread (L picked it). Graphics > Low Input Latency (default on) shows each frame at the next VI instead of one later (about 17 ms sooner); T158. Late frame start is not done: the game starts its next frame when the last one has rendered, so headless here was too slow to tune it.
 
 ### 4.32 Performance defaults
 - [ ] Done

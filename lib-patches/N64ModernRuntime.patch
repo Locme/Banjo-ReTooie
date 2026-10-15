@@ -105,7 +105,7 @@ index 2f22456..41b1e8b 100644
          });
  
 diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
-index 3b28af3..130e992 100644
+index 3b28af3..5921407 100644
 --- a/ultramodern/include/ultramodern/ultramodern.hpp
 +++ b/ultramodern/include/ultramodern/ultramodern.hpp
 @@ -2,6 +2,8 @@
@@ -129,7 +129,7 @@ index 3b28af3..130e992 100644
  
  // Thread scheduling.
  void check_running_queue(RDRAM_ARG1);
-@@ -79,7 +86,51 @@ void set_main_thread();
+@@ -79,7 +86,56 @@ void set_main_thread();
  bool is_game_thread();
  void submit_rsp_task(RDRAM_ARG PTR(OSTask) task);
  void send_si_message();
@@ -172,6 +172,11 @@ index 3b28af3..130e992 100644
 +// VIs sent per 60th of a second (1 = 60 a second, 2 = 120). Game time and audio are unchanged.
 +uint32_t get_vi_rate_multiplier();
 +void set_vi_rate_multiplier(uint32_t multiplier);
++// Low input latency: a swapped-in frame shows at the next VI rather than one VI later.
++void set_low_latency(bool enabled);
++bool get_low_latency();
++// steady_clock time (ns) of the latest VI tick.
++int64_t get_last_vi_tick_ns();
 +// Called on the SP task thread just before an audio task runs, so the game can check its inputs.
 +void set_audio_task_check(void (*check)(uint8_t* rdram, const OSTask* task));
 +// Game time since start. This runs at get_speed_multiplier() times real time.
@@ -182,7 +187,7 @@ index 3b28af3..130e992 100644
  // Time
  std::chrono::high_resolution_clock::time_point get_start();
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index 090cc42..8bad5b8 100644
+index 090cc42..cb1a212 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -1,4 +1,5 @@
@@ -199,10 +204,31 @@ index 090cc42..8bad5b8 100644
  
  #include "blockingconcurrentqueue.h"
  
-@@ -172,6 +174,17 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
+@@ -172,6 +174,38 @@ extern "C" void osViSetEvent(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, u32 ret
  }
  
  uint64_t total_vis = 0;
++// steady_clock time (ns) of the latest VI tick, for latency logging (TOOIE_VI_LOG=1).
++static std::atomic<int64_t> last_vi_tick_ns{ 0 };
++static bool vi_log_enabled() {
++    static const bool enabled = std::getenv("TOOIE_VI_LOG") != nullptr;
++    return enabled;
++}
++static int64_t steady_now_ns() {
++    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++// Low input latency: show a frame the game swapped in at the very next VI (when a real N64 starts
++// scanning it out) instead of one VI later (when that scanout has finished), about 17 ms sooner at 60 VIs a second.
++static std::atomic<bool> low_latency{ false };
++void ultramodern::set_low_latency(bool enabled) {
++    low_latency = enabled;
++}
++bool ultramodern::get_low_latency() {
++    return low_latency.load();
++}
++int64_t ultramodern::get_last_vi_tick_ns() {
++    return last_vi_tick_ns.load(std::memory_order_relaxed);
++}
 +// VIs sent per 60th of a second (1 normally). Raised so the game can make more than 60 frames a second;
 +// the AI messages stay at 60 a second. The VI count restarts from a base whenever it changes.
 +static std::atomic<uint32_t> vi_rate_multiplier{ 1 };
@@ -217,7 +243,7 @@ index 090cc42..8bad5b8 100644
  
  
  extern std::atomic_bool exited;
-@@ -187,10 +200,20 @@ void vi_thread_func() {
+@@ -187,10 +221,20 @@ void vi_thread_func() {
      using namespace std::chrono_literals;
  
      int remaining_retraces = 1;
@@ -239,7 +265,7 @@ index 090cc42..8bad5b8 100644
          //if (next > std::chrono::high_resolution_clock::now()) {
          //    printf("Sleeping for %" PRIu64 " us to get from %" PRIu64 " us to %" PRIu64 " us \n",
          //        (next - std::chrono::high_resolution_clock::now()) / 1us,
-@@ -205,9 +228,9 @@ void vi_thread_func() {
+@@ -205,13 +249,14 @@ void vi_thread_func() {
              next = std::chrono::high_resolution_clock::now();
          }
          ultramodern::sleep_until(next);
@@ -251,9 +277,24 @@ index 090cc42..8bad5b8 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -226,8 +249,16 @@ void vi_thread_func() {
+         total_vis = new_total_vis;
++        last_vi_tick_ns.store(steady_now_ns(), std::memory_order_relaxed);
+ 
+         // If the game hasn't started yet, set a dummy VI mode and origin.
+         if (!ultramodern::is_game_started()) {
+@@ -224,10 +269,31 @@ void vi_thread_func() {
+ 
+         // Queue a screen update for the graphics thread with the current VI register state.
          // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
-         events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
+-        events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
++        // With low latency on, it's queued after the VI update instead, so the frame just swapped in shows now.
++        const bool show_now = low_latency.load();
++        if (!show_now) {
++            events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
++            if (vi_log_enabled()) {
++                printf("[vi] show %08X\n", events_context.vi.regs.VI_ORIGIN_REG);
++            }
++        }
  
 -        // Update VI registers and swap VI modes.
 -        events_context.vi.update_vi();
@@ -267,10 +308,22 @@ index 090cc42..8bad5b8 100644
 +            }
 +            events_context.vi.update_vi();
 +        }
++        if (show_now) {
++            events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
++            if (vi_log_enabled()) {
++                printf("[vi] show %08X\n", events_context.vi.regs.VI_ORIGIN_REG);
++            }
++        }
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -243,7 +274,11 @@ void vi_thread_func() {
+@@ -240,10 +306,17 @@ void vi_thread_func() {
+                     // Send a message to the VI queue, and do not set it to be requeued if the queue was full.
+                     // The worst case scenario is that the game misses a VI message and has to wait a little longer for the next. 
+                     ultramodern::enqueue_external_message(cur_state->mq, cur_state->msg, false, false);
++                    if (vi_log_enabled()) {
++                        printf("[vi] msg %.2f\n", (steady_now_ns() - last_vi_tick_ns.load()) / 1e6);
++                    }
                  }
                  remaining_retraces = cur_state->retrace_count;
              }
@@ -283,7 +336,7 @@ index 090cc42..8bad5b8 100644
                  // Send a message to the VI queue, and do not set it to be requeued if the queue was full for the same reason as the VI message above.
                  ultramodern::enqueue_external_message(events_context.ai.mq, events_context.ai.msg, false, false);
              }
-@@ -261,12 +296,79 @@ void sp_complete() {
+@@ -261,12 +334,79 @@ void sp_complete() {
      ultramodern::enqueue_external_message(events_context.sp.mq, events_context.sp.msg, false, true);
  }
  
@@ -363,7 +416,7 @@ index 090cc42..8bad5b8 100644
  void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_ready) {
      ultramodern::set_native_thread_name("SP Task Thread");
      ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::Normal);
-@@ -283,13 +385,28 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
+@@ -283,13 +423,28 @@ void task_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_r
              return;
          }
  
@@ -394,7 +447,7 @@ index 090cc42..8bad5b8 100644
      }
  }
  
-@@ -359,21 +476,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -359,21 +514,36 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
          if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
              // Determine the action type and act on it
              if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
@@ -436,7 +489,17 @@ index 090cc42..8bad5b8 100644
                  // TODO hook the parsed event up to the actual parsing point when a callback is added to RT64.
                  ultramodern::extensions::on_displaylist_parsed(displaylist);
                  ultramodern::extensions::on_displaylist_completed(displaylist);
-@@ -561,8 +693,37 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
+@@ -455,6 +625,9 @@ void set_dummy_vi(bool odd) {
+ }
+ 
+ extern "C" void osViSwapBuffer(RDRAM_ARG PTR(void) frameBufPtr) {
++    if (vi_log_enabled()) {
++        printf("[vi] swap %.2f %08X\n", (steady_now_ns() - last_vi_tick_ns.load()) / 1e6, (uint32_t)frameBufPtr);
++    }
+     std::lock_guard lock{ events_context.message_mutex };
+     events_context.vi.get_next_state()->framebuffer = frameBufPtr;
+ }
+@@ -561,8 +734,37 @@ void ultramodern::submit_rsp_task(RDRAM_ARG PTR(OSTask) task_) {
      OSTask* task = TO_PTR(OSTask, task_);
  
      // Send gfx tasks to the graphics action queue

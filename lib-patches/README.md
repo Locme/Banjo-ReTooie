@@ -40,6 +40,12 @@ so the submodules stay pinned to their upstream commits.
   messages stay at 60 a second. Game Frame Rate 120 FPS and Unlocked use 2 and 4
   (`src/game/game_frame_rate.cpp`).
 
+* **Low input latency** (`ultramodern/src/events.cpp`, `ultramodern.hpp`): upstream queues each screen
+  update before latching the framebuffer the game just swapped in, so a frame showed two VIs after
+  the swap. `set_low_latency(true)` queues it after the latch, so it shows at the next VI, as on an
+  N64 (Graphics > Low Input Latency, `src/input/low_latency.cpp`). `TOOIE_VI_LOG=1` prints each VI
+  message, buffer swap, screen update and player 1 controller read, timed from the latest VI tick.
+
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 

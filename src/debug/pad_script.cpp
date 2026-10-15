@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "ultramodern/ultramodern.hpp"
 #include "tooie_game_frame_rate.h"
 #include "tooie_debug.h"
 #include "tooie_control_scheme.h"
@@ -197,6 +198,11 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
         tooie::frame_overlay::note_input_read();
+        static const bool vi_log = std::getenv("TOOIE_VI_LOG") != nullptr;
+        if (vi_log) {
+            int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            std::printf("[vi] pad %.2f\n", (now - ultramodern::get_last_vi_tick_ns()) / 1e6);
+        }
         tooie::photo_mode::apply_input(buttons_out, x_out, y_out);
         tooie::control_scheme::apply(buttons_out, x_out, y_out);
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);

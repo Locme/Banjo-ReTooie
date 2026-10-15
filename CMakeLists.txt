@@ -266,6 +266,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp
     ${CMAKE_SOURCE_DIR}/src/display/smaa.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fxaa.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/low_latency.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fsr.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fast_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/display/draw_distance.cpp

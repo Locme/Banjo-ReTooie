@@ -167,7 +167,13 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     flags |= SDL_WINDOW_VULKAN;
 #endif
 
-    window = SDL_CreateWindow(tooie::program_name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1600, 900,  flags);
+    // TOOIE_WINDOW=<w>x<h>: start at another size (headless tests use a small one, as software rendering is slow).
+    int window_w = 1600;
+    int window_h = 900;
+    if (const char* size = std::getenv("TOOIE_WINDOW")) {
+        std::sscanf(size, "%dx%d", &window_w, &window_h);
+    }
+    window = SDL_CreateWindow(tooie::program_name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_w, window_h, flags);
 
     if (window == nullptr) {
         exit_error("Failed to create window: %s\n", SDL_GetError());
