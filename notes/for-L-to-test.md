@@ -943,7 +943,7 @@
   2. Pause and go to View Totals: the pages look like the original game, with no LEFT HERE table (QOL > Totals checklist now starts Off, even if you had it On)
   3. If the game is still at 8 FPS: say where (only paused on Totals, in all of the pause menu, or while playing), then turn QOL > Totals checklist On and Off again and say whether the frame rate changes
 - Look for: whether the 8 FPS is gone. Headless, the checklist on or off made no difference to the frame rate, paused or playing; the slow settings found there were Graphics > 3D grass (19 to 7 FPS), Sun shadows and Modern water.
-- Status: waiting for L
+- Status: resolved (L, 2026-10-16)
 
 ## T181 Modern water going back to the original
 - Asked: 2026-10-15 20:55 UTC
