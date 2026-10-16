@@ -2387,4 +2387,14 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Watch the intro ("Two years have passed..") from the start
 - Look for: The opening cloud shots fill the whole width with no panel ends or black at the sides. The castle, the rock, Grunty's grave and the text keep their normal shape (not stretched).
+
+## T226 Viva Mumbo Jumbo model mod (Viva Mumbo Jumbo v1)
+- Asked: 2026-10-16 08:15 UTC
+- Build: main, plus mods/Viva Mumbo Jumbo v1.zip from project files
+- Steps:
+  1. Put "Viva Mumbo Jumbo v1.zip" in the mods folder as it is (no unzipping). In the Mods menu, turn on "Viva Mumbo Jumbo"; it is its own entry, separate from the Banjo and honeycomb model mods, and works with any of them on
+  2. Go into any Mumbo's Skull (Mayahem Temple's is closest) and talk to Mumbo
+  3. Play as Mumbo (pay him a Glowbo, or Cheats > Transformation > Mumbo): walk, jump, swim, use the wand, stand still
+  4. Turn the mod off and enter a new area
+- Look for: Mumbo is the Viva Pinata Mumbo (yellow skull with dark markings, red feathers, pink body with the rainbow chest, patterned skirt) with the HD textures, moving with the game's own animations: his jaw moves when he talks, the three feathers sway, and the eyes keep the Viva half-closed lids with blue irises and blink. In his skull he sits with his eyes shut, as the original Mumbo does. The Viva model has no wand or bag, so he keeps the game's own wand and bag, held in the new hand. With the mod off the original Mumbo is back. Not replaced: Mumbo's cutscene-only models (the intro and story scenes use other models) and his shadow. Checked headless: playing as Mumbo in Spiral Mountain and Mumbo in Mayahem Temple's skull, including talking to him: [v1.png](screens/viva-mumbo/v1.png). Swimming and the wand spell were not tried.
 - Status: waiting for L
