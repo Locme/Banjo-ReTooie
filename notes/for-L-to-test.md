@@ -2418,7 +2418,7 @@
   1. Put "Banjo X Alt v3.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Stand still until Banjo looks around, then walk, jump, flap and talk to someone
 - Look for: Banjo's face stays like L's reference picture: the muzzle, teeth, brows and tongue now move with his head, so the snout no longer stretches and the mouth no longer hangs open when he turns his head (in v2 they followed his chest). Still full detail, as v2. Checked headless in Spiral Mountain through the idle look-around (screenshot screens/banjo-x/alt-v3.png: v2 left, v3 right, v3 front below).
-- Status: waiting for L
+- Status: failed (L, 2026-10-16: still broken); replaced by T246
 
 ## T229 Settings menu: controller moves the same way in every tab, Search ready to type
 - Asked: 2026-10-16 08:30 UTC
@@ -2585,4 +2585,13 @@
   2. Mayahem Temple's entrance courtyard: look at the foot of the stone walls, then turn 3D grass on edges off and on
   3. Spiral Mountain and Isle o' Hags: look along cliff tops and banks with a grass fringe
 - Look for: blades also grow on the green parts of textures that are only partly grass (a grass fringe along a cliff top or bank, grass at the foot of a rock or wall), leaning out from slopes and walls; off goes back to grass only on the grass textures. 36 such textures, picked by eye from the same texture dump as T227; tell me any spot that should have edge grass and doesn't. Checked headless in Mayahem Temple: on, blades rise along the foot of the courtyard walls; off, none (screens/n64-3d-grass-edges-mayahem-on-off.png). Also fixed: Graphics > Sun shadow on Banjo was shown with the softness slider's name since 3860208.
+- Status: waiting for L
+
+## T246 Banjo X Alt v4: eyes, lids, smile and ears like the reference
+- Asked: 2026-10-16 10:05 UTC
+- Build: main, plus mods/Banjo X Alt v4.zip from project files (take v1 to v3 out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v4.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
+  2. Open photo mode and look at Banjo's face close up, then walk, jump, flap and roll
+- Look for: half-closed eyelids over blue eyes, the brows, the smile and the peach insides of the ears, as in L's reference picture; the straps stay on the shoulders. The game stores model points as whole numbers, which crushed this model's fine detail (eyelids sank into the eyes, the smile closed). v4 stores the points 8 times larger and scales them back down while drawing. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v4.png: v3 top left, v4 top right, v4 with HD textures below).
 - Status: waiting for L
