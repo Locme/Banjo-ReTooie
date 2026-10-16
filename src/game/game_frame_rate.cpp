@@ -258,7 +258,39 @@ namespace {
     };
     Pacer pacer;
 
-    void pace_frame(int32_t rate) {
+    // Waits until end without holding up the game's other threads. The runtime runs one game
+    // thread at a time and only switches inside OS calls, so a plain sleep here kept the VI and
+    // sound threads (higher priority) from running for up to a frame. Every half millisecond it
+    // lets any thread that has a message waiting run, as preempt.cpp does for the game's own spin loops.
+    void wait_yielding(uint8_t* rdram, std::chrono::high_resolution_clock::time_point end) {
+        using clock = std::chrono::high_resolution_clock;
+        constexpr auto slice = std::chrono::microseconds(500);
+        for (;;) {
+            tooie_preempt_point(rdram, nullptr);
+            auto now = clock::now();
+            if (now >= end) {
+                return;
+            }
+            if (end - now <= slice) {
+                RT64::Timer::preciseSleepUntil(end);
+                tooie_preempt_point(rdram, nullptr);
+                return;
+            }
+            RT64::Timer::preciseSleepUntil(now + slice);
+        }
+    }
+
+    // RT64::WaitForPresentBacklog, a millisecond at a time, letting the other threads run between.
+    void wait_for_backlog_yielding(uint8_t* rdram, uint32_t max_backlog, uint32_t timeout_ms) {
+        for (uint32_t waited = 0; waited < timeout_ms; waited++) {
+            if (RT64::WaitForPresentBacklog(max_backlog, 1)) {
+                return;
+            }
+            tooie_preempt_point(rdram, nullptr);
+        }
+    }
+
+    void pace_frame(uint8_t* rdram, int32_t rate) {
         if (pacer.done) {
             return;
         }
@@ -269,7 +301,7 @@ namespace {
             // First paced frame, a new rate, or late: start again from now.
             pacer.next = now;
         } else if (pacer.next > now) {
-            RT64::Timer::preciseSleepUntil(
+            wait_yielding(rdram,
                 ultramodern::game_time_to_real(std::chrono::microseconds((int64_t)(pacer.next * 1e6))));
         }
         pacer.next += 1.0 / rate;
@@ -461,9 +493,9 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
         // Don't run more than two frames ahead of the screen: frames the renderer
         // can't show in time took GPU time from the ones it shows (L: Uncapped
         // made 300+ game frames a second but showed 100, 2026-10-16).
-        RT64::WaitForPresentBacklog(2, 100);
+        wait_for_backlog_yielding(rdram, 2, 100);
         if (rate > 0) {
-            pace_frame(rate);
+            pace_frame(rdram, rate);
         }
         // No VI wait: the extra VI after the last swap has shown it already.
         ctx->r2 = (int32_t)MEM_W(0, (gpr)(int32_t)0x80079704) + (int32_t)MEM_W(0, (gpr)(int32_t)0x80079138);
@@ -616,11 +648,24 @@ extern "C" int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     (void)ctx;
     std::lock_guard lock{ scheduler_vis_mutex };
+    // TOOIE_SCHED_LOG=1: every 120 timed VIs, how many VI messages ran the timed part and how many skipped it.
+    static const bool dbg = std::getenv("TOOIE_SCHED_LOG") != nullptr;
+    static int n_run = 0, n_skip = 0, n_empty = 0;
+    static uint64_t t0 = ultramodern::get_timed_vi_count();
+    if (dbg && ultramodern::get_timed_vi_count() - t0 >= 120) {
+        printf("[sched] timed %llu, ran %d, skipped %d, untracked %d\n", (unsigned long long)(ultramodern::get_timed_vi_count() - t0), n_run, n_skip, n_empty);
+        fflush(stdout);
+        t0 = ultramodern::get_timed_vi_count();
+        n_run = n_skip = n_empty = 0;
+    }
     if (scheduler_vis.empty()) {
+        n_empty++;
+        n_run++;
         return 0;
     }
     bool timed = scheduler_vis.front();
     scheduler_vis.pop_front();
+    (timed ? n_run : n_skip)++;
     return timed ? 0 : 1;
 }
 
@@ -629,9 +674,19 @@ extern "C" int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx) {
 extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
     (void)ctx;
+    // Timed VIs not yet passed on. When this thread falls behind, two timed VIs can come
+    // before it handles the first one's message; each gets a message, so each counts as timed
+    // when its turn comes. Comparing only with the last count made the second one an extra VI:
+    // at 40 FPS about 15 of 120 timed VIs, each a lost sound frame (L: sound broken at 40 FPS,
+    // 2026-10-16). Capped, so messages the runtime dropped can't make later extra VIs timed.
+    static uint64_t pending = 0;
     uint64_t timed = ultramodern::get_timed_vi_count();
-    vi_is_timed = timed != timed_vis_seen;
+    pending = std::min<uint64_t>(pending + (timed - timed_vis_seen), 2);
     timed_vis_seen = timed;
+    vi_is_timed = pending > 0;
+    if (pending > 0) {
+        pending--;
+    }
 }
 
 // func_8001608C, as the game replays a frame's recorded time step: attract

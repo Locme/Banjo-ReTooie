@@ -3309,3 +3309,13 @@
 - Look for: Step 2, the demo plays at normal speed, not sped up. It used to replay the N64's frame times but wait only the shortest time each frame, so it ran up to half again too fast; each demo frame now lasts its recorded time, whatever the toggles. Step 3, the demo is blended smooth by Interpolation. Force Interpolation in cutscenes now covers only the opening cutscene. Checked headless at 60 FPS: five demo levels played with game time matching real time, and the opening cutscene still ends at 51 s.
 - Status: waiting for L
 
+## T325 Sound at 40 FPS (and the other paced rates)
+- Asked: 2026-10-16 21:40 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Game Frame Rate: 40 FPS
+  2. Play a few minutes with music and sound effects (a level, the title screen)
+  3. Try 120 and 175 FPS too
+- Look for: The sound plays smoothly, no crackles, gaps or breaking up. The cause: when the game's VI thread fell behind and two screen ticks waited at once, the second was taken for an extra tick and its sound frame was skipped (headless at 40 FPS, about 15 of every 120 ticks). Headless now: all 120 of 120 ticks run the sound, 60 sound frames every 2 s, as at 30 FPS. The frame pacer's wait also lets the game's other threads run now.
+- Status: waiting for L
+
