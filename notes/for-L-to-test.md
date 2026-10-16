@@ -2516,3 +2516,13 @@
   3. Then 175 and 240 FPS in the same spot
 - Look for: Uncapped is at least as high as 175 now. 240 shows 240 where your PC can, and where it can't, the game still runs at normal speed (before, it went into slow motion). Send the session log if Uncapped is still lower than 175.
 - Status: waiting for L
+
+## T239 Freeze on a map change (your hang of 2026-10-16 10:41)
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Play as you were (boss rush on, cutscene skips on, mix rate High), changing maps a lot
+  2. If the picture ever stops for about 2 seconds on a map change and then carries on, send console.log: it has a `[sound]` line saying which sound was stuck
+  3. If it still freezes for good, wait 15 seconds, then send hangs.log and the newest hang_*.dmp
+- Look for: no more permanent freezes when entering a new area. What happened: before every map change the game waits for each sound it is stopping to be let go by the sound engine. In your hang one sound (slot 6, the same slot each time) was never let go, so the game waited forever while the screen kept showing the last picture. Now the game waits at most 2 seconds, then frees that sound itself, as it would have, and logs it. Hang dumps now also hold the game's memory, so if it happens again I can see which sound it was and why it stuck. Checked headless: with that sound held on purpose (TOOIE_TEST_STUCK_SOUND=1), the warp to Jinjo Village paused 2 seconds, logged slot 6 and carried on, and two more warps after it worked. Why the sound engine did not let go is not found yet.
+- Status: waiting for L

@@ -107,8 +107,10 @@ namespace tooie {
     // log writes it (Windows; elsewhere just the address).
     void describe_code_address(void* addr, char* out, size_t size);
     // Writes logs/hang_<time>.dmp with every thread's stack and report_text as its comment, keeping
-    // the newest 3. Returns its path, or empty if none was written (always empty off Windows).
-    std::string write_hang_dump(const std::string& report_text);
+    // the newest 3. The game's memory (rdram, rdram_size bytes) goes in as an extra stream that
+    // tools/read_dump.py --rdram saves. Returns its path, or empty if none was written (always
+    // empty off Windows).
+    std::string write_hang_dump(const std::string& report_text, const uint8_t* rdram, size_t rdram_size);
 }
 
 #endif

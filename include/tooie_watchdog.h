@@ -1,6 +1,7 @@
 #ifndef __TOOIE_WATCHDOG_H__
 #define __TOOIE_WATCHDOG_H__
 
+#include <cstdint>
 #include <memory>
 
 #include "ultramodern/renderer_context.hpp"
@@ -11,7 +12,8 @@
 namespace tooie::watchdog {
     // Starts the watchdog thread (safe to call more than once). Each watched part arms itself at
     // its first sign of life, so nothing is reported before it has started.
-    void start();
+    // rdram goes into the hang dump.
+    void start(uint8_t* rdram);
 
     // Called by the main thread's event loop each time round (update_gfx in main.cpp).
     void note_window_update();

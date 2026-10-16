@@ -683,10 +683,12 @@ value = 0x03E00008
 # released, which the audio thread does. Without a preemption point the main
 # thread never lets it run and the game freezes on the first level load after
 # the intro. Runs once per pass while some slot is still busy ($s3 != 0).
+# tooie_sound_slot_wait also frees a slot whose sound never reports finished
+# within 2 s and logs it, rather than freezing forever (L's hang of 2026-10-16).
 [[patches.hook]]
 func = "func_800C2AB8"
 before_vram = 0x800C2B50
-text = "if (ctx->r19 != 0) tooie_preempt_point(rdram, ctx);"
+text = "if (ctx->r19 != 0) tooie_sound_slot_wait(rdram, ctx);"
 
 # --- Sound mix rate (src/gameplay/mix_rate.cpp) -----------------------------
 # Sound > Mix rate = High mixes at 44100 Hz instead of 22050. func_800125B0 sets

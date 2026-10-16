@@ -67,6 +67,9 @@ namespace {
     std::atomic<float> reported_scale{0.0f};
     std::atomic<uint32_t> reported_rate{0};
     std::once_flag start_once;
+    std::atomic<uint8_t*> game_rdram{nullptr};
+    // The game's memory below 0x81000000, which More game memory uses up to (heap, audio, buffers).
+    constexpr size_t rdram_dump_size = 0x1000000;
     clock_type::time_point process_start = clock_type::now();
 
 #ifdef _WIN32
@@ -330,7 +333,7 @@ namespace {
                 }
                 if (long_enough) {
                     episode_dumped = true;
-                    std::string path = tooie::write_hang_dump(episode_text);
+                    std::string path = tooie::write_hang_dump(episode_text, game_rdram.load(), rdram_dump_size);
                     if (!path.empty()) {
                         dumps++;
                         log_text(wall_time() + " still hung; dump: " + path + "\n");
@@ -389,7 +392,8 @@ tooie::watchdog::RendererInfo tooie::watchdog::renderer_info() {
     return info;
 }
 
-void tooie::watchdog::start() {
+void tooie::watchdog::start(uint8_t* rdram) {
+    game_rdram.store(rdram);
     std::call_once(start_once, [] {
         // Detached: it only reads counters and appends to a log, so it can die with the process.
         std::thread(watch).detach();

@@ -2052,7 +2052,7 @@ L_800C2B48:
     }
     // 0x800C2B4C: addiu       $s1, $s1, 0x80
     ctx->r17 = ADD32(ctx->r17, 0X80);
-    if (ctx->r19 != 0) tooie_preempt_point(rdram, ctx);
+    if (ctx->r19 != 0) tooie_sound_slot_wait(rdram, ctx);
     // 0x800C2B50: bnel        $s3, $zero, L_800C2AF4
     if (ctx->r19 != 0) {
         // 0x800C2B54: or          $s1, $s6, $zero

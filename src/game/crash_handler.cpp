@@ -46,6 +46,8 @@ namespace {
     constexpr size_t dumps_kept = 5;
     // Hang dumps (write_hang_dump) are kept apart from crash dumps, fewer of them.
     constexpr size_t hang_dumps_kept = 3;
+    // Minidump stream type that holds the game's memory in a hang dump ("BTRD").
+    constexpr uint32_t hang_rdram_stream = 0x44525442;
 
     // Deletes all but the newest `keep` logs/<prefix>*.dmp (names sort by date).
     void prune_dumps(const char* prefix, size_t keep) {
@@ -406,7 +408,7 @@ void tooie::describe_code_address(void* addr, char* out, size_t size) {
     describe_address(addr, out, size);
 }
 
-std::string tooie::write_hang_dump(const std::string& report_text) {
+std::string tooie::write_hang_dump(const std::string& report_text, const uint8_t* rdram, size_t rdram_size) {
     prune_dumps("hang_", hang_dumps_kept - 1);
     char ts[32];
     timestamp(ts, sizeof(ts));
@@ -418,13 +420,18 @@ std::string tooie::write_hang_dump(const std::string& report_text) {
     }
     // The hang report rides along as the dump's comment, like a crash log (tools/read_dump.py prints it).
     std::string comment = report_text;
-    MINIDUMP_USER_STREAM stream{};
-    stream.Type = CommentStreamA;
-    stream.BufferSize = static_cast<ULONG>(comment.size() + 1);
-    stream.Buffer = comment.data();
+    MINIDUMP_USER_STREAM stream[2]{};
+    stream[0].Type = CommentStreamA;
+    stream[0].BufferSize = static_cast<ULONG>(comment.size() + 1);
+    stream[0].Buffer = comment.data();
+    // The game's memory as the recompiled code holds it (32-bit words in host order), so the game's
+    // state at the hang can be read back. The type is any number above the reserved ones.
+    stream[1].Type = hang_rdram_stream;
+    stream[1].BufferSize = static_cast<ULONG>(rdram != nullptr ? rdram_size : 0);
+    stream[1].Buffer = const_cast<uint8_t*>(rdram);
     MINIDUMP_USER_STREAM_INFORMATION streams{};
-    streams.UserStreamCount = 1;
-    streams.UserStreamArray = &stream;
+    streams.UserStreamCount = rdram != nullptr ? 2 : 1;
+    streams.UserStreamArray = stream;
     bool dumped;
     {
         DbgHelpLock dbghelp(5000);
@@ -445,7 +452,7 @@ void tooie::describe_code_address(void* addr, char* out, size_t size) {
     std::snprintf(out, size, "%p", addr);
 }
 
-std::string tooie::write_hang_dump(const std::string&) {
+std::string tooie::write_hang_dump(const std::string&, const uint8_t*, size_t) {
     return {};
 }
 #endif
