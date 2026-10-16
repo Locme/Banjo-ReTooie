@@ -36,6 +36,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
   ...)`. Map ids are in handoff §4.80 and `src/game/level_warp_places.inc`.
   Several warps: `TOOIE_WARP=AF:0@15000,142:0@29000,...` (in time order).
   Code: `src/debug/warp.cpp`.
+- `TOOIE_MAP_CHANGE_LOG=1`: logs every map change the game asks for, as `[map-change] to map 0x.. exit N (from map 0x..)`, to find exit ids (src/debug/warp.cpp). To find which exit puts Banjo by something, warp to each exit in turn (through a small map between them, since a warp to the map you are in does nothing) with a screenshot well after the wipe: Glitter Gulch Mine exit 8 is outside Mumbo's Skull.
 
 - `TOOIE_TEXTURE_DUMP=play|sweep`: sets General > Texture dump whatever the setting says. `TOOIE_TEXTURE_SWEEP_MAPS=B8,142,AF` sweeps only those maps (hex), `TOOIE_TEXTURE_DUMP_DIR=<dir>` writes there instead of `texture_dump/` (keep it out of the repo: the textures are ROM data). Logs `[texture-dump]` and `[texture-sweep]`. Code: `src/game/texture_sweep.cpp`. A sweep needs a map with a file, so pair it with `TOOIE_WARP=AF:0@15000`.
 

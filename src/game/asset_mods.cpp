@@ -336,7 +336,7 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
         MEM_B((int32_t)i, ptr) = (int8_t)bytes[i];
     }
     ctx->r7 = ptr;
-    printf("[assets] asset 0x%04X replaced (%zu bytes)\n", id, bytes.size());
+    printf("[assets] asset 0x%04X replaced (%zu bytes) at 0x%08X\n", id, bytes.size(), (uint32_t)ptr);
     fflush(stdout);
     return 1;
 }

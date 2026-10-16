@@ -160,6 +160,19 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     // Last: photo mode scales this frame's delta time.
     tooie::photo_mode::tick(rdram, ctx);
 
+    // TOOIE_MAP_CHANGE_LOG=1: every map change the game asks for, with its exit, to find exit ids.
+    static const bool map_change_log = std::getenv("TOOIE_MAP_CHANGE_LOG") != nullptr;
+    static bool go_was_set = false;
+    if (map_change_log) {
+        bool go = MEM_B(0x12, game_state_addr) != 0;
+        if (go && !go_was_set) {
+            fprintf(stderr, "[map-change] to map 0x%X exit %u (from map 0x%X)\n",
+                (unsigned)MEM_HU(0x10, game_state_addr), (unsigned)MEM_BU(0x13, game_state_addr),
+                tooie::debug::current_map(rdram));
+        }
+        go_was_set = go;
+    }
+
     if (env_next < env_requests.size()) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - started).count();

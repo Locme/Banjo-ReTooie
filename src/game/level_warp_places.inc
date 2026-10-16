@@ -19,6 +19,7 @@
 { "Glitter Gulch Mine", "Crushing Shed", 0xCB, 0 },
 { "Glitter Gulch Mine", "Waterfall Cavern", 0xCE, 0 },
 { "Glitter Gulch Mine", "Canary Cave", 0xDB, 0 },
+{ "Glitter Gulch Mine", "Outside Mumbo's Skull", 0xC7, 8 },
 { "Witchyworld", "Witchyworld", 0xD6, 0 },
 { "Witchyworld", "Crazy Castle Stockade", 0xE1, 0 },
 { "Witchyworld", "Cave of Horrors", 0xEA, 0 },
@@ -41,4 +42,5 @@
 { "Hailfire Peaks", "Inside the Volcano", 0x133, 0 },
 { "Cloud Cuckooland", "Cloud Cuckooland", 0x136, 0 },
 { "Cloud Cuckooland", "Central Cavern", 0x13A, 0 },
+{ "Cloud Cuckooland", "Skull on the cloud (straight ahead)", 0x136, 3 },
 { "Cauldron Keep", "Cauldron Keep", 0x15D, 0 },

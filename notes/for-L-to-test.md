@@ -2537,3 +2537,14 @@
 - Look for: Step 2, Banjo's brown fur (head, arms, back, legs) looks like a fine fuzzy coat with thin hairs along his outline, not cones or pyramids, and the hairs stay on him as he moves. Kazooie has no fur, out of the backpack or in it; the yellow shorts, belt, backpack, gloves and boots stay smooth. Step 3, shorter or longer fur. Replaces T205's look. Checked headless in Spiral Mountain (screenshots/banjo-fur/rework-off-on.png in project files); not checked on Windows (D3D12), with the split-up Banjo, or with Smash Banjo.
 - Status: waiting for L
 
+
+## T241 Mumbo's Hut Recreation mod (with Warp tab spots)
+- Asked: 2026-10-16 09:55 UTC (L: "Add this replacement (with warp support) Mumbo Hut Recreation")
+- Build: main (pull and build), plus the mod: put `mods/Mumbo's Hut Recreation v1.zip` (project files) in the game's mods folder and turn it on in the Mods menu
+- Steps:
+  1. Load a file, turn on Cheats > Enable cheats and Warp tab, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull
+  2. Walk into the hut's door
+  3. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead), and walk up to the skull on the cloud ahead
+  4. Turn the mod off in the Mods menu while standing by either hut
+- Look for: Step 1, Banjo stands at the door of Mumbo's hut from Banjo-Kazooie (cracked brown skull, window eyes, sandstone teeth, red feathers, bent metal pole), sharp HD textures, about the size of the old skull. Step 2, it takes you into Mumbo's Skull as before. Step 3, the same hut stands on the cloud platform. Step 4, the old skull comes back at once. Only these two skulls are separate models in the game; the other worlds build Mumbo's Skull into the level, so they stay as they were. The old skull's collision is kept, so Banjo may bump into its shape where the new hut is narrower. Checked headless with the mod zip ([v1.png](screens/mumbos-hut/v1.png) in project files): both huts drawn with HD textures and GGM's door entered; CCL's skull door didn't open headless with no file loaded, same as the original.
+- Status: waiting for L
