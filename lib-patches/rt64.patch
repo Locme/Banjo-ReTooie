@@ -322,7 +322,7 @@ index 1fdd873..3518bb7 100644
  };
 \ No newline at end of file
 diff --git a/src/common/rt64_math.cpp b/src/common/rt64_math.cpp
-index c20fb51..e14ac77 100644
+index c20fb51..d9e9256 100644
 --- a/src/common/rt64_math.cpp
 +++ b/src/common/rt64_math.cpp
 @@ -7,6 +7,9 @@
@@ -379,10 +379,21 @@ index c20fb51..e14ac77 100644
          p[3][2] = vp[3][2] - p[2][2] * v[3][2];
  
          p[0][0] = sqrtf(sqr(vp[0][0]) + sqr(vp[1][0]) + sqr(vp[2][0]));
-@@ -72,6 +103,21 @@ namespace RT64 {
+@@ -72,6 +103,32 @@ namespace RT64 {
              v = hlslpp::float4x4::identity();
              p = vp;
          }
++
++        // TEST: TOOIE_TEST_NEAR=<n> redraws with that near plane (same far), to test the effects with a short near.
++        static const float testNear = getenv("TOOIE_TEST_NEAR") ? float(atof(getenv("TOOIE_TEST_NEAR"))) : 0.0f;
++        if ((testNear > 0.0f) && (abs(float(p[2][2])) > 1.0001f) && (abs(float(p[2][2])) < 1.1f)) {
++            const float n = float(p[3][2]) / (float(p[2][2]) - 1.0f);
++            const float f = float(p[3][2]) / (float(p[2][2]) + 1.0f);
++            if ((n > testNear) && (f > n)) {
++                p[2][2] = (f + testNear) / (testNear - f);
++                p[3][2] = 2.0f * f * testNear / (testNear - f);
++            }
++        }
 +
 +        if (vpSplitLog()) {
 +            const hlslpp::float4x4 product = hlslpp::mul(v, p);
@@ -1678,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..c36f79a 100644
+index 9fae0d4..dda728d 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2111,7 +2122,7 @@ index 9fae0d4..c36f79a 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1642,80 @@ namespace RT64 {
+@@ -1296,9 +1642,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2155,6 +2166,10 @@ index 9fae0d4..c36f79a 100644
 +                        static const bool rawView = (getenv("TOOIE_FX_RAW_VIEW") != nullptr);
 +                        const interop::float4x4 &effectsView = (!rawView && (effectsIndex < effectsData->modViewTransforms.size())) ?
 +                            effectsData->modViewTransforms[effectsIndex] : effectsData->viewTransforms[effectsIndex];
++                        // The viewport's depth range, which the depth was written with.
++                        const bool hasViewport = (effectsIndex < effectsData->rspViewports.size());
++                        const float depthScale = hasViewport ? effectsData->rspViewports[effectsIndex].scale.z : 0.5f;
++                        const float depthTranslate = hasViewport ? effectsData->rspViewports[effectsIndex].translate.z : 0.5f;
 +                        // The sun shadow map's casters, drawn from the sun (the scene effects set up the map and the pass).
 +                        auto drawSunCasters = [&](RenderCommandList *commandList) {
 +                            commandList->setGraphicsDescriptorSet(sunShadowSet->get(), 0);
@@ -2179,7 +2194,7 @@ index 9fae0d4..c36f79a 100644
 +                            }
 +                        }
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
-+                            sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
++                            depthScale, depthTranslate, sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                    for (uint32_t sceneIndex : scenesBeforeEffects) {
@@ -2193,7 +2208,7 @@ index 9fae0d4..c36f79a 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1771,7 @@ namespace RT64 {
+@@ -1354,6 +1775,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -2201,7 +2216,7 @@ index 9fae0d4..c36f79a 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1826,59 @@ namespace RT64 {
+@@ -1408,6 +1830,60 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2241,7 +2256,7 @@ index 9fae0d4..c36f79a 100644
 +        {
 +            static const bool fxLog = (getenv("TOOIE_FX_LOG") != nullptr);
 +            static auto lastLog = std::chrono::steady_clock::now();
-+            if (fxLog && (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500))) {
++            if (fxLog && fbPair.depthWrite && (fbPair.projectionCount > 1) && (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500))) {
 +                lastLog = std::chrono::steady_clock::now();
 +                fprintf(stderr, "[fx-proj] world %d of %u:", worldProjection, fbPair.projectionCount);
 +                for (uint32_t pr = 0; pr < fbPair.projectionCount; pr++) {
@@ -2251,8 +2266,9 @@ index 9fae0d4..c36f79a 100644
 +                        zupd += proj.gameCalls[d].shaderDesc.otherMode.zUpd() ? 1 : 0;
 +                    }
 +                    const interop::float4x4 &m = drawData.projTransforms[proj.transformsIndex];
-+                    fprintf(stderr, " [%u %s calls %u zupd %u m22 %.4f m32 %.2f m23 %.2f]", pr,
-+                        (proj.type == Projection::Type::Perspective) ? "persp" : "other", proj.gameCallCount, zupd, m.m[2][2], m.m[3][2], m.m[2][3]);
++                    const auto &vpz = drawData.rspViewports[proj.transformsIndex];
++                    fprintf(stderr, " [%u %s calls %u zupd %u m22 %.4f m32 %.2f m23 %.2f vz %.5f %.5f]", pr,
++                        (proj.type == Projection::Type::Perspective) ? "persp" : "other", proj.gameCallCount, zupd, m[2][2], m[3][2], m[2][3], vpz.scale.z, vpz.translate.z);
 +                }
 +                fprintf(stderr, "\n");
 +            }
@@ -2261,7 +2277,7 @@ index 9fae0d4..c36f79a 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1927,54 @@ namespace RT64 {
+@@ -1456,6 +1932,54 @@ namespace RT64 {
                  continue;
              }
  
@@ -2316,7 +2332,7 @@ index 9fae0d4..c36f79a 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2201,20 @@ namespace RT64 {
+@@ -1682,6 +2206,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2337,7 +2353,7 @@ index 9fae0d4..c36f79a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2280,160 @@ namespace RT64 {
+@@ -1747,8 +2285,160 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2498,7 +2514,7 @@ index 9fae0d4..c36f79a 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2443,172 @@ namespace RT64 {
+@@ -1758,13 +2448,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3819,10 +3835,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..08321df
+index 0000000..a2cda9e
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1787 @@
+@@ -0,0 +1,1800 @@
 +//
 +// RT64
 +//
@@ -4407,6 +4423,19 @@ index 0000000..08321df
 +        return (effectsSettings.fur > 0.0f) ? FurShells : 0;
 +    }
 +
++    // The shaders read a depth as (z / w + 1) / 2, but RT64 writes z / w * scale + translate with the game's own viewport
++    // depth (511/1024 in Banjo-Tooie, not 1/2). Folding the difference into the depth terms keeps the shaders' formula
++    // right. Small with the usual near plane, it made the 3D world read as far nearer than it is when the game shortens
++    // the near plane (the camera close to the ground or a wall): no fog, and effects measured wrongly.
++    static interop::float4 DepthTermsForViewport(const interop::float4 &t, float depthScale, float depthTranslate) {
++        if (std::abs(depthScale) < 1e-6f) {
++            return t;
++        }
++        const float a = 0.5f / depthScale;
++        const float b = (0.5f - depthTranslate) / depthScale;
++        return interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
++    }
++
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
 +    {
@@ -4568,7 +4597,7 @@ index 0000000..08321df
 +            frameParams.grassClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
 +        }
 +
-+        frameParams.grassDepthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
++        frameParams.grassDepthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, viewportScale.z, viewportTranslate.z);
 +        frameParams.grassProjection = { m[0][0], m[1][1], viewportWidth, viewportHeight };
 +
 +        // View space back to world space, as RecordSceneEffects does it.
@@ -5020,7 +5049,7 @@ index 0000000..08321df
 +
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area,
-+        const std::function<void(RenderCommandList *)> &drawSunCasters)
++        float depthScale, float depthTranslate, const std::function<void(RenderCommandList *)> &drawSunCasters)
 +    {
 +
 +        sceneEffectsRecorded++;
@@ -5038,7 +5067,7 @@ index 0000000..08321df
 +            return;
 +        }
 +        interop::SceneEffectsCB constants;
-+        constants.depthTerms = rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] };
++        constants.depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, depthScale, depthTranslate);
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
 +        static const auto startTime = std::chrono::steady_clock::now();
@@ -5612,7 +5641,7 @@ index 0000000..08321df
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..8b29f72
+index 0000000..2508c83
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
 @@ -0,0 +1,254 @@
@@ -5868,7 +5897,7 @@ index 0000000..8b29f72
 +    // map's framebuffer, pipeline and constants already set (it binds its own descriptor set at 0 and index buffer).
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area,
-+        const std::function<void(RenderCommandList *)> &drawSunCasters = {});
++        float depthScale, float depthTranslate, const std::function<void(RenderCommandList *)> &drawSunCasters = {});
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
 index d1c5273..3f5a2a4 100644

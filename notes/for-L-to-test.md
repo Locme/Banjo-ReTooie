@@ -2930,3 +2930,12 @@
 - Look for: Step 2, fur on his head, arms, body and the shins below the shorts, none on his feet, shorts or belt. Step 3, cutscene Banjo has fur too, Mumbo and Kazooie have none. Step 4, density: fewer thicker hairs, then more finer ones; noisiness 0 is an even coat, 100 is tufty with lighter and darker hairs. Step 5, the same on Smash Banjo's feet and shorts (not checked headless). Checked headless in Spiral Mountain and the poker cutscene, vanilla model, no texture pack.
 - Status: waiting for L
 
+## T285 Fog stays when the camera gets low (free camera tilt)
+- Asked: 2026-10-16 12:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Your own settings, in Spiral Mountain where you took the burst of 10:16
+  2. Free camera: tilt up until the camera drops to the grass and zooms in to Banjo, as before
+  3. Then walk and move the camera near walls as in your burst of yesterday 21:40 (the fog switching on and off, T180)
+- Look for: Step 2, the cliffs keep the same haze all the way down (they turned plain brown at the bottom of the tilt before). Step 3, the fog no longer switches on and off. Other effects (ambient occlusion, sun shadows, reflections, 3D grass) stay put too. Cause: the game shortens its near plane when the camera is close to something, and the effects read the depth as if the game's depth range were 1/2 when it is 511/1024; with a short near plane that put the world much nearer than it is. Checked headless: fog the same with the near plane forced to 5, 1 and 0.2 as with the game's own (before the fix it vanished at 5). Not checked headless: your exact spot and your burst's camera move.
+- Status: waiting for L
