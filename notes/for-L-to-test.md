@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T277 Mumbo's Hut Recreation v4: shading
+- Asked: 2026-10-16 12:25 UTC
+- Build: main (pull and build), plus the v4 mod zip
+- Steps:
+  1. Put mods/Mumbo's Hut Recreation v4.zip (project files) in the game's mods folder in place of v3
+  2. Load a file, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull and look at the hut
+  3. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
+- Look for: Does the hut look like it belongs now? It has its own shading: the top of the skull lit, the underside, the teeth's lower halves and the areas under the overhang darker, on top of the level's colour from v2. Checked headless with the models (screens/mumbos-hut/v4.png in project files). Asked 2026-10-16 12:14 UTC (L: "It still looks like it does not belong, maybe it's missing shading?")
+- Status: waiting for L
+
 ## T274 Quit prompt takes the mouse after Alt+F4
 - Asked: 2026-10-16 12:12 UTC
 - Build: main (pull and build)
@@ -130,7 +140,7 @@
   2. Load a file, then Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
   3. Warp > Glitter Gulch Mine > Outside Mumbo's Skull, look at the door, then walk in
 - Look for: The original doorway now fills the hut's arch, with no sky or gaps round the black in either world. Lighting as in v2, and the door still takes you inside. Checked headless with the zip (screens/mumbos-hut/v3.png in project files): both doorways fill the arch, GGM's door entered. Asked 2026-10-16 10:21 UTC (L: "In your second image, you can see the black doorway does not fit, make it fit")
-- Status: waiting for L
+- Status: replaced by T277 (v4)
 
 ## T257 Banjo fur on model mods
 - Asked: 2026-10-16 10:30 UTC
