@@ -2947,7 +2947,7 @@
   2. Play as Mumbo and look at his face close up (photo mode, zoom in): stand still, walk, jump, cast a spell
   3. Go into Mayahem Temple's Mumbo's Skull and talk to him
 - Look for: the face matches the Viva model: the grin with both rows of teeth shows while he stands (in v2 the jaw sat shut over the teeth), the striped rings sit round the eye sockets with dark sockets behind the lids, and the brow band and nose holes are where they are on the original. Nothing flickers or shows through round the eyes. Legs, feet and skirt as in v2. Cause: the game's own animations hold Mumbo's jaw about 9 degrees shut, so the jaw is now modelled that much open; the model is also stored 8 times finer, so the eyelids and socket rims keep their exact shape and texture instead of being rounded to whole units. Checked headless with the zip: photo-mode close-up playing as Mumbo, walking, jumping, a spell, and talking in the skull ([v3.png](screens/viva-mumbo/v3.png)). Swimming was not tried.
-- Status: waiting for L
+- Status: replaced by T294 (v4)
 
 ## T268 Banjo X Alt v5: eyes open and blinking, straps fixed
 - Asked: 2026-10-16 11:30 UTC
@@ -3020,3 +3020,11 @@
 - Look for: Sheen: a soft gloss sliding over her feathers and beak as she or the camera moves. Feathery edges: short feather tips along her outline, crest and wings (her beak and legs stay smooth). Iridescence: her feathers shift colour a little with the angle, most at her outline. None of it on Banjo or anyone else. The switch hides the section's settings without turning them off. Checked headless in the poker cutscene (screenshots/kazooie/off-on-poker.png in project files); not checked in Spiral Mountain up close, on Windows (D3D12) or with model mods.
 - Status: waiting for L
 
+## T294 Viva Mumbo Jumbo v4: textures match L's reference picture
+- Asked: 2026-10-16 15:35 UTC
+- Build: main, plus mods/Viva Mumbo Jumbo v4.zip from project files (delete the older Viva zips and their unpacked folders first)
+- Steps:
+  1. Put "Viva Mumbo Jumbo v4.zip" in the mods folder as it is and turn on "Viva Mumbo Jumbo"
+  2. Play as Mumbo, open photo mode and zoom in on his face and body; then talk to him in Mayahem Temple's skull
+- Look for: the face texture sits exactly on the shape, as in L's reference picture: the line over the top of his head runs smoothly, the striped rings hug the eye sockets all the way round, and the tan patch outlines the nose holes. The pink skin on his arms, body and legs has the faint scale pattern from the reference; the chest rainbow and the soles stay plain. Cause: every texture was drawn shifted by a small step (a texture-pack setting meant for upscaled N64 textures), and the scale pattern came in the upload but was not used. Checked headless with the zip: photo-mode close-up playing as Mumbo and talking in the skull ([v4.png](screens/viva-mumbo/v4.png)).
+- Status: waiting for L
