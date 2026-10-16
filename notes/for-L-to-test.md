@@ -3084,3 +3084,11 @@
   2. Play as Mumbo, open photo mode and zoom in on his face and body; then talk to him in Mayahem Temple's skull
 - Look for: the face texture sits exactly on the shape, as in L's reference picture: the line over the top of his head runs smoothly, the striped rings hug the eye sockets all the way round, and the tan patch outlines the nose holes. The pink skin on his arms, body and legs has the faint scale pattern from the reference; the chest rainbow and the soles stay plain. Cause: every texture was drawn shifted by a small step (a texture-pack setting meant for upscaled N64 textures), and the scale pattern came in the upload but was not used. Checked headless with the zip: photo-mode close-up playing as Mumbo and talking in the skull ([v4.png](screens/viva-mumbo/v4.png)).
 - Status: waiting for L
+
+## T301 Day and night: clouds show again
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: clouds show again in daylight (a flag lost to rounding)" on main
+- Steps:
+  1. Graphics > Day and Night: Morning or Noon, Clouds on, Fireflies on; Spiral Mountain or Cliff Top, look at the sky
+- Look for: Soft white 3D clouds drifting across the sky, lit by the sun. Before this fix they were missing by day whenever Fireflies was on (the default). Checked headless: [clouds-before-after-fix.png](screens/day-night/clouds-before-after-fix.png) (top before, bottom after).
