@@ -17,6 +17,9 @@ namespace tooie::day_night {
     inline const std::string flare_option = "day_night_flare";
     // Fireflies round Banjo at night.
     inline const std::string fireflies_option = "day_night_fireflies";
+    // Clear, changing now and then, or always rain or a thunderstorm.
+    enum class Weather : uint32_t { Clear, Changing, Rain, Storm };
+    inline const std::string weather_option = "day_night_weather";
     // Soft 3D clouds across the sky.
     inline const std::string clouds_option = "day_night_clouds";
     // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).
@@ -34,7 +37,9 @@ namespace tooie::day_night {
 
 namespace tooie::night_sounds {
     // How much of each to play, 0 to 1. From day_night::tick on the game thread.
-    void set(float crickets, float owls, float birds);
+    void set(float crickets, float owls, float birds, float rain);
+    // A thunderclap after delay seconds, loudness 0 to 1.
+    void thunder(float delay, float loudness);
     // Adds them to interleaved stereo float samples at the given rate (main.cpp queue_samples, audio thread).
     void mix(float* stereo, size_t frames, uint32_t rate, float volume);
 }

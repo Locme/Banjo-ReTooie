@@ -26,6 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: rain and thunderstorms, with an overcast sky, falling rain, lightning, the sound of rain and thunder (Graphics > Weather: Clear, Changing, Rain, Storm; Changing by default). Untested on PC (T209).
 - Day and Night: soft 3D clouds drift across the sky, white by day, orange at sunset and dark at night (Graphics > Clouds, on; not in Cloud Cuckooland). Untested on PC (T207).
 - Day and Night: night sounds, crickets and the odd owl at night and birdsong in the morning, quietly under the music (Graphics > Night Sounds, on). Untested on PC (T206).
 - Day and Night: fireflies drift and blink round Banjo at night (Graphics > Fireflies, on; not on Hailfire Peaks). Untested on PC (T202).

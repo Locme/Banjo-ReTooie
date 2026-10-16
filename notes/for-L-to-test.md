@@ -2217,3 +2217,15 @@
   3. Try again with HD shadows off
 - Look for: Nothing vanishes or gets cut by a straight line at the sides, with HD shadows on or off
 - Status: waiting for L
+
+## T209 Day and night: rain and thunderstorms
+- Asked: 2026-10-16 00:40 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: rain and thunderstorms" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Graphics > Weather: Rain, in Spiral Mountain or the Isle o' Hags; walk and turn the camera
+  2. Graphics > Weather: Storm, wait for lightning; then Day and Night: Night
+  3. Graphics > Weather: Changing and play a while (mostly clear, rain or a storm now and then for a few minutes)
+- Look for: Step 1, a grey overcast sky with thick clouds, a darker greyer world, rain streaks falling that stay put as you turn and go behind walls, and the hiss of rain. Step 2, lightning flashes light up the sky and the world, then thunder a moment later, near or far. Too heavy, too light, too loud? The sun shadows, light shafts, lens flare, crickets and birds fade with the rain. No rain on Hailfire Peaks' Icy Side or in Cloud Cuckooland. Checked headless: [rain-morning.png](screens/day-night/rain-morning.png) and [rain-night-and-lightning.png](screens/day-night/rain-night-and-lightning.png) (a flash held on); sound preview previews/day-night/storm.wav (louder than in the game). Speed not measured.
+- Status: waiting for L
+

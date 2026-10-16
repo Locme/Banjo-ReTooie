@@ -21,6 +21,11 @@ namespace {
     std::atomic<float> want_crickets{0.0f};
     std::atomic<float> want_owls{0.0f};
     std::atomic<float> want_birds{0.0f};
+    std::atomic<float> want_rain{0.0f};
+    // A thunderclap: a new number in thunder_count asks for one, after thunder_delay seconds.
+    std::atomic<uint32_t> thunder_count{0};
+    std::atomic<float> thunder_delay{0.0f};
+    std::atomic<float> thunder_loudness{0.0f};
 
     // A small random number source, only used on the audio thread.
     uint32_t seed = 0x9E3779B9u;
@@ -69,6 +74,85 @@ namespace {
         float base = 3000.0f;   // this bird's voice
         double phase = 0.0;
     };
+
+    // Rain: noise shaped to a hiss, with the odd nearer drop pattering in it, a little different in each ear.
+    struct Rain {
+        float low[2] = {};   // the lowpass of each ear
+        float high[2] = {};  // the lowpass that is taken off for a highpass
+        float patter = 0.0f; // the envelope of a nearer drop
+        float patter_pan = 0.5f;
+    };
+
+    // A thunderclap: a crack, then a long low rumble.
+    struct Thunder {
+        uint32_t seen = 0;
+        float wait = -1.0f;  // seconds until it starts (negative: none coming)
+        float time = -1.0f;  // seconds into it (negative: silent)
+        float loudness = 0.0f;
+        float brown = 0.0f;
+        float low = 0.0f;
+        float lower = 0.0f;
+        float wobble = 0.0f;
+    };
+
+    Rain rain;
+    Thunder thunder_state;
+    float gain_rain = 0.0f;
+
+    float noise() {
+        return random01() * 2.0f - 1.0f;
+    }
+
+    // One frame of rain, both ears.
+    void rain_sample(float dt, float& left, float& right) {
+        // Roughly 400 Hz to 5 kHz.
+        const float a_low = 1.0f - std::exp(-2.0f * pi * 5000.0f * dt);
+        const float a_high = 1.0f - std::exp(-2.0f * pi * 400.0f * dt);
+        float out[2];
+        for (int c = 0; c < 2; c++) {
+            rain.low[c] += (noise() - rain.low[c]) * a_low;
+            rain.high[c] += (rain.low[c] - rain.high[c]) * a_high;
+            out[c] = rain.low[c] - rain.high[c];
+        }
+        // Now and then a drop close by: a short tick.
+        rain.patter *= std::exp(-dt / 0.006f);
+        if (random01() < dt * 25.0f) {
+            rain.patter = random_range(0.3f, 1.0f);
+            rain.patter_pan = random01();
+        }
+        const float tick = noise() * rain.patter * 0.6f;
+        left = out[0] + tick * (1.0f - rain.patter_pan);
+        right = out[1] + tick * rain.patter_pan;
+    }
+
+    float thunder_sample(float dt) {
+        Thunder& t = thunder_state;
+        if (t.wait >= 0.0f) {
+            t.wait -= dt;
+            if (t.wait < 0.0f) {
+                t.time = 0.0f;
+            }
+        }
+        if (t.time < 0.0f) {
+            return 0.0f;
+        }
+        t.time += dt;
+        if (t.time > 7.0f) {
+            t.time = -1.0f;
+            return 0.0f;
+        }
+        // Brown noise, through two lowpasses for the rumble; the crack keeps more of the top.
+        t.brown = t.brown * 0.998f + noise() * 0.04f;
+        const float a = 1.0f - std::exp(-2.0f * pi * 180.0f * dt);
+        const float b = 1.0f - std::exp(-2.0f * pi * 70.0f * dt);
+        t.low += (t.brown - t.low) * a;
+        t.lower += (t.low - t.lower) * b;
+        // The rumble rolls: its loudness wanders.
+        t.wobble += (random01() - t.wobble) * (dt * 3.0f);
+        const float crack = (t.time < 0.25f) ? (1.0f - t.time / 0.25f) * t.low * 2.5f : 0.0f;
+        const float swell = std::min(1.0f, t.time / 0.35f) * std::exp(-t.time / 1.8f);
+        return (t.lower * 6.0f * swell * (0.5f + t.wobble) + crack) * t.loudness;
+    }
 
     Cricket crickets[4];
     Owl owl;
@@ -251,7 +335,14 @@ namespace {
     }
 }
 
-void tooie::night_sounds::set(float crickets_amount, float owls_amount, float birds_amount) {
+void tooie::night_sounds::thunder(float delay, float loudness) {
+    thunder_delay.store(delay, std::memory_order_relaxed);
+    thunder_loudness.store(loudness, std::memory_order_relaxed);
+    thunder_count.fetch_add(1, std::memory_order_release);
+}
+
+void tooie::night_sounds::set(float crickets_amount, float owls_amount, float birds_amount, float rain_amount) {
+    want_rain.store(rain_amount, std::memory_order_relaxed);
     want_crickets.store(crickets_amount, std::memory_order_relaxed);
     want_owls.store(owls_amount, std::memory_order_relaxed);
     want_birds.store(birds_amount, std::memory_order_relaxed);
@@ -261,8 +352,16 @@ void tooie::night_sounds::mix(float* stereo, size_t frames, uint32_t rate, float
     const float target_crickets = want_crickets.load(std::memory_order_relaxed);
     const float target_owls = want_owls.load(std::memory_order_relaxed);
     const float target_birds = want_birds.load(std::memory_order_relaxed);
-    if (gain_crickets <= 0.0f && gain_owls <= 0.0f && gain_birds <= 0.0f && owl.time < 0.0f &&
-        target_crickets <= 0.0f && target_owls <= 0.0f && target_birds <= 0.0f) {
+    const float target_rain = want_rain.load(std::memory_order_relaxed);
+    const uint32_t thunders = thunder_count.load(std::memory_order_acquire);
+    if (thunders != thunder_state.seen) {
+        thunder_state.seen = thunders;
+        thunder_state.wait = thunder_delay.load(std::memory_order_relaxed);
+        thunder_state.loudness = std::clamp(thunder_loudness.load(std::memory_order_relaxed), 0.2f, 1.0f);
+    }
+    if (gain_crickets <= 0.0f && gain_owls <= 0.0f && gain_birds <= 0.0f && gain_rain <= 0.0f && owl.time < 0.0f &&
+        thunder_state.wait < 0.0f && thunder_state.time < 0.0f &&
+        target_crickets <= 0.0f && target_owls <= 0.0f && target_birds <= 0.0f && target_rain <= 0.0f) {
         return;
     }
     if (!started) {
@@ -279,11 +378,14 @@ void tooie::night_sounds::mix(float* stereo, size_t frames, uint32_t rate, float
     constexpr float cricket_level = 0.010f;
     constexpr float owl_level = 0.030f;
     constexpr float bird_level = 0.014f;
+    constexpr float rain_level = 0.045f;
+    constexpr float thunder_level = 0.032f;
 
     for (size_t i = 0; i < frames; i++) {
         gain_crickets += (target_crickets - gain_crickets) * ease;
         gain_owls += (target_owls - gain_owls) * ease;
         gain_birds += (target_birds - gain_birds) * ease;
+        gain_rain += (target_rain - gain_rain) * ease;
 
         float left = 0.0f;
         float right = 0.0f;
@@ -301,6 +403,17 @@ void tooie::night_sounds::mix(float* stereo, size_t frames, uint32_t rate, float
             const float s = bird_sample(b, dt, target_birds) * bird_level * gain_birds;
             left += s * (1.0f - b.pan);
             right += s * b.pan;
+        }
+        if (gain_rain > 0.0001f) {
+            float rl, rr;
+            rain_sample(dt, rl, rr);
+            left += rl * rain_level * gain_rain;
+            right += rr * rain_level * gain_rain;
+        }
+        {
+            const float s = thunder_sample(dt) * thunder_level;
+            left += s;
+            right += s;
         }
         stereo[2 * i + 0] += left * volume;
         stereo[2 * i + 1] += right * volume;

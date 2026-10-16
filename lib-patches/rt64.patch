@@ -3416,10 +3416,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..8ee5153
+index 0000000..22d8f72
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1272 @@
+@@ -0,0 +1,1288 @@
 +//
 +// RT64
 +//
@@ -3810,6 +3810,12 @@ index 0000000..8ee5153
 +            effectsSettings.sunDirection[1] = y;
 +            effectsSettings.sunDirection[2] = z;
 +        }
++    }
++
++    void SetSceneWeather(float rain, float flash) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayRain = std::clamp(rain, 0.0f, 1.0f);
++        effectsSettings.dayFlash = std::clamp(flash, 0.0f, 1.0f);
 +    }
 +
 +    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds) {
@@ -4279,9 +4285,19 @@ index 0000000..8ee5153
 +            // Moonlight casts fainter shadows: as the tint darkens towards night (as DayNight in the shader).
 +            const float dayBrightest = std::max(settings.dayTint[0], std::max(settings.dayTint[1], settings.dayTint[2]));
 +            const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
-+            constants.shadows = { settings.sunShadows * daylight * moonlight, settings.sunShadowReach, dayPacked, settings.sunShadowOnBanjo ? 0.0f : 1.0f };
++            // Rain hides the sun: no sun shadows under it.
++            const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
++            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, settings.sunShadowOnBanjo ? 0.0f : 1.0f };
 +            if (sunLength > 1e-6f) {
-+                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, settings.lightShafts * settings.dayShafts };
++                float shafts = settings.lightShafts * settings.dayShafts;
++                if (rain > 0.0f) {
++                    // Weather: -(1 + rain * 255 in the bits above 8, the shafts' strength * 255 below, then the
++                    // lightning as the fraction), so it all fits the one constant. The shafts fade with the rain.
++                    const float rain8 = std::round(rain * 255.0f);
++                    const float shafts8 = std::round(std::clamp(shafts * (1.0f - rain), 0.0f, 1.0f) * 255.0f);
++                    shafts = -(1.0f + rain8 * 256.0f + shafts8 + std::min(settings.dayFlash, 0.99f));
++                }
++                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, shafts };
 +            }
 +            else {
 +                constants.sun = { 0.0f, 0.0f, 1.0f, 0.0f };
@@ -4694,10 +4710,10 @@ index 0000000..8ee5153
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2915c52
+index 0000000..b18f06a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,194 @@
 +//
 +// RT64
 +//
@@ -4764,6 +4780,8 @@ index 0000000..2915c52
 +        bool dayFlare = true;
 +        bool dayFireflies = false;
 +        bool dayClouds = false;
++        float dayRain = 0.0f;
++        float dayFlash = 0.0f;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4829,6 +4847,9 @@ index 0000000..2915c52
 +    // fireflies: small glowing fireflies drift round Banjo at night.
 +    // clouds: a layer of soft 3D clouds drifting across the sky, lit by the sun or the moon.
 +    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
++    // Banjo-Tooie: the day and night cycle's weather. rain (0 clear, 1 a downpour) greys and darkens the world
++    // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
++    void SetSceneWeather(float rain, float flash);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -7109,10 +7130,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f2af2c3
+index 0000000..f9eac63
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1406 @@
+@@ -0,0 +1,1492 @@
 +//
 +// RT64
 +//
@@ -7197,6 +7218,26 @@ index 0000000..f2af2c3
 +    return saturate((0.97f - max(tint.r, max(tint.g, tint.b))) / 0.3f);
 +}
 +
++// The day and night cycle's weather, from the light shafts' constant (see rt64_scene_effects.h): rain (0 to 1),
++// the shafts' strength and lightning (0 to 1).
++float3 DayWeather() {
++    const float w = gConstants.sun.w;
++    if (w >= 0.0f) {
++        return float3(0.0f, w, 0.0f);
++    }
++    const float v = -w - 1.0f;
++    const float whole = floor(v);
++    const uint packed = uint(whole + 0.5f);
++    return float3(float(packed >> 8) / 255.0f, float(packed & 255u) / 255.0f, v - whole);
++}
++
++// Rain greys and darkens what it falls on; lightning lights it all up for a moment.
++float3 DayWeatherLight(float3 color, float rain, float flash, float amount) {
++    const float grey = dot(color, float3(0.3f, 0.59f, 0.11f));
++    color = lerp(color, grey.xxx * float3(0.92f, 0.96f, 1.0f), rain * 0.4f) * (1.0f - rain * amount);
++    return color + (color * 1.6f + float3(0.06f, 0.07f, 0.1f)) * flash;
++}
++
 +// The world under the tint. The brightest parts (lamps, lava, glowing things) keep more of their light the darker
 +// it gets, so they stand out at night.
 +// Colours fade towards grey as night comes in, as moonlight does, so the tint reads as blue rather than as a
@@ -7236,7 +7277,7 @@ index 0000000..f2af2c3
 +}
 +
 +// How thick the cloud is at a point of the layer (in layer units, 0 at its floor, 1 at its top), 0 for clear air.
-+float CloudDensity(float3 p, int octaves) {
++float CloudDensity(float3 p, int octaves, float rain) {
 +    const float time = gConstants.view.z;
 +    // Drifts slowly with the wind, the small shapes a little faster so the clouds churn as they go.
 +    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f);
@@ -7248,13 +7289,15 @@ index 0000000..f2af2c3
 +    // Round bottoms that thin out towards the top.
 +    const float height = saturate(p.y);
 +    const float shape = smoothstep(0.0f, 0.18f, height) * smoothstep(1.0f, 0.45f, height);
-+    return saturate((n - 0.52f) * 3.5f) * shape;
++    // Rain spreads the clouds over the whole sky.
++    return saturate((n - lerp(0.52f, 0.3f, rain)) * 3.5f) * shape;
 +}
 +
 +// Soft clouds over the sky, marched through a layer above the camera. Returns the cloud's colour and how much it
 +// covers (0 to 1). Lit from the sun by day (warm at sunrise and sunset, a bright edge round it when it is behind
 +// them) and faintly from the moon at night, and they darken with the tint like the rest of the sky.
-+float4 DayClouds(float3 world, float3 sunWorld, float3 tint, float glow, int2 pixel) {
++float4 DayClouds(float3 world, float3 sunWorld, float3 tint, float glow, int2 pixel, float3 weather) {
++    const float rain = weather.x;
 +    if (world.y < 0.015f) {
 +        return 0.0f;
 +    }
@@ -7268,8 +7311,9 @@ index 0000000..f2af2c3
 +    // A different start in each pixel, so the steps don't show as bands.
 +    float t = start + stride * DayHash(float3(pixel, 7.0f));
 +    const float3 sunColor = lerp(float3(1.0f, 0.96f, 0.9f), float3(1.0f, 0.6f, 0.32f), glow);
-+    const float3 light = lerp(sunColor * 1.15f, float3(0.32f, 0.38f, 0.55f), night);
-+    const float3 ambient = lerp(float3(0.62f, 0.68f, 0.8f), float3(0.08f, 0.1f, 0.16f), night);
++    // Rain clouds are darker and lit less by the sun.
++    const float3 light = lerp(sunColor * 1.15f, float3(0.32f, 0.38f, 0.55f), night) * (1.0f - rain * 0.75f) + weather.z * 2.5f;
++    const float3 ambient = lerp(float3(0.62f, 0.68f, 0.8f), float3(0.08f, 0.1f, 0.16f), night) * (1.0f - rain * 0.35f) + weather.z * 0.8f;
 +    // Brighter looking towards the light (light through the cloud's edges).
 +    const float toward = dot(world, sunWorld);
 +    const float phase = 0.55f + 0.9f * pow(saturate(toward), 8.0f);
@@ -7280,10 +7324,10 @@ index 0000000..f2af2c3
 +        float3 p = world * t + camera;
 +        p.y = world.y * t - 1.0f;
 +        p.y /= 0.6f;
-+        const float density = CloudDensity(p, 3);
++        const float density = CloudDensity(p, 3, rain);
 +        if (density > 0.01f) {
 +            // How much cloud lies between here and the light.
-+            const float toLight = CloudDensity(p + sunWorld * 0.25f, 2) + CloudDensity(p + sunWorld * 0.6f, 2) * 0.6f;
++            const float toLight = CloudDensity(p + sunWorld * 0.25f, 2, rain) + CloudDensity(p + sunWorld * 0.6f, 2, rain) * 0.6f;
 +            const float lit = exp(-toLight * 3.0f);
 +            // A darker underside.
 +            const float base = lerp(0.6f, 1.0f, saturate(p.y));
@@ -7310,14 +7354,19 @@ index 0000000..f2af2c3
 +    const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
 +    const float3 world = normalize(float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)));
 +    const float night = DayNight(tint);
++    const float3 weather = DayWeather();
++    const float rain = weather.x;
 +    float3 sky = lerp(color, dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, 0.6f * night) * pow(tint, 1.7f);
++    // Overcast in the rain: a flat grey sky, no sun, moon or stars.
++    sky = lerp(sky, float3(0.5f, 0.53f, 0.58f) * pow(tint, 1.7f), rain * 0.8f);
 +
 +    const float toward = saturate(dot(look, gConstants.sun.xyz));
 +    const float horizon = 1.0f - saturate(abs(world.y) * 2.5f);
 +    const float glow = saturate((tint.r - tint.b) * 2.2f) * (1.0f - night);
 +    sky += float3(1.0f, 0.55f, 0.25f) * glow * (pow(toward, 3.0f) * 0.6f + 0.25f) * horizon;
 +
-+    if ((night > 0.0f) && (world.y > 0.0f)) {
++    if ((night > 0.0f) && (world.y > 0.0f) && (rain < 0.99f)) {
++        const float3 before = sky;
 +        // One star at most in each cell of a grid round the camera, at a random place in it, twinkling.
 +        const float3 grid = world * 160.0f;
 +        const float3 cell = floor(grid);
@@ -7334,10 +7383,11 @@ index 0000000..f2af2c3
 +        const float disc = smoothstep(0.99925f, 0.99945f, toward);
 +        sky = lerp(sky, float3(0.92f, 0.94f, 1.0f), disc * night);
 +        sky += float3(0.25f, 0.3f, 0.45f) * pow(toward, 40.0f) * 0.35f * night;
++        sky = lerp(sky, before, saturate(rain * 1.6f));
 +    }
 +
 +    // The sun by day: a bright disc with a glow round it, orange when low and warm.
-+    const float day = 1.0f - night;
++    const float day = (1.0f - night) * (1.0f - rain);
 +    if (day > 0.0f) {
 +        const float3 sunColor = lerp(float3(1.0f, 0.97f, 0.88f), float3(1.0f, 0.62f, 0.3f), glow);
 +        const float disc = smoothstep(0.99955f, 0.99975f, toward);
@@ -7348,10 +7398,10 @@ index 0000000..f2af2c3
 +    // Clouds in front of all of it.
 +    if ((DayPacked() & 2u) != 0u) {
 +        const float3 sunWorld = normalize(float3(dot(gConstants.sun.xyz, gConstants.worldX.xyz), dot(gConstants.sun.xyz, gConstants.worldY.xyz), dot(gConstants.sun.xyz, gConstants.worldZ.xyz)));
-+        const float4 clouds = DayClouds(world, sunWorld, tint, glow, pixel);
++        const float4 clouds = DayClouds(world, sunWorld, tint, glow, pixel, weather);
 +        sky = sky * (1.0f - clouds.a) + clouds.rgb;
 +    }
-+    return sky;
++    return DayWeatherLight(sky, 0.0f, weather.z, 0.0f);
 +}
 +
 +float LoadDepth(int2 pixel) {
@@ -8019,6 +8069,60 @@ index 0000000..f2af2c3
 +    return (flare * 0.45f + float3(1.0f, 0.9f, 0.75f) * (glare * glare * 0.4f)) * strength;
 +}
 +
++// Rain: streaks falling on four rings round the camera (fixed to the compass, so they stay put as it turns),
++// each hidden behind whatever is nearer than its ring. Nearer rings have bigger, brighter, sparser drops.
++float3 DayRain(int2 pixel, float depth, float3 tint, float rain) {
++    if (rain <= 0.0f) {
++        return 0.0f;
++    }
++    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
++    const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
++    const float3 world = normalize(float3(dot(look, gConstants.worldX.xyz), dot(look, gConstants.worldY.xyz), dot(look, gConstants.worldZ.xyz)));
++    const float across = length(world.xz);
++    if (across < 0.08f) {
++        return 0.0f;
++    }
++    // How far the scene is along this ray, in world units (view units times the view-to-world scale).
++    const float scale = length(gConstants.worldX.xyz);
++    const float scene = (depth >= 0.99999f) ? 1e9f : length(ViewPosition(pixel, depth)) * scale;
++    // A pixel's size at a distance of 1, for keeping thin drops from flickering.
++    const float pixelSize = 2.0f / (gConstants.projection.y * gConstants.projection.w);
++    const float angle = atan2(world.z, world.x);
++    const float time = gConstants.view.z;
++    const float3 color = float3(0.62f, 0.66f, 0.74f) * (0.3f + 0.7f * max(tint.r, max(tint.g, tint.b)));
++    float total = 0.0f;
++    [unroll]
++    for (int i = 0; i < 4; i++) {
++        const float radius = 90.0f * pow(2.2f, float(i));
++        const float distance = radius / across;
++        if (distance > scene) {
++            continue;
++        }
++        const float width = 9.0f + 5.0f * float(i);
++        const float height = 150.0f;
++        // Where on the ring (around and up), in cells, leaning a little with the wind.
++        const float up = world.y / across * radius;
++        const float around = angle * radius / width + up * 0.08f / width;
++        const float column = floor(around);
++        const float pick = DayHash(float3(column, float(i) * 7.0f, 3.0f));
++        if (pick > rain * 0.85f) {
++            continue;
++        }
++        const float offset = DayHash(float3(column, float(i) * 7.0f, 11.0f));
++        const float speed = 900.0f + 300.0f * offset;
++        const float fall = (up + time * speed) / height + offset * 5.0f;
++        const float along = frac(fall);
++        // The drop's top part of its cell, brightest at its leading (lower) end.
++        const float streak = smoothstep(0.55f, 0.95f, along) * (1.0f - smoothstep(0.95f, 1.0f, along));
++        const float x = abs(frac(around) - (0.2f + 0.6f * DayHash(float3(column, floor(fall), float(i)))) ) * width;
++        const float drop = 0.4f + 0.2f * float(i);
++        const float footprint = max(drop, distance * pixelSize);
++        const float stroke = saturate(1.0f - x / footprint) * (drop / footprint);
++        total += stroke * streak * (0.36f - 0.06f * float(i));
++    }
++    return color * total * rain;
++}
++
 +// Fireflies at night: one at most in each 220-unit square of the ground round Banjo (a 7 by 7 block of squares,
 +// fixed in the world), drifting a little above his height and blinking slowly. Each is projected onto the
 +// screen and drawn as a small glow, hidden behind whatever is nearer.
@@ -8117,7 +8221,7 @@ index 0000000..f2af2c3
 +    // The share of the way to the sun that is open sky: whole near gaps in the scenery, so beams fan out
 +    // from them across whatever is in front, and brightest close to the sun.
 +    const float near = saturate(1.0f - length(sunScreen - float2(pixel)) / (size.y * 1.2f));
-+    return (gathered / total) * (gConstants.sun.w * onScreen * near * near * 1.4f);
++    return (gathered / total) * (DayWeather().y * onScreen * near * near * 1.4f);
 +}
 +
 +// Sun shadows: from the surface, steps towards the sun and checks the depth buffer at each step; when
@@ -8332,10 +8436,11 @@ index 0000000..f2af2c3
 +    // The glow of what was bright before the tint dims with it.
 +    bloom *= dayTint;
 +    if (daytime && (gConstants.view.x < 1.5f)) {
-+        bloom += DayFlare(pixel, dayTint) + DayFireflies(pixel, depth, dayTint);
++        const float3 weather = DayWeather();
++        bloom += (DayFlare(pixel, dayTint) + DayFireflies(pixel, depth, dayTint)) * (1.0f - weather.x) + DayRain(pixel, depth, dayTint, weather.x);
 +    }
 +    // Light shafts are added the same way.
-+    if ((gConstants.sun.w > 0.0f) && (gConstants.view.x < 1.5f)) {
++    if ((DayWeather().y > 0.0f) && (gConstants.view.x < 1.5f)) {
 +        // Less on the sky itself, so the beams show over the scenery rather than the sky washing out.
 +        bloom += LightShafts(pixel) * ((depth >= 0.99999f) ? 0.4f : 1.0f);
 +    }
@@ -8505,6 +8610,8 @@ index 0000000..f2af2c3
 +        }
 +        if (daytime) {
 +            scene = DayWorld(scene, dayTint);
++            const float3 weather = DayWeather();
++            scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
 +            rim *= dayTint;
 +        }
 +        if (gConstants.bloom.z > 0.0f) {
@@ -8933,10 +9040,10 @@ index 0a5c332..c4e4004 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..0cf11ea
+index 0000000..c770510
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,73 @@
 +//
 +// RT64
 +//
@@ -8980,6 +9087,8 @@ index 0000000..0cf11ea
 +        // The same for world y: its xyz is also the normal of level ground, in view space.
 +        float4 worldY;
 +        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
++        // While the day and night cycle's weather rains, w is negative: -(1 + rain (0 to 255) * 256 + the
++        // shafts' strength (0 to 255) + the lightning (0 to 0.99)).
 +        float4 sun;
 +        // Banjo's ripples: three rings' world x, world z and age in seconds (below 0 for none) in xyz; the w
 +        // components hold Banjo's world x, z and y (y below -1e8 when there is no Banjo), for the fog.

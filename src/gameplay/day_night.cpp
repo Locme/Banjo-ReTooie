@@ -28,6 +28,7 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
+    void SetSceneWeather(float rain, float flash);
 }
 
 namespace {
@@ -123,6 +124,100 @@ namespace {
         }
     }
 
+    tooie::day_night::Weather weather_setting() {
+        // Test aid: TOOIE_WEATHER=<0 Clear, 1 Changing, 2 Rain, 3 Storm> whatever the setting says.
+        if (const char* v = std::getenv("TOOIE_WEATHER")) {
+            return static_cast<tooie::day_night::Weather>(std::atoi(v));
+        }
+        try {
+            return static_cast<tooie::day_night::Weather>(std::get<uint32_t>(
+                recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::day_night::weather_option)));
+        } catch (...) {
+            return tooie::day_night::Weather::Changing;
+        }
+    }
+
+    // The weather, on game time. Changing: clear, rain or a storm for a few minutes of play at a time.
+    struct WeatherState {
+        uint32_t seed = 0x2545F491u;
+        uint32_t next_change_ms = 0;
+        bool started = false;
+        float target = 0.0f; // the rain it is heading to
+        bool storm = false;
+        float rain = 0.0f;   // the rain now, 0 to 1
+        uint32_t flash_ms = 0;
+        bool flashing = false;
+        uint32_t next_flash_ms = 0;
+
+        float random01() {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            return (seed >> 8) * (1.0f / 16777216.0f);
+        }
+    };
+    WeatherState weather;
+
+    // The lightning's brightness ms after it struck: a flash, a flicker, a second flash that fades.
+    float flash_at(uint32_t ms) {
+        if (ms < 70) {
+            return 1.0f;
+        }
+        if (ms < 140) {
+            return 0.25f;
+        }
+        if (ms < 220) {
+            return 0.85f;
+        }
+        return 0.85f * std::exp(-(float)(ms - 220) / 180.0f);
+    }
+
+    // Moves the weather on (ms of game time, dt seconds of it) and gives the rain (0 to 1) and lightning (0 to 1).
+    void weather_tick(tooie::day_night::Weather setting, uint32_t ms, float dt, bool snap, float& rain, float& flash) {
+        using tooie::day_night::Weather;
+        WeatherState& w = weather;
+        if (setting == Weather::Changing) {
+            if (!w.started || (int32_t)(ms - w.next_change_ms) >= 0) {
+                const float roll = w.random01();
+                // Starts clear; after that mostly clear, sometimes rain, now and then a storm.
+                w.target = !w.started ? 0.0f : (roll < 0.6f) ? 0.0f : (roll < 0.85f) ? 0.6f : 1.0f;
+                w.storm = w.started && (roll >= 0.85f);
+                w.next_change_ms = ms + (uint32_t)((2.0f + 4.0f * w.random01()) * 60000.0f);
+                w.started = true;
+            }
+        }
+        else {
+            w.started = false;
+            w.target = (setting == Weather::Rain) ? 0.6f : (setting == Weather::Storm) ? 1.0f : 0.0f;
+            w.storm = (setting == Weather::Storm);
+        }
+        // Comes and goes over about twenty seconds; already there on entering a level.
+        const float step = snap ? 1.0f : dt / 20.0f;
+        w.rain = (w.rain < w.target) ? std::min(w.target, w.rain + step) : std::max(w.target, w.rain - step);
+
+        flash = 0.0f;
+        if (w.storm && (w.rain > 0.6f)) {
+            if (!w.flashing && (int32_t)(ms - w.next_flash_ms) >= 0) {
+                w.flashing = true;
+                w.flash_ms = ms;
+                w.next_flash_ms = ms + (uint32_t)(6000.0f + 12000.0f * w.random01());
+                // Further off the longer the wait for the thunder, and quieter.
+                const float delay = 0.4f + 3.0f * w.random01();
+                tooie::night_sounds::thunder(delay, 1.0f - delay / 4.5f);
+            }
+        }
+        else if ((int32_t)(ms - w.next_flash_ms) >= 0) {
+            w.next_flash_ms = ms + 3000;
+        }
+        if (w.flashing) {
+            flash = flash_at(ms - w.flash_ms);
+            if ((ms - w.flash_ms) > 1200) {
+                w.flashing = false;
+            }
+        }
+        rain = w.rain;
+    }
+
     bool cycles(uint16_t map) {
         return std::find(std::begin(cycling_maps), std::end(cycling_maps), map) != std::end(cycling_maps);
     }
@@ -176,6 +271,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
 
     // Eases over half a second when switched on or off in a level; a map change (behind its wipe) snaps.
     static uint16_t last_map = 0xFFFF;
+    const bool new_map = (map != last_map);
     if (map != last_map) {
         last_map = map;
         amount = on ? 1.0f : 0.0f;
@@ -187,12 +283,13 @@ void tooie::day_night::tick(uint8_t* rdram) {
             std::lock_guard lock{mutex};
             active = false;
         }
-        tooie::night_sounds::set(0.0f, 0.0f, 0.0f);
+        tooie::night_sounds::set(0.0f, 0.0f, 0.0f, 0.0f);
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
             RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false, false);
             RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
+            RT64::SetSceneWeather(0.0f, 0.0f);
         }
         return;
     }
@@ -222,6 +319,20 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Light shafts from the sun only, fading out as it nears the horizon.
     const float shafts = smooth(height / 0.2f);
 
+    // The weather. No rain on Hailfire Peaks' Icy Side (it snows there) or in Cloud Cuckooland (above the clouds).
+    float rain = 0.0f;
+    float flash = 0.0f;
+    weather_tick(weather_setting(), ms, dt, new_map, rain, flash);
+    if ((map == 0x128) || (map == 0x136)) {
+        rain = 0.0f;
+        flash = 0.0f;
+    }
+    // Test aid: TOOIE_LIGHTNING=<0 to 1> holds the lightning's brightness there.
+    if (const char* v = std::getenv("TOOIE_LIGHTNING")) {
+        flash = (float)std::atof(v);
+    }
+    RT64::SetSceneWeather(rain * amount, flash * amount);
+
     // No fireflies on Hailfire Peaks (lava and ice).
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
     // No clouds in Cloud Cuckooland, which is up in them.
@@ -232,7 +343,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Night sounds: crickets and owls through the night, birds from dawn into the morning and a few through
     // the day. Quiet while the game stands still (the pause menu). No crickets on Hailfire Peaks or in Cloud
     // Cuckooland, and nothing living on the Icy Side.
-    float sounds[3] = { 0.0f, 0.0f, 0.0f };
+    float sounds[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     if (option_on(tooie::day_night::sounds_option) && dt > 0.0f) {
         const float night = 1.0f - smooth((t - 0.20f) / 0.06f) + smooth((t - 0.76f) / 0.06f);
         const float morning = smooth((t - 0.22f) / 0.05f) * (1.0f - 0.75f * smooth((t - 0.36f) / 0.09f)) *
@@ -241,11 +352,17 @@ void tooie::day_night::tick(uint8_t* rdram) {
         const float crickets = (hailfire || map == 0x136) ? 0.0f : night;
         const float owls = (map == 0x128) ? 0.0f : night;
         const float birds = (map == 0x128) ? 0.0f : morning;
-        sounds[0] = crickets * amount;
-        sounds[1] = owls * amount;
-        sounds[2] = birds * amount;
+        // Rain quietens the crickets and birds.
+        const float dry = 1.0f - rain;
+        sounds[0] = crickets * amount * dry;
+        sounds[1] = owls * amount * dry;
+        sounds[2] = birds * amount * dry;
     }
-    tooie::night_sounds::set(sounds[0], sounds[1], sounds[2]);
+    // The rain is heard whether or not Night Sounds is on (not in the pause menu).
+    if (dt > 0.0f) {
+        sounds[3] = rain * amount;
+    }
+    tooie::night_sounds::set(sounds[0], sounds[1], sounds[2], sounds[3]);
     {
         std::lock_guard lock{mutex};
         active = (amount >= 1.0f);
@@ -257,9 +374,9 @@ void tooie::day_night::tick(uint8_t* rdram) {
         static uint32_t logged_ms = 0;
         if (ms - logged_ms >= 1000) {
             logged_ms = ms;
-            fprintf(stderr, "[day-night] map %X time %.3f tint %.2f %.2f %.2f sun %.2f %.2f %.2f shafts %.2f sounds %.2f %.2f %.2f\n",
+            fprintf(stderr, "[day-night] map %X time %.3f tint %.2f %.2f %.2f sun %.2f %.2f %.2f shafts %.2f sounds %.2f %.2f %.2f rain %.2f flash %.2f\n",
                 map, t, look.tint[0], look.tint[1], look.tint[2], direction[0], direction[1], direction[2], shafts,
-                sounds[0], sounds[1], sounds[2]);
+                sounds[0], sounds[1], sounds[2], rain, flash);
         }
     }
 }
@@ -313,6 +430,18 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, small glowing fireflies drift round Banjo at night (not on Hailfire Peaks).",
         true);
     graphics.add_option_hidden_dependency(fireflies_option, option, Mode::Off);
+    graphics.add_enum_option(
+        weather_option,
+        "Weather",
+        "With Day and Night on, rain and thunderstorms. <recomp-color primary>Changing</recomp-color> is mostly clear, with rain or a storm now and then for a few minutes; the others hold one. No rain in Cloud Cuckooland or on Hailfire Peaks' Icy Side.",
+        {
+            {Weather::Clear, "Clear", "Clear"},
+            {Weather::Changing, "Changing", "Changing"},
+            {Weather::Rain, "Rain", "Rain"},
+            {Weather::Storm, "Storm", "Storm"},
+        },
+        Weather::Changing);
+    graphics.add_option_hidden_dependency(weather_option, option, Mode::Off);
     graphics.add_bool_option(
         clouds_option,
         "Clouds",
