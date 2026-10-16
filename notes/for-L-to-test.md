@@ -2496,3 +2496,13 @@
   2. If you had keys bound to Pick Model or Tag Model, press them in game
 - Look for: Debug now holds Effect Debug View, Effect Compare and Warp Again. Below it, Interpolation Debug holds Interpolation Check, Blend Mode, Pick Model, Tag Model, Save Tags, Unsave Tag and Model Effects. Bindings you already had still work. Checked headless.
 - Status: waiting for L
+
+## T237 Sun shadows steady, lined up and covering the whole scene
+- Asked: 2026-10-16 08:52 UTC
+- Build: 96ebfe6
+- Steps:
+  1. Sun shadows on, HD shadows on
+  2. Run around Spiral Mountain in daylight, turning the camera
+  3. Watch Banjo's shadow and the left and top of the picture
+- Look for: Shadows stay on (no sudden stop), sit on Banjo rather than beside him, cover the whole picture, and Banjo's shadow no longer flickers
+- Status: waiting for L
