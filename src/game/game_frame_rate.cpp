@@ -613,8 +613,14 @@ std::deque<bool> scheduler_vis;
 // Before each client's osSendMesg ($a0 = its queue): drop the controller pak thread's on the extra VIs.
 extern "C" void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx) {
     (void)rdram;
-    if (!vi_is_timed && (uint32_t)ctx->r4 == pak_vi_queue) {
-        ctx->r4 = 0;
+    if ((uint32_t)ctx->r4 == pak_vi_queue) {
+        // Headless: TOOIE_PAD_EVERY=<n> reads the controller on every n-th timed VI only, so a
+        // slow-motion run gets the several game frames per controller read a fast PC has.
+        static const int every = [] { const char* v = std::getenv("TOOIE_PAD_EVERY"); return v ? std::max(1, std::atoi(v)) : 1; }();
+        static int count = 0;
+        if (!vi_is_timed || (every > 1 && (count++ % every) != 0)) {
+            ctx->r4 = 0;
+        }
     }
 }
 
