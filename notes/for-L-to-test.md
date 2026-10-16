@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T328 Shader speed pass 2: lean shaders, fireflies, focus, bounce light
+- Asked: 2026-10-16 21:39 UTC
+- Build: main
+- Steps:
+  1. Pull main and build. The first run rebuilds the shader cache (a few seconds of hitching at first, then not again)
+  2. Spiral Mountain and Icy Side by day with your usual settings plus 3D grass, Deep snow and Banjo fur: grass, snow, fur, feathers, shadows and water should all look as before, and the frame rate should be the same or better
+  3. Day and Night: Night with Fireflies on in Spiral Mountain: the fireflies should look as before and the frame rate at night should be clearly better
+  4. Lighting: Bounce light 60 (off by default): soft coloured light at the foot of walls, a touch smoother than before is fine
+  5. Lighting: gameplay Depth of field 60: the focus should still follow Banjo and the middle of the picture
+- Look for: Anything that looks different from the last build, except the bounce light's smoothness, is a bug: say which effect and where. Also say what the frame counter shows by day and at night, before and after if you can (F7 overlay).
+- Status: waiting for L
+
 ## T327 Start menu: preset beside Play (Vanilla turns shaders off)
 - Asked: 2026-10-16 21:42 UTC
 - Build: main (pull and build)
@@ -9,8 +21,6 @@
   3. Pick Vanilla and press Play
   4. In the game, open Settings > Graphics and look at Effects preset and the Shaders options, then restart the game
 - Look for: Left and right step through Vanilla, Enhanced, Retro and Custom (wrapping round); clicking an arrow changes it without starting the game. Play with Vanilla sets Graphics > Effects preset to Vanilla (the old Original) and turns every shader effect off, also FXAA, FSR and Kazooie feathers, so no effect shaders run. Enhanced and Retro set those presets; Custom leaves your settings alone. The start menu remembers the choice next time. Checked headless: keys and arrow clicks cycle, Vanilla + Play saved the preset with bloom, AO, SMAA, FXAA, FSR and fur off, and the next start showed Vanilla (screens/play-preset/ in project files). Not checked with a real controller.
-- Status: waiting for L
-
 ## T326 Cheats: 100% complete and Dragon Kazooie
 - Asked: 2026-10-16 21:32 UTC
 - Build: main @ 0c6a82e
