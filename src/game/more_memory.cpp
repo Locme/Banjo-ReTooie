@@ -1,4 +1,4 @@
-// More game memory (General > More game memory).
+// More game memory (DEV tab > More game memory).
 //
 // The game keeps its heap in 0x80137800-0x80400000 (2.8 MB) and builds each frame in fixed buffers,
 // with fixed caches for the animations in use. A crowded scene (many characters at once) overflows

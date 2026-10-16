@@ -75,7 +75,7 @@ namespace {
         }
     }
 
-    // Discord status moved from General to WIP: carry a saved value over once.
+    // Discord status moved from General to DEV: carry a saved value over once.
     void move_saved_discord_option() {
         const std::filesystem::path dir = recomp::get_config_path();
         if (std::filesystem::exists(dir / (tooie::wip_tab_id + ".json"))) {

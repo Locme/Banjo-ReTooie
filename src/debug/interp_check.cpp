@@ -44,7 +44,7 @@ namespace {
     constexpr int mode_count = 6;
     bool created = false;
 
-    // Looked up each time: the tab list moves its configs as more tabs are added. The options live in the WIP tab.
+    // Looked up each time: the tab list moves its configs as more tabs are added. The options live in the DEV tab.
     recomp::config::Config& graphics_config() {
         return recompui::config::get_config(tooie::wip_tab_id);
     }
