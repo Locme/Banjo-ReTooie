@@ -9,7 +9,7 @@
 // file is being played (launcher, title screen, game select) a pick only shows
 // "Start the game and load a file first". Test > Test room also fills its area
 // with the test room's line-up (src/gameplay/test_room.cpp). The last group,
-// Race Warps, starts one of Canary Mary's four races as a practice run
+// Race Warps (Replay Race), starts one of Canary Mary's four races as a practice run
 // (src/gameplay/race_warp.cpp).
 
 #include <atomic>
@@ -59,10 +59,10 @@ namespace {
 #include "level_warp_places.inc"
         { "Test", "Test room", tooie::test_room::map, tooie::test_room::exit, true },
         // Last, at the bottom of the tab.
-        { "Race Warps", tooie::race_warp::name(0), 0, 0, false, 0 },
-        { "Race Warps", tooie::race_warp::name(1), 0, 0, false, 1 },
-        { "Race Warps", tooie::race_warp::name(2), 0, 0, false, 2 },
-        { "Race Warps", tooie::race_warp::name(3), 0, 0, false, 3 },
+        { "Race Warps (Replay Race)", tooie::race_warp::name(0), 0, 0, false, 0 },
+        { "Race Warps (Replay Race)", tooie::race_warp::name(1), 0, 0, false, 1 },
+        { "Race Warps (Replay Race)", tooie::race_warp::name(2), 0, 0, false, 2 },
+        { "Race Warps (Replay Race)", tooie::race_warp::name(3), 0, 0, false, 3 },
     };
 
     constexpr auto poll_interval = 10ms;

@@ -1,6 +1,6 @@
 // Race warps (roadmap 4.81).
 //
-// Warp > Race Warps starts one of Canary Mary's races. Her races are run by her
+// Warp > Race Warps (Replay Race) starts one of Canary Mary's races. Her races are run by her
 // hand cart (chhandcart, Glitter Gulch Mine) and her cloud cart (the overlay the
 // decomp calls chclockworkmouse, Cloud Cuckooland). In the game, talking to her
 // sets the 3-bit race state (flag 0xA4C in GGM, 0xA37 in CCL) to 1, "racing",
