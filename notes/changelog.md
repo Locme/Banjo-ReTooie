@@ -65,6 +65,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - New Graphics > 3D grass thickness (50-400 %, default 100) and 3D grass random length (0-100 %, default 40). Untested on PC (T279).
 - New Graphics > 3D grass on edges (on by default): blades also grow on the grassy parts of part-grass textures, such as cliff-top fringes and the foot of walls. Untested on PC (T245).
 - Kazooie feathers (Graphics > Character Shaders, 0 is off) with Kazooie feather size: lots of little flat feathers grow over her red feathers, overlapping down her body like a bird's, in the spirit of NeuralVFX's feather geometry shader. Needs geometry shaders (not on Mac). Untested on PC (T297).
+- Kazooie feathers also grow on her wings and the crest on her head (parts cut out by their textures), never on dark texture spots. Untested on PC (T306).
 - Character Shaders (Graphics, after Shaders): Banjo's fur settings moved here. Untested on PC (T288).
 - Banjo fur: no fur on his feet and shorts (picked by bone, so model mods are covered), none on Mumbo or anyone else (Banjo is picked by his skeleton), and cutscene Banjo gets fur too. New Banjo fur density and Banjo fur noisiness sliders. Untested on PC (T276).
 - Banjo fur reworked after L's screenshot: the strands now follow Sorumi's UnityFurShader (a fine noise thinned out shell by shell, darker at the roots), so the coat reads as fine fur instead of pyramids, and Kazooie no longer gets fur. Untested on PC (T240).

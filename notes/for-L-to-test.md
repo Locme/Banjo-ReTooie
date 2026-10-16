@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T306 Kazooie feathers on her wings and crest
+- Asked: 2026-10-16 20:24 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Kazooie feathers at 100
+  2. Look at her wings and the top of her head up close (the poker game in Jolly's works)
+- Look for: Her wings and the crest on her head are feathered like her body, with no dark or black feathers on the wings and nothing on her beak.
+- Status: waiting for L
+
 ## T304 Photo mode: Time frozen stands still, 1/167 step
 - Asked: 2026-10-16 20:16 UTC
 - Build: main @ 181272f

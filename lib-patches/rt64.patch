@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..3588155 100644
+index 9fae0d4..5a00e00 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2053,10 +2053,10 @@ index 9fae0d4..3588155 100644
 +                }
 +
 +                // Banjo-Tooie: Kazooie's feathers, grown over the same triangles by the grass blades' geometry shader.
-+                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] == 2)) {
++                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] >= 2)) {
 +                    worker->commandList->setPipeline(grassBladePipeline);
 +                    previousPipeline = grassBladePipeline;
-+                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS;
++                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS | ((instanceFurVector[i] == 3) ? RASTER_GRASS_EDGES : 0);
 +                    for (uint32_t pass = 1; pass <= FeatherCardPasses; pass++) {
 +                        rasterParams.grassShell = pass;
 +                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
@@ -2370,7 +2370,7 @@ index 9fae0d4..3588155 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2302,199 @@ namespace RT64 {
+@@ -1747,8 +2302,202 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2399,8 +2399,8 @@ index 9fae0d4..3588155 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2421,8 +2421,8 @@ index 9fae0d4..3588155 100644
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -2547,10 +2547,13 @@ index 9fae0d4..3588155 100644
 +                    !instanceDrawCall.triangles.vertexTestZ)
 +                {
 +                    const interop::OtherMode fm = call.shaderDesc.otherMode;
-+                    feathers = fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(fm);
++                    // (Her wings and crest are cut out by their textures' alpha and blended: the feathers grow on their
++                    // solid parts, drawn solid, RasterPS.hlsl.)
++                    feathers = fm.zCmp() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY);
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
-+                instanceFurVector.push_back(fur ? 1 : (feathers ? 2 : 0));
++                // (3: a part cut out by its texture, seen from both sides, RASTER_GRASS_EDGES in GrassGS.hlsl.)
++                instanceFurVector.push_back(fur ? 1 : (feathers ? (interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) : 0));
 +
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
 +                if (!nightLightsChecked) {
@@ -2570,7 +2573,7 @@ index 9fae0d4..3588155 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2504,172 @@ namespace RT64 {
+@@ -1758,13 +2507,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -7281,7 +7284,7 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..01192a8
+index 0000000..95a471e
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
 @@ -0,0 +1,109 @@
@@ -7375,7 +7378,7 @@ index 0000000..01192a8
 +bool FeatherCard(float3 anchor, float3 baseColor, inout float3 color) {
 +    const float high = max(baseColor.r, max(baseColor.g, baseColor.b));
 +    const float low = min(baseColor.r, min(baseColor.g, baseColor.b));
-+    if ((high < 0.06f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
++    if ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
 +        return false;
 +    }
 +    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
@@ -7799,10 +7802,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..0b5492f
+index 0000000..e5ef5be
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,520 @@
+@@ -0,0 +1,521 @@
 +//
 +// RT64
 +//
@@ -8034,7 +8037,7 @@ index 0000000..0b5492f
 +    normal /= normalLength;
 +
 +    // Outward: towards the camera for a triangle the camera sees the front of, away from it otherwise (the winding
-+    // on screen tells which).
++    // on screen tells which); always towards it on a thin part seen from both sides (her wings and crest).
 +    const float2 s0 = clip[0].xy / max(clip[0].w, 1e-5f);
 +    const float2 s1 = clip[1].xy / max(clip[1].w, 1e-5f);
 +    const float2 s2 = clip[2].xy / max(clip[2].w, 1e-5f);
@@ -8042,7 +8045,8 @@ index 0000000..0b5492f
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
 +    const bool facesCamera = dot(normal, camera - center) > 0.0f;
-+    if (facesCamera != (screenArea > 0.0f)) {
++    const bool twoSided = (gConstants.grassShells & RASTER_GRASS_EDGES) != 0;
++    if (facesCamera != ((screenArea > 0.0f) || twoSided)) {
 +        normal = -normal;
 +    }
 +
@@ -8547,7 +8551,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ec7c850 100644
+index e7895c3..ba8bf6d 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8607,7 +8611,7 @@ index e7895c3..ec7c850 100644
          return false;
      }
  #endif
-@@ -254,6 +290,55 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +290,63 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8615,6 +8619,14 @@ index e7895c3..ec7c850 100644
 +    // keeps only the blades crossing it, on green ground facing up.
 +    // Banjo-Tooie: a shell of deep snow keeps only where the snow reaches it, on snowy ground facing up.
 +    if (featherCard) {
++        // Grown from a part cut out by its texture's alpha: only on its solid parts, drawn solid.
++        if (alphaBlend) {
++            if (combinerColor.a < 0.5f) {
++                return false;
++            }
++            resultColor.rgb = combinerColor.rgb;
++            resultAlpha = 1.0f;
++        }
 +        if (!FeatherCard(vertexFurAnchor, combinerColor.rgb, resultColor.rgb)) {
 +            return false;
 +        }
@@ -8663,7 +8675,7 @@ index e7895c3..ec7c850 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +346,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +354,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8687,7 +8699,7 @@ index e7895c3..ec7c850 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +389,7 @@ void PSMain(
+@@ -287,6 +397,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8695,7 +8707,7 @@ index e7895c3..ec7c850 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +406,7 @@ void PSMain(
+@@ -303,7 +414,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -11638,7 +11650,7 @@ index 0000000..93ea5da
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..85bcf3a 100644
+index 0a5c332..a2433e6 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
 @@ -9,11 +9,36 @@
@@ -11655,7 +11667,7 @@ index 0a5c332..85bcf3a 100644
 +    // is then the shell and the low bits of grassShells the shell count.
 +#define RASTER_SNOW_SHELLS 0x20000000u
 +    // Banjo-Tooie: with RASTER_GRASS_BLADES, the geometry shader grows Kazooie's feathers on the draw instead of grass
-+    // (GrassGS.hlsl, FeatherCard in Fur.hlsli).
++    // (GrassGS.hlsl, FeatherCard in Fur.hlsli); RASTER_GRASS_EDGES then marks a thin part seen from both sides.
 +#define RASTER_FEATHER_CARDS 0x10000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +
