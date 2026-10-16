@@ -2239,3 +2239,13 @@
 - Look for: Step 1, light snow drifting down slowly and swaying, under a pale sky. Step 2, Storm is heavy snow (no lightning or rain sound there); Clear stops it. Too many flakes, too few, too big? Checked headless: [snow-icy-side-light-and-storm.png](screens/day-night/snow-icy-side-light-and-storm.png) (light on the left, storm on the right).
 - Status: waiting for L
 
+
+## T211 Sun shadow softness
+- Asked: 2026-10-16 00:32 UTC
+- Build: 3860208
+- Steps:
+  1. Graphics > Photo Filters: Sun shadows on, Sun shadow softness at 60 (default)
+  2. Stand near Klungo or a Grublin in Spiral Mountain in daylight
+  3. Slide Sun shadow softness from 0 to 100
+- Look for: Characters' shading gets smoother and less triangly as softness goes up, and shadow edges fade more gently
+- Status: waiting for L
