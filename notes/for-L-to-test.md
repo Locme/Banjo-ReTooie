@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T330 Icy Side: the ice reflects, and HD Shadows don't switch the water off
+- Asked: 2026-10-16 22:10 UTC
+- Build: main
+- Steps:
+  1. Graphics: Water reflections on (60 or more), HD Shadows (experimental) on
+  2. Hailfire Peaks, Icy Side: walk out onto the big frozen lake and stand by its edge, then by the warp pad where your capture was
+  3. Lower the camera so you look across the ice, then turn Water to Modern and walk the same edge
+- Look for: The ice keeps its look but shows soft reflections of the cliffs and the ice blocks when you look across it (little when you look straight down). Along the edge the water no longer flips between Modern and the game's own texture as you move. With Water reflections off, the ice looks as before.
+- Status: waiting for L
+
 ## T329 Kazooie's wing feathers run along the wing, feathers show the texture, head feathered
 - Asked: 2026-10-16 22:03 UTC
 - Build: main
