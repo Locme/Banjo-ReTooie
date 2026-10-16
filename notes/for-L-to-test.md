@@ -2898,7 +2898,7 @@
   2. Look at Banjo in photo mode, then walk, jump, flap and roll
 - Look for: the fur is the lighter brown of L's T-pose preview (the FBX's brown base colour had been multiplied onto the fur texture); no yellow shorts above the belt; the backpack straps go over his shoulders (they had followed his arms). Eyes open, and a blink now closes the lids smoothly (the game steps its eye options 1 3 5 7 7 5 3 1; v5 had options 5 and 6 half open, so a blink flickered). Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v6.png).
 
-## T277 Force Interpolation in cutscenes (DEV, on by default)
+## T280 Force Interpolation in cutscenes (DEV, on by default)
 - Asked: 2026-10-16 12:45 UTC
 - Build: your local build of main
 - Steps:
