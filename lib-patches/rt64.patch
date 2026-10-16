@@ -8799,10 +8799,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..0a4d8c9
+index 0000000..78c5497
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2155 @@
+@@ -0,0 +1,2162 @@
 +//
 +// RT64
 +//
@@ -9983,7 +9983,9 @@ index 0000000..0a4d8c9
 +    }
 +    const float scale = length(gConstants.worldX.xyz);
 +    const float distance = length(center) * scale;
-+    const float fade = 1.0f - (onWater ? smoothstep(400.0f, 1100.0f, distance) : smoothstep(250.0f, 700.0f, distance));
++    // Out to about Banjo's surroundings and well past them: splashes far off shrink to small flecks, so they thin
++    // out gently instead of stopping a little way in front of the camera.
++    const float fade = 1.0f - (onWater ? smoothstep(1400.0f, 3000.0f, distance) : smoothstep(1000.0f, 2400.0f, distance));
 +    if (fade <= 0.0f) {
 +        return 0.0f;
 +    }
@@ -10024,11 +10026,16 @@ index 0000000..0a4d8c9
 +            const float ring = saturate(1.0f - abs(across - ringRadius) / width) * min(1.0f, 0.5f / width);
 +            // A bright drop at the middle as it lands.
 +            const float hit = saturate(1.0f - across / max(0.8f, pixelSize)) * saturate(1.0f - x * 4.0f);
-+            total += (ring * 0.7f + hit) * (1.0f - x);
++            total += (ring * 0.6f + hit * 0.8f) * (1.0f - x);
 +        }
 +    }
-+    const float3 color = float3(0.75f, 0.8f, 0.88f) * (0.3f + 0.7f * max(tint.r, max(tint.g, tint.b)));
-+    return color * total * level * fade * saturate(rain * 1.5f) * 1.4f;
++    // Far off a splash is a pixel or two: dimmer there, so the ground doesn't flicker.
++    total *= saturate(1.5f / pixelSize);
++    // Lit like what they land on: a brighter, paler copy of the surface's own colour, so splashes in shade stay
++    // faint and those on bright ground or water catch the light.
++    const float3 surface = gColor.Load(int3(pixel, 0)).rgb * tint;
++    const float3 color = lerp(surface, dot(surface, float3(0.3f, 0.59f, 0.11f)).xxx, 0.5f) * 1.6f + float3(0.75f, 0.8f, 0.88f) * 0.2f * max(tint.r, max(tint.g, tint.b));
++    return color * total * level * fade * saturate(rain * 1.5f) * (onWater ? 1.6f : 1.0f);
 +}
 +
 +// Rain: streaks falling on four rings round the camera (fixed to the compass, so they stay put as it turns),
