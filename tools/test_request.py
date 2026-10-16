@@ -3,7 +3,7 @@
 "When it comes to bugs, make the new project ask me to test the issues there before
 trying to apply a fix").
 
-Appends a numbered, consistently shaped entry to the "for L to test" list and prints
+Adds a numbered, consistently shaped entry at the top of the "for L to test" list (newest first) and prints
 a short message to post in the thread. Keeping one shape means L can answer quickly
 and later threads can grep the file instead of re-reading conversations.
 
@@ -65,8 +65,13 @@ def main():
     entry = (f"\n## T{n} {a.title}\n- Asked: {now}\n- Build: {a.build}\n"
              + (f"- XBLA history: report §{a.xbla}\n" if a.xbla else "")
              + f"- Steps:\n{steps}\n- Look for: {a.look}\n- Status: waiting for L\n")
-    open(a.file, "a" if text.endswith("\n") else "w", encoding="utf-8").write(
-        entry if text.endswith("\n") else text + "\n" + entry)
+    # Newest first (L, 2026-10-16): the new entry goes above the first existing one.
+    m = re.search(r"^## T\d+\b", text, re.M)
+    if m:
+        text = text[:m.start()] + entry.lstrip("\n") + "\n" + text[m.start():]
+    else:
+        text = text.rstrip("\n") + "\n" + entry
+    open(a.file, "w", encoding="utf-8").write(text)
     print(f"Could you test this on {a.build}? {a.title}.\n{steps}\nWhat I need to know: {a.look}")
     return 0
 
