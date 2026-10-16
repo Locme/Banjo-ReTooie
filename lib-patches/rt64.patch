@@ -1589,7 +1589,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..1c3001c 100644
+index 69a82ac..455118c 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,9 @@ namespace RT64 {
@@ -1615,7 +1615,7 @@ index 69a82ac..1c3001c 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +668,99 @@ namespace RT64 {
+@@ -659,6 +668,101 @@ namespace RT64 {
          }
      };
  
@@ -1669,6 +1669,7 @@ index 69a82ac..1c3001c 100644
 +        uint32_t gWaterRipples;
 +        uint32_t gSunShadowMap;
 +        uint32_t gFireflies;
++        uint32_t gColorHalf;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1681,6 +1682,7 @@ index 69a82ac..1c3001c 100644
 +            gWaterRipples = builder.addTexture(8);
 +            gSunShadowMap = builder.addTexture(9);
 +            gFireflies = builder.addTexture(10);
++            gColorHalf = builder.addTexture(11);
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
 +            builder.addImmutableSampler(3, linearSampler);
@@ -4478,10 +4480,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3a06a3c
+index 0000000..6b0246a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1894 @@
+@@ -0,0 +1,1929 @@
 +//
 +// RT64
 +//
@@ -4554,6 +4556,11 @@ index 0000000..3a06a3c
 +            std::unique_ptr<RenderTexture> fireflyTexture;
 +            std::unique_ptr<RenderFramebuffer> fireflyFramebuffer;
 +            const RenderTexture *sceneSetFireflies = nullptr;
++            // The scene at half size (BloomPS pass 8), the bounce light's colour source: one read a sample there
++            // instead of four of the scene.
++            std::unique_ptr<RenderTexture> halfTexture;
++            std::unique_ptr<RenderFramebuffer> halfFramebuffer;
++            const RenderTexture *sceneSetHalf = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
 +            std::unique_ptr<RenderTexture> waterTexture;
@@ -5933,6 +5940,14 @@ index 0000000..3a06a3c
 +            res.bloomCombineSet->setTexture(res.bloomCombineSet->gTexture2, res.bloomTexture[2].get(), RenderTextureLayout::SHADER_READ);
 +            res.bloomWidth = bloomWidth;
 +            res.bloomHeight = bloomHeight;
++            res.halfTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(std::max(colorTarget->width / 2, 1U), std::max(colorTarget->height / 2, 1U), format));
++            res.halfTexture->setName("Scene Effects Half Scene");
++            const RenderTexture *halfTexturePtr = res.halfTexture.get();
++            res.halfFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&halfTexturePtr, 1));
++            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
++            commandList->setFramebuffer(res.halfFramebuffer.get());
++            commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::SHADER_READ));
 +            std::vector<RenderTextureBarrier> barriers;
 +            for (int i = 0; i < Resources::BloomTextures; i++) {
 +                barriers.emplace_back(res.bloomTexture[i].get(), RenderTextureLayout::COLOR_WRITE);
@@ -6106,6 +6121,26 @@ index 0000000..3a06a3c
 +            bloomPass(res.bloomSet[3].get(), res.bloomTexture[3].get(), 2, eighthWidth, eighthHeight, 2.0f);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.bloomTexture[0].get(), RenderTextureLayout::SHADER_READ));
 +            bloomPass(res.bloomCombineSet.get(), res.bloomTexture[2].get(), 4, bloomWidth, bloomHeight, 6.0f);
++        }
++
++        // The scene at half size for the bounce light (BloomPS pass 8).
++        if ((settings.bounceLight > 0.0f) && (source != nullptr)) {
++            GpuSectionScope timed(WorkloadGpuSections(), GpuSection::Bloom, commandList);
++            const uint32_t halfWidth = std::max(colorTarget->width / 2, 1U);
++            const uint32_t halfHeight = std::max(colorTarget->height / 2, 1U);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::COLOR_WRITE));
++            interop::BloomCB halfConstants;
++            halfConstants.params = { 1.0f / float(colorTarget->width), 1.0f / float(colorTarget->height), 8.0f, 0.0f };
++            commandList->setFramebuffer(res.halfFramebuffer.get());
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(halfWidth), float(halfHeight)));
++            commandList->setScissors(RenderRect(0, 0, halfWidth, halfHeight));
++            commandList->setPipeline(shaderLibrary->bloom.pipeline.get());
++            commandList->setGraphicsPipelineLayout(shaderLibrary->bloom.pipelineLayout.get());
++            commandList->setGraphicsDescriptorSet(res.sourceSet->get(), 0);
++            commandList->setGraphicsPushConstants(0, &halfConstants);
++            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++            commandList->drawInstanced(3, 1, 0, 0);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(res.halfTexture.get(), RenderTextureLayout::SHADER_READ));
 +        }
 +
 +        // Modern water's ripples: the player pushes the water of a grid that follows them (RippleCells cells of
@@ -6294,7 +6329,7 @@ index 0000000..3a06a3c
 +
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
-+            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get())) {
++            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
 +            if (res.sceneSet != nullptr) {
 +                res.retireLater(std::move(res.sceneSet));
 +            }
@@ -6318,6 +6353,8 @@ index 0000000..3a06a3c
 +            res.sceneSetSunMap = res.sunMapTexture.get();
 +            res.sceneSet->setTexture(res.sceneSet->gFireflies, res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetFireflies = res.fireflyTexture.get();
++            res.sceneSet->setTexture(res.sceneSet->gColorHalf, res.halfTexture.get(), RenderTextureLayout::SHADER_READ);
++            res.sceneSetHalf = res.halfTexture.get();
 +        }
 +
 +        const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
@@ -7700,17 +7737,18 @@ index 8a3782a..5f1b8d5 100644
          const RenderSampler *descriptorSetSampler = nullptr;
 diff --git a/src/shaders/BloomPS.hlsl b/src/shaders/BloomPS.hlsl
 new file mode 100644
-index 0000000..75eb198
+index 0000000..fc9cf8f
 --- /dev/null
 +++ b/src/shaders/BloomPS.hlsl
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,128 @@
 +//
 +// RT64
 +//
 +// Banjo-Tooie: the scene effects' bloom. Pass 0 keeps the bright parts of the scene at a quarter of its
 +// size (four bilinear taps cover each 4x4 block), passes 1 and 2 blur them across and down, pass 5 takes
 +// them down to an eighth for a wider glow and pass 6 adds the two. Passes 3
-+// and 4 measure the scene's brightness and adapt to it over time for eye adaptation.
++// and 4 measure the scene's brightness and adapt to it over time for eye adaptation. Pass 8 copies the scene at
++// half size for the bounce light.
 +
 +#include "shared/rt64_scene_effects.h"
 +
@@ -7779,6 +7817,11 @@ index 0000000..75eb198
 +        const float2 edge = min(float2(cell), float2(size - 1 - cell)) / (float2(size) * 0.12f);
 +        const float calm = saturate(min(edge.x, edge.y));
 +        return float4(h * calm, v * calm, 0.0f, 1.0f);
++    }
++    if (pass == 8) {
++        // A plain copy at half the size, for the bounce light: the one bilinear tap at the half pixel's centre
++        // averages its four pixels.
++        return float4(gTexture0.SampleLevel(LinearSampler, uv, 0).rgb, 1.0f);
 +    }
 +    if (pass == 0) {
 +        float3 color = 0.0f;
@@ -9460,10 +9503,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..86ec1cb
+index 0000000..3c5f2d8
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2246 @@
+@@ -0,0 +1,2244 @@
 +//
 +// RT64
 +//
@@ -9500,6 +9543,8 @@ index 0000000..86ec1cb
 +// The fireflies' table for this frame (FireflyPlace), 162 by 3, written by the FIREFLY_TABLE pass: rows 0 and 1 the
 +// fireflies, row 2 the depth of field's focus distance (DepthOfFieldFocus) in its first pixel.
 +Texture2D<float4> gFireflies : register(t10);
++// The scene at half size (BloomPS pass 8), for the bounce light's colour samples.
++Texture2D<float4> gColorHalf : register(t11);
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -9915,8 +9960,6 @@ index 0000000..86ec1cb
 +    const float distance = max(-center.z, 1.0f);
 +    const float radiusPixels = clamp(radius * gConstants.projection.y * gConstants.projection.w * 0.5f / distance, 3.0f, gConstants.projection.w * 0.07f);
 +    const float2 size = gConstants.projection.zw;
-+    // Half the side of the square each sample's colour is averaged over (four bilinear reads).
-+    const float spread = max(1.0f, radiusPixels * 0.12f);
 +
 +    const int samples = 12;
 +    float3 light = 0.0f;
@@ -9934,12 +9977,10 @@ index 0000000..86ec1cb
 +        const float lengthSquared = dot(v, v);
 +        const float facing = saturate(dot(normal, v) * rsqrt(max(lengthSquared, 1e-4f)));
 +        const float w = facing * saturate(1.0f - lengthSquared / (radius * radius));
++        // The sample's colour, averaged over a few pixels so the texture's detail doesn't decide it: one bilinear
++        // tap of the scene's half-size copy (four pixels' average, blended with its neighbours').
 +        const float2 uv = (at + 0.5f) / size;
-+        const float2 d = spread / size;
-+        const float3 colour = 0.25f * (gColor.SampleLevel(LinearSampler, uv + float2(-d.x, -d.y), 0).rgb +
-+            gColor.SampleLevel(LinearSampler, uv + float2(d.x, -d.y), 0).rgb +
-+            gColor.SampleLevel(LinearSampler, uv + float2(-d.x, d.y), 0).rgb +
-+            gColor.SampleLevel(LinearSampler, uv + float2(d.x, d.y), 0).rgb);
++        const float3 colour = gColorHalf.SampleLevel(LinearSampler, uv, 0).rgb;
 +        light += colour * w;
 +        weight += w;
 +    }
