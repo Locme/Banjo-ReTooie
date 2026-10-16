@@ -3,6 +3,7 @@
 
 #include <json/json.hpp>
 
+#include "tooie_photo_album.h"
 #include "tooie_game.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
@@ -564,6 +565,7 @@ void tooie::init_config() {
     tooie::cheats::create_tab();
     tooie::level_warp::create_tab();
     tooie::achievements::create_tab();
+    tooie::photo_album::create_tab();
     recompui::config::create_search_tab();
     recompui::config::create_mods_tab();
 
