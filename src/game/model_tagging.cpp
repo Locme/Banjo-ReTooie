@@ -90,6 +90,11 @@ namespace {
     constexpr uint32_t g_ex_scene_effects_exclude_v1 = 0x000034;
     // ...and the draws after it get Banjo's fur shells (1) or not (0).
     constexpr uint32_t g_ex_fur_shells_v1 = 0x000035;
+    // Kazooie's parts in the Banjo-Kazooie model, by where their lists are from the model's first list: no fur.
+    struct FurSpan {
+        uint32_t from, to;
+    };
+    constexpr FurSpan kazooie_parts[] = { { 0x25C8, 0x32B0 } };
     constexpr uint32_t g_ex_id_auto = 0xFFFFFFFF;
     constexpr uint32_t component_skip = 0;
     constexpr uint32_t component_interpolate = 1;
@@ -911,34 +916,78 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 std::fprintf(stderr, "\n");
             }
         }
-        if (best < 0 || cursor + 64 > limit) {
+        if (best < 0) {
             return;
         }
-        size_t first = blocks[best].vertex_command;
-        size_t last = first;
-        for (size_t i = first; i < commands.size(); i++) {
-            if (commands[i].block == best) {
-                last = i;
+        // Fur goes on Banjo's own parts only, not Kazooie's: RT64's fur flag is turned off round the model's
+        // calls to Kazooie's parts and on again after. A part is known by where its list is in the model, from the
+        // model's first list (the same however the model is placed in memory; Kazooie's parts are only called when
+        // she is out of the backpack). TOOIE_FUR_SKIP=<from>-<to>[,...] (hex) picks them instead (headless aid).
+        struct Span {
+            uint32_t from, to;
+        };
+        static const std::vector<Span> skip = [] {
+            std::vector<Span> spans;
+            if (const char* text = std::getenv("TOOIE_FUR_SKIP")) {
+                char* p = const_cast<char*>(text);
+                while (*p != 0) {
+                    const uint32_t from = (uint32_t)std::strtoul(p, &p, 16);
+                    const uint32_t to = *p == '-' ? (uint32_t)std::strtoul(p + 1, &p, 16) : from;
+                    spans.push_back({from, to});
+                    if (*p != ',') {
+                        break;
+                    }
+                    p++;
+                }
             }
-        }
-        const size_t marks[2] = { first, last + 1 };
-        for (int m = 0; m < 2; m++) {
-            if (marks[m] >= commands.size()) {
-                continue;
+            else {
+                for (const FurSpan& span : kazooie_parts) {
+                    spans.push_back({span.from, span.to});
+                }
             }
-            const uint32_t p = start + (uint32_t)marks[m] * 8;
+            return spans;
+        }();
+        auto wrap = [&](size_t index, bool on) {
+            if (index >= commands.size() || cursor + 32 > limit) {
+                return;
+            }
+            const uint32_t p = start + (uint32_t)index * 8;
             const uint32_t w0 = word(rdram, p);
             const uint32_t op = w0 >> 24;
             if (op == 0xE4 || op == 0xE5 || op == 0xE1 || op == 0xF1) {
-                continue;
+                return;
             }
             const uint32_t list = cursor;
             put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
-            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, m == 0 ? 1u : 0u);
+            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, on ? 1u : 0u);
             put(rdram, cursor + 16, w0, word(rdram, p + 4));
             put(rdram, cursor + 24, op_enddl << 24, 0);
             cursor += 32;
             put(rdram, p, op_dl << 24, list);
+        };
+        const uint32_t base = blocks[best].first_phys;
+        bool on = false;
+        size_t last = blocks[best].vertex_command;
+        for (size_t i = blocks[best].vertex_command; i < commands.size(); i++) {
+            if (commands[i].block != best) {
+                continue;
+            }
+            last = i;
+            if ((commands[i].w0 >> 24) != op_dl || (commands[i].w1 & 0x1FFFFFFF) < base) {
+                continue;
+            }
+            const uint32_t offset = (commands[i].w1 & 0x1FFFFFFF) - base;
+            bool want = true;
+            for (const Span& span : skip) {
+                want = want && (offset < span.from || offset > span.to);
+            }
+            if (want != on) {
+                wrap(i, want);
+                on = want;
+            }
+        }
+        if (on) {
+            wrap(last + 1, false);
         }
     };
     if (!interpolating) {

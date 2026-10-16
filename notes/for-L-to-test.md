@@ -2526,3 +2526,14 @@
   3. If it still freezes for good, wait 15 seconds, then send hangs.log and the newest hang_*.dmp
 - Look for: no more permanent freezes when entering a new area. What happened: before every map change the game waits for each sound it is stopping to be let go by the sound engine. In your hang one sound (slot 6, the same slot each time) was never let go, so the game waited forever while the screen kept showing the last picture. Now the game waits at most 2 seconds, then frees that sound itself, as it would have, and logs it. Hang dumps now also hold the game's memory, so if it happens again I can see which sound it was and why it stuck. Checked headless: with that sound held on purpose (TOOIE_TEST_STUCK_SOUND=1), the warp to Jinjo Village paused 2 seconds, logged slot 6 and carried on, and two more warps after it worked. Why the sound engine did not let go is not found yet.
 - Status: waiting for L
+
+## T240 Banjo fur, reworked: fine fur, Banjo only
+- Asked: 2026-10-16 09:45 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Lighting, Water, Fog (Experimental) on, then set Banjo fur to 100 (Banjo fur length 100)
+  2. Spiral Mountain: stand still until Kazooie pops out of the backpack, then walk, jump and roll with the camera close behind and beside Banjo
+  3. Try Banjo fur length 50 and 200
+- Look for: Step 2, Banjo's brown fur (head, arms, back, legs) looks like a fine fuzzy coat with thin hairs along his outline, not cones or pyramids, and the hairs stay on him as he moves. Kazooie has no fur, out of the backpack or in it; the yellow shorts, belt, backpack, gloves and boots stay smooth. Step 3, shorter or longer fur. Replaces T205's look. Checked headless in Spiral Mountain (screenshots/banjo-fur/rework-off-on.png in project files); not checked on Windows (D3D12), with the split-up Banjo, or with Smash Banjo.
+- Status: waiting for L
+
