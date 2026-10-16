@@ -1562,7 +1562,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..18fe987 100644
+index 9fae0d4..0c8ab38 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1588,7 +1588,7 @@ index 9fae0d4..18fe987 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +132,97 @@ namespace RT64 {
+@@ -125,6 +132,100 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -1625,7 +1625,10 @@ index 9fae0d4..18fe987 100644
 +                flatArea += area;
 +            }
 +        }
-+        return (totalArea > 0.0f) && (flatArea >= 0.5f * totalArea);
++        // A fifth is enough: a pool drawn together with the falls pouring into it is mostly steep when the game
++        // leaves out part of the pool, and taking it as water only some frames turned Modern water on and off.
++        // The shader sorts flat from steep per pixel; light beams have no flat part at all.
++        return (totalArea > 0.0f) && (flatArea >= 0.2f * totalArea);
 +    }
 +
 +    // Banjo-Tooie: the passes of real 3D grass blades a ground draw needs: the most any of its triangles facing up
@@ -1686,7 +1689,7 @@ index 9fae0d4..18fe987 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +267,19 @@ namespace RT64 {
+@@ -169,6 +270,19 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1706,7 +1709,7 @@ index 9fae0d4..18fe987 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +484,7 @@ namespace RT64 {
+@@ -373,6 +487,7 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -1714,7 +1717,7 @@ index 9fae0d4..18fe987 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -465,12 +577,61 @@ namespace RT64 {
+@@ -465,12 +580,61 @@ namespace RT64 {
          return true;
      }
      
@@ -1778,7 +1781,7 @@ index 9fae0d4..18fe987 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +675,17 @@ namespace RT64 {
+@@ -514,6 +678,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1796,7 +1799,7 @@ index 9fae0d4..18fe987 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +746,51 @@ namespace RT64 {
+@@ -574,10 +749,51 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -1848,7 +1851,7 @@ index 9fae0d4..18fe987 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1463,67 @@ namespace RT64 {
+@@ -1250,6 +1466,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -1916,7 +1919,7 @@ index 9fae0d4..18fe987 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1570,56 @@ namespace RT64 {
+@@ -1296,9 +1573,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1974,7 +1977,7 @@ index 9fae0d4..18fe987 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1675,7 @@ namespace RT64 {
+@@ -1354,6 +1678,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -1982,7 +1985,7 @@ index 9fae0d4..18fe987 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1730,58 @@ namespace RT64 {
+@@ -1408,6 +1733,58 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2041,7 +2044,7 @@ index 9fae0d4..18fe987 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1830,48 @@ namespace RT64 {
+@@ -1456,6 +1833,48 @@ namespace RT64 {
                  continue;
              }
  
@@ -2090,7 +2093,7 @@ index 9fae0d4..18fe987 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2098,20 @@ namespace RT64 {
+@@ -1682,6 +2101,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2111,7 +2114,7 @@ index 9fae0d4..18fe987 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2177,104 @@ namespace RT64 {
+@@ -1747,7 +2180,104 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2216,7 +2219,7 @@ index 9fae0d4..18fe987 100644
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2285,143 @@ namespace RT64 {
+@@ -1758,13 +2288,143 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -7337,10 +7340,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..ebb78db
+index 0000000..b9a481e
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1832 @@
+@@ -0,0 +1,1791 @@
 +//
 +// RT64
 +//
@@ -8202,6 +8205,9 @@ index 0000000..ebb78db
 +float3 ModernWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
 +    const float3 v = normalize(surface);
 +    const float3 up = normalize(gConstants.worldY.xyz);
++    // The game's water polygons each tilt a little as they bob, so lighting them by their own facing
++    // shows every triangle as a flat block: the surface is lit as level, and only the waves bend it.
++    normal = up;
 +    const float strength = gConstants.water.w;
 +    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
 +    const float waterY = dot(surface, gConstants.worldY.xyz) + gConstants.worldY.w;
@@ -8344,61 +8350,17 @@ index 0000000..ebb78db
 +    return color;
 +}
 +
-+// Modern water's waterfalls: white water streaming down over a bluer body in the level's water colour, with
-+// what is behind seen wobbling through its thinner parts and the sun catching the streaks.
-+float3 ModernFall(int2 pixel, float fallDepth, float3 scene, float3 tint) {
-+    const float3 surface = ViewPosition(pixel, fallDepth);
-+    const float3 v = normalize(surface);
-+    // The fall's facing, from its neighbours in the mask (the smaller step on each axis).
-+    float dr, dl, dd, du;
-+    const float3 right = LoadAnyWater(pixel + int2(1, 0), dr) ? ViewPosition(pixel + int2(1, 0), dr) : surface;
-+    const float3 left = LoadAnyWater(pixel - int2(1, 0), dl) ? ViewPosition(pixel - int2(1, 0), dl) : surface;
-+    const float3 down = LoadAnyWater(pixel + int2(0, 1), dd) ? ViewPosition(pixel + int2(0, 1), dd) : surface;
-+    const float3 upper = LoadAnyWater(pixel - int2(0, 1), du) ? ViewPosition(pixel - int2(0, 1), du) : surface;
-+    const float3 dx = (abs(right.z - surface.z) < abs(surface.z - left.z)) ? (right - surface) : (surface - left);
-+    const float3 dy = (abs(down.z - surface.z) < abs(surface.z - upper.z)) ? (down - surface) : (surface - upper);
-+    float3 normal = cross(dx, dy);
-+    normal = (dot(normal, normal) > 1e-8f) ? normalize(normal) : -v;
-+    if (dot(normal, -surface) < 0.0f) {
-+        normal = -normal;
-+    }
-+
-+    // Along the fall: across it (horizontal in the world) and down it (the world's height).
-+    const float3 world = WorldPosition(surface);
-+    const float3 normalWorld = float3(dot(normal, gConstants.worldX.xyz), dot(normal, gConstants.worldY.xyz), dot(normal, gConstants.worldZ.xyz));
-+    float3 across = cross(float3(0.0f, 1.0f, 0.0f), normalWorld);
-+    across = (dot(across, across) > 1e-4f) ? normalize(across) : float3(1.0f, 0.0f, 0.0f);
-+    const float u = dot(world, across);
-+    const float t = gConstants.ambientOcclusion.z;
-+    // Streaks stretched down the fall and pouring down it, two sizes falling at two speeds.
-+    const float coarse = WaterNoise(float2(u / 9.0f, world.y / 70.0f + t * 4.0f));
-+    const float fine = WaterNoise(float2(u / 3.5f, world.y / 28.0f + t * 9.0f));
-+    const float streak = saturate(coarse * 0.65f + fine * 0.45f);
-+    const float white = saturate((streak - 0.42f) * 2.6f);
-+
-+    // The level's water colour, kept saturated, darker in its body.
-+    const float luma = dot(tint, float3(0.299f, 0.587f, 0.114f));
-+    const float3 hue = saturate(lerp(luma.xxx, tint, 1.35f));
-+    const float3 body = hue * 0.75f + float3(0.03f, 0.06f, 0.09f);
-+
-+    // Behind it, wobbling with the streaks, only from things further away.
-+    const int2 bent = clamp(pixel + int2(int((fine - 0.5f) * gConstants.projection.w * 0.012f), 0), int2(0, 0), int2(gConstants.projection.zw) - 1);
-+    float3 behind = scene;
-+    const float bentDepth = LoadDepth(bent);
-+    if ((bentDepth >= 0.99999f) || (-ViewPosition(bent, bentDepth).z > -surface.z)) {
-+        behind = gColor.Load(int3(bent, 0)).rgb;
-+    }
-+    const float3 seen = behind * lerp(float3(1.0f, 1.0f, 1.0f), hue / max(max(hue.r, max(hue.g, hue.b)), 0.05f), 0.5f);
-+
-+    // Thick where it is white, a little clearer between the streaks.
-+    float3 color = lerp(seen, body, 0.55f);
-+    color = lerp(color, float3(0.9f, 0.95f, 1.0f), white * 0.7f);
-+    // The sun catching the white water, and a soft sheen from the sky along its edges.
++// Modern water's waterfalls: the game's own fall, a little thicker and brighter in its white water.
++float3 ModernFall(int2 pixel, float3 original, float4 game) {
++    // The game's own fall texture and its scrolling are kept (they move smoothly at any frame rate);
++    // its white water is lifted a little and the fall drawn a touch thicker, with a soft glow from the sun.
++    const float luma = dot(game.rgb, float3(0.299f, 0.587f, 0.114f));
++    const float white = saturate((luma - 0.5f) * 2.5f);
++    float3 color = lerp(original, game.rgb, 0.2f * saturate(game.a + 0.25f));
 +    const float3 sun = (gConstants.sun.z < 0.98f) ? gConstants.sun.xyz : normalize(float3(0.3f, 0.8f, -0.5f));
-+    color += float3(1.0f, 0.97f, 0.9f) * white * saturate(dot(normal, sun)) * 0.25f;
-+    const float rim = pow(1.0f - saturate(dot(-v, normal)), 3.0f);
-+    color = lerp(color, float3(0.75f, 0.85f, 0.92f), rim * 0.3f);
-+    return color;
++    const float sunUp = saturate(dot(sun, normalize(gConstants.worldY.xyz)) + 0.3f);
++    color += float3(0.95f, 0.97f, 1.0f) * white * 0.12f * sunUp;
++    return saturate(color);
 +}
 +
 +// Modern water's surface seen from under it: straight up, a bright window onto the world above, bent by the
@@ -9101,10 +9063,10 @@ index 0000000..ebb78db
 +                    // Steep parts of a water draw (a stream going over a drop) become a waterfall when watery.
 +                    float3 back = original;
 +                    const float steep = (amount < 1.0f) ? SteepAt(pixel) : 0.0f;
-+                    if ((amount < 1.0f) && (steep > 0.0f)) {
++                    if (steep > 0.0f) {
 +                        float3 tint;
 +                        const float watery = FallWatery(pixel, tint);
-+                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, scene, tint), watery * steep) : original;
++                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, original, game), watery * steep) : original;
 +                    }
 +                    scene = (amount > 0.0f) ? lerp(back, ModernWater(pixel, depth, surface, normal, scene), amount) : back;
 +                }
@@ -9116,7 +9078,7 @@ index 0000000..ebb78db
 +                const float3 original = lerp(scene, game.rgb, saturate(game.a));
 +                float3 tint;
 +                const float watery = FallWatery(pixel, tint);
-+                scene = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, scene, tint), watery) : original;
++                scene = (watery > 0.0f) ? lerp(original, ModernFall(pixel, original, game), watery) : original;
 +            }
 +            else if ((gConstants.rippleZ.z > 0.0f) && (depth < 0.99999f)) {
 +                // Under the water: caustics on what faces up below the surface.

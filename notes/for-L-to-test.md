@@ -2430,3 +2430,13 @@
 - Look for: Step 1, each tab opens as soon as you reach it. Step 2, the cursor goes to the page's first option; the stick never jumps out to the sidebar or to the quit button, and stops at the ends of the list. Step 3, B goes back to the sidebar on the open tab; L and R switch tabs and keep you where you were (in the sidebar, or in the new page's first option). Step 4, the cursor is already in the search box and typing works at once. Checked headless with the arrow keys and the mouse; B and a real controller not checked.
 - Status: waiting for L
 
+## T230 Modern water: no blocky facets, no on/off, game's own waterfalls
+- Asked: 2026-10-16 08:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Water: Modern
+  2. In Spiral Mountain, look at the pool round the tree trunk from the grass above it (your blocky water shot)
+  3. Walk from the grass down towards the pool under the two waterfalls (your 10-03-10 burst)
+  4. Look at the waterfalls themselves and the trunk-pool stream
+- Look for: Step 2, the water is smooth with no triangle-shaped bright and dark blocks. Step 3, the water stays Modern (reflections) the whole way instead of switching from the game's grey water to Modern partway. Step 4, the falls are the game's own smooth-scrolling ones, a little thicker and brighter, with foam where they land; no stutter and no white wedges. Checked headless in Spiral Mountain and Mumbo's Skull.
+- Status: waiting for L
