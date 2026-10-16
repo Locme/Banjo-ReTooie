@@ -2342,14 +2342,14 @@
 - Look for: the build finishes (it stopped in GrassGS.hlsl line 116 with "Declared output vertex count (70) ... equals 1190"). The grass should look as before; each pass now draws 12 blades per step instead of 14, with more passes allowed, so the same number of blades. Checked: the same DXC error reproduced on Linux with the Windows-style DXIL compile, the fixed shader validates, and the grass draws headless in Spiral Mountain.
 - Status: waiting for L
 
-## T221 HoneyComb NB model mod (HoneyComb NB v1)
+## T221 HoneyComb NB model mod (HoneyComb NB v2)
 - Asked: 2026-10-16 (L: "Add this replacement, HoneyComb NB")
-- Build: any recent build, plus the mod zip from project files: mods/HoneyComb NB v1.zip
+- Build: any recent build, plus the mod zip from project files: mods/HoneyComb NB v2.zip
 - Steps:
-  1. Put "HoneyComb NB v1.zip" in the game's mods folder as it is (no unzipping), then turn on "HoneyComb NB" in the Mods menu
+  1. Put "HoneyComb NB v2.zip" in the game's mods folder as it is (no unzipping), then turn on "HoneyComb NB" in the Mods menu
   2. Load a file and go to a health honeycomb (Spiral Mountain's cave has three), or enter a new area so the model loads
   3. Collect one, then turn the mod off and enter a new area
-- Look for: the health honeycombs are the Nuts & Bolts style comb, a gold frame round a block of honey with the HD honey texture, spinning as usual, and collecting one still heals. With the mod off the original comb is back after the area reloads. Is the gold the right shade (the FBX's gold looked lime-green in the cave, so it is a warmer gold), and is the size right (same width as the original, a little taller)? Empty honeycombs are a different model and stay as they are. Checked headless: the three combs in Spiral Mountain's cave with the mod on: [v1.png](screens/honeycomb-nb/v1.png).
+- Look for: the health honeycombs are the Nuts & Bolts style comb, a gold frame round a block of honey with the HD honey texture, spinning as usual, and collecting one still heals. With the mod off the original comb is back after the area reloads. v2 uses the exact gold from the FBX (lime-tinted, as in its own game; v1 had a warmer gold). Is the size right (same width as the original, a little taller)? Empty honeycombs are a different model and stay as they are. Checked headless: the three combs in Spiral Mountain's cave with the mod on: [v2.png](screens/honeycomb-nb/v2.png).
 ## T222 Honeycomb Piece model mod (Honeycomb Recreation)
 - Asked: 2026-10-16 07:45 UTC
 - Build: main, plus mods/Honeycomb Piece v1.zip from project files
