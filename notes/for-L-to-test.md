@@ -2870,3 +2870,16 @@
   2. Look at Banjo in photo mode, then walk, jump, flap and roll
 - Look for: the fur is the lighter brown of L's T-pose preview (the FBX's brown base colour had been multiplied onto the fur texture); no yellow shorts above the belt; the backpack straps go over his shoulders (they had followed his arms). Eyes open, and a blink now closes the lids smoothly (the game steps its eye options 1 3 5 7 7 5 3 1; v5 had options 5 and 6 half open, so a blink flickered). Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v6.png).
 - Status: waiting for L
+
+## T276 Banjo fur: not on feet, shorts or Mumbo; on cutscene Banjo; density and noisiness sliders
+- Asked: 2026-10-16 12:30 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Lighting, Water, Fog (Experimental) on, Banjo fur 100, BT Reloaded on as in your screenshot
+  2. Spiral Mountain: look at Banjo from the front and behind
+  3. Start a new game's poker cutscene (or any cutscene with Banjo and Mumbo)
+  4. Try Banjo fur density at 50 and 200, and Banjo fur noisiness at 0 and 100
+  5. Once more with Smash Banjo on
+- Look for: Step 2, fur on his head, arms, body and the shins below the shorts, none on his feet, shorts or belt. Step 3, cutscene Banjo has fur too, Mumbo and Kazooie have none. Step 4, density: fewer thicker hairs, then more finer ones; noisiness 0 is an even coat, 100 is tufty with lighter and darker hairs. Step 5, the same on Smash Banjo's feet and shorts (not checked headless). Checked headless in Spiral Mountain and the poker cutscene, vanilla model, no texture pack.
+- Status: waiting for L
+

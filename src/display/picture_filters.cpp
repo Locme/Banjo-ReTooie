@@ -63,7 +63,7 @@ namespace RT64 {
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
-    void SetSceneFur(float amount, float length);
+    void SetSceneFur(float amount, float length, float density, float noisiness);
     void SetSceneSnow(bool on, float height);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
@@ -427,7 +427,8 @@ void tooie::picture_filters::apply() {
         fur = std::atof(forced);
     }
     banjo_fur = fur > 0.0;
-    RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0));
+    RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0),
+        (float)(value<double>(banjo_fur_density_option, 100.0) / 100.0), (float)(value<double>(banjo_fur_noisiness_option, 50.0) / 100.0));
     bool snow = value<bool>(deep_snow_option, false);
     if (const char* forced = std::getenv("TOOIE_DEEP_SNOW")) {
         snow = std::atoi(forced) != 0;
@@ -860,13 +861,23 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         banjo_fur_option,
         "Banjo fur",
-        "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots. Kazooie, his shorts and his backpack are left as they are. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots, in play and in cutscenes. Kazooie, his shorts, feet and backpack are left as they are, and so is everyone else. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         banjo_fur_length_option,
         "Banjo fur length",
         "How long Banjo's fur is, in percent. 100 is short and fluffy.",
         25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        banjo_fur_density_option,
+        "Banjo fur density",
+        "How many hairs Banjo's fur has, in percent: higher is more, finer hairs, lower is fewer, thicker ones.",
+        25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        banjo_fur_noisiness_option,
+        "Banjo fur noisiness",
+        "How uneven Banjo's fur is: higher gives tufts that stand taller or lower and hairs lighter or darker than their neighbours, 0 an even coat.",
+        0, 100, 5, 0, false, 50);
     graphics.add_number_option(
         heat_haze_option,
         "Heat haze",
@@ -958,7 +969,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &water_option, &shore_foam_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &water_option, &shore_foam_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -1004,6 +1015,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_length_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_density_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_noisiness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(sun_shadows_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(sun_shadow_banjo_option, lighting_section_option, false);

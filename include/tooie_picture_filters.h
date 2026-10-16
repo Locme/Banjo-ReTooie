@@ -77,6 +77,8 @@ namespace tooie::picture_filters {
     // Banjo's fur: shells of strands over his brown fur (lib/rt64/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
+    inline const std::string banjo_fur_density_option = "banjo_fur_density";
+    inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
 

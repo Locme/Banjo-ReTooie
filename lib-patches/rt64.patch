@@ -3815,10 +3815,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..bdbb737
+index 0000000..089faf3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1779 @@
+@@ -0,0 +1,1781 @@
 +//
 +// RT64
 +//
@@ -4381,10 +4381,12 @@ index 0000000..bdbb737
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
 +    }
 +
-+    void SetSceneFur(float amount, float length) {
++    void SetSceneFur(float amount, float length, float density, float noisiness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.fur = amount;
 +        effectsSettings.furLength = length;
++        effectsSettings.furDensity = std::clamp(density, 0.1f, 4.0f);
++        effectsSettings.furNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
 +    }
 +
 +    // Enough shells that the strands read as strands at the fur's full length.
@@ -4427,10 +4429,10 @@ index 0000000..bdbb737
 +            };
 +        }
 +
-+        // About 2.5 units long (Banjo is about 150 tall), fine strands (the noise's lattice every 0.6 units), the
-+        // amount making them thin out more slowly (a thicker coat).
++        // About 2.5 units long (Banjo is about 150 tall), fine strands (the noise's lattice every 0.4 units at density
++        // 100), the amount making them thin out more slowly (a thicker coat).
 +        const float amount = std::min(settings.fur, 1.0f);
-+        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 1.7f, 0.6f - 0.3f * amount, 0.5f };
++        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
 +        return true;
 +    }
 +
@@ -5600,10 +5602,10 @@ index 0000000..bdbb737
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..8fedb12
+index 0000000..e58c4d0
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,248 @@
+@@ -0,0 +1,250 @@
 +//
 +// RT64
 +//
@@ -5699,6 +5701,8 @@ index 0000000..8fedb12
 +        float grassPatches = 1.0f;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
++        float furDensity = 1.0f;
++        float furNoisiness = 0.5f;
 +        bool snow = false;
 +        float snowHeight = 1.0f;
 +        uint32_t view = 0;
@@ -5796,7 +5800,7 @@ index 0000000..8fedb12
 +        float viewportWidth, float viewportHeight, uint64_t workloadId, interop::FrameParams &frameParams);
 +    // Banjo-Tooie: Banjo's fur (0 off, 1 the thickest coat) and its length (1 normal). The game marks his
 +    // model's draws (G_EX_SETFURSHELLS_V1); each is drawn again as shells pushed out along its normals.
-+    void SetSceneFur(float amount, float length);
++    void SetSceneFur(float amount, float length, float density, float noisiness);
 +    // The shells drawn over each of Banjo's draws: 0 when the fur is off.
 +    uint32_t SceneFurShells();
 +    // Fills the frame's fur terms from the 3D world's projection and view-projection and viewport (as the RSP
@@ -7025,10 +7029,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..22d3839
+index 0000000..61331e7
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,82 @@
 +//
 +// RT64
 +//
@@ -7094,16 +7098,21 @@ index 0000000..22d3839
 +        return false;
 +    }
 +
-+    // params.y: strands per unit; params.z: density (how fast the strands thin out with height).
++    // params.y: strands per unit (the density); params.z: how fast the strands thin out with height; params.w: the
++    // noisiness, how uneven the coat is: tufts that stand taller or lower (a coarser noise moving the threshold)
++    // and strands lighter or darker than their neighbours.
 +    const float4 params = FrParams.furParams;
-+    const float noise = FurNoise(anchor * params.y);
-+    if (noise - share * share * params.z < 0.55f) {
++    const float3 grid = anchor * params.y;
++    const float noise = FurNoise(grid);
++    const float tufts = FurNoise(grid * 0.23f + 17.0f) - 0.5f;
++    if (noise - share * share * params.z + tufts * 0.35f * params.w < 0.55f) {
 +        return false;
 +    }
 +
 +    // The strands shade each other near the roots (Sorumi's FurShading); the tips catch a little more light.
 +    const float rootShade = 1.0f - share;
-+    color *= (1.0f - 0.55f * rootShade * rootShade * rootShade) * (1.0f + 0.12f * share);
++    const float strand = FurValue(int3(floor(grid))) - 0.5f;
++    color *= (1.0f - 0.55f * rootShade * rootShade * rootShade) * (1.0f + 0.12f * share) * (1.0f + 0.7f * params.w * strand);
 +    return true;
 +}
 diff --git a/src/shaders/FxaaPS.hlsl b/src/shaders/FxaaPS.hlsl
@@ -8148,7 +8157,7 @@ index e7895c3..0bc9258 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..66e5e3a 100644
+index 74b1fa0..4c9afc4 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,7 +11,8 @@
@@ -8182,7 +8191,7 @@ index 74b1fa0..66e5e3a 100644
 +            oFurAnchor = furNormals[iVertexId * 2 + 1].xyz;
 +            const float share = float(gConstants.furShell) / float(gConstants.furShells);
 +            const float4 params = FrParams.furParams;
-+            const float3 offset = normal * (params.x * share) - float3(0.0f, params.w * params.x * share * share * share, 0.0f);
++            const float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
 +        }
      }

@@ -183,7 +183,52 @@ namespace {
         uint32_t header[3] = {}; // geo tree, list and vertex offsets, to notice another model loaded in its place
         bool found = false;
         uint32_t from = 0, to = 0; // physical addresses of her first and last list
+        uint32_t bone_count = 0;
+        int32_t kazooie_parent = -1; // bone 18's parent: 13 in Banjo's skeleton
+        std::vector<uint32_t> bare; // Banjo's own lists that get no fur (feet, shorts), sorted
     };
+
+    // Banjo-Kazooie's skeletons: the player's (68 bones) and the cutscenes' double (62 bones), told apart from
+    // other models by the bone count and the parent of Kazooie's root (bone 18). Model mods keep them. Each has the
+    // bones that get no fur: his feet, and his shorts (the hips and the thighs; the shins below the shorts keep
+    // their fur). TOOIE_FUR_BARE_BONES=<n>,<n>... picks those instead (headless aid).
+    struct BanjoSkeleton {
+        uint32_t bone_count;
+        int32_t kazooie_parent;
+        std::vector<uint32_t> bare;
+    };
+
+    const BanjoSkeleton* banjo_skeleton(uint32_t bone_count, int32_t kazooie_parent) {
+        static const std::vector<BanjoSkeleton> skeletons = [] {
+            std::vector<BanjoSkeleton> out = {
+                { 68, 13, { 1, 60, 62, 63, 64, 66, 67 } },
+                { 62, 17, { 1, 51, 53, 54, 55, 57, 58 } },
+            };
+            if (const char* text = std::getenv("TOOIE_FUR_BARE_BONES")) {
+                std::vector<uint32_t> bones;
+                char* p = const_cast<char*>(text);
+                while (*p != 0) {
+                    char* next = p;
+                    const uint32_t bone = (uint32_t)std::strtoul(p, &next, 10);
+                    if (next == p) {
+                        break;
+                    }
+                    bones.push_back(bone);
+                    p = *next == ',' ? next + 1 : next;
+                }
+                for (BanjoSkeleton& skeleton : out) {
+                    skeleton.bare = bones;
+                }
+            }
+            return out;
+        }();
+        for (const BanjoSkeleton& skeleton : skeletons) {
+            if (skeleton.bone_count == bone_count && skeleton.kazooie_parent == kazooie_parent) {
+                return &skeleton;
+            }
+        }
+        return nullptr;
+    }
 
     uint16_t half(uint8_t* rdram, uint32_t phys) {
         return (uint16_t)MEM_HU(0, kseg0(phys));
@@ -193,7 +238,7 @@ namespace {
         return (uint8_t)MEM_BU(0, kseg0(phys));
     }
 
-    void read_kazooie_lists(uint8_t* rdram, uint32_t vertex_base, KazooieLists& out) {
+    void read_kazooie_lists(uint8_t* rdram, uint32_t vertex_base, uint32_t first_list, KazooieLists& out) {
         constexpr uint32_t ram_size = 0x00800000;
         constexpr uint32_t kazooie_root = 18;
         out = {};
@@ -207,6 +252,18 @@ namespace {
             if (word(rdram, m) == 0x0B && word(rdram, m + 0x10) == back - 0x18) {
                 model = m;
                 break;
+            }
+        }
+        // A model whose vertices are copied for each copy of it (a cutscene's Banjo, his face moving) draws them from
+        // elsewhere: then it is found back from its first list, which lies between its list and vertex blocks.
+        if (model == 0 && first_list >= 0x1000 && first_list < ram_size) {
+            for (uint32_t back = 0x20; back <= 0x80000 && back + 0x60 <= first_list; back += 8) {
+                const uint32_t m = first_list - back;
+                if (word(rdram, m) == 0x0B && word(rdram, m + 0x0C) + 8 <= back && back < word(rdram, m + 0x10) + 0x18 &&
+                    word(rdram, m + 0x10) < 0x80000) {
+                    model = m;
+                    break;
+                }
             }
         }
         if (model == 0) {
@@ -223,6 +280,16 @@ namespace {
         const uint32_t bone_count = half(rdram, model + bones + 4);
         if (bone_count <= kazooie_root || bone_count > 256) {
             return;
+        }
+        out.bone_count = bone_count;
+        out.kazooie_parent = (int16_t)half(rdram, model + bones + 8 + kazooie_root * 16 + 14);
+        std::vector<bool> bare(bone_count, false);
+        if (const BanjoSkeleton* skeleton = banjo_skeleton(bone_count, out.kazooie_parent)) {
+            for (uint32_t b : skeleton->bare) {
+                if (b < bone_count) {
+                    bare[b] = true;
+                }
+            }
         }
         std::vector<bool> kazooie(bone_count, false);
         for (uint32_t b = 0; b < bone_count; b++) {
@@ -265,6 +332,10 @@ namespace {
                     lo = std::min(lo, index);
                     hi = std::max(hi, index);
                 }
+                else if ((cmd == 0x11 || cmd == 0x18) && item.bone >= 0 && (uint32_t)item.bone < bone_count && bare[item.bone]) {
+                    const int32_t index = (int16_t)half(rdram, node + 8);
+                    out.bare.push_back((uint32_t)((int32_t)(model + list + 8) + index * 8));
+                }
                 if (size == 0 || size > 0x10000) {
                     break;
                 }
@@ -274,6 +345,7 @@ namespace {
         if (lo > hi) {
             return;
         }
+        std::sort(out.bare.begin(), out.bare.end());
         out.found = true;
         out.from = (uint32_t)((int32_t)(model + list + 8) + lo * 8);
         out.to = (uint32_t)((int32_t)(model + list + 8) + hi * 8);
@@ -978,25 +1050,49 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         if (!fur) {
             return;
         }
+        static const bool log_fur = std::getenv("TOOIE_FUR_LOG") != nullptr;
+        // Each model's skeleton and lists, cached by where its vertices are (read again when another model is
+        // loaded there).
+        static std::unordered_map<uint32_t, KazooieLists> models;
+        auto lists_of = [&](int b) -> const KazooieLists& {
+            if (models.size() > 64) {
+                models.clear();
+            }
+            const uint32_t vertex_base = commands[blocks[b].vertex_command].w1 & 0x1FFFFFFF;
+            auto found = models.find(vertex_base);
+            KazooieLists& lists = models[vertex_base];
+            const bool same = found != models.end() && (lists.model == 0 ||
+                (word(rdram, lists.model) == 0x0B && word(rdram, lists.model + 0x04) == lists.header[0] &&
+                 word(rdram, lists.model + 0x0C) == lists.header[1] && word(rdram, lists.model + 0x10) == lists.header[2]));
+            if (!same) {
+                read_kazooie_lists(rdram, vertex_base, blocks[b].first_phys, lists);
+                if (log_fur) {
+                    std::fprintf(stderr, "[fur] model at %X: %u bones, Kazooie's lists %s: %X-%X\n", vertex_base, lists.bone_count,
+                        lists.found ? "found" : "not found", lists.from, lists.to);
+                }
+            }
+            return lists;
+        };
+        // Banjo is a model with one of Banjo-Kazooie's skeletons (banjo_skeleton: the player's, or his double in
+        // cutscenes), nearest the player if there are more; others with many bones (Mumbo, say) have another.
+        // Failing that (Banjo alone), the model with many bones nearest to where Banjo stands.
+        float at[3] = {};
+        bool have_player = false;
         const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
-        if (player < 0x80000000u || player >= 0x80800000u) {
-            return;
-        }
-        const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
-        if (transform < 0x80000000u || transform >= 0x80800000u) {
-            return;
+        if (player >= 0x80000000u && player < 0x80800000u) {
+            const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
+            if (transform >= 0x80000000u && transform < 0x80800000u) {
+                for (int k = 0; k < 3; k++) {
+                    const uint32_t bits = (uint32_t)MEM_W(4 * k, (int32_t)transform);
+                    std::memcpy(&at[k], &bits, sizeof(float));
+                }
+                have_player = at[0] != 0.0f || at[1] != 0.0f || at[2] != 0.0f;
+            }
         }
         // The form byte (ScriptHawk's character_state): 1 Banjo-Kazooie, 10 Banjo alone.
         const uint8_t form = (uint8_t)MEM_B(0, (int32_t)0x80136F63);
-        if (form != 1 && form != 10) {
-            return;
-        }
-        float at[3];
-        for (int k = 0; k < 3; k++) {
-            const uint32_t bits = (uint32_t)MEM_W(4 * k, (int32_t)transform);
-            std::memcpy(&at[k], &bits, sizeof(float));
-        }
         int best = -1;
+        bool skeleton = false;
         float best_distance = 150.0f * 150.0f;
         for (size_t b = 0; b < blocks.size(); b++) {
             const Block& block = blocks[b];
@@ -1007,16 +1103,22 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             for (int k = 0; k < 3; k++) {
                 d += (block.pos[k] - at[k]) * (block.pos[k] - at[k]);
             }
-            if (d < best_distance) {
+            const KazooieLists& lists = lists_of((int)b);
+            const bool banjo = lists.found && banjo_skeleton(lists.bone_count, lists.kazooie_parent) != nullptr;
+            if (banjo && (!skeleton || d < best_distance)) {
+                skeleton = true;
+                best_distance = d;
+                best = (int)b;
+            }
+            else if (!skeleton && !banjo && have_player && form == 10 && d < best_distance) {
                 best_distance = d;
                 best = (int)b;
             }
         }
-        static const bool log_fur = std::getenv("TOOIE_FUR_LOG") != nullptr;
         if (log_fur) {
             static uint32_t logged = 0;
             if ((logged++ % 60) == 0) {
-                std::fprintf(stderr, "[fur] form %u, Banjo at %.0f,%.0f,%.0f, model %s", form, at[0], at[1], at[2], best < 0 ? "not found" : "found");
+                std::fprintf(stderr, "[fur] form %u, Banjo at %.0f,%.0f,%.0f, model %s", form, at[0], at[1], at[2], best < 0 ? "not found" : skeleton ? "found by skeleton" : "found nearby");
                 if (best >= 0) {
                     std::fprintf(stderr, " %.0f units off (%u matrices)", std::sqrt(best_distance), blocks[best].matrices);
                 }
@@ -1073,24 +1175,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             put(rdram, p, op_dl << 24, list);
         };
         uint32_t base = blocks[best].first_phys;
-        static KazooieLists kazooie;
         static std::vector<Span> model_skip;
-        const uint32_t vertex_base = commands[blocks[best].vertex_command].w1 & 0x1FFFFFFF;
-        if (std::getenv("TOOIE_FUR_SKIP") == nullptr) {
-            const bool same = kazooie.vertex_base == vertex_base && (kazooie.model == 0 ||
-                (word(rdram, kazooie.model) == 0x0B && word(rdram, kazooie.model + 0x04) == kazooie.header[0] &&
-                 word(rdram, kazooie.model + 0x0C) == kazooie.header[1] && word(rdram, kazooie.model + 0x10) == kazooie.header[2]));
-            if (!same) {
-                read_kazooie_lists(rdram, vertex_base, kazooie);
-                if (log_fur) {
-                    std::fprintf(stderr, "[fur] Kazooie's lists %s: %X-%X\n",
-                        kazooie.found ? "found" : "not found", kazooie.from, kazooie.to);
-                }
-            }
-            if (kazooie.found) {
-                base = 0; // the spans below are physical addresses
-                model_skip = { { kazooie.from, kazooie.to } };
-            }
+        const KazooieLists& kazooie = lists_of(best);
+        if (std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found) {
+            base = 0; // the spans below are physical addresses
+            model_skip = { { kazooie.from, kazooie.to } };
         }
         const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
         bool on = false;
@@ -1107,6 +1196,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             bool want = true;
             for (const Span& span : spans) {
                 want = want && (offset < span.from || offset > span.to);
+            }
+            if (want && kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr) {
+                want = !std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF);
             }
             if (want != on) {
                 wrap(i, want);
