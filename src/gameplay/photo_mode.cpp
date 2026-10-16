@@ -31,6 +31,9 @@
 // is a UI layer, so the photo itself never shows it. The Timer row (Off, 3 s, 10 s) counts down with
 // toasts before the photo; A again cancels it.
 //
+// Others (hidden: enemies, NPCs, items, doors and other moving parts): banjotooie.us.toml hooks func_800EC7D4, the draw of
+// each actor in an object pass's list, to skip it while tooie_others_hidden().
+//
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
 // func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
 //
@@ -141,13 +144,15 @@ namespace {
     std::atomic<bool> orbit_toggle{false};
     std::atomic<bool> players_toggle{false};
     std::atomic<bool> players_hidden{false};
+    // Others row: every other actor (enemies, NPCs, items, doors and other moving parts) hidden.
+    std::atomic<bool> others_hidden{false};
     std::atomic<float> fov_scale{1.0f};
     // The game's own delta time this frame, before photo mode scaled it (for the log).
     std::atomic<float> game_delta{0.0f};
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Time, Hud, Banjo, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Time, Hud, Banjo, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, Tilt, Crop, Grid, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
@@ -358,7 +363,7 @@ namespace {
     constexpr const char* look_names[] = { "None", "Sepia", "Black and white", "Noir", "Warm", "Cool", "Vivid", "Faded film",
         "Teal and orange", "Dream" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Tilt", "Crop", "Grid" };
     static_assert(std::size(row_names) == row_count);
 
@@ -380,6 +385,9 @@ namespace {
                 break;
             case Row::Banjo:
                 players_toggle = true;
+                break;
+            case Row::Others:
+                others_hidden = !others_hidden;
                 break;
             case Row::Filter: {
                 const uint32_t n = (uint32_t)std::size(look_names);
@@ -429,6 +437,8 @@ namespace {
             return tooie::hide_hud::is_hidden() ? "Hidden" : "Shown";
         case Row::Banjo:
             return players_hidden ? "Hidden" : "Shown";
+        case Row::Others:
+            return others_hidden ? "Hidden" : "Shown";
         case Row::Filter: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
             return v < std::size(look_names) ? look_names[v] : "None";
@@ -510,6 +520,7 @@ namespace {
         is_active = false;
         apply_filters(false);
         players_hidden = false;
+        others_hidden = false;
         if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
             tooie::hide_hud::set_hidden(false);
         }
@@ -892,6 +903,10 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
             game_delta.load(), cam.orbit, cam.distance, fov_scale.load());
     }
     return true;
+}
+
+extern "C" int tooie_others_hidden(void) {
+    return is_active && others_hidden ? 1 : 0;
 }
 
 extern "C" int tooie_players_hidden(void) {

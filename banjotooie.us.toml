@@ -912,6 +912,13 @@ func = "func_800F50D0"
 before_vram = 0x800F50D0
 text = "if (tooie_players_hidden()) { return; }"
 
+# Photo mode's Others row: func_800EB51C draws a pass's list of objects, sending each actor (flag 1 at
+# +8) to func_800EC7D4; skipping it hides every enemy, NPC, item and door but leaves Banjo and the level.
+[[patches.hook]]
+func = "func_800EC7D4"
+before_vram = 0x800EC7D4
+text = "if (tooie_others_hidden()) { return; }"
+
 # Hide HUD also hides the area name shown on arrival (the chintrotext actor's draw), which is drawn
 # with the 3D scene rather than with the 2D (src/game/hide_hud.cpp).
 [[patches.hook]]
