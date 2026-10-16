@@ -2207,3 +2207,13 @@
 - Look for: Soft, rounded clouds over the game's own sky, drifting slowly: white with grey undersides by day, orange and pink at sunset, dark and hiding the stars at night. Too many, too few, too dark? Does the frame rate drop with them on? None in Cloud Cuckooland. Known: the lens flare still shows when a cloud covers the sun. Checked headless at morning, sunset and night: [clouds-morning-on-off.png](screens/day-night/clouds-morning-on-off.png), [clouds-sunset-night.png](screens/day-night/clouds-sunset-night.png) in project files (the green sky is the no-save warp, not the clouds). Speed not measured.
 - Status: waiting for L
 
+
+## T208 Widescreen: NPCs and objects at the sides stay whole
+- Asked: 2026-10-16 00:08 UTC
+- Build: 5ff7408
+- Steps:
+  1. Aspect Expand in your wide window, HD shadows on
+  2. Walk past NPCs and enemies so they sit at the left or right edge (Jiggywiggy's disciples, Bottles' corpse in Spiral Mountain)
+  3. Try again with HD shadows off
+- Look for: Nothing vanishes or gets cut by a straight line at the sides, with HD shadows on or off
+- Status: waiting for L
