@@ -1562,7 +1562,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..8726799 100644
+index 9fae0d4..5f67ef6 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1670,7 +1670,7 @@ index 9fae0d4..8726799 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +251,16 @@ namespace RT64 {
+@@ -169,6 +251,19 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1678,6 +1678,9 @@ index 9fae0d4..8726799 100644
 +        instanceGrassVector.clear();
 +        grassShells = 0;
 +        instanceFurVector.clear();
++        instanceNightLightVector.clear();
++        nightLightsChecked = false;
++        nightLights = false;
 +        furShells = 0;
 +        furNormalVector.clear();
 +        furPositionVector.clear();
@@ -1687,7 +1690,7 @@ index 9fae0d4..8726799 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +465,7 @@ namespace RT64 {
+@@ -373,6 +468,7 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -1695,7 +1698,7 @@ index 9fae0d4..8726799 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -465,12 +558,54 @@ namespace RT64 {
+@@ -465,12 +561,55 @@ namespace RT64 {
          return true;
      }
      
@@ -1729,6 +1732,7 @@ index 9fae0d4..8726799 100644
 +                rasterParams.renderIndex = i;
 +                rasterParams.screenScale = triangles.screenScale;
 +                rasterParams.screenOffset = triangles.screenOffset;
++                rasterParams.nightLight = 0;
 +                worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                worker->commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
 +            }
@@ -1752,7 +1756,7 @@ index 9fae0d4..8726799 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +649,17 @@ namespace RT64 {
+@@ -514,6 +653,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1770,7 +1774,12 @@ index 9fae0d4..8726799 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -578,6 +724,46 @@ namespace RT64 {
+@@ -574,10 +724,51 @@ namespace RT64 {
+                 rasterParams.renderIndex = i;
+                 rasterParams.screenScale = triangles.screenScale;
+                 rasterParams.screenOffset = triangles.screenOffset;
++                rasterParams.nightLight = ((i < instanceNightLightVector.size()) && (instanceNightLightVector[i] != 0)) ? 1 : 0;
+                 worker->commandList->setGraphicsPushConstants(0, &rasterParams);
  
                  drawCallTriangles(drawCall);
  
@@ -1817,7 +1826,7 @@ index 9fae0d4..8726799 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1436,66 @@ namespace RT64 {
+@@ -1250,6 +1441,66 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -1884,7 +1893,7 @@ index 9fae0d4..8726799 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1542,56 @@ namespace RT64 {
+@@ -1296,9 +1547,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1942,7 +1951,7 @@ index 9fae0d4..8726799 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1647,7 @@ namespace RT64 {
+@@ -1354,6 +1652,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -1950,7 +1959,7 @@ index 9fae0d4..8726799 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1702,57 @@ namespace RT64 {
+@@ -1408,6 +1707,57 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2008,7 +2017,7 @@ index 9fae0d4..8726799 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1801,48 @@ namespace RT64 {
+@@ -1456,6 +1806,48 @@ namespace RT64 {
                  continue;
              }
  
@@ -2057,7 +2066,7 @@ index 9fae0d4..8726799 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2069,20 @@ namespace RT64 {
+@@ -1682,6 +2074,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2078,7 +2087,7 @@ index 9fae0d4..8726799 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2148,80 @@ namespace RT64 {
+@@ -1747,7 +2153,94 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2132,7 +2141,7 @@ index 9fae0d4..8726799 100644
 +                    }
 +                    grass = (off < 1e-3f) && gm.zCmp() && gm.zUpd() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        !interop::Blender::usesAlphaBlend(gm);
-                 }
++                }
 +                uint8_t grassValue = grass ? 1 : 0;
 +                if (grass && (grassBladePipeline != nullptr)) {
 +                    grassValue = uint8_t(std::min(grassBladePasses(drawData, call, frameParams), 255u));
@@ -2155,11 +2164,25 @@ index 9fae0d4..8726799 100644
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
 +                instanceFurVector.push_back(fur ? 1 : 0);
++
++                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
++                if (!nightLightsChecked) {
++                    nightLightsChecked = true;
++                    nightLights = ComputeSceneNightLights(frameParams);
++                }
++                bool nightLight = false;
++                if (nightLights && (proj.type == Projection::Type::Perspective)) {
++                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
++                        nightLight = SceneNightLightTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                    }
+                 }
++                instanceNightLightVector.resize(instanceIndex, 0);
++                instanceNightLightVector.push_back(nightLight ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2232,140 @@ namespace RT64 {
+@@ -1758,13 +2251,140 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2302,7 +2325,7 @@ index 9fae0d4..8726799 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..f0249d8 100644
+index 3add9c3..c15f0f7 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,30 @@ namespace RT64 {
@@ -2336,7 +2359,7 @@ index 3add9c3..f0249d8 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +91,33 @@ namespace RT64 {
+@@ -67,6 +91,37 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -2352,6 +2375,10 @@ index 3add9c3..f0249d8 100644
 +        uint32_t grassShells = 0;
 +        // Banjo-Tooie: Banjo's fur. 1 for each instance draw call that gets fur shells over it (marked by the game).
 +        std::vector<uint8_t> instanceFurVector;
++        // Banjo-Tooie: per instance, 1 for a window or lamp that lights up at night.
++        std::vector<uint8_t> instanceNightLightVector;
++        bool nightLightsChecked = false;
++        bool nightLights = false;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t furShells = 0;
 +        // Each vertex's normal for the fur (world space, by vertex index; zero where there is no fur), summed from
@@ -2370,7 +2397,7 @@ index 3add9c3..f0249d8 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +138,8 @@ namespace RT64 {
+@@ -87,6 +142,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -2379,7 +2406,7 @@ index 3add9c3..f0249d8 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -123,6 +176,10 @@ namespace RT64 {
+@@ -123,6 +180,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2390,7 +2417,7 @@ index 3add9c3..f0249d8 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +221,15 @@ namespace RT64 {
+@@ -164,7 +225,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -3416,10 +3443,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..7c75d57
+index 0000000..56072b8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1298 @@
+@@ -0,0 +1,1335 @@
 +//
 +// RT64
 +//
@@ -3428,6 +3455,7 @@ index 0000000..7c75d57
 +#include "rt64_gpu_sections.h"
 +
 +#include <algorithm>
++#include <unordered_set>
 +#include <atomic>
 +#include <cmath>
 +#include <cstdio>
@@ -3811,6 +3839,42 @@ index 0000000..7c75d57
 +            effectsSettings.sunDirection[1] = y;
 +            effectsSettings.sunDirection[2] = z;
 +        }
++    }
++
++    // The night light textures: read on the render thread while it builds a frame's draws, so they are kept apart
++    // from the effects settings and swapped in whole.
++    static std::mutex nightLightMutex;
++    static std::unordered_set<uint64_t> nightLightTextures;
++
++    void SetSceneNightLights(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(nightLightMutex);
++        nightLightTextures.swap(textures);
++    }
++
++    bool ComputeSceneNightLights(interop::FrameParams &frameParams) {
++        float night = 0.0f;
++        {
++            const std::scoped_lock lock(effectsMutex);
++            if (effectsSettings.timeOfDay) {
++                // As DayNight in SceneEffectsPS: from how dark the tint's brightest channel is.
++                const float brightest = std::max(effectsSettings.dayTint[0], std::max(effectsSettings.dayTint[1], effectsSettings.dayTint[2]));
++                night = std::clamp((0.97f - brightest) / 0.3f, 0.0f, 1.0f);
++                // Dusky rain counts a little too.
++                night = std::max(night, effectsSettings.dayRain * 0.5f);
++            }
++        }
++        frameParams.nightLights = { night, 1.0f, 0.88f, 0.55f };
++        if (night <= 0.0f) {
++            return false;
++        }
++        const std::scoped_lock lock(nightLightMutex);
++        return !nightLightTextures.empty();
++    }
++
++    bool SceneNightLightTexture(uint64_t hash) {
++        const std::scoped_lock lock(nightLightMutex);
++        return nightLightTextures.count(hash) != 0;
 +    }
 +
 +    void SetSceneMoonPhase(uint32_t phase) {
@@ -4720,10 +4784,10 @@ index 0000000..7c75d57
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..0bbf945
+index 0000000..3cab43e
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,206 @@
 +//
 +// RT64
 +//
@@ -4902,6 +4966,12 @@ index 0000000..0bbf945
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
++    // Banjo-Tooie: the textures (RT64 hashes) of windows and lamps that light up at night with the day and night cycle.
++    void SetSceneNightLights(const uint64_t *hashes, size_t count);
++    // Fills the frame's night light terms. False when nothing lights up this frame (day, or the cycle is off).
++    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
++    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
++    bool SceneNightLightTexture(uint64_t hash);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
@@ -6980,7 +7050,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..7b64815 100644
+index e7895c3..ac464f2 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,8 @@
@@ -7019,7 +7089,7 @@ index e7895c3..7b64815 100644
          return false;
      }
  #endif
-@@ -254,6 +269,26 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +269,35 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -7043,10 +7113,19 @@ index e7895c3..7b64815 100644
 +        }
 +    }
 +
++    // Banjo-Tooie: a window or lamp lights up at night: a warm light, a little of its own pattern kept.
++    if ((gConstants.nightLight != 0) && (FrParams.nightLights.x > 0.0f)) {
++        // Only the lighter parts (the glass or the flame), not a dark frame round them.
++        const float luma = dot(resultColor.rgb, float3(0.3f, 0.59f, 0.11f));
++        const float glass = smoothstep(0.33f, 0.48f, luma);
++        const float3 lit = FrParams.nightLights.yzw * (0.85f + 0.15f * saturate(luma * 1.5f));
++        resultColor.rgb = lerp(resultColor.rgb, lit, FrParams.nightLights.x * glass);
++    }
++
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +296,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +305,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -7068,7 +7147,7 @@ index e7895c3..7b64815 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +337,7 @@ void PSMain(
+@@ -287,6 +346,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -7076,7 +7155,7 @@ index e7895c3..7b64815 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +354,7 @@ void PSMain(
+@@ -303,7 +363,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -7146,10 +7225,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..ae262e2
+index 0000000..fa7a21b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1601 @@
+@@ -0,0 +1,1603 @@
 +//
 +// RT64
 +//
@@ -8280,7 +8359,9 @@ index 0000000..ae262e2
 +            const float blink = saturate(sin(time * (0.8f + 0.6f * pick) + a * 60.0f) * 1.5f + 0.5f);
 +            const float fade = saturate(1.0f - length(world.xz - banjo.xz) / (Cell * 3.2f));
 +            const float halo = saturate(1.0f - r / 4.0f);
-+            glow += float3(0.75f, 1.0f, 0.35f) * (saturate(1.2f - r) + 0.35f * halo * halo) * blink * fade;
++            // Fades out right by the camera, where one would fill the screen.
++            const float near = smoothstep(80.0f, 200.0f, -v.z * length(gConstants.worldX.xyz));
++            glow += float3(0.75f, 1.0f, 0.35f) * (saturate(1.2f - r) + 0.35f * halo * halo) * blink * fade * near;
 +        }
 +    }
 +    return glow * night * 2.5f;
@@ -9025,10 +9106,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..0d8b288 100644
+index 2e62aaf..b32cae6 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,43 @@ namespace interop {
+@@ -13,6 +13,46 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9069,6 +9150,9 @@ index 2e62aaf..0d8b288 100644
 +        float4 furClipZ;
 +        // Fur length in world units, strands per texel, how thick the coat is (0 to 1), how far the tips droop.
 +        float4 furParams;
++        // Banjo-Tooie: the day and night cycle's lit windows and lamps (RasterPS.hlsl): how far night has come in
++        // (0 day, 1 night), then the light's colour.
++        float4 nightLights;
      };
  #ifdef HLSL_CPU
  };
@@ -9134,10 +9218,10 @@ index 0000000..93ea5da
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..c4e4004 100644
+index 0a5c332..fb7af29 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,24 @@
+@@ -9,11 +9,26 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -9160,6 +9244,8 @@ index 0a5c332..c4e4004 100644
 +        // Banjo-Tooie: Banjo's fur: which shell this redraw is (1 to furShells; 0 the model itself).
 +        uint furShell;
 +        uint furShells;
++        // Banjo-Tooie: 1 when the draw's texture is a window or lamp that lights up at night (FrameParams.nightLights).
++        uint nightLight;
      };
  #ifdef HLSL_CPU
  };

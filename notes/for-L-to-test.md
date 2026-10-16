@@ -2260,3 +2260,13 @@
 - Look for: Step 1, now and then a short bright streak slides down part of the sky and fades (about one every 18 seconds, wherever you look, so not every one is in view). The moon is full. Step 2, the moon goes round its phases over eight days: full on the first night, then waning, new (dark) on the fifth, then waxing. Checked headless: [shooting-star.png](screens/day-night/shooting-star.png) (with one forced into view) and [moon-phases-first-and-last-quarter.png](screens/day-night/moon-phases-first-and-last-quarter.png).
 - Status: waiting for L
 
+## T213 Day and night: lit windows at night
+- Asked: 2026-10-16 02:20 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: lit windows at night" on main
+- Steps:
+  1. Graphics > Day and Night: Night, go to Jinjo Village and look at the houses
+  2. Day and Night: Cycle with Day Length 4 and watch the windows as evening comes
+- Look for: The house windows glow warm yellow at night and go back to their own look by day; the wooden frames stay dark. Any window that should light and doesn't (tell me where)? Also: fireflies no longer fill the screen when one drifts right by the camera. Checked headless in Jinjo Village: [lit-windows-off-on.png](screens/day-night/lit-windows-off-on.png) (top unlit, bottom lit).
+- Status: waiting for L
+

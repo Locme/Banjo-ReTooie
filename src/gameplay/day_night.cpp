@@ -30,6 +30,7 @@ namespace RT64 {
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneMoonPhase(uint32_t phase);
+    void SetSceneNightLights(const uint64_t* hashes, size_t count);
 }
 
 namespace {
@@ -51,6 +52,16 @@ namespace {
         0x127,  // Hailfire Peaks: Lava Side
         0x128,  // Hailfire Peaks: Icy Side
         0x136,  // Cloud Cuckooland
+    };
+
+    // Windows and lamps that light up warm at night (their RT64 texture hashes, from a texture dump of the cycling
+    // levels). Only the lighter parts of each light up (the glass, not the wooden frame).
+    constexpr uint64_t night_light_textures[] = {
+        0x0f160fc97318b755, 0xfe7ebd28c377b54f, 0x6f59260c143a2e31, // a pair of rounded windows, with its smaller copies
+        0xc232f2ff08279dce, // a window of four panes in a wooden frame
+        0x861bfb5c8890c6e0, // a lit window of four panes, on a stone sill
+        0x49d8dc4266c7a1c2, // a latticed window
+        0xf2b985d6790d2a85, 0x82b9c2031fef595f, 0xe11c75383d80e7b0, 0xbcae94b32238dd3d, // pale glass behind wooden crosses
     };
 
     // A time of day: the colour the 3D world is multiplied by. RT64 works out the rest from it: the sky darkens
@@ -257,6 +268,15 @@ namespace {
 }
 
 void tooie::day_night::tick(uint8_t* rdram) {
+    static bool sent_lights = false;
+    if (!sent_lights) {
+        sent_lights = true;
+        // Test aid: TOOIE_NIGHT_LIGHTS=0 leaves them unlit, to compare.
+        const char* lights = std::getenv("TOOIE_NIGHT_LIGHTS");
+        if ((lights == nullptr) || (std::atoi(lights) != 0)) {
+            RT64::SetSceneNightLights(night_light_textures, std::size(night_light_textures));
+        }
+    }
     const Mode m = mode();
     const uint16_t map = tooie::debug::current_map(rdram);
     const bool on = (m != Mode::Off) && cycles(map);
