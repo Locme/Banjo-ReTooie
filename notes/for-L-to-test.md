@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T261 Smash Banjo v8: no fur out of his mouth
+- Asked: 2026-10-16 UTC
+- Build: main, plus mods/Smash Banjo v8.zip from project files (take v7 and its unpacked folder out of the mods folder)
+- Steps:
+  1. Graphics > Photo Filters on, Banjo fur at 100, with Smash Banjo on
+  2. Look at Banjo's face close up from the side while he idles, talks and attacks, so his mouth opens
+- Look for: No brown strands round his teeth, gums or lips. The mouth used the same texture as his body, so the fur shader grew strands on its brown texels; v8 gives the mouth its own copy of the texture with those texels slightly less saturated, which the fur test skips. The mouth looks the same otherwise, and the body fur is unchanged. Checked headless in Mayahem Temple at fur 100 against v7 (screens/smash-banjo/v8.png in project files). Replaces T256's zip; T256's checks still apply.
+- Status: waiting for L
+
 ## T259 Mumbo's Hut Recreation v3: doorway fits the arch
 - Asked: 2026-10-16 10:25 UTC
 - Build: main (pull and build), plus the v3 mod zip
