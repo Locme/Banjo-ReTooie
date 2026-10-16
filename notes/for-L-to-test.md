@@ -2019,7 +2019,7 @@
 - Look for: No dark streaky block beside Banjo; his sun shadow is a small soft shape. With the switch off he casts no sun shadow (HD shadows still give him one).
 - Status: waiting for L
 
-## T189 Intro backdrop stretched to widescreen
+## T189 Intro backdrop stretched to widescreen (replaced by T225)
 - Asked: 2026-10-15 22:10 UTC
 - Build: next build from main
 - Steps:
@@ -2378,4 +2378,13 @@
   2. Without closing the game, drop a model mod or texture pack zip into the mods folder (for example "Smash Banjo v6.zip"; delete its unpacked "Smash Banjo v6" folder first if it is already there)
   3. Press Refresh
 - Look for: the new mod appears in the list straight away and is switched on, and the area reloads with it (Smash Banjo shows up without restarting). Mods that were already loaded stay as they were. Code mods (.nrm) also appear but stay off until you restart, as before. A zip whose folder already exists is not unpacked again in game (that still happens on the next start), and Install Mods stays greyed out in game. Checked headless: zip copied in mid-game in Spiral Mountain, refresh called directly, Smash Banjo unpacked, opened, switched on and loaded after the area reload. The button press itself was not clicked headless.
+- Status: waiting for L
+
+## T225 Intro: only the cloud backdrop is stretched (replaces T189)
+- Asked: 2026-10-16 08:30 UTC
+- Build: next build from main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Watch the intro ("Two years have passed..") from the start
+- Look for: The opening cloud shots fill the whole width with no panel ends or black at the sides. The castle, the rock, Grunty's grave and the text keep their normal shape (not stretched).
 - Status: waiting for L

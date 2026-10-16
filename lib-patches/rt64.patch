@@ -3084,14 +3084,15 @@ index 0000000..e400499
 +    };
 +};
 diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
-index e842dcc..7538751 100644
+index e842dcc..9bb172a 100644
 --- a/src/render/rt64_projection_processor.cpp
 +++ b/src/render/rt64_projection_processor.cpp
-@@ -7,7 +7,15 @@
+@@ -7,7 +7,16 @@
  #include "common/rt64_math.h"
  #include "hle/rt64_workload_queue.h"
  
 +#include <atomic>
++#include <cmath>
 +
  namespace RT64 {
 +    static std::atomic<bool> stretchPerspective{ false };
@@ -3103,28 +3104,35 @@ index e842dcc..7538751 100644
      inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
          matrix[0][0] *= aspectRatioScale;
          matrix[1][0] *= aspectRatioScale;
-@@ -98,6 +106,10 @@ namespace RT64 {
+@@ -98,6 +107,16 @@ namespace RT64 {
                  }
              }
   
++            // The intro's cloud shots are filmed with a camera of their own (near plane about 35, the other shots
++            // 2.5): only those are stretched, so the castle and characters keep their shape.
 +            if (stretchPerspective.load(std::memory_order_relaxed) && (proj.type == Projection::Type::Perspective)) {
-+                adjustAspectRatio = false;
++                const interop::float4x4 &m = drawData.projTransforms[proj.transformsIndex];
++                const float nearPlane = (std::abs(m.m[2][2] - 1.0f) > 1e-6f) ? (m.m[3][2] / (m.m[2][2] - 1.0f)) : 0.0f;
++                if (nearPlane > 20.0f) {
++                    adjustAspectRatio = false;
++                }
 +            }
 +
              float projRatioScale = adjustAspectRatio ? (1.0f / p.aspectRatioScale) : 1.0f;
              interop::float4x4 &viewMatrix = drawData.modViewTransforms[proj.transformsIndex];
              interop::float4x4 &projMatrix = drawData.modProjTransforms[proj.transformsIndex];
 diff --git a/src/render/rt64_projection_processor.h b/src/render/rt64_projection_processor.h
-index 5bc3a2a..c6c5ec2 100644
+index 5bc3a2a..a327910 100644
 --- a/src/render/rt64_projection_processor.h
 +++ b/src/render/rt64_projection_processor.h
-@@ -30,4 +30,8 @@ namespace RT64 {
+@@ -30,4 +30,9 @@ namespace RT64 {
          void processScene(const ProcessParams &p, const GameScene &scene, size_t sceneIndex);
          void upload(const ProcessParams &p);
      };
 +
-+    // Banjo-Tooie: while on, perspective views are stretched across a wide picture instead of widened (the
-+    // intro's backdrop only covers a 4:3 view). Set by the game every frame.
++    // Banjo-Tooie: while on, the intro's cloud backdrop shots (perspective views with a far near plane) are
++    // stretched across a wide picture instead of widened, since the backdrop only covers a 4:3 view. Set by
++    // the game every frame.
 +    void SetStretchPerspective(bool stretch);
  };
 \ No newline at end of file

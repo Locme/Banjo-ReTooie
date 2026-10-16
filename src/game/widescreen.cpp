@@ -53,8 +53,9 @@ namespace {
 
 // The intro ("Two years have passed..", map 0xA1) films a backdrop of cloud
 // panels built for a 4:3 view: widened, the picture shows the panels' ends
-// and black past them. On that map the 3D view is stretched to the window
-// instead (RT64 skips its aspect adjustment for perspective views).
+// and black past them. On that map the cloud shots, which have a camera of
+// their own, are stretched to the window instead (RT64 skips its aspect
+// adjustment for them); the castle and characters keep their shape.
 void tooie::widescreen_tick(uint8_t* rdram) {
     constexpr uint16_t intro_map = 0xA1;
     RT64::SetStretchPerspective(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
