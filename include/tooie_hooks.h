@@ -35,6 +35,7 @@ void tooie_vi_client_filter(uint8_t* rdram, recomp_context* ctx);
 void tooie_vi_client_sent(uint8_t* rdram, recomp_context* ctx);
 int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx);
+void tooie_current_push(uint8_t* rdram, recomp_context* ctx);
 void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx);
 int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_klungo_fade(uint8_t* rdram, recomp_context* ctx, int fade_in);

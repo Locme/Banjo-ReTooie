@@ -21,7 +21,7 @@
 //   D-pad up/down   pick a row of the photo panel (src/ui/photo_panel.cpp)
 //   D-pad left/right change it (held repeats): zoom (the field of view, through tooie_set_fov), camera
 //                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), time,
-//                   HUD, Banjo shown or hidden, the filter rows below, depth of field, tilt, crop, grid
+//                   HUD, Banjo shown or hidden, his pose and the point in it, the others shown or hidden, the filter rows below, depth of field, tilt, crop, grid
 //   L               show / hide the photo panel
 //   Start           frozen, 1/167 speed, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
@@ -33,6 +33,10 @@
 //
 // Others (hidden: enemies, NPCs, items, doors and other moving parts): banjotooie.us.toml hooks func_800EC7D4, the draw of
 // each actor in an object pass's list, to skip it while tooie_others_hidden().
+//
+// Poses: the Pose row swaps Banjo's animation (his anim controller from baanim_getAnimCtrlPtr, set up as the
+// game's own state inits do) and the Pose frame row holds it at a point (the animation's timer, anctrl +0x2C)
+// while time is frozen. His own animation is put back on leaving or on picking "Game".
 //
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
 // func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
@@ -69,6 +73,7 @@
 #endif
 
 #include "recomp.h"
+#include "funcs.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
@@ -153,7 +158,7 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Time, Hud, Banjo, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Grid, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
@@ -168,6 +173,60 @@ namespace {
     std::atomic<float> last_fov{45.0f};
     // Banjo's middle, above his feet.
     constexpr float banjo_middle = 45.0f;
+
+    // Poses: Banjo's animation swapped for one of these and held at a point in it (Pose frame, 0 to 1).
+    // "Game" leaves him as he was. Leaving photo mode puts his own animation back.
+    struct PoseChoice {
+        const char* name;
+        uint32_t anim;
+    };
+    constexpr PoseChoice poses[] = {
+        { "Game", 0 },
+        // Picked from a headless sweep of animations 0x1-0x17E on Banjo (names describe the look).
+        { "Walk", 0x3 },
+        { "Run", 0xC },
+        { "Jump", 0x17 },
+        { "Big stride", 0x14A },
+        { "Kick", 0xAB },
+        { "Crouch", 0x2A },
+        { "Lie down", 0x5A },
+        { "Jiggy jig", 0x2E },
+        { "Wings out", 0x14 },
+        { "Wings spread", 0x9F },
+        { "Fly", 0xFB },
+        { "Kazooie up", 0x1B },
+        { "Kazooie dash", 0x47 },
+        { "Kazooie lunge", 0x166 },
+        { "Talon trot", 0x3C },
+    };
+    constexpr int pose_count = (int)std::size(poses);
+    std::atomic<int> pose_choice{0};
+    std::atomic<int> pose_frame{0};          // in 5% steps, 0 to 20
+    std::atomic<bool> pose_dirty{false};
+    // Banjo's own animation, kept to put back.
+    struct SavedAnim {
+        bool saved = false;
+        uint32_t ctrl = 0;
+        uint32_t index = 0;
+        uint32_t duration = 0;
+        uint32_t playback = 0;
+        uint32_t timer = 0;
+    } saved_anim;
+    constexpr uint32_t anctrl_duration = 0x0C;
+    constexpr uint32_t anctrl_playback = 0x1A;     // byte
+    constexpr uint32_t anctrl_timer = 0x1C + 0x10;  // the animation's place, 0 to 1
+    constexpr uint32_t anctrl_index = 0x1C + 0x18;  // halfword
+    // Headless: TOOIE_POSE_SWEEP=<hex>[-<hex>][,...] poses those animation ids in turn 12 s after photo mode
+    // comes on, with a screenshot of each, logging "[pose] sweep 0x..". TOOIE_POSE_FRAME=<0-20> sets the pose
+    // frame (default 10, the middle).
+    struct PoseSweep {
+        bool active = false;
+        std::vector<uint32_t> ids;
+        size_t next = 0;
+        Clock::time_point at{};
+        bool shot = false;
+    } pose_sweep;
+    uint32_t sweep_anim = 0;
 
     // Self-timer: the Timer row's choice, and the countdown (on the game thread) once A started it.
     constexpr int timer_seconds[] = { 0, 3, 10 };
@@ -373,7 +432,7 @@ namespace {
     constexpr const char* look_names[] = { "None", "Sepia", "Black and white", "Noir", "Warm", "Cool", "Vivid", "Faded film",
         "Teal and orange", "Dream" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Others", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Grid" };
     static_assert(std::size(row_names) == row_count);
 
@@ -398,6 +457,14 @@ namespace {
                 break;
             case Row::Others:
                 others_hidden = !others_hidden;
+                break;
+            case Row::Pose:
+                pose_choice = (pose_choice + pose_count + step) % pose_count;
+                pose_dirty = true;
+                break;
+            case Row::PoseFrame:
+                pose_frame = std::clamp(pose_frame + step, 0, 20);
+                pose_dirty = true;
                 break;
             case Row::Filter: {
                 const uint32_t n = (uint32_t)std::size(look_names);
@@ -454,6 +521,11 @@ namespace {
             return players_hidden ? "Hidden" : "Shown";
         case Row::Others:
             return others_hidden ? "Hidden" : "Shown";
+        case Row::Pose:
+            return poses[pose_choice.load()].name;
+        case Row::PoseFrame:
+            std::snprintf(text, sizeof(text), "%d%%", pose_frame.load() * 5);
+            return text;
         case Row::Filter: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
             return v < std::size(look_names) ? look_names[v] : "None";
@@ -486,6 +558,80 @@ namespace {
             }
             return "";
         }
+    }
+
+    uint32_t player_anim_ctrl(uint8_t* rdram, recomp_context* ctx) {
+        const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+        if (player < 0x80000000u || player >= 0x81000000u) {
+            return 0;
+        }
+        recomp_context call = *ctx;
+        call.r29 = ctx->r29 - 0x100;
+        call.r4 = (int32_t)player;
+        baanim_getAnimCtrlPtr(rdram, &call);
+        const uint32_t ctrl = (uint32_t)call.r2;
+        return ctrl >= 0x80000000u && ctrl < 0x81000000u ? ctrl : 0;
+    }
+
+    // As the game's own state inits do: reset, no blend, the animation, a duration, looped, started.
+    void play_anim(uint8_t* rdram, recomp_context* ctx, uint32_t ctrl, uint32_t anim, uint32_t duration_bits, uint32_t playback) {
+        recomp_context call = *ctx;
+        call.r29 = ctx->r29 - 0x100;
+        call.r4 = (int32_t)ctrl;
+        anctrl_reset(rdram, &call);
+        call.r4 = (int32_t)ctrl;
+        call.r5 = 0;
+        anctrl_setSmoothTransition(rdram, &call);
+        call.r4 = (int32_t)ctrl;
+        call.r5 = (int32_t)anim;
+        anctrl_setIndex(rdram, &call);
+        call.r4 = (int32_t)ctrl;
+        call.r5 = (int32_t)duration_bits;
+        anctrl_setDuration(rdram, &call);
+        call.r4 = (int32_t)ctrl;
+        call.r5 = (int32_t)playback;
+        anctrl_setPlaybackType(rdram, &call);
+        call.r4 = (int32_t)ctrl;
+        anctrl_start(rdram, &call);
+    }
+
+    void hold_pose_frame(uint8_t* rdram, recomp_context* ctx);
+
+    // Puts Banjo in the picked pose (or back in his own animation for "Game"), held at the pose frame.
+    void apply_pose(uint8_t* rdram, recomp_context* ctx, uint32_t anim) {
+        const uint32_t ctrl = player_anim_ctrl(rdram, ctx);
+        if (ctrl == 0) {
+            return;
+        }
+        if (anim == 0) {
+            if (saved_anim.saved && saved_anim.ctrl == ctrl) {
+                play_anim(rdram, ctx, ctrl, saved_anim.index, saved_anim.duration, saved_anim.playback);
+                MEM_W(anctrl_timer, (gpr)(int32_t)ctrl) = (int32_t)saved_anim.timer;
+            }
+            saved_anim.saved = false;
+            return;
+        }
+        if (!saved_anim.saved) {
+            saved_anim.saved = true;
+            saved_anim.ctrl = ctrl;
+            saved_anim.index = (uint32_t)(uint16_t)MEM_H(anctrl_index, (gpr)(int32_t)ctrl);
+            saved_anim.duration = (uint32_t)MEM_W(anctrl_duration, (gpr)(int32_t)ctrl);
+            saved_anim.playback = (uint32_t)MEM_BU(anctrl_playback, (gpr)(int32_t)ctrl);
+            saved_anim.timer = (uint32_t)MEM_W(anctrl_timer, (gpr)(int32_t)ctrl);
+        }
+        constexpr uint32_t two_seconds = 0x40000000;   // 2.0f: how long a loop takes in slow time
+        play_anim(rdram, ctx, ctrl, anim, two_seconds, 2);
+        hold_pose_frame(rdram, ctx);
+    }
+
+    // Keeps the animation at the pose frame while time is frozen (in slow time it plays on from there).
+    void hold_pose_frame(uint8_t* rdram, recomp_context* ctx) {
+        const uint32_t ctrl = player_anim_ctrl(rdram, ctx);
+        if (ctrl == 0) {
+            return;
+        }
+        const float t = std::min((float)pose_frame.load() / 20.0f, 0.999f);
+        write_float(rdram, ctrl + anctrl_timer, t);
     }
 
     void shoot() {
@@ -564,6 +710,29 @@ void tooie::photo_mode::register_input() {
 
 void tooie::photo_mode::start() {
     std::call_once(started, [] {
+        if (const char* v = std::getenv("TOOIE_POSE_SWEEP")) {
+            for (const char* p = v; *p != '\0';) {
+                unsigned first = 0, last = 0;
+                int used = 0;
+                if (std::sscanf(p, "%x%n", &first, &used) != 1) {
+                    break;
+                }
+                p += used;
+                last = first;
+                if (*p == '-' && std::sscanf(p + 1, "%x%n", &last, &used) == 1) {
+                    p += 1 + used;
+                }
+                for (unsigned id = first; id <= last; id++) {
+                    pose_sweep.ids.push_back(id);
+                }
+                if (*p == ',') {
+                    p++;
+                }
+            }
+            pose_sweep.active = !pose_sweep.ids.empty();
+            const char* frame = std::getenv("TOOIE_POSE_FRAME");
+            pose_frame = frame != nullptr ? std::clamp(std::atoi(frame), 0, 20) : 10;
+        }
         if (const char* v = std::getenv("TOOIE_PHOTO")) {
             test.active = std::sscanf(v, "%ld:%ld", &test.on, &test.off) == 2;
         }
@@ -712,7 +881,7 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
     *y = 0.0f;
 }
 
-void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
+void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
     if (test.active) {
         if (test.begin == Clock::time_point{}) {
             test.begin = Clock::now();
@@ -740,11 +909,51 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
         }
     }
     if (is_active && (leave_requested.exchange(false) || !playing || tooie::debug::current_map(rdram) != entered_map)) {
+        if (saved_anim.saved && playing && tooie::debug::current_map(rdram) == entered_map) {
+            apply_pose(rdram, ctx, 0);
+        }
+        saved_anim.saved = false;
+        pose_choice = 0;
         leave();
     }
     leave_requested = false;
     if (!is_active) {
         return;
+    }
+
+    if (pose_sweep.active) {
+        const Clock::time_point now = Clock::now();
+        if (pose_sweep.at == Clock::time_point{}) {
+            pose_sweep.at = now + 12s;
+        }
+        if (now >= pose_sweep.at) {
+            if (!pose_sweep.shot) {
+                if (pose_sweep.next >= pose_sweep.ids.size()) {
+                    pose_sweep.active = false;
+                    fprintf(stderr, "[pose] sweep done\n");
+                }
+                else {
+                    sweep_anim = pose_sweep.ids[pose_sweep.next++];
+                    fprintf(stderr, "[pose] sweep 0x%X\n", sweep_anim);
+                    apply_pose(rdram, ctx, sweep_anim);
+                    pose_sweep.shot = true;
+                    pose_sweep.at = now + 300ms;
+                }
+            }
+            else {
+                tooie::screenshot::take();
+                pose_sweep.shot = false;
+                pose_sweep.at = now + 300ms;
+            }
+        }
+    }
+    if (pose_dirty.exchange(false)) {
+        apply_pose(rdram, ctx, poses[pose_choice.load()].anim);
+    }
+    if (pose_choice != 0 || pose_sweep.active) {
+        if (speed == 0) {
+            hold_pose_frame(rdram, ctx);
+        }
     }
 
     if (timer_requested.exchange(false)) {

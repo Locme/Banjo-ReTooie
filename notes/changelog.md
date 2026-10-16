@@ -42,6 +42,10 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Graphics > Debug has Effect compare, Interpolation check and an Interpolation blend mode list beside the Effect debug view (T143).
 - F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
+### Gameplay
+
+- Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
+
 ### Graphics
 - New Parallax setting (Graphics, under Shaders, 0 to 100, off by default): stone walls, paving and rock get depth, with the stones standing out and the gaps and cracks sunk in, shifting as the camera moves. The N64 textures have no depth of their own, so it comes from how dark each part of the texture is. On 64 stone and rock textures from Mayahem Temple, Spiral Mountain, Jinjo Village, Isle o' Hags and Glitter Gulch Mine so far (L). Untested on PC (T341).
 - Fixed: above 30 FPS Klungo's fades ran at the wrong speed, and at 150 FPS and up he never faded back in behind his shield, so some phials started from his middle instead of his raised hand. Untested on PC (T331).
@@ -149,6 +153,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Audio
 
+- Sound no longer drops out at Uncapped and other high frame rates, or in cutscene skips ("Unhandled jump target ... n_aspMain" in the log). Untested on PC (T339).
 - Sound > Mix rate now switches at once, without restarting the game. Untested on PC (T335).
 
 - Sound no longer breaks up with Game Frame Rate at 40 FPS (and the other rates the port paces itself). Untested on PC (T325).

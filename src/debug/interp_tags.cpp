@@ -46,7 +46,12 @@ namespace {
     };
     // Tags that ship with the port (from L's interp_tags.txt).
     const Default defaults[] = {
-        {0, 0},
+        // L's interp_tags.txt, 2026-10-16 (map and place it was picked in).
+        {0x1D639342, tooie::interp_tags::mode_snap},   // map AF (Spiral Mountain) at 0,1784,-2908, 1 matrix
+        {0x83083D34, tooie::interp_tags::mode_vertex}, // map AF at -1611,3307,904, 1 matrix
+        {0x0AAEA09B, tooie::interp_tags::mode_vertex}, // map AF at -2678,380,1034, 28 matrices
+        {0xD9A9C09E, tooie::interp_tags::mode_vertex}, // map 113 at -38,815,-1829, 1 matrix
+        {0x453E57C9, tooie::interp_tags::mode_vertex}, // Banjo (map 113 at -1,16,1524, 72 matrices)
     };
     // Models drawn without the screen effects by default.
     const uint32_t default_no_effects[] = {

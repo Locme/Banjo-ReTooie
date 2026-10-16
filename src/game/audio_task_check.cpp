@@ -10,6 +10,15 @@
 //
 // A sound task that still fails no longer ends the game: the runtime skips that sound frame
 // (lib-patches/N64ModernRuntime.patch, events.cpp).
+//
+// The cause seen on PCs: the ring holds pointers to requests, and the game takes requests round
+// robin from one pool of 20 (0x8007BCF8, 0x18 bytes each, next index at 0x8007BED8) for sound
+// (type 0), graphics (type 1) and others, without checking whether one is still waiting. At 30 FPS
+// that never matters. At high or uncapped frame rates (and in sped-up cutscene skips) 20 graphics
+// frames can be sent while a sound request waits for the RSP, so its slot becomes a graphics
+// request and the sound microcode is given a display list (first command DE000000, "Unhandled jump
+// target 0x0E5F"). Each queued sound request is now copied into a slot of our own, which stays
+// unchanged until well after it has played, and the ring gets the copy.
 
 #include <algorithm>
 #include <cstdint>
@@ -25,19 +34,29 @@ namespace {
     constexpr gpr ring_write_addr = (int32_t)0x80078F00;
     constexpr gpr ring_read_addr = (int32_t)0x80078F04;
     constexpr int ring_slots = 20;
+    constexpr uint32_t request_size = 0x18;
+    // More than the ring can hold plus the one playing, so a copy is never reused while in use.
+    constexpr uint32_t copy_slots = 32;
+    // Extended RDRAM no one else uses: between the sample DMA list (src/gameplay/mix_rate.cpp, ends at
+    // 0x80EE0E10) and the Totals checklist's strings (0x80EF0000). Save states keep it.
+    constexpr gpr copies = (int32_t)0x80EE8000;
+    static_assert(0x80EE8000u + copy_slots * request_size <= 0x80EF0000u, "sound request copies run into the Totals strings");
 
     struct Queued {
         uint32_t sum;
         uint32_t size;
         int waiting;
+        uint32_t request; // the game's own request; the ring got a copy
     };
 
     std::mutex mutex;
     std::unordered_map<uint32_t, Queued> lists;
     unsigned changed = 0;
+    unsigned reused = 0;
+    uint32_t next_copy = 0;
 
     bool in_rdram(uint32_t addr, uint32_t size) {
-        return addr >= 0x80000000u && size <= 0x10000 && addr + size <= 0x80800000u;
+        return addr >= 0x80000000u && size <= 0x10000 && addr + size <= 0x81000000u; // More game memory's lists are at 0x80E80000
     }
 
     uint32_t checksum(uint8_t* rdram, uint32_t addr, uint32_t size) {
@@ -61,6 +80,12 @@ namespace {
         }
         Queued queued = found->second;
         lists.erase(found);
+        if ((uint32_t)MEM_W(8, (gpr)(int32_t)queued.request) != addr) {
+            reused++;
+            if (reused <= 20) {
+                fprintf(stderr, "[audio] A sound request's slot was reused before it played (%u so far); played the kept copy.\n", reused);
+            }
+        }
         uint32_t sum = checksum(rdram, addr, std::min(size, queued.size));
         if (sum != queued.sum) {
             changed++;
@@ -86,10 +111,17 @@ extern "C" void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx) {
     uint32_t start = (uint32_t)MEM_W(8, ctx->r4);
     uint32_t end = (uint32_t)MEM_W(0xC, ctx->r4);
     uint32_t size = (end - start) & ~7u;
+    std::lock_guard lock{ mutex };
+    gpr copy = copies + (gpr)(next_copy * request_size);
+    next_copy = (next_copy + 1) % copy_slots;
+    for (uint32_t i = 0; i < request_size; i += 4) {
+        MEM_W(i, copy) = MEM_W(i, ctx->r4);
+    }
+    // func_80013D94 puts $a0 in the ring.
+    ctx->r4 = copy;
     if (!in_rdram(start, size)) {
         return;
     }
     int waiting = (((int32_t)MEM_W(0, ring_write_addr) - (int32_t)MEM_W(0, ring_read_addr)) % ring_slots + ring_slots) % ring_slots;
-    std::lock_guard lock{ mutex };
-    lists[start] = Queued{ checksum(rdram, start, size), size, waiting };
+    lists[start] = Queued{ checksum(rdram, start, size), size, waiting, entry };
 }
