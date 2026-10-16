@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T334 Photo mode: shutter, self-timer, Others row, focus point
+- Asked: 2026-10-16 22:12 UTC
+- Build: main @ 8033ca7
+- Steps:
+  1. Load a file, press the Photo Mode key (F10) and press A
+  2. On the Timer row pick 3 s, press A and wait; press A again during a countdown to cancel it
+  3. On the Others row pick Hidden and look around (try Mayahem Temple)
+  4. Set Depth of field to 80 or more, then step the Focus point row through Middle, Banjo and the four corners
+- Look for: Step 1: a camera click and a short white flash; the saved photo has no flash in it. Step 2: toasts count Photo in 3, 2, 1, then the photo; A during the count says Timer cancelled. Step 3: enemies, NPCs, items, doors and other moving parts disappear while Banjo and the level stay; leaving photo mode brings them back. Step 4: Banjo stays sharp with Banjo picked, even off-centre, and the corners focus on what is at that third of the picture. Checked headless in Spiral Mountain and Mayahem Temple.
+- Status: waiting for L
+
 ## T333 Fat Banjo and Kazooie v1 (model mod)
 - Asked: 2026-10-16 22:10 UTC
 - Build: main, plus mods/Fat Banjo v1.zip
