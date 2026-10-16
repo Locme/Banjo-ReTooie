@@ -67,6 +67,7 @@ namespace tooie::picture_filters {
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";
     inline const std::string grass_patches_option = "grass_3d_patches";
+    inline const std::string grass_edges_option = "grass_3d_edges";
     // Banjo's fur: shells of strands over his brown fur (lib/rt64/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";

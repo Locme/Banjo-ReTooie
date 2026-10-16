@@ -61,6 +61,7 @@ namespace RT64 {
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
+    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
@@ -233,6 +234,21 @@ namespace {
         0xf13b3cfd0e5fc100, 0xfbcd4c5990eee6c0,
     };
 
+    // Textures with grass only along an edge or in part (cliff tops with a grass fringe, rock and walls with grass at
+    // their foot, banks of grass over dirt), picked by eye from the same dump: with 3D grass on edges, blades grow
+    // on their green parts, whichever way they face.
+    constexpr uint64_t grass_edge_textures[] = {
+        0x01322ac88a4e2d38, 0x02f4c308663b9cdd, 0x05ea4829b0f5ae21, 0x0c5260f7fed5e062,
+        0x0e44aed08f6b69e4, 0x101b67e86f3893fa, 0x14d0dd9bde7bdb6a, 0x252c178af5221184,
+        0x252edfa734e82676, 0x2df0d9aa6d361419, 0x364d703d10b7a60b, 0x383158a31ec96959,
+        0x3db137bf59b5a361, 0x42cdc86e999ec748, 0x46d68be1a6b1fa62, 0x4e7a7ab0cff39b36,
+        0x587a76a5cdc6f314, 0x6117061bdf68345a, 0x747f93d5552d7d66, 0x7acde6f0c1a0efa2,
+        0x7ad091419192ebc3, 0x83d693d9e9707210, 0xa63f304a43ef6d4d, 0xa6b1fd02d5614f7d,
+        0xa9d6e248b5f02181, 0xac535dd5a290b70b, 0xb1e9d035a5dc3d72, 0xb55e8fd582d86eb2,
+        0xbbf770fe909b287b, 0xc0ad6f3ae735fb3f, 0xc487e32d8285b942, 0xdb14615e0fb4e281,
+        0xe8394ac6c551ad41, 0xf083a8663d02850e, 0xf72c14f88e4786f8, 0xf7842ba08ee5dedc,
+    };
+
     constexpr float fog_colours[][3] = {
         { 0.72f, 0.80f, 0.88f },   // Haze: pale blue
         { 0.90f, 0.92f, 0.94f },   // Mist: white
@@ -391,6 +407,7 @@ void tooie::picture_filters::apply() {
         (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
         (float)(value<double>(grass_patches_option, 50.0) / 100.0));
     RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
+    RT64::SetSceneGrassEdgeTextures(grass_edge_textures, value<bool>(grass_edges_option, true) ? std::size(grass_edge_textures) : 0);
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
@@ -771,6 +788,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "3D grass patches",
         "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
         5, 100, 5, 0, false, 50);
+    graphics.add_bool_option(
+        grass_edges_option,
+        "3D grass on edges",
+        "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
+        true);
     graphics.add_number_option(
         banjo_fur_option,
         "Banjo fur",
@@ -793,7 +815,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
-        sun_shadow_softness_option,
         "Sun shadow on Banjo",
         "Whether Banjo casts a sun shadow too. Off leaves his to HD shadows or the game's own.",
         true);
@@ -873,7 +894,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -913,6 +934,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_distance_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_density_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_patches_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_edges_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_length_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);

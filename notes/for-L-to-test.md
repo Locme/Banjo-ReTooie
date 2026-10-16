@@ -2576,3 +2576,13 @@
   2. Play until the 1 fps comes (or for 2 minutes), then send console.log
 - Look for: every [vram] line now has a second line, "[vram] objects alive (made since the last line): ...", counting every kind of graphics object the game has alive, busiest first. Whatever climbs along with VRAM is what fills it (for example "descriptor sets 5000 (+2400)" would point at descriptor sets). This replaces the setting-by-setting check in T234 if you'd rather just send one log. Checked headless: the line prints, and nothing climbs here in Spiral Mountain with 3D grass on (the software renderer doesn't show your leak).
 - Status: waiting for L
+
+## T245 3D grass on edges
+- Asked: 2026-10-16 09:45 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > 3D grass to 100; Graphics > 3D grass on edges is on by default
+  2. Mayahem Temple's entrance courtyard: look at the foot of the stone walls, then turn 3D grass on edges off and on
+  3. Spiral Mountain and Isle o' Hags: look along cliff tops and banks with a grass fringe
+- Look for: blades also grow on the green parts of textures that are only partly grass (a grass fringe along a cliff top or bank, grass at the foot of a rock or wall), leaning out from slopes and walls; off goes back to grass only on the grass textures. 36 such textures, picked by eye from the same texture dump as T227; tell me any spot that should have edge grass and doesn't. Checked headless in Mayahem Temple: on, blades rise along the foot of the courtyard walls; off, none (screens/n64-3d-grass-edges-mayahem-on-off.png). Also fixed: Graphics > Sun shadow on Banjo was shown with the softness slider's name since 3860208.
+- Status: waiting for L
