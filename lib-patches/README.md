@@ -132,7 +132,8 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   reach the tab, `TabSet::set_tab_listed`), and each options page shows its tab's name as a heading and a line under
   each option. The layout is styled after Banjo-Tooie's menus (`recompui/src/elements/ui_sidebar_style.h`): brown
   panels with a gold border, gold "Luckiest Guy" lettering (the game registers the font), and the picked tab filled
-  gold with a Jiggy (`assets/icons/Jiggy.svg`); turning it off puts the old colours and font back.
+  gold with a Jiggy (`assets/icons/Jiggy.svg`), and switches that are on drawn gold instead of blue
+  (`Toggle::set_sidebar_colors`, `ui_toggle.{h,cpp}`); turning it off puts the old colours and font back.
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 

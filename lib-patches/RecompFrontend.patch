@@ -715,7 +715,7 @@ index 86428c9..e9d03ad 100644
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..be581b0 100644
+index 0561657..04abac5 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -743,6 +743,14 @@ index 0561657..be581b0 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
+@@ -127,6 +132,7 @@ public:
+ 
+     void update_value() override;
+     void update_disabled() override;
++    Toggle *get_toggle() { return toggle; }
+ };
+ 
+ } // namespace recompui
 diff --git a/recompui/src/config/ui_config_page_controls.cpp b/recompui/src/config/ui_config_page_controls.cpp
 index f379a6f..7687717 100644
 --- a/recompui/src/config/ui_config_page_controls.cpp
@@ -771,7 +779,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..7e94744 100644
+index 6ba64e2..8fe4b04 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,9 @@
@@ -792,7 +800,7 @@ index 6ba64e2..7e94744 100644
  
      if (config->requires_confirmation) {
          add_footer();
-@@ -38,6 +44,61 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+@@ -38,6 +44,64 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
      }
  }
  
@@ -835,6 +843,9 @@ index 6ba64e2..7e94744 100644
 +    for (ConfigOptionElement *element : config_option_elements) {
 +        element->set_border_bottom_width(strip ? theme::border::width : 0.0f);
 +        element->set_border_bottom_color(sidebar_style::gold_faint);
++        if (auto *bool_element = dynamic_cast<ConfigOptionBool *>(element)) {
++            bool_element->get_toggle()->set_sidebar_colors(strip);
++        }
 +        if (element->group_heading != nullptr) {
 +            Element *heading = element->group_heading;
 +            if (strip) {
@@ -854,7 +865,7 @@ index 6ba64e2..7e94744 100644
  ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
      for (auto *element : config_option_elements) {
          if (element->get_option_id() == option_id) {
-@@ -109,6 +170,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +173,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -864,7 +875,7 @@ index 6ba64e2..7e94744 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +213,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +216,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -875,7 +886,7 @@ index 6ba64e2..7e94744 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +241,17 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +244,17 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -893,7 +904,7 @@ index 6ba64e2..7e94744 100644
          config_option_elements.clear();
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +260,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +263,30 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -924,7 +935,7 @@ index 6ba64e2..7e94744 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +334,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +337,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -1711,6 +1722,61 @@ index b8d3783..8ebd65d 100644
      };
  
  } // namespace recompui
+diff --git a/recompui/src/elements/ui_toggle.cpp b/recompui/src/elements/ui_toggle.cpp
+index da7039a..bd16469 100644
+--- a/recompui/src/elements/ui_toggle.cpp
++++ b/recompui/src/elements/ui_toggle.cpp
+@@ -1,4 +1,5 @@
+ #include "ui_toggle.h"
++#include "ui_sidebar_style.h"
+ #include "ui_pseudo_border.h"
+ #include "ui_utils.h"
+ 
+@@ -94,6 +95,31 @@ namespace recompui {
+ 
+ 
+ 
++    void Toggle::set_sidebar_colors(bool sidebar) {
++        set_toggle_colors(true);
++        if (sidebar) {
++            Color hover = sidebar_style::gold;
++            hover.a = 77;
++            Color disabled = sidebar_style::gold;
++            disabled.a = 128;
++            style_groups.checked.normal.set_border_color(sidebar_style::gold);
++            style_groups.checked_floater.normal.set_background_color(sidebar_style::gold);
++            style_groups.checked_inner_border.normal.set_border_color(sidebar_style::gold);
++            style_groups.checked.hover.set_border_color(sidebar_style::gold);
++            style_groups.checked_inner_border.hover.set_border_color(sidebar_style::gold);
++            style_groups.checked.hover.set_background_color(hover);
++            style_groups.checked.focus.set_border_color(sidebar_style::gold);
++            style_groups.checked_inner_border.focus.set_border_color(sidebar_style::gold);
++            style_groups.checked.focus.set_background_color(hover);
++            style_groups.checked.disabled.set_border_color(disabled);
++            style_groups.checked_inner_border.disabled.set_border_color(disabled);
++            style_groups.checked_floater.disabled.set_background_color(disabled);
++        }
++        apply_styles();
++        floater->apply_styles();
++        inner_border->apply_styles();
++    }
++
+     Toggle::Toggle(ResourceId rid, Element *parent, ToggleSize size) : Element(rid, parent, Events(EventType::Click, EventType::Focus, EventType::Hover, EventType::Enable), "button") {
+         this->size = size;
+         const ToggleSizing &sizing = get_toggle_sizing(size);
+diff --git a/recompui/src/elements/ui_toggle.h b/recompui/src/elements/ui_toggle.h
+index 507bffb..5de38d5 100644
+--- a/recompui/src/elements/ui_toggle.h
++++ b/recompui/src/elements/ui_toggle.h
+@@ -63,6 +63,8 @@ namespace recompui {
+         void set_checked(bool checked);
+         bool is_checked() const;
+         void add_checked_callback(std::function<void(bool)> callback);
++        // Settings sidebar layout: an on switch in the sidebar's gold instead of the theme's blue.
++        void set_sidebar_colors(bool sidebar);
+     };
+ 
+     class IconToggle : public Toggle {
 diff --git a/recompui/src/renderer/rt64_render_context.cpp b/recompui/src/renderer/rt64_render_context.cpp
 index a7954c7..8add9d9 100644
 --- a/recompui/src/renderer/rt64_render_context.cpp
