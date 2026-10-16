@@ -59,7 +59,8 @@ namespace RT64 {
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
-    void SetSceneGrass(float amount, float height, float distance, float density);
+    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
+    void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
@@ -214,6 +215,24 @@ namespace {
     }
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
+    // The grass textures of the levels' ground (their RT64 texture hashes, picked by eye from a texture dump of 22
+    // outdoor maps on 2026-10-16): 3D grass grows only on these, not on other green textures (moss, leaves, walls).
+    constexpr uint64_t grass_textures[] = {
+        0x04b8e6560d7f0373, 0x07e2adeaace237bf, 0x0ba0f140a35638fc, 0x0e4d9a802c7dc7ea,
+        0x131bc9d029e49793, 0x177db5c49582b48d, 0x1acbb6681f918b72, 0x1dd2ae664d368548,
+        0x1fcb6c5e87f783fb, 0x27eae30b3613e31d, 0x37cf9756bf11bfcc, 0x4550fe11ee0e4d34,
+        0x48b2654886cd15c6, 0x4a0cddf9edc01dab, 0x4b0e8cd3ac96bba8, 0x543f46bc9510c161,
+        0x55950894b7abc374, 0x583f4a61dea0c60c, 0x5d56d430aeacb7cf, 0x6f7c66122a9e73d4,
+        0x7557553c55ab1a8a, 0x7727582b32eebc5f, 0x7b5eec9bafbe1838, 0x887e31b8771d7b91,
+        0x9069a11fede45381, 0x92912c9af8ac974f, 0x94e63a3b4b78fc54, 0x9ec2455f025b64df,
+        0x9f1986bf06a9fde4, 0x9fa547ff3c838199, 0xa0b40729970090fe, 0xa181e8f7c27c9e43,
+        0xa4235f087bde04cd, 0xa45e6eb6df215fff, 0xb092ded1029decac, 0xb4e2f23be6235ed4,
+        0xb586ef9810cd32d7, 0xbea28b5e576eeebc, 0xbfcb26d86de25a81, 0xc0555349975fe317,
+        0xc65609b0a5b03fe4, 0xdfe83dc2f43dcf40, 0xe333ef8b4a0b2512, 0xe6a78e76ed50374a,
+        0xe6e8cc803fb5cc26, 0xe6fb1ff1fd886251, 0xe83affdc5057bd6d, 0xea8789c9031a539d,
+        0xf13b3cfd0e5fc100, 0xfbcd4c5990eee6c0,
+    };
+
     constexpr float fog_colours[][3] = {
         { 0.72f, 0.80f, 0.88f },   // Haze: pale blue
         { 0.90f, 0.92f, 0.94f },   // Mist: white
@@ -369,7 +388,9 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
-        (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0));
+        (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
+        (float)(value<double>(grass_patches_option, 50.0) / 100.0));
+    RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
@@ -746,6 +767,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
         10, 200, 5, 0, false, 100);
     graphics.add_number_option(
+        grass_patches_option,
+        "3D grass patches",
+        "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
+        5, 100, 5, 0, false, 50);
+    graphics.add_number_option(
         banjo_fur_option,
         "Banjo fur",
         "Banjo's brown fur grows real strands: layers of short hairs stand out of his model and move with him, darker at the roots. Kazooie, his shorts and his backpack are left as they are. Higher numbers give a thicker coat. Drawn on the picture, so nothing in the game changes. 0 is off.",
@@ -847,7 +873,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -908,6 +934,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_height_option, section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, section_option, false);
     graphics.add_option_hidden_dependency(grass_density_option, section_option, false);
+    graphics.add_option_hidden_dependency(grass_patches_option, section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_option, section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_length_option, section_option, false);
     graphics.add_option_hidden_dependency(dither16_option, section_option, false);

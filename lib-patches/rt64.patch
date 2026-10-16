@@ -1562,7 +1562,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..f906a0d 100644
+index 9fae0d4..18fe987 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2111,7 +2111,7 @@ index 9fae0d4..f906a0d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2177,98 @@ namespace RT64 {
+@@ -1747,7 +2177,104 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2140,8 +2140,8 @@ index 9fae0d4..f906a0d 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2151,7 +2151,7 @@ index 9fae0d4..f906a0d 100644
 +                instanceExcludedVector.push_back(excluded ? 1 : 0);
 +
 +                // Banjo-Tooie: 3D grass grows on the level's own opaque, textured ground (drawn without a model
-+                // transform of its own); the shader keeps only green surfaces facing up.
++                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
 +                if ((grassShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
@@ -2168,7 +2168,14 @@ index 9fae0d4..f906a0d 100644
 +                    }
 +                    grass = (off < 1e-3f) && gm.zCmp() && gm.zUpd() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        !interop::Blender::usesAlphaBlend(gm);
-+                }
++
++                    // Only on grass textures.
++                    bool grassTexture = false;
++                    for (uint32_t t = 0; grass && (t < call.callDesc.tileCount) && !grassTexture; t++) {
++                        grassTexture = SceneGrassTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                    }
++                    grass = grass && grassTexture;
+                 }
 +                uint8_t grassValue = grass ? 1 : 0;
 +                if (grass && (grassBladePipeline != nullptr)) {
 +                    grassValue = uint8_t(std::min(grassBladePasses(drawData, call, frameParams), 255u));
@@ -2206,11 +2213,10 @@ index 9fae0d4..f906a0d 100644
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back(nightLight ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-             }
-@@ -1758,13 +2278,143 @@ namespace RT64 {
+@@ -1758,13 +2285,143 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3486,10 +3492,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..ba8c34d
+index 0000000..1242070
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1340 @@
+@@ -0,0 +1,1357 @@
 +//
 +// RT64
 +//
@@ -3886,6 +3892,20 @@ index 0000000..ba8c34d
 +
 +    // The night light textures: read on the render thread while it builds a frame's draws, so they are kept apart
 +    // from the effects settings and swapped in whole.
++    static std::mutex grassTextureMutex;
++    static std::unordered_set<uint64_t> grassTextures;
++
++    void SetSceneGrassTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(grassTextureMutex);
++        grassTextures.swap(textures);
++    }
++
++    bool SceneGrassTexture(uint64_t hash) {
++        const std::scoped_lock lock(grassTextureMutex);
++        return grassTextures.empty() || (grassTextures.count(hash) != 0);
++    }
++
 +    static std::mutex nightLightMutex;
 +    static std::unordered_set<uint64_t> nightLightTextures;
 +
@@ -3949,12 +3969,13 @@ index 0000000..ba8c34d
 +        effectsSettings.dayShafts = enabled ? std::clamp(shafts, 0.0f, 1.0f) : 1.0f;
 +    }
 +
-+    void SetSceneGrass(float amount, float height, float distance, float density) {
++    void SetSceneGrass(float amount, float height, float distance, float density, float patches) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grass = amount;
 +        effectsSettings.grassHeight = height;
 +        effectsSettings.grassDistance = distance;
 +        effectsSettings.grassDensity = std::clamp(density, 0.1f, 2.0f);
++        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
 +    void SetSceneFur(float amount, float length) {
@@ -4168,6 +4189,8 @@ index 0000000..ba8c34d
 +        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
 +        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell / std::sqrt(settings.grassDensity) };
++        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
++        frameParams.grassPatches = { settings.grassPatches, 220.0f, 0.0f, 0.0f };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -4832,10 +4855,10 @@ index 0000000..ba8c34d
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..78c49cd
+index 0000000..166910b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,214 @@
 +//
 +// RT64
 +//
@@ -4917,6 +4940,7 @@ index 0000000..78c49cd
 +        float grassHeight = 1.0f;
 +        float grassDistance = 2500.0f;
 +        float grassDensity = 1.0f;
++        float grassPatches = 1.0f;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
 +        uint32_t view = 0;
@@ -4995,8 +5019,9 @@ index 0000000..78c49cd
 +    void NoteSceneWorkloadSubmitted(uint64_t workloadId);
 +    void SetSceneEffectsWorkload(uint64_t workloadId);
 +    // Banjo-Tooie: 3D grass on green, level ground of the 3D world (0 off, 1 the most blades), blade height
-+    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal).
-+    void SetSceneGrass(float amount, float height, float distance, float density);
++    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal)
++    // and how much of the green ground their patches cover (1 all of it).
++    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
@@ -5019,6 +5044,9 @@ index 0000000..78c49cd
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
 +    // Banjo-Tooie: the textures (RT64 hashes) of windows and lamps that light up at night with the day and night cycle.
 +    void SetSceneNightLights(const uint64_t *hashes, size_t count);
++    // Banjo-Tooie: the textures 3D grass grows on (RT64 texture hashes); with none set, any green ground.
++    void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
++    bool SceneGrassTexture(uint64_t hash);
 +    // Fills the frame's night light terms. False when nothing lights up this frame (day, or the cycle is off).
 +    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
 +    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
@@ -6409,10 +6437,10 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/Grass.hlsli b/src/shaders/Grass.hlsli
 new file mode 100644
-index 0000000..8735575
+index 0000000..b6496e1
 --- /dev/null
 +++ b/src/shaders/Grass.hlsli
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,209 @@
 +//
 +// RT64
 +//
@@ -6457,6 +6485,14 @@ index 0000000..8735575
 +    return float3(h & 0xFFFF, h2 & 0xFFFF, h3 & 0xFFFF) / 65535.0f;
 +}
 +
++// Smooth value noise over the world's x and z.
++float GrassPatchNoise(float2 p) {
++    const float2 i = floor(p);
++    const float2 f = frac(p);
++    const float2 u = f * f * (3.0f - 2.0f * f);
++    return lerp(lerp(GrassHash(i).x, GrassHash(i + float2(1.0f, 0.0f)).x, u.x), lerp(GrassHash(i + float2(0.0f, 1.0f)).x, GrassHash(i + 1.0f).x, u.x), u.y);
++}
++
 +// Whether a shell's pixel at height share (0 to 1) is part of a blade; if so, shades it from root to tip.
 +bool GrassShell(float3 world, float3 worldDx, float3 worldDy, float3 baseColor, float share, inout float3 color) {
 +    // Green ground only (grass, not dirt, rock or paths).
@@ -6481,6 +6517,18 @@ index 0000000..8735575
 +    const float widen = 1.0f + cameraDistance / 700.0f;
 +    if (fade < 0.05f) {
 +        return false;
++    }
++
++    // Only in patches (as GrassGS.hlsl), shorter toward their edges.
++    float patchAmount = 1.0f;
++    if (FrParams.grassPatches.x < 0.999f) {
++        const float2 p = world.xz / FrParams.grassPatches.y;
++        const float n = GrassPatchNoise(p + 41.0f) * 0.7f + GrassPatchNoise(p * 2.6f + 97.0f) * 0.3f;
++        const float threshold = lerp(0.8f, 0.2f, FrParams.grassPatches.x);
++        patchAmount = smoothstep(threshold, threshold + 0.1f, n);
++        if (patchAmount <= 0.0f) {
++            return false;
++        }
 +    }
 +
 +    // Wind: a slow wave rolling across the field along the wind, a faster cross wave, and a little flutter.
@@ -6530,7 +6578,7 @@ index 0000000..8735575
 +
 +    // A leaning blade's tip is lower, so the shells it reaches are fewer.
 +    const float leanShare = min(leanLength / height, 0.95f);
-+    const float tallness = fade * (1.0f - 0.55f * leanShare * leanShare) * (1.0f - 0.45f * saturate(flatten));
++    const float tallness = fade * lerp(0.3f, 1.0f, patchAmount) * (1.0f - 0.55f * leanShare * leanShare) * (1.0f - 0.45f * saturate(flatten));
 +
 +    // The blades curve: the higher up, the further the shell's point is from the blade's root. Blades arc out
 +    // of their tuft by up to half a cell. Tufts sit 0.2 to 0.8 of the way across their cell, so the four
@@ -6585,14 +6633,6 @@ index 0000000..8735575
 +    return false;
 +}
 +
-+// Smooth value noise over the world's x and z.
-+float GrassPatchNoise(float2 p) {
-+    const float2 i = floor(p);
-+    const float2 f = frac(p);
-+    const float2 u = f * f * (3.0f - 2.0f * f);
-+    return lerp(lerp(GrassHash(i).x, GrassHash(i + float2(1.0f, 0.0f)).x, u.x), lerp(GrassHash(i + float2(0.0f, 1.0f)).x, GrassHash(i + 1.0f).x, u.x), u.y);
-+}
-+
 +// A real blade (GrassGS.hlsl): kept only when the ground at its root (baseColor, from the root's texture
 +// coordinates) is green, then shaded dark at the root to bright and warm at the tip by its height over the root,
 +// with broad patches of lighter, yellower grass across the field.
@@ -6612,10 +6652,10 @@ index 0000000..8735575
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..44493ea
+index 0000000..0839629
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,261 @@
+@@ -0,0 +1,280 @@
 +//
 +// RT64
 +//
@@ -6675,6 +6715,19 @@ index 0000000..44493ea
 +    const float c = GrassHash1(float3(i + float2(0.0f, 1.0f), 7.0f));
 +    const float d = GrassHash1(float3(i + float2(1.0f, 1.0f), 7.0f));
 +    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
++}
++
++// How much grass grows at a point: 1 inside a patch, falling to 0 over its soft edge and outside it.
++float GrassPatch(float2 xz) {
++    const float4 patches = FrParams.grassPatches;
++    if (patches.x >= 0.999f) {
++        return 1.0f;
++    }
++
++    const float2 p = xz / patches.y;
++    const float n = GrassNoise(p + 41.0f) * 0.7f + GrassNoise(p * 2.6f + 97.0f) * 0.3f;
++    const float threshold = lerp(0.8f, 0.2f, patches.x);
++    return smoothstep(threshold, threshold + 0.1f, n);
 +}
 +
 +float4 GrassToClip(float3 world) {
@@ -6813,6 +6866,12 @@ index 0000000..44493ea
 +            continue;
 +        }
 +
++        // Only in patches; toward a patch's edge the blades thin out and get shorter.
++        const float patch = GrassPatch(root.xz);
++        if (patch <= GrassHash1(float3(cellIndex, cell + 53.0f)) * 0.6f) {
++            continue;
++        }
++
 +        GrassVertex v;
 +        v.position = 0.0f;
 +        v.uv = input[0].uv * w0 + input[1].uv * w1 + input[2].uv * w2;
@@ -6859,7 +6918,7 @@ index 0000000..44493ea
 +            bend *= 0.95f / bendLength;
 +        }
 +
-+        const float bladeHeight = height * lerp(0.6f, 1.0f, r.y) * lerp(0.35f, 1.0f, fade);
++        const float bladeHeight = height * lerp(0.6f, 1.0f, r.y) * lerp(0.35f, 1.0f, fade) * lerp(0.3f, 1.0f, patch);
 +        // As wide as at density 1 whatever the density, widening as the grid coarsens with distance.
 +        const float bladeWidth = 2.4f * (cell / FrParams.grassBlades.w) * lerp(0.75f, 1.25f, r.x);
 +        const float lean = min(length(bend), 0.95f);
@@ -9388,10 +9447,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..b32cae6 100644
+index 2e62aaf..5fea553 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,46 @@ namespace interop {
+@@ -13,6 +13,49 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9425,6 +9484,9 @@ index 2e62aaf..b32cae6 100644
 +        float4 grassWorldToClip[4];
 +        float4 grassClipToWorld[4];
 +        float4 grassBlades;
++        // Grass grows in patches: how much of the green ground they cover (1 all of it, no patches), their size in
++        // world units, then unused.
++        float4 grassPatches;
 +        // Banjo-Tooie: Banjo's fur (Fur.hlsli, RasterVS.hlsl). A world vector's clip-space offset (as RasterVS's
 +        // positions) per world unit along x, y and z.
 +        float4 furClipX;

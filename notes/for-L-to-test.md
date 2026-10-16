@@ -2398,3 +2398,14 @@
   4. Turn the mod off and enter a new area
 - Look for: Mumbo is the Viva Pinata Mumbo (yellow skull with dark markings, red feathers, pink body with the rainbow chest, patterned skirt) with the HD textures, moving with the game's own animations: his jaw moves when he talks, the three feathers sway, and the eyes keep the Viva half-closed lids with blue irises and blink. In his skull he sits with his eyes shut, as the original Mumbo does. The Viva model has no wand or bag, so he keeps the game's own wand and bag, held in the new hand. With the mod off the original Mumbo is back. Not replaced: Mumbo's cutscene-only models (the intro and story scenes use other models) and his shadow. Checked headless: playing as Mumbo in Spiral Mountain and Mumbo in Mayahem Temple's skull, including talking to him: [v1.png](screens/viva-mumbo/v1.png). Swimming and the wand spell were not tried.
 - Status: waiting for L
+
+## T227 3D grass in patches, only on grass textures
+- Asked: 2026-10-16 08:25 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > 3D grass to 100, then go to Spiral Mountain's meadow by Klungo, then Isle o' Hags, Mayahem Temple and Terrydactyland
+  2. Move Graphics > 3D grass patches from 50 (the default) down to 5 and up to 100
+  3. Look for green ground that isn't grass (moss, mossy stone, leaves, slime) and check no blades grow there
+  4. Squares check: do the move that left the white square behind Banjo, and talk fast to the fish by the rock, first with 3D grass at 0, then at 100
+- Look for: the grass grows in patches here and there, with shorter grass round their edges; lower numbers give fewer, smaller patches and 100 covers all the grass. Blades only on grass textures (50 of them, picked by eye from a dump of 22 outdoor levels); if a grassy area now has none, tell me where and I'll add its texture. For the squares: do they still come with 3D grass at 0? The grass only redraws the level's own opaque ground, never sprites or effects, and the squares in your burst look like the black squares from in-between frames (T38). Checked headless in Spiral Mountain at patches 20, 50 and 60.
+- Status: waiting for L
