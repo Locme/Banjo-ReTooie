@@ -7952,10 +7952,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..95a471e
+index 0000000..e5eb48d
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,112 @@
 +//
 +// RT64
 +//
@@ -8049,8 +8049,11 @@ index 0000000..95a471e
 +    if ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
 +        return false;
 +    }
++    // Red to orange; up to a deep orange only where it is fully saturated (the top of her head), as her beak's
++    // yellow-orange is paler.
 +    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
-+    if ((hue < -20.0f) || (hue > 18.0f)) {
++    const float saturation = (high - low) / high;
++    if ((hue < -20.0f) || (hue > ((saturation >= 0.9f) ? 30.0f : 18.0f))) {
 +        return false;
 +    }
 +
@@ -8470,10 +8473,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..39a1193
+index 0000000..d6e5a7d
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,542 @@
+@@ -0,0 +1,580 @@
 +//
 +// RT64
 +//
@@ -8669,9 +8672,10 @@ index 0000000..39a1193
 +
 +// Banjo-Tooie: Kazooie's feathers. Little flat feathers are scattered over each of her triangles (as many as its area
 +// holds, at random places that stay put on it as she moves), each a card from a spot on her surface, pointing down
-+// her body and lifted a little off it, so they overlap like a bird's. A card keeps the texture coordinates and
-+// colours of its root, so it is one colour, hers there; the pixel shader cuts it to a feather's shape and shades it
-+// (FeatherCard in Fur.hlsli). Its place across and along the feather goes in the fur anchor, with its shade.
++// her body and lifted a little off it, so they overlap like a bird's. A card's texture coordinates are those of the
++// surface under each of its corners, so it shows the texture it lies on (L), while whether it is a feather at all
++// is up to her colour at its root; the pixel shader cuts it to a feather's shape and shades it (FeatherCard in
++// Fur.hlsli). Its place across and along the feather goes in the fur anchor, with its shade.
 +#define FEATHERS_PER_INVOCATION 15
 +
 +uint FeatherHash(uint a, uint b) {
@@ -8688,8 +8692,9 @@ index 0000000..39a1193
 +    return float(FeatherHash(a, b) & 0xFFFFu) / 65535.0f;
 +}
 +
-+void FeatherEmit(inout TriangleStream<GrassVertex> stream, GrassVertex v, float4 rootClip, float3 offset, float s, float t, float shade) {
++void FeatherEmit(inout TriangleStream<GrassVertex> stream, GrassVertex v, float4 rootClip, float3 offset, float2 uvOffset, float s, float t, float shade) {
 +    v.position = GrassRescale(rootClip + GrassDirToClip(offset));
++    v.uv += uvOffset;
 +    v.furAnchor = float3(s, t, shade);
 +    stream.Append(v);
 +}
@@ -8745,7 +8750,35 @@ index 0000000..39a1193
 +        down -= normal * dot(down, normal);
 +    }
 +    down = normalize(down);
++
++    // A wing (a thin part seen from both sides) has its feathers along it instead, the way its texture runs
++    // (L: on her wing they go out towards the tips, not down).
++    if (twoSided) {
++        const float3 e1 = world[1] - world[0];
++        const float3 e2 = world[2] - world[0];
++        const float2 d1 = input[1].uv - input[0].uv;
++        const float2 d2 = input[2].uv - input[0].uv;
++        const float det = d1.x * d2.y - d2.x * d1.y;
++        if (abs(det) > 1e-6f) {
++            // Where the texture's second coordinate grows: towards the wing's yellow tips.
++            float3 runs = (e2 * d1.x - e1 * d2.x) / det;
++            runs -= normal * dot(runs, normal);
++            if (length(runs) > 1e-5f) {
++                down = normalize(runs);
++            }
++        }
++    }
 +    const float3 across = cross(normal, down);
++
++    // How the texture runs over the triangle's plane, so each corner of a feather shows the texture under it.
++    const float3 edge1 = world[1] - world[0];
++    const float3 edge2 = world[2] - world[0];
++    const float g11 = dot(edge1, edge1);
++    const float g12 = dot(edge1, edge2);
++    const float g22 = dot(edge2, edge2);
++    const float gramDet = g11 * g22 - g12 * g12;
++    const float2 uvEdge1 = input[1].uv - input[0].uv;
++    const float2 uvEdge2 = input[2].uv - input[0].uv;
 +
 +    for (uint i = 0; i < FEATHERS_PER_INVOCATION; i++) {
 +        const uint index = start + i;
@@ -8786,10 +8819,18 @@ index 0000000..39a1193
 +        v.smoothColor = input[0].smoothColor * w0 + input[1].smoothColor * w1 + input[2].smoothColor * w2;
 +        v.flatColor = input[0].flatColor;
 +        v.furAnchor = 0.0f;
-+        FeatherEmit(stream, v, rootClip, rootOffset - side * halfWidth, -1.0f, 0.0f, shade);
-+        FeatherEmit(stream, v, rootClip, rootOffset + side * halfWidth, 1.0f, 0.0f, shade);
-+        FeatherEmit(stream, v, rootClip, tipOffset - side * halfWidth, -1.0f, 1.0f, shade);
-+        FeatherEmit(stream, v, rootClip, tipOffset + side * halfWidth, 1.0f, 1.0f, shade);
++        const float3 corners[4] = {
++            rootOffset - side * halfWidth, rootOffset + side * halfWidth, tipOffset - side * halfWidth, tipOffset + side * halfWidth
++        };
++        for (uint c = 0; c < 4; c++) {
++            float2 uvOffset = 0.0f;
++            if (gramDet > 1e-8f) {
++                const float a = dot(corners[c], edge1);
++                const float b = dot(corners[c], edge2);
++                uvOffset = uvEdge1 * ((g22 * a - g12 * b) / gramDet) + uvEdge2 * ((g11 * b - g12 * a) / gramDet);
++            }
++            FeatherEmit(stream, v, rootClip, corners[c], uvOffset, ((c & 1u) != 0) ? 1.0f : -1.0f, (c >= 2u) ? 1.0f : 0.0f, shade);
++        }
 +        stream.RestartStrip();
 +    }
 +}
@@ -9240,7 +9281,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..6617ff8 100644
+index e7895c3..a41d52a 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -9308,7 +9349,44 @@ index e7895c3..6617ff8 100644
          return false;
      }
  #endif
-@@ -254,6 +298,64 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +226,36 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+     ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
+     ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
+     colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
++
++    // Banjo-Tooie: one of Kazooie's feathers shows the texture under it, but whether it is a feather is up to her colour
++    // at its root (the middle of its base, where its place across and along it is zero), worked out here as well.
++    float4 featherRootColor = combinerColor;
++    if (featherCard) {
++        const float2 anchorDx = ddx(vertexFurAnchor.xy);
++        const float2 anchorDy = ddy(vertexFurAnchor.xy);
++        const float anchorDet = anchorDx.x * anchorDy.y - anchorDy.x * anchorDx.y;
++        if (abs(anchorDet) > 1e-12f) {
++            const float2 toRoot = float2(anchorDy.y * vertexFurAnchor.x - anchorDy.x * vertexFurAnchor.y,
++                anchorDx.x * vertexFurAnchor.y - anchorDx.y * vertexFurAnchor.x) / anchorDet;
++            const float2 rootUV = vertexUV - ddxVertexUV * toRoot.x - ddyVertexUV * toRoot.y;
++            ColorCombiner::Inputs rootInputs = ccInputs;
++            if (renderFlagUsesTexture0(rp.flags)) {
++                const uint globalTileIndex = instanceRenderIndices[gConstants.renderIndex].rdpTileIndex + tileIndex0;
++                RDPTile rdpTile = RDPTiles[globalTileIndex];
++                if (!renderFlagDynamicTiles(rp.flags)) {
++                    rdpTile.cms = renderCMS0(rp.flags);
++                    rdpTile.cmt = renderCMT0(rp.flags);
++                    rdpTile.nativeSampler = renderFlagNativeSampler0(rp.flags);
++                }
++                rootInputs.texVal0 = sampleTexture(otherMode, rp.flags, rootUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], false);
++                if (otherMode.cycleType() == G_CYC_1CYCLE) {
++                    rootInputs.texVal1 = rootInputs.texVal0;
++                }
++            }
++            float rootAlphaCompare;
++            colorCombiner.run(rootInputs, featherRootColor, rootAlphaCompare);
++        }
++    }
+     
+ #if 0
+     // Alpha dither.
+@@ -254,6 +328,70 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9318,13 +9396,19 @@ index e7895c3..6617ff8 100644
 +    if (featherCard) {
 +        // Grown from a part cut out by its texture's alpha: only on its solid parts, drawn solid.
 +        if (alphaBlend) {
-+            if (combinerColor.a < 0.5f) {
++            if (featherRootColor.a < 0.5f) {
 +                return false;
 +            }
-+            resultColor.rgb = combinerColor.rgb;
++            resultColor.rgb = (combinerColor.a < 0.5f) ? featherRootColor.rgb : combinerColor.rgb;
 +            resultAlpha = 1.0f;
 +        }
-+        if (!FeatherCard(vertexFurAnchor, combinerColor.rgb, resultColor.rgb)) {
++        // Where the texture under it is dark or grey (her eye, say), it keeps her colour at its root.
++        const float underHigh = max(resultColor.r, max(resultColor.g, resultColor.b));
++        const float underLow = min(resultColor.r, min(resultColor.g, resultColor.b));
++        if ((underHigh < 0.22f) || ((underHigh - underLow) < 0.4f * underHigh)) {
++            resultColor.rgb = featherRootColor.rgb;
++        }
++        if (!FeatherCard(vertexFurAnchor, featherRootColor.rgb, resultColor.rgb)) {
 +            return false;
 +        }
 +    }
@@ -9373,7 +9457,7 @@ index e7895c3..6617ff8 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +363,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +399,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9397,7 +9481,7 @@ index e7895c3..6617ff8 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +406,7 @@ void PSMain(
+@@ -287,6 +442,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9405,7 +9489,7 @@ index e7895c3..6617ff8 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +423,7 @@ void PSMain(
+@@ -303,7 +459,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;

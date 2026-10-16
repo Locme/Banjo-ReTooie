@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T329 Kazooie's wing feathers run along the wing, feathers show the texture, head feathered
+- Asked: 2026-10-16 22:03 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Kazooie feathers at 100
+  2. Look at her wings and the top of her head up close (the poker game in Jolly's works)
+- Look for: On her wings the feathers point out along the wing towards the yellow tips, not down. Each feather shows the colours of the texture under it, so the wing feathers have yellow tips. The top of her head is feathered and her beak has none.
+- Status: waiting for L
+
 ## T328 Shader speed pass 2: lean shaders, fireflies, focus, bounce light
 - Asked: 2026-10-16 21:39 UTC
 - Build: main
