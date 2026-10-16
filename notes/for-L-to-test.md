@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T315 Shader speed pass: nothing should look different
+- Asked: 2026-10-16 20:58 UTC
+- Build: main
+- Steps:
+  1. Pull main and build
+  2. Spiral Mountain with 3D grass, Banjo fur and your usual Enhanced settings; look at the grass, Banjo's fur and feathers, Jiggy water, dark corners (ambient occlusion) and sun shadows
+  3. Icy Side with Deep snow: the same, plus the snow and the frozen water
+- Look for: Nothing should look different from the previous build. Four shader changes only remove repeated work (one commit each, listed in notes/shader-qa-2026-10-16.md). If anything changed, say which of grass, fur, water, dark corners or shadows, and where.
+- Status: waiting for L
+
 ## T314 Day and night: cloud settings
 - Asked: 2026-10-16 UTC
 - Build: main (pull and build)
