@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T309 3D grass off the Spiral Mountain road
+- Asked: 2026-10-16 20:35 UTC
+- Build: main
+- Steps:
+  1. Spiral Mountain with 3D grass on: walk along the cobbled road past Bottles' ghost and the dirt pit
+- Look for: No grass clumps on the cobbles; grass still grows on the grass beside the road and where the grass layer fades over its edge.
+- Status: waiting for L
+
 ## T308 Sun shadows: no lines in the mornings, left and top of the title screen shaded
 - Asked: 2026-10-16 20:30 UTC
 - Build: a827041

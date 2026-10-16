@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..5a00e00 100644
+index 9fae0d4..0392332 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2370,7 +2370,7 @@ index 9fae0d4..5a00e00 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2302,202 @@ namespace RT64 {
+@@ -1747,8 +2302,219 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2399,8 +2399,8 @@ index 9fae0d4..5a00e00 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2464,6 +2464,23 @@ index 9fae0d4..5a00e00 100644
 +                    }
 +                    grassEdges = grass && (grassTexture == 2);
 +                    grass = grass && (grassTexture != 0);
++                    // TOOIE_GRASS_LOG=2: each texture combination 3D grass grows on, once (decal or not, edge or not).
++                    static const bool grassTextureLog = (getenv("TOOIE_GRASS_LOG") != nullptr) && (getenv("TOOIE_GRASS_LOG")[0] == '2');
++                    if (grassTextureLog && grass) {
++                        static std::unordered_set<uint64_t> seen;
++                        uint64_t key = grassDecal ? 1 : 0;
++                        for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                            key = key * 0x9E3779B97F4A7C15ull + drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                        }
++                        if (seen.insert(key).second) {
++                            fprintf(stderr, "[grass-tex] decal %d edges %d tiles", grassDecal ? 1 : 0, grassEdges ? 1 : 0);
++                            for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                                const uint64_t h = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                                fprintf(stderr, " %016llx(%u)", (unsigned long long)h, SceneGrassTexture(h));
++                            }
++                            fprintf(stderr, "\n");
++                        }
++                    }
 +                }
 +                // The passes of blades (at most GrassBladeMaxPasses) and, in the top bit, whether they grow on edges too.
 +                uint8_t grassValue = grass ? 1 : 0;
@@ -2498,8 +2515,8 @@ index 9fae0d4..5a00e00 100644
 +                            logGrass = logBlades = logMaxPasses = logSumPasses = 0;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: deep snow lies on the level's own opaque, textured ground as 3D grass does; the shader
 +                // keeps only snowy surfaces facing up. Fewer shells further away, none beyond the snow's reach.
 +                uint8_t snowValue = 0;
@@ -2573,7 +2590,7 @@ index 9fae0d4..5a00e00 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2507,172 @@ namespace RT64 {
+@@ -1758,13 +2524,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -8551,7 +8568,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ba8bf6d 100644
+index e7895c3..341ca0c 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8611,7 +8628,7 @@ index e7895c3..ba8bf6d 100644
          return false;
      }
  #endif
-@@ -254,6 +290,63 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +290,64 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8637,10 +8654,11 @@ index e7895c3..ba8bf6d 100644
 +        }
 +    }
 +    else if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0)) {
-+        // Grown from a grass layer blended over the ground: only where the layer shows, coloured by it alone (the
-+        // blades draw opaque).
++        // Grown from a grass layer blended over the ground: only where the layer shows (by the blender's own factor,
++        // which can be the vertices' alpha: Spiral Mountain's road fades the grass out that way), coloured by it
++        // alone (the blades draw opaque).
 +        if (alphaBlend) {
-+            if (combinerColor.a < 0.5f) {
++            if (resultAlpha.a < 0.5f) {
 +                return false;
 +            }
 +            resultColor.rgb = combinerColor.rgb;
@@ -8675,7 +8693,7 @@ index e7895c3..ba8bf6d 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +354,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +355,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8699,7 +8717,7 @@ index e7895c3..ba8bf6d 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +397,7 @@ void PSMain(
+@@ -287,6 +398,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8707,7 +8725,7 @@ index e7895c3..ba8bf6d 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +414,7 @@ void PSMain(
+@@ -303,7 +415,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
