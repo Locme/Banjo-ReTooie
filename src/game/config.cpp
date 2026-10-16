@@ -515,6 +515,7 @@ void tooie::init_config() {
         "Discord status",
         "Shows the level you are playing in your Discord status while Discord is running.",
         true);
+    tooie::game_frame_rate::add_dev_options(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);

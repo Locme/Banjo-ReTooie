@@ -69,6 +69,7 @@ namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
     void SetFixedFrameRate(uint32_t rate);
     bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
+    void SetForcedInterpolation(bool forced);
     // lib/rt64/src/common/rt64_timer.h: short sleeps, then a spin for the last bit.
     struct Timer {
         static void preciseSleepUntil(const std::chrono::high_resolution_clock::time_point endTime);
@@ -136,9 +137,38 @@ namespace {
     // demo replay, counted down by each frame's time step.
     std::atomic<int> demo_frames{ 0 };
 
+    // DEV > Force Interpolation in cutscenes (on by default): the opening
+    // cutscene (map 18B, before the title screen; it waits 3 VIs, 20 a second)
+    // and the recorded scenes (demos) run at the game's own pace whatever the
+    // Game Frame Rate, and RT64 blends frames up to the screen's rate even with
+    // Interpolation set to Original. Worked out once per game frame.
+    std::atomic<bool> scene_forced{ false };
+
+    bool force_option_on() {
+        static const char* env = std::getenv("TOOIE_FORCE_SCENE_INTERP");
+        if (env != nullptr) {
+            return env[0] == '1';
+        }
+        if (!created) {
+            return false;
+        }
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id)
+                .get_option_value(tooie::game_frame_rate::force_scene_interpolation_option));
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void update_scene_forced(uint8_t* rdram) {
+        constexpr int opening_cutscene_map = 0x18B;
+        int map = MEM_HU(0, (gpr)(int32_t)0x80132DC2);
+        scene_forced = force_option_on() && (demo_frames.load() > 0 || map == opening_cutscene_map);
+    }
+
     // VIs per game frame for 30 and 60 FPS, or 0 for the other modes (and while a demo plays).
     int32_t locked_vis() {
-        if (demo_frames.load() > 0) {
+        if (demo_frames.load() > 0 || scene_forced.load()) {
             return 0;
         }
         switch (mode()) {
@@ -154,7 +184,7 @@ namespace {
     // Frames a second for the modes the port paces itself (40, 120, 175, 240),
     // -1 for Uncapped, 0 for the others (and while a demo plays).
     int32_t paced_rate() {
-        if (demo_frames.load() > 0) {
+        if (demo_frames.load() > 0 || scene_forced.load()) {
             return 0;
         }
         switch (mode()) {
@@ -395,8 +425,20 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
         log().wait = (int32_t)ctx->r2;
     }
     int32_t rate = paced_rate();
-    apply_fixed_rate(rate);
+    bool force_interp = scene_forced.load();
+    static bool forced_applied = false;
+    if (force_interp != forced_applied) {
+        RT64::SetForcedInterpolation(force_interp);
+        forced_applied = force_interp;
+    }
     int32_t vis = locked_vis();
+    if (force_interp) {
+        // The game's own wait, and its rate for RT64 to blend from.
+        int32_t wait = std::clamp((int32_t)ctx->r2, 1, 4);
+        apply_fixed_rate(60 / wait);
+        return;
+    }
+    apply_fixed_rate(rate);
     if (vis != 0) {
         ctx->r2 = vis;
     } else if (rate != 0) {
@@ -429,6 +471,7 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     if (demo_frames.load() > 0) {
         demo_frames--;
     }
+    update_scene_forced(rdram);
     int32_t vis = locked_vis();
     int32_t rate = paced_rate();
     double now = game_seconds_now();
@@ -652,6 +695,15 @@ extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
 // frame jumps there, so the eyes still show.
 extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
+    dev.add_bool_option(
+        force_scene_interpolation_option,
+        "Force Interpolation in cutscenes",
+        "While the opening cutscene (and the attract demos) play, runs them at the game's own frame rate whatever Game Frame Rate says, so their pacing is right, "
+        "and blends in-between frames up to your screen's refresh rate even when Interpolation is Original.",
+        true);
 }
 
 uint32_t tooie::game_frame_rate::game_ms() {

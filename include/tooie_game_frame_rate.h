@@ -13,9 +13,12 @@ namespace tooie::game_frame_rate {
     // Values are saved by key; the new ones go at the end. Uncapped keeps the key "Unlocked".
     enum class Mode : uint32_t { Original, Fps30, Fps60, Fps120, Uncapped, Fps40, Fps175, Fps240 };
     inline const std::string option = "game_frame_rate";
+    // DEV tab: Force Interpolation in cutscenes (on by default).
+    inline const std::string force_scene_interpolation_option = "force_scene_interpolation";
 
     // Adds the option to the Graphics tab. It applies from the next game frame.
     void add_option(recomp::config::Config& graphics);
+    void add_dev_options(recomp::config::Config& dev);
 
     // Game time in ms since the game started, from each frame's delta time.
     // With TOOIE_PAD_GAME_TIME=1 the pad script and TOOIE_TELEPORT run on it,
