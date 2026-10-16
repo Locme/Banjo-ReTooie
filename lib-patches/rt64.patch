@@ -8621,7 +8621,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..341ca0c 100644
+index e7895c3..d250348 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8634,7 +8634,7 @@ index e7895c3..341ca0c 100644
  #include "Library.hlsli"
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
-@@ -46,11 +49,44 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +49,47 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -8644,19 +8644,22 @@ index e7895c3..341ca0c 100644
      const OtherMode otherMode = { rp.omL, rp.omH };
 +
 +    // Banjo-Tooie: a 3D grass shell's world position and its slopes, worked out before anything can stop
-+    // the pixel (the shell number is the same for the whole draw).
++    // the pixel (the shell number is the same for the whole draw). A blade (GrassGS.hlsl) needs only the
++    // position, and one of Kazooie's feathers neither.
++    const bool featherCard = (gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0);
 +    float3 grassWorld = 0.0f;
 +    float3 grassDx = 0.0f;
 +    float3 grassDy = 0.0f;
-+    if (gConstants.grassShell != 0) {
++    if ((gConstants.grassShell != 0) && !featherCard) {
 +        grassWorld = GrassWorldPosition(vertexPosition);
-+        grassDx = ddx(grassWorld);
-+        grassDy = ddy(grassWorld);
++        if ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0) {
++            grassDx = ddx(grassWorld);
++            grassDy = ddy(grassWorld);
++        }
 +    }
 +
 +    // Banjo-Tooie: a pixelated 3D grass blade (drawn a little bigger, GrassGS.hlsl) keeps whole blocks of grassStyle.w N64
 +    // pixels, those whose centre is in the real blade. Its place across and up the blade is in the fur anchor.
-+    const bool featherCard = (gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0);
 +    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0) && !featherCard && (vertexFurAnchor.z > 0.5f)) {
 +        const float block = max(floor(FbParams.resolutionScale.y * FrParams.grassStyle.w + 0.5f), 1.0f);
 +        const float2 toCentre = (floor(vertexPosition.xy / block) + 0.5f) * block - vertexPosition.xy;
@@ -8681,7 +8684,7 @@ index e7895c3..341ca0c 100644
          return false;
      }
  #endif
-@@ -254,6 +290,64 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +293,64 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8746,7 +8749,7 @@ index e7895c3..341ca0c 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +355,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +358,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8770,7 +8773,7 @@ index e7895c3..341ca0c 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +398,7 @@ void PSMain(
+@@ -287,6 +401,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8778,7 +8781,7 @@ index e7895c3..341ca0c 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +415,7 @@ void PSMain(
+@@ -303,7 +418,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
