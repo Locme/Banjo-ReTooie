@@ -3,10 +3,13 @@
 // navigation with a pad (Back, Start, the d-pad) can be tested without a controller.
 // --pad-script only feeds the game's own input, which the menus never read.
 // Buttons: a b x y back start l r du dd dl dr. Each press is logged as "[menu-pad] ...".
+// TOOIE_MENU_PAD_FILE=<path>: presses the buttons written to that file (one per line) as soon as
+// they appear, then empties it, for driving the menus step by step alongside xdotool.
 
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -83,6 +86,40 @@ namespace {
 void tooie::start_menu_pad_script() {
     static std::once_flag once;
     std::call_once(once, [] {
+        if (const char *file = std::getenv("TOOIE_MENU_PAD_FILE")) {
+            std::thread([path = std::string(file)] {
+                while (true) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    std::vector<std::string> names;
+                    {
+                        std::ifstream in(path);
+                        std::string line;
+                        while (std::getline(in, line)) {
+                            if (!line.empty()) {
+                                names.push_back(line);
+                            }
+                        }
+                    }
+                    if (names.empty()) {
+                        continue;
+                    }
+                    std::ofstream(path, std::ios::trunc);
+                    for (const std::string &name : names) {
+                        int button = button_from_name(name);
+                        if (button == SDL_CONTROLLER_BUTTON_INVALID) {
+                            std::printf("[menu-pad] unknown button '%s'\n", name.c_str());
+                            continue;
+                        }
+                        push(button, true);
+                        std::printf("[menu-pad] %s\n", name.c_str());
+                        std::fflush(stdout);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                        push(button, false);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                    }
+                }
+            }).detach();
+        }
         const char *text = std::getenv("TOOIE_MENU_PAD");
         if (text == nullptr) {
             return;
