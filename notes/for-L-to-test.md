@@ -1,5 +1,23 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T322 Totals checklist on by default
+- Asked: 2026-10-16 21:08 UTC
+- Build: main (pull and build)
+- Steps:
+  1. QOL > Totals checklist
+- Look for: On a fresh install it starts on. Your own install keeps what is saved (it saved Off before, since Off was the default), so turn it on once. Checked headless: with no saved value it saves as on.
+- Status: waiting for L
+
+## T321 Shaders off plays without its effects
+- Asked: 2026-10-16 21:08 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Shaders: turn the switch off
+  2. Play somewhere with water and outlines or ambient occlusion you had on, and dive under water
+  3. Turn Shaders back on
+- Look for: With Shaders off the game looks like the plain game: no ambient occlusion, bounce light, outlines, rim light, underwater tint, haze or wobble, water reflections or waves, Modern water, shore foam or deep snow. Their settings stay as you set them and come back when you turn Shaders on. Effects outside that section (sun shadows, fog, bloom, grass, fur and the rest) are not affected. Checked headless that the settings are kept and nothing breaks; the picture itself needs your eyes.
+- Status: waiting for L
+
 ## T320 Compiling shaders % on the start menu; compiled shaders kept on disk
 - Asked: 2026-10-16 21:07 UTC
 - Build: latest Windows build from main

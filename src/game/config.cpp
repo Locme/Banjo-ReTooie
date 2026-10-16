@@ -339,8 +339,8 @@ void tooie::init_config() {
     qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals checklist",
-        "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now. Off by default.",
-        false);
+        "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now.",
+        true);
     qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine aim",

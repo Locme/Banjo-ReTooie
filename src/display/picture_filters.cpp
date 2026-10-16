@@ -454,6 +454,10 @@ void tooie::picture_filters::apply() {
         return (setting != (decltype(setting))off) ? setting : (decltype(setting))fallback;
     };
 
+    // Graphics > Shaders off (L, 2026-10-16): the effects of its section are off, their settings kept.
+    const bool shaders = value<bool>(lighting_section_option, true);
+    auto shader = [shaders](double v) { return shaders ? v : 0.0; };
+
     RT64::SetPictureFilters(
         (int)value<double>(brightness_option, 0.0),
         value<bool>(brightness_pattern_option, false),
@@ -465,16 +469,16 @@ void tooie::picture_filters::apply() {
 
     cutscene_dof = (float)(value<double>(cutscene_dof_option, 0.0) / 100.0);
     gameplay_dof = (float)(value<double>(gameplay_dof_option, 0.0) / 100.0);
-    underwater_tint = (float)(value<double>(underwater_tint_option, 25.0) / 100.0);
-    underwater_haze = (float)(value<double>(underwater_haze_option, 15.0) / 100.0);
+    underwater_tint = (float)(shader(value<double>(underwater_tint_option, 25.0)) / 100.0);
+    underwater_haze = (float)(shader(value<double>(underwater_haze_option, 15.0)) / 100.0);
     underwater_sent = -1.0f;
     heat_haze = (float)(value<double>(heat_haze_option, 0.0) / 100.0);
     heat_haze_sent = -1.0f;
-    underwater_distortion = (float)(value<double>(underwater_distortion_option, 30.0) / 100.0);
+    underwater_distortion = (float)(shader(value<double>(underwater_distortion_option, 30.0)) / 100.0);
     // The next frame sets it again for the scene playing then.
     dof_sent = -1;
     RT64::SetSharpening(debug_value(Solo::Sharpening, (float)(value<double>(sharpen_option, 0.0) / 100.0), 0.0f, 0.5f));
-    ambient_occlusion = (float)(value<double>(ambient_occlusion_option, 0.0) / 100.0);
+    ambient_occlusion = (float)(shader(value<double>(ambient_occlusion_option, 0.0)) / 100.0);
     RT64::SetSceneEffects(ambient_occlusion, ambient_occlusion_radius, depth_address);
 
     uint32_t colour = value<uint32_t>(fog_colour_option, (uint32_t)FogColour::Haze);
@@ -488,10 +492,10 @@ void tooie::picture_filters::apply() {
     if (thickness < 10.0) {
         thickness *= 25.0;
     }
-    RT64::SetSceneOutlines((float)(value<double>(outlines_option, 0.0) / 100.0), (float)(thickness / 25.0));
+    RT64::SetSceneOutlines((float)(shader(value<double>(outlines_option, 0.0)) / 100.0), (float)(thickness / 25.0));
     const uint32_t upscale = debug_value(Solo::TextureUpscale, value<uint32_t>(texture_upscale_option, (uint32_t)TextureUpscale::Off), (uint32_t)TextureUpscale::Off, (uint32_t)TextureUpscale::Double);
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
-    RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
+    RT64::SetSceneBounceLight((float)(shader(value<double>(bounce_light_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
@@ -519,7 +523,7 @@ void tooie::picture_filters::apply() {
     }
     kazooie_feathers = feathers > 0.0;
     RT64::SetSceneKazooieFeathers((float)(feathers / 100.0), (float)(value<double>(kazooie_feather_size_option, 100.0) / 100.0));
-    bool snow = value<bool>(deep_snow_option, false);
+    bool snow = shaders && value<bool>(deep_snow_option, false);
     if (const char* forced = std::getenv("TOOIE_DEEP_SNOW")) {
         snow = std::atoi(forced) != 0;
     }
@@ -529,20 +533,20 @@ void tooie::picture_filters::apply() {
         snow_height = (float)(std::atof(forced) / 100.0);
     }
     snow_sent = -1.0f;
-    modern_water = value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
+    modern_water = shaders && value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
     }
     RT64::SetSceneModernWater(modern_water);
-    bool shore_foam = value<bool>(shore_foam_option, false);
+    bool shore_foam = shaders && value<bool>(shore_foam_option, false);
     if (const char* forced = std::getenv("TOOIE_SHORE_FOAM")) {
         shore_foam = std::atoi(forced) != 0;
     }
     RT64::SetSceneShoreFoam(shore_foam);
-    water_waves_on = (value<double>(water_waves_option, 0.0) > 0.0) || modern_water;
-    RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
-    RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
-    RT64::SetSceneRimLight((float)(value<double>(rim_light_option, 0.0) / 100.0));
+    water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
+    RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
+    RT64::SetSceneWaterReflections((float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0));
+    RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
@@ -879,7 +883,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         lighting_section_option,
         "Shaders",
-        "Shows the lighting, water, fog and the other effects below. Hiding them does not turn any effect off.",
+        "Turns on the lighting, water and other effects below and shows their settings. Off plays the game without them (their settings are kept for when you turn it back on).",
         true);
 
     graphics.add_number_option(
@@ -1159,7 +1163,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
