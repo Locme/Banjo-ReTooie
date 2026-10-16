@@ -469,7 +469,7 @@ void tooie::photo_mode::register_input() {
         "D-pad up and down pick a row, left and right change it, L hides the list. "
         "Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
-    recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_MISC1) });
+    recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_GUIDE) });
 }
 
 void tooie::photo_mode::start() {
