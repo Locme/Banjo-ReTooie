@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T336 Enemy fur: the yetis' white fur
+- Asked: 2026-10-16 22:31 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn Enemy fur on
+  2. Hailfire Peaks, Icy Side: find a yeti and look at it up close
+  3. Turn Enemy fur off again
+- Look for: The yeti's white body and arms grow white fur strands like Banjo's, while its blue face, red mouth and eyes stay smooth. With Enemy fur off it is smooth again. Banjo only has fur if Banjo fur is on.
+- Status: waiting for L
+
 ## T334 Photo mode: shutter, self-timer, Others row, focus point
 - Asked: 2026-10-16 22:12 UTC
 - Build: main @ 8033ca7

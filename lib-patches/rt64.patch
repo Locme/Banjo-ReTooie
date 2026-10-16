@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6ffa5b7 100644
+index 9fae0d4..ae65b37 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2139,12 +2139,12 @@ index 9fae0d4..6ffa5b7 100644
 +                }
 +
 +                // Banjo-Tooie: Banjo's fur, the same triangles again as shells pushed further out each time.
-+                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] == 1) && (triangles.shellPipeline != nullptr)) {
++                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && ((instanceFurVector[i] == 1) || (instanceFurVector[i] == 4)) && (triangles.shellPipeline != nullptr)) {
 +                    if (previousPipeline != triangles.shellPipeline) {
 +                        worker->commandList->setPipeline(triangles.shellPipeline);
 +                        previousPipeline = triangles.shellPipeline;
 +                    }
-+                    rasterParams.furShells = furShells;
++                    rasterParams.furShells = furShells | ((instanceFurVector[i] == 4) ? RASTER_FUR_WHITE : 0);
 +                    for (uint32_t shell = 1; shell <= furShells; shell++) {
 +                        rasterParams.furShell = shell;
 +                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
@@ -2156,7 +2156,7 @@ index 9fae0d4..6ffa5b7 100644
 +                }
 +
 +                // Banjo-Tooie: Kazooie's feathers, grown over the same triangles by the grass blades' geometry shader.
-+                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] >= 2)) {
++                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && ((instanceFurVector[i] == 2) || (instanceFurVector[i] == 3))) {
 +                    worker->commandList->setPipeline(grassBladePipeline);
 +                    previousPipeline = grassBladePipeline;
 +                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS | ((instanceFurVector[i] == 3) ? RASTER_GRASS_EDGES : 0);
@@ -2555,7 +2555,7 @@ index 9fae0d4..6ffa5b7 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2440,259 @@ namespace RT64 {
+@@ -1747,8 +2440,262 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2768,7 +2768,9 @@ index 9fae0d4..6ffa5b7 100644
 +
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
-+                if ((furShells > 0) && (call.callDesc.extendedFlags.furShells == 1) && !excluded && worldOpen && fbPair.depthWrite &&
++                // (3: a furry enemy's white fur, the yeti.)
++                const bool enemyFur = (call.callDesc.extendedFlags.furShells == 3);
++                if ((furShells > 0) && ((call.callDesc.extendedFlags.furShells == 1) || enemyFur) && !excluded && worldOpen && fbPair.depthWrite &&
 +                    (proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                    !instanceDrawCall.triangles.vertexTestZ && ((furDrawData == nullptr) || (furDrawData == &drawData)))
 +                {
@@ -2791,8 +2793,9 @@ index 9fae0d4..6ffa5b7 100644
 +                    feathers = fm.zCmp() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY);
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
-+                // (3: a part cut out by its texture, seen from both sides, RASTER_GRASS_EDGES in GrassGS.hlsl.)
-+                instanceFurVector.push_back(fur ? 1 : (feathers ? (interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) : 0));
++                // (3: a part cut out by its texture, seen from both sides, RASTER_GRASS_EDGES in GrassGS.hlsl; 4: a furry
++                // enemy's white fur.)
++                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : (feathers ? (interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) : 0));
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = shellPipelineFor(call.shaderDesc);
 +                }
@@ -2815,7 +2818,7 @@ index 9fae0d4..6ffa5b7 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2702,179 @@ namespace RT64 {
+@@ -1758,13 +2705,179 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -8010,10 +8013,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..e5eb48d
+index 0000000..153f213
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,120 @@
 +//
 +// RT64
 +//
@@ -8072,10 +8075,18 @@ index 0000000..e5eb48d
 +    return (hue >= 14.0f) && (hue <= 34.0f);
 +}
 +
++// A furry enemy's white fur (the yeti): light and nearly grey, not its blue or pink skin or dark eyes and mouth.
++bool WhiteFurColor(float3 color) {
++    const float high = max(color.r, max(color.g, color.b));
++    const float low = min(color.r, min(color.g, color.b));
++    return (high >= 0.45f) && ((high - low) <= 0.3f * high);
++}
++
 +// Whether a shell's pixel at height share (0 to 1) is part of a strand; if so, shades it from root to tip.
-+// anchor is the place on the model (its own units), baseColor the surface's own colour there.
-+bool FurShell(float3 anchor, float3 baseColor, float share, inout float3 color) {
-+    if (!FurColor(baseColor)) {
++// anchor is the place on the model (its own units), baseColor the surface's own colour there; white picks a furry
++// enemy's white fur instead of Banjo's brown.
++bool FurShell(float3 anchor, float3 baseColor, float share, bool white, inout float3 color) {
++    if (white ? !WhiteFurColor(baseColor) : !FurColor(baseColor)) {
 +        return false;
 +    }
 +
@@ -9340,7 +9351,7 @@ index 0000000..c9288dd
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..eceebc6 100644
+index e7895c3..acadd2e 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -9456,7 +9467,7 @@ index e7895c3..eceebc6 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +330,70 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +330,72 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9508,9 +9519,11 @@ index e7895c3..eceebc6 100644
 +        }
 +    }
 +
-+    // Banjo-Tooie: a shell of Banjo's fur keeps only the strands crossing it, on his brown fur.
++    // Banjo-Tooie: a shell of Banjo's fur keeps only the strands crossing it, on his brown fur (or a furry enemy's white).
 +    if (furShell != 0) {
-+        if (!FurShell(vertexFurAnchor, combinerColor.rgb, float(furShell) / float(gConstants.furShells), resultColor.rgb)) {
++        if (!FurShell(vertexFurAnchor, combinerColor.rgb, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
++            (gConstants.furShells & RASTER_FUR_WHITE) != 0, resultColor.rgb))
++        {
 +            return false;
 +        }
 +    }
@@ -9527,7 +9540,7 @@ index e7895c3..eceebc6 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +401,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +403,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9551,7 +9564,7 @@ index e7895c3..eceebc6 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +444,7 @@ void PSMain(
+@@ -287,6 +446,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9559,7 +9572,7 @@ index e7895c3..eceebc6 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +461,7 @@ void PSMain(
+@@ -303,7 +463,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -9569,7 +9582,7 @@ index e7895c3..eceebc6 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..ebd667f 100644
+index 74b1fa0..f97ab5c 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,14 +11,39 @@
@@ -9605,7 +9618,7 @@ index 74b1fa0..ebd667f 100644
 +        if (furShell != 0) {
 +            const float3 normal = furNormals[iVertexId * 2].xyz;
 +            oFurAnchor = furNormals[iVertexId * 2 + 1].xyz;
-+            const float share = float(furShell) / float(gConstants.furShells);
++            const float share = float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = FrParams.furParams;
 +            const float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
@@ -12686,10 +12699,10 @@ index 0000000..b5e1bc4
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..a2433e6 100644
+index 0a5c332..43bd314 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,36 @@
+@@ -9,11 +9,39 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -12706,6 +12719,9 @@ index 0a5c332..a2433e6 100644
 +    // (GrassGS.hlsl, FeatherCard in Fur.hlsli); RASTER_GRASS_EDGES then marks a thin part seen from both sides.
 +#define RASTER_FEATHER_CARDS 0x10000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
++    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
++    // the shell count.
++#define RASTER_FUR_WHITE 0x10000u
 +
      struct RasterParams {
          uint renderIndex;
