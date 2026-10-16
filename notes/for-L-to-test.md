@@ -2548,7 +2548,7 @@
   3. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead), and walk up to the skull on the cloud ahead
   4. Turn the mod off in the Mods menu while standing by either hut
 - Look for: Step 1, Banjo stands at the door of Mumbo's hut from Banjo-Kazooie (cracked brown skull, window eyes, sandstone teeth, red feathers, bent metal pole), sharp HD textures, about the size of the old skull. Step 2, it takes you into Mumbo's Skull as before. Step 3, the same hut stands on the cloud platform. Step 4, the old skull comes back at once. Only these two skulls are separate models in the game; the other worlds build Mumbo's Skull into the level, so they stay as they were. The old skull's collision is kept, so Banjo may bump into its shape where the new hut is narrower. Checked headless with the mod zip ([v1.png](screens/mumbos-hut/v1.png) in project files): both huts drawn with HD textures and GGM's door entered; CCL's skull door didn't open headless with no file loaded, same as the original.
-- Status: waiting for L
+- Status: replaced by T255 (v2)
 
 ## T242 Day and night: more times of day
 - Asked: 2026-10-16 UTC
@@ -2664,4 +2664,13 @@
   2. Load a file and go to Spiral Mountain, to the rock by Bottles' ghost near Banjo's house
   3. Talk to him and speed through his dialogue
 - Look for: Does the red square still show on his talking head with the pack off? (No red square showed headless without a pack.)
+- Status: waiting for L
+
+## T255 Mumbo's Hut Recreation v2: original doorway and level lighting
+- Asked: 2026-10-16 10:06 UTC (L: "The black part of the entrance need to be similar to vanilla entrence, so replace that entrance with vanilla. The lighting of the hut does not look right, like it does not belong")
+- Build: main (pull and build), plus the mod: replace v1 with `mods/Mumbo's Hut Recreation v2.zip` (project files) in the game's mods folder and turn it on in the Mods menu
+- Steps:
+  1. Load a file, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull and look at the hut, then walk into its door
+  2. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
+- Look for: The flat black door is gone; the doorway is now the original skull's short tunnel, shading from the entrance to black inside. The hut takes its light from the level the way the old skull did: warm orange and darker in the mine, plain daylight on the cloud, instead of the same flat light everywhere. The door still takes you inside. Checked headless with the zip ([v2.png](screens/mumbos-hut/v2.png) in project files): both huts drawn, GGM's door entered.
 - Status: waiting for L
