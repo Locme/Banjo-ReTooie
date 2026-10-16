@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T298 Start-up stutter with saved shaders
+- Asked: 2026-10-16 19:25 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Start the game the way you usually do (keep cache\shader_list.bin, do not delete it)
+  2. Play the first minute
+- Look for: The stutter at the start should be gone or much shorter. If it still stutters, open logs\console.log and tell me the number on the line '[shaders] compiling N shaders from the shader list'
+- Status: waiting for L
+
 ## T297 Kazooie feathers (feather cards, like the NeuralVFX shader)
 - Asked: 2026-10-16 19:17 UTC
 - Build: main
