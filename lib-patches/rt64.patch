@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..d0eb89e 100644
+index 79dfc38..6218dfb 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -184,7 +184,7 @@ index 79dfc38..d0eb89e 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +590,45 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +590,48 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -223,6 +223,9 @@ index 79dfc38..d0eb89e 100644
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects8XPS.hlsl" "-D SAMPLES_8X")
 +# Banjo-Tooie: the fireflies' table, worked out once a frame for the scene effects pass.
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTablePS.hlsl" "-D FIREFLY_TABLE")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable2XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_2X")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable4XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_4X")
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable8XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_8X")
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
 +build_vertex_shader( rt64 "src/shaders/SunShadowMapVS.hlsl")
@@ -4475,10 +4478,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a861633
+index 0000000..3a06a3c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1892 @@
+@@ -0,0 +1,1894 @@
 +//
 +// RT64
 +//
@@ -4511,6 +4514,8 @@ index 0000000..a861633
 +        constexpr float RippleCellSize = 3.0f;
 +        // The fireflies' table width: two fireflies to each of a 9 by 9 block of cells (SceneEffectsPS.hlsl FIREFLY_COUNT).
 +        constexpr uint32_t FireflyCount = 9 * 9 * 2;
++        // Its rows: the fireflies' places, their brightness, then the depth of field's focus distance.
++        constexpr uint32_t FireflyTableRows = 3;
 +        // When the program started (near enough), for the sun shadow map's headless test hook.
 +        const auto sunMapProcessStart = std::chrono::steady_clock::now();
 +        std::mutex effectsMutex;
@@ -6234,7 +6239,7 @@ index 0000000..a861633
 +        }
 +        // The fireflies' table, made once and cleared, so the pass can always read it (it does only at night).
 +        if (res.fireflyTexture == nullptr) {
-+            res.fireflyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(FireflyCount, 2, RenderFormat::R32G32B32A32_FLOAT));
++            res.fireflyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(FireflyCount, FireflyTableRows, RenderFormat::R32G32B32A32_FLOAT));
 +            res.fireflyTexture->setName("Scene Effects Fireflies");
 +            const RenderTexture *texture = res.fireflyTexture.get();
 +            res.fireflyFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
@@ -6317,23 +6322,6 @@ index 0000000..a861633
 +
 +        const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +
-+        // The fireflies' table for this frame: the same constants and inputs as the pass itself, one pixel a
-+        // firefly (and a second row for their brightness). Only with the cycle and fireflies on; the pass
-+        // otherwise never reads it.
-+        if (settings.timeOfDay && settings.dayFireflies) {
-+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::COLOR_WRITE) });
-+            commandList->setFramebuffer(res.fireflyFramebuffer.get());
-+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(FireflyCount), 2.0f));
-+            commandList->setScissors(RenderRect(0, 0, FireflyCount, 2));
-+            commandList->setPipeline(shaderLibrary->fireflyTable.pipeline.get());
-+            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
-+            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
-+            commandList->setGraphicsPushConstants(0, &constants);
-+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
-+            commandList->drawInstanced(3, 1, 0, 0);
-+            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
-+        }
-+
 +        colorTarget->setupColorFramebuffer(worker);
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +            RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
@@ -6342,6 +6330,23 @@ index 0000000..a861633
 +            RenderTextureBarrier(water, RenderTextureLayout::SHADER_READ),
 +            RenderTextureBarrier(waterColor, RenderTextureLayout::SHADER_READ)
 +        });
++
++        // The frame's table: the same constants and inputs as the pass itself. One pixel a firefly (and a second
++        // row for their brightness), then the depth of field's focus distance, each the same for every pixel of the
++        // pass, so worked out once here. Only when something in it is on; the pass otherwise never reads it.
++        if ((settings.timeOfDay && settings.dayFireflies) || (settings.depthOfField > 0.0f)) {
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::COLOR_WRITE) });
++            commandList->setFramebuffer(res.fireflyFramebuffer.get());
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(FireflyCount), float(FireflyTableRows)));
++            commandList->setScissors(RenderRect(0, 0, FireflyCount, FireflyTableRows));
++            commandList->setPipeline(shaderLibrary->fireflyTable.pipeline.get());
++            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
++            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
++            commandList->setGraphicsPushConstants(0, &constants);
++            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++            commandList->drawInstanced(3, 1, 0, 0);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
++        }
 +
 +        commandList->setFramebuffer(colorTarget->textureFramebuffer.get());
 +        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(colorTarget->width), float(colorTarget->height)));
@@ -6682,10 +6687,10 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..a3f2de8 100644
+index d1c5273..b5d26b7 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,7 +40,28 @@
+@@ -40,7 +40,31 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -6707,6 +6712,9 @@ index d1c5273..a3f2de8 100644
 +#include "shaders/BloomPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects2XPS.hlsl.spirv.h"
 +#include "shaders/FireflyTablePS.hlsl.spirv.h"
++#include "shaders/FireflyTable2XPS.hlsl.spirv.h"
++#include "shaders/FireflyTable4XPS.hlsl.spirv.h"
++#include "shaders/FireflyTable8XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects4XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects8XPS.hlsl.spirv.h"
  #include "shaders/TextureDecodeCS.hlsl.spirv.h"
@@ -6714,7 +6722,7 @@ index d1c5273..a3f2de8 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +69,8 @@
+@@ -48,6 +72,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -6723,7 +6731,7 @@ index d1c5273..a3f2de8 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +109,28 @@
+@@ -86,7 +112,31 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -6745,6 +6753,9 @@ index d1c5273..a3f2de8 100644
 +#   include "shaders/BloomPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.dxil.h"
 +#   include "shaders/FireflyTablePS.hlsl.dxil.h"
++#   include "shaders/FireflyTable2XPS.hlsl.dxil.h"
++#   include "shaders/FireflyTable4XPS.hlsl.dxil.h"
++#   include "shaders/FireflyTable8XPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects4XPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.dxil.h"
  #   include "shaders/TextureDecodeCS.hlsl.dxil.h"
@@ -6752,7 +6763,7 @@ index d1c5273..a3f2de8 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +138,8 @@
+@@ -94,6 +144,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -6761,7 +6772,7 @@ index d1c5273..a3f2de8 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +177,28 @@
+@@ -131,7 +183,31 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -6783,6 +6794,9 @@ index d1c5273..a3f2de8 100644
 +#   include "shaders/BloomPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.metal.h"
 +#   include "shaders/FireflyTablePS.hlsl.metal.h"
++#   include "shaders/FireflyTable2XPS.hlsl.metal.h"
++#   include "shaders/FireflyTable4XPS.hlsl.metal.h"
++#   include "shaders/FireflyTable8XPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects4XPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.metal.h"
  #   include "shaders/TextureDecodeCS.hlsl.metal.h"
@@ -6790,7 +6804,7 @@ index d1c5273..a3f2de8 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +206,8 @@
+@@ -139,6 +215,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -6799,7 +6813,7 @@ index d1c5273..a3f2de8 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +217,10 @@
+@@ -148,6 +226,10 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -6810,7 +6824,7 @@ index d1c5273..a3f2de8 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +277,7 @@ namespace RT64 {
+@@ -204,7 +286,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -6819,7 +6833,7 @@ index d1c5273..a3f2de8 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -569,6 +642,78 @@ namespace RT64 {
+@@ -569,6 +651,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -6898,7 +6912,7 @@ index d1c5273..a3f2de8 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +728,20 @@ namespace RT64 {
+@@ -583,6 +737,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -6919,7 +6933,7 @@ index d1c5273..a3f2de8 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +991,88 @@ namespace RT64 {
+@@ -832,6 +1000,102 @@ namespace RT64 {
              }
          }
  
@@ -6969,8 +6983,22 @@ index d1c5273..a3f2de8 100644
 +            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
 +
 +            // The fireflies' table (SceneEffectsPS.hlsl, FIREFLY_TABLE): the same layout and constants, into a
-+            // small float target, one column a firefly.
-+            std::unique_ptr<RenderShader> tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTablePSBlobDXIL, FireflyTablePSBlobSPIRV, FireflyTablePSBlobMSL, "PSMain", shaderFormat));
++            // small float target, one column a firefly; built at the depth target's sample count, as it reads it.
++            std::unique_ptr<RenderShader> tableShader;
++            switch (multisampling.sampleCount) {
++            case RenderSampleCount::COUNT_2:
++                tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTable2XPSBlobDXIL, FireflyTable2XPSBlobSPIRV, FireflyTable2XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            case RenderSampleCount::COUNT_4:
++                tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTable4XPSBlobDXIL, FireflyTable4XPSBlobSPIRV, FireflyTable4XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            case RenderSampleCount::COUNT_8:
++                tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTable8XPSBlobDXIL, FireflyTable8XPSBlobSPIRV, FireflyTable8XPSBlobMSL, "PSMain", shaderFormat));
++                break;
++            default:
++                tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTablePSBlobDXIL, FireflyTablePSBlobSPIRV, FireflyTablePSBlobMSL, "PSMain", shaderFormat));
++                break;
++            }
 +            RenderGraphicsPipelineDesc tableDesc;
 +            tableDesc.pipelineLayout = sceneEffects.pipelineLayout.get();
 +            tableDesc.renderTargetBlend[0] = RenderBlendDesc::Copy();
@@ -9432,10 +9460,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f62d84b
+index 0000000..86ec1cb
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2231 @@
+@@ -0,0 +1,2246 @@
 +//
 +// RT64
 +//
@@ -9469,7 +9497,8 @@ index 0000000..f62d84b
 +Texture2D<float2> gWaterRipples : register(t8);
 +// The sun shadow map (SunShadowMap.hlsli), when shadows.y is negative.
 +Texture2D<float> gSunShadowMap : register(t9);
-+// The fireflies' table for this frame (FireflyPlace), 162 by 2, written by the FIREFLY_TABLE pass.
++// The fireflies' table for this frame (FireflyPlace), 162 by 3, written by the FIREFLY_TABLE pass: rows 0 and 1 the
++// fireflies, row 2 the depth of field's focus distance (DepthOfFieldFocus) in its first pixel.
 +Texture2D<float4> gFireflies : register(t10);
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
@@ -11341,7 +11370,9 @@ index 0000000..f62d84b
 +// Depth of field: the nearest thing in a small box at the middle of the picture is in focus (or Banjo, for the
 +// gameplay one, unless he is too close to the camera, as in first person), and the picture blurs more the
 +// further a pixel's distance is from it, up to a radius set by the strength.
-+float3 DepthOfField(int2 pixel, float distance, float strength, bool onBanjo) {
++// The distance in focus: the same for the whole picture, so the table pass works it out once a frame (row 2 of
++// the fireflies' table) and the pixels read it.
++float DepthOfFieldFocus(bool onBanjo) {
 +    const float2 size = gConstants.projection.zw;
 +    float focus = onBanjo ? BanjoDistance() : 0.0f;
 +    if (focus < 80.0f) {
@@ -11354,6 +11385,13 @@ index 0000000..f62d84b
 +            }
 +        }
 +    }
++    return focus;
++}
++
++#ifndef FIREFLY_TABLE
++float3 DepthOfField(int2 pixel, float distance, float strength, bool onBanjo) {
++    const float2 size = gConstants.projection.zw;
++    const float focus = gFireflies.Load(int3(0, 2, 0)).x;
 +
 +    const float3 sharp = gColor.Load(int3(pixel, 0)).rgb;
 +    const float maxRadius = strength * size.y / 80.0f;
@@ -11379,11 +11417,16 @@ index 0000000..f62d84b
 +
 +    return sum / weight;
 +}
++#endif
 +
 +#ifdef FIREFLY_TABLE
-+// The fireflies' table: one column a firefly, row 0 its place and row 1 its brightness (see FireflyPlace).
++// The fireflies' table: one column a firefly, row 0 its place and row 1 its brightness (see FireflyPlace), and in
++// row 2 the depth of field's focus distance.
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    const int2 pixel = int2(pos.xy);
++    if (pixel.y == 2) {
++        return float4((gConstants.bloom.y != 0.0f) ? DepthOfFieldFocus(gConstants.bloom.y < 0.0f) : 0.0f, 0.0f, 0.0f, 0.0f);
++    }
 +    float3 tint;
 +    if (!DayTint(tint) || ((DayPacked() & 1u) == 0u) || (DayNight(tint) <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
 +        return 0.0f;
