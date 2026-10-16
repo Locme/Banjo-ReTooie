@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T339 Sound at Uncapped and high frame rates
+- Asked: 2026-10-16 22:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Game Frame Rate: Uncapped
+  2. Play a few minutes in a level with music, and skip a cutscene with Start
+  3. Try 240 and 175 FPS too
+- Look for: The sound keeps playing with no gaps, and the console log has no 'Unhandled jump target' or 'A sound task failed' lines. If the game ever reuses a sound request's slot you'll see 'A sound request's slot was reused ... played the kept copy' instead, which is fine. Checked headless by overwriting the game's slot on purpose: before the fix that gave 773 'Unhandled jump' lines in 40 s, after it none, with the sound unchanged.
+- Status: waiting for L
+
 ## T338 Button combinations in Controls
 - Asked: 2026-10-16 22:45 UTC
 - Build: latest Windows build from main
