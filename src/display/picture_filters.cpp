@@ -72,6 +72,8 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size);
     void SetSceneSnow(bool on, float height, bool strictColor);
     void SetSceneSnowStamps(const float *stamps, uint32_t count);
+    void SetSceneParallax(float depth, bool all);
+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
     bool GetSceneCameraHeight(float *height);
@@ -343,6 +345,82 @@ namespace {
         0xf083a8663d02850e,
     };
 
+    // Stone with parallax mapping: walls, paving and rock whose brightness reads as their shape (dark gaps and cracks
+    // between lighter faces), picked by eye from a texture dump. Moss, grass, wood and painted or lettered
+    // textures are left out: their dark parts aren't deeper. With each, its darkest and lightest brightness (0 to 255,
+    // leaving out the darkest and lightest twentieth of its texels) from the same dump: its deepest and highest parts.
+    struct ParallaxTexture {
+        uint64_t hash;
+        uint8_t darkest;
+        uint8_t lightest;
+    };
+    constexpr ParallaxTexture parallax_textures[] = {
+        { 0x01a20bd62ff8cac0, 42, 151 },
+        { 0x039014c5f7f7ea13, 17, 236 },
+        { 0x05749d611ab935e0, 7, 143 },
+        { 0x122aedafd43e2a9e, 0, 134 },
+        { 0x133010d9f09ec074, 44, 150 },
+        { 0x1a7773fc099b83b4, 0, 234 },
+        { 0x1cf577bcf120b2b6, 9, 219 },
+        { 0x23a025da09940ab1, 25, 198 },
+        { 0x2fd04cbc57722e00, 13, 204 },
+        { 0x3361921e7386e1c3, 0, 136 },
+        { 0x35e91f2f8821467c, 48, 132 },
+        { 0x3a39edf4d3cce92d, 49, 130 },
+        { 0x3b5ceddf7e529830, 0, 143 },
+        { 0x3f827bede427e44c, 24, 119 },
+        { 0x42bd4ae4b0ca5fab, 15, 106 },
+        { 0x48efa3236ca2d3d4, 7, 129 },
+        { 0x4a7b1a2672b73a09, 49, 162 },
+        { 0x4d2d6f78c97fdad4, 7, 149 },
+        { 0x4dbab2ad7c3c20bc, 7, 126 },
+        { 0x505fb4c4fdca9135, 0, 143 },
+        { 0x520da5015f653d7f, 0, 139 },
+        { 0x565d41f359f6ec9c, 21, 164 },
+        { 0x56999a939e83fb09, 7, 147 },
+        { 0x5942c0f010806cf6, 15, 169 },
+        { 0x5b8466278bb1da3a, 7, 132 },
+        { 0x624aba45ab5e4757, 12, 189 },
+        { 0x635bdf5f8d1be6b7, 15, 103 },
+        { 0x63c8c0806df5ae64, 10, 108 },
+        { 0x64c948d225f75cd4, 0, 158 },
+        { 0x6c9813f82d5b1c78, 44, 154 },
+        { 0x6d2e592bea2b1e66, 35, 162 },
+        { 0x742b91dbb8ae10fa, 51, 154 },
+        { 0x80c4e4b432d14a7a, 12, 171 },
+        { 0x83224706a3b80c1b, 7, 141 },
+        { 0x86acdb6b0bc1e981, 33, 119 },
+        { 0x8f5c2b4231d5b6c2, 31, 136 },
+        { 0x9fa67f767a2d583d, 7, 147 },
+        { 0xa0393d4bafb9a1a3, 0, 171 },
+        { 0xa455894091918abc, 15, 157 },
+        { 0xa6aa8fd8983de63e, 70, 162 },
+        { 0xa70e1c9a0236b70a, 4, 150 },
+        { 0xb6fcd67489647e96, 18, 108 },
+        { 0xb717793fa34a1632, 0, 151 },
+        { 0xb7b1698056c3cc29, 0, 150 },
+        { 0xbadfc8c99a7ba54a, 44, 162 },
+        { 0xbdb943cddf7a8aaf, 0, 191 },
+        { 0xcaab85e3af47d3ca, 48, 130 },
+        { 0xcebb441714f8c0f6, 27, 136 },
+        { 0xcf6ef877cce4b28f, 0, 142 },
+        { 0xd43233920209a202, 20, 132 },
+        { 0xd47c56aae92d3f79, 15, 164 },
+        { 0xd48dbc4653da6b34, 34, 154 },
+        { 0xd88901e0ba47e0c9, 0, 143 },
+        { 0xe1a77418ed910c5a, 0, 147 },
+        { 0xe94bf2c6e32f2cdf, 48, 137 },
+        { 0xeca4591a3dbd2fcc, 44, 162 },
+        { 0xed007ae11f0b6d8e, 15, 158 },
+        { 0xf173be7d0b4b5078, 43, 131 },
+        { 0xf3d5dbbcf85d0e81, 7, 164 },
+        { 0xf5f41410c0c1086f, 25, 116 },
+        { 0xf9140cd61642a49e, 0, 116 },
+        { 0xf940a34f148c43e9, 7, 132 },
+        { 0xf9451942ba08cae9, 0, 125 },
+        { 0xfef5c06c42fcce74, 56, 132 },
+    };
+
     constexpr float fog_colours[][3] = {
         { 0.72f, 0.80f, 0.88f },   // Haze: pale blue
         { 0.90f, 0.92f, 0.94f },   // Mist: white
@@ -388,6 +466,7 @@ namespace {
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
         { &tooie::picture_filters::deep_snow_option, false },
+        { &tooie::picture_filters::parallax_option, 0.0 },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
         { &tooie::picture_filters::kazooie_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
@@ -540,6 +619,24 @@ void tooie::picture_filters::apply() {
         snow_height = (float)(std::atof(forced) / 100.0);
     }
     snow_sent = -1.0f;
+    // Parallax mapping; TOOIE_PARALLAX=<0-100> sets it instead, TOOIE_PARALLAX_ALL=1 puts it on every texture of the
+    // 3D world (headless, to find textures that suit it).
+    double parallax = shader(value<double>(parallax_option, 0.0));
+    if (const char* forced = std::getenv("TOOIE_PARALLAX")) {
+        parallax = std::atof(forced);
+    }
+    const char* parallax_all = std::getenv("TOOIE_PARALLAX_ALL");
+    RT64::SetSceneParallax((float)(parallax / 100.0), (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
+    static const auto parallax_lists = [] {
+        std::pair<std::vector<uint64_t>, std::vector<uint8_t>> lists;
+        for (const ParallaxTexture& texture : parallax_textures) {
+            lists.first.push_back(texture.hash);
+            lists.second.push_back(texture.darkest);
+            lists.second.push_back(texture.lightest);
+        }
+        return lists;
+    }();
+    RT64::SetSceneParallaxTextures(parallax_lists.first.data(), parallax_lists.second.data(), parallax_lists.first.size());
     modern_water = shaders && value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
@@ -993,6 +1090,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Snow height",
         "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
         25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        parallax_option,
+        "Parallax",
+        "Stone walls, paving and rock get depth: the stones stand out of the surface and the gaps and cracks between them sink in, shifting as the camera moves, instead of looking painted on. The textures have no depth of their own, so it is worked out from how dark each part is. Higher numbers are deeper. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
@@ -1191,7 +1293,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -1242,6 +1344,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
     for (const std::string* option : { &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option }) {
         graphics.add_option_hidden_dependency(*option, character_section_option, false);
