@@ -429,36 +429,6 @@ index 38b84f5..1bdc706 100644
          void set_tab(const std::string &id);
          void open();
          bool close();
-diff --git a/recompui/src/composites/ui_mod_menu.cpp b/recompui/src/composites/ui_mod_menu.cpp
-index 02455fd..482fc45 100644
---- a/recompui/src/composites/ui_mod_menu.cpp
-+++ b/recompui/src/composites/ui_mod_menu.cpp
-@@ -279,9 +279,14 @@ void ModMenu::refresh_mods(bool scan_mods) {
-         recompui::release_image(thumbnail);
-     }
- 
--    // Prevent scanning mods after starting the game.
--    if (scan_mods && !ultramodern::is_game_started()) {
--        recomp::mods::scan_mods();
-+    // After the game started, a full rescan would close the loaded mods, so only the new ones are opened.
-+    if (scan_mods) {
-+        if (ultramodern::is_game_started()) {
-+            recomp::mods::scan_new_mods();
-+        }
-+        else {
-+            recomp::mods::scan_mods();
-+        }
-     }
-     mod_details = recomp::mods::get_all_mod_details(game_mod_id);
-     create_mod_list();
-@@ -641,7 +646,6 @@ void ModMenu::process_event(const Event &e) {
-         }
-         if (ultramodern::is_game_started()) {
-             install_mods_button->set_enabled(false);
--            refresh_button->set_enabled(false);
-         }
-         if (active_mod_index != -1) {        
-             bool auto_enabled = recomp::mods::is_mod_auto_enabled(mod_details[active_mod_index].mod_id);
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..19a7624 100644
 --- a/recompui/src/config/ui_config.cpp
@@ -1214,8 +1184,41 @@ index cf2a311..486e08d 100644
              break;
          case EventType::Update:
              break;
+diff --git a/recompui/src/elements/ui_document.cpp b/recompui/src/elements/ui_document.cpp
+index a60c585..1a57764 100644
+--- a/recompui/src/elements/ui_document.cpp
++++ b/recompui/src/elements/ui_document.cpp
+@@ -196,6 +196,15 @@ namespace recompui {
+                 return this_element;
+             }
+ 
++            // Leaving a barrier container: stay put (the caller treats the document as "nowhere to go").
++            if (this_element->is_nav_barrier) {
++                Element *root = this_element;
++                while (root->get_nav_parent() != nullptr) {
++                    root = root->get_nav_parent();
++                }
++                return root;
++            }
++
+             int cur_element_index = get_element_index(this_element, nav_parent->nav_children);
+             if (cur_element_index == -1) {
+                 throw std::runtime_error("This should never ever ever happen. Element not found in its parent's nav children.");
+@@ -396,6 +405,12 @@ namespace recompui {
+             std::cout << "\nNAV START\n";
+             #endif
+ 
++            if (nav_context.original_focused_element->nav_override &&
++                nav_context.original_focused_element->nav_override(key_identifier)) {
++                event.StopPropagation();
++                return true;
++            }
++
+             Element *next_top_element = nav_context.unwind_nav_in_direction(nav_context.original_focused_element);
+             if (next_top_element == nullptr) {
+                 return false;
 diff --git a/recompui/src/elements/ui_element.cpp b/recompui/src/elements/ui_element.cpp
-index 4517152..36aae6b 100644
+index 4517152..f6ce79f 100644
 --- a/recompui/src/elements/ui_element.cpp
 +++ b/recompui/src/elements/ui_element.cpp
 @@ -520,6 +520,10 @@ float Element::get_scroll_top() {
@@ -1229,11 +1232,65 @@ index 4517152..36aae6b 100644
  float Element::get_client_left() {
      return base->GetClientLeft();
  }
+@@ -682,6 +686,44 @@ void Element::set_nav_wrapping(bool wrapping) {
+     is_nav_wrapping = wrapping;
+ }
+ 
++bool Element::contains_element(const Element *other) const {
++    for (const Element *cur = other; cur != nullptr; cur = cur->parent) {
++        if (cur == this) {
++            return true;
++        }
++    }
++    return false;
++}
++
++bool Element::focus_first_nav_element() {
++    nav_children.clear();
++    build_navigation(this, nullptr);
++    if (nav_children.empty()) {
++        get_all_focusable_children(this);
++    }
++    Element *cur = this;
++    NavigationType cur_type = is_nav_container ? nav_type : NavigationType::Vertical;
++    while (!cur->nav_children.empty()) {
++        Element *next = cur->nav_children[0];
++        // In a row, the selected entry (a radio's picked value, the active tab).
++        if (cur_type == NavigationType::Horizontal || cur_type == NavigationType::GridRow) {
++            for (Element *child : cur->nav_children) {
++                if (child->is_primary_focus) {
++                    next = child;
++                    break;
++                }
++            }
++        }
++        cur = next;
++        cur_type = cur->nav_type;
++    }
++    if (cur == this) {
++        return false;
++    }
++    cur->focus();
++    return true;
++}
++
+ void Element::set_as_primary_focus(bool is_primary_focus) {
+     this->is_primary_focus = is_primary_focus;
+ }
 diff --git a/recompui/src/elements/ui_element.h b/recompui/src/elements/ui_element.h
-index 34eec3f..1680b5f 100644
+index 34eec3f..cedce38 100644
 --- a/recompui/src/elements/ui_element.h
 +++ b/recompui/src/elements/ui_element.h
-@@ -141,6 +141,7 @@ public:
+@@ -75,6 +75,8 @@ private:
+     bool is_nav_wrapping = false;
+     NavigationType nav_type = NavigationType::Auto;
+     bool is_primary_focus = false;
++    bool is_nav_barrier = false;
++    std::function<bool(int key_identifier)> nav_override;
+ 
+     std::vector<Element *> nav_children;
+ 
+@@ -141,6 +143,7 @@ public:
      float get_offset_top();
      float get_scroll_left();
      float get_scroll_top();
@@ -1241,51 +1298,85 @@ index 34eec3f..1680b5f 100644
      float get_client_left();
      float get_client_top();
      float get_client_width();
+@@ -175,6 +178,16 @@ public:
+     // This is more used to decide which element to focus on when any element could be picked,
+     // like vertically navigating to the selected tab in a tab list.
+     void set_as_primary_focus(bool is_primary_focus = true);
++    // Directional navigation never leaves this container: a direction with nothing left inside it does nothing.
++    void set_nav_barrier(bool barrier) { is_nav_barrier = barrier; }
++    // Called with the arrow key (Rml::Input::KI_*) pressed while this element has focus, before the usual
++    // navigation; return true to take the press.
++    void set_nav_override(std::function<bool(int key_identifier)> callback) { nav_override = std::move(callback); }
++    // True when other is this element or one of its descendants.
++    bool contains_element(const Element *other) const;
++    // Focuses the first element directional navigation would reach going into this container from the top
++    // (the selected entry of a row). Returns false when nothing in it can take focus.
++    bool focus_first_nav_element();
+ 
+     Element *select_add_option(std::string_view text, std::string_view value);
+     void select_set_selection(std::string_view option_value);
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..bd7a9ba 100644
+index b057f46..433d594 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
-@@ -3,6 +3,8 @@
+@@ -3,6 +3,9 @@
  #include "ui_document.h"
  #include "recompinput/recompinput.h"
  #include "recompinput/profiles.h"
 +#include "recompui/config.h"
 +#include "ui_sidebar_style.h"
++#include <RmlUi/Core/Input.h>
  
  namespace recompui {
  
-@@ -311,6 +313,72 @@ Modal *Modal::create_modal(ModalType modal_type) {
+@@ -311,6 +314,88 @@ Modal *Modal::create_modal(ModalType modal_type) {
      return modal;
  }
  
 +// The sidebar's search box: opens the Search tab, whose own text box does the searching.
 +class SidebarSearch : public Element {
 +protected:
-+    std::function<void()> on_press;
++    std::function<void()> on_select;
++    std::function<void()> on_enter;
 +    Style hover_style;
 +    Style focus_style;
 +
 +    void process_event(const Event &e) override {
 +        switch (e.type) {
 +        case EventType::Click:
-+            on_press();
++            on_select();
++            on_enter();
 +            break;
 +        case EventType::Hover:
 +            set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
 +            break;
-+        case EventType::Focus:
-+            set_style_enabled(focus_state, std::get<EventFocus>(e.variant).active);
++        case EventType::Focus: {
++            bool active = std::get<EventFocus>(e.variant).active;
++            set_style_enabled(focus_state, active);
++            // Like the tabs below it: reaching the box opens the Search tab.
++            if (active) {
++                on_select();
++            }
 +            break;
++        }
 +        default:
 +            break;
 +        }
 +    }
 +    std::string_view get_type_name() override { return "SidebarSearch"; }
 +public:
-+    SidebarSearch(ResourceId rid, Element *parent, std::function<void()> on_press) :
++    SidebarSearch(ResourceId rid, Element *parent, std::function<void()> on_select, std::function<void()> on_enter) :
 +        Element(rid, parent, Events(EventType::Click, EventType::Hover, EventType::Focus), "button", false),
-+        on_press(std::move(on_press))
++        on_select(std::move(on_select)), on_enter(std::move(on_enter))
 +    {
++        set_nav_override([this](int key_identifier) {
++            if (key_identifier == Rml::Input::KI_RIGHT) {
++                this->on_select();
++                this->on_enter();
++                return true;
++            }
++            return false;
++        });
 +        set_display(Display::None);
 +        set_position(Position::Relative);
 +        set_height(44.0f);
@@ -1327,7 +1418,7 @@ index b057f46..bd7a9ba 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -331,9 +399,95 @@ TabbedModal::TabbedModal(
+@@ -331,9 +416,114 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -1388,7 +1479,18 @@ index b057f46..bd7a9ba 100644
 +        body->set_width(100.0f, Unit::Percent);
 +    }
 +
++    // Controller and arrow keys (L, 2026-10-16): up and down the sidebar opens each tab, A or Right moves into
++    // the page, B goes back to the sidebar. Inside a page the stick stays in the page, and inside the sidebar
++    // it stays in the sidebar, so nothing jumps across.
++    modal_element->set_nav_wrapping(!sidebar);
++    header->set_nav_barrier(sidebar);
++    body->set_as_navigation_container(NavigationType::Vertical);
++    body->set_nav_barrier(sidebar);
++
 +    if (tabs != nullptr) {
++        tabs->set_enter_callback([this]() {
++            this->enter_page();
++        });
 +        tabs->set_vertical(sidebar);
 +        // The search box at the top of the sidebar takes the Search tab's place in the list.
 +        tabs->set_tab_listed(get_tab_index("search"), !sidebar);
@@ -1396,6 +1498,14 @@ index b057f46..bd7a9ba 100644
 +    if (sidebar_search != nullptr) {
 +        sidebar_search->set_display((sidebar && get_tab_index("search") >= 0) ? Display::Block : Display::None);
 +    }
++}
++
++void TabbedModal::enter_page() {
++    if (!sidebar_layout) {
++        return;
++    }
++    // A page made this frame has no layout yet: focus it after the next two updates.
++    page_focus_pending = 2;
 +}
 +
 +int TabbedModal::get_tab_index(const std::string &id) const {
@@ -1423,28 +1533,57 @@ index b057f46..bd7a9ba 100644
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -404,6 +558,10 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -341,6 +531,9 @@ void TabbedModal::process_event(const Event &e) {
+                 }
+                 previous_tab_index = current_tab_index;
+             }
++            else if (page_focus_pending > 0 && --page_focus_pending == 0) {
++                body->focus_first_nav_element();
++            }
+             queue_update();
+             break;
+         }
+@@ -362,7 +555,14 @@ void TabbedModal::navigate_tab_direction(int direction) {
+         return;
+     }
+     int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
++    // Sidebar: L and R from inside a page land inside the next page, not on the sidebar.
++    Element *focused = get_current_context().get_focused_element();
++    bool from_page = sidebar_layout && focused != nullptr && body->contains_element(focused);
+     set_selected_tab(next_index);
++    if (from_page && current_tab_index == next_index) {
++        enter_page();
++        return;
++    }
+     // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
+     if (current_tab_index == next_index) {
+         tabs->focus_on_active_tab();
+@@ -404,6 +604,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
 +        // Shown above the tabs with the sidebar layout only.
 +        sidebar_search = context.create_element<SidebarSearch>(header->get_left(), [this]() {
 +            this->set_selected_tab(std::string{"search"});
++        }, [this]() {
++            this->enter_page();
 +        });
          tabs = context.create_element<TabSet>(header->get_left());
          tabs->set_change_tab_callback([this](int tab_index) {
              this->on_tab_change(tab_index);
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..7d6a77f 100644
+index d065a14..ef08475 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -102,6 +102,11 @@ namespace recompui {
+@@ -102,6 +102,13 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
 +        bool sidebar_layout = false;
 +        Element *sidebar_search = nullptr;
 +        bool sidebar_search_active = false;
++        int page_focus_pending = 0;
++        void enter_page();
 +        int get_tab_index(const std::string &id) const;
 +        void apply_sidebar_layout(bool sidebar);
          virtual void process_event(const Event &e) override;
@@ -1582,19 +1721,20 @@ index 0000000..e5b6a0c
 +    inline constexpr const char *font = "Luckiest Guy";
 +}
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
-index 2c5dc52..2271509 100644
+index 2c5dc52..396c645 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
 +++ b/recompui/src/elements/ui_tab_set.cpp
-@@ -1,5 +1,8 @@
+@@ -1,5 +1,9 @@
  #include "ui_tab_set.h"
  #include "ui_utils.h"
 +#include "ui_svg.h"
 +#include "ui_sidebar_style.h"
 +#include "recompui/recompui.h"
++#include <RmlUi/Core/Input.h>
  
  namespace recompui {
  
-@@ -49,6 +52,60 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
+@@ -49,6 +53,60 @@ Tab::Tab(ResourceId rid, Element *parent, int tab_index, std::string_view text,
      add_style(&disabled_style, { disabled_state });
  }
  
@@ -1655,7 +1795,27 @@ index 2c5dc52..2271509 100644
  void Tab::set_visible(bool is_visible) {
      visible = is_visible;
      set_enabled(visible);
-@@ -88,6 +145,14 @@ void Tab::process_event(const Event &e) {
+@@ -66,6 +124,9 @@ void Tab::process_event(const Event &e) {
+     switch (e.type) {
+     case EventType::Click:
+         on_select_tab(tab_index);
++        if (vertical && on_enter) {
++            on_enter();
++        }
+         break;
+     case EventType::Hover:
+         set_style_enabled(hover_state, std::get<EventHover>(e.variant).active);
+@@ -82,12 +143,24 @@ void Tab::process_event(const Event &e) {
+             set_style_enabled(focus_state, active);
+             if (active) {
+                 queue_update();
++                // Sidebar: moving up and down the list opens each tab as it is reached.
++                if (vertical && !is_selected) {
++                    on_select_tab(tab_index);
++                }
+             }
+         }
+         break;
      case EventType::Update:
          if (is_style_enabled(focus_state)) {
              recompui::Color pulse_color = recompui::get_pulse_color(750);
@@ -1670,7 +1830,7 @@ index 2c5dc52..2271509 100644
              pulsing_style.set_color(pulse_color);
              if (is_selected) {
                  indicator->set_background_color(pulse_color);
-@@ -105,6 +170,9 @@ void Tab::process_event(const Event &e) {
+@@ -105,6 +178,9 @@ void Tab::process_event(const Event &e) {
  
  void Tab::set_selected(bool enable) {
      is_selected = enable;
@@ -1680,7 +1840,7 @@ index 2c5dc52..2271509 100644
      set_as_primary_focus(enable);
      set_style_enabled(checked_state, enable);
      indicator->set_background_color(enable ? theme::color::BorderSolid : theme::color::Transparent);
-@@ -131,6 +199,9 @@ int TabSet::add_tab(std::string_view text) {
+@@ -131,6 +207,9 @@ int TabSet::add_tab(std::string_view text) {
          set_active_tab(tab_index, true);
      });
      tabs.push_back(tab);
@@ -1690,7 +1850,7 @@ index 2c5dc52..2271509 100644
      if (active_tab < 0) {
          active_tab = 0;
          tab->set_selected(true);
-@@ -194,6 +265,26 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
+@@ -194,6 +273,39 @@ int TabSet::get_next_tab_in_direction(int index, int direction) {
      return new_index;
  }
  
@@ -1701,6 +1861,19 @@ index 2c5dc52..2271509 100644
 +    set_as_navigation_container(vertical ? NavigationType::Vertical : NavigationType::Horizontal);
 +    for (Tab *tab : tabs) {
 +        tab->set_vertical(vertical);
++    }
++}
++
++void TabSet::set_enter_callback(std::function<void()> callback) {
++    for (Tab *tab : tabs) {
++        tab->on_enter = callback;
++        tab->set_nav_override([tab](int key_identifier) {
++            if (key_identifier == Rml::Input::KI_RIGHT && tab->on_enter) {
++                tab->on_enter();
++                return true;
++            }
++            return false;
++        });
 +    }
 +}
 +
@@ -1718,7 +1891,7 @@ index 2c5dc52..2271509 100644
      if (tab_index < 0 || tab_index >= static_cast<int>(tabs.size())) {
          return;
 diff --git a/recompui/src/elements/ui_tab_set.h b/recompui/src/elements/ui_tab_set.h
-index b8d3783..8ebd65d 100644
+index b8d3783..366fcd5 100644
 --- a/recompui/src/elements/ui_tab_set.h
 +++ b/recompui/src/elements/ui_tab_set.h
 @@ -18,6 +18,8 @@ namespace recompui {
@@ -1730,16 +1903,18 @@ index b8d3783..8ebd65d 100644
  
          bool visible = true;
  
-@@ -32,6 +34,8 @@ namespace recompui {
+@@ -32,6 +34,10 @@ namespace recompui {
          void set_selected(bool selected);
          void set_visible(bool is_visible);
          bool get_visible() { return visible; }
 +        // Sidebar layout: a row of a vertical list, its selected mark down the left edge.
 +        void set_vertical(bool vertical);
++        // Sidebar layout: called on A (click) and on Right, to move into the tab's page.
++        std::function<void()> on_enter;
      };
  
      class TabSet : public Element {
-@@ -51,6 +55,13 @@ namespace recompui {
+@@ -51,6 +57,15 @@ namespace recompui {
          int get_active_tab() const { return active_tab; }
          void set_tab_visible(int tab_index, bool is_visible);
          int get_next_tab_in_direction(int index, int direction);
@@ -1748,6 +1923,8 @@ index b8d3783..8ebd65d 100644
 +        bool is_vertical() const { return vertical; }
 +        // Leaves a tab out of the list without hiding it from L and R (the sidebar's search box stands in for it).
 +        void set_tab_listed(int tab_index, bool listed);
++        // Sidebar layout: A or Right on a tab moves into its page.
++        void set_enter_callback(std::function<void()> callback);
 +    private:
 +        bool vertical = false;
      };

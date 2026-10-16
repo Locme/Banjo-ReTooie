@@ -134,6 +134,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   panels with a gold border, gold "Luckiest Guy" lettering (the game registers the font), and the picked tab filled
   gold with a Jiggy (`assets/icons/Jiggy.svg`), and switches that are on drawn gold instead of blue
   (`Toggle::set_sidebar_colors`, `ui_toggle.{h,cpp}`, also on the Search tab's rows); turning it off puts the old colours and font back.
+  Navigation in that layout (`ui_document.cpp`, `ui_element.{h,cpp}`, `ui_tab_set.cpp`, `ui_modal.cpp`): the sidebar
+  and the page are barriers (`Element::set_nav_barrier`), so the stick never crosses between them; reaching a tab or
+  the search box opens it; A or Right (`Element::set_nav_override`) moves into the page's first option
+  (`Element::focus_first_nav_element`, the search box's text field on the Search tab); L and R from inside a page
+  land in the next page.
 * **Android** (`recompui/CMakeLists.txt`, `recompinput/CMakeLists.txt`): the SDL include folders are added on
   Android too (the game's CMakeLists builds SDL there).
 

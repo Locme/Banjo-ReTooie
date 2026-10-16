@@ -2418,3 +2418,15 @@
   2. Stand still until Banjo looks around, then walk, jump, flap and talk to someone
 - Look for: Banjo's face stays like L's reference picture: the muzzle, teeth, brows and tongue now move with his head, so the snout no longer stretches and the mouth no longer hangs open when he turns his head (in v2 they followed his chest). Still full detail, as v2. Checked headless in Spiral Mountain through the idle look-around (screenshot screens/banjo-x/alt-v3.png: v2 left, v3 right, v3 front below).
 - Status: waiting for L
+
+## T229 Settings menu: controller moves the same way in every tab, Search ready to type
+- Asked: 2026-10-16 08:30 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Open the settings menu with a controller and move up and down the sidebar
+  2. Press A or Right on a tab, then move around the page with the stick, including Left and Right on switches and at the top and bottom of the list
+  3. Press B, then L and R both from the sidebar and from inside a page
+  4. Go up to Search settings at the top of the sidebar and press A (or click it with the mouse), then type
+- Look for: Step 1, each tab opens as soon as you reach it. Step 2, the cursor goes to the page's first option; the stick never jumps out to the sidebar or to the quit button, and stops at the ends of the list. Step 3, B goes back to the sidebar on the open tab; L and R switch tabs and keep you where you were (in the sidebar, or in the new page's first option). Step 4, the cursor is already in the search box and typing works at once. Checked headless with the arrow keys and the mouse; B and a real controller not checked.
+- Status: waiting for L
+
