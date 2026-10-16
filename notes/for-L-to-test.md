@@ -2601,7 +2601,7 @@
 - Steps:
   1. Put "Banjo X Alt v4.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Open photo mode and look at Banjo's face close up, then walk, jump, flap and roll
-- Look for: half-closed eyelids over blue eyes, the brows, the smile and the peach insides of the ears, as in L's reference picture; the straps stay on the shoulders. The game stores model points as whole numbers, which crushed this model's fine detail (eyelids sank into the eyes, the smile closed). v4 stores the points 8 times larger and scales them back down while drawing. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v4.png: v3 top left, v4 top right, v4 with HD textures below).
+- Look for: half-closed eyelids over blue eyes, the brows, the smile and the peach insides of the ears, as in L's reference picture; the straps stay on the shoulders. The game stores model points as whole numbers, which crushed this model's fine detail (eyelids sank into the eyes, the smile closed). v4 stores the points 8 times larger and scales them back down while drawing. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v4.png: v4 close up, and v4 with HD textures).
 - Status: waiting for L
 
 ## T248 Viva Mumbo Jumbo v2: polish pass
