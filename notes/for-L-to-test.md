@@ -2613,3 +2613,27 @@
   3. Play as Mumbo: walk, run, jump, crouch, swim, use the wand, and look at his feet and skirt close up (photo mode helps)
 - Look for: closed, solid toes and feet (v1 showed orange holes on top of the toes), legs lit like the rest of the body instead of dark and flat, a skirt with its full colours, no eyelids showing through the eyes, thumbs and feet joined cleanly while moving, no orange rim round the soles, and the soles orange underneath when he sits with his feet up. The cause of the toes: the source model's legs, feet, skirt and feathers were built inside out, and the game hides the inside of a model. Checked headless with the zip, playing as Mumbo in Spiral Mountain and sitting in Mayahem Temple's skull: [v2.png](screens/viva-mumbo/v2.png). Swimming and the wand spell were not tried.
 - Status: waiting for L
+
+## T249 Day and night: wet ground in the rain
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: wet ground, rain rings on water, raindrops on screen" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Weather: Rain, Wet Ground on; stand in Spiral Mountain for 15 s or so, then set Weather: Clear
+- Look for: The ground darkens and level ground turns shiny in patches, reflecting what is round it, more so looking along it. Banjo and water stay as they are. After the rain stops it dries over about a minute and a half. Wet Ground off keeps it dry. Checked headless: [wet-ground-rain.png](screens/day-night/wet-ground-rain.png).
+
+## T250 Day and night: rain rings on water
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: wet ground, rain rings on water, raindrops on screen" on main
+- Steps:
+  1. Weather: Storm, swim in the Spiral Mountain moat or stand by the water in Jolly Roger's Lagoon
+- Look for: Rings spreading over the water where the rain lands, two at a time, wider and slower than the splashes on the ground. Checked headless: [rain-rings-and-drops.png](screens/day-night/rain-rings-and-drops.png).
+
+## T251 Day and night: raindrops on the screen
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: wet ground, rain rings on water, raindrops on screen" on main
+- Steps:
+  1. Weather: Rain, Raindrops on Screen on; look around, then point the camera up at the sky
+- Look for: A few drops land on the screen, hold, then run down leaving a thin trail; each bends what is behind it with a dark rim and a glint. Many more when looking up. None under water or in snow. Off removes them.

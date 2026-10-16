@@ -25,6 +25,9 @@ namespace tooie::day_night {
     inline const std::string aurora_option = "day_night_aurora";
     // Soft 3D clouds across the sky.
     inline const std::string clouds_option = "day_night_clouds";
+    // Wet, shiny ground in and after the rain, and raindrops running down the screen.
+    inline const std::string wet_ground_option = "day_night_wet_ground";
+    inline const std::string drops_option = "day_night_drops";
     // Mist over low ground and round water: how thick (0 off to 100), and when it shows.
     inline const std::string mist_option = "day_night_mist";
     enum class MistTime : uint32_t { Mornings, MorningsAndNights, Always };

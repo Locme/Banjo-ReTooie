@@ -3620,10 +3620,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..4c26c7b
+index 0000000..f2d7a82
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1378 @@
+@@ -0,0 +1,1387 @@
 +//
 +// RT64
 +//
@@ -4094,6 +4094,12 @@ index 0000000..4c26c7b
 +        effectsSettings.dayMistWhen = std::min(when, 2u);
 +    }
 +
++    void SetSceneRainDetail(float wet, bool drops) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayWet = std::clamp(wet, 0.0f, 1.0f);
++        effectsSettings.dayDrops = drops;
++    }
++
 +    void SetSceneWeather(float rain, float flash, bool snow) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayRain = std::clamp(rain, 0.0f, 1.0f);
@@ -4391,7 +4397,8 @@ index 0000000..4c26c7b
 +        const std::scoped_lock lock(effectsMutex);
 +        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.modernWater || (effectsSettings.view == 4) ||
 +            // The day and night cycle's mist gathers round water.
-+            (effectsSettings.timeOfDay && (effectsSettings.dayMist > 0.0f)) ||
++            // and the rain rings on water need it too.
++            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
 +            (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
 +    }
 +
@@ -4576,8 +4583,10 @@ index 0000000..4c26c7b
 +            const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
 +            // Rain hides the sun: no sun shadows under it.
 +            const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
-+            // The mist rides above the softness and Banjo's flag: 4 * (strength (0 to 100) + 128 * when).
-+            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen)) : 0.0f;
++            // The mist and the rain's details ride above the softness and Banjo's flag: 4 * (the mist's strength
++            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
++            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
++                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
 +            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
 +            if (sunLength > 1e-6f) {
 +                float shafts = settings.lightShafts * settings.dayShafts;
@@ -5004,10 +5013,10 @@ index 0000000..4c26c7b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f3d46ca
+index 0000000..19f76e1
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,222 @@
+@@ -0,0 +1,226 @@
 +//
 +// RT64
 +//
@@ -5083,6 +5092,9 @@ index 0000000..f3d46ca
 +        // The mist's strength (0 off, 1 thickest) and when it shows (0 mornings, 1 mornings and nights, 2 always).
 +        float dayMist = 0.5f;
 +        uint32_t dayMistWhen = 0;
++        // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
++        float dayWet = 0.0f;
++        bool dayDrops = false;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -5154,6 +5166,7 @@ index 0000000..f3d46ca
 +    // snow: it falls as snow.
 +    void SetSceneWeather(float rain, float flash, bool snow);
 +    void SetSceneMist(float strength, uint32_t when);
++    void SetSceneRainDetail(float wet, bool drops);
 +    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
 +    void SetSceneMoonPhase(uint32_t phase);
 +    // Banjo-Tooie: northern lights across the night sky with the day and night cycle.
@@ -7516,10 +7529,10 @@ index 74b1fa0..4b52771 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..90a9c7c
+index 0000000..fb8ed7a
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1904 @@
+@@ -0,0 +1,2037 @@
 +//
 +// RT64
 +//
@@ -8621,49 +8634,64 @@ index 0000000..90a9c7c
 +}
 +
 +// Rain landing: small rings splashing up and spreading on level ground, at random spots fixed in the world, each
-+// spot splashing again and again at its own pace, and fewer far off.
++// spot splashing again and again at its own pace, and fewer far off. On water (from the water mask) the rings
++// are wider and slower, two at a time spreading over the surface, with no splash in the middle.
 +float3 DayRainSplashes(int2 pixel, float depth, float3 tint, float rain) {
 +    if ((rain <= 0.0f) || (depth >= 0.99999f) || DaySnow()) {
 +        return 0.0f;
 +    }
-+    const float3 center = ViewPosition(pixel, depth);
-+    const float level = saturate((dot(ViewNormal(pixel, center), normalize(gConstants.worldY.xyz)) - 0.75f) * 6.0f);
++    float waterDepth;
++    const bool onWater = (gConstants.water.y > 0.5f) && (gConstants.fog.w <= 0.0f) && LoadWater(pixel, waterDepth);
++    const float3 center = ViewPosition(pixel, onWater ? waterDepth : depth);
++    const float level = onWater ? 1.0f : saturate((dot(ViewNormal(pixel, center), normalize(gConstants.worldY.xyz)) - 0.75f) * 6.0f);
 +    if (level <= 0.0f) {
 +        return 0.0f;
 +    }
 +    const float scale = length(gConstants.worldX.xyz);
 +    const float distance = length(center) * scale;
-+    const float fade = 1.0f - smoothstep(250.0f, 700.0f, distance);
++    const float fade = 1.0f - (onWater ? smoothstep(400.0f, 1100.0f, distance) : smoothstep(250.0f, 700.0f, distance));
 +    if (fade <= 0.0f) {
 +        return 0.0f;
 +    }
 +    const float2 world = float2(dot(center, gConstants.worldX.xyz) + gConstants.worldX.w, dot(center, gConstants.worldZ.xyz) + gConstants.worldZ.w);
 +    const float pixelSize = distance * 2.0f / (gConstants.projection.y * gConstants.projection.w);
 +    const float time = gConstants.view.z;
++    const float Cell = onWater ? 24.0f : 11.0f;
++    const float life = onWater ? 0.7f : 0.25f;
 +    float total = 0.0f;
 +    [unroll]
 +    for (int layer = 0; layer < 3; layer++) {
-+        const float Cell = 11.0f;
 +        const float2 p = world / Cell + float2(0.37f, 0.61f) * float(layer);
 +        const float2 cell = floor(p);
 +        const float3 seed = float3(cell, 4.0f + float(layer) * 9.0f);
 +        if (DayHash(seed) > rain) {
 +            continue;
 +        }
-+        // A splash every half second to second, lasting a quarter of a second.
-+        const float period = 0.5f + 0.5f * DayHash(seed + 3.0f);
++        // A splash every half second to second (a little slower on water), lasting a quarter of a second (on
++        // water, the rings spread for most of a second).
++        const float period = (0.5f + 0.5f * DayHash(seed + 3.0f)) * (onWater ? 1.6f : 1.0f);
 +        const float age = frac(time / period + DayHash(seed + 5.0f)) * period;
-+        if (age > 0.25f) {
++        if (age > life) {
 +            continue;
 +        }
 +        const float2 spot = (cell + 0.3f + 0.4f * float2(DayHash(seed + 7.0f), DayHash(seed + 9.0f)) - float2(0.37f, 0.61f) * float(layer)) * Cell;
-+        const float x = age / 0.25f;
-+        const float ringRadius = 0.6f + 3.4f * sqrt(x);
++        const float x = age / life;
 +        const float width = max(0.5f, pixelSize);
-+        const float ring = saturate(1.0f - abs(length(world - spot) - ringRadius) / width) * min(1.0f, 0.5f / width);
-+        // A bright drop at the middle as it lands.
-+        const float hit = saturate(1.0f - length(world - spot) / max(0.8f, pixelSize)) * saturate(1.0f - x * 4.0f);
-+        total += (ring * 0.7f + hit) * (1.0f - x);
++        const float across = length(world - spot);
++        if (onWater) {
++            const float outer = 0.8f + 7.5f * sqrt(x);
++            const float inner = outer * 0.55f;
++            const float soft = width * 1.6f;
++            const float ring = saturate(1.0f - abs(across - outer) / soft) + 0.5f * saturate(1.0f - abs(across - inner) / soft) * step(0.15f, x);
++            total += ring * min(1.0f, 0.5f / width) * 0.3f * (1.0f - x) * (1.0f - x);
++        }
++        else {
++            const float ringRadius = 0.6f + 3.4f * sqrt(x);
++            const float ring = saturate(1.0f - abs(across - ringRadius) / width) * min(1.0f, 0.5f / width);
++            // A bright drop at the middle as it lands.
++            const float hit = saturate(1.0f - across / max(0.8f, pixelSize)) * saturate(1.0f - x * 4.0f);
++            total += (ring * 0.7f + hit) * (1.0f - x);
++        }
 +    }
 +    const float3 color = float3(0.75f, 0.8f, 0.88f) * (0.3f + 0.7f * max(tint.r, max(tint.g, tint.b)));
 +    return color * total * level * fade * saturate(rain * 1.5f) * 1.4f;
@@ -8762,12 +8790,60 @@ index 0000000..90a9c7c
 +        (1.0f - DayNight(tint)) * (1.0f - DayWeather().x);
 +}
 +
-+// The mist setting, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when) + 2 to
-+// leave Banjo out + softness): x the strength (0 to 1), y when (0 mornings, 1 mornings and nights, 2 always).
-+float2 DayMistSetting() {
-+    const float packed = floor(gConstants.shadows.w / 4.0f);
++// The mist and rain settings, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when +
++// 512 * wet (0 to 31) + 16384 for raindrops) + 2 to leave Banjo out + softness): x the mist's strength (0 to 1),
++// y when (0 mornings, 1 mornings and nights, 2 always), z how wet the ground is (0 to 1), w 1 for raindrops on the
++// screen.
++float4 DayMistAndRain() {
++    float packed = floor(gConstants.shadows.w / 4.0f);
++    const float drops = (packed >= 16384.0f) ? 1.0f : 0.0f;
++    packed -= drops * 16384.0f;
++    const float wet = floor(packed / 512.0f);
++    packed -= wet * 512.0f;
 +    const float when = floor(packed / 128.0f);
-+    return float2((packed - when * 128.0f) / 100.0f, when);
++    return float4((packed - when * 128.0f) / 100.0f, when, wet / 31.0f, drops);
++}
++
++float2 DayMistSetting() {
++    return DayMistAndRain().xy;
++}
++
++// Wet ground in and after the rain: everything darkens a little, and what faces up darkens more and turns
++// shiny, reflecting what is round it (a ray across the screen, as the water's reflections) with a sheen that
++// comes and goes over the ground. Not on Banjo himself, nor on the water.
++float3 DayWet(float3 scene, int2 pixel, float depth) {
++    const float wet = DayMistAndRain().z;
++    if ((wet <= 0.0f) || (depth >= 0.99999f) || (gConstants.fog.w > 0.0f)) {
++        return scene;
++    }
++    float waterDepth;
++    if ((gConstants.water.y > 0.5f) && LoadWater(pixel, waterDepth)) {
++        return scene;
++    }
++    const float3 center = ViewPosition(pixel, depth);
++    const float3 world = WorldPosition(center);
++    if (gConstants.rippleAge.w > -1e8f) {
++        const float across = length(world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w));
++        const float up = world.y - gConstants.rippleAge.w;
++        if ((across < 45.0f) && (up > 3.0f) && (up < 140.0f)) {
++            return scene;
++        }
++    }
++    const float3 normal = ViewNormal(pixel, center);
++    const float level = saturate((dot(normal, normalize(gConstants.worldY.xyz)) - 0.55f) * 4.0f);
++    // Wet patches and drier ones, fixed to the ground.
++    const float patches = 0.55f + 0.45f * smoothstep(0.25f, 0.7f, WaterNoise(world.xz / 90.0f));
++    float3 result = scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
++    const float shine = wet * level * patches;
++    if (shine > 0.02f) {
++        // A slightly rough surface: the normal wobbles with the position.
++        const float2 rough = float2(WaterNoise(world.xz / 7.0f), WaterNoise(world.zx / 7.0f + 13.0f)) - 0.5f;
++        const float3 n = normalize(normal + (normalize(gConstants.worldX.xyz) * rough.x + normalize(gConstants.worldZ.xyz) * rough.y) * 0.08f);
++        const float4 reflection = WaterReflection(center, n);
++        const float fresnel = 0.05f + 0.95f * pow(1.0f - saturate(dot(-normalize(center), n)), 5.0f);
++        result = lerp(result, reflection.rgb, saturate(shine * fresnel * reflection.a * 0.85f));
++    }
++    return result;
 +}
 +
 +// Mist: pale banks drifting slowly over low ground (below and a little above Banjo's height), thicker with
@@ -8829,6 +8905,73 @@ index 0000000..90a9c7c
 +    const float shade = saturate(0.5f + dot(color, float3(0.299f, 0.587f, 0.114f)) * 1.4f);
 +    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.5f) * shade;
 +    return lerp(color, mist, amount);
++}
++
++// Raindrops on the screen in the rain, more when looking up: each lands, holds a while, then runs down leaving
++// a thin wet trail. A drop bends what is behind it, as a little lens, darker at its rim with a glint.
++float3 DayLensDrops(float3 scene, int2 pixel, float3 tint, float rain) {
++    if ((DayMistAndRain().w < 0.5f) || (rain <= 0.0f) || (gConstants.fog.w > 0.0f) || DaySnow()) {
++        return scene;
++    }
++    const float2 size = gConstants.projection.zw;
++    const float lookUp = -gConstants.worldY.z / length(gConstants.worldY.xyz);
++    const float chance = saturate(rain * 1.3f) * (0.06f + 0.34f * smoothstep(-0.45f, 0.25f, lookUp));
++    const float time = gConstants.view.z;
++    const float Cell = size.y / 7.0f;
++    float2 bend = 0.0f;
++    float inside = 0.0f, rim = 0.0f, glint = 0.0f, trail = 0.0f;
++    [unroll]
++    for (int layer = 0; layer < 2; layer++) {
++        const float2 p = float2(pixel) / Cell + float2(0.5f, 0.29f) * float(layer);
++        // This cell, and the one above for a drop running down into it.
++        [unroll]
++        for (int k = 0; k < 2; k++) {
++            const float2 cell = floor(p) - float2(0.0f, float(k));
++            const float3 seed = float3(cell, 31.0f + float(layer) * 7.0f);
++            const float period = 3.0f + 3.0f * DayHash(seed + 1.0f);
++            const float phase = time / period + DayHash(seed + 2.0f);
++            // A new drop (or none) each time round, on its own spot.
++            const float3 drop = seed + floor(phase) * 17.0f;
++            if (DayHash(drop) > chance) {
++                continue;
++            }
++            const float age = frac(phase);
++            const float radius = 0.06f + 0.09f * DayHash(drop + 3.0f);
++            float2 c = cell + 0.25f + 0.5f * float2(DayHash(drop + 4.0f), DayHash(drop + 5.0f));
++            const float slide = smoothstep(0.45f, 1.0f, age);
++            const float run = slide * slide * 1.4f;
++            const float top = c.y;
++            c.y += run;
++            const float appear = saturate(age * 25.0f) * (1.0f - smoothstep(0.85f, 1.0f, age));
++            // Running drops stretch a little.
++            const float2 d = (p - c) / (radius * float2(1.0f, 1.0f + 0.3f * slide));
++            const float r = length(d);
++            if (r < 1.0f) {
++                bend += -d * radius * Cell * 0.3f * appear;
++                inside = max(inside, appear);
++                rim = max(rim, smoothstep(0.65f, 1.0f, r) * appear);
++                glint = max(glint, saturate(1.0f - length(d - float2(-0.35f, -0.4f)) / 0.28f) * appear);
++            }
++            else if ((run > 0.0f) && (p.y < c.y) && (p.y > top)) {
++                const float along = (p.y - top) / max(run, 1e-3f);
++                trail = max(trail, saturate(1.0f - abs(p.x - c.x) / (radius * 0.3f)) * along * appear * 0.6f);
++            }
++        }
++    }
++    if ((inside <= 0.0f) && (trail <= 0.0f)) {
++        return scene;
++    }
++    const float bright = 0.4f + 0.6f * max(tint.r, max(tint.g, tint.b));
++    if (inside > 0.0f) {
++        const int2 at = clamp(int2(float2(pixel) + bend), int2(0, 0), int2(size) - 1);
++        // What is bent in, as the change it makes to the picture here, so the drop keeps the finished look
++        // (the tint, an overcast sky) round it.
++        const float3 through = max(scene + (gColor.Load(int3(at, 0)).rgb - gColor.Load(int3(pixel, 0)).rgb) * tint, 0.0f);
++        const float3 lens = through * (1.0f - 0.35f * rim) + glint * 0.5f * bright;
++        return lerp(scene, lens, inside * 0.7f);
++    }
++    const int2 at = clamp(pixel + int2(int(Cell * 0.02f) + 1, 0), int2(0, 0), int2(size) - 1);
++    return lerp(scene, max(scene + (gColor.Load(int3(at, 0)).rgb - gColor.Load(int3(pixel, 0)).rgb) * tint, 0.0f) * 1.08f, trail);
 +}
 +
 +// Morning dew: by the low morning sun (in the east), tiny glints twinkle on level grass, fixed in the world.
@@ -9240,6 +9383,7 @@ index 0000000..90a9c7c
 +            float3 scene = blur ? DepthOfField(pixel, -ViewPosition(pixel, depth).z, abs(gConstants.bloom.y), gConstants.bloom.y < 0.0f) : gColor.Load(int3(pixel, 0)).rgb;
 +            if (daytime) {
 +                scene = DaySky(scene, pixel, dayTint);
++                scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
 +            }
 +            if (gConstants.bloom.z > 0.0f) {
 +                scene = Adapt(scene);
@@ -9406,10 +9550,12 @@ index 0000000..90a9c7c
 +            }
 +        }
 +        if (daytime) {
++            scene = DayWet(scene, pixel, depth);
 +            scene = DayWorld(scene, dayTint);
 +            const float3 weather = DayWeather();
 +            scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
 +            scene = DayMist(scene, pixel, depth, dayTint);
++            scene = DayLensDrops(scene, pixel, dayTint, weather.x);
 +            rim *= dayTint;
 +        }
 +        if (gConstants.bloom.z > 0.0f) {
@@ -9849,10 +9995,10 @@ index 0a5c332..50c6be9 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..4ac4489
+index 0000000..7781aaa
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,75 @@
 +//
 +// RT64
 +//
@@ -9908,7 +10054,8 @@ index 0000000..4ac4489
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 7 bits
 +        // each, steps of 0.01, then three flags, bit 0 fireflies, bit 1 clouds, bit 2 northern lights: exact as a float below 2^24; negative for no lens
 +        // flare), then the softness (0 to 0.99) plus 2 to leave Banjo's own shadow out, plus 4 * (the day and night cycle's
-+        // mist strength (0 to 100) + 128 * when it shows (0 mornings, 1 mornings and nights, 2 always)).
++        // mist strength (0 to 100) + 128 * when it shows (0 mornings, 1 mornings and nights, 2 always) + 512 * how wet the
++        // ground is (0 to 31) + 16384 when raindrops land on the screen).
 +        float4 shadows;
 +    };
 +

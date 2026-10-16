@@ -31,6 +31,7 @@ namespace RT64 {
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneMist(float strength, uint32_t when);
+    void SetSceneRainDetail(float wet, bool drops);
     void SetSceneMoonPhase(uint32_t phase);
     void SetSceneAurora(bool enabled);
     void SetSceneNightLights(const uint64_t* hashes, size_t count);
@@ -405,6 +406,21 @@ void tooie::day_night::tick(uint8_t* rdram) {
     RT64::SetSceneWeather(rain * amount, flash * amount, snow);
     const auto [mist, mist_when] = mist_setting();
     RT64::SetSceneMist(mist, mist_when);
+    // The ground gets wet in the rain, in about 15 s of a storm, and dries over a minute and a half after.
+    // A map change (behind its wipe) snaps it to the weather. No wet ground in snow.
+    // Test aid: TOOIE_WET=<0 to 1> holds it there.
+    static float wet = 0.0f;
+    if (new_map) {
+        wet = std::min(rain * 1.5f, 1.0f);
+    }
+    else {
+        wet = (rain > 0.0f) ? std::min(1.0f, wet + rain * dt / 15.0f) : std::max(0.0f, wet - dt / 90.0f);
+    }
+    float wet_shown = (snow || !option_on(tooie::day_night::wet_ground_option)) ? 0.0f : wet;
+    if (const char* v = std::getenv("TOOIE_WET")) {
+        wet_shown = (float)std::atof(v);
+    }
+    RT64::SetSceneRainDetail(wet_shown * amount, option_on(tooie::day_night::drops_option) && !snow);
 
     // No fireflies on Hailfire Peaks (lava and ice).
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
@@ -547,6 +563,18 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, soft 3D clouds drift across the sky, lit by the sun and the moon (not in Cloud Cuckooland).",
         true);
     graphics.add_option_hidden_dependency(clouds_option, option, Mode::Off);
+    graphics.add_bool_option(
+        wet_ground_option,
+        "Wet Ground",
+        "With Day and Night on, the ground darkens and turns shiny in the rain, reflecting what is round it, then dries slowly after.",
+        true);
+    graphics.add_option_hidden_dependency(wet_ground_option, option, Mode::Off);
+    graphics.add_bool_option(
+        drops_option,
+        "Raindrops on Screen",
+        "With Day and Night on, raindrops land on the screen in the rain, more when you look up, and run down it.",
+        true);
+    graphics.add_option_hidden_dependency(drops_option, option, Mode::Off);
     graphics.add_number_option(
         mist_option,
         "Mist",

@@ -207,6 +207,11 @@ F12 screenshots are taken before these filters, so they don't show them.
   over Hailfire Peaks' Icy Side at night. Default: on.
 - **Clouds**: with Day and Night on, soft 3D clouds drift across the sky, lit
   by the sun and the moon (not in Cloud Cuckooland). Default: on.
+- **Wet Ground**: with Day and Night on, the ground darkens and turns shiny in
+  the rain, reflecting what is round it, and dries over about a minute and a
+  half after. Default: on.
+- **Raindrops on Screen**: with Day and Night on, raindrops land on the screen
+  in the rain (more when looking up) and run down it. Default: on.
 - **Mist**: with Day and Night on, pale mist drifting in banks over low ground,
   thickest on and round water. 0 to 100; 0 turns it off. Default: 50.
 - **Mist Time**: when the mist shows: Mornings, Mornings and Nights, or Always.
