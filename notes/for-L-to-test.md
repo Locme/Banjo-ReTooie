@@ -3119,3 +3119,13 @@
   2. Play as Mumbo, open photo mode and zoom in on his face and body; then talk to him in Mayahem Temple's skull
 - Look for: the face texture sits exactly on the shape, as in L's reference picture: the line over the top of his head runs smoothly, the striped rings hug the eye sockets all the way round, and the tan patch outlines the nose holes. The pink skin on his arms, body and legs has the faint scale pattern from the reference; the chest rainbow and the soles stay plain. Cause: every texture was drawn shifted by a small step (a texture-pack setting meant for upscaled N64 textures), and the scale pattern came in the upload but was not used. Checked headless with the zip: photo-mode close-up playing as Mumbo and talking in the skull ([v4.png](screens/viva-mumbo/v4.png)).
 - Status: waiting for L
+
+## T305 Run on the B button by default
+- Asked: 2026-10-16 20:30 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Start the game with your saved controls; console.log should say "[run] Run bound to the controller's B button (taken off C-right)" (or why it kept your controls)
+  2. In play, hold the controller's B button (Xbox B) while moving as Banjo-Kazooie, Banjo or Kazooie
+  3. Turn the camera right with the right stick, and press the X button (the game's B) to attack and roll
+- Look for: Step 2 runs. Step 3: the right stick still turns the camera, and X still attacks and rolls without running. Controls tab > Movement > Run shows the B button. Checked headless: new controls get B on Run; old saved controls with Run unbound move B from C-right to Run once and are saved; controls that use B for something else are left alone.
+- Status: waiting for L

@@ -1,8 +1,10 @@
 // Hold to run (L, 2026-10-14): "press B and hold to run", rebindable in the controller options,
 // with an animation that fits Banjo running. Only for Banjo-Kazooie, Banjo alone and Kazooie alone.
 //
-// The Run control is a game input in the Controls tab, with no default binding (L, 2026-10-14: "its
-// own bind ... but unbind it"). While it is held in that form's run state, the target speed the run state asks for
+// The Run control is a game input in the Controls tab. It had no default binding at first (L, 2026-10-14:
+// "its own bind ... but unbind it"); since L's "Make B the default run button" (2026-10-16) it defaults to the
+// controller's B button (SDL's east face button), which then stops being a second C-right (the right stick
+// still is one). Saved controls get the same change once (see give_run_the_b_button). While it is held in that form's run state, the target speed the run state asks for
 // (baphysics_set_target_horizontal_velocity, hooked in banjotooie.us.toml) is raised by sprint_scale.
 // The game ties its run animation's pace to the speed only up to the normal run speed, so at the
 // higher speed the feet would slide (the steps get longer); the top of that speed map is stretched by
@@ -26,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <variant>
 #include <utility>
 #include <vector>
@@ -38,6 +41,7 @@
 
 #include "recomp.h"
 #include "librecomp/addresses.hpp"
+#include "librecomp/game.hpp"
 #include "funcs.h"
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
@@ -184,6 +188,51 @@ namespace {
                 *held = *held || recompinput::get_input_digital(0, field);
             }
         }
+    }
+
+    // Controls saved before Run had a default keep Run unbound and the B button on C-right. Once, the first
+    // time the game reads input: when the controller profile's Run is unbound and the B button is bound to
+    // nothing but C-right, the B button moves to Run and the controls are saved. A marker file in the config
+    // folder records that it ran, so unbinding Run afterwards sticks.
+    void give_run_the_b_button() {
+        const std::filesystem::path marker = recomp::get_config_path() / "run_default_b.done";
+        std::error_code ec;
+        if (std::filesystem::exists(marker, ec)) {
+            return;
+        }
+        const int profile = recompinput::profiles::get_sp_controller_profile_index();
+        if (profile < 0) {
+            return;
+        }
+        const recompinput::InputField b_button = recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_EAST);
+        bool run_bound = false;
+        bool b_taken = false;
+        for (size_t i = 0; i < recompinput::num_game_inputs; i++) {
+            const auto input = static_cast<recompinput::GameInput>(i);
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                const recompinput::InputField& field = recompinput::profiles::get_input_binding(profile, input, b);
+                if (input == run_input && field.input_type != recompinput::InputType::None) {
+                    run_bound = true;
+                }
+                if (field == b_button && input != recompinput::GameInput::C_RIGHT && input != run_input) {
+                    b_taken = true;
+                }
+            }
+        }
+        if (!run_bound && !b_taken) {
+            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+                if (recompinput::profiles::get_input_binding(profile, recompinput::GameInput::C_RIGHT, b) == b_button) {
+                    recompinput::profiles::set_input_binding(profile, recompinput::GameInput::C_RIGHT, b, recompinput::InputField{});
+                }
+            }
+            recompinput::profiles::set_input_binding(profile, run_input, 0, b_button);
+            recompinput::profiles::save_controls_config(recomp::get_config_path() / "controls.json");
+            std::printf("[run] Run bound to the controller's B button (taken off C-right)\n");
+        } else {
+            std::printf("[run] Run kept as saved (%s)\n", run_bound ? "already bound" : "the B button is used for something else");
+        }
+        std::fflush(stdout);
+        std::ofstream(marker) << "Run was given the controller's B button once (hold_to_run.cpp).\n";
     }
 
     // --- The sprint animations -------------------------------------------------------------------
@@ -550,10 +599,13 @@ namespace {
 void tooie::hold_to_run::register_input() {
     recompinput::set_game_input_name(run_input, "Run");
     recompinput::set_game_input_description(run_input,
-        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. Not bound by default. QOL > Running turns it off.");
+        "Hold to run faster as Banjo-Kazooie, Banjo or Kazooie. The controller's B button by default. QOL > Running turns it off.");
     recompinput::set_game_input_section(run_input, "Movement");
     recompinput::set_default_mapping_for_keyboard(run_input, {});
-    recompinput::set_default_mapping_for_controller(run_input, {});
+    recompinput::set_default_mapping_for_controller(run_input, { recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_EAST) });
+    // The B button was also C-right; the right stick keeps that.
+    recompinput::set_default_mapping_for_controller(recompinput::GameInput::C_RIGHT,
+        { recompinput::InputField::controller_analog(SDL_CONTROLLER_AXIS_RIGHTX, true) });
 }
 
 void tooie::hold_to_run::apply(float* x, float* y) {
@@ -573,6 +625,8 @@ void tooie::hold_to_run::apply(float* x, float* y) {
         return true;
     }();
     (void)rebound;
+    static const bool migrated = [] { give_run_the_b_button(); return true; }();
+    (void)migrated;
     bool held = false;
     read_run(&held);
     TestHold& test = test_hold();

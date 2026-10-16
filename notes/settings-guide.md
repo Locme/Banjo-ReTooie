@@ -85,8 +85,10 @@ framework, not from this port's code, so it is not described here.
   row and A lists
   its items by name: GET NOW (green), LATER (white, with what it still needs
   when picked) and DONE (yellow); B goes back to the table. Default: Off (L, 2026-10-15).
-- **Running**: On or Off. On lets the Run key (Controls tab, Movement; not bound
-  by default) run faster as Banjo-Kazooie, Banjo or Kazooie. Default: On.
+- **Running**: On or Off. On lets the Run key (Controls tab, Movement; the
+  controller's B button by default, which is then no longer a second C-right;
+  not bound on the keyboard) run faster as Banjo-Kazooie, Banjo or Kazooie.
+  Default: On.
 - **Transform anywhere**: On or Off. On lets the Transform key (Controls tab,
   Movement; T on the keyboard, not bound on a controller) change Banjo-Kazooie
   into the world's Humba Wumba form where he stands, with the game's own spin-up

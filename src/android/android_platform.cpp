@@ -116,7 +116,8 @@ void tooie::android::update_touch() {
     // Button bits as TouchOverlay.java sets them.
     constexpr uint32_t BTN_A = 1 << 0, BTN_B = 1 << 1, BTN_START = 1 << 2, BTN_L = 1 << 3, BTN_R = 1 << 4, BTN_Z = 1 << 5;
     SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_A, (buttons & BTN_A) ? 1 : 0);
-    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_B, (buttons & BTN_B) ? 1 : 0);
+    // The game's B is on the west face button by default (SDL's B, the east one, is Run).
+    SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_X, (buttons & BTN_B) ? 1 : 0);
     SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_START, (buttons & BTN_START) ? 1 : 0);
     SDL_JoystickSetVirtualButton(touch_pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER, (buttons & BTN_L) ? 1 : 0);
     SDL_JoystickSetVirtualAxis(touch_pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, (buttons & BTN_R) ? 32767 : 0);
