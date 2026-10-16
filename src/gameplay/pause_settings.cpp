@@ -57,6 +57,8 @@ namespace {
     // so 0x7E is never one of the game's; Totals sub pages go up to 0xD).
     constexpr uint8_t settings_text = 0x7E;
     constexpr uint8_t settings_sub_page = tooie::achievements::pause_sub_page;
+    // The entry's icon, a gczoomboxdata portrait id: 0xAA is King Jingaling.
+    constexpr uint16_t achievements_icon = 0xAA;
 
     // The variants that get the entry: 0..3, the normal pause menu (+1 with items, +2 with Jinjos).
     // 4..6 are the menus of special modes (decomp func_80800534 case 1), left as they are.
@@ -166,12 +168,10 @@ namespace {
             uint32_t out = 0;
             for (uint32_t i = 0; i <= count; i++) {
                 if (i == at) {
-                    // Same icon as the row above it; the text and function are ours. The icon is a talking
-                    // head (gczoomboxdata's portrait list); Cheato has none there (swept 0x00..0xD1
-                    // headless, 2026-10-16).
+                    // King Jingaling's talking head (L picked it; Cheato has none in gczoomboxdata's
+                    // portrait list, swept 0x00..0xD1 headless); the text and function are ours.
                     const gpr dst = copy + out * option_size;
-                    const gpr like = options + (at > 0 ? at - 1 : 0) * option_size;
-                    MEM_H(option_icon, dst) = MEM_HU(option_icon, like);
+                    MEM_H(option_icon, dst) = achievements_icon;
                     MEM_B(option_text, dst) = settings_text;
                     MEM_B(option_function, dst) = function_settings;
                     MEM_B(4, dst) = 0;
