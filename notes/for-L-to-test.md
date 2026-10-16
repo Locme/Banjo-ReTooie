@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T308 Sun shadows: no lines in the mornings, left and top of the title screen shaded
+- Asked: 2026-10-16 20:30 UTC
+- Build: a827041
+- Steps:
+  1. Graphics > Photo Filters: Sun shadows on
+  2. Watch the title screen (Spiral Mountain shot)
+  3. In a day and night level, look at flat lit ground in the morning or evening
+  4. Turn the camera so cliffs sit just past the screen's edge
+- Look for: Title screen: the big cliff on the left and the walls at the top are now as dark as the cast shadows. Morning and evening ground has no fine diagonal lines. Shadows from cliffs just outside the picture no longer pop in as the camera turns.
+- Status: waiting for L
+
 ## T306 Kazooie feathers on her wings and crest
 - Asked: 2026-10-16 20:24 UTC
 - Build: main
