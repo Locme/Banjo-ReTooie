@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T337 Smash Banjo v13: Kazooie as Smash Kazooie after Split Up
+- Asked: 2026-10-16 22:39 UTC
+- Build: mods/Smash Banjo v13.zip in project files (remove v12 from the mods folder first)
+- Steps:
+  1. Put Smash Banjo v13 in the mods folder and take v12 out
+  2. Use a Split Up pad and switch to Kazooie
+  3. Let her idle, then walk, jump, peck and flap
+  4. Switch to Banjo on his own and check he still has his backpack
+- Look for: Solo Kazooie is Smash's Kazooie with the game's animations. Smash's Kazooie has no hips (they're hidden in the backpack), so I moved her legs and tail up under her body and made her legs a little longer; check there is no gap between her body and legs in any move. She blinks with her own eyes (vanilla's blink timing). Solo Banjo keeps his backpack. Dragon Kazooie is not in this version.
+- Status: waiting for L
+
 ## T336 Enemy fur: the yetis' white fur
 - Asked: 2026-10-16 22:31 UTC
 - Build: main
