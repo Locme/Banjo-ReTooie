@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Banjo fur: his knees (the brown between his shorts and boots) now have fur too; the shorts stay bare (L). Untested on PC (T332).
 - Kazooie feathers: on her wings they now point out along the wing to the tips instead of down, each feather shows the texture colours under it (yellow tips on the wings), and the top of her head is feathered (L). Untested on PC (T331).
 - Start menu: Start Game is now Play, with the effects preset beside it (< Vanilla >, Enhanced, Retro, Custom); left and right or the arrows change it, and Play applies it (L). Vanilla (the Effects preset once called Original) turns every shader effect off, also FXAA, FSR and Kazooie feathers. Untested on PC (T327).
 - New cheats: 100% complete (everything done except the last boss, Hag 1: all Jiggies, notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons, moves, worlds and bosses; saving keeps it) and Dragon Kazooie (on: Kazooie is Dragon Kazooie, off: she is Kazooie again). Untested on PC (T326).

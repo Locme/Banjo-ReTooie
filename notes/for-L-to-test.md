@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T332 Banjo's knees have fur
+- Asked: 2026-10-16 22:08 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur on
+  2. Look at Banjo's legs just below his shorts, from the front and behind, and in a cutscene
+- Look for: The brown bit of his legs between the shorts and his boots is furry all the way round, and his yellow shorts have no fur.
+- Status: waiting for L
+
 ## T331 Klungo's throws and fades above 30 FPS
 - Asked: 2026-10-16 22:10 UTC (L: "Klungo is not throwing the same way as in vanilla", burst-2026-10-16_22-20-17)
 - Build: main (pull and build)

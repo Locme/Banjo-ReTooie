@@ -190,8 +190,8 @@ namespace {
 
     // Banjo-Kazooie's skeletons: the player's (68 bones) and the cutscenes' double (62 bones), told apart from
     // other models by the bone count and the parent of Kazooie's root (bone 18). Model mods keep them. Each has the
-    // bones that get no fur: his feet, and his shorts (the hips and the thighs; the shins below the shorts keep
-    // their fur). TOOIE_FUR_BARE_BONES=<n>,<n>... picks those instead (headless aid).
+    // bones that get no fur: his feet and his hips. The thighs keep theirs, for his knees (L); their shorts stay bare
+    // by colour (FurColor in Fur.hlsli). TOOIE_FUR_BARE_BONES=<n>,<n>... picks those instead (headless aid).
     struct BanjoSkeleton {
         uint32_t bone_count;
         int32_t kazooie_parent;
@@ -201,8 +201,8 @@ namespace {
     const BanjoSkeleton* banjo_skeleton(uint32_t bone_count, int32_t kazooie_parent) {
         static const std::vector<BanjoSkeleton> skeletons = [] {
             std::vector<BanjoSkeleton> out = {
-                { 68, 13, { 1, 60, 62, 63, 64, 66, 67 } },
-                { 62, 17, { 1, 51, 53, 54, 55, 57, 58 } },
+                { 68, 13, { 1, 62, 63, 66, 67 } },
+                { 62, 17, { 1, 53, 54, 57, 58 } },
             };
             if (const char* text = std::getenv("TOOIE_FUR_BARE_BONES")) {
                 std::vector<uint32_t> bones;
