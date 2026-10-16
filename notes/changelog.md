@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Kazooie feathers: none on her beak, eyes or mouth any more, fuller wings, and new Kazooie feather length, density, noisiness and transparency sliders in Character Shaders (L). Untested on PC (T347).
 - Settings menu: General > DEV tab is now called Developer Mode. The DEV tab has a new Additional Tabs section with Achievements tab (off by default), Cheats tab (moved from General) and Warp tab (moved from Cheats > Tabs; it no longer needs Enable cheats). Saved Cheats tab and Warp tab values carry over (L). Untested on PC (T344).
 - New cheat: Learn Every Move learns every move for real, once each time it is switched on; the area reloads, saving keeps them (L). Untested on PC (T344).
 - Graphics: HUD Placement's choice is called Expand again and is the default (a saved 16:9 changes to Expand once); Aspect Ratio's choice is called Fill again (L). Untested on PC (T344).

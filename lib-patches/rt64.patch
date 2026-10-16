@@ -4596,10 +4596,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..344f461
+index 0000000..cd04b53
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1976 @@
+@@ -0,0 +1,1982 @@
 +//
 +// RT64
 +//
@@ -5258,10 +5258,14 @@ index 0000000..344f461
 +        effectsSettings.furNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
 +    }
 +
-+    void SetSceneKazooieFeathers(float amount, float size) {
++    void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.feathers = std::clamp(amount, 0.0f, 1.0f);
 +        effectsSettings.featherSize = std::clamp(size, 0.25f, 4.0f);
++        effectsSettings.featherLength = std::clamp(length, 0.25f, 4.0f);
++        effectsSettings.featherDensity = std::clamp(density, 0.25f, 4.0f);
++        effectsSettings.featherNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
++        effectsSettings.featherTransparency = std::clamp(transparency, 0.0f, 1.0f);
 +    }
 +
 +    bool SceneKazooieFeathers() {
@@ -5491,9 +5495,11 @@ index 0000000..344f461
 +        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
 +        // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
 +        // so each spot of her is under about two of them.
-+        const float featherLength = 5.5f * settings.featherSize;
++        const float featherLength = 5.5f * settings.featherSize * settings.featherLength;
 +        const float featherWidth = 2.4f * settings.featherSize;
-+        frameParams.featherParams = { featherLength, featherWidth, (0.8f + 1.6f * settings.feathers) / (featherLength * featherWidth * 0.55f), 0.35f };
++        frameParams.featherParams = { featherLength, featherWidth,
++            (0.8f + 1.6f * settings.feathers) * settings.featherDensity / (featherLength * featherWidth * 0.55f), 0.35f };
++        frameParams.featherStyle = { settings.featherNoisiness, settings.featherTransparency, 0.0f, 0.0f };
 +        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
 +        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
 +        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, settings.grassChunkSize, settings.grassPixelSize };
@@ -6578,10 +6584,10 @@ index 0000000..344f461
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..711161a
+index 0000000..aec4215
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,295 @@
 +//
 +// RT64
 +//
@@ -6691,6 +6697,10 @@ index 0000000..711161a
 +        float furNoisiness = 0.5f;
 +        float feathers = 0.0f;
 +        float featherSize = 1.0f;
++        float featherLength = 1.0f;
++        float featherDensity = 1.0f;
++        float featherNoisiness = 0.5f;
++        float featherTransparency = 0.0f;
 +        float parallax = 0.0f;
 +        bool parallaxAll = false;
 +        bool snow = false;
@@ -6804,9 +6814,10 @@ index 0000000..711161a
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
-+    // Banjo-Tooie: Kazooie's feathers (0 off, 1 the fullest) and their size (1 normal). The game marks her draws
++    // Banjo-Tooie: Kazooie's feathers (0 off, 1 the fullest), their size, length and density (1 normal), how uneven
++    // they are (0 to 1, 0.5 normal) and how see-through (0 solid to 1). The game marks her draws
 +    // (G_EX_SETFURSHELLS_V1 2); a geometry shader grows little feathers over them (GrassGS.hlsl).
-+    void SetSceneKazooieFeathers(float amount, float size);
++    void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
 +    // Whether Kazooie's feathers are on.
 +    bool SceneKazooieFeathers();
 +    // Banjo-Tooie: deep snow that Banjo leaves a trail in (Snow.hlsli), on the snowy ground of the 3D world; on is
@@ -8656,10 +8667,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..d6e5a7d
+index 0000000..1cc68ed
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,580 @@
+@@ -0,0 +1,582 @@
 +//
 +// RT64
 +//
@@ -8917,7 +8928,8 @@ index 0000000..d6e5a7d
 +
 +    // How many feathers the triangle holds; one too big for a pass's worth gets fewer, bigger ones.
 +    const float area = 0.5f * normalLength;
-+    const float wanted = area * params.z;
++    // (Her wings, thin and partly cut out, get more for the same cover.)
++    const float wanted = area * params.z * (twoSided ? 1.8f : 1.0f);
 +    const float capacity = float(passes * GRASS_INVOCATIONS * FEATHERS_PER_INVOCATION);
 +    const float grow = sqrt(max(wanted / capacity, 1.0f));
 +    const float count = min(wanted, capacity);
@@ -8985,16 +8997,17 @@ index 0000000..d6e5a7d
 +        const float4 rootClip = clip[0] * w0 + clip[1] * w1 + clip[2] * w2;
 +
 +        // Turned a little either way, lifted off her surface, the tip curling back down to it.
-+        const float turn = (FeatherRandom(seed, 3u) - 0.5f) * 0.7f;
++        const float noisiness = FrParams.featherStyle.x;
++        const float turn = (FeatherRandom(seed, 3u) - 0.5f) * 1.4f * noisiness;
 +        const float3 along = down * cos(turn) + across * sin(turn);
 +        const float3 side = cross(normal, along);
-+        const float size = grow * lerp(0.8f, 1.2f, FeatherRandom(seed, 4u));
++        const float size = grow * lerp(1.0f - 0.4f * noisiness, 1.0f + 0.4f * noisiness, FeatherRandom(seed, 4u));
 +        const float featherLength = params.x * size;
 +        const float halfWidth = 0.5f * params.y * size;
 +        const float lift = params.w * featherLength;
 +        const float3 rootOffset = -normal * (0.1f * featherLength);
 +        const float3 tipOffset = along * featherLength + normal * (lift * 0.5f);
-+        const float shade = lerp(0.82f, 1.1f, FeatherRandom(seed, 5u));
++        const float shade = lerp(1.0f - 0.36f * noisiness, 1.0f + 0.2f * noisiness, FeatherRandom(seed, 5u));
 +
 +        GrassVertex v;
 +        v.position = 0.0f;
@@ -9673,7 +9686,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..a1e445d 100644
+index e7895c3..d1192e5 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -9813,7 +9826,7 @@ index e7895c3..a1e445d 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +346,75 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +346,105 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9829,14 +9842,44 @@ index e7895c3..a1e445d 100644
 +            resultColor.rgb = (combinerColor.a < 0.5f) ? featherRootColor.rgb : combinerColor.rgb;
 +            resultAlpha = 1.0f;
 +        }
-+        // Where the texture under it is dark or grey (her eye, say), it keeps her colour at its root.
-+        const float underHigh = max(resultColor.r, max(resultColor.g, resultColor.b));
-+        const float underLow = min(resultColor.r, min(resultColor.g, resultColor.b));
-+        if ((underHigh < 0.22f) || ((underHigh - underLow) < 0.4f * underHigh)) {
++        // None over her beak (a paler yellow), her eyes (white, green or black) or her mouth (L): where the texture
++        // under it is one of those, the feather stops. Where it is just dark or grey otherwise, it keeps her colour at
++        // its root.
++        const float3 under = combinerColor.rgb;
++        const float underHigh = max(under.r, max(under.g, under.b));
++        const float underLow = min(under.r, min(under.g, under.b));
++        const float underChroma = underHigh - underLow;
++        const float underSaturation = underChroma / max(underHigh, 1e-4f);
++        float underHue = 0.0f;
++        if (underChroma > 1e-4f) {
++            if (underHigh == under.r) {
++                underHue = 60.0f * (under.g - under.b) / underChroma;
++            }
++            else if (underHigh == under.g) {
++                underHue = 60.0f * (2.0f + (under.b - under.r) / underChroma);
++            }
++            else {
++                underHue = 60.0f * (4.0f + (under.r - under.g) / underChroma);
++            }
++        }
++        const bool beak = (underHue >= 30.0f) && (underHue <= 70.0f) && (underSaturation < 0.88f) && (underHigh > 0.25f);
++        const bool eye = ((underHigh > 0.55f) && (underSaturation < 0.25f)) || ((underHue > 70.0f) && (underHue < 180.0f) && (underSaturation > 0.3f));
++        if (beak || eye || (underHigh < 0.08f)) {
++            return false;
++        }
++        if ((underHigh < 0.22f) || (underSaturation < 0.4f)) {
 +            resultColor.rgb = featherRootColor.rgb;
 +        }
 +        if (!FeatherCard(vertexFurAnchor, featherRootColor.rgb, resultColor.rgb)) {
 +            return false;
++        }
++        // See-through feathers: a share of their pixels left out in a fine even pattern.
++        if (FrParams.featherStyle.y > 0.0f) {
++            const uint2 cell = uint2(vertexPosition.xy) & 3u;
++            const uint bayer[16] = { 0u, 8u, 2u, 10u, 12u, 4u, 14u, 6u, 3u, 11u, 1u, 9u, 15u, 7u, 13u, 5u };
++            if ((float(bayer[cell.y * 4u + cell.x]) + 0.5f) / 16.0f < FrParams.featherStyle.y) {
++                return false;
++            }
 +        }
 +    }
 +    else if (snowShell) {
@@ -9889,7 +9932,7 @@ index e7895c3..a1e445d 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +422,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +452,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9913,7 +9956,7 @@ index e7895c3..a1e445d 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +465,7 @@ void PSMain(
+@@ -287,6 +495,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9921,7 +9964,7 @@ index e7895c3..a1e445d 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +482,7 @@ void PSMain(
+@@ -303,7 +512,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -12901,10 +12944,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..595d081 100644
+index 2e62aaf..a27f527 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,83 @@ namespace interop {
+@@ -13,6 +13,85 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -12960,6 +13003,8 @@ index 2e62aaf..595d081 100644
 +        // Banjo-Tooie: Kazooie's feathers (GrassGS.hlsl): a feather's length and width in world units, feathers per
 +        // square unit of her surface, then how much they lift off her (0 to 1).
 +        float4 featherParams;
++        // Banjo-Tooie: how uneven Kazooie's feathers are (0 to 1: their turn, size and shade), then how see-through.
++        float4 featherStyle;
 +        // Banjo-Tooie: the day and night cycle's lit windows and lamps (RasterPS.hlsl): how far night has come in
 +        // (0 day, 1 night), then the light's colour.
 +        float4 nightLights;

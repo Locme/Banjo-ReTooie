@@ -95,6 +95,11 @@ namespace tooie::picture_filters {
     // Kazooie's feathers (GrassGS.hlsl in lib/rt64): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
     inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
+    // Like Banjo's fur (L): length, density, noisiness, and how see-through.
+    inline const std::string kazooie_feather_length_option = "kazooie_feather_length";
+    inline const std::string kazooie_feather_density_option = "kazooie_feather_density";
+    inline const std::string kazooie_feather_noisiness_option = "kazooie_feather_noisiness";
+    inline const std::string kazooie_feather_transparency_option = "kazooie_feather_transparency";
     // Furry enemies' white fur (the yetis), on or off (L).
     inline const std::string enemy_fur_option = "enemy_fur";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.

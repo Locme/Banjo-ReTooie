@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T347 Kazooie: no feathers on her beak, eyes or mouth; fuller wings; feather sliders
+- Asked: 2026-10-16 23:27 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Kazooie feathers at 100
+  2. Look at her beak, eyes and wings up close (the poker game in Jolly's works)
+  3. Try Kazooie feather length, density, noisiness and transparency
+- Look for: No feathers or flecks on her beak, over her eyes or in her mouth. Her wings are fully covered. Length makes them longer, density packs more, noisiness turns and varies them more (0 is an even coat), transparency lets her own colours show through (as a fine pattern).
+- Status: waiting for L
+
 ## T346 Fat Banjo and Kazooie v2 (model mod)
 - Asked: 2026-10-16 23:17 UTC
 - Build: Fat Banjo v2.zip on any current build
