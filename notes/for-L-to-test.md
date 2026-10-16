@@ -2398,7 +2398,7 @@
   3. Play as Mumbo (pay him a Glowbo, or Cheats > Transformation > Mumbo): walk, jump, swim, use the wand, stand still
   4. Turn the mod off and enter a new area
 - Look for: Mumbo is the Viva Pinata Mumbo (yellow skull with dark markings, red feathers, pink body with the rainbow chest, patterned skirt) with the HD textures, moving with the game's own animations: his jaw moves when he talks, the three feathers sway, and the eyes keep the Viva half-closed lids with blue irises and blink. In his skull he sits with his eyes shut, as the original Mumbo does. The Viva model has no wand or bag, so he keeps the game's own wand and bag, held in the new hand. With the mod off the original Mumbo is back. Not replaced: Mumbo's cutscene-only models (the intro and story scenes use other models) and his shadow. Checked headless: playing as Mumbo in Spiral Mountain and Mumbo in Mayahem Temple's skull, including talking to him: [v1.png](screens/viva-mumbo/v1.png). Swimming and the wand spell were not tried.
-- Status: waiting for L
+- Status: replaced by T248 (v2)
 
 ## T227 3D grass in patches, only on grass textures
 - Asked: 2026-10-16 08:25 UTC
@@ -2602,4 +2602,14 @@
   1. Put "Banjo X Alt v4.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Open photo mode and look at Banjo's face close up, then walk, jump, flap and roll
 - Look for: half-closed eyelids over blue eyes, the brows, the smile and the peach insides of the ears, as in L's reference picture; the straps stay on the shoulders. The game stores model points as whole numbers, which crushed this model's fine detail (eyelids sank into the eyes, the smile closed). v4 stores the points 8 times larger and scales them back down while drawing. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v4.png: v3 top left, v4 top right, v4 with HD textures below).
+- Status: waiting for L
+
+## T248 Viva Mumbo Jumbo v2: polish pass
+- Asked: 2026-10-16 10:00 UTC
+- Build: main, plus mods/Viva Mumbo Jumbo v2.zip from project files (replaces v1; delete v1.zip and its unpacked "Viva Mumbo Jumbo v1" folder from the mods folder first)
+- Steps:
+  1. Put "Viva Mumbo Jumbo v2.zip" in the mods folder as it is and turn on "Viva Mumbo Jumbo" in the Mods menu
+  2. Go into Mayahem Temple's Mumbo's Skull, look at Mumbo sitting and talk to him
+  3. Play as Mumbo: walk, run, jump, crouch, swim, use the wand, and look at his feet and skirt close up (photo mode helps)
+- Look for: closed, solid toes and feet (v1 showed orange holes on top of the toes), legs lit like the rest of the body instead of dark and flat, a skirt with its full colours, no eyelids showing through the eyes, thumbs and feet joined cleanly while moving, no orange rim round the soles, and the soles orange underneath when he sits with his feet up. The cause of the toes: the source model's legs, feet, skirt and feathers were built inside out, and the game hides the inside of a model. Checked headless with the zip, playing as Mumbo in Spiral Mountain and sitting in Mayahem Temple's skull: [v2.png](screens/viva-mumbo/v2.png). Swimming and the wand spell were not tried.
 - Status: waiting for L
