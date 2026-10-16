@@ -2958,3 +2958,15 @@
   3. Then walk and move the camera near walls as in your burst of yesterday 21:40 (the fog switching on and off, T180)
 - Look for: Step 2, the cliffs keep the same haze all the way down (they turned plain brown at the bottom of the tilt before). Step 3, the fog no longer switches on and off. Other effects (ambient occlusion, sun shadows, reflections, 3D grass) stay put too. Cause: the game shortens its near plane when the camera is close to something, and the effects read the depth as if the game's depth range were 1/2 when it is 511/1024; with a short near plane that put the world much nearer than it is. Checked headless: fog the same with the near plane forced to 5, 1 and 0.2 as with the game's own (before the fix it vanished at 5). Not checked headless: your exact spot and your burst's camera move.
 - Status: waiting for L
+
+## T288 Kazooie feather shaders and the Character Shaders section
+- Asked: 2026-10-16 13:50 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics: find the new Character Shaders section (after Shaders). Banjo fur and its settings are there now
+  2. Turn on Kazooie feather sheen, Kazooie feathery edges and Kazooie iridescence one at a time, then all three
+  3. Spiral Mountain: stand still until Kazooie pops out, turn the camera round her; then a cutscene with her (the poker one at the start)
+  4. Try each strength at 50 and 200, and the Character Shaders switch off and on
+- Look for: Sheen: a soft gloss sliding over her feathers and beak as she or the camera moves. Feathery edges: short feather tips along her outline, crest and wings (her beak and legs stay smooth). Iridescence: her feathers shift colour a little with the angle, most at her outline. None of it on Banjo or anyone else. The switch hides the section's settings without turning them off. Checked headless in the poker cutscene (screenshots/kazooie/off-on-poker.png in project files); not checked in Spiral Mountain up close, on Windows (D3D12) or with model mods.
+- Status: waiting for L
+

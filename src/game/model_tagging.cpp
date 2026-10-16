@@ -771,7 +771,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now);
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
-    const bool fur = !overlay && end > start && tooie::picture_filters::banjo_fur_on();
+    const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
+    const bool kazooie_shaders = tooie::picture_filters::kazooie_shaders_on();
+    const bool fur = !overlay && end > start && (banjo_fur || kazooie_shaders);
     if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
@@ -1156,7 +1158,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             return spans;
         }();
-        auto wrap = [&](size_t index, bool on) {
+        auto wrap = [&](size_t index, uint32_t kind) {
             if (index >= commands.size() || cursor + 32 > limit) {
                 return;
             }
@@ -1168,7 +1170,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             const uint32_t list = cursor;
             put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
-            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, on ? 1u : 0u);
+            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, kind);
             put(rdram, cursor + 16, w0, word(rdram, p + 4));
             put(rdram, cursor + 24, op_enddl << 24, 0);
             cursor += 32;
@@ -1182,7 +1184,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             model_skip = { { kazooie.from, kazooie.to } };
         }
         const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
-        bool on = false;
+        // Each list's kind: 1 Banjo's fur, 2 Kazooie (her feather shaders), 0 neither (his feet and shorts, or a
+        // shader that is off).
+        uint32_t on = 0;
         size_t last = blocks[best].vertex_command;
         for (size_t i = blocks[best].vertex_command; i < commands.size(); i++) {
             if (commands[i].block != best) {
@@ -1193,20 +1197,25 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 continue;
             }
             const uint32_t offset = (commands[i].w1 & 0x1FFFFFFF) - base;
-            bool want = true;
+            bool banjo = true;
             for (const Span& span : spans) {
-                want = want && (offset < span.from || offset > span.to);
+                banjo = banjo && (offset < span.from || offset > span.to);
             }
-            if (want && kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr) {
-                want = !std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF);
+            uint32_t want = banjo ? 1 : (kazooie.found ? 2 : 0);
+            if (banjo && kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr &&
+                std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF)) {
+                want = 0;
+            }
+            if ((want == 1 && !banjo_fur) || (want == 2 && !kazooie_shaders)) {
+                want = 0;
             }
             if (want != on) {
                 wrap(i, want);
                 on = want;
             }
         }
-        if (on) {
-            wrap(last + 1, false);
+        if (on != 0) {
+            wrap(last + 1, 0);
         }
     };
     if (!interpolating) {

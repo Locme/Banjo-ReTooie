@@ -86,8 +86,19 @@ namespace tooie::picture_filters {
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
+    // Kazooie's feather shaders (lib/rt64/src/shaders/Feathers.hlsli), each a toggle with its strength.
+    inline const std::string kazooie_sheen_option = "kazooie_sheen";
+    inline const std::string kazooie_sheen_strength_option = "kazooie_sheen_strength";
+    inline const std::string kazooie_edges_option = "kazooie_feather_edges";
+    inline const std::string kazooie_edges_strength_option = "kazooie_feather_edges_strength";
+    inline const std::string kazooie_iridescence_option = "kazooie_iridescence";
+    inline const std::string kazooie_iridescence_strength_option = "kazooie_iridescence_strength";
+    // The Character Shaders section's switch: shows Banjo's fur and Kazooie's shaders (hiding them turns none off).
+    inline const std::string character_section_option = "character_shaders_section";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
+    // Whether any of Kazooie's shaders is on, for the model tagging to mark her draws.
+    bool kazooie_shaders_on();
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

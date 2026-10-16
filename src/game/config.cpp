@@ -457,6 +457,16 @@ void tooie::init_config() {
     recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::banjo_direction_option, tooie::picture_filters::sun_shadows_option);
+    // Character Shaders (L, 2026-10-16): Banjo's fur and Kazooie's shaders, after the Shaders group.
+    for (const std::string* option : { &tooie::picture_filters::character_section_option, &tooie::picture_filters::banjo_fur_option,
+                                       &tooie::picture_filters::banjo_fur_length_option, &tooie::picture_filters::banjo_fur_density_option,
+                                       &tooie::picture_filters::banjo_fur_noisiness_option, &tooie::picture_filters::kazooie_sheen_option,
+                                       &tooie::picture_filters::kazooie_sheen_strength_option, &tooie::picture_filters::kazooie_edges_option,
+                                       &tooie::picture_filters::kazooie_edges_strength_option, &tooie::picture_filters::kazooie_iridescence_option,
+                                       &tooie::picture_filters::kazooie_iridescence_strength_option }) {
+        recompui::config::set_option_display_before(*option, tooie::picture_filters::contrast_option);
+    }
+    recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
     // 3D grass has its own section after the colour grading (L, 2026-10-16).
     recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
