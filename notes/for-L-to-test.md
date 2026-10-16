@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T318 Test room starts no cutscene
+- Asked: 2026-10-16 21:03 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Load a save, open Warp, pick Test > Test room
+  2. Stand still for a minute after the rows fill, then walk along them
+- Look for: No cutscene or talk starts by itself (Gruntilda's quiz intro and King Jingaling, Jolly Roger, Bullion Bill, Conga and Biggafoot are no longer in the room). The area's name card on arrival is the game's own and stays.
+- Status: waiting for L
+
 ## T317 Smash Banjo v12: backpack lid opens when Kazooie peeks, Kazooie blinks, closed beak, no eye flicker, less glossy
 - Asked: 2026-10-16 21:02 UTC
 - Build: mods/Smash Banjo v12.zip in project files (remove v11 from the mods folder first)

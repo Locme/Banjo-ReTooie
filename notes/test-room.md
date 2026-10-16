@@ -29,6 +29,20 @@ overlay chbaddieDll) are not in that table and cannot be spawned this way.
 - Crowd crashes (display list overflow, full animation caches) were fixed by
   More game memory; with it off the room may crash.
 
+## Characters that start scenes (2026-10-16)
+
+Six characters started a scene by themselves from across the room on a file
+that hasn't met them yet (headless, no file loaded), so they are commented out
+in `test_room_actors.inc`. Gruntilda (0x528) starts her Tower of Tragedy quiz
+intro ("I'm Grunty, your host"). King Jingaling, Jolly Roger, Bullion Bill,
+Conga and Biggafoot start talking. With them out, the full room ran 100 s
+after filling with no scene. Two things were tried first and dropped. Fast-
+forwarding the talk with the cutscene skip hit its 45 s limit on Jingaling.
+Reading every FTT ("first time talk") flag as set left the screen black, and
+Jingaling, Bill and Biggafoot don't use FTT flags anyway.
+Not cutscenes: the "Isle O' Hags (Quagmire)" name card on arrival, and
+Stomponadon's boss name card when Banjo gets near it.
+
 ## Finding which actor crashes
 
 The headless sweep runs the room with `TOOIE_TEST_ROOM_ONLY=<ids>` (hex,
