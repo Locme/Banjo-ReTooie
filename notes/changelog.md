@@ -46,6 +46,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - 3D grass has its own Grass section in Graphics, with two new toggles (L): Chunky 3D grass (fewer, wider, flat-coloured single-triangle blades) and Pixelated 3D grass (blades drawn in blocks the size of N64 pixels). Untested on PC (T286).
 - Textures use mip LOD bias 0 instead of RT64's -0.25 (L), in both the native samplers and the shader path, so distant textures pick the matching mip level: slightly softer, less shimmer. Untested on PC (T281).
 - Fog and the other picture effects (ambient occlusion, sun shadows, water reflections, 3D grass) no longer go wrong when the camera gets close to the ground or a wall, as at the bottom of a free camera tilt: the effects now read the game's depth the way it was written, so distant scenery keeps its fog. Untested on PC (T285).
+- Day and Night: Cloud Amount, Cloud Height, Cloud Thickness and Cloud Speed settings (T314).
 - Day and Night: rain splashes reach well past Banjo and are lit like the ground they land on (T310).
 - Day and Night: clouds show again by day; with Fireflies on, a rounding step in the shader dropped the clouds flag (T302).
 - Day and Night: Wet Ground (shiny, drying after rain), rain rings on water and Raindrops on Screen (T249, T250, T251).

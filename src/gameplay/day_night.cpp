@@ -32,6 +32,7 @@ namespace RT64 {
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneMist(float strength, uint32_t when);
     void SetSceneRainDetail(float wet, bool drops);
+    void SetSceneClouds(float cover, float height, float thickness, float speed);
     void SetSceneMoonPhase(uint32_t phase);
     void SetSceneAurora(bool enabled);
     void SetSceneNightLights(const uint64_t* hashes, size_t count);
@@ -157,6 +158,15 @@ namespace {
             return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
         } catch (...) {
             return true;
+        }
+    }
+
+    // A 0 to 100 setting as 0 to 1 (50 when it can't be read).
+    float option_fraction(const std::string& id) {
+        try {
+            return (float)std::clamp(std::get<double>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id)) / 100.0, 0.0, 1.0);
+        } catch (...) {
+            return 0.5f;
         }
     }
 
@@ -426,6 +436,18 @@ void tooie::day_night::tick(uint8_t* rdram) {
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
     // No clouds in Cloud Cuckooland, which is up in them.
     const bool clouds = option_on(tooie::day_night::clouds_option) && (map != 0x136);
+    // The clouds' shape. Test aid: TOOIE_CLOUDS=<amount>,<height>,<thickness>,<speed>, each 0 to 100.
+    float cloud[4] = { option_fraction(tooie::day_night::cloud_amount_option), option_fraction(tooie::day_night::cloud_height_option),
+        option_fraction(tooie::day_night::cloud_thickness_option), option_fraction(tooie::day_night::cloud_speed_option) };
+    if (const char* v = std::getenv("TOOIE_CLOUDS")) {
+        float c[4] = { 50.0f, 50.0f, 50.0f, 50.0f };
+        sscanf(v, "%f,%f,%f,%f", &c[0], &c[1], &c[2], &c[3]);
+        for (int i = 0; i < 4; i++) {
+            cloud[i] = std::clamp(c[i] / 100.0f, 0.0f, 1.0f);
+        }
+    }
+    // Height: half to twice the usual; thickness: a third to five thirds; speed: still to four times.
+    RT64::SetSceneClouds(cloud[0], std::pow(4.0f, cloud[1] - 0.5f), 0.2f + 0.8f * cloud[2], (cloud[3] * 2.0f) * (cloud[3] * 2.0f));
     RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies, clouds);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
     // The moon goes round its phases in eight days: full on the first night, waning, new on the fifth, waxing.
@@ -563,6 +585,30 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, soft 3D clouds drift across the sky, lit by the sun and the moon (not in Cloud Cuckooland).",
         true);
     graphics.add_option_hidden_dependency(clouds_option, option, Mode::Off);
+    graphics.add_number_option(
+        cloud_amount_option,
+        "Cloud Amount",
+        "With Day and Night and Clouds on, how much of the sky the clouds cover: 0 a few wisps, 50 the usual, 100 nearly overcast (rain covers it all anyway).",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(cloud_amount_option, option, Mode::Off);
+    graphics.add_number_option(
+        cloud_height_option,
+        "Cloud Height",
+        "With Day and Night and Clouds on, how high the clouds float: low clouds look big and close, high ones small and far off.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(cloud_height_option, option, Mode::Off);
+    graphics.add_number_option(
+        cloud_thickness_option,
+        "Cloud Thickness",
+        "With Day and Night and Clouds on, how deep the cloud layer is: thin, flat clouds or tall, puffy ones that block more of the sky.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(cloud_thickness_option, option, Mode::Off);
+    graphics.add_number_option(
+        cloud_speed_option,
+        "Cloud Speed",
+        "With Day and Night and Clouds on, how fast the wind blows the clouds across the sky: 0 holds them still.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(cloud_speed_option, option, Mode::Off);
     graphics.add_bool_option(
         wet_ground_option,
         "Wet Ground",

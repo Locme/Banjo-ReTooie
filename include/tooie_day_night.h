@@ -25,6 +25,11 @@ namespace tooie::day_night {
     inline const std::string aurora_option = "day_night_aurora";
     // Soft 3D clouds across the sky.
     inline const std::string clouds_option = "day_night_clouds";
+    // The clouds' amount, height, thickness and wind speed, 0 to 100 (50 the usual).
+    inline const std::string cloud_amount_option = "day_night_cloud_amount";
+    inline const std::string cloud_height_option = "day_night_cloud_height";
+    inline const std::string cloud_thickness_option = "day_night_cloud_thickness";
+    inline const std::string cloud_speed_option = "day_night_cloud_speed";
     // Wet, shiny ground in and after the rain, and raindrops running down the screen.
     inline const std::string wet_ground_option = "day_night_wet_ground";
     inline const std::string drops_option = "day_night_drops";

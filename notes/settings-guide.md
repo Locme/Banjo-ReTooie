@@ -209,6 +209,10 @@ F12 screenshots are taken before these filters, so they don't show them.
   over Hailfire Peaks' Icy Side at night. Default: on.
 - **Clouds**: with Day and Night on, soft 3D clouds drift across the sky, lit
   by the sun and the moon (not in Cloud Cuckooland). Default: on.
+- **Cloud Amount / Height / Thickness / Speed**: with Day and Night and Clouds
+  on, 0 to 100 each (50 the usual): how much sky they cover, how high they
+  float, how deep the layer is (flat to puffy) and how fast the wind moves
+  them (0 holds them still).
 - **Wet Ground**: with Day and Night on, the ground darkens and turns shiny in
   the rain, reflecting what is round it, and dries over about a minute and a
   half after. Default: on.

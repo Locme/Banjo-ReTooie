@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T314 Day and night: cloud settings
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: Cloud Amount, Height, Thickness and Speed settings" on main
+- Steps:
+  1. Graphics > Day and Night: Noon, Clouds on; in Spiral Mountain, move Cloud Amount, Cloud Height, Cloud Thickness and Cloud Speed between 0 and 100
+- Look for: Amount goes from a few wisps (0) to a nearly overcast sky (100). Height: low clouds look big and close, high ones small and far off. Thickness: flat thin clouds to tall puffy ones. Speed: 0 holds them still, 100 races them along. 50 on all four looks as before. Checked headless: [cloud-settings.png](screens/day-night/cloud-settings.png) (from the top: another view at 50s, Amount 100, Height 0 with Thickness 100, Amount 10 with Height 100).
+
 ## T313 Deep snow: in Chilly Willy's arena, enemies and attacks press in, deeper
 - Asked: 2026-10-16
 - Build: main (pull and build)

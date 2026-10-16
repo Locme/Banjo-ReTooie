@@ -4030,10 +4030,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5f045fe
+index 0000000..b662039
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1845 @@
+@@ -0,0 +1,1854 @@
 +//
 +// RT64
 +//
@@ -4554,6 +4554,14 @@ index 0000000..5f045fe
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
 +        effectsSettings.dayMistWhen = std::min(when, 2u);
++    }
++
++    void SetSceneClouds(float cover, float height, float thickness, float speed) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayCloudShape[0] = std::clamp(cover, 0.0f, 1.0f);
++        effectsSettings.dayCloudShape[1] = std::clamp(height, 0.25f, 4.0f);
++        effectsSettings.dayCloudShape[2] = std::clamp(thickness, 0.1f, 2.0f);
++        effectsSettings.dayCloudShape[3] = std::clamp(speed, 0.0f, 8.0f);
 +    }
 +
 +    void SetSceneRainDetail(float wet, bool drops) {
@@ -5307,6 +5315,7 @@ index 0000000..5f045fe
 +            return;
 +        }
 +        interop::SceneEffectsCB constants;
++        constants.clouds = { settings.dayCloudShape[0], settings.dayCloudShape[1], settings.dayCloudShape[2], settings.dayCloudShape[3] };
 +        constants.depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, depthScale, depthTranslate);
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
@@ -5881,10 +5890,10 @@ index 0000000..5f045fe
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..1b28bc2
+index 0000000..8128620
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,278 @@
 +//
 +// RT64
 +//
@@ -5968,6 +5977,8 @@ index 0000000..1b28bc2
 +        // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
 +        float dayWet = 0.0f;
 +        bool dayDrops = false;
++        // The clouds' cover, height, thickness and wind speed (see SceneEffectsCB::clouds).
++        float dayCloudShape[4] = { 0.5f, 1.0f, 0.6f, 1.0f };
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -6060,6 +6071,7 @@ index 0000000..1b28bc2
 +    void SetSceneWeather(float rain, float flash, bool snow);
 +    void SetSceneMist(float strength, uint32_t when);
 +    void SetSceneRainDetail(float wet, bool drops);
++    void SetSceneClouds(float cover, float height, float thickness, float speed);
 +    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
 +    void SetSceneMoonPhase(uint32_t phase);
 +    // Banjo-Tooie: northern lights across the night sky with the day and night cycle.
@@ -8840,10 +8852,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..ceee513
+index 0000000..25f9f47
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2166 @@
+@@ -0,0 +1,2172 @@
 +//
 +// RT64
 +//
@@ -9016,7 +9028,7 @@ index 0000000..ceee513
 +float CloudDensity(float3 p, int octaves, float rain) {
 +    const float time = gConstants.view.z;
 +    // Drifts slowly with the wind, the small shapes a little faster so the clouds churn as they go.
-+    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f);
++    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f) * gConstants.clouds.w;
 +    float n = CloudNoise(p * 0.55f + wind) * 0.6f;
 +    n += CloudNoise(p * 1.4f + wind * 1.6f + 13.7f) * 0.27f;
 +    if (octaves > 2) {
@@ -9025,8 +9037,10 @@ index 0000000..ceee513
 +    // Round bottoms that thin out towards the top.
 +    const float height = saturate(p.y);
 +    const float shape = smoothstep(0.0f, 0.18f, height) * smoothstep(1.0f, 0.45f, height);
-+    // Rain spreads the clouds over the whole sky.
-+    return saturate((n - lerp(0.52f, 0.3f, rain)) * 3.5f) * shape;
++    // How much of the sky they cover (the Cloud Amount setting: 0.5 the usual); rain spreads them over all of it.
++    const float cover = gConstants.clouds.x;
++    const float threshold = (cover < 0.5f) ? lerp(0.82f, 0.52f, cover * 2.0f) : lerp(0.52f, 0.26f, (cover - 0.5f) * 2.0f);
++    return saturate((n - lerp(threshold, min(threshold, 0.3f), rain)) * 3.5f) * shape;
 +}
 +
 +// Soft clouds over the sky, marched through a layer above the camera. Returns the cloud's colour and how much it
@@ -9038,10 +9052,14 @@ index 0000000..ceee513
 +        return 0.0f;
 +    }
 +    const float night = DayNight(tint);
-+    // The layer from 1 to 1.6 (in its own units) above the camera; walking about moves it a little.
++    // The layer from its height to its height + thickness (1 to 1.6 usually, in its own units) above the camera;
++    // walking about moves it a little.
 +    const float3 camera = float3(gConstants.worldX.w, 0.0f, gConstants.worldZ.w) / 9000.0f;
-+    const float start = 1.0f / world.y;
-+    const float end = min(1.6f / world.y, start + 3.0f);
++    // Its height and thickness from the Cloud Height and Cloud Thickness settings.
++    const float base = gConstants.clouds.y;
++    const float depth = gConstants.clouds.z;
++    const float start = base / world.y;
++    const float end = min((base + depth) / world.y, start + 3.0f * max(base, 1.0f));
 +    const int steps = 10;
 +    const float stride = (end - start) / steps;
 +    // A different start in each pixel, so the steps don't show as bands.
@@ -9058,8 +9076,8 @@ index 0000000..ceee513
 +    [loop]
 +    for (int i = 0; i < steps; i++) {
 +        float3 p = world * t + camera;
-+        p.y = world.y * t - 1.0f;
-+        p.y /= 0.6f;
++        p.y = world.y * t - base;
++        p.y /= depth;
 +        const float density = CloudDensity(p, 3, rain);
 +        if (density > 0.01f) {
 +            // How much cloud lies between here and the light.
@@ -11780,10 +11798,10 @@ index 0a5c332..a2433e6 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..d1667c1
+index 0000000..ef68323
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,83 @@
 +//
 +// RT64
 +//
@@ -11846,6 +11864,10 @@ index 0000000..d1667c1
 +        // ground is (0 to 31) + 16384 when raindrops land on the screen). The reach is negative when the sun
 +        // shadow map was drawn this frame.
 +        float4 shadows;
++        // The day and night cycle's clouds: how much of the sky they cover (0 to 1, 0.5 the usual), the layer's
++        // height (0.5 to 2 times the usual), its thickness (in the layer's units, 0.6 the usual), then the wind's
++        // speed (1 the usual).
++        float4 clouds;
 +    };
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
