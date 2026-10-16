@@ -13,11 +13,11 @@
 // "Sweep all maps" also warps to every map in map_names.inc (multiplayer maps, the title
 // screen and the game select left out; cutscene maps last), waits for the map to load and
 // fade in, holds C-right to turn the camera around, and moves on. Progress is written to
-// texture_dump/sweep.txt as it goes. A sweep only runs when the option is picked while the
-// game is running: left on from an earlier run it does nothing, not even dumping, so it never
-// warps anyone around in normal play. Picking it again after the game stopped mid-sweep
-// carries on after the map it stopped in and skips that map. When the sweep is done it warps
-// back to where it started and stops dumping; the option then does nothing until picked again.
+// texture_dump/sweep.txt as it goes. Picking it asks first ("Start the texture sweep?"), and
+// the warning says it carries on after a restart: with the option still on, the next start
+// resumes after the map the game stopped in and skips that map, so a map that crashes is only
+// tried once. When the sweep is done it warps back to where it started and stops dumping; the
+// option then does nothing (also after a restart) until it is picked again, which starts anew.
 //
 // Warping through maps every few seconds loads a texture pack's replacements much faster
 // than normal play. RT64 keeps replacements nobody uses until its pool (2/3 of video memory)
@@ -52,6 +52,7 @@
 #include "recomp.h"
 #include "librecomp/game.hpp"
 #include "recompui/config.h"
+#include "recompui/recompui.h"
 
 #include "common/rt64_load_types.h"
 
@@ -399,8 +400,10 @@ namespace {
     fs::path root;
     bool dumping = false;
     bool first_tick = true;
-    // Set when "Sweep all maps" is picked in this run; cleared when the sweep ends.
+    // Set once the sweep is confirmed (or was on at start-up); "Sweep all maps" does nothing
+    // while it waits for the prompt.
     bool armed = false;
+    std::atomic<bool> confirmed{false};
     bool pool_capped = false;
     tooie::TextureDump last_value = tooie::TextureDump::Off;
     Phase phase = Phase::Idle;
@@ -506,11 +509,16 @@ namespace {
         return Progress::Unfinished;
     }
 
-    void begin_sweep(bool resume) {
+    // At start-up a finished sweep stays finished; picked from the menu it starts anew.
+    void begin_sweep(bool at_startup) {
         targets = all_targets();
         next_target = 0;
         std::set<uint16_t> done;
-        const Progress progress = resume ? read_progress(done) : Progress::None;
+        const Progress progress = read_progress(done);
+        if (progress == Progress::Finished && at_startup) {
+            phase = Phase::Done;
+            return;
+        }
         if (progress == Progress::Unfinished) {
             std::vector<Target> left;
             for (const Target& t : targets) {
@@ -539,7 +547,6 @@ namespace {
                 tooie::debug::request_warp(start_map, 0);
             }
             enter(Phase::Done);
-            armed = false;
             return;
         }
         const Target& t = targets[next_target];
@@ -604,19 +611,16 @@ namespace {
 
 void tooie::texture_sweep::tick(uint8_t* rdram) {
     tooie::TextureDump value = option_value();
-    if (value == tooie::TextureDump::SweepAllMaps && !first_tick && last_value != tooie::TextureDump::SweepAllMaps) {
-        armed = true;
-    }
-    if (value == tooie::TextureDump::SweepAllMaps && std::getenv("TOOIE_TEXTURE_DUMP") != nullptr && first_tick) {
-        // Headless runs set the sweep from the environment: that counts as picking it.
-        armed = true;
-    }
     const tooie::TextureDump picked = value;
-    if (value == tooie::TextureDump::SweepAllMaps && !armed) {
-        // Left on from an earlier run, or finished: nothing runs until it is picked again.
-        if (first_tick) {
-            tooie::toast::show("Texture sweep is idle after a restart: pick it again in General to carry on");
-        }
+    if (value != tooie::TextureDump::SweepAllMaps) {
+        armed = false;
+        confirmed = false;
+    } else if (first_tick || confirmed.exchange(false)) {
+        // On at start-up: it was confirmed in an earlier run (or set from the environment).
+        armed = true;
+    }
+    if (value == tooie::TextureDump::SweepAllMaps && (!armed || phase == Phase::Done)) {
+        // Waiting for the prompt, or finished: nothing runs, not even dumping.
         value = tooie::TextureDump::Off;
     }
     const bool want_dump = value != tooie::TextureDump::Off;
@@ -627,16 +631,22 @@ void tooie::texture_sweep::tick(uint8_t* rdram) {
     }
 
     if (value == tooie::TextureDump::SweepAllMaps) {
-        if (phase == Phase::Idle || phase == Phase::Done) {
-            // Picked: carry on with an unfinished sweep, or start a new one.
-            begin_sweep(true);
-            if (!tooie::debug::can_warp()) {
+        if (phase == Phase::Idle) {
+            begin_sweep(first_tick);
+            if (phase != Phase::Done && first_tick) {
+                tooie::toast::show("Texture sweep carries on. To stop it, set DEV > Texture dump to Off");
+            } else if (phase != Phase::Done && !tooie::debug::can_warp()) {
                 tooie::toast::show("Texture sweep: load a save file to start");
             }
         }
         sweep_tick(rdram);
-    } else if (phase != Phase::Idle && phase != Phase::Done) {
-        stop_sweep();
+    } else {
+        if (phase != Phase::Idle && phase != Phase::Done) {
+            stop_sweep();
+        }
+        if (picked != tooie::TextureDump::SweepAllMaps) {
+            phase = Phase::Idle;
+        }
     }
 
     const bool cap = value == tooie::TextureDump::SweepAllMaps;
@@ -651,6 +661,38 @@ void tooie::texture_sweep::tick(uint8_t* rdram) {
     }
     last_value = picked;
     first_tick = false;
+}
+
+void tooie::texture_sweep::add_prompt(recomp::config::Config& config) {
+    config.add_option_change_callback(tooie::texture_dump_option,
+        [&config](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value,
+           recomp::config::OptionChangeContext change_context) {
+            // The menu changes options as Temporary; the save afterwards reports it again.
+            if (change_context != recomp::config::OptionChangeContext::Temporary || cur_value == prev_value) {
+                return;
+            }
+            if (!std::holds_alternative<uint32_t>(cur_value) || std::get<uint32_t>(cur_value) != (uint32_t)tooie::TextureDump::SweepAllMaps) {
+                return;
+            }
+            recompui::open_choice_prompt(
+                "Start the texture sweep?",
+                "The game will warp through every map by itself and turn the camera around in each, for about 40 minutes. "
+                "Load a spare save file first: the game may save in odd places. "
+                "The sweep keeps going after you restart the game, also after a crash, until it has been through every map. "
+                "To stop it, set Texture dump to Off.",
+                "Start sweep",
+                "Cancel",
+                [&config]() {
+                    confirmed = true;
+                    config.save_config();
+                },
+                [&config, prev_value]() {
+                    config.update_option_value(tooie::texture_dump_option, prev_value);
+                },
+                recompui::ButtonStyle::Success,
+                recompui::ButtonStyle::Tertiary,
+                true);
+        });
 }
 
 void tooie::texture_sweep::apply_input(uint16_t* buttons) {

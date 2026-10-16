@@ -2698,3 +2698,14 @@
   2. Load a file and go to a health honeycomb (Spiral Mountain's cave has three), then collect one
 - Look for: the combs are Banjo-Kazooie's honeycomb (honey faces, a shiny frame round the sides), spinning as usual, and collecting one heals. The model is Banjo-Kazooie's own, still in Tooie's game files (unused), scaled up to Tooie's comb size. Does the frame shine like in Banjo-Kazooie? Headless it reads as a flat pale gold, so that is the part to check. Checked headless: [v1.png](screens/original-honeycomb/v1.png).
 - Status: waiting for L
+
+## T255 Texture sweep: "Start the texture sweep?" popup, carries on after a restart
+- Asked: 2026-10-16 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Load a spare save file. DEV > Texture dump: pick Sweep all maps
+  2. A popup asks "Start the texture sweep?" and warns that it keeps going after a restart. Press Cancel: the option goes back to what it was and nothing warps
+  3. Pick it again and press Start sweep: it starts warping
+  4. Close the game mid-sweep and start it again, then load a file
+- Look for: after the restart a notice says the sweep carries on, and it goes on from the next map (the map it was in is skipped and listed as skipped in sweep.txt). Setting Texture dump to Off stops it for good.
+- Status: waiting for L
