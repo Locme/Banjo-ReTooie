@@ -3589,10 +3589,10 @@ index 0000000..c4df6ec
 +};
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..36592a7
+index 0000000..ae4ef06
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,144 @@
 +//
 +// RT64
 +//
@@ -3617,12 +3617,13 @@ index 0000000..36592a7
 +        const std::scoped_lock lock(gradeMutex);
 +        const float cropAspect = gradeSettings.cropAspect;
 +        const bool grid = gradeSettings.grid;
++        const uint32_t border = gradeSettings.border;
 +        const float dofStrength = gradeSettings.dofStrength;
 +        const uint32_t depthAddress = gradeSettings.depthAddress;
 +        const float focusX = gradeSettings.focusX;
 +        const float focusY = gradeSettings.focusY;
 +        const float sharpen = gradeSettings.sharpen;
-+        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress, focusX, focusY, sharpen };
++        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, border, dofStrength, depthAddress, focusX, focusY, sharpen };
 +    }
 +
 +    void SetSharpening(float strength) {
@@ -3656,6 +3657,11 @@ index 0000000..36592a7
 +        const std::scoped_lock lock(gradeMutex);
 +        gradeSettings.cropAspect = cropAspect;
 +        gradeSettings.grid = grid;
++    }
++
++    void SetPhotoBorder(uint32_t border) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.border = border;
 +    }
 +
 +    RenderTexture *PhotoGradeRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
@@ -3708,7 +3714,7 @@ index 0000000..36592a7
 +        constants.tone = { settings.exposure, settings.contrast, settings.saturation, settings.warmth };
 +        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
-+        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, settings.compare ? 1.0f : 0.0f, 0.0f };
++        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, settings.compare ? 1.0f : 0.0f, float(settings.border) };
 +        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, settings.sharpen };
 +        constants.focus = { settings.focusX, settings.focusY, 0.0f, 0.0f };
 +
@@ -3733,10 +3739,10 @@ index 0000000..36592a7
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..77b81ea
+index 0000000..2df8ab2
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,70 @@
 +//
 +// RT64
 +//
@@ -3760,6 +3766,7 @@ index 0000000..77b81ea
 +        float grain = 0.0f;
 +        float cropAspect = 0.0f;
 +        bool grid = false;
++        uint32_t border = 0;
 +        float dofStrength = 0.0f;
 +        uint32_t depthAddress = 0;
 +        float focusX = 0.5f;
@@ -3773,6 +3780,9 @@ index 0000000..77b81ea
 +    // The crop frame (width / height, 0 for none; outside it is shaded) and the rule-of-thirds grid.
 +    // The grid is left out of the frame a screenshot is taken from.
 +    void SetPhotoFrame(float cropAspect, bool grid);
++    // A border drawn over the edge of the crop frame and kept in screenshots: 0 none, 1 instant photo, 2 film
++    // strip, 3 honeycomb, 4 Jiggy, 5 wooden.
++    void SetPhotoBorder(uint32_t border);
 +
 +    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
 +    // depthAddress is the game's depth buffer in RDRAM, whose render target gives the scene's depth.
@@ -9316,10 +9326,10 @@ index 0000000..2748b01
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..c9288dd
+index 0000000..b6751fa
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,218 @@
+@@ -0,0 +1,322 @@
 +//
 +// RT64
 +//
@@ -9469,6 +9479,101 @@ index 0000000..c9288dd
 +    return frac(sin(dot(p, float2(12.9898f, 78.233f))) * 43758.5453f);
 +}
 +
++// Distance from p to the edge of its cell in a hexagon grid (cells r across, pointy side up): 0 on an edge.
++float HexEdge(float2 p, float r) {
++    const float2 spacing = float2(1.7320508f, 1.0f) * r;
++    const float2 a = fmod(p, spacing) - spacing * 0.5f;
++    const float2 b = fmod(p + spacing * 0.5f, spacing) - spacing * 0.5f;
++    const float2 g = (dot(a, a) < dot(b, b)) ? a : b;
++    const float2 q = abs(g);
++    return r * 0.5f - max(q.x * 0.8660254f + q.y * 0.5f, q.y);
++}
++
++// Photo frames drawn over the edge of the crop frame (so screenshots keep them), in Banjo-Tooie's colours:
++// 1 instant photo, 2 film strip, 3 honeycomb, 4 Jiggy (gold with puzzle knobs), 5 wooden (the menus' brown
++// and gold). local is the pixel inside the frame, size the frame's size, in pixels.
++float3 PhotoBorder(float3 rgb, float2 local, float2 size, uint style) {
++    const float unit = min(size.x, size.y);
++    const float2 fromEdge = min(local, size - local);
++    const float edge = min(fromEdge.x, fromEdge.y);
++    const float px = max(1.0f, unit / 540.0f);
++    if (style == 1u) {
++        // White card, wider at the bottom, with a faint paper texture and a soft shadow inside.
++        const float side = unit * 0.045f;
++        const float bottom = unit * 0.17f;
++        const bool card = (local.x < side) || (local.x > size.x - side) || (local.y < side) || (local.y > size.y - bottom);
++        if (card) {
++            return float3(0.96f, 0.95f, 0.91f) - 0.025f * Hash(floor(local / (2.0f * px)));
++        }
++        const float inner = min(min(local.x - side, size.x - side - local.x), min(local.y - side, size.y - bottom - local.y));
++        return rgb * lerp(0.75f, 1.0f, saturate(inner / (6.0f * px)));
++    }
++    if (style == 2u) {
++        // Black bands top and bottom with sprocket holes.
++        const float band = unit * 0.1f;
++        const float fromBand = min(local.y, size.y - local.y);
++        if (fromBand < band) {
++            const float pitch = band * 0.75f;
++            const float2 hole = float2(fmod(local.x, pitch) - pitch * 0.5f, fromBand - band * 0.5f);
++            const float2 holeSize = float2(pitch * 0.28f, band * 0.22f);
++            const float2 d = abs(hole) - holeSize;
++            const float rounded = length(max(d, 0.0f)) + min(max(d.x, d.y), 0.0f) - band * 0.06f;
++            return (rounded < 0.0f) ? float3(0.86f, 0.84f, 0.8f) : float3(0.06f, 0.05f, 0.05f);
++        }
++        return rgb;
++    }
++    if (style == 3u) {
++        // A band of golden honeycomb.
++        const float band = unit * 0.08f;
++        if (edge < band) {
++            const float h = HexEdge(local, unit * 0.045f);
++            const float3 wax = lerp(float3(1.0f, 0.62f, 0.05f), float3(1.0f, 0.82f, 0.25f), saturate(h / (unit * 0.02f)));
++            const float3 cell = (h < 1.5f * px) ? float3(0.55f, 0.3f, 0.02f) : wax;
++            return (edge > band - 2.0f * px) ? float3(0.45f, 0.24f, 0.02f) : cell;
++        }
++        return rgb;
++    }
++    if (style == 4u) {
++        // A gold band with round puzzle knobs pushing into the picture along each side.
++        const float band = unit * 0.045f;
++        const float knob = band * 0.85f;
++        const float2 pitch = size / max(round(size / (unit * 0.25f)), 1.0f);
++        float inside = edge - band;
++        // The knob nearest this pixel on the nearest side.
++        float2 centre = local;
++        if (fromEdge.x < fromEdge.y) {
++            centre.x = (local.x < size.x * 0.5f) ? band : size.x - band;
++            centre.y = (floor(local.y / pitch.y) + 0.5f) * pitch.y;
++        } else {
++            centre.y = (local.y < size.y * 0.5f) ? band : size.y - band;
++            centre.x = (floor(local.x / pitch.x) + 0.5f) * pitch.x;
++        }
++        inside = min(inside, length(local - centre) - knob);
++        if (inside < 0.0f) {
++            const float shade = saturate(-inside / band);
++            const float3 gold = lerp(float3(0.85f, 0.5f, 0.02f), float3(1.0f, 0.86f, 0.3f), shade);
++            return (inside > -1.5f * px) ? float3(0.45f, 0.22f, 0.0f) : gold;
++        }
++        return rgb * lerp(0.7f, 1.0f, saturate(inside / (5.0f * px)));
++    }
++    if (style == 5u) {
++        // Wood with a gold line inside, as the menus.
++        const float band = unit * 0.06f;
++        if (edge < band) {
++            const float along = (fromEdge.x < fromEdge.y) ? local.y : local.x;
++            const float grain = sin(along * 0.05f / px + 6.0f * sin(edge * 0.11f / px)) * 0.5f + 0.5f;
++            const float3 wood = lerp(float3(0.2f, 0.1f, 0.03f), float3(0.38f, 0.2f, 0.07f), grain);
++            const float fromInside = band - edge;
++            if (fromInside < 3.0f * px) {
++                return float3(1.0f, 0.77f, 0.19f);
++            }
++            return wood * lerp(0.75f, 1.0f, saturate(edge / band));
++        }
++        return rgb;
++    }
++    return rgb;
++}
++
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    float4 color = gTexture0.SampleLevel(PointSampler, uv, 0);
 +    // F8 compare: the right half as it was, a line down the middle.
@@ -9519,6 +9624,15 @@ index 0000000..c9288dd
 +        frameMin = (gConstants.rtMetrics.zw - frameSize) * 0.5f;
 +        if (any(pos.xy < frameMin) || any(pos.xy >= frameMin + frameSize)) {
 +            rgb *= 0.3f;
++        }
++    }
++
++    // The photo frame's border (frame.w: 0 none), kept in screenshots.
++    const uint border = uint(gConstants.frame.w + 0.5f);
++    if (border != 0u) {
++        const float2 local = pos.xy - frameMin;
++        if (all(local >= 0.0f) && all(local < frameSize)) {
++            rgb = PhotoBorder(rgb, local, frameSize, border);
 +        }
 +    }
 +
@@ -12883,10 +12997,10 @@ index 0000000..6cb97eb
 +#endif
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..b5e1bc4
+index 0000000..ad4cab2
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,31 @@
 +//
 +// RT64
 +//
@@ -12906,7 +13020,8 @@ index 0000000..b5e1bc4
 +        // Vignette (0 to 1), film grain (0 to 1), a time in seconds for the grain, the look (0 none).
 +        float4 effects;
 +        // The crop's width / height (0 for none: the outside is shaded), 1 to draw the rule-of-thirds grid, 1 to
-+        // keep the right half of the picture as it was (F8 compare), then unused.
++        // keep the right half of the picture as it was (F8 compare), then the photo frame's border (0 none, 1 instant
++        // photo, 2 film strip, 3 honeycomb, 4 Jiggy, 5 wooden).
 +        float4 frame;
 +        // Depth of field strength (0 off, 1 strongest), 1 when the depth texture holds this frame's depth, 1 for
 +        // an HDR colour buffer, then the sharpening (0 off, 1 strongest).

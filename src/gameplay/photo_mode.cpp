@@ -41,6 +41,9 @@
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
 // func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
 //
+// Border (QOL > Photo border): a frame drawn by the same pass over the edge of the crop frame and kept in
+// screenshots: instant photo, film strip, honeycomb, Jiggy (gold puzzle knobs) or wooden (the menus' look).
+//
 // Filters (QOL > Photo filter rows): a look, exposure, contrast, saturation, warmth, vignette and grain,
 // drawn by RT64's photo grade pass (lib-patches/rt64.patch) only while photo mode is on, so screenshots
 // show them. They can be changed from the photo panel or the menu while photo mode is on, as can
@@ -94,6 +97,7 @@ namespace RT64 {
     void SetPhotoFrame(float cropAspect, bool grid);
     void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
     void SetPhotoFocus(float x, float y);
+    void SetPhotoBorder(uint32_t border);
 }
 
 namespace {
@@ -159,7 +163,7 @@ namespace {
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
     enum class Row { Zoom, Camera, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
-        Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Grid, Count };
+        Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
     std::atomic<bool> panel_shown{true};
@@ -350,11 +354,13 @@ namespace {
             // The game's own picture settings (Graphics tab) come back.
             tooie::picture_filters::apply();
             RT64::SetPhotoFrame(0.0f, false);
+            RT64::SetPhotoBorder(0);
             RT64::SetPhotoDepthOfField(0.0f, 0);
             return;
         }
         RT64::SetPhotoDepthOfField((float)qol_value<double>(tooie::photo_mode::dof_option, 0.0) / 100.0f, depth_address);
         RT64::SetPhotoFrame(crop_value(), qol_value<bool>(tooie::photo_mode::grid_option, false));
+        RT64::SetPhotoBorder(qol_value<uint32_t>(tooie::photo_mode::border_option, 0));
         RT64::SetPhotoGrade(true,
             qol_value<uint32_t>(tooie::photo_mode::look_option, 0),
             (float)qol_value<double>(tooie::photo_mode::exposure_option, 0.0) / 10.0f,
@@ -431,9 +437,10 @@ namespace {
     };
     constexpr const char* look_names[] = { "None", "Sepia", "Black and white", "Noir", "Warm", "Cool", "Vivid", "Faded film",
         "Teal and orange", "Dream" };
+    constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
     constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
-        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Grid" };
+        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid" };
     static_assert(std::size(row_names) == row_count);
 
     // On the game thread: one step of the picked row, -1 or +1.
@@ -469,6 +476,11 @@ namespace {
             case Row::Filter: {
                 const uint32_t n = (uint32_t)std::size(look_names);
                 qol.update_option_value(tooie::photo_mode::look_option, (qol_value<uint32_t>(tooie::photo_mode::look_option, 0) + n + step) % n);
+                break;
+            }
+            case Row::Border: {
+                const uint32_t n = (uint32_t)std::size(border_names);
+                qol.update_option_value(tooie::photo_mode::border_option, (qol_value<uint32_t>(tooie::photo_mode::border_option, 0) + n + step) % n);
                 break;
             }
             case Row::Crop: {
@@ -529,6 +541,10 @@ namespace {
         case Row::Filter: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::look_option, 0);
             return v < std::size(look_names) ? look_names[v] : "None";
+        }
+        case Row::Border: {
+            const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::border_option, 0);
+            return v < std::size(border_names) ? border_names[v] : "None";
         }
         case Row::Crop: {
             const uint32_t v = qol_value<uint32_t>(tooie::photo_mode::crop_option, 0);
@@ -776,6 +792,17 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {6, "9_16", "9:16"},
         },
         0u);
+    qol.add_enum_option(border_option, "Photo border",
+        "A frame round photo mode's picture (inside the crop), kept in its screenshots.",
+        {
+            {0, "none", "None"},
+            {1, "instant", "Instant photo"},
+            {2, "film", "Film strip"},
+            {3, "honeycomb", "Honeycomb"},
+            {4, "jiggy", "Jiggy"},
+            {5, "wooden", "Wooden"},
+        },
+        0u);
     qol.add_number_option(tilt_option, "Photo tilt",
         "Tilts photo mode's camera, in degrees. 0 is level.",
         -45, 45, 1, 0, false, 0);
@@ -787,7 +814,7 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
     qol.add_bool_option(grid_option, "Photo grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
     for (const std::string* id : { &look_option, &exposure_option, &contrast_option, &saturation_option, &warmth_option,
-            &vignette_option, &grain_option, &crop_option, &tilt_option, &dof_option, &shutter_option, &grid_option }) {
+            &vignette_option, &grain_option, &crop_option, &border_option, &tilt_option, &dof_option, &shutter_option, &grid_option }) {
         qol.add_option_hidden_dependency(*id, hide_settings_option, true);
     }
 }

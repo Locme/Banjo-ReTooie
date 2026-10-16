@@ -31,6 +31,7 @@ namespace tooie::photo_mode {
     inline const std::string dof_option = "photo_dof";
     inline const std::string tilt_option = "photo_tilt";
     inline const std::string shutter_option = "photo_shutter";
+    inline const std::string border_option = "photo_border";
 
     // Adds photo mode's filter rows to the QOL tab (used only while photo mode is on).
     void add_options(recomp::config::Config& qol);
