@@ -68,6 +68,10 @@
 namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
     void SetFixedFrameRate(uint32_t rate);
+    // lib/rt64/src/common/rt64_timer.h: short sleeps, then a spin for the last bit.
+    struct Timer {
+        static void preciseSleepUntil(const std::chrono::high_resolution_clock::time_point endTime);
+    };
 }
 
 namespace {
@@ -173,11 +177,17 @@ namespace {
         return locked_vis() == 1 || paced_rate() != 0;
     }
 
-    // Tells RT64 the game's frame rate when it is fixed and not a whole number
-    // of VIs (0 otherwise), for the Interpolation option.
+    // Rate given to RT64 for Uncapped: above any screen, so RT64 neither blends
+    // frames nor holds each present to the Interpolation rate. With 0 (frame
+    // rate unknown) it held presents to that rate, which capped Uncapped at it
+    // (L: Uncapped about 100 FPS where 175 FPS reached 175, 2026-10-16).
+    constexpr int32_t uncapped_rt64_rate = 100000;
+
+    // Tells RT64 the game's frame rate when the port paces the frames (0
+    // otherwise, so RT64 works it out from the VIs), for the Interpolation option.
     void apply_fixed_rate(int32_t rate) {
         static int32_t applied = 0;
-        int32_t wanted = rate > 0 ? rate : 0;
+        int32_t wanted = rate > 0 ? rate : (rate < 0 ? uncapped_rt64_rate : 0);
         if (wanted != applied) {
             RT64::SetFixedFrameRate((uint32_t)wanted);
             applied = wanted;
@@ -188,13 +198,16 @@ namespace {
         return std::chrono::duration<double>(ultramodern::game_time_now()).count();
     }
 
-    // Holds the game until this frame's time: 1/rate s after the last frame's.
-    // Sleeps while more than 2 ms are left, then yields, as a sleep alone can
-    // be a millisecond or more late.
+    // Holds the game until this frame's time: 1/rate s after the last frame's
+    // (RT64's precise sleep: short sleeps, then a spin). A frame that comes
+    // later than its time starts the schedule again from now and marks the
+    // pacer behind, so the next step uses the time that really went by and a
+    // PC that can't reach the rate doesn't run the game in slow motion.
     struct Pacer {
         double next = 0.0;
         int32_t rate = 0;
         bool done = false;   // already paced this frame
+        bool behind = false;
     };
     Pacer pacer;
 
@@ -204,22 +217,13 @@ namespace {
         }
         pacer.done = true;
         double now = game_seconds_now();
-        if (rate != pacer.rate || now - pacer.next > 0.1 || pacer.next - now > 1.0) {
-            // First paced frame, a new rate, or far behind (a load): start again from now.
+        pacer.behind = rate == pacer.rate && now - pacer.next > 0.0005 && now - pacer.next <= 0.1;
+        if (rate != pacer.rate || now - pacer.next > 0.0005 || pacer.next - now > 1.0) {
+            // First paced frame, a new rate, or late: start again from now.
             pacer.next = now;
         } else if (pacer.next > now) {
-            auto target = ultramodern::game_time_to_real(std::chrono::microseconds((int64_t)(pacer.next * 1e6)));
-            for (;;) {
-                auto left = target - std::chrono::high_resolution_clock::now();
-                if (left <= std::chrono::high_resolution_clock::duration::zero()) {
-                    break;
-                }
-                if (left > std::chrono::milliseconds(2)) {
-                    std::this_thread::sleep_for(left - std::chrono::microseconds(1500));
-                } else {
-                    std::this_thread::yield();
-                }
-            }
+            RT64::Timer::preciseSleepUntil(
+                ultramodern::game_time_to_real(std::chrono::microseconds((int64_t)(pacer.next * 1e6))));
         }
         pacer.next += 1.0 / rate;
         pacer.rate = rate;
@@ -427,7 +431,11 @@ extern "C" void tooie_frame_step(uint8_t* rdram, recomp_context* ctx) {
     if (rate != 0) {
         // A fixed 1/rate s, or for Uncapped the time the last frame really took,
         // up to 15/60 s as the game's own step.
-        double step = rate > 0 ? 1.0 / rate : forced_uncapped_step(since_last);
+        // A fixed mode that fell behind its rate steps by the real time too.
+        // (TOOIE_FIXED_SLOW_MOTION=1 keeps the fixed step, for headless runs.)
+        static const bool slow_motion = std::getenv("TOOIE_FIXED_SLOW_MOTION") != nullptr;
+        double step = rate < 0 ? forced_uncapped_step(since_last)
+            : (pacer.behind && !slow_motion) ? std::max(since_last, 1.0 / rate) : 1.0 / rate;
         step = std::clamp(step, 0.0, 0.25);
         fine.carry += step;
         fine.count = (int32_t)std::floor(fine.carry * 60.0 + 1e-6);

@@ -2506,3 +2506,13 @@
   3. Watch Banjo's shadow and the left and top of the picture
 - Look for: Shadows stay on (no sudden stop), sit on Banjo rather than beside him, cover the whole picture, and Banjo's shadow no longer flickers
 - Status: waiting for L
+
+## T238 Uncapped past 100 FPS, 240 FPS no longer slower than 175
+- Asked: 2026-10-16 09:20 UTC
+- Build: your local build of main
+- Steps:
+  1. Same settings as when Uncapped gave about 100 FPS (keep your Interpolation setting)
+  2. Game Frame Rate Uncapped: note the frame rate in Spiral Mountain
+  3. Then 175 and 240 FPS in the same spot
+- Look for: Uncapped is at least as high as 175 now. 240 shows 240 where your PC can, and where it can't, the game still runs at normal speed (before, it went into slow motion). Send the session log if Uncapped is still lower than 175.
+- Status: waiting for L
