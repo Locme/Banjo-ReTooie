@@ -2359,3 +2359,13 @@
   3. Watch it spin, then collect it
 - Look for: the Empty Honeycomb is your FBX's gold frame with rounded edges, deeper than the game's own, in the game's shiny gold with its sparkles, the same height as before and standing in the same place. The FBX's honey texture was not in the zip, and its mesh only uses the plain Gold material, so the frame is gold all over. It replaces the Empty Honeycomb only, not the orange health honeycomb. Collecting it should work as before. Checked headless in the test room (screenshot screens/honeycomb-piece/v1.png).
 - Status: waiting for L
+
+## T223 Bee Banjo model mod: replaces the Bee transformation
+- Asked: 2026-10-16 08:00 UTC
+- Build: main, plus mods/Bee Banjo v1.zip from project files
+- Steps:
+  1. Put "Bee Banjo v1.zip" in the mods folder as it is and turn on "Bee Banjo" in the Mods menu
+  2. In Cloud Cuckooland, turn into the bee at Humba Wumba's (or with the transformation cheat)
+  3. Look at the bee close up in photo mode, then walk, fly, shoot stingers and talk to someone
+- Look for: the round Bee Banjo from your FBX (belt, shorts, backpack, HD textures) instead of the game's bee, the same size and in the same place. The wings are translucent and flap with the game's own animation; arms, legs and the mouth move too. Only the Bee transformation changes; Banjo himself is untouched. Checked headless in Cloud Cuckooland: loads from the zip, stands, turns and walks (screenshot screens/bee-banjo/v1.png).
+- Status: waiting for L
