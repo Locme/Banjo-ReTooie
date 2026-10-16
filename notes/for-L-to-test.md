@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T319 Graphics menu: no lag scrolling with a controller
+- Asked: 2026-10-16 21:04 UTC
+- Build: main
+- Steps:
+  1. Open the menu with a controller and go to Graphics
+  2. Hold the d-pad down through the whole list, then tap it a few times
+- Look for: Scrolling is smooth with no hitching. The description on the right appears a moment after you stop on an option, which is the fix: rewriting it on every step made the whole page lay out again.
+- Status: waiting for L
+
 ## T318 Test room starts no cutscene
 - Asked: 2026-10-16 21:03 UTC
 - Build: latest Windows build from main

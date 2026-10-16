@@ -1042,11 +1042,12 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..68f670f 100644
+index 6ba64e2..881a3e8 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
-@@ -1,4 +1,9 @@
+@@ -1,4 +1,10 @@
 +#include <algorithm>
++#include <chrono>
  #include "ui_config_page_options_menu.h"
 +#include "elements/ui_container.h"
 +#include "recompui/config.h"
@@ -1055,7 +1056,7 @@ index 6ba64e2..68f670f 100644
  
  
  namespace recompui {
-@@ -7,10 +12,14 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -7,10 +13,14 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      ResourceId rid,
      Element *parent,
      recomp::config::Config *config,
@@ -1072,7 +1073,7 @@ index 6ba64e2..68f670f 100644
  {
      ContextId context = recompui::get_current_context();
      set_as_navigation_container(NavigationType::Vertical);
-@@ -21,8 +30,10 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,19 +31,98 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -1084,10 +1085,41 @@ index 6ba64e2..68f670f 100644
          add_footer();
          render_confirmation_footer();
      }
-@@ -38,6 +49,65 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
-     }
  }
  
++// Changing the description text makes RmlUi lay out the whole page again, which costs tens of
++// milliseconds on a long page like Graphics. So a new text waits until the selection has rested for
++// a moment: holding the d-pad through the list then costs nothing, and the text shows when it stops.
+ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+-    if (description_container) {
+-        if (is_internal) {
+-            description_container->set_text_unsafe(text);
+-        } else {
+-            description_container->set_text(text);
++    pending_description = text;
++    description_pending = true;
++    description_pending_since = std::chrono::steady_clock::now();
++}
++
++void ConfigPageOptionsMenu::flush_description_text(bool force) {
++    if (!description_pending || description_container == nullptr) {
++        return;
++    }
++    if (!force && std::chrono::steady_clock::now() - description_pending_since < std::chrono::milliseconds(150)) {
++        return;
++    }
++    description_pending = false;
++    if (pending_description == shown_description) {
++        return;
++    }
++    shown_description = pending_description;
++    if (is_internal) {
++        description_container->set_text_unsafe(shown_description);
++    } else {
++        description_container->set_text(shown_description);
++    }
++}
++
 +// With the sidebar layout (Settings > DEV > Sidebar menu), the description sits in a strip along the
 +// bottom of the page instead of a column on the right, so the options get the full width.
 +void ConfigPageOptionsMenu::apply_description_strip(bool strip) {
@@ -1143,14 +1175,10 @@ index 6ba64e2..68f670f 100644
 +                heading->set_font_family(recompui::get_primary_font_family());
 +                heading->set_color(theme::color::Primary);
 +            }
-+        }
-+    }
-+}
-+
- ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
-     for (auto *element : config_option_elements) {
-         if (element->get_option_id() == option_id) {
-@@ -59,7 +129,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+         }
+     }
+ }
+@@ -59,7 +148,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
          std::string &option_id = schema.options[option_index].id;
          ConfigOptionElement* element = get_element_from_option_id(option_id);
          if (element == nullptr) {
@@ -1162,7 +1190,7 @@ index 6ba64e2..68f670f 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -109,6 +182,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +201,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -1172,7 +1200,15 @@ index 6ba64e2..68f670f 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +225,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -117,6 +212,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+             }
+         }
+         perform_option_render_updates();
++        flush_description_text(false);
+         break;
+     }
+     case EventType::MenuAction: {
+@@ -149,6 +245,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -1183,7 +1219,7 @@ index 6ba64e2..68f670f 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +253,17 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +273,17 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -1201,7 +1237,7 @@ index 6ba64e2..68f670f 100644
          config_option_elements.clear();
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +272,37 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +292,37 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -1239,7 +1275,7 @@ index 6ba64e2..68f670f 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +353,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +373,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -1248,10 +1284,18 @@ index 6ba64e2..68f670f 100644
              element->update_hidden();
              config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..52ac3c0 100644
+index 49e05db..6b65555 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
-@@ -12,11 +12,17 @@ namespace recompui {
+@@ -1,5 +1,7 @@
+ #pragma once
+ 
++#include <chrono>
++
+ #include "config/ui_config_option.h"
+ #include "elements/ui_config_page.h"
+ #include "elements/ui_modal.h"
+@@ -12,11 +14,21 @@ namespace recompui {
      protected:
          recomp::config::Config *config;
          bool is_internal = false;
@@ -1263,16 +1307,21 @@ index 49e05db..52ac3c0 100644
          std::vector<ConfigOptionElement*> config_option_elements;
          Element *description_container = nullptr;
          std::string description_option_id = "";
++        std::string pending_description;
++        std::string shown_description;
++        bool description_pending = false;
++        std::chrono::steady_clock::time_point description_pending_since;
          Button *apply_button = nullptr;
 +        bool description_strip = false;
 +        Element *page_title = nullptr;
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -31,12 +37,15 @@ namespace recompui {
+@@ -31,12 +43,16 @@ namespace recompui {
          ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
++        void flush_description_text(bool force);
 +        void apply_description_strip(bool strip);
      public:
          ConfigPageOptionsMenu(

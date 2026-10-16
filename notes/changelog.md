@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Fixed: scrolling the Graphics menu with a controller lagged on every step. The option description now shows a moment after you stop on an option instead of on every step. Untested on PC (T319).
 - Run is now on the controller's B button by default (the button labelled B on an Xbox pad, Circle on PlayStation). That button was a second C-right; the right stick still turns the camera. Saved controls get the change once if Run was unbound and B was only C-right. On Android the touch B button now does the game's B instead of C-right. Untested on PC (T305).
 - The Start menu has a SETTINGS entry under View Totals (L). For now it opens an empty SETTINGS page; B goes back, Start closes the menu. Untested on PC (T270).
 - Warp tab: Glitter Gulch Mine > Outside Mumbo's Skull, and Cloud Cuckooland > Skull on the cloud (straight ahead), for the Mumbo's Hut Recreation mod (the mod itself is a separate download for the Mods menu). Untested on PC (T241).
