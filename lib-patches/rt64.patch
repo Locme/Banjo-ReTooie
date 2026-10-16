@@ -8781,10 +8781,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f827f3d
+index 0000000..0a4d8c9
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2142 @@
+@@ -0,0 +1,2155 @@
 +//
 +// RT64
 +//
@@ -10534,12 +10534,21 @@ index 0000000..f827f3d
 +    if (gConstants.shadows.y < 0.0f) {
 +        const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
 +        const float3 worldNormal = normalize(SunMapWorldDirection(SUN_MAP_FRAME(gConstants), normal));
-+        const float3 world = WorldPosition(center) + worldNormal * (texel * 1.5f + distance * 0.001f);
++        float3 across, up, towards, middle;
++        SunMapBasis(SUN_MAP_FRAME(gConstants), across, up, towards, middle);
++        // How steeply the sun meets the surface. A low sun (mornings and evenings) grazes the ground: across
++        // the few texels looked up the ground's own depth on the map changes a lot, and a fixed bias let it
++        // shadow itself in fine diagonal lines. The bias and the lift off the surface grow with the slope.
++        const float sunFacing = dot(worldNormal, towards);
++        const float sunCos = saturate(sunFacing);
++        const float sunSin = sqrt(1.0f - sunCos * sunCos);
++        const float sunTan = min(sunSin / max(sunCos, 0.05f), 8.0f);
++        const float radius = 1.0f + softness * 2.5f;
++        const float3 world = WorldPosition(center) + worldNormal * (texel * (1.5f + 1.5f * sunSin) + distance * 0.001f);
 +        const float3 m = SunMapPosition(SUN_MAP_FRAME(gConstants), world);
 +        const float cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
 +        if ((cover > 0.0f) && (m.z > 0.0f) && (m.z < 1.0f)) {
-+            const float depthBias = 2.0f * texel / (2.0f * SunMapRange);
-+            const float radius = 1.0f + softness * 2.5f;
++            const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * SunMapRange);
 +            const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * float(SUN_SHADOW_MAP_SIZE);
 +            const float angle = jitter * 6.2831853f;
 +            const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
@@ -10554,9 +10563,13 @@ index 0000000..f827f3d
 +                const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(SUN_SHADOW_MAP_SIZE - 1, SUN_SHADOW_MAP_SIZE - 1));
 +                blocked += ((m.z - depthBias) > gSunShadowMap.Load(int3(at, 0))) ? 1.0f : 0.0f;
 +            }
-+            shadow = max(shadow, (blocked / float(Taps)) * cover);
++            // A surface turned from the sun gets none of its light either: as dark as a cast shadow, with a soft
++            // turn (wider the softer the shadows) so rounded characters still shade smoothly.
++            const float away = saturate(-sunFacing * lerp(6.0f, 2.0f, softness));
++            const float mapShadow = max(blocked / float(Taps), away);
++            shadow = max(shadow, mapShadow * cover);
 +            if (mapView) {
-+                return 1.0f - 0.9f * (blocked / float(Taps));
++                return 1.0f - 0.9f * mapShadow;
 +            }
 +        }
 +        if (mapView) {
