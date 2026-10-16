@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T290 Banjo X Alt v7: no clipping at the straps, fur shader
+- Asked: 2026-10-16 14:32 UTC
+- Build: main, plus mods/Banjo X Alt v7.zip from project files (take v6 out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v7.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
+  2. Walk, jump, flap, crouch, Talon Trot, roll and attack, looking at his shoulders and face up close
+  3. Turn on Banjo fur in Graphics > Character Shaders and look again
+- Look for: The fur on his neck and shoulders no longer pokes through the backpack straps, and the straps no longer show across his cheeks when he lowers his head (that fur was on the neck and shoulder bones while the straps stay on the chest; it now rides with the straps). With fur on, his brown fur grows fur; his face, hands, feet, shorts, belt, backpack and Kazooie stay smooth. Checked headless on all those moves and in photo mode with fur on and off (screenshot screens/banjo-x/alt-v7.png).
+- Status: waiting for L
+
 ## T289 Kazooie feathers look like feathers, not fur
 - Asked: 2026-10-16 14:27 UTC
 - Build: main
@@ -2935,6 +2945,7 @@
   1. Put "Banjo X Alt v6.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Look at Banjo in photo mode, then walk, jump, flap and roll
 - Look for: the fur is the lighter brown of L's T-pose preview (the FBX's brown base colour had been multiplied onto the fur texture); no yellow shorts above the belt; the backpack straps go over his shoulders (they had followed his arms). Eyes open, and a blink now closes the lids smoothly (the game steps its eye options 1 3 5 7 7 5 3 1; v5 had options 5 and 6 half open, so a blink flickered). Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v6.png).
+- Status: passed apart from a little clipping (L, 2026-10-16: "Looks great, though I see a little clipping"); replaced by T290
 
 ## T280 Force Interpolation in cutscenes (DEV, on by default)
 - Asked: 2026-10-16 12:45 UTC
