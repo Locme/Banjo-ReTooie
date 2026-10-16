@@ -86,10 +86,15 @@ namespace tooie::picture_filters {
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
-    // The Character Shaders section's switch: shows Banjo's fur (hiding them turns none off).
+    // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
     inline const std::string character_section_option = "character_shaders_section";
+    // Kazooie's feathers (GrassGS.hlsl in lib/rt64): how full (0 off) and how big.
+    inline const std::string kazooie_feathers_option = "kazooie_feathers";
+    inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
+    // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
+    bool kazooie_feathers_on();
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

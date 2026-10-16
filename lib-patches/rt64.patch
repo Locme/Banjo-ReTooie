@@ -413,10 +413,10 @@ index c20fb51..d9e9256 100644
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
-index 20c0d4d..dea1874 100644
+index 20c0d4d..ff978bd 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
 +++ b/src/gbi/rt64_gbi_extended.cpp
-@@ -331,6 +331,16 @@ namespace RT64 {
+@@ -331,6 +331,15 @@ namespace RT64 {
              state->rdp->setRectAspect(aspect);
          }
  
@@ -426,14 +426,13 @@ index 20c0d4d..dea1874 100644
 +        }
 +
 +        void setFurShellsV1(State *state, DisplayList **dl) {
-+            const bool fur = (*dl)->p1(0, 1);
-+            state->rdp->setFurShells(fur);
++            state->rdp->setFurShells((*dl)->p1(0, 2));
 +        }
 +
          void noOpHook(State *state, DisplayList **dl) {
              uint32_t magicNumber = (*dl)->p0(0, 24);
              if (magicNumber == RT64_HOOK_MAGIC_NUMBER) {
-@@ -439,6 +449,8 @@ namespace RT64 {
+@@ -439,6 +448,8 @@ namespace RT64 {
              Map[G_EX_SETVERTEXSEGMENT_V1] = &setVertexSegmentV1;
              Map[G_EX_SETTEXCOORDWRAPPOINT_V1] = &setTexcoordWrapPointV1;
              Map[G_EX_SETRECTASPECT_V1] = &setRectAspectV1;
@@ -456,17 +455,18 @@ index 08f83e5..2bfdba4 100755
  #   elif defined(__linux__) || defined(__APPLE__)
          if (SDL_VideoInit(nullptr) != 0) {
 diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
-index 0e62be1..fc54f90 100644
+index 0e62be1..103584a 100644
 --- a/src/hle/rt64_draw_call.h
 +++ b/src/hle/rt64_draw_call.h
-@@ -65,6 +65,10 @@ namespace RT64 {
+@@ -65,6 +65,11 @@ namespace RT64 {
          uint32_t forceUpscale2D : 1;
          uint32_t forceTrueBilerp : 2;
          uint32_t forceScaleLOD : 1;
 +        // Banjo-Tooie: drawn after the scene effects instead of under them (see FramebufferRenderer).
 +        uint32_t sceneEffectsExclude : 1;
-+        // Banjo-Tooie: fur shells are drawn over these (Banjo's model, see FramebufferRenderer).
-+        uint32_t furShells : 1;
++        // Banjo-Tooie: 1 fur shells are drawn over these (Banjo's model), 2 feathers grow on them (Kazooie's), see
++        // FramebufferRenderer.
++        uint32_t furShells : 2;
      };
  
      struct DrawCall {
@@ -1181,7 +1181,7 @@ index e08b02c..cad0222 100644
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
-index a10c11a..ca4c7a2 100644
+index a10c11a..d896e1e 100644
 --- a/src/hle/rt64_rdp.cpp
 +++ b/src/hle/rt64_rdp.cpp
 @@ -1076,6 +1076,16 @@ namespace RT64 {
@@ -1193,8 +1193,8 @@ index a10c11a..ca4c7a2 100644
 +        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
 +    }
 +
-+    void RDP::setFurShells(bool fur) {
-+        extended.drawExtendedFlags.furShells = fur;
++    void RDP::setFurShells(uint32_t kind) {
++        extended.drawExtendedFlags.furShells = kind & 0x3;
 +        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
 +    }
 +
@@ -1202,7 +1202,7 @@ index a10c11a..ca4c7a2 100644
          extended.scissorLeftOriginStack[0] = G_EX_ORIGIN_NONE;
          extended.scissorRightOriginStack[0] = G_EX_ORIGIN_NONE;
 diff --git a/src/hle/rt64_rdp.h b/src/hle/rt64_rdp.h
-index 84f4e7c..e265fb9 100644
+index 84f4e7c..6508918 100644
 --- a/src/hle/rt64_rdp.h
 +++ b/src/hle/rt64_rdp.h
 @@ -199,6 +199,8 @@ namespace RT64 {
@@ -1210,7 +1210,7 @@ index 84f4e7c..e265fb9 100644
          void forceTrueBilerp(uint8_t mode);
          void forceScaleLOD(bool force);
 +        void setSceneEffectsExclude(bool exclude);
-+        void setFurShells(bool fur);
++        void setFurShells(uint32_t kind);
          void clearExtended();
  
          // The expected size and order for the elements in each array are:
@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..dda728d 100644
+index 9fae0d4..e457f69 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1852,7 +1852,7 @@ index 9fae0d4..dda728d 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +306,22 @@ namespace RT64 {
+@@ -169,6 +306,23 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1872,10 +1872,11 @@ index 9fae0d4..dda728d 100644
 +        furVertexVector.clear();
 +        furShaderVector.clear();
 +        furDrawData = nullptr;
++        featherCards = false;
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +526,8 @@ namespace RT64 {
+@@ -373,6 +527,8 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -1884,7 +1885,7 @@ index 9fae0d4..dda728d 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +598,14 @@ namespace RT64 {
+@@ -443,6 +599,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -1899,7 +1900,7 @@ index 9fae0d4..dda728d 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +628,61 @@ namespace RT64 {
+@@ -465,12 +629,61 @@ namespace RT64 {
          return true;
      }
      
@@ -1963,7 +1964,7 @@ index 9fae0d4..dda728d 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +726,17 @@ namespace RT64 {
+@@ -514,6 +727,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1981,7 +1982,7 @@ index 9fae0d4..dda728d 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +797,72 @@ namespace RT64 {
+@@ -574,10 +798,87 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2039,7 +2040,7 @@ index 9fae0d4..dda728d 100644
 +                }
 +
 +                // Banjo-Tooie: Banjo's fur, the same triangles again as shells pushed further out each time.
-+                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] != 0)) {
++                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] == 1)) {
 +                    rasterParams.furShells = furShells;
 +                    for (uint32_t shell = 1; shell <= furShells; shell++) {
 +                        rasterParams.furShell = shell;
@@ -2051,10 +2052,25 @@ index 9fae0d4..dda728d 100644
 +                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                }
 +
++                // Banjo-Tooie: Kazooie's feathers, grown over the same triangles by the grass blades' geometry shader.
++                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] == 2)) {
++                    worker->commandList->setPipeline(grassBladePipeline);
++                    previousPipeline = grassBladePipeline;
++                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS;
++                    for (uint32_t pass = 1; pass <= FeatherCardPasses; pass++) {
++                        rasterParams.grassShell = pass;
++                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                        drawCallTriangles(drawCall);
++                    }
++                    rasterParams.grassShell = 0;
++                    rasterParams.grassShells = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
++
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1535,67 @@ namespace RT64 {
+@@ -1250,6 +1551,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2122,7 +2138,7 @@ index 9fae0d4..dda728d 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1642,84 @@ namespace RT64 {
+@@ -1296,9 +1658,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2208,7 +2224,7 @@ index 9fae0d4..dda728d 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1775,7 @@ namespace RT64 {
+@@ -1354,6 +1791,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -2216,7 +2232,7 @@ index 9fae0d4..dda728d 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1830,60 @@ namespace RT64 {
+@@ -1408,6 +1846,60 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2277,7 +2293,7 @@ index 9fae0d4..dda728d 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1932,54 @@ namespace RT64 {
+@@ -1456,6 +1948,55 @@ namespace RT64 {
                  continue;
              }
  
@@ -2298,6 +2314,7 @@ index 9fae0d4..dda728d 100644
 +                                framebuffer.viewport.width, framebuffer.viewport.height, p.submissionFrame, frameParams))
 +                            {
 +                                grassShells = SceneGrassShells();
++                                featherCards = (grassBladePipeline != nullptr) && SceneKazooieFeathers();
 +                                // Banjo-Tooie: deep snow, from the same camera.
 +                                if ((snowShells == 0) && ComputeSceneSnow(drawData.modProjTransforms[proj.transformsIndex], drawData.modViewProjTransforms[proj.transformsIndex],
 +                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrailVector))
@@ -2332,7 +2349,7 @@ index 9fae0d4..dda728d 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2206,20 @@ namespace RT64 {
+@@ -1682,6 +2223,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2353,7 +2370,7 @@ index 9fae0d4..dda728d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2285,160 @@ namespace RT64 {
+@@ -1747,7 +2302,168 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2382,8 +2399,8 @@ index 9fae0d4..dda728d 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2482,7 +2499,7 @@ index 9fae0d4..dda728d 100644
 +
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
-+                if ((furShells > 0) && call.callDesc.extendedFlags.furShells && !excluded && worldOpen && fbPair.depthWrite &&
++                if ((furShells > 0) && (call.callDesc.extendedFlags.furShells == 1) && !excluded && worldOpen && fbPair.depthWrite &&
 +                    (proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                    !instanceDrawCall.triangles.vertexTestZ && ((furDrawData == nullptr) || (furDrawData == &drawData)))
 +                {
@@ -2493,8 +2510,17 @@ index 9fae0d4..dda728d 100644
 +                        addFurNormals(drawData, call.meshDesc.faceIndicesStart, call.callDesc.triangleCount);
 +                    }
 +                }
++                // Banjo-Tooie: Kazooie's feathers grow on her opaque draws the same way (the game marks them 2).
++                bool feathers = false;
++                if (!fur && featherCards && (call.callDesc.extendedFlags.furShells == 2) && !excluded && worldOpen && fbPair.depthWrite &&
++                    (proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
++                    !instanceDrawCall.triangles.vertexTestZ)
++                {
++                    const interop::OtherMode fm = call.shaderDesc.otherMode;
++                    feathers = fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(fm);
++                }
 +                instanceFurVector.resize(instanceIndex, 0);
-+                instanceFurVector.push_back(fur ? 1 : 0);
++                instanceFurVector.push_back(fur ? 1 : (feathers ? 2 : 0));
 +
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
 +                if (!nightLightsChecked) {
@@ -2506,15 +2532,14 @@ index 9fae0d4..dda728d 100644
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
 +                        nightLight = SceneNightLightTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                    }
-+                }
+                 }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back(nightLight ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-             }
-@@ -1758,13 +2448,172 @@ namespace RT64 {
+@@ -1758,13 +2474,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2689,7 +2714,7 @@ index 9fae0d4..dda728d 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..a107897 100644
+index 3add9c3..1a21c13 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,36 @@ namespace RT64 {
@@ -2729,7 +2754,7 @@ index 3add9c3..a107897 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +97,43 @@ namespace RT64 {
+@@ -67,6 +97,47 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -2767,13 +2792,17 @@ index 3add9c3..a107897 100644
 +        // own vertex position, before the bones move it) for the strands to stand still on.
 +        std::vector<interop::float4> furShaderVector;
 +        const DrawData *furDrawData = nullptr;
++        // Banjo-Tooie: whether Kazooie's feathers grow this frame, and the geometry shader passes each of her draws
++        // gets (GrassGS.hlsl grows up to 32 x 15 feathers on a triangle a pass).
++        bool featherCards = false;
++        static constexpr uint32_t FeatherCardPasses = 1;
 +        BufferPair furNormalsBuffer;
 +        void addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount);
 +        void finishFurNormals();
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +154,8 @@ namespace RT64 {
+@@ -87,6 +158,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -2782,7 +2811,7 @@ index 3add9c3..a107897 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +169,7 @@ namespace RT64 {
+@@ -100,6 +173,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -2790,7 +2819,7 @@ index 3add9c3..a107897 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +193,10 @@ namespace RT64 {
+@@ -123,6 +197,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2801,7 +2830,7 @@ index 3add9c3..a107897 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +238,15 @@ namespace RT64 {
+@@ -164,7 +242,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -3835,10 +3864,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d2a8ffb
+index 0000000..62c42e3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1805 @@
+@@ -0,0 +1,1821 @@
 +//
 +// RT64
 +//
@@ -4419,6 +4448,17 @@ index 0000000..d2a8ffb
 +        effectsSettings.furNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
 +    }
 +
++    void SetSceneKazooieFeathers(float amount, float size) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.feathers = std::clamp(amount, 0.0f, 1.0f);
++        effectsSettings.featherSize = std::clamp(size, 0.25f, 4.0f);
++    }
++
++    bool SceneKazooieFeathers() {
++        const std::scoped_lock lock(effectsMutex);
++        return effectsSettings.feathers > 0.0f;
++    }
++
 +    // Enough shells that the strands read as strands at the fur's full length.
 +    static constexpr uint32_t FurShells = 12;
 +
@@ -4551,8 +4591,8 @@ index 0000000..d2a8ffb
 +        float viewportWidth, float viewportHeight, uint64_t workloadId, interop::FrameParams &frameParams)
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
-+        // (Deep snow needs the camera's terms worked out here too.)
-+        if (((settings.grass <= 0.0f) && !settings.snow) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++        // (Deep snow and Kazooie's feathers need the camera's terms worked out here too.)
++        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
 +            return false;
 +        }
 +        UsePlayerFrame(settings, workloadId);
@@ -4639,6 +4679,11 @@ index 0000000..d2a8ffb
 +        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
 +        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
++        // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
++        // so each spot of her is under about two of them.
++        const float featherLength = 5.5f * settings.featherSize;
++        const float featherWidth = 2.4f * settings.featherSize;
++        frameParams.featherParams = { featherLength, featherWidth, (0.8f + 1.6f * settings.feathers) / (featherLength * featherWidth * 0.55f), 0.35f };
 +        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
 +        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
 +        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, settings.grassChunkSize, settings.grassPixelSize };
@@ -5646,10 +5691,10 @@ index 0000000..d2a8ffb
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ee8328e
+index 0000000..e04e3bb
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,258 @@
+@@ -0,0 +1,265 @@
 +//
 +// RT64
 +//
@@ -5754,6 +5799,8 @@ index 0000000..ee8328e
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
 +        float furNoisiness = 0.5f;
++        float feathers = 0.0f;
++        float featherSize = 1.0f;
 +        bool snow = false;
 +        float snowHeight = 1.0f;
 +        uint32_t view = 0;
@@ -5859,6 +5906,11 @@ index 0000000..ee8328e
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
++    // Banjo-Tooie: Kazooie's feathers (0 off, 1 the fullest) and their size (1 normal). The game marks her draws
++    // (G_EX_SETFURSHELLS_V1 2); a geometry shader grows little feathers over them (GrassGS.hlsl).
++    void SetSceneKazooieFeathers(float amount, float size);
++    // Whether Kazooie's feathers are on.
++    bool SceneKazooieFeathers();
 +    // Banjo-Tooie: deep snow that Banjo leaves a trail in (Snow.hlsli), on the snowy ground of the 3D world; on is
 +    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep).
 +    void SetSceneSnow(bool on, float height);
@@ -7090,10 +7142,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..61331e7
+index 0000000..01192a8
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,109 @@
 +//
 +// RT64
 +//
@@ -7174,6 +7226,33 @@ index 0000000..61331e7
 +    const float rootShade = 1.0f - share;
 +    const float strand = FurValue(int3(floor(grid))) - 0.5f;
 +    color *= (1.0f - 0.55f * rootShade * rootShade * rootShade) * (1.0f + 0.12f * share) * (1.0f + 0.7f * params.w * strand);
++    return true;
++}
++
++// Banjo-Tooie: one of Kazooie's feathers (GrassGS.hlsl): anchor is its place across (-1 to 1) and along it (0 root,
++// 1 tip), then its own shade. Only on her feathers (reds and oranges), not her beak or legs. Cut to a feather's
++// shape, narrow at the root and round at the tip, darker towards the root where the one above lies over it, with a
++// faint shaft down its middle.
++bool FeatherCard(float3 anchor, float3 baseColor, inout float3 color) {
++    const float high = max(baseColor.r, max(baseColor.g, baseColor.b));
++    const float low = min(baseColor.r, min(baseColor.g, baseColor.b));
++    if ((high < 0.06f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
++        return false;
++    }
++    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
++    if ((hue < -20.0f) || (hue > 18.0f)) {
++        return false;
++    }
++
++    const float t = saturate(anchor.y);
++    const float across = abs(anchor.x);
++    const float halfWidth = sqrt(saturate(t * 4.0f)) * sqrt(saturate((1.0f - t) * 2.2f));
++    if (across > halfWidth) {
++        return false;
++    }
++    const float edge = smoothstep(halfWidth * 0.6f, halfWidth, across);
++    const float shaft = 1.0f - smoothstep(0.0f, 0.08f, across);
++    color *= anchor.z * lerp(0.62f, 1.05f, smoothstep(0.0f, 0.75f, t)) * (1.0f - 0.18f * edge) * (1.0f - 0.08f * shaft);
 +    return true;
 +}
 diff --git a/src/shaders/FxaaPS.hlsl b/src/shaders/FxaaPS.hlsl
@@ -7571,10 +7650,10 @@ index 0000000..1284731
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..2a4ecd5
+index 0000000..0b5492f
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,389 @@
+@@ -0,0 +1,520 @@
 +//
 +// RT64
 +//
@@ -7759,9 +7838,140 @@ index 0000000..2a4ecd5
 +    stream.Append(v);
 +}
 +
++// Banjo-Tooie: Kazooie's feathers. Little flat feathers are scattered over each of her triangles (as many as its area
++// holds, at random places that stay put on it as she moves), each a card from a spot on her surface, pointing down
++// her body and lifted a little off it, so they overlap like a bird's. A card keeps the texture coordinates and
++// colours of its root, so it is one colour, hers there; the pixel shader cuts it to a feather's shape and shades it
++// (FeatherCard in Fur.hlsli). Its place across and along the feather goes in the fur anchor, with its shade.
++#define FEATHERS_PER_INVOCATION 15
++
++uint FeatherHash(uint a, uint b) {
++    uint h = a * 0x8DA6B343u ^ b * 0xD8163841u ^ 0x6C8E9CF5u;
++    h ^= h >> 13;
++    h *= 0x5BD1E995u;
++    h ^= h >> 15;
++    h *= 0x27D4EB2Du;
++    h ^= h >> 16;
++    return h;
++}
++
++float FeatherRandom(uint a, uint b) {
++    return float(FeatherHash(a, b) & 0xFFFFu) / 65535.0f;
++}
++
++void FeatherEmit(inout TriangleStream<GrassVertex> stream, GrassVertex v, float4 rootClip, float3 offset, float s, float t, float shade) {
++    v.position = GrassRescale(rootClip + GrassDirToClip(offset));
++    v.furAnchor = float3(s, t, shade);
++    stream.Append(v);
++}
++
++void FeatherCards(triangle GrassVertex input[3], uint primitive, uint instance, inout TriangleStream<GrassVertex> stream) {
++    const float4 params = FrParams.featherParams;
++    const uint pass = gConstants.grassShell - 1;
++    const uint passes = max(gConstants.grassShells & GRASS_PASS_MASK, 1u);
++
++    float4 clip[3];
++    float3 world[3];
++    for (int k = 0; k < 3; k++) {
++        clip[k] = GrassUnscale(input[k].position);
++        world[k] = GrassToWorld(clip[k]);
++    }
++
++    float3 normal = cross(world[1] - world[0], world[2] - world[0]);
++    const float normalLength = length(normal);
++    if (normalLength <= 1e-4f) {
++        return;
++    }
++    normal /= normalLength;
++
++    // Outward: towards the camera for a triangle the camera sees the front of, away from it otherwise (the winding
++    // on screen tells which).
++    const float2 s0 = clip[0].xy / max(clip[0].w, 1e-5f);
++    const float2 s1 = clip[1].xy / max(clip[1].w, 1e-5f);
++    const float2 s2 = clip[2].xy / max(clip[2].w, 1e-5f);
++    const float screenArea = (s1.x - s0.x) * (s2.y - s0.y) - (s2.x - s0.x) * (s1.y - s0.y);
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
++    const bool facesCamera = dot(normal, camera - center) > 0.0f;
++    if (facesCamera != (screenArea > 0.0f)) {
++        normal = -normal;
++    }
++
++    // How many feathers the triangle holds; one too big for a pass's worth gets fewer, bigger ones.
++    const float area = 0.5f * normalLength;
++    const float wanted = area * params.z;
++    const float capacity = float(passes * GRASS_INVOCATIONS * FEATHERS_PER_INVOCATION);
++    const float grow = sqrt(max(wanted / capacity, 1.0f));
++    const float count = min(wanted, capacity);
++    const uint start = (pass * GRASS_INVOCATIONS + instance) * FEATHERS_PER_INVOCATION;
++    if (float(start) >= count) {
++        return;
++    }
++
++    // Down her body: straight down, along the surface; on a part facing up or down, along the triangle.
++    float3 down = float3(0.0f, -1.0f, 0.0f) - normal * (-normal.y);
++    if (length(down) < 0.25f) {
++        down = world[1] - world[0];
++        down -= normal * dot(down, normal);
++    }
++    down = normalize(down);
++    const float3 across = cross(normal, down);
++
++    for (uint i = 0; i < FEATHERS_PER_INVOCATION; i++) {
++        const uint index = start + i;
++        const float last = count - float(index);
++        if (last <= 0.0f) {
++            break;
++        }
++        const uint seed = FeatherHash(primitive, index);
++        // Part of a feather: the last one only sometimes.
++        if ((last < 1.0f) && (FeatherRandom(seed, 9u) >= last)) {
++            break;
++        }
++
++        float w1 = FeatherRandom(seed, 1u);
++        float w2 = FeatherRandom(seed, 2u);
++        if (w1 + w2 > 1.0f) {
++            w1 = 1.0f - w1;
++            w2 = 1.0f - w2;
++        }
++        const float w0 = 1.0f - w1 - w2;
++        const float4 rootClip = clip[0] * w0 + clip[1] * w1 + clip[2] * w2;
++
++        // Turned a little either way, lifted off her surface, the tip curling back down to it.
++        const float turn = (FeatherRandom(seed, 3u) - 0.5f) * 0.7f;
++        const float3 along = down * cos(turn) + across * sin(turn);
++        const float3 side = cross(normal, along);
++        const float size = grow * lerp(0.8f, 1.2f, FeatherRandom(seed, 4u));
++        const float featherLength = params.x * size;
++        const float halfWidth = 0.5f * params.y * size;
++        const float lift = params.w * featherLength;
++        const float3 rootOffset = -normal * (0.1f * featherLength);
++        const float3 tipOffset = along * featherLength + normal * (lift * 0.5f);
++        const float shade = lerp(0.82f, 1.1f, FeatherRandom(seed, 5u));
++
++        GrassVertex v;
++        v.position = 0.0f;
++        v.uv = input[0].uv * w0 + input[1].uv * w1 + input[2].uv * w2;
++        v.smoothColor = input[0].smoothColor * w0 + input[1].smoothColor * w1 + input[2].smoothColor * w2;
++        v.flatColor = input[0].flatColor;
++        v.furAnchor = 0.0f;
++        FeatherEmit(stream, v, rootClip, rootOffset - side * halfWidth, -1.0f, 0.0f, shade);
++        FeatherEmit(stream, v, rootClip, rootOffset + side * halfWidth, 1.0f, 0.0f, shade);
++        FeatherEmit(stream, v, rootClip, tipOffset - side * halfWidth, -1.0f, 1.0f, shade);
++        FeatherEmit(stream, v, rootClip, tipOffset + side * halfWidth, 1.0f, 1.0f, shade);
++        stream.RestartStrip();
++    }
++}
++
 +[maxvertexcount(GRASS_BLADES_PER_INVOCATION * 5)]
 +[instance(GRASS_INVOCATIONS)]
-+void GSMain(triangle GrassVertex input[3], uint instance : SV_GSInstanceID, inout TriangleStream<GrassVertex> stream) {
++void GSMain(triangle GrassVertex input[3], uint instance : SV_GSInstanceID, uint primitive : SV_PrimitiveID, inout TriangleStream<GrassVertex> stream) {
++    if ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0) {
++        FeatherCards(input, primitive, instance, stream);
++        return;
++    }
++
 +    const uint passes = max(gConstants.grassShells & GRASS_PASS_MASK, 1u);
 +    const uint pass = gConstants.grassShell - 1;
 +    const float4 params = FrParams.grassParams;
@@ -8188,7 +8398,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..11da95a 100644
+index e7895c3..ec7c850 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8201,7 +8411,7 @@ index e7895c3..11da95a 100644
  #include "Library.hlsli"
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
-@@ -46,11 +49,43 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +49,44 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -8223,7 +8433,8 @@ index e7895c3..11da95a 100644
 +
 +    // Banjo-Tooie: a pixelated 3D grass blade (drawn a little bigger, GrassGS.hlsl) keeps whole blocks of grassStyle.w N64
 +    // pixels, those whose centre is in the real blade. Its place across and up the blade is in the fur anchor.
-+    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0) && (vertexFurAnchor.z > 0.5f)) {
++    const bool featherCard = (gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0);
++    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0) && !featherCard && (vertexFurAnchor.z > 0.5f)) {
 +        const float block = max(floor(FbParams.resolutionScale.y * FrParams.grassStyle.w + 0.5f), 1.0f);
 +        const float2 toCentre = (floor(vertexPosition.xy / block) + 0.5f) * block - vertexPosition.xy;
 +        const float2 bladeAt = vertexFurAnchor.xy + ddx(vertexFurAnchor.xy) * toCentre.x + ddy(vertexFurAnchor.xy) * toCentre.y;
@@ -8247,14 +8458,19 @@ index e7895c3..11da95a 100644
          return false;
      }
  #endif
-@@ -254,6 +289,50 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +290,55 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
 +    // Banjo-Tooie: a 3D grass blade grown from green ground is shaded from its root to its tip; a 3D grass shell
 +    // keeps only the blades crossing it, on green ground facing up.
 +    // Banjo-Tooie: a shell of deep snow keeps only where the snow reaches it, on snowy ground facing up.
-+    if (snowShell) {
++    if (featherCard) {
++        if (!FeatherCard(vertexFurAnchor, combinerColor.rgb, resultColor.rgb)) {
++            return false;
++        }
++    }
++    else if (snowShell) {
 +        if (!SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, resultColor.rgb)) {
 +            return false;
 +        }
@@ -8298,7 +8514,7 @@ index e7895c3..11da95a 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +340,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +346,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8322,7 +8538,7 @@ index e7895c3..11da95a 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +383,7 @@ void PSMain(
+@@ -287,6 +389,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8330,7 +8546,7 @@ index e7895c3..11da95a 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +400,7 @@ void PSMain(
+@@ -303,7 +406,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -11130,10 +11346,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..9df93a2 100644
+index 2e62aaf..6d4c7ca 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,69 @@ namespace interop {
+@@ -13,6 +13,72 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -11181,6 +11397,9 @@ index 2e62aaf..9df93a2 100644
 +        float4 furClipZ;
 +        // Fur length in world units, strands per texel, how thick the coat is (0 to 1), how far the tips droop.
 +        float4 furParams;
++        // Banjo-Tooie: Kazooie's feathers (GrassGS.hlsl): a feather's length and width in world units, feathers per
++        // square unit of her surface, then how much they lift off her (0 to 1).
++        float4 featherParams;
 +        // Banjo-Tooie: the day and night cycle's lit windows and lamps (RasterPS.hlsl): how far night has come in
 +        // (0 day, 1 night), then the light's colour.
 +        float4 nightLights;
@@ -11265,10 +11484,10 @@ index 0000000..93ea5da
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..d867588 100644
+index 0a5c332..85bcf3a 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,33 @@
+@@ -9,11 +9,36 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -11281,6 +11500,9 @@ index 0a5c332..d867588 100644
 +    // Banjo-Tooie: set in grassShells when the redraw is a shell of deep snow (Snow.hlsli) instead of grass; grassShell
 +    // is then the shell and the low bits of grassShells the shell count.
 +#define RASTER_SNOW_SHELLS 0x20000000u
++    // Banjo-Tooie: with RASTER_GRASS_BLADES, the geometry shader grows Kazooie's feathers on the draw instead of grass
++    // (GrassGS.hlsl, FeatherCard in Fur.hlsli).
++#define RASTER_FEATHER_CARDS 0x10000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +
      struct RasterParams {

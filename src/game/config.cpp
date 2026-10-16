@@ -457,10 +457,11 @@ void tooie::init_config() {
     recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::banjo_direction_option, tooie::picture_filters::sun_shadows_option);
-    // Character Shaders (L, 2026-10-16): Banjo's fur, after the Shaders group.
+    // Character Shaders (L, 2026-10-16): Banjo's fur and Kazooie's feathers, after the Shaders group.
     for (const std::string* option : { &tooie::picture_filters::character_section_option, &tooie::picture_filters::banjo_fur_option,
                                        &tooie::picture_filters::banjo_fur_length_option, &tooie::picture_filters::banjo_fur_density_option,
-                                       &tooie::picture_filters::banjo_fur_noisiness_option }) {
+                                       &tooie::picture_filters::banjo_fur_noisiness_option, &tooie::picture_filters::kazooie_feathers_option,
+                                       &tooie::picture_filters::kazooie_feather_size_option }) {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::contrast_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T297 Kazooie feathers (feather cards, like the NeuralVFX shader)
+- Asked: 2026-10-16 19:17 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: set Kazooie feathers to 100
+  2. Look at Kazooie up close in a cutscene (the poker game in Jolly's works) and while playing
+  3. Try Kazooie feather size between 50 and 200
+- Look for: Her head, neck and body are covered in lots of little overlapping feathers that stick out a little, each in her own colour there, with her beak, legs and backpack left smooth. Does it look good? Also say if the frame rate drops.
+- Status: waiting for L
+
 ## T296 Smash Banjo v11: slow blink
 - Asked: 2026-10-16 UTC
 - Build: main, plus mods/Smash Banjo v11.zip from project files (take v10 and its unpacked folder out of the mods folder)
