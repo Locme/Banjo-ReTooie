@@ -2290,3 +2290,13 @@
 - Look for: Step 1, the warm light lasts a while after sunrise and before sunset, with richer colours, then fades to plain daylight. Step 2, tiny glints of dew twinkle on level grass while the sun is low in the morning, and go as it climbs (none in the evening or in rain). Too strong, too faint? Checked headless: [morning-dew-golden-hour.png](screens/day-night/morning-dew-golden-hour.png) (the dew is faint in a still screenshot).
 - Status: waiting for L
 
+## T216 Day and night: morning mist
+- Asked: 2026-10-16 03:35 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: morning mist" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Weather: Clear, in Terrydactyland, Spiral Mountain or the Isle o' Hags; look out over lower ground
+  2. Day and Night: Cycle and watch it thin out as the sun climbs
+- Look for: A pale haze lying low over the ground in the distance, warm towards the sun, gone by mid-morning and absent in the evening, at night and in rain. It is separate from the Fog setting. Too thick, too thin? Checked headless: [morning-mist.png](screens/day-night/morning-mist.png) (Terrydactyland left, Jinjo Village right).
+- Status: waiting for L
+

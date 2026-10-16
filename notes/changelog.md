@@ -26,6 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: morning mist lying low over the ground until mid-morning. Untested on PC (T216).
 - Day and Night: golden hour (warm light with richer colours for a while after sunrise and before sunset) and morning dew glinting on the grass. Untested on PC (T215).
 - Day and Night: northern lights over Hailfire Peaks' Icy Side at night (Graphics > Northern Lights, on). Untested on PC (T214).
 - Day and Night: house windows light up warm at night (Jinjo Village and others using the same windows), and fireflies fade out right by the camera. Untested on PC (T213).
