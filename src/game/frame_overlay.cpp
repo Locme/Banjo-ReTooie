@@ -252,6 +252,10 @@ namespace {
     };
 
     bool build(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return false;
+        }
         try {
             recompui::ContextId ctx = recompui::create_context();
             ctx.open();
@@ -311,6 +315,10 @@ namespace {
 
     // The game start clears every shown context, so check the real state each time.
     void show(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (!recompui::is_context_shown(o.context)) {
             recompui::show_context(o.context, "");
         }
@@ -318,6 +326,10 @@ namespace {
     }
 
     void hide(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (o.shown && recompui::is_context_shown(o.context)) {
             recompui::hide_context(o.context);
         }
@@ -966,33 +978,39 @@ namespace {
             }
 
             std::vector<std::string> text = format(frames, game_delta, game_seconds, game_busy_ms, mode);
-            overlay.context.open();
-            // A " " line is a gap: the next line gets a margin above it instead.
-            size_t used = 0;
-            bool gap = false;
-            for (const std::string& t : text) {
-                if (t == " ") {
-                    gap = true;
-                    continue;
+            {
+                auto lifetime = recompui::lock_context_lifetime();
+                if (!recompui::contexts_alive()) {
+                    return;
                 }
-                if (used == overlay.lines.size()) {
-                    break;
+                overlay.context.open();
+                // A " " line is a gap: the next line gets a margin above it instead.
+                size_t used = 0;
+                bool gap = false;
+                for (const std::string& t : text) {
+                    if (t == " ") {
+                        gap = true;
+                        continue;
+                    }
+                    if (used == overlay.lines.size()) {
+                        break;
+                    }
+                    overlay.lines[used]->set_text(t);
+                    overlay.lines[used]->set_margin_top(gap ? group_gap : 0.0f);
+                    overlay.lines[used]->set_display(recompui::Display::Block);
+                    gap = false;
+                    used++;
                 }
-                overlay.lines[used]->set_text(t);
-                overlay.lines[used]->set_margin_top(gap ? group_gap : 0.0f);
-                overlay.lines[used]->set_display(recompui::Display::Block);
-                gap = false;
-                used++;
+                for (size_t i = used; i < overlay.lines.size(); i++) {
+                    overlay.lines[i]->set_text(std::string());
+                    overlay.lines[i]->set_display(recompui::Display::None);
+                }
+                overlay.graph->set_display(mode == Mode::Full ? recompui::Display::Flex : recompui::Display::None);
+                if (mode == Mode::Full) {
+                    update_graph(overlay);
+                }
+                overlay.context.close();
             }
-            for (size_t i = used; i < overlay.lines.size(); i++) {
-                overlay.lines[i]->set_text(std::string());
-                overlay.lines[i]->set_display(recompui::Display::None);
-            }
-            overlay.graph->set_display(mode == Mode::Full ? recompui::Display::Flex : recompui::Display::None);
-            if (mode == Mode::Full) {
-                update_graph(overlay);
-            }
-            overlay.context.close();
             show(overlay);
         }
     }

@@ -1,5 +1,45 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T267 No 'invalid UI context' error when quitting
+- Asked: 2026-10-16 11:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Performance > Frame rate overlay: Compact
+  2. Play a little so a notice shows (for example toggle the overlay with F3)
+  3. Quit the game from the menu, and once more by closing the window
+- Look for: The game closes with no 'Fatal error in mod - Attempted to open an invalid UI context' box. The overlay, notices and the photo mode panel now stop touching the menu once it is torn down. Quit from the menu checked headless with the overlay on (no box); the error itself was a race, so it may not have shown every time before.
+- Status: waiting for L
+
+## T266 Controller: Back while typing in search, menu reopens where you left it
+- Asked: 2026-10-16 11:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. With the controller, pick Search settings, press A and type a few letters
+  2. Press Back (the Back button the menu's footer shows)
+  3. Go to Sound in the sidebar, close the menu with Select, open it again and press Left or Down
+- Look for: Step 2: you leave the text box and land on the Search settings box in the sidebar, and the stick moves through the sidebar again. Step 3: the menu opens on Sound with the cursor there, not at the top of the list. Checked headless with the keyboard for step 3; step 2 needs a controller (the cause was Back trying to focus the hidden Search tab).
+- Status: waiting for L
+
+## T265 Default and Shaders labels
+- Asked: 2026-10-16 11:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Aspect Ratio and HUD Placement
+  2. Graphics > the Shaders section
+- Look for: Aspect Ratio reads 4:3, Default, Letterbox 16:9. HUD Placement reads Original, 16:9, Default. Your saved choice is unchanged. The Lighting, Water, Fog (Experimental) switch and its heading now say Shaders and still show and hide the same effects.
+- Status: waiting for L
+
+## T264 QOL tab: Fast Forward Cutscenes, Photo Filter, Balancing
+- Asked: 2026-10-16 11:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Open QOL
+  2. Look at Speed and skipping, Photo Filter and Balancing
+  3. Turn Hide Settings off under Photo Filter
+  4. With Fast Forward Cutscenes on, press Start in a boss intro and in a normal cutscene
+- Look for: Speed and skipping ends with Fast Forward Cutscenes, then Press Start Anytime In Intro. The old two skip switches are one; if you had Skip other cutscenes on, the new one is on. Photo Filter is its own section with Hide Settings on; turning it off shows the photo filter, exposure, crop and the rest. Canary Mary races sits alone under Balancing at the bottom. Start fast-forwards both cutscene kinds. Checked headless (menu only).
+- Status: waiting for L
+
 ## T263 Video memory no longer fills up (frame rate drops to 2 fps)
 - Asked: 2026-10-16 10:57 UTC
 - Build: main @ next push

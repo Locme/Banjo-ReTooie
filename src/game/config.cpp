@@ -95,6 +95,24 @@ namespace {
         wip.save_config();
     }
 
+    // Skip boss intros and Skip other cutscenes became one option (L, 2026-10-16), saved under the boss
+    // option's key: someone who had other cutscenes on keeps fast-forwarding them.
+    void move_saved_cutscene_skip() {
+        std::ifstream qol_file(recomp::get_config_path() / "qol.json");
+        if (!qol_file) {
+            return;
+        }
+        nlohmann::json qol_json = nlohmann::json::parse(qol_file, nullptr, false);
+        if (!qol_json.is_object() || !qol_json.contains(tooie::cutscene_skip_other_option) ||
+            !qol_json[tooie::cutscene_skip_other_option].is_boolean() ||
+            !qol_json[tooie::cutscene_skip_other_option].get<bool>()) {
+            return;
+        }
+        recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
+        qol.set_option_value(tooie::cutscene_skip_option, true);
+        qol.save_config();
+    }
+
     // Options that moved from the QOL tab to Graphics (L, 2026-10-13): carry a value saved in qol.json
     // over once, unless graphics.json already has one. Extended draw distance is not carried over, so
     // it starts off after its fix whatever the broken first version saved.
@@ -226,7 +244,7 @@ void tooie::init_config() {
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(
         tooie::quick_start_option,
-        "Press Start Early in Intro",
+        "Press Start Anytime In Intro",
         "Press Start during the logos and title flight to go straight to the file select.",
         true);
     qol.add_enum_option(
@@ -250,16 +268,13 @@ void tooie::init_config() {
             {tooie::TransitionSpeed::Instant, "Instant", "Instant"},
         },
         tooie::TransitionSpeed::Original);
+    // One option for every cutscene (L, 2026-10-16); it was Skip boss intros plus Skip other cutscenes.
+    // Saved under the boss option's key; move_saved_cutscene_skip carries "other cutscenes on" over.
     qol.add_bool_option(
         tooie::cutscene_skip_option,
-        "Skip boss intros",
-        "Press Start during a boss's intro cutscene to fast-forward through it and its dialogue to the fight. Press Start again to stop. The sound is muted while it fast-forwards.",
+        "Fast Forward Cutscenes",
+        "Press Start during a cutscene, a boss's intro included, to fast-forward through it and its dialogue (Start again stops it). This includes conversations, so a stray Start skips them. The sound is muted while it fast-forwards. The title screen and file select are left alone.",
         true);
-    qol.add_bool_option(
-        tooie::cutscene_skip_other_option,
-        "Skip other cutscenes",
-        "Press Start during any other cutscene to fast-forward through it and its dialogue (Start again stops it). This includes conversations, so a stray Start skips them. The title screen and file select are left alone.",
-        false);
     qol.add_bool_option(
         tooie::free_camera_option,
         "Free camera",
@@ -320,16 +335,6 @@ void tooie::init_config() {
         "The pause menu's Totals pages also say how many of each item are left in a world and how many you can get with the moves you have now. Off by default.",
         false);
     qol.add_enum_option(
-        tooie::canary_mary::mode_option,
-        "Canary Mary races",
-        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
-        {
-            {tooie::canary_mary::Mode::Original, "Original", "Original"},
-            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
-            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
-        },
-        tooie::canary_mary::Mode::Fair);
-    qol.add_enum_option(
         tooie::fine_aim::mode_option,
         "Fine aim",
         "Turns the first-person view (C-up) slower with the left stick, for aiming eggs. <recomp-color primary>Hold key</recomp-color> slows it only while the Fine Aim key is held (Controls tab, Hotkeys; R by default).",
@@ -352,9 +357,23 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
+    qol.add_enum_option(
+        tooie::canary_mary::mode_option,
+        "Canary Mary races",
+        "<recomp-color primary>Fair</recomp-color>: Canary Mary never speeds up past her normal pace to catch you when you lead. <recomp-color primary>Easy</recomp-color> is Fair with her pace at 85%. <recomp-color primary>Original</recomp-color> keeps her catch-up. She still slows down when you fall behind, as in the original.",
+        {
+            {tooie::canary_mary::Mode::Original, "Original", "Original"},
+            {tooie::canary_mary::Mode::Fair, "Fair", "Fair"},
+            {tooie::canary_mary::Mode::Easy, "Easy", "Easy"},
+        },
+        tooie::canary_mary::Mode::Fair);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
-    recompui::config::set_option_group(tooie::quick_start_option, "Speed and skipping");
+    recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
+    // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
+    recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
+    recompui::config::set_option_group(tooie::photo_mode::hide_settings_option, "Photo Filter");
+    recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
 
@@ -427,8 +446,8 @@ void tooie::init_config() {
     // heading hides with its option.
     recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
     recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture and effects");
-    recompui::config::set_option_group(tooie::picture_filters::lighting_section_option, "Lighting, Water, Fog (Experimental)");
-    // HD Shadows sits in the Sun shadows part of the Lighting, Water, Fog group, with its own toggle (L, 2026-10-16).
+    recompui::config::set_option_group(tooie::picture_filters::lighting_section_option, "Shaders");
+    // HD Shadows sits in the Sun shadows part of the Shaders group, with its own toggle (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::hd_shadows_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::banjo_direction_option, tooie::picture_filters::sun_shadows_option);
@@ -500,6 +519,7 @@ void tooie::init_config() {
     show_wip_tab();
     show_cheats_tab();
     move_saved_discord_option();
+    move_saved_cutscene_skip();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();

@@ -110,7 +110,7 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
         printf("[cutscene] %s\n", scene ? "scene" : "gameplay");
         fflush(stdout);
     }
-    scene_on = scene && !menu && (boss ? option(tooie::cutscene_skip_option, true) : option(tooie::cutscene_skip_other_option, false));
+    scene_on = scene && !menu && option(tooie::cutscene_skip_option, true);
 
     if (skipping) {
         if (stop_requested.exchange(false)) {

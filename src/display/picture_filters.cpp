@@ -695,7 +695,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         lighting_section_option,
-        "Lighting, Water, Fog (Experimental)",
+        "Shaders",
         "Shows the lighting, water, fog and the other effects below. Hiding them does not turn any effect off.",
         true);
 
@@ -916,7 +916,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     }
 
 
-    // Hidden when the Lighting, Water, Fog (Experimental) toggle is off; the effects keep their values either way.
+    // Hidden when the Shaders toggle is off; the effects keep their values either way.
     graphics.add_option_hidden_dependency(ambient_occlusion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(bounce_light_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);

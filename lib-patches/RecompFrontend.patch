@@ -438,6 +438,47 @@ index 38b84f5..d6d68fa 100644
          void set_tab(const std::string &id);
          void open();
          bool close();
+diff --git a/recompui/include/recompui/recompui.h b/recompui/include/recompui/recompui.h
+index 30c463b..52bbd4c 100644
+--- a/recompui/include/recompui/recompui.h
++++ b/recompui/include/recompui/recompui.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include <memory>
++#include <mutex>
+ #include <string>
+ #include <string_view>
+ #include <list>
+@@ -56,6 +57,11 @@ namespace recompui {
+     void hide_context(ContextId context);
+     void hide_all_contexts();
+     bool is_context_shown(ContextId context);
++    // For threads that draw their own context (notices, overlays): hold this lock while building, opening,
++    // showing or hiding it, and skip the work when contexts_alive() is false. When the game exits, the UI
++    // destroys every context under the same lock, so a context is never opened after it is gone.
++    std::unique_lock<std::mutex> lock_context_lifetime();
++    bool contexts_alive();
+     bool is_context_capturing_input();
+     bool is_context_capturing_mouse();
+     bool is_any_context_shown();
+diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
+index 277a421..49b1ab2 100644
+--- a/recompui/src/base/ui_state.cpp
++++ b/recompui/src/base/ui_state.cpp
+@@ -346,6 +346,13 @@ public:
+                 // Check if not focused or focused element is not focusable.
+                 if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
+                     auto recompui_doc = top_context.get_root_element();
++                    // A menu that names where its focus starts (the settings menu: its picked tab) gets it.
++                    auto autofocus = top_context.get_autofocus_element();
++                    if (autofocus != nullptr && autofocus->is_focusable() == recompui::Element::CanFocus::Yes) {
++                        autofocus->focus();
++                        top_context.close();
++                        return;
++                    }
+                     auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
+                     if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
+                         last_hovered->focus();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..3cc43e9 100644
 --- a/recompui/src/config/ui_config.cpp
@@ -1150,7 +1191,7 @@ index 49e05db..52ac3c0 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..c87b8b5 100644
+index 4fdf81f..fe7c52e 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -1180,7 +1221,7 @@ index 4fdf81f..c87b8b5 100644
 -            {ultramodern::renderer::AspectRatio::Expand, "Expand"},
 -            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
 +            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
-+            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
++            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Default"},
 +            {ultramodern::renderer::AspectRatio::Manual, "Manual", "Letterbox 16:9"},
          };
  
@@ -1194,6 +1235,15 @@ index 4fdf81f..c87b8b5 100644
              {ultramodern::renderer::RefreshRate::Display, "Display"},
              {ultramodern::renderer::RefreshRate::Manual, "Manual"},
          };
+@@ -92,7 +95,7 @@ namespace recompui {
+         static EnumOptionVector hud_ratio_mode_options = {
+             {ultramodern::renderer::HUDRatioMode::Original, "Original"},
+             {ultramodern::renderer::HUDRatioMode::Clamp16x9, "Clamp16x9", "16:9"},
+-            {ultramodern::renderer::HUDRatioMode::Full, "Expand"},
++            {ultramodern::renderer::HUDRatioMode::Full, "Expand", "Default"},
+         };
+ 
+         static const std::string get_downsampling_details(ultramodern::renderer::Resolution res_option, DownsamplingOption ds_option) {
 @@ -100,6 +103,11 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
@@ -1293,7 +1343,7 @@ index 4fdf81f..c87b8b5 100644
                  graphics::options::ar_option,
                  "Aspect Ratio",
 -                "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
-+                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
++                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Default</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
@@ -1327,6 +1377,15 @@ index 4fdf81f..c87b8b5 100644
              config.add_enum_option(
                  graphics::options::msaa_option,
                  "MS Anti-Aliasing",
+@@ -336,7 +364,7 @@ namespace recompui {
+             config.add_enum_option(
+                 graphics::options::hr_option,
+                 "HUD Placement",
+-                "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
++                "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Default</recomp-color> will use the aspect ratio of the game's output window.",
+                 hud_ratio_mode_options,
+                 ultramodern::renderer::HUDRatioMode::Clamp16x9
+             );
 @@ -346,7 +374,7 @@ namespace recompui {
                  "Graphics API",
                  "Selects the graphics API to use.",
@@ -1353,6 +1412,31 @@ index 4fdf81f..c87b8b5 100644
              return config;
          }
      }
+diff --git a/recompui/src/core/ui_context.cpp b/recompui/src/core/ui_context.cpp
+index e99229a..b9e9fbd 100644
+--- a/recompui/src/core/ui_context.cpp
++++ b/recompui/src/core/ui_context.cpp
+@@ -324,7 +324,20 @@ void recompui::destroy_context(ContextId id) {
+     }
+ }
+ 
++static std::mutex context_lifetime_mutex;
++static bool contexts_are_alive = true;
++
++std::unique_lock<std::mutex> recompui::lock_context_lifetime() {
++    return std::unique_lock<std::mutex>{ context_lifetime_mutex };
++}
++
++bool recompui::contexts_alive() {
++    return contexts_are_alive;
++}
++
+ void recompui::destroy_all_contexts() {
++    std::lock_guard lifetime_lock{ context_lifetime_mutex };
++    contexts_are_alive = false;
+     recompui::hide_all_contexts();
+ 
+     std::lock_guard lock{ context_state.all_contexts_lock };
 diff --git a/recompui/src/elements/ui_button.cpp b/recompui/src/elements/ui_button.cpp
 index cf2a311..486e08d 100644
 --- a/recompui/src/elements/ui_button.cpp
@@ -1500,7 +1584,7 @@ index 34eec3f..cedce38 100644
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..433d594 100644
+index b057f46..c5361ce 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,9 @@
@@ -1602,7 +1686,20 @@ index b057f46..433d594 100644
  TabbedModal::TabbedModal(
      ResourceId rid,
      Document *parent,
-@@ -331,9 +416,114 @@ TabbedModal::TabbedModal(
+@@ -319,6 +404,12 @@ TabbedModal::TabbedModal(
+ ) : Modal(rid, parent, modal_root_context, modal_type)
+ {
+     set_menu_action_callback(MenuAction::Back, [this]() {
++        // Sidebar: the Search tab has no row in the list; its box at the top stands in for it, so Back
++        // (from typing in the search field too) goes there.
++        if (this->sidebar_layout && this->sidebar_search != nullptr && this->sidebar_search_active) {
++            this->sidebar_search->focus();
++            return;
++        }
+         if (this->tabs != nullptr) {
+             this->tabs->focus_on_active_tab();
+         }
+@@ -331,9 +422,124 @@ TabbedModal::TabbedModal(
      }, "Next Tab");
  }
  
@@ -1714,10 +1811,20 @@ index b057f46..433d594 100644
 +                    static_cast<SidebarSearch *>(sidebar_search)->set_active(active);
 +                }
 +            }
++            // The menu reopens on the picked tab (or the search box) rather than the top of the list: the
++            // first controller press after it opens focuses the context's autofocus element.
++            if (tabs != nullptr) {
++                Element *autofocus = (sidebar_layout && sidebar_search != nullptr && sidebar_search_active)
++                    ? sidebar_search : tabs->get_active_tab_element();
++                if (autofocus != nullptr && autofocus != autofocus_target) {
++                    autofocus_target = autofocus;
++                    get_current_context().set_autofocus_element(autofocus);
++                }
++            }
              if (previous_tab_index != current_tab_index) {
                  body->clear_children();
                  if (current_tab_index >= 0 && current_tab_index < tab_contexts.size()) {
-@@ -341,6 +531,9 @@ void TabbedModal::process_event(const Event &e) {
+@@ -341,6 +547,9 @@ void TabbedModal::process_event(const Event &e) {
                  }
                  previous_tab_index = current_tab_index;
              }
@@ -1727,7 +1834,7 @@ index b057f46..433d594 100644
              queue_update();
              break;
          }
-@@ -362,7 +555,14 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +571,14 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
@@ -1742,7 +1849,7 @@ index b057f46..433d594 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,6 +604,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,6 +620,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
@@ -1756,15 +1863,16 @@ index b057f46..433d594 100644
          tabs->set_change_tab_callback([this](int tab_index) {
              this->on_tab_change(tab_index);
 diff --git a/recompui/src/elements/ui_modal.h b/recompui/src/elements/ui_modal.h
-index d065a14..ef08475 100644
+index d065a14..0b68f37 100644
 --- a/recompui/src/elements/ui_modal.h
 +++ b/recompui/src/elements/ui_modal.h
-@@ -102,6 +102,13 @@ namespace recompui {
+@@ -102,6 +102,14 @@ namespace recompui {
          TabSet *tabs = nullptr;
          int previous_tab_index = -1;
          int current_tab_index = -1;
 +        bool sidebar_layout = false;
 +        Element *sidebar_search = nullptr;
++        Element *autofocus_target = nullptr;
 +        bool sidebar_search_active = false;
 +        int page_focus_pending = 0;
 +        void enter_page();

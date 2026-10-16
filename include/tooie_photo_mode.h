@@ -25,6 +25,8 @@ namespace tooie::photo_mode {
     inline const std::string grain_option = "photo_grain";
     inline const std::string crop_option = "photo_crop";
     inline const std::string grid_option = "photo_grid";
+    // QOL > Photo Filter: hides the photo settings below it (L, 2026-10-16).
+    inline const std::string hide_settings_option = "photo_hide_settings";
     inline const std::string dof_option = "photo_dof";
     inline const std::string tilt_option = "photo_tilt";
 

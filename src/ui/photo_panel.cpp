@@ -39,6 +39,10 @@ namespace {
     };
 
     bool build(Panel& p) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return false;
+        }
         try {
             recompui::ContextId ctx = recompui::create_context();
             ctx.open();
@@ -89,6 +93,10 @@ namespace {
     }
 
     void update(Panel& p, const std::vector<std::string>& rows, int picked) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (rows == p.last_rows && picked == p.last_picked) {
             return;
         }
@@ -112,6 +120,10 @@ namespace {
 
     // The game start clears every shown context, so check the real state each time.
     void show(Panel& p) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (!recompui::is_context_shown(p.context)) {
             recompui::show_context(p.context, "");
         }
@@ -119,6 +131,10 @@ namespace {
     }
 
     void hide(Panel& p) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (p.shown && recompui::is_context_shown(p.context)) {
             recompui::hide_context(p.context);
         }

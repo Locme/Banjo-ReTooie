@@ -482,6 +482,8 @@ void tooie::photo_mode::start() {
 }
 
 void tooie::photo_mode::add_options(recomp::config::Config& qol) {
+    qol.add_bool_option(hide_settings_option, "Hide Settings",
+        "Hides photo mode's filter, exposure, crop and the other photo settings below. Turn it off to change them.", true);
     qol.add_enum_option(look_option, "Photo filter",
         "A colour look for photo mode (F10). Only shown while photo mode is on, and in its screenshots.",
         {
@@ -523,6 +525,10 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
         0, 100, 5, 0, false, 0);
     qol.add_bool_option(grid_option, "Photo grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
+    for (const std::string* id : { &look_option, &exposure_option, &contrast_option, &saturation_option, &warmth_option,
+            &vignette_option, &grain_option, &crop_option, &tilt_option, &dof_option, &grid_option }) {
+        qol.add_option_hidden_dependency(*id, hide_settings_option, true);
+    }
 }
 
 bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_row) {

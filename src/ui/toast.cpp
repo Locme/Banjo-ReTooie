@@ -34,6 +34,10 @@ namespace {
     };
 
     bool build(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return false;
+        }
         try {
             recompui::ContextId ctx = recompui::create_context();
             ctx.open();
@@ -68,6 +72,10 @@ namespace {
     }
 
     void set_state(Overlay& o, const std::string* text, float opacity) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         o.context.open();
         if (text != nullptr) {
             o.label->set_text(*text);
@@ -78,6 +86,10 @@ namespace {
 
     // The game start clears every shown context, so check the real state each time.
     void show_overlay(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (!recompui::is_context_shown(o.context)) {
             recompui::show_context(o.context, "");
         }
@@ -85,6 +97,10 @@ namespace {
     }
 
     void hide_overlay(Overlay& o) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
         if (o.shown && recompui::is_context_shown(o.context)) {
             recompui::hide_context(o.context);
         }

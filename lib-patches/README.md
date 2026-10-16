@@ -127,7 +127,7 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   `ui_tab_set.{h,cpp}`, `ui_config_page_options_menu.{h,cpp}`): `recompui::config::set_sidebar_layout(true)` draws the
   settings tabs as a vertical list on the left (the header becomes a column, the quit and close buttons at its foot) and
   each options page's description in a strip along the bottom instead of a column on the right. The modal and pages
-  check it on every update, so it switches while the menu is open. The game turns it on at start (`src/game/config.cpp`); it is the only layout the port uses (L, 2026-10-16). `config::create_page_tab` adds a tab that shows some options of another tab's config (`set_option_page`; the port's Performance tab shows Graphics options), so they keep saving where they did. The Graphics page has no Apply footer in any layout, since it saves each change as it is made.
+  check it on every update, so it switches while the menu is open. The game turns it on at start (`src/game/config.cpp`); it is the only layout the port uses (L, 2026-10-16). `config::create_page_tab` adds a tab that shows some options of another tab's config (`set_option_page`; the port's Performance tab shows Graphics options), so they keep saving where they did. Back (`TabbedModal`) goes to the search box when the Search tab is open, and the modal keeps its context's autofocus element on the picked tab, which `update_focus` (`ui_state.cpp`) now prefers, so the menu reopens there with a controller. The Graphics page has no Apply footer in any layout, since it saves each change as it is made.
   In that layout a "Search settings" box at the top of the sidebar stands in for the Search tab's row (L and R still
   reach the tab, `TabSet::set_tab_listed`), and each options page shows its tab's name as a heading and a line under
   each option, with the option's name and its control on one line (`ConfigOptionElement::set_compact`,
@@ -296,3 +296,4 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
 
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.
+* **Context lifetime lock** (`recompui/include/recompui/recompui.h`, `src/core/ui_context.cpp`): `lock_context_lifetime()` and `contexts_alive()`; `destroy_all_contexts` takes the lock and marks contexts gone, so the port's overlay, notice and photo panel threads never open a context after exit tears them down.
