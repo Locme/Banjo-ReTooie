@@ -429,6 +429,36 @@ index 38b84f5..1bdc706 100644
          void set_tab(const std::string &id);
          void open();
          bool close();
+diff --git a/recompui/src/composites/ui_mod_menu.cpp b/recompui/src/composites/ui_mod_menu.cpp
+index 02455fd..482fc45 100644
+--- a/recompui/src/composites/ui_mod_menu.cpp
++++ b/recompui/src/composites/ui_mod_menu.cpp
+@@ -279,9 +279,14 @@ void ModMenu::refresh_mods(bool scan_mods) {
+         recompui::release_image(thumbnail);
+     }
+ 
+-    // Prevent scanning mods after starting the game.
+-    if (scan_mods && !ultramodern::is_game_started()) {
+-        recomp::mods::scan_mods();
++    // After the game started, a full rescan would close the loaded mods, so only the new ones are opened.
++    if (scan_mods) {
++        if (ultramodern::is_game_started()) {
++            recomp::mods::scan_new_mods();
++        }
++        else {
++            recomp::mods::scan_mods();
++        }
+     }
+     mod_details = recomp::mods::get_all_mod_details(game_mod_id);
+     create_mod_list();
+@@ -641,7 +646,6 @@ void ModMenu::process_event(const Event &e) {
+         }
+         if (ultramodern::is_game_started()) {
+             install_mods_button->set_enabled(false);
+-            refresh_button->set_enabled(false);
+         }
+         if (active_mod_index != -1) {        
+             bool auto_enabled = recomp::mods::is_mod_auto_enabled(mod_details[active_mod_index].mod_id);
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..19a7624 100644
 --- a/recompui/src/config/ui_config.cpp

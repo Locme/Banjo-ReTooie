@@ -56,8 +56,10 @@ namespace tooie {
     // --dialogue_text_speed 1|2|4|instant; overrides the setting. False if the value is unknown.
     bool parse_text_speed_arg(const char* value);
 
-    // Unpacks RT64 texture packs dropped into the mods folder as a .zip (src/game/mod_zips.cpp).
-    void unpack_mod_zips();
+    // Unpacks RT64 texture packs and asset mods dropped into the mods folder as a .zip (src/game/mod_zips.cpp).
+    // Runs before each mod scan. With new_only (a refresh after the game started) a zip is only unpacked
+    // when it has no folder yet, so a loaded mod's files are never swapped out under it.
+    void unpack_mod_zips(bool new_only = false);
 
     // Timer save (src/game/timer_save.cpp): saves every N minutes of play. Called each frame from tooie_warp_tick.
     enum class TimerSave : uint32_t { Off, Minutes5, Minutes10, Minutes30, Minutes60, Minutes120 };

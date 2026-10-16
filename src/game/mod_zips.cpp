@@ -7,7 +7,8 @@
 // with an assets.json instead of or next to the rt64.json. At startup, before
 // the mods are scanned, every .zip in the mods folder that holds an rt64.json or
 // an assets.json is unpacked into a folder named after the zip, which the loader
-// then opens like any other mod folder. A marker file in
+// then opens like any other mod folder. Refresh Mods does the same; in game it only
+// unpacks zips that have no folder yet, which the refresh then opens next to the loaded mods. A marker file in
 // that folder remembers which zip (size and date) it came from, so the zip is
 // only unpacked again when it changes. A pack without a mod.json gets a small
 // one so the loader accepts the folder.
@@ -108,9 +109,12 @@ namespace {
         return true;
     }
 
-    void unpack_zip(const fs::path& zip_path) {
+    void unpack_zip(const fs::path& zip_path, bool new_only) {
         std::error_code ec;
         fs::path target = zip_path.parent_path() / zip_path.stem();
+        if (new_only && fs::exists(target, ec)) {
+            return;
+        }
         const std::string stamp = zip_stamp(zip_path);
         if (fs::exists(target / marker_name, ec) && read_text(target / marker_name) == stamp) {
             return;
@@ -166,7 +170,7 @@ namespace {
     }
 }
 
-void tooie::unpack_mod_zips() {
+void tooie::unpack_mod_zips(bool new_only) {
     std::error_code ec;
     fs::path mods = recomp::mods::get_mods_directory();
     if (!fs::is_directory(mods, ec)) {
@@ -174,7 +178,7 @@ void tooie::unpack_mod_zips() {
     }
     for (const auto& entry : fs::directory_iterator(mods, fs::directory_options::skip_permission_denied, ec)) {
         if (entry.is_regular_file(ec) && entry.path().extension() == ".zip") {
-            unpack_zip(entry.path());
+            unpack_zip(entry.path(), new_only);
         }
     }
 }

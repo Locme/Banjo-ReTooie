@@ -792,7 +792,8 @@ int main(int argc, char** argv) {
 
     tooie::init_config();
     tooie::session_log::start(version_string);
-    tooie::unpack_mod_zips();
+    // Zips dropped into the mods folder are unpacked before every mod scan (startup and Refresh Mods).
+    recomp::mods::set_before_scan_callback([](bool game_started) { tooie::unpack_mod_zips(game_started); });
 
     tooie::start_save_backups();
 

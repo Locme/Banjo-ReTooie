@@ -2369,3 +2369,13 @@
   3. Look at the bee close up in photo mode, then walk, fly, shoot stingers and talk to someone
 - Look for: the round Bee Banjo from your FBX (belt, shorts, backpack, HD textures) instead of the game's bee, the same size and in the same place. The wings are translucent and flap with the game's own animation; arms, legs and the mouth move too. Only the Bee transformation changes; Banjo himself is untouched. Checked headless in Cloud Cuckooland: loads from the zip, stands, turns and walks (screenshot screens/bee-banjo/v1.png).
 - Status: waiting for L
+
+## T224 Refresh Mods in game
+- Asked: 2026-10-16 08:15 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Start the game and load a file, then open the Mods menu: the Refresh button (the circular arrow next to Open Mods Folder) is no longer greyed out
+  2. Without closing the game, drop a model mod or texture pack zip into the mods folder (for example "Smash Banjo v6.zip"; delete its unpacked "Smash Banjo v6" folder first if it is already there)
+  3. Press Refresh
+- Look for: the new mod appears in the list straight away and is switched on, and the area reloads with it (Smash Banjo shows up without restarting). Mods that were already loaded stay as they were. Code mods (.nrm) also appear but stay off until you restart, as before. A zip whose folder already exists is not unpacked again in game (that still happens on the next start), and Install Mods stays greyed out in game. Checked headless: zip copied in mid-game in Spiral Mountain, refresh called directly, Smash Banjo unpacked, opened, switched on and loaded after the area reload. The button press itself was not clicked headless.
+- Status: waiting for L

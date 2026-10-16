@@ -1,3 +1,38 @@
+diff --git a/librecomp/include/librecomp/mods.hpp b/librecomp/include/librecomp/mods.hpp
+index 37556bd..2cab4fb 100644
+--- a/librecomp/include/librecomp/mods.hpp
++++ b/librecomp/include/librecomp/mods.hpp
+@@ -2,6 +2,7 @@
+ #define __RECOMP_MODS_HPP__
+ 
+ #include <filesystem>
++#include <functional>
+ #include <string>
+ #include <fstream>
+ #include <cstdio>
+@@ -341,7 +342,8 @@ namespace recomp {
+             void register_game(const std::string& mod_game_id);
+             void register_embedded_mod(const std::string& mod_id, std::span<const uint8_t> mod_bytes);
+             void register_deprecated_mod(const std::string& mod_id, DeprecationStatus deprecation_status, const Version& maximum_version);
+-            std::vector<ModOpenErrorDetails> scan_mod_folder(const std::filesystem::path& mod_folder);
++            // only_new: keep the opened mods and only open the ones not opened yet (for a refresh after the game started).
++            std::vector<ModOpenErrorDetails> scan_mod_folder(const std::filesystem::path& mod_folder, bool only_new = false);
+             void close_mods();
+             void load_mods_config();
+             void enable_mod(const std::string& mod_id, bool enabled, bool trigger_save);
+@@ -624,6 +626,12 @@ namespace recomp {
+         void register_embedded_mod(const std::string& mod_id, std::span<const uint8_t> mod_bytes);
+         void register_deprecated_mod(const std::string& mod_id, DeprecationStatus deprecation_status, const Version &maximum_version);
+         void scan_mods();
++        // Opens the mods added to the mods folder since the last scan and leaves the opened ones as they are,
++        // so it is safe after the game started. New mods that can't be toggled in game show up but stay off.
++        void scan_new_mods();
++        // Called at the start of scan_mods and scan_new_mods, with whether the game has started (the game
++        // unpacks dropped zips there).
++        void set_before_scan_callback(std::function<void(bool game_started)> callback);
+         void close_mods();
+         std::filesystem::path get_mods_directory();
+         std::optional<ModDetails> get_details_for_mod(const std::string& mod_id);
 diff --git a/librecomp/include/librecomp/overlays.hpp b/librecomp/include/librecomp/overlays.hpp
 index 35703bd..7095517 100644
 --- a/librecomp/include/librecomp/overlays.hpp
@@ -49,6 +84,38 @@ index 97dbd8e..f4b4e13 100644
 +    }
      update_bit(rdp_state, ctx->r4, RDPStatusBit::Flush);
  }
+diff --git a/librecomp/src/mods.cpp b/librecomp/src/mods.cpp
+index 0f7de83..09ce870 100644
+--- a/librecomp/src/mods.cpp
++++ b/librecomp/src/mods.cpp
+@@ -794,10 +794,12 @@ void recomp::mods::ModContext::dirty_mod_configuration_thread_process() {
+     }
+ }
+ 
+-std::vector<recomp::mods::ModOpenErrorDetails> recomp::mods::ModContext::scan_mod_folder(const std::filesystem::path& mod_folder) {
++std::vector<recomp::mods::ModOpenErrorDetails> recomp::mods::ModContext::scan_mod_folder(const std::filesystem::path& mod_folder, bool only_new) {
+     std::vector<recomp::mods::ModOpenErrorDetails> ret{};
+     std::error_code ec;
+-    close_mods();
++    if (!only_new) {
++        close_mods();
++    }
+ 
+     static const std::vector<ModContentTypeId> empty_content_types{};
+     for (const auto& mod_path : std::filesystem::directory_iterator{mod_folder, std::filesystem::directory_options::skip_permission_denied, ec}) {
+@@ -815,6 +817,12 @@ std::vector<recomp::mods::ModOpenErrorDetails> recomp::mods::ModContext::scan_mo
+         else if (mod_path.is_directory()) {
+             is_mod = true;
+         }
++        if (is_mod && only_new) {
++            std::unique_lock lock(opened_mods_mutex);
++            if (opened_mods_by_filename.contains(mod_path.path().filename().native())) {
++                continue;
++            }
++        }
+         if (is_mod) {
+             printf("Opening mod " PATHFMT "\n", mod_path.path().stem().c_str());
+             std::string open_error_param;
 diff --git a/librecomp/src/overlays.cpp b/librecomp/src/overlays.cpp
 index 8c8e5d1..3599f5a 100644
 --- a/librecomp/src/overlays.cpp
@@ -78,6 +145,48 @@ index 8c8e5d1..3599f5a 100644
  void recomp::overlays::init_overlays() {
      func_map.clear();
      section_addresses = (int32_t *)calloc(sections_info.total_num_sections, sizeof(int32_t));
+diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
+index 1200f77..8c9697f 100644
+--- a/librecomp/src/recomp.cpp
++++ b/librecomp/src/recomp.cpp
+@@ -107,11 +107,20 @@ void recomp::mods::register_deprecated_mod(const std::string& mod_id, recomp::mo
+     mod_context->register_deprecated_mod(mod_id, deprecation_status, maximum_version);
+ }
+ 
+-void recomp::mods::scan_mods() {
++static std::function<void(bool)> before_scan_callback;
++
++void recomp::mods::set_before_scan_callback(std::function<void(bool game_started)> callback) {
++    before_scan_callback = std::move(callback);
++}
++
++static void scan_mods_impl(bool only_new) {
++    if (before_scan_callback) {
++        before_scan_callback(ultramodern::is_game_started());
++    }
+     std::vector<recomp::mods::ModOpenErrorDetails> mod_open_errors;
+     {
+         std::lock_guard mod_lock{ mod_context_mutex };
+-        mod_open_errors = mod_context->scan_mod_folder(config_path / mods_directory);
++        mod_open_errors = mod_context->scan_mod_folder(config_path / recomp::mods::mods_directory, only_new);
+     }
+     for (const auto& cur_error : mod_open_errors) {
+         printf("Error opening mod " PATHFMT ": %s (%s)\n", cur_error.mod_path.c_str(), recomp::mods::error_to_string(cur_error.error).c_str(), cur_error.error_param.c_str());
+@@ -120,6 +129,14 @@ void recomp::mods::scan_mods() {
+     mod_context->load_mods_config();
+ }
+ 
++void recomp::mods::scan_mods() {
++    scan_mods_impl(false);
++}
++
++void recomp::mods::scan_new_mods() {
++    scan_mods_impl(true);
++}
++
+ void recomp::mods::close_mods() {
+     {
+         std::lock_guard mod_lock{ mod_context_mutex };
 diff --git a/ultramodern/include/ultramodern/config.hpp b/ultramodern/include/ultramodern/config.hpp
 index 2f22456..41b1e8b 100644
 --- a/ultramodern/include/ultramodern/config.hpp
