@@ -832,6 +832,16 @@ func = "func_8001443C"
 before_vram = 0x8001454C
 text = "if (tooie_scheduler_vi_skip(rdram, ctx)) { ctx->r31 = MEM_W(ctx->r29, 0X24); goto L_800146CC; }"
 
+# func_808005F4_chbanjocurrent pushes Banjo along a water current (Jolly Roger's
+# Lagoon): it adds the current's direction times 8 ($f12) to his position once per
+# game frame, with no delta time, so above 30 FPS the push grew with the frame rate
+# and he could not swim against it (L, 2026-10-16). The hook scales the 8 by the
+# frame's time (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_808005F4_chbanjocurrent"
+before_vram = 0x80800758
+text = "tooie_current_push(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).

@@ -3460,3 +3460,13 @@
   3. Try it in a room with echo too (a cave or the Jinjo houses), and with General > More game memory on and off
 - Look for: The sound changes right away, with no restart; music and effects keep their pitch and speed, and echoes keep their timing. At most a tiny blip at the moment it switches. Checked headless on the title screen: switched 22 > 44 > 22 > 44 kHz, the sound kept 60 frames every 2 s and the music's pitch stayed in the same range; the reverb's delays were found and changed. Not checked headless: how it sounds.
 - Status: waiting for L
+
+## T340 Swimming in Jolly Roger's Lagoon above 60 FPS
+- Asked: 2026-10-16 23:20 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Game Frame Rate: 120, 175 and Uncapped in turn
+  2. Swim in the lagoon in the middle of Jolly Roger's Lagoon's town, forwards and against the water's push; also float without touching the stick
+- Look for: Banjo swims forward normally and the water only nudges him gently, as at 30 FPS. The cause: the lagoon's current pushes Banjo a fixed step every game frame, so at 240 FPS it pushed 8 times as hard (headless: he drifted about 240 units a second while floating, against about 10 at 30 FPS). The push now follows the frame's time; headless at 240 FPS he drifts about 7 units a second.
+- Status: waiting for L
+

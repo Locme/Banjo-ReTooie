@@ -42,6 +42,10 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Graphics > Debug has Effect compare, Interpolation check and an Interpolation blend mode list beside the Effect debug view (T143).
 - F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
+### Gameplay
+
+- Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
+
 ### Graphics
 - Fixed: above 30 FPS Klungo's fades ran at the wrong speed, and at 150 FPS and up he never faded back in behind his shield, so some phials started from his middle instead of his raised hand. Untested on PC (T331).
 - Shader speed pass 2: every material's shader is a third of its size for ordinary draws (the grass, snow and fur shells have their own), the night's fireflies and the depth of field's focus are worked out once a frame instead of in every pixel, bounce light reads a half-size copy of the scene (a touch smoother), and the output pass skips its gamma at 1.0. Nothing should look different; night with fireflies and busy scenes should run faster. Untested on PC (T328).

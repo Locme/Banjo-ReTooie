@@ -771,6 +771,19 @@ extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return portrait_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
+// func_808005F4_chbanjocurrent, as it pushes Banjo along a water current (Jolly Roger's
+// Lagoon): $f12 holds 8, the push per game frame. The game adds it to his position each frame
+// with no delta time, so above 30 FPS the current grew stronger with the frame rate (headless
+// at 240 FPS he drifted 240 units a second instead of about 10) and could push him back while
+// he swam (L, 2026-10-16). Outside Original it is scaled to the frame's time, as at 30 FPS.
+extern "C" void tooie_current_push(uint8_t* rdram, recomp_context* ctx) {
+    if (mode() == Mode::Original) {
+        return;
+    }
+    float dt = read_float(rdram, delta_time_addr);
+    ctx->f12.fl = 8.0f * std::clamp(dt * 30.0f, 0.0f, 2.0f);
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the

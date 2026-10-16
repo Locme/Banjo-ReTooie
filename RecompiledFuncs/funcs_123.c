@@ -3394,6 +3394,7 @@ L_808006E8:
     ctx->r1 = S32(0X4100 << 16);
     // 0x80800754: mtc1        $at, $f12
     ctx->f12.u32l = ctx->r1;
+    tooie_current_push(rdram, ctx);
     // 0x80800758: lwc1        $f16, 0x24($sp)
     ctx->f16.u32l = MEM_W(ctx->r29, 0X24);
     // 0x8080075C: lwc1        $f2, 0x40($sp)
