@@ -111,6 +111,10 @@ namespace tooie::picture_filters {
     void effect_changed();
     // Whether a preset is setting the effect options now.
     bool applying_effects_preset();
+    // The effects preset in Graphics, and setting it as the menu does (applies its values and saves);
+    // Custom leaves the effects as they are. The start menu's Play row picks it (src/main/main.cpp).
+    Preset preset();
+    void set_preset(Preset preset);
     // Each game frame: gives RT64 the game's depth buffer for ambient occlusion.
     void tick(uint8_t* rdram, recomp_context* ctx);
     // An actor the game drew this frame (its address, place and scale), for deep snow: enemies walking leave a

@@ -35,6 +35,8 @@
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
+#include "tooie_fsr.h"
+#include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
 
@@ -362,6 +364,8 @@ namespace {
     };
     const PresetValue preset_values[] = {
         { &tooie::smaa::option, (uint32_t)tooie::smaa::Quality::Off },
+        { &tooie::fxaa::option, (uint32_t)tooie::fxaa::Mode::Off },
+        { &tooie::fsr::option, (uint32_t)tooie::fsr::Mode::Off },
         { &tooie::picture_filters::three_point_option, true },
         { &tooie::picture_filters::dither16_option, (uint32_t)tooie::picture_filters::Colour16::Off },
         { &tooie::picture_filters::crt_option, false },
@@ -385,6 +389,7 @@ namespace {
         { &tooie::picture_filters::grass_option, 0.0 },
         { &tooie::picture_filters::deep_snow_option, false },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
+        { &tooie::picture_filters::kazooie_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
@@ -572,6 +577,22 @@ void tooie::picture_filters::effect_changed() {
         }
     } catch (...) {
     }
+}
+
+tooie::picture_filters::Preset tooie::picture_filters::preset() {
+    if (!created) {
+        return Preset::Custom;
+    }
+    return (Preset)value<uint32_t>(preset_option, (uint32_t)Preset::Custom);
+}
+
+void tooie::picture_filters::set_preset(Preset preset) {
+    if (!created) {
+        return;
+    }
+    graphics_config().update_option_value(preset_option, (uint32_t)preset);
+    apply_preset(preset);
+    graphics_config().save_config();
 }
 
 bool tooie::picture_filters::banjo_fur_on() {
@@ -801,10 +822,10 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         preset_option,
         "Effects preset",
-        "Sets all the picture effects below at once. <recomp-color primary>Original</recomp-color> turns them all off. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
+        "Sets all the picture effects below at once. <recomp-color primary>Vanilla</recomp-color> turns them all off, so none of the effect shaders run. <recomp-color primary>Enhanced</recomp-color> adds SMAA, ambient occlusion and sharpening. <recomp-color primary>Retro</recomp-color> gives N64 16-bit colour and a CRT look. Changing any of them yourself makes it <recomp-color primary>Custom</recomp-color>.",
         {
             {Preset::Custom, "Custom", "Custom"},
-            {Preset::Original, "Original", "Original"},
+            {Preset::Original, "Original", "Vanilla"},
             {Preset::Enhanced, "Enhanced", "Enhanced"},
             {Preset::Retro, "Retro", "Retro"},
         },

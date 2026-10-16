@@ -461,6 +461,179 @@ index 30c463b..52bbd4c 100644
      bool is_context_capturing_input();
      bool is_context_capturing_mouse();
      bool is_any_context_shown();
+diff --git a/recompui/src/base/ui_game_option.cpp b/recompui/src/base/ui_game_option.cpp
+index 13f3f5c..6cac348 100644
+--- a/recompui/src/base/ui_game_option.cpp
++++ b/recompui/src/base/ui_game_option.cpp
+@@ -1,6 +1,8 @@
+ #include "base/ui_game_option.h"
+ #include "ui_utils.h"
+ 
++#include <algorithm>
++
+ namespace recompui {
+     GameOption::GameOption(
+         ResourceId rid,
+@@ -8,7 +10,7 @@ namespace recompui {
+         const std::string& title,
+         std::function<void()> callback,
+         GameOptionsMenuLayout layout
+-    ) : Element(rid, parent, Events(EventType::Click, EventType::Hover, EventType::Enable, EventType::Focus), "button", false),
++    ) : Element(rid, parent, Events(EventType::Click, EventType::Hover, EventType::Enable, EventType::Focus, EventType::Navigate), "button", false),
+         title(title),
+         callback(callback)
+     {
+@@ -66,9 +68,31 @@ namespace recompui {
+         switch (e.type) {
+         case EventType::Click:
+             if (is_enabled()) {
++                if (!choices.empty()) {
++                    const EventClick &click = std::get<EventClick>(e.variant);
++                    if (hit(choice_left, click.x, click.y)) {
++                        step_choice(-1);
++                        break;
++                    }
++                    if (hit(choice_right, click.x, click.y)) {
++                        step_choice(1);
++                        break;
++                    }
++                }
+                 callback();
+             }
+             break;
++        case EventType::Navigate:
++            if (is_enabled() && !choices.empty()) {
++                NavDirection dir = std::get<EventNavigate>(e.variant).direction;
++                if (dir == NavDirection::Left) {
++                    step_choice(-1);
++                }
++                else if (dir == NavDirection::Right) {
++                    step_choice(1);
++                }
++            }
++            break;
+         case EventType::Hover: 
+             set_style_enabled(hover_state, std::get<EventHover>(e.variant).active && is_enabled());
+             break;
+@@ -116,4 +140,51 @@ namespace recompui {
+     void GameOption::set_callback(std::function<void()> new_callback) {
+         callback = new_callback;
+     }
++
++    void GameOption::set_choices(const std::vector<std::string>& names, size_t index, std::function<void(size_t)> on_change) {
++        choices = names;
++        choice = names.empty() ? 0 : std::min(index, names.size() - 1);
++        choice_callback = on_change;
++        if (choice_box == nullptr) {
++            auto context = get_current_context();
++            choice_box = context.create_element<Element>(this);
++            choice_box->set_display(Display::Flex);
++            choice_box->set_align_items(AlignItems::Center);
++            choice_box->set_margin_left(24.0f);
++            choice_box->set_gap(10.0f);
++            choice_box->set_color(theme::color::Primary);
++            choice_left = context.create_element<Label>(choice_box, "<", theme::Typography::LabelLG);
++            choice_label = context.create_element<Label>(choice_box, "", theme::Typography::LabelLG);
++            choice_right = context.create_element<Label>(choice_box, ">", theme::Typography::LabelLG);
++            choice_left->set_padding_left(8.0f);
++            choice_left->set_padding_right(8.0f);
++            choice_right->set_padding_left(8.0f);
++            choice_right->set_padding_right(8.0f);
++        }
++        choice_box->set_display(names.empty() ? Display::None : Display::Flex);
++        if (!names.empty()) {
++            choice_label->set_text(names[choice]);
++        }
++    }
++
++    void GameOption::step_choice(int direction) {
++        if (choices.empty()) {
++            return;
++        }
++        const size_t count = choices.size();
++        choice = (choice + count + (direction < 0 ? count - 1 : 1)) % count;
++        choice_label->set_text(choices[choice]);
++        if (choice_callback) {
++            choice_callback(choice);
++        }
++    }
++
++    bool GameOption::hit(Element *element, float x, float y) {
++        if (element == nullptr) {
++            return false;
++        }
++        const float left = element->get_absolute_left();
++        const float top = element->get_absolute_top();
++        return x >= left && x <= left + element->get_client_width() && y >= top && y <= top + element->get_client_height();
++    }
+ }
+diff --git a/recompui/src/base/ui_game_option.h b/recompui/src/base/ui_game_option.h
+index cfaab26..f944779 100644
+--- a/recompui/src/base/ui_game_option.h
++++ b/recompui/src/base/ui_game_option.h
+@@ -10,6 +10,16 @@ namespace recompui {
+     private:
+         std::string title;
+         std::function<void()> callback;
++        // A value picked with left and right beside the title, shown as "< Vanilla >" (set_choices).
++        std::vector<std::string> choices;
++        size_t choice = 0;
++        std::function<void(size_t)> choice_callback;
++        Element *choice_box = nullptr;
++        Label *choice_left = nullptr;
++        Label *choice_label = nullptr;
++        Label *choice_right = nullptr;
++        void step_choice(int direction);
++        bool hit(Element *element, float x, float y);
+     protected:
+         Label *label;
+         void set_styles();
+@@ -19,6 +29,10 @@ namespace recompui {
+         GameOption(ResourceId rid, Element* parent, const std::string& title, std::function<void()> callback, GameOptionsMenuLayout layout);
+         void set_title(const std::string& new_title);
+         void set_callback(std::function<void()> new_callback);
++        // Shows names[index] beside the title. Left and right (keys, d-pad, stick) or a click on the
++        // arrows step through the names, wrapping round, and call on_change with the new index.
++        void set_choices(const std::vector<std::string>& names, size_t index, std::function<void(size_t)> on_change);
++        size_t get_choice() const { return choice; }
+         Label* get_label() { return label; }
+         // These are public so you can modify them.
+         Style hover_style;
+diff --git a/recompui/src/base/ui_launcher.cpp b/recompui/src/base/ui_launcher.cpp
+index 6de7a94..b0be7f0 100644
+--- a/recompui/src/base/ui_launcher.cpp
++++ b/recompui/src/base/ui_launcher.cpp
+@@ -456,6 +456,9 @@ namespace recompui {
+ 
+         option->set_callback([this, option, start_game_title]() {
+             if (this->rom_valid) {
++                if (this->before_start) {
++                    this->before_start();
++                }
+                 recompui::update_game_mod_id(this->mod_game_id);
+                 if (recomp::mods::game_mode_count(this->mod_game_id, false) > 0) {
+                     get_launcher_menu()->show_game_mode_menu(this->game_id, this->game_display_name, this->game_thumbnail);
+diff --git a/recompui/src/base/ui_launcher.h b/recompui/src/base/ui_launcher.h
+index eb8833e..acd435b 100644
+--- a/recompui/src/base/ui_launcher.h
++++ b/recompui/src/base/ui_launcher.h
+@@ -23,6 +23,7 @@ namespace recompui {
+         std::span<const char> game_thumbnail;
+         bool rom_valid = false;
+         GameOptionsMenuLayout layout;
++        std::function<void()> before_start;
+ 
+         std::string_view get_type_name() override { return "GameOptionsMenu"; }
+     public:
+@@ -37,6 +38,8 @@ namespace recompui {
+         GameOption *add_exit_option(const std::string& title = "Exit");
+ 
+         GameOption *get_start_game_option() { return start_game_option; }
++        // Called when the start game option is picked, just before the game starts.
++        void set_before_start_callback(std::function<void()> callback) { before_start = callback; }
+     
+         void add_default_options() {
+             add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
 index 277a421..63a4152 100644
 --- a/recompui/src/base/ui_state.cpp

@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Start menu: Start Game is now Play, with the effects preset beside it (< Vanilla >, Enhanced, Retro, Custom); left and right or the arrows change it, and Play applies it (L). Vanilla (the Effects preset once called Original) turns every shader effect off, also FXAA, FSR and Kazooie feathers. Untested on PC (T327).
 - New cheats: 100% complete (everything done except the last boss, Hag 1: all Jiggies, notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons, moves, worlds and bosses; saving keeps it) and Dragon Kazooie (on: Kazooie is Dragon Kazooie, off: she is Kazooie again). Untested on PC (T326).
 - Fixed: scrolling the Graphics menu with a controller lagged on every step. The option description now shows a moment after you stop on an option instead of on every step. Untested on PC (T319).
 - Run is now on the controller's B button by default (the button labelled B on an Xbox pad, Circle on PlayStation). That button was a second C-right; the right stick still turns the camera. Saved controls get the change once if Run was unbound and B was only C-right. On Android the touch B button now does the game's B instead of C-right. Untested on PC (T305).

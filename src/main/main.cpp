@@ -47,6 +47,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
+#include "tooie_picture_filters.h"
 #include "tooie_shader_progress.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
@@ -628,7 +629,28 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
         recompui::GameOptionsMenuLayout::Center
     );
 
-    game_options_menu->add_default_options();
+    // The launcher's options, with the start option named Play. Left and right on it pick the effects
+    // preset (Graphics > Effects preset), applied when Play is pressed (L, 2026-10-16).
+    recompui::GameOption* play = game_options_menu->add_start_game_or_load_rom_option("Load ROM", "Play");
+    game_options_menu->add_setup_controls_option();
+    game_options_menu->add_settings_option();
+    game_options_menu->add_mods_option();
+    game_options_menu->add_exit_option();
+
+    using tooie::picture_filters::Preset;
+    static const Preset presets[] = { Preset::Original, Preset::Enhanced, Preset::Retro, Preset::Custom };
+    static const std::vector<std::string> preset_names = { "Vanilla", "Enhanced", "Retro", "Custom" };
+    size_t current = 3;
+    for (size_t i = 0; i < std::size(presets); i++) {
+        if (presets[i] == tooie::picture_filters::preset()) {
+            current = i;
+        }
+    }
+    play->set_choices(preset_names, current, nullptr);
+    game_options_menu->set_before_start_callback([play]() {
+        // Custom keeps the effects as they are set.
+        tooie::picture_filters::set_preset(presets[play->get_choice()]);
+    });
 
     if (autostart_game && recomp::is_rom_valid(supported_games[0].game_id)) {
         // Start a moment later, as the launcher's own option does: the VI

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T327 Start menu: preset beside Play (Vanilla turns shaders off)
+- Asked: 2026-10-16 21:42 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Start the game normally (not with --game bt): the start menu shows Play < Custom > (or the preset you last used)
+  2. With Play highlighted, press left and right on the d-pad, stick or keyboard; also click the < and > arrows with the mouse
+  3. Pick Vanilla and press Play
+  4. In the game, open Settings > Graphics and look at Effects preset and the Shaders options, then restart the game
+- Look for: Left and right step through Vanilla, Enhanced, Retro and Custom (wrapping round); clicking an arrow changes it without starting the game. Play with Vanilla sets Graphics > Effects preset to Vanilla (the old Original) and turns every shader effect off, also FXAA, FSR and Kazooie feathers, so no effect shaders run. Enhanced and Retro set those presets; Custom leaves your settings alone. The start menu remembers the choice next time. Checked headless: keys and arrow clicks cycle, Vanilla + Play saved the preset with bloom, AO, SMAA, FXAA, FSR and fur off, and the next start showed Vanilla (screens/play-preset/ in project files). Not checked with a real controller.
+- Status: waiting for L
+
 ## T326 Cheats: 100% complete and Dragon Kazooie
 - Asked: 2026-10-16 21:32 UTC
 - Build: main @ 0c6a82e
