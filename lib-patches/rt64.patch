@@ -12153,10 +12153,10 @@ index 0000000..63b1ede
 +    gOutput[coord] = result;
 +}
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
-index 3f33475..cb122d1 100644
+index 3f33475..7d84d10 100644
 --- a/src/shaders/VideoInterfacePS.hlsl
 +++ b/src/shaders/VideoInterfacePS.hlsl
-@@ -32,10 +32,134 @@ float4 PixelAntialiasing(float2 uv) {
+@@ -32,10 +32,141 @@ float4 PixelAntialiasing(float2 uv) {
      return SampleInput(uvTexspace / gConstants.textureResolution);
  }
  
@@ -12280,7 +12280,14 @@ index 3f33475..cb122d1 100644
 +        color.rgb = patternColor;
 +    }
 +
-+    color.rgb = pow(max(color.rgb, 0.0f), gConstants.brightnessGamma);
++    // Banjo-Tooie: the brightness gamma. At 1.0 (the default) the power would give the colour back as it is, so
++    // the three pow operations a pixel are skipped.
++    if (gConstants.brightnessGamma != 1.0f) {
++        color.rgb = pow(max(color.rgb, 0.0f), gConstants.brightnessGamma);
++    }
++    else {
++        color.rgb = max(color.rgb, 0.0f);
++    }
 +    return color;
 +}
 +
