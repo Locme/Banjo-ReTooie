@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..4815315 100644
+index 79dfc38..d0eb89e 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -184,7 +184,7 @@ index 79dfc38..4815315 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +590,43 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +590,45 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -221,6 +221,8 @@ index 79dfc38..4815315 100644
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects2XPS.hlsl" "-D SAMPLES_2X")
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects4XPS.hlsl" "-D SAMPLES_4X")
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects8XPS.hlsl" "-D SAMPLES_8X")
++# Banjo-Tooie: the fireflies' table, worked out once a frame for the scene effects pass.
++build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTablePS.hlsl" "-D FIREFLY_TABLE")
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
 +build_vertex_shader( rt64 "src/shaders/SunShadowMapVS.hlsl")
@@ -1567,7 +1569,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..e60b26f 100644
+index 69a82ac..1c3001c 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,9 @@ namespace RT64 {
@@ -1593,7 +1595,7 @@ index 69a82ac..e60b26f 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +668,97 @@ namespace RT64 {
+@@ -659,6 +668,99 @@ namespace RT64 {
          }
      };
  
@@ -1646,6 +1648,7 @@ index 69a82ac..e60b26f 100644
 +        uint32_t gWaterColor;
 +        uint32_t gWaterRipples;
 +        uint32_t gSunShadowMap;
++        uint32_t gFireflies;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1657,6 +1660,7 @@ index 69a82ac..e60b26f 100644
 +            gWaterColor = builder.addTexture(7);
 +            gWaterRipples = builder.addTexture(8);
 +            gSunShadowMap = builder.addTexture(9);
++            gFireflies = builder.addTexture(10);
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
 +            builder.addImmutableSampler(3, linearSampler);
@@ -4368,10 +4372,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..b662039
+index 0000000..a861633
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1854 @@
+@@ -0,0 +1,1892 @@
 +//
 +// RT64
 +//
@@ -4402,6 +4406,8 @@ index 0000000..b662039
 +        // Modern water's ripple grid round the player: cells across, and world units per cell.
 +        constexpr uint32_t RippleCells = 256;
 +        constexpr float RippleCellSize = 3.0f;
++        // The fireflies' table width: two fireflies to each of a 9 by 9 block of cells (SceneEffectsPS.hlsl FIREFLY_COUNT).
++        constexpr uint32_t FireflyCount = 9 * 9 * 2;
 +        // When the program started (near enough), for the sun shadow map's headless test hook.
 +        const auto sunMapProcessStart = std::chrono::steady_clock::now();
 +        std::mutex effectsMutex;
@@ -4435,6 +4441,11 @@ index 0000000..b662039
 +            std::unique_ptr<RenderTextureView> sunMapTextureView;
 +            std::unique_ptr<RenderFramebuffer> sunMapFramebuffer;
 +            const RenderTexture *sceneSetSunMap = nullptr;
++            // The fireflies' table: where each of the night's fireflies is on the screen this frame, worked out
++            // once (FireflyTablePS) rather than in every pixel.
++            std::unique_ptr<RenderTexture> fireflyTexture;
++            std::unique_ptr<RenderFramebuffer> fireflyFramebuffer;
++            const RenderTexture *sceneSetFireflies = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
 +            std::unique_ptr<RenderTexture> waterTexture;
@@ -6118,6 +6129,17 @@ index 0000000..b662039
 +            constants.rippleZ.y = float(RippleCells);
 +            constants.rippleX.z = (res.rippleCornerKnown && havePlayer) ? 1.0f : 0.0f;
 +        }
++        // The fireflies' table, made once and cleared, so the pass can always read it (it does only at night).
++        if (res.fireflyTexture == nullptr) {
++            res.fireflyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(FireflyCount, 2, RenderFormat::R32G32B32A32_FLOAT));
++            res.fireflyTexture->setName("Scene Effects Fireflies");
++            const RenderTexture *texture = res.fireflyTexture.get();
++            res.fireflyFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&texture, 1));
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::COLOR_WRITE) });
++            commandList->setFramebuffer(res.fireflyFramebuffer.get());
++            commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
++        }
 +        // The sun shadow map, made once and cleared to nothing in the way of the sun, so the pass can always read it.
 +        if (res.sunMapTexture == nullptr) {
 +            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
@@ -6164,7 +6186,7 @@ index 0000000..b662039
 +
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
-+            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get())) {
++            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get())) {
 +            if (res.sceneSet != nullptr) {
 +                res.retireLater(std::move(res.sceneSet));
 +            }
@@ -6186,10 +6208,30 @@ index 0000000..b662039
 +            res.sceneSetRipples = res.rippleTexture[0].get();
 +            res.sceneSet->setTexture(res.sceneSet->gSunShadowMap, res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ, res.sunMapTextureView.get());
 +            res.sceneSetSunMap = res.sunMapTexture.get();
++            res.sceneSet->setTexture(res.sceneSet->gFireflies, res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ);
++            res.sceneSetFireflies = res.fireflyTexture.get();
++        }
++
++        const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
++
++        // The fireflies' table for this frame: the same constants and inputs as the pass itself, one pixel a
++        // firefly (and a second row for their brightness). Only with the cycle and fireflies on; the pass
++        // otherwise never reads it.
++        if (settings.timeOfDay && settings.dayFireflies) {
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::COLOR_WRITE) });
++            commandList->setFramebuffer(res.fireflyFramebuffer.get());
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(FireflyCount), 2.0f));
++            commandList->setScissors(RenderRect(0, 0, FireflyCount, 2));
++            commandList->setPipeline(shaderLibrary->fireflyTable.pipeline.get());
++            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
++            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
++            commandList->setGraphicsPushConstants(0, &constants);
++            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++            commandList->drawInstanced(3, 1, 0, 0);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
-+        const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +            RenderTextureBarrier(colorTarget->texture.get(), RenderTextureLayout::COLOR_WRITE),
 +            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::SHADER_READ),
@@ -6511,10 +6553,10 @@ index 0000000..8128620
 +        float depthScale, float depthTranslate, const std::function<void(RenderCommandList *)> &drawSunCasters = {});
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..3f5a2a4 100644
+index d1c5273..a3f2de8 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,7 +40,27 @@
+@@ -40,7 +40,28 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -6535,6 +6577,7 @@ index d1c5273..3f5a2a4 100644
 +#include "shaders/SceneEffectsPS.hlsl.spirv.h"
 +#include "shaders/BloomPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects2XPS.hlsl.spirv.h"
++#include "shaders/FireflyTablePS.hlsl.spirv.h"
 +#include "shaders/SceneEffects4XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffects8XPS.hlsl.spirv.h"
  #include "shaders/TextureDecodeCS.hlsl.spirv.h"
@@ -6542,7 +6585,7 @@ index d1c5273..3f5a2a4 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +68,8 @@
+@@ -48,6 +69,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -6551,7 +6594,7 @@ index d1c5273..3f5a2a4 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +108,27 @@
+@@ -86,7 +109,28 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -6572,6 +6615,7 @@ index d1c5273..3f5a2a4 100644
 +#   include "shaders/SceneEffectsPS.hlsl.dxil.h"
 +#   include "shaders/BloomPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.dxil.h"
++#   include "shaders/FireflyTablePS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects4XPS.hlsl.dxil.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.dxil.h"
  #   include "shaders/TextureDecodeCS.hlsl.dxil.h"
@@ -6579,7 +6623,7 @@ index d1c5273..3f5a2a4 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +136,8 @@
+@@ -94,6 +138,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -6588,7 +6632,7 @@ index d1c5273..3f5a2a4 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +175,27 @@
+@@ -131,7 +177,28 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -6609,6 +6653,7 @@ index d1c5273..3f5a2a4 100644
 +#   include "shaders/SceneEffectsPS.hlsl.metal.h"
 +#   include "shaders/BloomPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects2XPS.hlsl.metal.h"
++#   include "shaders/FireflyTablePS.hlsl.metal.h"
 +#   include "shaders/SceneEffects4XPS.hlsl.metal.h"
 +#   include "shaders/SceneEffects8XPS.hlsl.metal.h"
  #   include "shaders/TextureDecodeCS.hlsl.metal.h"
@@ -6616,7 +6661,7 @@ index d1c5273..3f5a2a4 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +203,8 @@
+@@ -139,6 +206,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -6625,7 +6670,7 @@ index d1c5273..3f5a2a4 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +214,10 @@
+@@ -148,6 +217,10 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -6636,7 +6681,7 @@ index d1c5273..3f5a2a4 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +274,7 @@ namespace RT64 {
+@@ -204,7 +277,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -6645,7 +6690,7 @@ index d1c5273..3f5a2a4 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -569,6 +639,78 @@ namespace RT64 {
+@@ -569,6 +642,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -6724,7 +6769,7 @@ index d1c5273..3f5a2a4 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +725,20 @@ namespace RT64 {
+@@ -583,6 +728,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -6745,7 +6790,7 @@ index d1c5273..3f5a2a4 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +988,76 @@ namespace RT64 {
+@@ -832,6 +991,88 @@ namespace RT64 {
              }
          }
  
@@ -6793,6 +6838,18 @@ index d1c5273..3f5a2a4 100644
 +            pipelineDesc.pixelShader = pixelShader.get();
 +            pipelineDesc.multisampling = multisampling;
 +            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
++
++            // The fireflies' table (SceneEffectsPS.hlsl, FIREFLY_TABLE): the same layout and constants, into a
++            // small float target, one column a firefly.
++            std::unique_ptr<RenderShader> tableShader = device->createShader(CREATE_SHADER_INPUTS(FireflyTablePSBlobDXIL, FireflyTablePSBlobSPIRV, FireflyTablePSBlobMSL, "PSMain", shaderFormat));
++            RenderGraphicsPipelineDesc tableDesc;
++            tableDesc.pipelineLayout = sceneEffects.pipelineLayout.get();
++            tableDesc.renderTargetBlend[0] = RenderBlendDesc::Copy();
++            tableDesc.renderTargetFormat[0] = RenderFormat::R32G32B32A32_FLOAT;
++            tableDesc.renderTargetCount = 1;
++            tableDesc.vertexShader = fullScreenVertexShader.get();
++            tableDesc.pixelShader = tableShader.get();
++            fireflyTable.pipeline = device->createGraphicsPipeline(tableDesc);
 +        }
 +
 +        // Banjo-Tooie: the sun shadow map, the 3D world's triangles drawn from the sun into a depth map. The
@@ -6823,15 +6880,17 @@ index d1c5273..3f5a2a4 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..4c8d527 100644
+index 641f3ec..776db92 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,26 @@ namespace RT64 {
+@@ -51,8 +51,28 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
 +        // Banjo-Tooie: screen-space effects over the 3D world, at the main targets' sample count.
 +        ShaderRecord sceneEffects;
++        // Banjo-Tooie: the fireflies' table for the scene effects (its pipeline only; the layout is sceneEffects').
++        ShaderRecord fireflyTable;
 +        // Banjo-Tooie: the sun shadow map's depth-only pass (SunShadowMapVS.hlsl).
 +        ShaderRecord sunShadowMap;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
@@ -9215,10 +9274,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..5de6828
+index 0000000..f62d84b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2189 @@
+@@ -0,0 +1,2231 @@
 +//
 +// RT64
 +//
@@ -9252,6 +9311,8 @@ index 0000000..5de6828
 +Texture2D<float2> gWaterRipples : register(t8);
 +// The sun shadow map (SunShadowMap.hlsli), when shadows.y is negative.
 +Texture2D<float> gSunShadowMap : register(t9);
++// The fireflies' table for this frame (FireflyPlace), 162 by 2, written by the FIREFLY_TABLE pass.
++Texture2D<float4> gFireflies : register(t10);
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -10791,71 +10852,94 @@ index 0000000..5de6828
 +// trees and glowing up and fading away smoothly rather than blinking. Two to each 160-unit square of the
 +// ground round Banjo (a 9 by 9 block of squares, fixed in the world). Each is projected onto the screen and
 +// hidden behind whatever is nearer.
-+float3 DayFireflies(int2 pixel, float depth, float3 tint) {
-+    const float night = DayNight(tint);
-+    if (((DayPacked() & 1u) == 0u) || (night <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
-+        return 0.0f;
-+    }
++//
++// Where each firefly is on the screen is the same for every pixel, so a one-line pass works the 162 of them out
++// once a frame into a table (FIREFLY_TABLE: FireflyTablePS, a 162 by 2 texture, gFireflies), and the pixels only
++// read it: row 0 holds the screen position, the core's radius in pixels and the view-space z (radius 0 for one
++// that is dark or behind the camera), row 1 its brightness.
++#define FIREFLY_CELLS 9
++#define FIREFLY_COUNT (FIREFLY_CELLS * FIREFLY_CELLS * 2)
++
++bool FireflyPlace(int index, out float4 place, out float weight) {
++    place = 0.0f;
++    weight = 0.0f;
++    const int k = index & 1;
++    const int cellIndex = index >> 1;
++    const int cx = (cellIndex % FIREFLY_CELLS) - (FIREFLY_CELLS / 2);
++    const int cz = (cellIndex / FIREFLY_CELLS) - (FIREFLY_CELLS / 2);
 +    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
 +    // View space from world space: the inverse of the view-to-world rows (a rotation and a scale).
 +    const float scale = 1.0f / dot(gConstants.worldX.xyz, gConstants.worldX.xyz);
 +    const float viewToWorld = length(gConstants.worldX.xyz);
 +    const float3 origin = float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
-+    const float sceneZ = (depth >= 0.99999f) ? -1e9f : ViewPosition(pixel, depth).z;
 +    const float2 size = gConstants.projection.zw;
-+    const float2 here = float2(pixel) + 0.5f;
 +    const float time = gConstants.view.z;
 +    const float Cell = 160.0f;
 +    const float2 home = floor(banjo.xz / Cell);
++    const float2 cell = home + float2(cx, cz);
++    const float3 seed = float3(cell, 7.0f + 13.0f * float(k));
++    const float a = DayHash(seed + 11.0f), b = DayHash(seed + 23.0f), c = DayHash(seed + 37.0f);
++    // Glows up and fades away over several seconds, then is dark for a while: about two in three
++    // are lit at a time.
++    const float cycle = frac(time / (5.0f + 4.0f * a) + b);
++    const float lit = smoothstep(0.0f, 0.25f, cycle) * (1.0f - smoothstep(0.55f, 0.7f, cycle));
++    if (lit <= 0.0f) {
++        return false;
++    }
++    // Slow loops round a home spot, at any height from the grass up into the trees.
++    const float t = time * (0.18f + 0.12f * c) + a * 40.0f;
++    const float3 world = float3((cell.x + 0.15f + 0.7f * a) * Cell + sin(t) * 40.0f + sin(t * 2.3f) * 12.0f,
++        banjo.y + 15.0f + 230.0f * c * c + sin(t * 1.7f + b * 20.0f) * 22.0f,
++        (cell.y + 0.15f + 0.7f * b) * Cell + cos(t * 0.9f) * 40.0f + cos(t * 2.1f) * 12.0f);
++    const float3 d = world - origin;
++    const float3 v = (gConstants.worldX.xyz * d.x + gConstants.worldY.xyz * d.y + gConstants.worldZ.xyz * d.z) * scale;
++    if (v.z > -20.0f) {
++        return false;
++    }
++    const float2 ndc = float2(v.x * gConstants.projection.x / -v.z, v.y * gConstants.projection.y / -v.z);
++    const float2 at = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++    // A core about 3 units across (never under 1.5 pixels at 1080 rows) in a glow eight times as wide.
++    const float radius = max(3.0f * gConstants.projection.y / -v.z * size.y * 0.5f, 1.5f * size.y / 1080.0f);
++    const float distance = -v.z * viewToWorld;
++    const float fade = saturate(1.0f - length(world.xz - banjo.xz) / (Cell * 4.2f));
++    // Fades out right by the camera, where one would fill the screen.
++    const float near = smoothstep(60.0f, 160.0f, distance);
++    const float flicker = 0.85f + 0.15f * sin(time * (6.0f + 4.0f * c) + a * 50.0f);
++    place = float4(at, radius, v.z);
++    weight = lit * flicker * fade * near;
++    return true;
++}
++
++#ifndef FIREFLY_TABLE
++float3 DayFireflies(int2 pixel, float depth, float3 tint) {
++    const float night = DayNight(tint);
++    if (((DayPacked() & 1u) == 0u) || (night <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
++        return 0.0f;
++    }
++    const float sceneZ = (depth >= 0.99999f) ? -1e9f : ViewPosition(pixel, depth).z;
++    const float2 here = float2(pixel) + 0.5f;
 +    float3 glow = 0.0f;
-+    [loop] for (int cz = -4; cz <= 4; cz++) {
-+        [loop] for (int cx = -4; cx <= 4; cx++) {
-+            const float2 cell = home + float2(cx, cz);
-+            [unroll] for (int k = 0; k < 2; k++) {
-+                const float3 seed = float3(cell, 7.0f + 13.0f * float(k));
-+                const float a = DayHash(seed + 11.0f), b = DayHash(seed + 23.0f), c = DayHash(seed + 37.0f);
-+                // Glows up and fades away over several seconds, then is dark for a while: about two in three
-+                // are lit at a time.
-+                const float cycle = frac(time / (5.0f + 4.0f * a) + b);
-+                const float lit = smoothstep(0.0f, 0.25f, cycle) * (1.0f - smoothstep(0.55f, 0.7f, cycle));
-+                if (lit <= 0.0f) {
-+                    continue;
-+                }
-+                // Slow loops round a home spot, at any height from the grass up into the trees.
-+                const float t = time * (0.18f + 0.12f * c) + a * 40.0f;
-+                const float3 world = float3((cell.x + 0.15f + 0.7f * a) * Cell + sin(t) * 40.0f + sin(t * 2.3f) * 12.0f,
-+                    banjo.y + 15.0f + 230.0f * c * c + sin(t * 1.7f + b * 20.0f) * 22.0f,
-+                    (cell.y + 0.15f + 0.7f * b) * Cell + cos(t * 0.9f) * 40.0f + cos(t * 2.1f) * 12.0f);
-+                const float3 d = world - origin;
-+                const float3 v = (gConstants.worldX.xyz * d.x + gConstants.worldY.xyz * d.y + gConstants.worldZ.xyz * d.z) * scale;
-+                if (v.z > -20.0f) {
-+                    continue;
-+                }
-+                // Hidden behind nearer scenery.
-+                if (sceneZ > v.z + 10.0f) {
-+                    continue;
-+                }
-+                const float2 ndc = float2(v.x * gConstants.projection.x / -v.z, v.y * gConstants.projection.y / -v.z);
-+                const float2 at = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
-+                // A core about 3 units across (never under 1.5 pixels at 1080 rows) in a glow eight times as wide.
-+                const float radius = max(3.0f * gConstants.projection.y / -v.z * size.y * 0.5f, 1.5f * size.y / 1080.0f);
-+                const float r = length(here - at) / radius;
-+                if (r > 8.0f) {
-+                    continue;
-+                }
-+                const float distance = -v.z * viewToWorld;
-+                const float fade = saturate(1.0f - length(world.xz - banjo.xz) / (Cell * 4.2f));
-+                // Fades out right by the camera, where one would fill the screen.
-+                const float near = smoothstep(60.0f, 160.0f, distance);
-+                const float core = saturate(1.3f - r);
-+                const float halo = saturate(1.0f - r / 8.0f);
-+                const float flicker = 0.85f + 0.15f * sin(time * (6.0f + 4.0f * c) + a * 50.0f);
-+                glow += (float3(1.0f, 0.98f, 0.85f) * core + float3(1.0f, 0.85f, 0.4f) * (halo * halo * halo * 0.45f)) * lit * flicker * fade * near;
-+            }
++    [loop] for (int i = 0; i < FIREFLY_COUNT; i++) {
++        const float4 place = gFireflies.Load(int3(i, 0, 0));
++        if (place.z <= 0.0f) {
++            continue;
 +        }
++        // Hidden behind nearer scenery.
++        if (sceneZ > place.w + 10.0f) {
++            continue;
++        }
++        const float r = length(here - place.xy) / place.z;
++        if (r > 8.0f) {
++            continue;
++        }
++        const float weight = gFireflies.Load(int3(i, 1, 0)).x;
++        const float core = saturate(1.3f - r);
++        const float halo = saturate(1.0f - r / 8.0f);
++        glow += (float3(1.0f, 0.98f, 0.85f) * core + float3(1.0f, 0.85f, 0.4f) * (halo * halo * halo * 0.45f)) * weight;
 +    }
 +    return glow * night * 2.2f;
 +}
++#endif
 +
 +// Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
 +// through and fading with each step, so light streams through gaps between things against the sky.
@@ -11138,6 +11222,22 @@ index 0000000..5de6828
 +    return sum / weight;
 +}
 +
++#ifdef FIREFLY_TABLE
++// The fireflies' table: one column a firefly, row 0 its place and row 1 its brightness (see FireflyPlace).
++float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
++    const int2 pixel = int2(pos.xy);
++    float3 tint;
++    if (!DayTint(tint) || ((DayPacked() & 1u) == 0u) || (DayNight(tint) <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
++        return 0.0f;
++    }
++    float4 place;
++    float weight;
++    if (!FireflyPlace(pixel.x, place, weight)) {
++        return 0.0f;
++    }
++    return (pixel.y == 0) ? place : float4(weight, 0.0f, 0.0f, 0.0f);
++}
++#else
 +float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 +    const int2 pixel = int2(pos.xy);
 +    const float depth = LoadDepth(pixel);
@@ -11408,6 +11508,7 @@ index 0000000..5de6828
 +
 +    return float4(rim * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
 +}
++#endif
 diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
 new file mode 100644
 index 0000000..d6b151f
