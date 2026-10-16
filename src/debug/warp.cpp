@@ -52,6 +52,7 @@
 #include "tooie_asset_mods.h"
 #include "tooie_test_room.h"
 #include "tooie_race_warp.h"
+#include "tooie_boss_rush.h"
 
 namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
@@ -155,6 +156,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::test_room::tick(rdram, ctx);
     // Before the warp below, which it may ask for.
     tooie::race_warp::tick(rdram, ctx);
+    tooie::boss_rush::tick(rdram, ctx);
     // Last: photo mode scales this frame's delta time.
     tooie::photo_mode::tick(rdram, ctx);
 

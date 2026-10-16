@@ -214,6 +214,11 @@ Numbers are the feature numbers in the handoff report, Section 4.
 - [x] Done (T61)
 - [ ] Approved by L
 
+### Boss rush (L, 2026-10-16; not in the handoff)
+General > Boss rush: the 13 bosses back to back through the game's own Boss Replay.
+- [x] Done (T219)
+- [ ] Approved by L
+
 ### 4.78 Transformation picker
 - [x] Done
 - [ ] Approved by L
