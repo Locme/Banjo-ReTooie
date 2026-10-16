@@ -1055,7 +1055,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         grass_pixel_size_option,
         "Pixel size",
         "With Pixelated 3D grass: how big the blocks are, in N64 pixels. 1 matches the game's own pixels; higher is blockier.",
-        1, 32, 1, 0, false, 1);
+        1, 8, 1, 0, false, 1);
     graphics.add_bool_option(
         grass_edges_option,
         "3D grass on edges",

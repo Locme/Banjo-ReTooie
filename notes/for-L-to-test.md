@@ -5,7 +5,7 @@
 - Build: main
 - Steps:
   1. Graphics > Grass: set 3D grass above 0, turn on Chunky 3D grass and Pixelated 3D grass
-  2. Move Chunk size (100 to 400) and Pixel size (1 to 32) in Spiral Mountain
+  2. Move Chunk size (100 to 400) and Pixel size (1 to 8) in Spiral Mountain
 - Look for: Chunk size makes the chunky blades bigger and further apart; Pixel size makes the pixel blocks bigger. Both apply live, alone or together.
 - Status: waiting for L
 
