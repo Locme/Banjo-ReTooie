@@ -2469,3 +2469,13 @@
   1. Graphics > Day and Night: Morning, Weather: Rain or Storm, in Spiral Mountain; look at the grass and paths near Banjo
 - Look for: Small rings splashing up and spreading on level ground all round, with a bright drop where each lands, more in a storm, fading out further off. None on walls or slopes, none in snow. Checked headless: [rain-splashes.png](screens/day-night/rain-splashes.png).
 - Status: waiting for L
+
+## T234 Video memory filling up (the 1 fps spells): which setting
+- Asked: 2026-10-16 08:50 UTC
+- Build: your current build (423f2b2 or newer)
+- Steps:
+  1. Same setup as your console.log of 09:41 (3440x1440, MSAA 2x, Vulkan, Spiral Mountain), with the frame overlay on
+  2. Stand on the meadow for 1 minute with Graphics > 3D grass at 0, then send console.log
+  3. Do it again with 3D grass at 100, then with Banjo's fur off, then with Water set to Original, and send console.log after each (or one log, writing down the times you switched)
+- Look for: the [vram] lines (every 2 seconds). In your log VRAM climbs by about 520 MB every 2 seconds, from 0.8 GB to 16 GB in a minute, while "ours" (the renderer's own memory) stays at about 1.5 GB. Once VRAM passes 100% the card has to swap, which is the 1 fps; when the driver frees it, the speed comes back. Shaders were not compiling then (0 in 5 s). The setting whose 0 or Off stops the climb is the leak.
+- Status: waiting for L
