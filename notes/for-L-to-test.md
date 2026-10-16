@@ -2679,3 +2679,12 @@
   2. Wait for the logo and title screen
 - Look for: Does it reach the title screen with picture and sound, without a crash?
 - Status: waiting for L
+
+## T258 Original Honeycomb model mod (Original Honeycomb v1)
+- Asked: 2026-10-16 (L: "Are you able to backport the normal honeycomb from banjo kazooie?", "Call it Original Honeycomb")
+- Build: any recent build, plus the mod zip from project files: mods/Original Honeycomb v1.zip
+- Steps:
+  1. Put "Original Honeycomb v1.zip" in the game's mods folder as it is, turn off HoneyComb NB (same model), then turn on "Original Honeycomb" in the Mods menu
+  2. Load a file and go to a health honeycomb (Spiral Mountain's cave has three), then collect one
+- Look for: the combs are Banjo-Kazooie's honeycomb (honey faces, a shiny frame round the sides), spinning as usual, and collecting one heals. The model is Banjo-Kazooie's own, still in Tooie's game files (unused), scaled up to Tooie's comb size. Does the frame shine like in Banjo-Kazooie? Headless it reads as a flat pale gold, so that is the part to check. Checked headless: [v1.png](screens/original-honeycomb/v1.png).
+- Status: waiting for L
