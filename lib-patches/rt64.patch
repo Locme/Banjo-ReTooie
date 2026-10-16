@@ -9215,10 +9215,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..bc550da
+index 0000000..5de6828
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2188 @@
+@@ -0,0 +1,2189 @@
 +//
 +// RT64
 +//
@@ -10410,7 +10410,8 @@ index 0000000..bc550da
 +    float waterDepth;
 +    const bool onWater = (gConstants.water.y > 0.5f) && (gConstants.fog.w <= 0.0f) && LoadWater(pixel, waterDepth);
 +    const float3 center = ViewPosition(pixel, onWater ? waterDepth : depth);
-+    const float level = onWater ? 1.0f : saturate((dot(ViewNormal(pixel, center), normalize(gConstants.worldY.xyz)) - 0.75f) * 6.0f);
++    // Level ground, and level water (not waterfalls).
++    const float level = saturate((dot(ViewNormal(pixel, center), normalize(gConstants.worldY.xyz)) - 0.75f) * 6.0f);
 +    if (level <= 0.0f) {
 +        return 0.0f;
 +    }

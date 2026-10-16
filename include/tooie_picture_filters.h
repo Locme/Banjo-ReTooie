@@ -98,6 +98,8 @@ namespace tooie::picture_filters {
     bool sun_shadows_on();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
     bool kazooie_feathers_on();
+    // How far under water the view is, 0 above to 1 under (easing between), for the day and night cycle's rain.
+    float underwater();
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);

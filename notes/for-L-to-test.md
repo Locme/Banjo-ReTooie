@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T324 Day and night: no rain under water
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: no rain under water, no rain rings on waterfalls" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Weather: Storm; dive into the Spiral Mountain moat or a pool in Mayahem Temple, then come back up
+- Look for: Under water there are no rain streaks, splashes or drops on the screen, and the rain is only heard faintly; they come back as you surface. Rain rings show on flat water only, not on waterfalls. Checked headless: [no-rain-underwater.png](screens/day-night/no-rain-underwater.png) (left on the surface, right under the waterfall's pool).
+
 ## T323 3D grass skips the road's texture
 - Asked: 2026-10-16 21:10 UTC
 - Build: main

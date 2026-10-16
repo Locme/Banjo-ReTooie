@@ -200,6 +200,8 @@ namespace {
     }
     // How far into the underwater look (0 above water, 1 under), eased over a fifth of a second.
     float underwater_amount = 0.0f;
+    // underwater_amount for other threads (tooie::picture_filters::underwater).
+    std::atomic<float> underwater_shared{0.0f};
     float underwater_sent = -1.0f;
     std::chrono::steady_clock::time_point underwater_at{};
     // How far above Banjo's position the surface is while he floats. His position is about at the
@@ -584,6 +586,10 @@ bool tooie::picture_filters::kazooie_feathers_on() {
     return kazooie_feathers;
 }
 
+float tooie::picture_filters::underwater() {
+    return underwater_shared;
+}
+
 bool tooie::picture_filters::applying_effects_preset() {
     return applying_preset;
 }
@@ -692,6 +698,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     underwater_amount = (target > underwater_amount) ? std::min(target, underwater_amount + dt * 5.0f) : std::max(target, underwater_amount - dt * 5.0f);
+    underwater_shared = underwater_amount;
     if (underwater_amount != underwater_sent) {
         underwater_sent = underwater_amount;
         RT64::SetSceneUnderwater(underwater_tint * underwater_amount, underwater_haze * underwater_amount);

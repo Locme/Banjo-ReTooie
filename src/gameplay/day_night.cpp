@@ -24,6 +24,7 @@
 #include "tooie_day_night.h"
 #include "tooie_debug.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_picture_filters.h"
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
@@ -413,7 +414,10 @@ void tooie::day_night::tick(uint8_t* rdram) {
     if (const char* v = std::getenv("TOOIE_LIGHTNING")) {
         flash = (float)std::atof(v);
     }
-    RT64::SetSceneWeather(rain * amount, flash * amount, snow);
+    // No rain falling (streaks, splashes, drops on the screen) while the view is under water, and it is only
+    // heard faintly there. Lightning still flashes through.
+    const float above_water = 1.0f - std::clamp(tooie::picture_filters::underwater(), 0.0f, 1.0f);
+    RT64::SetSceneWeather(rain * amount * above_water, flash * amount, snow);
     const auto [mist, mist_when] = mist_setting();
     RT64::SetSceneMist(mist, mist_when);
     // The ground gets wet in the rain, in about 15 s of a storm, and dries over a minute and a half after.
@@ -486,7 +490,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
     }
     // The rain is heard whether or not Night Sounds is on (not in the pause menu).
     if ((dt > 0.0f) && !snow) {
-        sounds[3] = rain * amount;
+        sounds[3] = rain * amount * (0.25f + 0.75f * above_water);
     }
     tooie::night_sounds::set(sounds[0], sounds[1], sounds[2], sounds[3]);
     {
