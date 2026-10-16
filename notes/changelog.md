@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- New cheats: 100% complete (everything done except the last boss, Hag 1: all Jiggies, notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons, moves, worlds and bosses; saving keeps it) and Dragon Kazooie (on: Kazooie is Dragon Kazooie, off: she is Kazooie again). Untested on PC (T326).
 - Fixed: scrolling the Graphics menu with a controller lagged on every step. The option description now shows a moment after you stop on an option instead of on every step. Untested on PC (T319).
 - Run is now on the controller's B button by default (the button labelled B on an Xbox pad, Circle on PlayStation). That button was a second C-right; the right stick still turns the camera. Saved controls get the change once if Run was unbound and B was only C-right. On Android the touch B button now does the game's B instead of C-right. Untested on PC (T305).
 - The Start menu has a SETTINGS entry under View Totals (L). For now it opens an empty SETTINGS page; B goes back, Start closes the menu. Untested on PC (T270).
@@ -38,7 +39,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
 ### Graphics
-- 3D grass now reads the textures of what the game lays over the ground: wherever a road, path or dirt patch with a non-grass texture is drawn over grass ground, no blades grow under it (L). Untested on PC (T323).
+- 3D grass now reads the textures of what the game lays over the ground: wherever a road, path or dirt patch with a non-grass texture is drawn over grass ground, no blades grow under it (L). Untested on PC (T326).
 - Shader speed pass: 3D grass blades, the water mask, ambient occlusion and sun shadows each do less repeated work on the GPU; nothing should look different. Every shader also compiles clean for both Vulkan and DirectX (QA write-up in notes/shader-qa-2026-10-16.md). Untested on PC (T315).
 - Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T317).
 - 3D grass no longer grows on Spiral Mountain's cobbled road: the grass layer the game blends over the road fades out by its vertices' alpha, which the blades ignored (L). Untested on PC (T309).

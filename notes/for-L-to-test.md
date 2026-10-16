@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T326 Cheats: 100% complete and Dragon Kazooie
+- Asked: 2026-10-16 21:32 UTC
+- Build: main @ 0c6a82e
+- Steps:
+  1. Turn on Cheats, load any save, then switch on 100% complete
+  2. Open the pause menu Totals
+  3. Switch Dragon Kazooie on, then off
+  4. Split up (Split up anywhere cheat, D-pad down) to see Kazooie
+- Look for: Does 100% complete give 90 Jiggies, 900 notes and full Jinjo families with Hag 1 still to beat? Does Kazooie turn into Dragon Kazooie with the switch on and back to Kazooie with it off?
+- Status: waiting for L
+
 ## T324 Day and night: no rain under water
 - Asked: 2026-10-16 UTC
 - Build: main (pull and build)
