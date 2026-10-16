@@ -8013,7 +8013,7 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..153f213
+index 0000000..caf3f5a
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
 @@ -0,0 +1,120 @@
@@ -8075,11 +8075,11 @@ index 0000000..153f213
 +    return (hue >= 14.0f) && (hue <= 34.0f);
 +}
 +
-+// A furry enemy's white fur (the yeti): light and nearly grey, not its blue or pink skin or dark eyes and mouth.
++// A furry enemy's white fur (the yeti), from its texture: white to mid grey, not its blue skin or dark eyes and mouth.
 +bool WhiteFurColor(float3 color) {
 +    const float high = max(color.r, max(color.g, color.b));
 +    const float low = min(color.r, min(color.g, color.b));
-+    return (high >= 0.45f) && ((high - low) <= 0.3f * high);
++    return (high >= 0.3f) && ((high - low) <= 0.15f * high);
 +}
 +
 +// Whether a shell's pixel at height share (0 to 1) is part of a strand; if so, shades it from root to tip.
@@ -9351,7 +9351,7 @@ index 0000000..c9288dd
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..acadd2e 100644
+index e7895c3..8fa442a 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -9467,7 +9467,7 @@ index e7895c3..acadd2e 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +330,72 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +330,75 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9519,10 +9519,13 @@ index e7895c3..acadd2e 100644
 +        }
 +    }
 +
-+    // Banjo-Tooie: a shell of Banjo's fur keeps only the strands crossing it, on his brown fur (or a furry enemy's white).
++    // Banjo-Tooie: a shell of Banjo's fur keeps only the strands crossing it, on his brown fur (or a furry enemy's white,
++    // told by its texture alone: lit, the yeti's white in the shade looks as blue as its skin).
 +    if (furShell != 0) {
-+        if (!FurShell(vertexFurAnchor, combinerColor.rgb, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
-+            (gConstants.furShells & RASTER_FUR_WHITE) != 0, resultColor.rgb))
++        const bool whiteFur = (gConstants.furShells & RASTER_FUR_WHITE) != 0;
++        const float3 furBase = (whiteFur && renderFlagUsesTexture0(rp.flags)) ? texVal0.rgb : combinerColor.rgb;
++        if (!FurShell(vertexFurAnchor, furBase, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
++            whiteFur, resultColor.rgb))
 +        {
 +            return false;
 +        }
@@ -9540,7 +9543,7 @@ index e7895c3..acadd2e 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +403,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +406,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9564,7 +9567,7 @@ index e7895c3..acadd2e 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +446,7 @@ void PSMain(
+@@ -287,6 +449,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9572,7 +9575,7 @@ index e7895c3..acadd2e 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +463,7 @@ void PSMain(
+@@ -303,7 +466,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
