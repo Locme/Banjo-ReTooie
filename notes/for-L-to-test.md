@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T320 Compiling shaders % on the start menu; compiled shaders kept on disk
+- Asked: 2026-10-16 21:07 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Start the game and stay on the start menu
+  2. Watch the bottom-right corner
+  3. Quit, start again, and watch the same corner
+- Look for: First start: 'Compiling shaders N%' counts up and goes away at 100%, and the menu still works while it shows. Second start: it should reach 100% much faster, because the compiled shaders are now read from cache\shaders instead of compiled again. Tell me roughly how long each start took to reach 100%.
+- Status: waiting for L
+
 ## T319 Graphics menu: no lag scrolling with a controller
 - Asked: 2026-10-16 21:04 UTC
 - Build: main

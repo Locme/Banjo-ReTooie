@@ -46,6 +46,7 @@
 #include "tooie_asset_mods.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
+#include "tooie_shader_progress.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
 #include "tooie_api_restart.h"
@@ -755,8 +756,10 @@ int main(int argc, char** argv) {
     recomp::register_config_path(app_folder);
     tooie::install_crash_handler(app_folder);
     // RT64 keeps the shaders met in earlier sessions here and compiles them again in the
-    // background at start (roadmap 4.32), so a first visit to an area stutters less.
+    // background at start (roadmap 4.32), so a first visit to an area stutters less. On Windows the
+    // compiled shaders are also kept, in cache/shaders, so that compile is quick after the first time.
     RT64::SetShaderListPath(app_folder / "cache" / "shader_list.bin");
+    tooie::shader_progress::start();
 #ifdef _WIN32
     // The Windows build has no console, so keep what the game and the runtime
     // print (errors before an abort, among others) in logs/console.log.

@@ -37,7 +37,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 - Shader speed pass: 3D grass blades, the water mask, ambient occlusion and sun shadows each do less repeated work on the GPU; nothing should look different. Every shader also compiles clean for both Vulkan and DirectX (QA write-up in notes/shader-qa-2026-10-16.md). Untested on PC (T315).
-- Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T312).
+- Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T320).
 - 3D grass no longer grows on Spiral Mountain's cobbled road: the grass layer the game blends over the road fades out by its vertices' alpha, which the blades ignored (L). Untested on PC (T309).
 
 - The gameplay demo (when you don't press Start) no longer runs too fast. DEV > Force Interpolation in the gameplay demo (off by default) blends it like the opening cutscene. Untested on PC (T307).
@@ -88,6 +88,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Frame rate overlay: lines in four groups; game CPU time no longer drops to 0 ms (a wait was counted twice); the first line keeps the last frame rate below 4 fps (T170).
 - Benchmark key (F4): records the frame rate overlay's figures to benchmarks\ with a summary and the settings, for comparing settings or builds (T161).
 - Shaders met in earlier sessions are kept in cache\shader_list.bin and compile in the background at start, so first visits stutter less (roadmap 4.32, T159).
+- The saved shaders no longer hold up the shaders the current scene needs (stutter at the start, T298). "Compiling shaders N%" shows in the bottom-right corner while they compile, and on Windows the compiled shaders are kept in cache\shaders so later starts skip the compiler (T320).
 - Frame rate overlay (Full): GPU time of each extra pass (water mask, eye adaptation, bloom, effects, SMAA, FXAA, photo filters, FSR, output, UI); roadmap 4.43's F3 timings (T157).
 - Faster rendering: the renderer no longer copies every frame back into the game's memory and waits for the graphics card (Graphics > Frame Read-Back, off by default; turn it on if a picture effect shows black or frozen), and it sleeps instead of keeping a CPU core busy while the graphics card catches up. Headless in Bottles' House: 28 fps instead of 14, controller-to-screen 64 ms instead of about 165 ms. Untested on PC (T162).
 - DEV > Force Interpolation in cutscenes (on by default): the opening cutscene before the title screen, and the attract demos, run at the game's own pace (20 a second for the opening) when Game Frame Rate is above Original, and Interpolation blends them up to its rate; it does nothing while Interpolation is Original. Untested on PC (T280).
