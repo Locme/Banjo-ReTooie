@@ -3875,7 +3875,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..6742841
+index 0000000..3e63a3a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1828 @@
@@ -4448,7 +4448,7 @@ index 0000000..6742841
 +        effectsSettings.grassChunky = chunky;
 +        effectsSettings.grassChunkSize = std::clamp(chunkSize, 1.0f, 4.0f);
 +        effectsSettings.grassPixelated = pixelated;
-+        effectsSettings.grassPixelSize = std::clamp(pixelSize, 1.0f, 8.0f);
++        effectsSettings.grassPixelSize = std::clamp(pixelSize, 1.0f, 32.0f);
 +    }
 +
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -7719,7 +7719,7 @@ index 0000000..1284731
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..55ecf2a
+index 0000000..2a4ecd5
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
 @@ -0,0 +1,389 @@
@@ -8098,7 +8098,7 @@ index 0000000..55ecf2a
 +            const float w = max(rootClip.w, 1e-3f);
 +            const float across = length(GrassDirToClip(side).xy) / w;
 +            const float along = length(GrassDirToClip(tip).xy) / w;
-+            grow = float2(1.0f + min(pixel / max(across, 1e-4f), 50.0f), 1.0f + min(2.0f * pixel / max(along, 1e-4f), 50.0f));
++            grow = float2(1.0f + min(pixel / max(across, 1e-4f), 400.0f), 1.0f + min(2.0f * pixel / max(along, 1e-4f), 400.0f));
 +        }
 +
 +        // Chunky: one triangle, in one flat colour (GrassBlade in Grass.hlsli).
