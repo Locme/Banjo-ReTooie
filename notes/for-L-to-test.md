@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T338 Button combinations in Controls
+- Asked: 2026-10-16 22:45 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Esc > Controls. In the footer, press "Combo binding: Off" so it says On
+  2. Click a free binding slot (for example the second slot of Fine Aim, or of an N64 button), hold one button (for example LB or a back button) and press a second one (for example Y). The slot shows both, joined with +
+  3. Press "Combo binding" again to turn it Off; bindings made while it is Off are single buttons as before
+  4. In game, press the second button alone, then hold the first and press the second
+- Look for: Alone, the second button does its usual job. With the first held, only the combination's action happens, not the usual one. Do the bindings stay after restarting the game? Don't use Back/Select as the first button if it opens the menu.
+- Status: waiting for L
+
 ## T337 Smash Banjo v13: Kazooie as Smash Kazooie after Split Up
 - Asked: 2026-10-16 22:39 UTC
 - Build: mods/Smash Banjo v13.zip in project files (remove v12 from the mods folder first)
@@ -3439,15 +3450,3 @@
   3. Try it in a room with echo too (a cave or the Jinjo houses), and with General > More game memory on and off
 - Look for: The sound changes right away, with no restart; music and effects keep their pitch and speed, and echoes keep their timing. At most a tiny blip at the moment it switches. Checked headless on the title screen: switched 22 > 44 > 22 > 44 kHz, the sound kept 60 frames every 2 s and the music's pitch stayed in the same range; the reverb's delays were found and changed. Not checked headless: how it sounds.
 - Status: waiting for L
-
-## T336 Button combinations in Controls
-- Asked: 2026-10-16 22:45 UTC
-- Build: latest Windows build from main
-- Steps:
-  1. Esc > Controls. In the footer, press "Combo binding: Off" so it says On
-  2. Click a free binding slot (for example the second slot of Fine Aim, or of an N64 button), hold one button (for example LB or a back button) and press a second one (for example Y). The slot shows both, joined with +
-  3. Press "Combo binding" again to turn it Off; bindings made while it is Off are single buttons as before
-  4. In game, press the second button alone, then hold the first and press the second
-- Look for: Alone, the second button does its usual job. With the first held, only the combination's action happens, not the usual one. Do the bindings stay after restarting the game? Don't use Back/Select as the first button if it opens the menu.
-- Status: waiting for L
-

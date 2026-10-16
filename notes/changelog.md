@@ -137,7 +137,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Controls
 
-- Button combinations: with Combo binding On (Controls tab footer), a binding slot takes two inputs, held one then pressed the other (for example a back button + Y). A combination wins over the second button's own binding while the first is held. Untested on PC (T336).
+- Button combinations: with Combo binding On (Controls tab footer), a binding slot takes two inputs, held one then pressed the other (for example a back button + Y). A combination wins over the second button's own binding while the first is held. Untested on PC (T338).
 - Fine aim now really slows first-person turning (headless: 44% of the normal turn at the 40% setting; before, about 89%). Its key is bindable: Controls tab, Hotkeys, Fine Aim (R or right trigger by default). Untested on PC (T102).
 - Gyro aim: the controller's turn now moves the view the right way (left/right and up/down were swapped) and by the right amount (it was a rate, not degrees). Untested on PC (T103).
 - Split up anywhere: D-pad left plays Banjo, right plays Kazooie (065b633, 22ee63c). Untested on PC (T55).
