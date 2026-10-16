@@ -3662,10 +3662,10 @@ index 3b991ff..6a469af 100644
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
-index bf7b669..6b8bcbd 100644
+index bf7b669..676e5d7 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
 +++ b/src/render/rt64_raster_shader_cache.cpp
-@@ -4,11 +4,32 @@
+@@ -4,17 +4,39 @@
  
  #include "rt64_raster_shader_cache.h"
  
@@ -3697,8 +3697,38 @@ index bf7b669..6b8bcbd 100644
 +
      // RasterShaderCache::CompilationThread
      
-     RasterShaderCache::CompilationThread::CompilationThread(RasterShaderCache *shaderCache) {
-@@ -66,6 +87,8 @@ namespace RT64 {
+-    RasterShaderCache::CompilationThread::CompilationThread(RasterShaderCache *shaderCache) {
++    RasterShaderCache::CompilationThread::CompilationThread(RasterShaderCache *shaderCache, bool takesListed) {
+         assert(shaderCache != nullptr);
+ 
+         this->shaderCache = shaderCache;
++        this->takesListed = takesListed;
+ 
+         thread = std::make_unique<std::thread>(&CompilationThread::loop, this);
+         threadRunning = false;
+@@ -44,7 +66,7 @@ namespace RT64 {
+                 std::unique_lock<std::mutex> queueLock(shaderCache->descQueueMutex);
+                 shaderCache->descQueueActiveCount--;
+                 shaderCache->descQueueChanged.wait(queueLock, [this]() {
+-                    return !threadRunning || !shaderCache->descQueue.empty();
++                    return !threadRunning || !shaderCache->descQueue.empty() || (takesListed && !shaderCache->listQueue.empty());
+                 });
+ 
+                 shaderCache->descQueueActiveCount++;
+@@ -53,6 +75,12 @@ namespace RT64 {
+                     shaderCache->descQueue.pop();
+                     fromPriorityQueue = true;
+                 }
++                else if (takesListed && !shaderCache->listQueue.empty()) {
++                    // Banjo-Tooie: a listed shader, unless the game asked for it meanwhile and it went to descQueue.
++                    shaderDesc = shaderCache->listQueue.front();
++                    shaderCache->listQueue.pop();
++                    fromPriorityQueue = (shaderCache->listPending.erase(shaderDesc.hash()) > 0);
++                }
+             }
+             
+             // Compile the shader at the top of the queue.
+@@ -66,6 +94,8 @@ namespace RT64 {
                      const std::unique_lock<std::mutex> lock(shaderCache->GPUShadersMutex);
                      shaderCache->GPUShaders[shaderDesc.hash()] = std::move(newShader);
                  }
@@ -3707,7 +3737,20 @@ index bf7b669..6b8bcbd 100644
              }
          }
      }
-@@ -109,6 +132,66 @@ namespace RT64 {
+@@ -85,8 +115,11 @@ namespace RT64 {
+ 
+         descQueueActiveCount = threadCount;
+ 
++        // Banjo-Tooie: half of the threads (at least one) work through the shader list, so the rest stay free
++        // for what the game draws now and the list leaves the CPU to the game and the driver.
++        const uint32_t listThreadCount = std::max(threadCount / 2U, 1U);
+         for (uint32_t t = 0; t < threadCount; t++) {
+-            compilationThreads.push_back(std::make_unique<CompilationThread>(this));
++            compilationThreads.push_back(std::make_unique<CompilationThread>(this, t < listThreadCount));
+         }
+ #endif
+     }
+@@ -109,6 +142,79 @@ namespace RT64 {
          if (shaderFormat == RenderShaderFormat::SPIRV) {
              optimizerCacheSPIRV.initialize();
          }
@@ -3764,17 +3807,49 @@ index bf7b669..6b8bcbd 100644
 +            }
 +        }
 +
-+        for (const ShaderDescription &desc : descs) {
-+            submit(desc);
++        uint32_t queued = 0;
++        {
++            const std::unique_lock<std::mutex> queueLock(submissionMutex);
++            const std::unique_lock<std::mutex> descLock(descQueueMutex);
++            for (const ShaderDescription &desc : descs) {
++                bool &found = shaderHashes[desc.hash()];
++                if (!found) {
++                    found = true;
++                    listQueue.push(desc);
++                    listPending.insert(desc.hash());
++                    queued++;
++                }
++            }
 +        }
 +
-+        if (!descs.empty()) {
-+            fprintf(stdout, "[shaders] compiling %zu shaders from the shader list in the background\n", descs.size());
++        descQueueChanged.notify_all();
++
++        if (queued > 0) {
++            fprintf(stdout, "[shaders] compiling %u shaders from the shader list in the background\n", queued);
 +        }
      }
  
      void RasterShaderCache::submit(const ShaderDescription &desc) {
-@@ -123,6 +206,15 @@ namespace RT64 {
+@@ -119,10 +225,34 @@ namespace RT64 {
+             const uint64_t shaderHash = desc.hash();
+             bool &found = shaderHashes[shaderHash];
+             if (found) {
++                // Banjo-Tooie: still waiting in the shader list's queue: the game needs it now, so it goes first.
++                bool promoted = false;
++                {
++                    const std::unique_lock<std::mutex> descLock(descQueueMutex);
++                    if (listPending.erase(shaderHash) > 0) {
++                        descQueue.push(desc);
++                        promoted = true;
++                    }
++                }
++
++                if (promoted) {
++                    queueLock.unlock();
++                    descQueueChanged.notify_all();
++                }
++
+                 return;
              }
  
              found = true;
@@ -3790,11 +3865,25 @@ index bf7b669..6b8bcbd 100644
          }
  
          // Push a new shader compilation to the queue.
+@@ -138,6 +268,8 @@ namespace RT64 {
+         {
+             std::unique_lock<std::mutex> queueLock(descQueueMutex);
+             descQueue = std::queue<ShaderDescription>();
++            listQueue = std::queue<ShaderDescription>();
++            listPending.clear();
+         }
+ 
+         bool keepWaiting = false;
 diff --git a/src/render/rt64_raster_shader_cache.h b/src/render/rt64_raster_shader_cache.h
-index 5c40c18..df8eb33 100644
+index 5c40c18..bf17518 100644
 --- a/src/render/rt64_raster_shader_cache.h
 +++ b/src/render/rt64_raster_shader_cache.h
-@@ -16,6 +16,12 @@
+@@ -12,17 +12,26 @@
+ #include <queue>
+ #include <thread>
+ #include <unordered_map>
++#include <unordered_set>
+ 
  #include "rt64_raster_shader.h"
  
  namespace RT64 {
@@ -3807,17 +3896,33 @@ index 5c40c18..df8eb33 100644
      struct RasterShaderCache {
          struct CompilationThread {
              RasterShaderCache *shaderCache;
-@@ -45,6 +51,9 @@ namespace RT64 {
+             std::unique_ptr<std::thread> thread;
+             std::atomic<bool> threadRunning;
++            // Banjo-Tooie: whether this thread also takes shaders from the shader list.
++            bool takesListed;
+ 
+-            CompilationThread(RasterShaderCache *shaderCache);
++            CompilationThread(RasterShaderCache *shaderCache, bool takesListed);
+             ~CompilationThread();
+             void loop();
+         };
+@@ -45,6 +54,15 @@ namespace RT64 {
          std::unique_ptr<ShaderCompiler> shaderCompiler;
          RenderMultisampling multisampling;
          bool usesHDR = false;
 +        std::unordered_map<uint64_t, bool> listedHashes;
++        // Banjo-Tooie: the shader list's shaders wait in their own queue, which only some of the threads take
++        // from and only when nothing the game is drawing now waits, so a long list compiling at start does not
++        // keep the current scene on the ubershader. listPending holds the hashes still waiting there; the game
++        // asking for one moves it to descQueue.
++        std::queue<ShaderDescription> listQueue;
++        std::unordered_set<uint64_t> listPending;
 +        std::ofstream listFile;
 +        uint32_t listCount = 0;
          
          RasterShaderCache(uint32_t threadCount, uint32_t ubershaderThreadCount);
          ~RasterShaderCache();
-@@ -55,5 +64,6 @@ namespace RT64 {
+@@ -55,5 +73,6 @@ namespace RT64 {
          RasterShader *getGPUShader(const ShaderDescription &desc);
          RasterShaderUber *getGPUShaderUber() const;
          uint32_t shaderCount();
