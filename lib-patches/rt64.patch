@@ -3902,7 +3902,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..82a97be
+index 0000000..1b6621f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1828 @@
@@ -4501,8 +4501,8 @@ index 0000000..82a97be
 +        effectsSettings.kazooieIridescence = std::clamp(iridescence, 0.0f, 1.0f);
 +    }
 +
-+    // A few layers of feathers, each a flap over the one below.
-+    static constexpr uint32_t FeatherShells = 4;
++    // One layer just over her surface, painted with the outlines of her feathers.
++    static constexpr uint32_t FeatherShells = 1;
 +
 +    uint32_t SceneFeatherShells() {
 +        const std::scoped_lock lock(effectsMutex);
@@ -4564,8 +4564,8 @@ index 0000000..82a97be
 +        // 100), the amount making them thin out more slowly (a thicker coat).
 +        const float amount = std::min(settings.fur, 1.0f);
 +        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
-+        // Kazooie's feathers: layers up to 2 units out, each feather about 4.5 units across.
-+        frameParams.featherParams = { 2.0f * settings.kazooieEdges, settings.kazooieSheen, settings.kazooieIridescence, 0.22f };
++        // Kazooie's feathers: how dark their outlines are, each feather about 3.5 units across.
++        frameParams.featherParams = { settings.kazooieEdges, settings.kazooieSheen, settings.kazooieIridescence, 0.28f };
 +        return true;
 +    }
 +
@@ -7126,10 +7126,10 @@ index bc250a2..162e8de 100644
  Texture2D<float4> gTextures[8192] : register(t0, space1);
 diff --git a/src/shaders/Feathers.hlsli b/src/shaders/Feathers.hlsli
 new file mode 100644
-index 0000000..8da8a74
+index 0000000..ea3969f
 --- /dev/null
 +++ b/src/shaders/Feathers.hlsli
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,95 @@
 +//
 +// RT64
 +//
@@ -7137,9 +7137,9 @@ index 0000000..8da8a74
 +// Banjo-Tooie: Kazooie's feather shaders, on her draws only (the game marks them). Her own draw gets a sheen, a soft
 +// glossy highlight that slides across her feathers as she moves, and iridescence, her feathers' colour shifting a
 +// little with the angle they are seen at; both from her normal as the camera sees it (RasterVS.hlsl). Her
-+// feathery edges are a few short shells (as Banjo's fur, Fur.hlsli) cut into rows of rounded feather flaps, each row
-+// offset by half a feather and slid down over the one below like roof tiles. Only her feathers (reds and oranges) get
-+// them, not her beak or legs.
++// feather outlines are painted on one layer just over her surface (as Banjo's fur shells, Fur.hlsli): soft scalloped
++// lines where each row of feather tips overlaps the next. Only her feathers (reds and oranges) get them, not her beak
++// or legs.
 +
 +#pragma once
 +
@@ -7159,34 +7159,49 @@ index 0000000..8da8a74
 +    return (hue >= -20.0f) && (hue <= 22.0f);
 +}
 +
-+// A shell of feathers at height share (0 to 1). The feathers sit in rows down her body like roof tiles (every other
-+// row moved half a feather along), each a rounded flap with its tip at the bottom; each shell is slid down a little
-+// (RasterVS.hlsl), so the layers overlap. A darker rim round each flap and a shade of its own keep the feathers
-+// apart; they get smaller towards the outer layers.
++// The layer just over her surface: only the outlines of her feathers are drawn on it (the rest is left out, so her
++// own draw with its sheen shows through). The feathers are rounded tips in rows down her body, every other row moved
++// half a feather along; each row's tips lie over the roots of the row below, so only the lower edge of each tip shows,
++// a scalloped line like a bird's breast. The lines fade out where the feathers would be too small to see clearly.
 +bool FeatherShell(float3 anchor, float3 baseColor, float share, inout float3 color) {
 +    if (!FeatherColor(baseColor)) {
 +        return false;
 +    }
 +    const float3 grid = anchor * FrParams.featherParams.w;
-+    const float row = floor(grid.y);
-+    const float2 across = grid.xz + (fmod(abs(row), 2.0f) * 0.5f);
-+    const float2 cell = floor(across);
-+    const uint h = FurHash(int3(int(cell.x), int(row), int(cell.y)));
-+    const float random = float(h & 0x3FF) / 1023.0f;
-+    // Where the point is in its feather: across (0 the middle) and down it (0 its root at the top, 1 its tip).
-+    const float2 side = frac(across) - 0.5f;
-+    const float down = 1.0f - frac(grid.y);
-+    const float width = 0.64f * (1.0f - 0.3f * share) * (0.85f + 0.3f * random);
-+    // A rounded flap: full width near the root, curving in to a rounded tip.
-+    const float halfWidth = width * sqrt(saturate(1.0f - down * down * 0.85f));
-+    const float sideDistance = length(side);
-+    if ((sideDistance > halfWidth) || (down > 1.0f - 0.2f * share)) {
++    // How many feathers a pixel spans: fade the lines from a third of a feather per pixel, gone by a half.
++    const float footprint = max(length(fwidth(grid)), 1e-5f);
++    const float fade = 1.0f - smoothstep(0.12f, 0.3f, footprint);
++    if (fade <= 0.0f) {
 +        return false;
 +    }
-+    // The flap's rim is darker (where it overlaps the one below), its middle lighter along the shaft.
-+    const float rim = smoothstep(halfWidth * 0.55f, halfWidth, sideDistance);
-+    const float shaft = 1.0f - smoothstep(0.0f, 0.06f, sideDistance);
-+    color *= (0.82f + 0.25f * random) * (1.0f - 0.45f * rim) * (1.0f + 0.15f * shaft) * lerp(0.85f, 1.05f, share);
++    // The tip on top here: the highest row whose tip covers this point (rows above lie over rows below).
++    const float radius = 0.62f;
++    const float top = floor(grid.y) + 1.0f;
++    float edge = -1.0f;
++    float random = 0.0f;
++    for (int k = 0; (k < 3) && (edge < 0.0f); k++) {
++        const float row = top - float(k);
++        const float shift = fmod(abs(row), 2.0f) * 0.5f;
++        const float column = floor(grid.x - shift + 0.5f);
++        for (int c = -1; c <= 1; c++) {
++            const float2 centre = float2(column + float(c) + shift, row - 0.5f);
++            const float inside = radius - length(float2(grid.x, grid.y) - centre);
++            if (inside > edge) {
++                edge = inside;
++                random = float(FurHash(int3(int(centre.x * 2.0f), int(row), int(floor(grid.z)))) & 0x3FF) / 1023.0f;
++            }
++        }
++    }
++    if (edge < 0.0f) {
++        return false;
++    }
++    // A thin soft line along the tip's edge, darkest at the edge itself, with a faint shadow inside it.
++    const float width = max(0.08f, footprint * 1.5f);
++    const float stroke = 1.0f - smoothstep(0.0f, width, edge);
++    if (stroke <= 0.02f) {
++        return false;
++    }
++    color *= 1.0f - FrParams.featherParams.x * fade * stroke * (0.3f + 0.12f * random);
 +    return true;
 +}
 +
@@ -8538,7 +8553,7 @@ index e7895c3..cb41a9d 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..272f4b0 100644
+index 74b1fa0..bc17677 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,7 +11,8 @@
@@ -8567,14 +8582,14 @@ index 74b1fa0..272f4b0 100644
 +
 +        // Banjo-Tooie: a shell of Banjo's fur, pushed out along the vertex's normal by its share of the fur's
 +        // length, the tips drooping a little (by the cube of the height, as in Sorumi's UnityFurShader).
-+        // Kazooie's feathery edges the same way, each layer also slid down so the feathers overlap like tiles.
++        // Kazooie's feather outlines on one layer just off her surface, so they sit on it without flickering.
 +        const bool feathers = (gConstants.furShells & RASTER_FEATHERS) != 0;
 +        if (gConstants.furShell != 0) {
 +            const float3 normal = furNormals[iVertexId * 2].xyz;
 +            oFurAnchor = furNormals[iVertexId * 2 + 1].xyz;
 +            const float share = float(gConstants.furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = FrParams.furParams;
-+            const float3 offset = feathers ? normal * (FrParams.featherParams.x * share) - float3(0.0f, 0.6f * FrParams.featherParams.x * share, 0.0f) :
++            const float3 offset = feathers ? normal * 0.15f :
 +                normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
 +        }

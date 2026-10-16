@@ -890,13 +890,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         5, 200, 5, 0, false, 100);
     graphics.add_bool_option(
         kazooie_edges_option,
-        "Kazooie feathery edges",
-        "Short, flat feather tips stand out of Kazooie's red feathers, mostly seen along her outline and wings, so she looks soft instead of smooth. Her beak and legs stay as they are.",
+        "Kazooie painted feathers",
+        "Soft outlines of overlapping feathers are painted onto Kazooie's red feathers, rows of rounded tips like a bird's breast. They fade out when she is far away. Her beak and legs stay as they are.",
         false);
     graphics.add_number_option(
         kazooie_edges_strength_option,
-        "Kazooie feathery edges length",
-        "How far Kazooie's feather tips stand out, in percent.",
+        "Kazooie painted feathers strength",
+        "How dark the outlines of Kazooie's feathers are, in percent.",
         5, 200, 5, 0, false, 100);
     graphics.add_bool_option(
         kazooie_iridescence_option,

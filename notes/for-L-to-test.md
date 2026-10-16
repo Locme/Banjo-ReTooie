@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T292 Kazooie painted feathers
+- Asked: 2026-10-16 14:59 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn on Kazooie feather sheen, Kazooie painted feathers and Kazooie iridescence
+  2. Look at Kazooie up close in a cutscene (the poker game in Jolly's works) and in Spiral Mountain
+  3. Move Kazooie painted feathers strength between 5 and 200
+- Look for: Soft scalloped outlines of overlapping feathers on her head, neck and body, with no raised bumps; the sheen still shows between them. Her beak, legs and backpack stay smooth. The outlines fade when she is far away instead of flickering. Does it look good?
+- Status: waiting for L
+
 ## T291 Mumbo's Hut Recreation v5: doorway shadows and stronger shading
 - Asked: 2026-10-16 14:50 UTC
 - Build: main (pull and build), plus the v5 mod zip
@@ -27,7 +37,7 @@
   1. Graphics > Character Shaders: turn on Kazooie's feather sheen, feathery edges and iridescence at 100
   2. Look at Kazooie up close in Spiral Mountain and in a cutscene (the poker game in Jolly's works)
 - Look for: Her head, neck and wings show small rounded feathers overlapping each other, not fuzz like Banjo's fur. Her beak, legs and backpack stay smooth. The sheen is a clear glossy highlight that moves as she turns.
-- Status: waiting for L
+- Status: replaced by T292 (painted feathers)
 
 ## T287 3D grass: Chunk size and Pixel size sliders
 - Asked: 2026-10-16 13:27 UTC
