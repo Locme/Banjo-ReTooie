@@ -8865,10 +8865,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..1926e28
+index 0000000..bc550da
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2181 @@
+@@ -0,0 +1,2188 @@
 +//
 +// RT64
 +//
@@ -9272,9 +9272,9 @@ index 0000000..1926e28
 +    return normal;
 +}
 +
-+float AmbientOcclusion(int2 pixel, float depth) {
-+    const float3 center = ViewPosition(pixel, depth);
-+    const float3 normal = ViewNormal(pixel, center);
++// center and normal are the pixel's view-space position and surface normal (ViewPosition, ViewNormal), worked out
++// once in PSMain for the ambient occlusion and the sun shadows together.
++float AmbientOcclusion(int2 pixel, float3 center, float3 normal) {
 +
 +    const float radius = gConstants.ambientOcclusion.y;
 +    const float distance = max(-center.z, 1.0f);
@@ -10554,9 +10554,9 @@ index 0000000..1926e28
 +// something stands in front of the step (but not so far in front that the ray passed behind it), the
 +// surface is in its shadow. Surfaces turned away from the sun are shaded too, gently, so the dark side of
 +// a thing meets its shadow on the ground.
-+float SunShadow(int2 pixel, float depth) {
++// center and surfaceNormal as AmbientOcclusion's.
++float SunShadow(int2 pixel, float3 center, float3 surfaceNormal) {
 +    const float3 sun = gConstants.sun.xyz;
-+    const float3 center = ViewPosition(pixel, depth);
 +    const float distance = -center.z;
 +    // Fades out with distance: far away the depth buffer is too coarse and the shadows too small to tell.
 +    const float near = saturate(1.0f - (distance - 4000.0f) / 3000.0f);
@@ -10567,7 +10567,7 @@ index 0000000..1926e28
 +    const float shadowFlags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
 +    const bool skipBanjo = (shadowFlags > 1.5f) && (gConstants.rippleAge.w > -1e8f);
 +    const float softness = shadowFlags - (shadowFlags > 1.5f ? 2.0f : 0.0f);
-+    float3 normal = ViewNormal(pixel, center);
++    float3 normal = surfaceNormal;
 +    // Characters are low-poly, so a normal read from the depth is flat across each triangle and the side
 +    // turned from the sun was shaded face by face. Soft shadows average the normals a few pixels around,
 +    // only where the depth says it is the same surface.
@@ -10870,11 +10870,18 @@ index 0000000..1926e28
 +    }
 +
 +    float keep = 1.0f;
-+    if (gConstants.ambientOcclusion.x > 0.0f) {
-+        keep *= AmbientOcclusion(pixel, depth);
-+    }
-+    if ((gConstants.shadows.x > 0.0f) && (gConstants.view.x < 1.5f)) {
-+        keep *= SunShadow(pixel, depth);
++    const bool occlusion = gConstants.ambientOcclusion.x > 0.0f;
++    const bool sunShadows = (gConstants.shadows.x > 0.0f) && (gConstants.view.x < 1.5f);
++    if (occlusion || sunShadows) {
++        // The surface's position and normal once for both (the normal reads four more depths).
++        const float3 center = ViewPosition(pixel, depth);
++        const float3 normal = ViewNormal(pixel, center);
++        if (occlusion) {
++            keep *= AmbientOcclusion(pixel, center, normal);
++        }
++        if (sunShadows) {
++            keep *= SunShadow(pixel, center, normal);
++        }
 +    }
 +
 +    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
