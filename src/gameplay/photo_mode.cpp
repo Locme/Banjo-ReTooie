@@ -3,7 +3,7 @@
 // Freeze: func_800D8FA0 turns the VIs the last frame took into the frame's delta time, kept as a
 // float at 0x8012C760 (func_800D8FF8 returns it). tooie_warp_tick runs at the start of the game's
 // frame update (func_800A7D84), after that, so photo mode scales the value there: almost nothing
-// while frozen, 1/8 or 1/4 of it in slow time. Everything the game moves by delta time stands
+// while frozen, 1/167, 1/8 or 1/4 of it in slow time. Everything the game moves by delta time stands
 // still, and the world is still drawn every frame, so the camera can move. (Things the game moves
 // by a fixed step per frame can keep moving.)
 //
@@ -23,7 +23,7 @@
 //                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), time,
 //                   HUD, Banjo shown or hidden, the filter rows below, depth of field, tilt, crop, grid
 //   L               show / hide the photo panel
-//   Start           frozen, 1/8 speed, 1/4 speed
+//   Start           frozen, 1/167 speed, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
 //
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
@@ -108,10 +108,14 @@ namespace {
     constexpr float stick_deadzone = 0.15f;
     constexpr float max_pitch = 89.0f;
     constexpr float deg = 3.14159265f / 180.0f;
-    // The game's delta time while frozen: small but not zero, as some code divides by it.
-    constexpr float frozen_delta = 0.0001f;
-    constexpr float speed_scales[] = { 0.0f, 0.125f, 0.25f };
-    constexpr const char* speed_names[] = { "Time frozen", "Time 1/8", "Time 1/4" };
+    // The game's delta time while frozen: not zero, as some code divides by it, but small enough that
+    // adding it to a timer changes nothing. (It was 0.0001 s, which at 60 FPS ran time at 0.0001 / (1/60)
+    // = 0.006 of normal speed, about 1/167: still moving. That speed is kept as its own step, L, 2026-10-16.)
+    constexpr float frozen_delta = 1.0e-7f;
+    constexpr float speed_scales[] = { 0.0f, 0.006f, 0.125f, 0.25f };
+    constexpr const char* speed_names[] = { "Time frozen", "Time 1/167", "Time 1/8", "Time 1/4" };
+    constexpr const char* speed_values[] = { "Frozen", "1/167 speed", "1/8 speed", "1/4 speed" };
+    constexpr int speed_count = (int)std::size(speed_scales);
     // Orbit: the point circled is Banjo's position plus this much, at these distances.
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t player_transform = 0xE4;
@@ -133,6 +137,8 @@ namespace {
     std::atomic<bool> players_toggle{false};
     std::atomic<bool> players_hidden{false};
     std::atomic<float> fov_scale{1.0f};
+    // The game's own delta time this frame, before photo mode scaled it (for the log).
+    std::atomic<float> game_delta{0.0f};
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
@@ -350,7 +356,7 @@ namespace {
                 orbit_toggle = true;
                 break;
             case Row::Time:
-                speed = (speed + 3 + step) % 3;
+                speed = (speed + speed_count + step) % speed_count;
                 break;
             case Row::Hud:
                 tooie::hide_hud::set_hidden(!tooie::hide_hud::is_hidden());
@@ -393,7 +399,7 @@ namespace {
         case Row::Camera:
             return orbit_on ? "Orbit Banjo" : "Free";
         case Row::Time:
-            return speed == 0 ? "Frozen" : speed == 1 ? "1/8 speed" : "1/4 speed";
+            return speed_values[speed.load()];
         case Row::Hud:
             return tooie::hide_hud::is_hidden() ? "Hidden" : "Shown";
         case Row::Banjo:
@@ -467,7 +473,7 @@ void tooie::photo_mode::register_input() {
         "Left stick moves, right stick looks, Z and R go down and up, A takes a screenshot. "
         "A list on screen holds zoom, camera, time, HUD, Banjo, the filters, depth of field, tilt, crop and grid: "
         "D-pad up and down pick a row, left and right change it, L hides the list. "
-        "Start runs time at 1/8 or 1/4 speed, B goes back to the game.");
+        "Start runs time at 1/167, 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
     recompinput::set_default_mapping_for_controller(photo_input, { recompinput::InputField::controller_digital(SDL_CONTROLLER_BUTTON_GUIDE) });
 }
@@ -599,7 +605,7 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
         pending_step = dir;
     }
     if (pressed & button_start) {
-        int s = (speed + 1) % 3;
+        int s = (speed + 1) % speed_count;
         speed = s;
         if (!panel_shown) {
             tooie::toast::show(speed_names[s]);
@@ -660,6 +666,7 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
 
     const float scale = speed_scales[speed.load()];
     const float dt = read_float(rdram, (uint32_t)delta_time_addr);
+    game_delta = dt;
     write_float(rdram, (uint32_t)delta_time_addr, scale > 0.0f ? dt * scale : frozen_delta);
 }
 
@@ -791,9 +798,9 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
     static Clock::time_point last_log;
     if (log && now - last_log >= 500ms) {
         last_log = now;
-        fprintf(stderr, "[photo] cam %.0f %.0f %.0f yaw %.1f pitch %.1f speed %d dt %.5f orbit %d dist %.0f fov x%.2f\n",
+        fprintf(stderr, "[photo] cam %.0f %.0f %.0f yaw %.1f pitch %.1f speed %d dt %.7f (game %.5f) orbit %d dist %.0f fov x%.2f\n",
             cam.pos[0], cam.pos[1], cam.pos[2], cam.yaw, cam.pitch, speed.load(), read_float(rdram, (uint32_t)delta_time_addr),
-            cam.orbit, cam.distance, fov_scale.load());
+            game_delta.load(), cam.orbit, cam.distance, fov_scale.load());
     }
     return true;
 }

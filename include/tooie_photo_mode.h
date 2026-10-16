@@ -9,7 +9,7 @@
 
 // Photo mode (handoff 4.82, src/gameplay/photo_mode.cpp): the Photo Mode key (F10, bindable in the
 // Controls tab) freezes the game, hides the HUD and flies the camera freely. A takes a screenshot,
-// Start cycles frozen / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game. An on-screen
+// Start cycles frozen / 1/167 / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game. An on-screen
 // list (the photo panel) picks and changes the camera, time and filter settings with the D-pad.
 namespace recomp::config {
     class Config;
