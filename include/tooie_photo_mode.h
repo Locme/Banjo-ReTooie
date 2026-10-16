@@ -8,7 +8,8 @@
 #include "recomp.h"
 
 // Photo mode (handoff 4.82, src/gameplay/photo_mode.cpp): the Photo Mode key (F10, bindable in the
-// Controls tab) freezes the game, hides the HUD and flies the camera freely. A takes a screenshot,
+// Controls tab) freezes the game, hides the HUD and flies the camera freely. A takes a screenshot (after
+// the self-timer, with a click and flash),
 // Start cycles frozen / 1/167 / 1/8 / 1/4 speed, B or the Photo Mode key goes back to the game. An on-screen
 // list (the photo panel) picks and changes the camera, time and filter settings with the D-pad.
 namespace recomp::config {
@@ -29,6 +30,7 @@ namespace tooie::photo_mode {
     inline const std::string hide_settings_option = "photo_hide_settings";
     inline const std::string dof_option = "photo_dof";
     inline const std::string tilt_option = "photo_tilt";
+    inline const std::string shutter_option = "photo_shutter";
 
     // Adds photo mode's filter rows to the QOL tab (used only while photo mode is on).
     void add_options(recomp::config::Config& qol);
@@ -54,6 +56,12 @@ namespace tooie::photo_mode {
     // Takes player 1's input while photo mode is on: the controls drive the camera and the game
     // sees an idle pad.
     void apply_input(uint16_t* buttons, float* x, float* y);
+
+    // How white the shutter flash is now, 1 just after a photo down to 0 (read by src/ui/photo_panel.cpp).
+    float flash_level();
+
+    // Adds the shutter's click to interleaved stereo float samples (main.cpp queue_samples, audio thread).
+    void mix_shutter(float* stereo, size_t frames, uint32_t rate, float volume);
 
     // Once per frame on the game thread (tooie_warp_tick): enters and leaves, and slows game time.
     void tick(uint8_t* rdram, recomp_context* ctx);

@@ -17,7 +17,7 @@
 //   right stick     look (C-buttons on the keyboard)
 //   Z / R           down / up
 //   (holding a move for a second speeds it up)
-//   A               screenshot (as F12)
+//   A               screenshot (as F12), after the self-timer if one is set
 //   D-pad up/down   pick a row of the photo panel (src/ui/photo_panel.cpp)
 //   D-pad left/right change it (held repeats): zoom (the field of view, through tooie_set_fov), camera
 //                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), time,
@@ -25,6 +25,11 @@
 //   L               show / hide the photo panel
 //   Start           frozen, 1/167 speed, 1/8 speed, 1/4 speed
 //   B / Photo Mode  back to the game, with the camera and HUD as they were
+//
+// Shutter (QOL > Photo shutter, on by default): each photo plays a camera click (synthesised, mixed into
+// the game's sound by mix_shutter from main.cpp) and the photo panel flashes the screen white; the flash
+// is a UI layer, so the photo itself never shows it. The Timer row (Off, 3 s, 10 s) counts down with
+// toasts before the photo; A again cancels it.
 //
 // Hide Banjo: func_800F5008 draws the players each frame (opaque ones at once, faded ones listed for
 // func_800F50D0 to draw later); banjotooie.us.toml hooks both to skip them while tooie_players_hidden().
@@ -142,13 +147,25 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Time, Hud, Banjo, Filter, Exposure, Contrast, Saturation, Warmth, Vignette, Grain,
-        Focus, Tilt, Crop, Grid, Count };
+    enum class Row { Zoom, Camera, Time, Hud, Banjo, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+        Vignette, Grain, Focus, Tilt, Crop, Grid, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
     std::atomic<bool> panel_shown{true};
     std::atomic<int> pending_step{0};
     std::atomic<bool> orbit_on{false};
+    // Self-timer: the Timer row's choice, and the countdown (on the game thread) once A started it.
+    constexpr int timer_seconds[] = { 0, 3, 10 };
+    std::atomic<int> timer_choice{0};
+    std::atomic<bool> timer_requested{false};
+    bool timer_running = false;
+    Clock::time_point timer_end{};
+    int timer_shown = -1;
+    // Shutter: photos taken (the sound mixer plays a click for each new one) and when the last one was.
+    std::atomic<uint32_t> shots{0};
+    std::atomic<int64_t> last_shot_ns{0};
+    constexpr float flash_seconds = 0.35f;
+
     // Held left / right: the first change at once, then repeats.
     Clock::time_point step_held_since{};
     Clock::time_point step_last{};
@@ -341,8 +358,8 @@ namespace {
     constexpr const char* look_names[] = { "None", "Sepia", "Black and white", "Noir", "Warm", "Cool", "Vivid", "Faded film",
         "Teal and orange", "Dream" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Filter", "Exposure", "Contrast",
-        "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Tilt", "Crop", "Grid" };
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Timer", "Shutter", "Filter", "Exposure",
+        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Tilt", "Crop", "Grid" };
     static_assert(std::size(row_names) == row_count);
 
     // On the game thread: one step of the picked row, -1 or +1.
@@ -376,6 +393,14 @@ namespace {
             }
             case Row::Grid:
                 qol.update_option_value(tooie::photo_mode::grid_option, !qol_value<bool>(tooie::photo_mode::grid_option, false));
+                break;
+            case Row::Timer: {
+                const int n = (int)std::size(timer_seconds);
+                timer_choice = (timer_choice + n + step) % n;
+                break;
+            }
+            case Row::Shutter:
+                qol.update_option_value(tooie::photo_mode::shutter_option, !qol_value<bool>(tooie::photo_mode::shutter_option, true));
                 break;
             default:
                 for (const NumberRow& n : number_rows) {
@@ -414,6 +439,14 @@ namespace {
         }
         case Row::Grid:
             return qol_value<bool>(tooie::photo_mode::grid_option, false) ? "On" : "Off";
+        case Row::Timer:
+            if (timer_choice == 0) {
+                return "Off";
+            }
+            std::snprintf(text, sizeof(text), "%d s", timer_seconds[timer_choice.load()]);
+            return text;
+        case Row::Shutter:
+            return qol_value<bool>(tooie::photo_mode::shutter_option, true) ? "Click and flash" : "Off";
         case Row::Exposure:
             std::snprintf(text, sizeof(text), "%+.1f stops", qol_value<double>(tooie::photo_mode::exposure_option, 0.0) / 10.0);
             return text;
@@ -426,6 +459,25 @@ namespace {
             }
             return "";
         }
+    }
+
+    void shoot() {
+        tooie::screenshot::take();
+        bool shutter = true;
+        try {
+            shutter = qol_value<bool>(tooie::photo_mode::shutter_option, true);
+        } catch (...) {
+        }
+        if (shutter) {
+            last_shot_ns = Clock::now().time_since_epoch().count();
+            shots.fetch_add(1);
+        }
+    }
+
+    void stop_timer() {
+        timer_requested = false;
+        timer_running = false;
+        timer_shown = -1;
     }
 
     void enter(uint8_t* rdram) {
@@ -460,6 +512,9 @@ namespace {
         players_hidden = false;
         if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
             tooie::hide_hud::set_hidden(false);
+        }
+        if (timer_running) {
+            stop_timer();
         }
         tooie::toast::show("Photo mode off");
         fprintf(stderr, "[photo] off\n");
@@ -529,10 +584,12 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
     qol.add_number_option(dof_option, "Photo depth of field",
         "Blurs what is nearer or further than the middle of photo mode's picture, which stays sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
+    qol.add_bool_option(shutter_option, "Photo shutter",
+        "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true);
     qol.add_bool_option(grid_option, "Photo grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
     for (const std::string* id : { &look_option, &exposure_option, &contrast_option, &saturation_option, &warmth_option,
-            &vignette_option, &grain_option, &crop_option, &tilt_option, &dof_option, &grid_option }) {
+            &vignette_option, &grain_option, &crop_option, &tilt_option, &dof_option, &shutter_option, &grid_option }) {
         qol.add_option_hidden_dependency(*id, hide_settings_option, true);
     }
 }
@@ -578,7 +635,13 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
         leave_requested = true;
     }
     if (pressed & button_a) {
-        tooie::screenshot::take();
+        if (timer_choice == 0) {
+            shoot();
+        }
+        else {
+            // Started (or, while counting, cancelled) on the game thread.
+            timer_requested = true;
+        }
     }
     if (pressed & d_up) {
         picked = (picked + row_count - 1) % row_count;
@@ -649,6 +712,32 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     leave_requested = false;
     if (!is_active) {
         return;
+    }
+
+    if (timer_requested.exchange(false)) {
+        if (timer_running) {
+            stop_timer();
+            tooie::toast::show("Timer cancelled");
+        }
+        else if (timer_choice > 0) {
+            timer_running = true;
+            timer_end = Clock::now() + std::chrono::seconds(timer_seconds[timer_choice.load()]);
+            timer_shown = -1;
+        }
+    }
+    if (timer_running) {
+        const auto left = timer_end - Clock::now();
+        if (left <= 0ms) {
+            stop_timer();
+            shoot();
+        }
+        else {
+            const int secs = (int)std::chrono::duration_cast<std::chrono::seconds>(left + 999ms).count();
+            if (secs != timer_shown) {
+                timer_shown = secs;
+                tooie::toast::show("Photo in " + std::to_string(secs));
+            }
+        }
     }
 
     if (const int step = pending_step.exchange(0); step != 0) {
@@ -807,4 +896,51 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
 
 extern "C" int tooie_players_hidden(void) {
     return is_active && players_hidden ? 1 : 0;
+}
+
+float tooie::photo_mode::flash_level() {
+    const int64_t at = last_shot_ns.load();
+    if (at == 0) {
+        return 0.0f;
+    }
+    const float t = std::chrono::duration<float>(Clock::now().time_since_epoch() - Clock::duration(at)).count();
+    return t >= 0.0f && t < flash_seconds ? 1.0f - t / flash_seconds : 0.0f;
+}
+
+// A camera shutter, made up: two short clicks (the shutter opening and closing, 70 ms apart), each a
+// burst of noise and a high ring dying away within a few milliseconds.
+void tooie::photo_mode::mix_shutter(float* stereo, size_t frames, uint32_t rate, float volume) {
+    static uint32_t seen = 0;
+    static float time = -1.0f;
+    static uint32_t noise = 22222;
+    const uint32_t now_shots = shots.load(std::memory_order_relaxed);
+    if (now_shots != seen) {
+        seen = now_shots;
+        time = 0.0f;
+    }
+    if (time < 0.0f || rate == 0) {
+        return;
+    }
+    constexpr float level = 0.22f;
+    constexpr float second_click = 0.07f;
+    constexpr float length = 0.12f;
+    const float dt = 1.0f / (float)rate;
+    for (size_t i = 0; i < frames && time < length; i++, time += dt) {
+        float v = 0.0f;
+        for (const float start : { 0.0f, second_click }) {
+            const float t = time - start;
+            if (t < 0.0f) {
+                continue;
+            }
+            noise = noise * 1664525u + 1013904223u;
+            const float white = (float)(noise >> 8) / (float)(1u << 24) * 2.0f - 1.0f;
+            const float loud = start == 0.0f ? 1.0f : 0.7f;
+            v += loud * (white * std::exp(-t / 0.004f) + 0.6f * std::sin(t * 2.0f * 3.14159265f * 2400.0f) * std::exp(-t / 0.012f));
+        }
+        stereo[i * 2 + 0] += v * level * volume;
+        stereo[i * 2 + 1] += v * level * volume;
+    }
+    if (time >= length) {
+        time = -1.0f;
+    }
 }

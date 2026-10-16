@@ -46,6 +46,7 @@
 #include "tooie_asset_mods.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
+#include "tooie_photo_mode.h"
 #include "tooie_shader_progress.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
@@ -307,6 +308,9 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
     
     // Crickets, owls and birds with the day and night cycle.
     tooie::night_sounds::mix(swap_buffer.data() + duplicated_input_frames * input_channels, sample_count / input_channels,
+        sample_rate, cur_main_volume);
+    // Photo mode's shutter click.
+    tooie::photo_mode::mix_shutter(swap_buffer.data() + duplicated_input_frames * input_channels, sample_count / input_channels,
         sample_rate, cur_main_volume);
 
     // TODO handle cases where a chunk is smaller than the duplicated frame count.

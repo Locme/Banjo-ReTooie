@@ -22,6 +22,7 @@ namespace {
     using namespace std::chrono_literals;
 
     constexpr auto poll_interval = 50ms;
+    constexpr auto flash_interval = 16ms;
     constexpr auto ui_wait = 500ms;
     constexpr size_t max_rows = 20;
     const char* const help_lines[] = {
@@ -199,6 +200,67 @@ namespace {
         p.last_picked = picked;
     }
 
+    // The shutter flash: a white sheet over the whole window, faded out by tooie::photo_mode::flash_level.
+    // Its own context, so it shows with the list hidden too.
+    struct Flash {
+        recompui::ContextId context = recompui::ContextId::null();
+        recompui::Element* sheet = nullptr;
+        bool shown = false;
+    };
+
+    bool build_flash(Flash& f) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return false;
+        }
+        try {
+            recompui::ContextId ctx = recompui::create_context();
+            ctx.open();
+            recompui::Element* root = ctx.create_element<recompui::Element>(ctx.get_root_element());
+            root->set_display(recompui::Display::Flex);
+            root->set_background_color(recompui::theme::color::Transparent);
+            root->set_pointer_events(recompui::PointerEvents::None);
+            f.sheet = ctx.create_element<recompui::Element>(root);
+            f.sheet->set_position(recompui::Position::Absolute);
+            f.sheet->set_top(0);
+            f.sheet->set_left(0);
+            f.sheet->set_width(100.0f, recompui::Unit::Percent);
+            f.sheet->set_height(100.0f, recompui::Unit::Percent);
+            f.sheet->set_background_color(recompui::Color{ 255, 255, 255, 255 });
+            f.sheet->set_opacity(0.0f);
+            f.sheet->set_pointer_events(recompui::PointerEvents::None);
+            ctx.close();
+            ctx.set_captures_input(false);
+            ctx.set_captures_mouse(false);
+            f.context = ctx;
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+
+    void set_flash(Flash& f, float level) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
+        if (level > 0.0f) {
+            f.context.open();
+            f.sheet->set_opacity(0.85f * level);
+            f.context.close();
+            if (!recompui::is_context_shown(f.context)) {
+                recompui::show_context(f.context, "");
+            }
+            f.shown = true;
+        }
+        else if (f.shown) {
+            if (recompui::is_context_shown(f.context)) {
+                recompui::hide_context(f.context);
+            }
+            f.shown = false;
+        }
+    }
+
     // The game start clears every shown context, so check the real state each time.
     void show(Panel& p) {
         auto lifetime = recompui::lock_context_lifetime();
@@ -224,9 +286,16 @@ namespace {
 
     void worker() {
         Panel panel;
+        Flash flash;
         std::vector<std::string> rows;
         for (;;) {
-            std::this_thread::sleep_for(poll_interval);
+            const float level = tooie::photo_mode::flash_level();
+            std::this_thread::sleep_for(level > 0.0f || flash.shown ? flash_interval : poll_interval);
+            if (level > 0.0f || flash.shown) {
+                if (flash.context != recompui::ContextId::null() || build_flash(flash)) {
+                    set_flash(flash, tooie::photo_mode::flash_level());
+                }
+            }
             int picked = 0;
             const bool want = tooie::photo_mode::panel_state(rows, picked);
             if (!want) {
