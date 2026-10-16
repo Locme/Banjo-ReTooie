@@ -690,6 +690,28 @@ func = "func_800C2AB8"
 before_vram = 0x800C2B50
 text = "if (ctx->r19 != 0) tooie_sound_slot_wait(rdram, ctx);"
 
+# func_800C15BC (get a sound handle) rescans while a handle is only waiting on
+# the sound player to finish its sound; the same kind of loop. After 2 s it
+# gives up and returns no handle, as it does when the game holds all 16.
+[[patches.hook]]
+func = "func_800C15BC"
+before_vram = 0x800C168C
+text = "if (SIGNED(ctx->r2) < 0x10 && tooie_sound_handle_wait(rdram, ctx)) { ctx->r2 = 0; return; }"
+
+# --- Sound effect player events (src/game/sound_events.cpp) ----------------
+# A bigger event pool when the sound heap has moved, and pan/volume/pitch/effect
+# changes dropped while the pool is nearly full, so high game frame rates can't
+# crowd out stop and end events (L's sweep hangs of 2026-10-16).
+[[patches.hook]]
+func = "func_800DC380"
+before_vram = 0x800DC3BC
+text = "tooie_sound_event_pool(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80026500"
+before_vram = 0x80026500
+text = "if (tooie_sound_event_full(rdram, ctx)) return;"
+
 # --- Sound mix rate (src/gameplay/mix_rate.cpp) -----------------------------
 # Sound > Mix rate = High mixes at 44100 Hz instead of 22050. func_800125B0 sets
 # up the audio heap, then calls func_8001268C (synthesizer, AI rate, buffers);

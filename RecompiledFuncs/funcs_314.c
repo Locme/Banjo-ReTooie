@@ -725,6 +725,7 @@ L_800C1680:
     }
     // 0x800C1688: addiu       $a0, $a0, 0x20
     ctx->r4 = ADD32(ctx->r4, 0X20);
+    if (SIGNED(ctx->r2) < 0x10 && tooie_sound_handle_wait(rdram, ctx)) { ctx->r2 = 0; return; }
     // 0x800C168C: slti        $at, $v0, 0x10
     ctx->r1 = SIGNED(ctx->r2) < 0X10 ? 1 : 0;
     // 0x800C1690: bne         $at, $zero, L_800C15C0

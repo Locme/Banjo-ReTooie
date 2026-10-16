@@ -931,16 +931,20 @@ index 812c556..b64dd16 100644
  
      // Wait until the thread is initialized to indicate that it's ready to be started.
 diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
-index 276301b..36885c1 100644
+index 276301b..2093cc7 100644
 --- a/ultramodern/src/timer.cpp
 +++ b/ultramodern/src/timer.cpp
-@@ -1,3 +1,5 @@
+@@ -1,5 +1,9 @@
 +#include <atomic>
 +#include <mutex>
  #include <thread>
  #include <variant>
++#include <cstdio>
++#include <map>
  #include <set>
-@@ -15,10 +17,19 @@
+ #include "blockingconcurrentqueue.h"
+ 
+@@ -15,10 +19,19 @@
  static std::chrono::high_resolution_clock::time_point start_time = std::chrono::high_resolution_clock::now();
  // Offset of the duration since program start used to calculate the value for osGetTime. 
  static int64_t ostime_offset = 0;
@@ -964,7 +968,7 @@ index 276301b..36885c1 100644
  
  struct OSTimer {
      PTR(OSTimer) unused1;
-@@ -37,33 +48,31 @@ struct RemoveTimerAction {
+@@ -37,63 +50,74 @@ struct RemoveTimerAction {
      PTR(OSTimer) timer;
  };
  
@@ -1008,7 +1012,103 @@ index 276301b..36885c1 100644
  }
  
  void timer_thread(RDRAM_ARG1) {
-@@ -146,7 +155,30 @@ void ultramodern::init_timers(RDRAM_ARG1) {
+     ultramodern::set_native_thread_name("Timer Thread");
+     ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::VeryHigh);
+ 
+-    // Lambda comparator function to keep the set ordered
+-    auto timer_sort = [PASS_RDRAM1](PTR(OSTimer) a_, PTR(OSTimer) b_) {
+-        OSTimer* a = TO_PTR(OSTimer, a_);
+-        OSTimer* b = TO_PTR(OSTimer, b_);
+-
+-        // Order by timestamp if the timers have different timestamps
+-        if (a->timestamp != b->timestamp) {
+-            return a->timestamp < b->timestamp;
++    // Active timers ordered by when they fire. The timestamp is copied in when a timer is added:
++    // the game rewrites a timer's fields in RDRAM whenever it re-arms it (osSetTimer on a timer
++    // that is still running), and a set ordered by those live fields broke its own tree and
++    // crashed this thread. `armed` maps each timer to its entry so a re-arm replaces it.
++    using Entry = std::pair<OSTime, PTR(OSTimer)>;
++    std::set<Entry> active_timers;
++    std::map<PTR(OSTimer), OSTime> armed;
++
++    auto add_timer = [&](PTR(OSTimer) timer_) {
++        auto found = armed.find(timer_);
++        if (found != armed.end()) {
++            active_timers.erase(Entry{ found->second, timer_ });
++            static int rearms_logged = 0;
++            if (rearms_logged < 3) {
++                rearms_logged++;
++                printf("[timer] timer 0x%08X set again while running (was the crash in timer_thread)\n", (uint32_t)timer_);
++            }
++        }
++        OSTime timestamp = TO_PTR(OSTimer, timer_)->timestamp;
++        armed[timer_] = timestamp;
++        active_timers.insert(Entry{ timestamp, timer_ });
++    };
++    auto remove_timer = [&](PTR(OSTimer) timer_) {
++        auto found = armed.find(timer_);
++        if (found != armed.end()) {
++            active_timers.erase(Entry{ found->second, timer_ });
++            armed.erase(found);
+         }
+-
+-        // If they have the exact same timestamp then order by address instead
+-        return a < b;
+     };
+ 
+-    // Ordered set of timers that are currently active
+-    std::set<PTR(OSTimer), decltype(timer_sort)> active_timers{timer_sort};
+-    
+     // Lambda to process a timer action to handle adding and removing timers
+     auto process_timer_action = [&](const Action& action) {
+         // Determine the action type and act on it
+         if (const auto* add_action = std::get_if<AddTimerAction>(&action)) {
+-            active_timers.insert(add_action->timer);
++            add_timer(add_action->timer);
+         } else if (const auto* remove_action = std::get_if<RemoveTimerAction>(&action)) {
+-            active_timers.erase(remove_action->timer);
++            remove_timer(remove_action->timer);
+         }
+     };
+ 
+@@ -111,30 +135,26 @@ void timer_thread(RDRAM_ARG1) {
+         }
+ 
+         // Get the timer that's closest to running out
+-        PTR(OSTimer) cur_timer_ = *active_timers.begin();
++        Entry cur_entry = *active_timers.begin();
++        PTR(OSTimer) cur_timer_ = cur_entry.second;
+         OSTimer* cur_timer = TO_PTR(OSTimer, cur_timer_);
+ 
+-        // Remove the timer from the queue (it may get readded if waiting is interrupted)
+-        active_timers.erase(cur_timer_);
+-
+         // Determine how long to wait to reach the timer's timestamp
+-        auto wait_duration = ticks_to_timepoint(cur_timer->timestamp) - std::chrono::high_resolution_clock::now();
++        auto wait_duration = ticks_to_timepoint(cur_entry.first) - std::chrono::high_resolution_clock::now();
+ 
+         // Wait for either the duration to complete or a new action to come through
+         if (wait_duration.count() >= 0 && timer_context.action_queue.wait_dequeue_timed(cur_action, wait_duration)) {
+-            // Timer was interrupted by a new action 
+-            // Add the current timer back to the queue (done first in case the action is to remove this timer)
+-            active_timers.insert(cur_timer_);
+-            // Process the new action
++            // Timer was interrupted by a new action; the timer stays queued unless the action removes it.
+             process_timer_action(cur_action);
+         }
+         else {
++            remove_timer(cur_timer_);
+             // Waiting for the timer completed, so send the timer's message to its message queue
+             ultramodern::enqueue_external_message(cur_timer->mq, cur_timer->msg, false, true);
+             // If the timer has a specified interval then reload it with that value
+             if (cur_timer->interval != 0) {
+                 cur_timer->timestamp = cur_timer->interval + time_now();
+-                active_timers.insert(cur_timer_);
++                add_timer(cur_timer_);
+             }
+         }
+     }
+@@ -146,7 +166,30 @@ void ultramodern::init_timers(RDRAM_ARG1) {
  }
  
  uint32_t ultramodern::get_speed_multiplier() {

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T293 Sound freezes at Uncapped (texture sweep, Mumbo's Skull)
+- Asked: 2026-10-16 15:01 UTC
+- Build: main
+- Steps:
+  1. Graphics > Game Frame Rate: Uncapped; Sound > Mix rate: High
+  2. Run the texture sweep again over the maps that froze before
+  3. Play a while in Witchyworld and go in and out of Mumbo's Skull a few times
+- Look for: No freeze and no hang dump. A [sound] line in console.log saying the game waited for a free sound handle or freed a sound slot is fine: it means the fix stepped in. The sweep should go past Tower of Tragedy (0x15F) without entering it. Any stuck-sound effect still playing after leaving a map?
+- Status: waiting for L
+
 ## T292 Kazooie painted feathers
 - Asked: 2026-10-16 14:59 UTC
 - Build: main

@@ -15,6 +15,10 @@ void tooie_overlay_placed(uint8_t* rdram, recomp_context* ctx);
 void tooie_overlay_unloading(uint8_t* rdram, recomp_context* ctx);
 void tooie_preempt_point(uint8_t* rdram, recomp_context* ctx);
 void tooie_sound_slot_wait(uint8_t* rdram, recomp_context* ctx);
+// Sound effect player events (src/game/sound_events.cpp).
+void tooie_sound_event_pool(uint8_t* rdram, recomp_context* ctx);
+int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx);
+int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
 void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
 

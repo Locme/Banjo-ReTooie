@@ -310,6 +310,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/sound_events.cpp
     ${CMAKE_SOURCE_DIR}/src/game/quick_start.cpp
     ${CMAKE_SOURCE_DIR}/src/game/mod_zips.cpp
     ${CMAKE_SOURCE_DIR}/src/game/timer_save.cpp

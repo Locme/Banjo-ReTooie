@@ -102,3 +102,36 @@ extern "C" void tooie_sound_slot_wait(uint8_t* rdram, recomp_context* ctx) {
     }
     wait_start = now;
 }
+
+// func_800C15BC hands out one of the 16 sound handles (word pairs at 0x80128B10). A handle is free
+// once the game has let go of it (second word 0) and the sound player has finished its sound (first
+// word 0). With none free but some only waiting on the sound player, it scans again and again with
+// no OS call, so the sound player never runs and the game freezes (L's hangs of 2026-10-16 after the
+// texture sweep's warps and at Mumbo's Skull, Game frame rate Uncapped). This runs once per failed
+// scan: it lets the sound player run, and after 2 s gives up so the caller goes without a sound.
+// Returns true to give up.
+extern "C" int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx) {
+    using clock_type = std::chrono::steady_clock;
+    static clock_type::time_point wait_start{};
+    static clock_type::time_point last_pass{};
+    auto now = clock_type::now();
+    if (now - last_pass > std::chrono::milliseconds(250)) {
+        wait_start = now;
+    }
+    last_pass = now;
+
+    tooie_preempt_point(rdram, ctx);
+
+    if (now - wait_start < sound_wait_limit) {
+        return 0;
+    }
+    int game_held = 0;
+    for (int h = 1; h <= 16; h++) {
+        game_held += MEM_W(4, k0(sound_handles + h * 8)) != 0;
+    }
+    std::printf("[sound] waited %.1f s for a free sound handle (%d of 16 still held by the game); going without the sound\n",
+        std::chrono::duration<double>(now - wait_start).count(), game_held);
+    std::fflush(stdout);
+    wait_start = now;
+    return 1;
+}

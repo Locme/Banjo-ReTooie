@@ -1914,6 +1914,7 @@ RECOMP_FUNC void func_800DC380(uint8_t* rdram, recomp_context* ctx) {
     ctx->r4 = S32(0X8013 << 16);
     // 0x800DC3B8: addiu       $a0, $a0, -0x3800
     ctx->r4 = ADD32(ctx->r4, -0X3800);
+    tooie_sound_event_pool(rdram, ctx);
     // 0x800DC3BC: jal         0x8001EB10
     // 0x800DC3C0: sw          $v0, 0xC($a0)
     MEM_W(0XC, ctx->r4) = ctx->r2;

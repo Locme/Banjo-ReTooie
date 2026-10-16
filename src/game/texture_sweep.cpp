@@ -92,11 +92,14 @@ namespace {
     // multiplayer arenas, which set up two to four players and share their textures with
     // the one-player maps, and cutscenes that crash when entered straight from another map
     // (0xAC, Banjo's house is destroyed: its intro character plays an animation the earlier
-    // intro scenes set up, and reads a null pointer in chanim_entrypoint_6 without them).
+    // intro scenes set up, and reads a null pointer in chanim_entrypoint_6 without them;
+    // 0x15F, Tower of Tragedy: L's sweep of 2026-10-16 crashed there in the quiz code,
+    // func_800A4C88 reading a null pointer from func_80800F34_chquiz, likely for want of the
+    // quiz setup the normal way in does).
     constexpr uint16_t skipped_maps[] = {
         0x158, 0x18B,
         0x164, 0x165, 0x166, 0x17B, 0x17C, 0x182, 0x183, 0x188, 0x189,
-        0xAC,
+        0xAC, 0x15F,
     };
 
     // ---- Texture decoding (lib/rt64/src/shaders/TextureDecoder.hlsli and Formats.hlsli) ----

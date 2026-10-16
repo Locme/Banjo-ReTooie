@@ -173,8 +173,10 @@ namespace {
         char name[64];
         snprintf(name, sizeof(name), "ramdump_%ld.bin", times[next]);
         next++;
-        std::vector<uint8_t> words(rdram_size);
-        for (size_t i = 0; i < rdram_size; i += 4) {
+        // All 16 MB: More game memory puts the sound heap and other buffers above 0x80E00000.
+        constexpr size_t ramdump_size = 0x1000000;
+        std::vector<uint8_t> words(ramdump_size);
+        for (size_t i = 0; i < ramdump_size; i += 4) {
             const uint32_t w = (uint32_t)MEM_W(0, (gpr)(int32_t)(0x80000000u + i));
             words[i] = w >> 24; words[i + 1] = w >> 16; words[i + 2] = w >> 8; words[i + 3] = w;
         }

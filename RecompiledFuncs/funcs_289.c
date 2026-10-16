@@ -789,6 +789,7 @@ L_80110550:
 RECOMP_FUNC void func_80026500(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_sound_event_full(rdram, ctx)) return;
     // 0x80026500: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80026504: sw          $ra, 0x14($sp)
