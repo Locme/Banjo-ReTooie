@@ -17,7 +17,7 @@ on a controller.
   Banjo-Kazooie's jiggy dance (fist pumps, Kazooie pops out at the end) instead
   of Tooie's pose. Tooie's jingle, camera and Jiggy count stay. The dance is
   still in Tooie's own data, unused. Default: off.
-- **Boss rush**: fights all 13 bosses one after another, in the order the game
+- **Boss rush** (Features): fights all 13 bosses one after another, in the order the game
   meets them (Klungo, Targitzan, Old King Coal, Mr. Patch, Lord Woo Fak Fak,
   Klungo again, Terry, Weldar, Chilli Billi, Chilly Willy, Mingy Jongo, Klungo a
   third time, Hag 1), whatever your file has reached. It uses the game's own
