@@ -1199,6 +1199,51 @@ func = "gcnewpause_entrypoint_3"
 before_vram = 0x80800520
 text = "tooie_totals_checklist_draw(rdram, ctx);"
 
+# --- Settings entry in the pause menu (src/gameplay/pause_settings.cpp) ---------------
+# The main page's setup (func_80800A08): $s0 = the option table D_80802070.
+[[patches.hook]]
+func = "func_80800A08_gcnewpause"
+before_vram = 0x80800A48
+text = "tooie_pause_settings_setup(rdram, ctx);"
+
+# Same function, before gcnewoption_entrypoint_8 sets how many option boxes are shown ($a1):
+# there is room for five, so a sixth row (Settings with every Totals row) scrolls.
+[[patches.hook]]
+func = "func_80800A08_gcnewpause"
+before_vram = 0x80800A94
+text = "tooie_pause_settings_visible(rdram, ctx);"
+
+# Start of the pause menu's update: when the game moves the overlay it shifts every pointer in its
+# data, the table's pointers to our copies too, so they are set back here.
+[[patches.hook]]
+func = "gcnewpause_entrypoint_2"
+before_vram = 0x80800100
+text = "tooie_pause_settings_update(rdram, ctx);"
+
+# An option was picked: $a0 = the PauseState, $a2 = the option. Settings is handled by the hook.
+[[patches.hook]]
+func = "func_80800CE4_gcnewpause"
+before_vram = 0x80800CE4
+text = "if (tooie_pause_settings_select(rdram, ctx)) return;"
+
+# A Totals page's counts: $a1 = the sub page. Nothing is counted on the Settings page.
+[[patches.hook]]
+func = "func_80800F2C_gcnewpause"
+before_vram = 0x80800F2C
+text = "if (tooie_pause_settings_page_counts(rdram, ctx)) return;"
+
+# Text lookup gldbstring_entrypoint_1($a0 bank, $a1 index): the Settings text in the pause menu's banks.
+[[patches.hook]]
+func = "gldbstring_entrypoint_1"
+before_vram = 0x8080003C
+text = "if (tooie_pause_settings_text(rdram, ctx)) return;"
+
+# After the options' text lookup ($v0 = the string), for TOOIE_PAUSE_LOG.
+[[patches.hook]]
+func = "func_808027DC_gcnewoption"
+before_vram = 0x80802914
+text = "tooie_pause_settings_log_text(rdram, ctx);"
+
 # --- Asset replacement (src/game/asset_mods.cpp) -------------------------------
 # Load asset by id: before the asset is fetched, a file mods/assets/asset_<id>.bin is loaded in its place
 # (game heap, any size) and the function skips to where it records the asset's address ($a3).

@@ -2548,6 +2548,7 @@ L_808028C8:
     // 0x80802910: lh          $a1, 0x56($sp)
     ctx->r5 = MEM_H(ctx->r29, 0X56);
     after_6:
+    tooie_pause_settings_log_text(rdram, ctx);
     // 0x80802914: lw          $a0, 0x3C($s3)
     ctx->r4 = MEM_W(ctx->r19, 0X3C);
     // 0x80802918: jal         0x80087B20

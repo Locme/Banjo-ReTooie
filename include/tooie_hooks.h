@@ -91,6 +91,19 @@ void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx);
 // Totals checklist (src/gameplay/totals_checklist.cpp): end of the pause menu's draw
 // (gcnewpause_entrypoint_3); $s0 is the PauseState, 0x20($sp) the display list pointer's address.
 void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx);
+// Settings entry in the pause menu (src/gameplay/pause_settings.cpp): func_80800A08 with the option
+// table in $s0; the number of option boxes shown ($a1, capped at five); the menu's update (sets the
+// table's pointers back after the game moves the overlay); an option picked ($a0 PauseState,
+// $a2 option; true when it was Settings); a Totals page's counts ($a1 sub page; true to skip);
+// gldbstring_entrypoint_1 ($a0 bank, $a1 index; true when it returned our string); a log of the
+// options' text.
+void tooie_pause_settings_setup(uint8_t* rdram, recomp_context* ctx);
+void tooie_pause_settings_visible(uint8_t* rdram, recomp_context* ctx);
+void tooie_pause_settings_update(uint8_t* rdram, recomp_context* ctx);
+int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx);
+int tooie_pause_settings_page_counts(uint8_t* rdram, recomp_context* ctx);
+int tooie_pause_settings_text(uint8_t* rdram, recomp_context* ctx);
+void tooie_pause_settings_log_text(uint8_t* rdram, recomp_context* ctx);
 // Whether Hide HUD (or photo mode) has the HUD hidden (src/game/hide_hud.cpp).
 int tooie_hud_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).

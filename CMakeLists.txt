@@ -306,6 +306,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/totals_checklist.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/pause_settings.cpp
     ${CMAKE_SOURCE_DIR}/src/game/game_init.cpp
     ${CMAKE_SOURCE_DIR}/src/game/overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp

@@ -2586,6 +2586,7 @@ L_800E71DC:
 RECOMP_FUNC void func_80800F2C_gcnewpause(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_pause_settings_page_counts(rdram, ctx)) return;
     // 0x80800F2C: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x80800F30: beq         $a1, $zero, L_80800F54

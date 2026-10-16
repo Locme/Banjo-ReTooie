@@ -1215,6 +1215,7 @@ RECOMP_FUNC void func_80800A08_gcnewpause(uint8_t* rdram, recomp_context* ctx) {
     ctx->r16 = S32(RELOC_HI16(2658, 0X2070) << 16);
     // 0x80800A44: addiu       $s0, $s0, 0x2070
     ctx->r16 = ADD32(ctx->r16, (int16_t)RELOC_LO16(2658, 0X2070));
+    tooie_pause_settings_setup(rdram, ctx);
     // 0x80800A48: sll         $t7, $t6, 3
     ctx->r15 = S32(ctx->r14 << 3);
     // 0x80800A4C: addu        $t8, $s0, $t7
@@ -1261,6 +1262,7 @@ RECOMP_FUNC void func_80800A08_gcnewpause(uint8_t* rdram, recomp_context* ctx) {
     ctx->r9 = MEM_W(ctx->r2, 0X4);
     // 0x80800A90: or          $a1, $s2, $zero
     ctx->r5 = ctx->r18 | 0;
+    tooie_pause_settings_visible(rdram, ctx);
     // 0x80800A94: jal         0x80087CD8
     // 0x80800A98: sw          $t1, 0x80($sp)
     MEM_W(0X80, ctx->r29) = ctx->r9;
