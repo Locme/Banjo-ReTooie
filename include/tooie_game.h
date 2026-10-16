@@ -46,6 +46,8 @@ namespace tooie {
 
     // Quick start (quick_start.cpp): Start during the boot logos goes to the file select.
     inline const std::string qol_tab_id = "qol";
+    // The Performance tab (a page of Graphics options, recompui::config::create_page_tab).
+    inline const std::string performance_tab_id = "performance";
     inline const std::string quick_start_option = "quick_start";
     void quick_start_note_input(uint16_t buttons);
     void quick_start_tick(uint8_t* rdram);

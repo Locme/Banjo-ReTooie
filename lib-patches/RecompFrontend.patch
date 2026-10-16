@@ -393,7 +393,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..1bdc706 100644
+index 38b84f5..d6d68fa 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -65,6 +65,8 @@ namespace recompui {
@@ -405,7 +405,7 @@ index 38b84f5..1bdc706 100644
              void toggle_fullscreen();
          }
  
-@@ -133,6 +135,23 @@ namespace recompui {
+@@ -133,6 +135,32 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -420,6 +420,15 @@ index 38b84f5..1bdc706 100644
 +        // library adds in an order that doesn't fit the tab's sections. Only the display order changes.
 +        void set_option_display_before(const std::string &option_id, const std::string &before_id);
 +        const std::string *get_option_display_before(const std::string &option_id);
++        // Adds a tab that shows some of another tab's options (the ones given to it with set_option_page).
++        // The options still belong to that tab's config, so they save and apply as before.
++        void create_page_tab(const std::string &name, const std::string &page_id, const std::string &config_id);
++        // Shows the option with this ID on the page tab page_id instead of its own tab.
++        void set_option_page(const std::string &option_id, const std::string &page_id);
++        // The page tab an option is shown on, or nullptr when it shows on its own tab.
++        const std::string *get_option_page(const std::string &option_id);
++        // The name of the tab an option of config_name's config is shown on.
++        const std::string &get_option_tab_name(const std::string &option_id, const std::string &config_name);
 +
 +        // Layout A preview: the tabs as a sidebar on the left and the focused option's description in a
 +        // strip along the bottom. Off draws the tabs across the top. Takes effect while the menu is open.
@@ -430,7 +439,7 @@ index 38b84f5..1bdc706 100644
          void open();
          bool close();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..19a7624 100644
+index 6c84c05..3cc43e9 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -510,7 +519,7 @@ index 6c84c05..19a7624 100644
 +                    const auto &option = schema.options[i];
 +                    auto *box = context.create_element<Container>(list, FlexDirection::Column, JustifyContent::FlexStart);
 +                    box->set_display(Display::None);
-+                    context.create_element<Label>(box, cfg->name + " tab", LabelStyle::Annotation);
++                    context.create_element<Label>(box, config::get_option_tab_name(option.id, cfg->name) + " tab", LabelStyle::Annotation);
 +                    ConfigOptionElement *element = nullptr;
 +                    switch (option.type) {
 +                        case recomp::config::ConfigOptionType::Enum:
@@ -556,7 +565,7 @@ index 6c84c05..19a7624 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +222,28 @@ namespace recompui {
+@@ -121,6 +222,69 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -582,10 +591,51 @@ index 6c84c05..19a7624 100644
 +        return it == option_display_before.end() ? nullptr : &it->second;
 +    }
 +
++    static std::unordered_map<std::string, std::string> option_pages;
++    static std::unordered_map<std::string, std::string> page_names;
++
++    void config::create_page_tab(const std::string &name, const std::string &page_id, const std::string &config_id) {
++        page_names[page_id] = name;
++        config::create_tab(
++            name,
++            page_id,
++            [config_id, page_id, name](recompui::ContextId context, Element* parent) {
++                context.create_element<ConfigPageOptionsMenu>(parent, get_config_ptr(config_id), true, page_id, name);
++            },
++            [](TabCloseContext) { return true; },
++            [config_id](TabCloseContext) {
++                recomp::config::Config &config = config::get_config(config_id);
++                if (!config.requires_confirmation) {
++                    config.save_config();
++                }
++            }
++        );
++    }
++
++    void config::set_option_page(const std::string &option_id, const std::string &page_id) {
++        option_pages[option_id] = page_id;
++    }
++
++    const std::string *config::get_option_page(const std::string &option_id) {
++        auto it = option_pages.find(option_id);
++        return it == option_pages.end() ? nullptr : &it->second;
++    }
++
++    const std::string &config::get_option_tab_name(const std::string &option_id, const std::string &config_name) {
++        const std::string *page = get_option_page(option_id);
++        if (page != nullptr) {
++            auto it = page_names.find(*page);
++            if (it != page_names.end()) {
++                return it->second;
++            }
++        }
++        return config_name;
++    }
++
      void config::set_tab_visible(const std::string &id, bool is_visible) {
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
-@@ -177,6 +300,14 @@ namespace recompui {
+@@ -177,6 +341,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -855,7 +905,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..eb27a28 100644
+index 6ba64e2..68f670f 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,9 @@
@@ -868,7 +918,24 @@ index 6ba64e2..eb27a28 100644
  
  
  namespace recompui {
-@@ -21,8 +26,10 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -7,10 +12,14 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+     ResourceId rid,
+     Element *parent,
+     recomp::config::Config *config,
+-    bool is_internal
++    bool is_internal,
++    const std::string &page_id,
++    const std::string &page_name
+ ) : ConfigPage(rid, parent, Events(EventType::Hover, EventType::Update, EventType::MenuAction)),
+     config(config),
+-    is_internal(is_internal)
++    is_internal(is_internal),
++    page_id(page_id),
++    page_name(page_name)
+ {
+     ContextId context = recompui::get_current_context();
+     set_as_navigation_container(NavigationType::Vertical);
+@@ -21,8 +30,10 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -876,11 +943,11 @@ index 6ba64e2..eb27a28 100644
  
 -    if (config->requires_confirmation) {
 +    // Graphics saves each change as it is made, so it has no Apply button.
-+    if (config->requires_confirmation && config->id != recompui::config::graphics::id) {
++    if (config->requires_confirmation && config->id != recompui::config::graphics::id && page_id.empty()) {
          add_footer();
          render_confirmation_footer();
      }
-@@ -38,6 +45,65 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+@@ -38,6 +49,65 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
      }
  }
  
@@ -946,7 +1013,19 @@ index 6ba64e2..eb27a28 100644
  ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
      for (auto *element : config_option_elements) {
          if (element->get_option_id() == option_id) {
-@@ -109,6 +175,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -59,7 +129,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+         std::string &option_id = schema.options[option_index].id;
+         ConfigOptionElement* element = get_element_from_option_id(option_id);
+         if (element == nullptr) {
+-            printf("Failed to update conf option: '%s'\n", option_id.c_str());
++            // Shown on another page (config::set_option_page).
++            if (recompui::config::get_option_page(option_id) == nullptr && page_id.empty()) {
++                printf("Failed to update conf option: '%s'\n", option_id.c_str());
++            }
+             continue;
+         }
+         for (auto &update_type :option_update.updates) {
+@@ -109,6 +182,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -956,7 +1035,7 @@ index 6ba64e2..eb27a28 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +218,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +225,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -967,12 +1046,12 @@ index 6ba64e2..eb27a28 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +246,17 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +253,17 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
 +        // The tab's name as a heading, shown with the sidebar layout.
-+        page_title = context.create_element<Label>(body_left_scroll, config->name, theme::Typography::Header2);
++        page_title = context.create_element<Label>(body_left_scroll, page_id.empty() ? config->name : page_name, theme::Typography::Header2);
 +        page_title->set_display(Display::None);
 +        page_title->set_font_family(sidebar_style::font);
 +        page_title->set_font_weight(400);
@@ -985,21 +1064,28 @@ index 6ba64e2..eb27a28 100644
          config_option_elements.clear();
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +265,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +272,37 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
 +        // Display order: the schema's, with options moved by set_option_display_before.
 +        std::vector<size_t> order;
 +        for (size_t i = 0; i < schema.options.size(); i++) {
-+            order.push_back(i);
++            const std::string *page = recompui::config::get_option_page(schema.options[i].id);
++            if ((page == nullptr) == page_id.empty() && (page == nullptr || *page == page_id)) {
++                order.push_back(i);
++            }
 +        }
          for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
 +            }
-+            order.erase(std::find(order.begin(), order.end(), i));
++            auto from = std::find(order.begin(), order.end(), i);
++            if (from == order.end() || std::find(order.begin(), order.end(), schema.options_by_id.at(*before)) == order.end()) {
++                continue;
++            }
++            order.erase(from);
 +            order.insert(std::find(order.begin(), order.end(), schema.options_by_id.at(*before)), i);
 +        }
 +        for (size_t position = 0; position < order.size(); position++) {
@@ -1016,7 +1102,7 @@ index 6ba64e2..eb27a28 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +339,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +353,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -1025,10 +1111,19 @@ index 6ba64e2..eb27a28 100644
              element->update_hidden();
              config_option_elements.push_back(element);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..e99f88b 100644
+index 49e05db..52ac3c0 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
-@@ -17,6 +17,8 @@ namespace recompui {
+@@ -12,11 +12,17 @@ namespace recompui {
+     protected:
+         recomp::config::Config *config;
+         bool is_internal = false;
++        // For a page tab (config::create_page_tab): only the options set_option_page gives it, under its own name.
++        // Empty for a config's own tab, which leaves those options out.
++        std::string page_id;
++        std::string page_name;
+ 
+         std::vector<ConfigOptionElement*> config_option_elements;
          Element *description_container = nullptr;
          std::string description_option_id = "";
          Button *apply_button = nullptr;
@@ -1037,7 +1132,7 @@ index 49e05db..e99f88b 100644
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -31,6 +33,7 @@ namespace recompui {
+@@ -31,12 +37,15 @@ namespace recompui {
          ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
@@ -1045,6 +1140,15 @@ index 49e05db..e99f88b 100644
      public:
          ConfigPageOptionsMenu(
              ResourceId rid,
+             Element *parent,
+             recomp::config::Config *config,
+-            bool is_internal = false
++            bool is_internal = false,
++            const std::string &page_id = "",
++            const std::string &page_name = ""
+         );
+         virtual ~ConfigPageOptionsMenu() = default;
+     };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
 index 4fdf81f..c87b8b5 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp

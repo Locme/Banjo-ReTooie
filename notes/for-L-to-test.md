@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T262 Performance tab under Graphics
+- Asked: 2026-10-16 10:35 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Open the menu: Performance sits under Graphics
+  2. Change Game Frame Rate, Interpolation or the Frame rate overlay there
+  3. Restart the game and look again
+  4. Type 'overlay' in Search settings
+- Look for: Performance holds Game Frame Rate, Interpolation (with its Manual rate), Low Input Latency, Frame Read-Back and Frame rate overlay; Graphics no longer shows them. Changes apply at once and stay after a restart (they still save in graphics.json, so your old values carry over). Search labels them 'Performance tab'. Checked headless: the overlay change saved.
+- Status: waiting for L
+
 ## T261 Smash Banjo v8: no fur out of his mouth
 - Asked: 2026-10-16 UTC
 - Build: main, plus mods/Smash Banjo v8.zip from project files (take v7 and its unpacked folder out of the mods folder)

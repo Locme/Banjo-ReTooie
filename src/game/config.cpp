@@ -440,6 +440,15 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::game_frame_rate::option, "Frame rate and overlay");
     recompui::config::set_option_group(tooie::effect_views::option, "Debug");
 
+    // Performance tab under Graphics (L, 2026-10-16): the frame rate and latency options. They stay in the
+    // graphics config (graphics.json), so saving and the code that reads them don't change.
+    recompui::config::create_page_tab("Performance", tooie::performance_tab_id, recompui::config::graphics::id);
+    for (const std::string* id : { &tooie::game_frame_rate::option, &recompui::config::graphics::options::rr_option,
+            &recompui::config::graphics::options::rr_manual_value, &tooie::low_latency::option,
+            &tooie::frame_readback::option, &tooie::frame_overlay::option }) {
+        recompui::config::set_option_page(*id, tooie::performance_tab_id);
+    }
+
     recompui::config::create_controls_tab();
     {
         recomp::config::Config& sound = recompui::config::create_sound_tab();
