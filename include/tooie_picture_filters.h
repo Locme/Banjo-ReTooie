@@ -24,6 +24,7 @@ namespace tooie::picture_filters {
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
     inline const std::string lighting_section_option = "lighting_water_fog";
+    inline const std::string grass_section_option = "grass_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -71,6 +72,8 @@ namespace tooie::picture_filters {
     inline const std::string grass_patches_option = "grass_3d_patches";
     inline const std::string grass_thickness_option = "grass_3d_thickness";
     inline const std::string grass_random_length_option = "grass_3d_random_length";
+    inline const std::string grass_chunky_option = "grass_3d_chunky";
+    inline const std::string grass_pixelated_option = "grass_3d_pixelated";
     inline const std::string grass_edges_option = "grass_3d_edges";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.

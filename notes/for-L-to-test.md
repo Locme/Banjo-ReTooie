@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T286 3D grass: Chunky and Pixelated toggles, own Grass section
+- Asked: 2026-10-16 12:56 UTC
+- Build: main
+- Steps:
+  1. Graphics: find the new Grass section (after Colour grading) and set 3D grass above 0
+  2. Turn on Chunky 3D grass, then Pixelated 3D grass, then both, in Spiral Mountain
+  3. Walk through the grass and move the camera
+- Look for: Chunky: fewer, wider single-colour triangle blades. Pixelated: blades drawn in blocky N64-sized pixels with jagged edges. Both apply live. Say if the blocks shimmer badly while moving or if any blade edges look cut off.
+- Status: waiting for L
+
 ## T281 Textures: mip bias 0 (RT64 sampler)
 - Asked: 2026-10-16 12:34 UTC
 - Build: main

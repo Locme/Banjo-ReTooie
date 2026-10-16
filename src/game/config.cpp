@@ -458,6 +458,8 @@ void tooie::init_config() {
     recompui::config::set_option_display_before(tooie::hd_shadows::enemy_direction_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_display_before(tooie::hd_shadows::banjo_direction_option, tooie::picture_filters::sun_shadows_option);
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
+    // 3D grass has its own section after the colour grading (L, 2026-10-16).
+    recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);

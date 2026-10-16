@@ -61,7 +61,7 @@ namespace RT64 {
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-    void SetSceneGrassBlades(float thickness, float randomLength);
+    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, bool pixelated);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
@@ -419,7 +419,8 @@ void tooie::picture_filters::apply() {
         (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
         (float)(value<double>(grass_patches_option, 50.0) / 100.0));
     RT64::SetSceneGrassBlades((float)(value<double>(grass_thickness_option, 100.0) / 100.0),
-        (float)(value<double>(grass_random_length_option, 40.0) / 100.0));
+        (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
+        value<bool>(grass_pixelated_option, false));
     RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
     RT64::SetSceneGrassEdgeTextures(grass_edge_textures, value<bool>(grass_edges_option, true) ? std::size(grass_edge_textures) : 0);
     double fur = value<double>(banjo_fur_option, 0.0);
@@ -818,46 +819,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
-    graphics.add_number_option(
-        grass_option,
-        "3D grass",
-        "Real blades of grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others): wind rolls across them in waves, and they bend away from Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        grass_height_option,
-        "3D grass height",
-        "How tall the 3D grass grows, in percent. 100 is about knee high on Banjo.",
-        25, 200, 5, 0, false, 100);
-    graphics.add_number_option(
-        grass_distance_option,
-        "3D grass distance",
-        "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
-        500, 6000, 250, 0, false, 2500);
-    graphics.add_number_option(
-        grass_density_option,
-        "3D grass density",
-        "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
-        10, 200, 5, 0, false, 100);
-    graphics.add_number_option(
-        grass_patches_option,
-        "3D grass patches",
-        "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
-        5, 100, 5, 0, false, 50);
-    graphics.add_number_option(
-        grass_thickness_option,
-        "3D grass thickness",
-        "How wide each 3D grass blade is, in percent of the normal width. Higher gives thicker, chunkier strands.",
-        50, 400, 10, 0, false, 100);
-    graphics.add_number_option(
-        grass_random_length_option,
-        "3D grass random length",
-        "How much the 3D grass blades' lengths differ from each other, in percent. 0 makes every blade as long as 3D grass height; 100 makes them anything from very short to full length.",
-        0, 100, 5, 0, false, 40);
-    graphics.add_bool_option(
-        grass_edges_option,
-        "3D grass on edges",
-        "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
-        true);
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
@@ -975,11 +936,68 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Adds moving film grain over the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
 
+    graphics.add_bool_option(
+        grass_section_option,
+        "Grass",
+        "Shows the 3D grass settings below. Hiding them does not turn the grass off.",
+        true);
+
+    graphics.add_number_option(
+        grass_option,
+        "3D grass",
+        "Real blades of grass grow out of the green ground of the levels (Spiral Mountain, Isle o' Hags, Mayahem Temple and others): wind rolls across them in waves, and they bend away from Banjo and spring back up behind him. Higher numbers grow more of them. Drawn on the picture, so nothing in the game changes. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        grass_height_option,
+        "3D grass height",
+        "How tall the 3D grass grows, in percent. 100 is about knee high on Banjo.",
+        25, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        grass_distance_option,
+        "3D grass distance",
+        "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
+        500, 6000, 250, 0, false, 2500);
+    graphics.add_number_option(
+        grass_density_option,
+        "3D grass density",
+        "How closely the 3D grass blades grow, in percent. Lower is sparser and cheaper, higher is thicker and costs more.",
+        10, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        grass_patches_option,
+        "3D grass patches",
+        "How much of the green ground the 3D grass grows on: it grows in patches here and there, with short grass at their edges. Lower is fewer, smaller patches, 100 is grass everywhere.",
+        5, 100, 5, 0, false, 50);
+    graphics.add_number_option(
+        grass_thickness_option,
+        "3D grass thickness",
+        "How wide each 3D grass blade is, in percent of the normal width. Higher gives thicker, chunkier strands.",
+        50, 400, 10, 0, false, 100);
+    graphics.add_number_option(
+        grass_random_length_option,
+        "3D grass random length",
+        "How much the 3D grass blades' lengths differ from each other, in percent. 0 makes every blade as long as 3D grass height; 100 makes them anything from very short to full length.",
+        0, 100, 5, 0, false, 40);
+    graphics.add_bool_option(
+        grass_chunky_option,
+        "Chunky 3D grass",
+        "Low-poly 3D grass to suit the N64 look: fewer, wider blades, each a single flat-coloured triangle. Also cheaper to draw.",
+        false);
+    graphics.add_bool_option(
+        grass_pixelated_option,
+        "Pixelated 3D grass",
+        "Draws the 3D grass blades in blocks the size of the N64's own pixels, so they look blocky and pixel-sharp at any resolution. Works with or without Chunky 3D grass.",
+        false);
+    graphics.add_bool_option(
+        grass_edges_option,
+        "3D grass on edges",
+        "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
+        true);
+
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &water_option, &shore_foam_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_chunky_option, &grass_pixelated_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &water_option, &shore_foam_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -1015,14 +1033,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_height_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_distance_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_density_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_patches_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_thickness_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_random_length_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(grass_edges_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_density_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_patches_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_thickness_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_random_length_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_chunky_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_pixelated_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_option, lighting_section_option, false);

@@ -3835,10 +3835,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a2cda9e
+index 0000000..597d14c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1800 @@
+@@ -0,0 +1,1803 @@
 +//
 +// RT64
 +//
@@ -4401,10 +4401,12 @@ index 0000000..a2cda9e
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
 +    }
 +
-+    void SetSceneGrassBlades(float thickness, float randomLength) {
++    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, bool pixelated) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grassThickness = std::clamp(thickness, 0.25f, 4.0f);
 +        effectsSettings.grassRandomLength = std::clamp(randomLength, 0.0f, 1.0f);
++        effectsSettings.grassChunky = chunky;
++        effectsSettings.grassPixelated = pixelated;
 +    }
 +
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -4634,9 +4636,10 @@ index 0000000..a2cda9e
 +        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
 +        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
-+        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell / std::sqrt(settings.grassDensity) };
++        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, (settings.grassChunky ? 2.0f : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
 +        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
 +        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
++        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, 0.0f, 0.0f };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -5641,10 +5644,10 @@ index 0000000..a2cda9e
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2508c83
+index 0000000..8ecd9c3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,256 @@
 +//
 +// RT64
 +//
@@ -5741,6 +5744,8 @@ index 0000000..2508c83
 +        // 3D grass blades: width (1 as before) and how much their lengths differ (0 all alike, 1 from none to full).
 +        float grassThickness = 1.0f;
 +        float grassRandomLength = 0.4f;
++        bool grassChunky = false;
++        bool grassPixelated = false;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
@@ -5829,7 +5834,7 @@ index 0000000..2508c83
 +    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal)
 +    // and how much of the green ground their patches cover (1 all of it).
 +    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-+    void SetSceneGrassBlades(float thickness, float randomLength);
++    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, bool pixelated);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
@@ -7335,10 +7340,10 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/Grass.hlsli b/src/shaders/Grass.hlsli
 new file mode 100644
-index 0000000..b6496e1
+index 0000000..1284731
 --- /dev/null
 +++ b/src/shaders/Grass.hlsli
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,221 @@
 +//
 +// RT64
 +//
@@ -7534,12 +7539,24 @@ index 0000000..b6496e1
 +// A real blade (GrassGS.hlsl): kept only when the ground at its root (baseColor, from the root's texture
 +// coordinates) is green, then shaded dark at the root to bright and warm at the tip by its height over the root,
 +// with broad patches of lighter, yellower grass across the field.
++// Whether a point (s across, t up, as GrassBladePoint in GrassGS.hlsl) is in the blade: a chunky blade is one
++// triangle, the others narrow to 0.75 of their width at t 0.55, then to the tip.
++bool GrassBladeCovers(float2 st) {
++    if ((st.y < 0.0f) || (st.y > 1.0f)) {
++        return false;
++    }
++
++    const float width = (FrParams.grassStyle.x > 0.5f) ? (1.0f - st.y) : ((st.y < 0.55f) ? lerp(1.0f, 0.75f, st.y / 0.55f) : 0.75f * (1.0f - st.y) / 0.45f);
++    return abs(st.x) <= width;
++}
++
 +bool GrassBlade(float3 world, float3 baseColor, float rootY, inout float3 color) {
 +    if (!((baseColor.g - max(baseColor.r, baseColor.b) > 0.03f) && (baseColor.g > baseColor.b * 1.25f))) {
 +        return false;
 +    }
 +
-+    const float t = saturate((world.y - rootY) / max(FrParams.grassParams.x, 1.0f));
++    // Retro blades are one colour all the way up, as at 60% of the way to the tip.
++    const float t = (FrParams.grassStyle.x > 0.5f) ? 0.6f : saturate((world.y - rootY) / max(FrParams.grassParams.x, 1.0f));
 +    const float patch = smoothstep(0.5f, 0.85f, GrassPatchNoise(world.xz / 240.0f + 17.0f));
 +    const float variation = GrassPatchNoise(world.xz / 37.0f);
 +    float3 shade = color * lerp(0.42f, 1.08f, t) * lerp(0.9f, 1.08f, variation);
@@ -7550,17 +7567,17 @@ index 0000000..b6496e1
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..d906d1e
+index 0000000..2d7fdca
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,355 @@
+@@ -0,0 +1,388 @@
 +//
 +// RT64
 +//
 +
 +// Banjo-Tooie: 3D grass as real blades. Each triangle of the level's green ground is drawn again through this
 +// geometry shader, which grows blades on it: one per cell of a grid over the world's x and z (coarser further
-+// away), each a flat, tapering blade of two segments and a tip, turned any way, leaning in the wind (a noise
++// away), each a flat, tapering blade of two segments and a tip (one triangle for chunky blades), turned any way, leaning in the wind (a noise
 +// field rolling across the field) and pushed away from Banjo and his trail. The blades keep the ground's own
 +// texture coordinates and colours at their root, so the pixel shader colours them from the ground under them
 +// (and keeps only green ground); the root's height goes in the flat colour's alpha (RasterPS.hlsl).
@@ -7714,9 +7731,27 @@ index 0000000..d906d1e
 +    return true;
 +}
 +
-+void GrassEmit(inout TriangleStream<GrassVertex> stream, GrassVertex root, float4 rootClip, float3 offset) {
++// A blade's shape: s across it (-1 to 1 at the root), t up it (0 root, 1 tip). The spine runs from the root through
++// the middle (t 0.55, where the blade is 0.75 as wide) to the tip; a chunky blade is one straight triangle.
++float3 GrassBladePoint(float s, float t, bool chunky, float3 side, float3 middle, float3 tip) {
++    const float3 spine = chunky ? tip * t : ((t < 0.55f) ? middle * (t / 0.55f) : lerp(middle, tip, (t - 0.55f) / 0.45f));
++    return spine + side * s;
++}
++
++// Emits the blade's vertex at (s, t). Pixelated blades are drawn bigger, by one N64 pixel each way (2 / 240 of the
++// screen's height before its scale, as RasterVS's positions), with their (s, t) going along, so RasterPS can keep
++// whole N64-sized blocks whose centre is in the real blade.
++void GrassEmitBlade(inout TriangleStream<GrassVertex> stream, GrassVertex root, float4 rootClip, float s, float t, bool chunky,
++    float2 grow, float3 side, float3 middle, float3 tip)
++{
 +    GrassVertex v = root;
-+    v.position = GrassRescale(rootClip + GrassDirToClip(offset));
++    if (grow.x > 0.0f) {
++        s *= grow.x;
++        t = 0.5f + (t - 0.5f) * grow.y;
++        v.furAnchor = float3(s, t, 1.0f);
++    }
++
++    v.position = GrassRescale(rootClip + GrassDirToClip(GrassBladePoint(s, t, chunky, side, middle, tip)));
 +    stream.Append(v);
 +}
 +
@@ -7893,7 +7928,9 @@ index 0000000..d906d1e
 +            lerp(0.3f, 1.0f, patch) * lodShrink;
 +        // Wider with distance as the grid thins out (smoothly, by the blade's own distance), and by the thickness.
 +        const float widen = clamp(cameraDistance / FrParams.grassBlades.x, 1.0f, exp2(float(bladeLevel + 1))) * exp2(float(level - min(level, GrassDistanceLevel(triangleDistance))));
-+        const float bladeWidth = 2.4f * widen * FrParams.grassPatches.z * lerp(0.75f, 1.25f, r.x);
++        const bool chunky = FrParams.grassStyle.x > 0.5f;
++        const bool pixelated = FrParams.grassStyle.y > 0.5f;
++        const float bladeWidth = (chunky ? 5.0f : 2.4f) * widen * FrParams.grassPatches.z * lerp(0.75f, 1.25f, r.x);
 +        const float lean = min(length(bend), 0.95f);
 +        const float rise = bladeHeight * sqrt(1.0f - lean * lean * 0.85f);
 +        const float3 side = float3(facing.x, 0.0f, facing.y) * (bladeWidth * 0.5f);
@@ -7901,11 +7938,24 @@ index 0000000..d906d1e
 +        const float3 middle = float3(0.0f, rise * 0.55f, 0.0f) + tipBend * 0.3f;
 +        const float3 tip = float3(0.0f, rise, 0.0f) + tipBend;
 +
-+        GrassEmit(stream, v, rootClip, -side);
-+        GrassEmit(stream, v, rootClip, side);
-+        GrassEmit(stream, v, rootClip, middle - side * 0.75f);
-+        GrassEmit(stream, v, rootClip, middle + side * 0.75f);
-+        GrassEmit(stream, v, rootClip, tip);
++        // Pixelated: how much bigger to draw the blade for one N64 pixel more each way across and along it.
++        float2 grow = 0.0f;
++        if (pixelated) {
++            const float pixel = 2.0f / 240.0f;
++            const float w = max(rootClip.w, 1e-3f);
++            const float across = length(GrassDirToClip(side).xy) / w;
++            const float along = length(GrassDirToClip(tip).xy) / w;
++            grow = float2(1.0f + min(pixel / max(across, 1e-4f), 50.0f), 1.0f + min(2.0f * pixel / max(along, 1e-4f), 50.0f));
++        }
++
++        // Chunky: one triangle, in one flat colour (GrassBlade in Grass.hlsli).
++        GrassEmitBlade(stream, v, rootClip, -1.0f, 0.0f, chunky, grow, side, middle, tip);
++        GrassEmitBlade(stream, v, rootClip, 1.0f, 0.0f, chunky, grow, side, middle, tip);
++        if (!chunky) {
++            GrassEmitBlade(stream, v, rootClip, -0.75f, 0.55f, chunky, grow, side, middle, tip);
++            GrassEmitBlade(stream, v, rootClip, 0.75f, 0.55f, chunky, grow, side, middle, tip);
++        }
++        GrassEmitBlade(stream, v, rootClip, 0.0f, 1.0f, chunky, grow, side, middle, tip);
 +        stream.RestartStrip();
 +    }
 +}
@@ -8133,7 +8183,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..b46a6e0 100644
+index e7895c3..52f7e29 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8146,7 +8196,7 @@ index e7895c3..b46a6e0 100644
  #include "Library.hlsli"
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
-@@ -46,11 +49,32 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +49,43 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -8166,6 +8216,17 @@ index e7895c3..b46a6e0 100644
 +        grassDy = ddy(grassWorld);
 +    }
 +
++    // Banjo-Tooie: a pixelated 3D grass blade (drawn a little bigger, GrassGS.hlsl) keeps whole N64-sized blocks of
++    // pixels, those whose centre is in the real blade. Its place across and up the blade is in the fur anchor.
++    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0) && (vertexFurAnchor.z > 0.5f)) {
++        const float block = max(floor(FbParams.resolutionScale.y + 0.5f), 1.0f);
++        const float2 toCentre = (floor(vertexPosition.xy / block) + 0.5f) * block - vertexPosition.xy;
++        const float2 bladeAt = vertexFurAnchor.xy + ddx(vertexFurAnchor.xy) * toCentre.x + ddy(vertexFurAnchor.xy) * toCentre.y;
++        if (!GrassBladeCovers(bladeAt)) {
++            return false;
++        }
++    }
++
 +    // Banjo-Tooie: a shell of deep snow throws away its pixels above the snow before the draw's colours are worked out.
 +    SnowSample snowSample = (SnowSample)0;
 +    const bool snowShell = (gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0);
@@ -8181,7 +8242,7 @@ index e7895c3..b46a6e0 100644
          return false;
      }
  #endif
-@@ -254,6 +278,50 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +289,50 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8232,7 +8293,7 @@ index e7895c3..b46a6e0 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +329,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +340,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8256,7 +8317,7 @@ index e7895c3..b46a6e0 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +372,7 @@ void PSMain(
+@@ -287,6 +383,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8264,7 +8325,7 @@ index e7895c3..b46a6e0 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +389,7 @@ void PSMain(
+@@ -303,7 +400,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -11044,10 +11105,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..6ece70e 100644
+index 2e62aaf..91027fe 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,65 @@ namespace interop {
+@@ -13,6 +13,68 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -11084,6 +11145,9 @@ index 2e62aaf..6ece70e 100644
 +        // Grass grows in patches: how much of the green ground they cover (1 all of it, no patches), their size in
 +        // world units; then the blades' width (1 normal) and how much their lengths differ (0 to 1).
 +        float4 grassPatches;
++        // Banjo-Tooie: chunky blades (x 1: fewer, wider single-triangle blades in one flat colour each), pixelated
++        // blades (y 1: drawn in whole N64-sized blocks of pixels).
++        float4 grassStyle;
 +        // Banjo-Tooie: Banjo's fur (Fur.hlsli, RasterVS.hlsl). A world vector's clip-space offset (as RasterVS's
 +        // positions) per world unit along x, y and z.
 +        float4 furClipX;
