@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T309 Day and night: rain splashes reach further and blend in
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: rain splashes reach well past Banjo and take the ground's light" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Weather: Storm, in Spiral Mountain; look round with the camera pulled back, then at grass in shade and in light
+- Look for: Splashes all over the ground out past Banjo (not only just in front of the camera), getting smaller and fainter far off without flickering. They take the colour and light of the ground they land on: faint in shade, brighter on lit grass, paths and water. Checked headless: [rain-splashes-wider.png](screens/day-night/rain-splashes-wider.png).
+
 ## T308 Sun shadows: no lines in the mornings, left and top of the title screen shaded
 - Asked: 2026-10-16 20:30 UTC
 - Build: a827041
