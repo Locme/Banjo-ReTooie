@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T295 Smash Banjo v10: straps stretch with the backpack
+- Asked: 2026-10-16 UTC
+- Build: main, plus mods/Smash Banjo v10.zip from project files (take v9 and its unpacked folder out of the mods folder)
+- Steps:
+  1. With Smash Banjo on, jump, then beak barge (B while crouched: hold Z, press B), watching the straps from the side and front
+  2. Stand still and look at the straps on his shoulders
+- Look for: The straps stay on his shoulders and stretch to the pack wherever it swings (v9 moved the whole strap with the pack, off his shoulders). Everything else as v9 (T272). Checked headless: the beak barge, where the pack lifts over his head, shows the straps stretching from his shoulders up to it (screens/smash-banjo/v10.png and v10-poses.png in project files). Also fixed: his chest was drawn twice.
+- Status: waiting for L
+
 ## T293 Sound freezes at Uncapped (texture sweep, Mumbo's Skull)
 - Asked: 2026-10-16 15:01 UTC
 - Build: main
