@@ -8631,7 +8631,7 @@ index 74b1fa0..bc17677 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..7410f39
+index 0000000..622ad4e
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
 @@ -0,0 +1,2139 @@
@@ -10380,9 +10380,9 @@ index 0000000..7410f39
 +    // shadows above carry on alone.
 +    if (gConstants.shadows.y < 0.0f) {
 +        const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
-+        const float3 worldNormal = normalize(SunMapWorldDirection(gConstants, normal));
++        const float3 worldNormal = normalize(SunMapWorldDirection(SUN_MAP_FRAME(gConstants), normal));
 +        const float3 world = WorldPosition(center) + worldNormal * (texel * 1.5f + distance * 0.001f);
-+        const float3 m = SunMapPosition(gConstants, world);
++        const float3 m = SunMapPosition(SUN_MAP_FRAME(gConstants), world);
 +        const float cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
 +        if ((cover > 0.0f) && (m.z > 0.0f) && (m.z < 1.0f)) {
 +            const float depthBias = 2.0f * texel / (2.0f * SunMapRange);
@@ -11005,10 +11005,10 @@ index 0000000..87c83c5
 +}
 diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
 new file mode 100644
-index 0000000..f2f9024
+index 0000000..925e73c
 --- /dev/null
 +++ b/src/shaders/SunShadowMap.hlsli
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,65 @@
 +//
 +// RT64
 +//
@@ -11027,12 +11027,32 @@ index 0000000..f2f9024
 +// How far towards and away from the sun the map reaches from its middle.
 +static const float SunMapRange = 8000.0f;
 +
-+float3 SunMapWorldDirection(SceneEffectsCB c, float3 d) {
++// The constants the map needs, copied out member by member. Passing the push constant buffer itself to a
++// function makes the Windows build's DXC (1.7) load the whole buffer and emit invalid SPIR-V.
++struct SunMapFrame {
++    float4 worldX;
++    float4 worldY;
++    float4 worldZ;
++    float4 sun;
++};
++
++SunMapFrame MakeSunMapFrame(float4 worldX, float4 worldY, float4 worldZ, float4 sun) {
++    SunMapFrame f;
++    f.worldX = worldX;
++    f.worldY = worldY;
++    f.worldZ = worldZ;
++    f.sun = sun;
++    return f;
++}
++
++#define SUN_MAP_FRAME(cb) MakeSunMapFrame((cb).worldX, (cb).worldY, (cb).worldZ, (cb).sun)
++
++float3 SunMapWorldDirection(SunMapFrame c, float3 d) {
 +    return float3(dot(d, c.worldX.xyz), dot(d, c.worldY.xyz), dot(d, c.worldZ.xyz));
 +}
 +
 +// The map's axes in the world (across, up the map, towards the sun) and its middle.
-+void SunMapBasis(SceneEffectsCB c, out float3 across, out float3 up, out float3 towards, out float3 middle) {
++void SunMapBasis(SunMapFrame c, out float3 across, out float3 up, out float3 towards, out float3 middle) {
 +    towards = normalize(SunMapWorldDirection(c, c.sun.xyz));
 +    across = (abs(towards.y) > 0.999f) ? float3(1.0f, 0.0f, 0.0f) : normalize(float3(towards.z, 0.0f, -towards.x));
 +    up = cross(towards, across);
@@ -11048,7 +11068,7 @@ index 0000000..f2f9024
 +}
 +
 +// A world position on the map: x and y in [-1, 1] across it, z the depth in [0, 1] (0 nearest the sun).
-+float3 SunMapPosition(SceneEffectsCB c, float3 world) {
++float3 SunMapPosition(SunMapFrame c, float3 world) {
 +    float3 across, up, towards, middle;
 +    SunMapBasis(c, across, up, towards, middle);
 +    const float3 q = world - middle;
@@ -11082,7 +11102,7 @@ index 0000000..fffa15a
 +}
 diff --git a/src/shaders/SunShadowMapVS.hlsl b/src/shaders/SunShadowMapVS.hlsl
 new file mode 100644
-index 0000000..54a0234
+index 0000000..fc50056
 --- /dev/null
 +++ b/src/shaders/SunShadowMapVS.hlsl
 @@ -0,0 +1,21 @@
@@ -11105,7 +11125,7 @@ index 0000000..54a0234
 +    const float3 local = float3(srcPos[posIndex + 0], srcPos[posIndex + 1], srcPos[posIndex + 2]);
 +    const float4 worldPos = mul(worldMats[srcWorldIndices[vertexIndex]], float4(local, 1.0f));
 +    world = worldPos.xyz / worldPos.w;
-+    pos = float4(SunMapPosition(gConstants, world), 1.0f);
++    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
 index 1ceb2ce..e6f0ef3 100644
