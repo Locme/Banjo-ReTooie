@@ -28,7 +28,7 @@ namespace RT64 {
     // lib/rt64/src/render/rt64_scene_effects.h.
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
-    void SetSceneWeather(float rain, float flash);
+    void SetSceneWeather(float rain, float flash, bool snow);
 }
 
 namespace {
@@ -289,7 +289,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
             const float none[3] = { 1.0f, 1.0f, 1.0f };
             RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false, false);
             RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
-            RT64::SetSceneWeather(0.0f, 0.0f);
+            RT64::SetSceneWeather(0.0f, 0.0f, false);
         }
         return;
     }
@@ -319,11 +319,18 @@ void tooie::day_night::tick(uint8_t* rdram) {
     // Light shafts from the sun only, fading out as it nears the horizon.
     const float shafts = smooth(height / 0.2f);
 
-    // The weather. No rain on Hailfire Peaks' Icy Side (it snows there) or in Cloud Cuckooland (above the clouds).
+    // The weather. On Hailfire Peaks' Icy Side it snows instead: a little always (unless the weather is set to
+    // Clear), more when it would rain, with no lightning. No rain in Cloud Cuckooland (above the clouds).
     float rain = 0.0f;
     float flash = 0.0f;
-    weather_tick(weather_setting(), ms, dt, new_map, rain, flash);
-    if ((map == 0x128) || (map == 0x136)) {
+    const tooie::day_night::Weather setting = weather_setting();
+    weather_tick(setting, ms, dt, new_map, rain, flash);
+    const bool snow = (map == 0x128);
+    if (snow) {
+        rain = (setting == tooie::day_night::Weather::Clear) ? 0.0f : std::max(rain, 0.5f);
+        flash = 0.0f;
+    }
+    if (map == 0x136) {
         rain = 0.0f;
         flash = 0.0f;
     }
@@ -331,7 +338,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
     if (const char* v = std::getenv("TOOIE_LIGHTNING")) {
         flash = (float)std::atof(v);
     }
-    RT64::SetSceneWeather(rain * amount, flash * amount);
+    RT64::SetSceneWeather(rain * amount, flash * amount, snow);
 
     // No fireflies on Hailfire Peaks (lava and ice).
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
@@ -359,7 +366,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
         sounds[2] = birds * amount * dry;
     }
     // The rain is heard whether or not Night Sounds is on (not in the pause menu).
-    if (dt > 0.0f) {
+    if ((dt > 0.0f) && !snow) {
         sounds[3] = rain * amount;
     }
     tooie::night_sounds::set(sounds[0], sounds[1], sounds[2], sounds[3]);
@@ -433,7 +440,7 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         weather_option,
         "Weather",
-        "With Day and Night on, rain and thunderstorms. <recomp-color primary>Changing</recomp-color> is mostly clear, with rain or a storm now and then for a few minutes; the others hold one. No rain in Cloud Cuckooland or on Hailfire Peaks' Icy Side.",
+        "With Day and Night on, rain and thunderstorms. <recomp-color primary>Changing</recomp-color> is mostly clear, with rain or a storm now and then for a few minutes; the others hold one. On Hailfire Peaks' Icy Side it snows instead (a little unless Clear), and Cloud Cuckooland stays dry.",
         {
             {Weather::Clear, "Clear", "Clear"},
             {Weather::Changing, "Changing", "Changing"},

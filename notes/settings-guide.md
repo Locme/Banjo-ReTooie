@@ -190,7 +190,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   Banjo at night (not on Hailfire Peaks). Default: on.
 - **Weather**: with Day and Night on, Clear, Changing (mostly clear, with rain
   or a thunderstorm now and then for a few minutes), Rain or Storm. No rain in
-  Cloud Cuckooland or on Hailfire Peaks' Icy Side. Default: Changing.
+  Cloud Cuckooland; on Hailfire Peaks' Icy Side it snows instead (a little unless
+  Clear, heavy in a storm). Default: Changing.
 - **Clouds**: with Day and Night on, soft 3D clouds drift across the sky, lit
   by the sun and the moon (not in Cloud Cuckooland). Default: on.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night

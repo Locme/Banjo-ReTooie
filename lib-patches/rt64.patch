@@ -3416,10 +3416,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..22d8f72
+index 0000000..37b132b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1288 @@
+@@ -0,0 +1,1290 @@
 +//
 +// RT64
 +//
@@ -3812,10 +3812,11 @@ index 0000000..22d8f72
 +        }
 +    }
 +
-+    void SetSceneWeather(float rain, float flash) {
++    void SetSceneWeather(float rain, float flash, bool snow) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayRain = std::clamp(rain, 0.0f, 1.0f);
 +        effectsSettings.dayFlash = std::clamp(flash, 0.0f, 1.0f);
++        effectsSettings.daySnow = snow;
 +    }
 +
 +    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds) {
@@ -4295,7 +4296,8 @@ index 0000000..22d8f72
 +                    // lightning as the fraction), so it all fits the one constant. The shafts fade with the rain.
 +                    const float rain8 = std::round(rain * 255.0f);
 +                    const float shafts8 = std::round(std::clamp(shafts * (1.0f - rain), 0.0f, 1.0f) * 255.0f);
-+                    shafts = -(1.0f + rain8 * 256.0f + shafts8 + std::min(settings.dayFlash, 0.99f));
++                    const float snow = settings.daySnow ? 65536.0f : 0.0f;
++                    shafts = -(1.0f + snow + rain8 * 256.0f + shafts8 + std::min(settings.dayFlash, 0.99f));
 +                }
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, shafts };
 +            }
@@ -4710,10 +4712,10 @@ index 0000000..22d8f72
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..b18f06a
+index 0000000..f3b4d67
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,196 @@
 +//
 +// RT64
 +//
@@ -4782,6 +4784,7 @@ index 0000000..b18f06a
 +        bool dayClouds = false;
 +        float dayRain = 0.0f;
 +        float dayFlash = 0.0f;
++        bool daySnow = false;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4849,7 +4852,8 @@ index 0000000..b18f06a
 +    void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
 +    // Banjo-Tooie: the day and night cycle's weather. rain (0 clear, 1 a downpour) greys and darkens the world
 +    // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
-+    void SetSceneWeather(float rain, float flash);
++    // snow: it falls as snow.
++    void SetSceneWeather(float rain, float flash, bool snow);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -7130,10 +7134,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f9eac63
+index 0000000..10b72f1
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1492 @@
+@@ -0,0 +1,1534 @@
 +//
 +// RT64
 +//
@@ -7228,11 +7232,20 @@ index 0000000..f9eac63
 +    const float v = -w - 1.0f;
 +    const float whole = floor(v);
 +    const uint packed = uint(whole + 0.5f);
-+    return float3(float(packed >> 8) / 255.0f, float(packed & 255u) / 255.0f, v - whole);
++    return float3(float((packed >> 8) & 255u) / 255.0f, float(packed & 255u) / 255.0f, v - whole);
 +}
 +
-+// Rain greys and darkens what it falls on; lightning lights it all up for a moment.
++// True when the weather's rain falls as snow.
++bool DaySnow() {
++    const float w = gConstants.sun.w;
++    return (w < 0.0f) && (((uint(floor(-w - 1.0f) + 0.5f) >> 16) & 1u) != 0u);
++}
++
++// Rain greys and darkens what it falls on (snow a little less); lightning lights it all up for a moment.
 +float3 DayWeatherLight(float3 color, float rain, float flash, float amount) {
++    if (DaySnow()) {
++        rain *= 0.5f;
++    }
 +    const float grey = dot(color, float3(0.3f, 0.59f, 0.11f));
 +    color = lerp(color, grey.xxx * float3(0.92f, 0.96f, 1.0f), rain * 0.4f) * (1.0f - rain * amount);
 +    return color + (color * 1.6f + float3(0.06f, 0.07f, 0.1f)) * flash;
@@ -7358,7 +7371,8 @@ index 0000000..f9eac63
 +    const float rain = weather.x;
 +    float3 sky = lerp(color, dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, 0.6f * night) * pow(tint, 1.7f);
 +    // Overcast in the rain: a flat grey sky, no sun, moon or stars.
-+    sky = lerp(sky, float3(0.5f, 0.53f, 0.58f) * pow(tint, 1.7f), rain * 0.8f);
++    const float3 overcast = DaySnow() ? float3(0.72f, 0.74f, 0.78f) : float3(0.5f, 0.53f, 0.58f);
++    sky = lerp(sky, overcast * pow(tint, 1.7f), rain * 0.8f);
 +
 +    const float toward = saturate(dot(look, gConstants.sun.xyz));
 +    const float horizon = 1.0f - saturate(abs(world.y) * 2.5f);
@@ -8091,6 +8105,38 @@ index 0000000..f9eac63
 +    const float time = gConstants.view.z;
 +    const float3 color = float3(0.62f, 0.66f, 0.74f) * (0.3f + 0.7f * max(tint.r, max(tint.g, tint.b)));
 +    float total = 0.0f;
++    if (DaySnow()) {
++        // Snow: soft flakes drifting down slowly, swaying from side to side.
++        [unroll]
++        for (int i = 0; i < 4; i++) {
++            const float radius = 70.0f * pow(2.0f, float(i));
++            const float distance = radius / across;
++            if (distance > scene) {
++                continue;
++            }
++            const float width = 16.0f + 8.0f * float(i);
++            const float height = 30.0f + 12.0f * float(i);
++            const float up = world.y / across * radius;
++            const float around = angle * radius / width;
++            const float column = floor(around);
++            const float offset = DayHash(float3(column, float(i) * 7.0f, 11.0f));
++            const float fall = (up + time * (45.0f + 30.0f * offset)) / height + offset * 5.0f;
++            const float row = floor(fall);
++            const float pick = DayHash(float3(column, row, float(i) * 3.0f + 1.0f));
++            if (pick > saturate(rain * 1.4f) * 0.9f) {
++                continue;
++            }
++            const float x0 = 0.25f + 0.5f * DayHash(float3(column, row, float(i) + 5.0f));
++            const float sway = sin(time * (0.8f + offset) + pick * 30.0f) * 0.18f;
++            const float dx = (frac(around) - x0 - sway) * width;
++            const float dy = (frac(fall) - 0.5f) * height;
++            const float size = 0.9f + 0.5f * float(i);
++            const float footprint = max(size, distance * pixelSize * 1.5f);
++            const float flake = saturate(1.0f - length(float2(dx, dy)) / footprint) * min(1.0f, (size * size) / (footprint * footprint));
++            total += flake * (1.1f - 0.15f * float(i));
++        }
++        return float3(0.9f, 0.92f, 0.96f) * (0.3f + 0.7f * max(tint.r, max(tint.g, tint.b))) * total * saturate(rain * 1.5f);
++    }
 +    [unroll]
 +    for (int i = 0; i < 4; i++) {
 +        const float radius = 90.0f * pow(2.2f, float(i));
@@ -9040,7 +9086,7 @@ index 0a5c332..c4e4004 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c770510
+index 0000000..9fc1aa4
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,73 @@
@@ -9087,8 +9133,8 @@ index 0000000..c770510
 +        // The same for world y: its xyz is also the normal of level ground, in view space.
 +        float4 worldY;
 +        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
-+        // While the day and night cycle's weather rains, w is negative: -(1 + rain (0 to 255) * 256 + the
-+        // shafts' strength (0 to 255) + the lightning (0 to 0.99)).
++        // While the day and night cycle's weather rains, w is negative: -(1 + 65536 when it snows + rain (0 to
++        // 255) * 256 + the shafts' strength (0 to 255) + the lightning (0 to 0.99)).
 +        float4 sun;
 +        // Banjo's ripples: three rings' world x, world z and age in seconds (below 0 for none) in xyz; the w
 +        // components hold Banjo's world x, z and y (y below -1e8 when there is no Banjo), for the fog.

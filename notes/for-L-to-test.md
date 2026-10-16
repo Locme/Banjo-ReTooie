@@ -2229,3 +2229,13 @@
 - Look for: Step 1, a grey overcast sky with thick clouds, a darker greyer world, rain streaks falling that stay put as you turn and go behind walls, and the hiss of rain. Step 2, lightning flashes light up the sky and the world, then thunder a moment later, near or far. Too heavy, too light, too loud? The sun shadows, light shafts, lens flare, crickets and birds fade with the rain. No rain on Hailfire Peaks' Icy Side or in Cloud Cuckooland. Checked headless: [rain-morning.png](screens/day-night/rain-morning.png) and [rain-night-and-lightning.png](screens/day-night/rain-night-and-lightning.png) (a flash held on); sound preview previews/day-night/storm.wav (louder than in the game). Speed not measured.
 - Status: waiting for L
 
+## T210 Day and night: snow on Hailfire Peaks' Icy Side
+- Asked: 2026-10-16 01:00 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: snow on Hailfire Peaks' Icy Side" on main
+- Steps:
+  1. Graphics > Day and Night: Morning (or Cycle), Weather: Changing, go to Hailfire Peaks' Icy Side
+  2. Weather: Storm, then Clear
+- Look for: Step 1, light snow drifting down slowly and swaying, under a pale sky. Step 2, Storm is heavy snow (no lightning or rain sound there); Clear stops it. Too many flakes, too few, too big? Checked headless: [snow-icy-side-light-and-storm.png](screens/day-night/snow-icy-side-light-and-storm.png) (light on the left, storm on the right).
+- Status: waiting for L
+
