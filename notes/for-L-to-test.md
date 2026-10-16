@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T346 Fat Banjo and Kazooie v2 (model mod)
+- Asked: 2026-10-16 23:17 UTC
+- Build: Fat Banjo v2.zip on any current build
+- Steps:
+  1. Remove Fat Banjo v1 from the mods folder
+  2. Install mods/Fat Banjo v2.zip from the project files
+  3. Do a flap flip (A, A) and a beak barge (Z+B)
+- Look for: Kazooie looks like a bird: wings come from her sides, no flat slabs; shorts stay in one piece. Known: Banjo's body fur still tears in big poses (barge, flip)
+- Status: waiting for L
+
 ## T345 HD Shadows: Icy Side ledge and crystal no longer flicker
 - Asked: 2026-10-16 23:12 UTC
 - Build: main, commit 'HD shadows: see-through scenery no longer flickers between pale and solid'
