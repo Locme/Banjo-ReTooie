@@ -20,6 +20,8 @@ namespace tooie::day_night {
     // Clear, changing now and then, or always rain or a thunderstorm.
     enum class Weather : uint32_t { Clear, Changing, Rain, Storm };
     inline const std::string weather_option = "day_night_weather";
+    // Northern lights over Hailfire Peaks' Icy Side.
+    inline const std::string aurora_option = "day_night_aurora";
     // Soft 3D clouds across the sky.
     inline const std::string clouds_option = "day_night_clouds";
     // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).

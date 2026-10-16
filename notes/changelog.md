@@ -26,6 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: northern lights over Hailfire Peaks' Icy Side at night (Graphics > Northern Lights, on). Untested on PC (T214).
 - Day and Night: house windows light up warm at night (Jinjo Village and others using the same windows), and fireflies fade out right by the camera. Untested on PC (T213).
 - Day and Night: shooting stars now and then on clear nights, and the moon goes round its phases over eight days with Cycle (full when a time of day is held). Untested on PC (T212).
 - Day and Night: snow on Hailfire Peaks' Icy Side, light unless Weather is Clear and heavy in a storm. Untested on PC (T210).

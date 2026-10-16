@@ -2270,3 +2270,13 @@
 - Look for: The house windows glow warm yellow at night and go back to their own look by day; the wooden frames stay dark. Any window that should light and doesn't (tell me where)? Also: fireflies no longer fill the screen when one drifts right by the camera. Checked headless in Jinjo Village: [lit-windows-off-on.png](screens/day-night/lit-windows-off-on.png) (top unlit, bottom lit).
 - Status: waiting for L
 
+## T214 Day and night: northern lights over the Icy Side
+- Asked: 2026-10-16 02:50 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: northern lights over Hailfire Peaks' Icy Side" on main
+- Steps:
+  1. Graphics > Day and Night: Night, Weather: Clear, go to Hailfire Peaks' Icy Side and look up at the sky (first person helps)
+  2. Graphics > Northern Lights off and on
+- Look for: Soft green curtains of light, violet at their tops, waving slowly across the night sky. Too faint, too strong? Hidden under rain or heavy snow. Checked headless with them forced on in Spiral Mountain, where the sky shows from the start: [northern-lights.png](screens/day-night/northern-lights.png).
+- Status: waiting for L
+

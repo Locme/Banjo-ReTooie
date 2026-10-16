@@ -3443,10 +3443,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..56072b8
+index 0000000..16acb6a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1335 @@
+@@ -0,0 +1,1340 @@
 +//
 +// RT64
 +//
@@ -3875,6 +3875,11 @@ index 0000000..56072b8
 +    bool SceneNightLightTexture(uint64_t hash) {
 +        const std::scoped_lock lock(nightLightMutex);
 +        return nightLightTextures.count(hash) != 0;
++    }
++
++    void SetSceneAurora(bool enabled) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayAurora = enabled;
 +    }
 +
 +    void SetSceneMoonPhase(uint32_t phase) {
@@ -4348,8 +4353,8 @@ index 0000000..56072b8
 +                for (int c = 0; c < 3; c++) {
 +                    packed = (packed << 7) | uint32_t(std::clamp(std::lround(settings.dayTint[c] * 100.0f), 0L, 127L));
 +                }
-+                // Then two flags: fireflies and clouds.
-+                packed = (packed << 2) | (settings.dayClouds ? 2u : 0u) | (settings.dayFireflies ? 1u : 0u);
++                // Then three flags: fireflies, clouds and the northern lights.
++                packed = (packed << 3) | (settings.dayAurora ? 4u : 0u) | (settings.dayClouds ? 2u : 0u) | (settings.dayFireflies ? 1u : 0u);
 +                // Negative: no lens flare.
 +                dayPacked = (1.0f + float(packed)) * (settings.dayFlare ? 1.0f : -1.0f);
 +            }
@@ -4784,10 +4789,10 @@ index 0000000..56072b8
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..3cab43e
+index 0000000..31dfcfc
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,206 @@
+@@ -0,0 +1,209 @@
 +//
 +// RT64
 +//
@@ -4858,6 +4863,7 @@ index 0000000..3cab43e
 +        float dayRain = 0.0f;
 +        float dayFlash = 0.0f;
 +        bool daySnow = false;
++        bool dayAurora = false;
 +        uint32_t dayMoonPhase = 4;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
@@ -4930,6 +4936,8 @@ index 0000000..3cab43e
 +    void SetSceneWeather(float rain, float flash, bool snow);
 +    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
 +    void SetSceneMoonPhase(uint32_t phase);
++    // Banjo-Tooie: northern lights across the night sky with the day and night cycle.
++    void SetSceneAurora(bool enabled);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -7225,10 +7233,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..fa7a21b
+index 0000000..46bc0ac
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1603 @@
+@@ -0,0 +1,1623 @@
 +//
 +// RT64
 +//
@@ -7303,7 +7311,7 @@ index 0000000..fa7a21b
 +        return false;
 +    }
 +    const uint packed = DayPacked();
-+    tint = float3(float((packed >> 16) & 127u), float((packed >> 9) & 127u), float((packed >> 2) & 127u)) / 100.0f;
++    tint = float3(float((packed >> 17) & 127u), float((packed >> 10) & 127u), float((packed >> 3) & 127u)) / 100.0f;
 +    return true;
 +}
 +
@@ -7546,6 +7554,26 @@ index 0000000..fa7a21b
 +        const float disc = smoothstep(0.99955f, 0.99975f, toward);
 +        sky = lerp(sky, sunColor * 1.3f, disc * day);
 +        sky += sunColor * (pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f) * day;
++    }
++
++    // Northern lights: curtains of green fading to violet at their tops, waving slowly, behind the clouds.
++    if (((DayPacked() & 4u) != 0u) && (night > 0.0f) && (world.y > 0.04f)) {
++        const float time = gConstants.view.z;
++        float3 aurora = 0.0f;
++        [loop]
++        for (int i = 0; i < 10; i++) {
++            const float h = 1.0f + float(i) * 0.09f;
++            const float2 q = world.xz / world.y * h * 0.35f;
++            // Bands along a wandering line: the noise's middle values, thin and bright.
++            const float n = CloudNoise(float3(q.x * 0.6f + time * 0.015f, q.y * 1.4f + sin(q.x * 0.5f + time * 0.05f), time * 0.03f));
++            const float band = pow(saturate(1.0f - abs(n - 0.5f) * 3.5f), 2.0f);
++            const float shimmer = 0.7f + 0.3f * CloudNoise(float3(q * 6.0f, time * 0.4f));
++            const float up = float(i) / 10.0f;
++            aurora += lerp(float3(0.15f, 1.0f, 0.45f), float3(0.55f, 0.25f, 0.9f), up * up) * band * shimmer * (1.0f - up) * 0.4f;
++        }
++        // Brightest up from the horizon, fading towards the top of the sky; hidden by the rain.
++        const float place = smoothstep(0.04f, 0.2f, world.y) * (1.0f - smoothstep(0.5f, 0.9f, world.y));
++        sky += aurora * place * night * (1.0f - rain);
 +    }
 +
 +    // Clouds in front of all of it.
@@ -9251,7 +9279,7 @@ index 0a5c332..fb7af29 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..98b5130
+index 0000000..8b9fbf8
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,73 @@
@@ -9308,7 +9336,7 @@ index 0000000..98b5130
 +        float4 rippleAge;
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 7 bits
-+        // each, steps of 0.01, then two flags, bit 0 fireflies, bit 1 clouds: exact as a float below 2^24; negative for no lens
++        // each, steps of 0.01, then three flags, bit 0 fireflies, bit 1 clouds, bit 2 northern lights: exact as a float below 2^24; negative for no lens
 +        // flare), then the softness (0 to 0.99) plus 2 to leave Banjo's own shadow out.
 +        float4 shadows;
 +    };

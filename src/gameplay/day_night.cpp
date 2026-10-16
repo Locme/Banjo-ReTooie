@@ -30,6 +30,7 @@ namespace RT64 {
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
     void SetSceneMoonPhase(uint32_t phase);
+    void SetSceneAurora(bool enabled);
     void SetSceneNightLights(const uint64_t* hashes, size_t count);
 }
 
@@ -383,6 +384,10 @@ void tooie::day_night::tick(uint8_t* rdram) {
         phase = (uint32_t)std::atoi(v) & 7u;
     }
     RT64::SetSceneMoonPhase(phase);
+    // Northern lights over Hailfire Peaks' Icy Side at night.
+    // Test aid: TOOIE_AURORA=1 shows them on any cycling map.
+    static const bool aurora_anywhere = (std::getenv("TOOIE_AURORA") != nullptr);
+    RT64::SetSceneAurora(((map == 0x128) || aurora_anywhere) && option_on(tooie::day_night::aurora_option));
 
     // Night sounds: crickets and owls through the night, birds from dawn into the morning and a few through
     // the day. Quiet while the game stands still (the pause menu). No crickets on Hailfire Peaks or in Cloud
@@ -486,6 +491,12 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         },
         Weather::Changing);
     graphics.add_option_hidden_dependency(weather_option, option, Mode::Off);
+    graphics.add_bool_option(
+        aurora_option,
+        "Northern Lights",
+        "With Day and Night on, green and violet northern lights wave across the night sky over Hailfire Peaks' Icy Side.",
+        true);
+    graphics.add_option_hidden_dependency(aurora_option, option, Mode::Off);
     graphics.add_bool_option(
         clouds_option,
         "Clouds",

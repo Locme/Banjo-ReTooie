@@ -192,6 +192,8 @@ F12 screenshots are taken before these filters, so they don't show them.
   or a thunderstorm now and then for a few minutes), Rain or Storm. No rain in
   Cloud Cuckooland; on Hailfire Peaks' Icy Side it snows instead (a little unless
   Clear, heavy in a storm). Default: Changing.
+- **Northern Lights**: with Day and Night on, green and violet northern lights
+  over Hailfire Peaks' Icy Side at night. Default: on.
 - **Clouds**: with Day and Night on, soft 3D clouds drift across the sky, lit
   by the sun and the moon (not in Cloud Cuckooland). Default: on.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
