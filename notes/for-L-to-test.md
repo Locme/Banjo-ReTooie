@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T316 Photo panel in the ESC menu style
+- Asked: 2026-10-16 21:02 UTC
+- Build: main @ ae40792
+- Steps:
+  1. Load a file and press the Photo Mode key (F10)
+  2. Use D-pad up/down and left/right on a few rows
+  3. Press A for a photo
+- Look for: The panel looks like the ESC menu: brown with a gold border, PHOTO MODE and the row names in the menu's lettering, values in gold on the right, the picked row in gold with a Jiggy and arrows round its value. The photo has no panel in it. Screenshot from headless: screens/photo-mode-panel-esc-style.png.
+- Status: waiting for L
+
 ## T315 Shader speed pass: nothing should look different
 - Asked: 2026-10-16 20:58 UTC
 - Build: main
