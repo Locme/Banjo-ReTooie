@@ -2451,3 +2451,21 @@
   4. Press B to go back to the game
 - Look for: Step 2, photo mode opens from Home with no remapping. Step 4, B returns to the game. Keyboard F10 still opens photo mode. Nothing else changes when you press Home. Checked in the code only: no other default uses the Home button.
 - Status: waiting for L
+
+## T232 Day and night: fireflies like Ocarina of Time's forest
+- Asked: 2026-10-16 08:30 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: fireflies reworked, rain splashes on the ground" on main
+- Steps:
+  1. Graphics > Day and Night: Night, Fireflies on, in Jinjo Village or Spiral Mountain; stand and look round
+- Look for: More fireflies than before, small warm white-yellow points in a wide soft glow (no longer green), floating slowly in loops at all heights from the grass up into the trees, each glowing up and fading away over a few seconds instead of blinking. Closer to Ocarina of Time's forest at night? Too many, too few, too bright? Checked headless: [fireflies-oot-style.png](screens/day-night/fireflies-oot-style.png) (caught during the level's opening wipe; a still shows few at a time).
+- Status: waiting for L
+
+## T233 Day and night: rain splashes on the ground
+- Asked: 2026-10-16 08:30 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: fireflies reworked, rain splashes on the ground" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Weather: Rain or Storm, in Spiral Mountain; look at the grass and paths near Banjo
+- Look for: Small rings splashing up and spreading on level ground all round, with a bright drop where each lands, more in a storm, fading out further off. None on walls or slopes, none in snow. Checked headless: [rain-splashes.png](screens/day-night/rain-splashes.png).
+- Status: waiting for L
