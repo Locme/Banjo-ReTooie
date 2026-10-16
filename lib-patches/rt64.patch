@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..c5cff70 100644
+index 9fae0d4..2f4e53a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2437,8 +2437,8 @@ index 9fae0d4..c5cff70 100644
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -2511,8 +2511,8 @@ index 9fae0d4..c5cff70 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                // Kazooie's draws are marked the same way (2), for her feather shaders.
 +                const uint32_t furKind = call.callDesc.extendedFlags.furShells;
@@ -2525,7 +2525,7 @@ index 9fae0d4..c5cff70 100644
 +                    fur = fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(fm);
 +                    if (fur) {
 +                        furDrawData = &drawData;
-+                        addFurNormals(drawData, call.meshDesc.faceIndicesStart, call.callDesc.triangleCount);
++                        addFurNormals(drawData, call.meshDesc.faceIndicesStart, call.callDesc.triangleCount, furKind == 2);
 +                    }
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
@@ -2549,7 +2549,7 @@ index 9fae0d4..c5cff70 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2483,172 @@ namespace RT64 {
+@@ -1758,13 +2483,199 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2606,10 +2606,37 @@ index 9fae0d4..c5cff70 100644
 +    }
 +
 +    // Banjo-Tooie: Banjo's fur. Adds each triangle's normal (by its area) to its three vertices, in world space.
-+    void FramebufferRenderer::addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount) {
++    void FramebufferRenderer::addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount, bool worldScale) {
 +        const uint32_t end = faceIndexStart + triangleCount * 3;
 +        if (end > drawData.faceIndices.size()) {
 +            return;
++        }
++        // worldScale (Kazooie's feathers): the anchors are scaled to world units, so a feather is the same size on
++        // whichever model she is (a cutscene's model is built far bigger and scaled down by its bones).
++        float anchorScale = 1.0f;
++        if (worldScale) {
++            double worldLength = 0.0, modelLength = 0.0;
++            for (uint32_t i = faceIndexStart; i + 1 < end; i += 3) {
++                const uint32_t a = drawData.faceIndices[i], b = drawData.faceIndices[i + 1];
++                if (((std::max(a, b) * 3 + 2) >= drawData.posFloats.size()) || (std::max(a, b) >= drawData.worldIndices.size()) ||
++                    (drawData.worldIndices[a] >= drawData.worldTransforms.size()) || (drawData.worldIndices[b] >= drawData.worldTransforms.size()))
++                {
++                    continue;
++                }
++                auto world = [&](uint32_t v) {
++                    const float (&m)[4][4] = drawData.worldTransforms[drawData.worldIndices[v]].m;
++                    const float x = drawData.posFloats[v * 3 + 0], y = drawData.posFloats[v * 3 + 1], z = drawData.posFloats[v * 3 + 2];
++                    return hlslpp::float3(x * m[0][0] + y * m[1][0] + z * m[2][0] + m[3][0], x * m[0][1] + y * m[1][1] + z * m[2][1] + m[3][1],
++                        x * m[0][2] + y * m[1][2] + z * m[2][2] + m[3][2]);
++                };
++                const hlslpp::float3 model = hlslpp::float3(drawData.posFloats[a * 3 + 0], drawData.posFloats[a * 3 + 1], drawData.posFloats[a * 3 + 2]) -
++                    hlslpp::float3(drawData.posFloats[b * 3 + 0], drawData.posFloats[b * 3 + 1], drawData.posFloats[b * 3 + 2]);
++                worldLength += double(float(hlslpp::length(world(a) - world(b))));
++                modelLength += double(float(hlslpp::length(model)));
++            }
++            if ((modelLength > 1e-6) && (worldLength > 1e-6)) {
++                anchorScale = float(worldLength / modelLength);
++            }
 +        }
 +        if (furNormalVector.size() < drawData.vertexCount()) {
 +            furNormalVector.resize(drawData.vertexCount(), interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -2648,7 +2675,7 @@ index 9fae0d4..c5cff70 100644
 +                    if (furShaderVector.size() < furNormalVector.size() * 2) {
 +                        furShaderVector.resize(furNormalVector.size() * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +                    }
-+                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0], drawData.posFloats[v[k] * 3 + 1], drawData.posFloats[v[k] * 3 + 2], 1.0f };
++                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0] * anchorScale, drawData.posFloats[v[k] * 3 + 1] * anchorScale, drawData.posFloats[v[k] * 3 + 2] * anchorScale, 1.0f };
 +                }
 +            }
 +        }
@@ -2724,7 +2751,7 @@ index 9fae0d4..c5cff70 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..29dbf3f 100644
+index 3add9c3..9b15129 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,36 @@ namespace RT64 {
@@ -2808,7 +2835,7 @@ index 3add9c3..29dbf3f 100644
 +        std::vector<interop::float4> furShaderVector;
 +        const DrawData *furDrawData = nullptr;
 +        BufferPair furNormalsBuffer;
-+        void addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount);
++        void addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount, bool worldScale);
 +        void finishFurNormals();
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
@@ -3875,7 +3902,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..6742841
+index 0000000..82a97be
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1828 @@
@@ -4474,8 +4501,8 @@ index 0000000..6742841
 +        effectsSettings.kazooieIridescence = std::clamp(iridescence, 0.0f, 1.0f);
 +    }
 +
-+    // Feather tips are short: fewer shells than the fur.
-+    static constexpr uint32_t FeatherShells = 6;
++    // A few layers of feathers, each a flap over the one below.
++    static constexpr uint32_t FeatherShells = 4;
 +
 +    uint32_t SceneFeatherShells() {
 +        const std::scoped_lock lock(effectsMutex);
@@ -4537,8 +4564,8 @@ index 0000000..6742841
 +        // 100), the amount making them thin out more slowly (a thicker coat).
 +        const float amount = std::min(settings.fur, 1.0f);
 +        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
-+        // Kazooie's feather tips: up to 3 units out, about two units apart.
-+        frameParams.featherParams = { 3.0f * settings.kazooieEdges, settings.kazooieSheen, settings.kazooieIridescence, 0.55f };
++        // Kazooie's feathers: layers up to 2 units out, each feather about 4.5 units across.
++        frameParams.featherParams = { 2.0f * settings.kazooieEdges, settings.kazooieSheen, settings.kazooieIridescence, 0.22f };
 +        return true;
 +    }
 +
@@ -7099,19 +7126,20 @@ index bc250a2..162e8de 100644
  Texture2D<float4> gTextures[8192] : register(t0, space1);
 diff --git a/src/shaders/Feathers.hlsli b/src/shaders/Feathers.hlsli
 new file mode 100644
-index 0000000..ed2e9a8
+index 0000000..8da8a74
 --- /dev/null
 +++ b/src/shaders/Feathers.hlsli
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,80 @@
 +//
 +// RT64
 +//
 +
 +// Banjo-Tooie: Kazooie's feather shaders, on her draws only (the game marks them). Her own draw gets a sheen, a soft
 +// glossy highlight that slides across her feathers as she moves, and iridescence, her feathers' colour shifting a
-+// little with the angle they are seen at; both from her normal as the camera sees it (RasterVS.hlsl). Her feathery
-+// edges are short shells (as Banjo's fur, Fur.hlsli) keeping broad feather tips, one per cell of a coarse grid,
-+// narrowing towards their ends, so they read as feathers rather than thin hairs. Only her feathers (reds and oranges) get them, not her beak or legs.
++// little with the angle they are seen at; both from her normal as the camera sees it (RasterVS.hlsl). Her
++// feathery edges are a few short shells (as Banjo's fur, Fur.hlsli) cut into rows of rounded feather flaps, each row
++// offset by half a feather and slid down over the one below like roof tiles. Only her feathers (reds and oranges) get
++// them, not her beak or legs.
 +
 +#pragma once
 +
@@ -7128,26 +7156,37 @@ index 0000000..ed2e9a8
 +    }
 +    // Hue in degrees, red being the largest (magenta-reds below 0).
 +    const float hue = 60.0f * (color.g - color.b) / chroma;
-+    return (hue >= -20.0f) && (hue <= 30.0f);
++    return (hue >= -20.0f) && (hue <= 22.0f);
 +}
 +
-+// A shell of feather tips at height share (0 to 1): keeps broad tips that narrow towards their ends.
++// A shell of feathers at height share (0 to 1). The feathers sit in rows down her body like roof tiles (every other
++// row moved half a feather along), each a rounded flap with its tip at the bottom; each shell is slid down a little
++// (RasterVS.hlsl), so the layers overlap. A darker rim round each flap and a shade of its own keep the feathers
++// apart; they get smaller towards the outer layers.
 +bool FeatherShell(float3 anchor, float3 baseColor, float share, inout float3 color) {
 +    if (!FeatherColor(baseColor)) {
 +        return false;
 +    }
-+    // One feather tip per cell of a coarse grid, round its own point in the cell, narrowing to its end.
 +    const float3 grid = anchor * FrParams.featherParams.w;
-+    const int3 cell = int3(floor(grid));
-+    const uint h = FurHash(cell);
-+    const float3 random = float3(h & 0x3FF, (h >> 10) & 0x3FF, (h >> 20) & 0x3FF) / 1023.0f;
-+    const float3 off = frac(grid) - (0.3f + 0.4f * random);
-+    const float radius = 0.62f * pow(saturate(1.0f - share), 0.6f);
-+    if (dot(off, off) > radius * radius) {
++    const float row = floor(grid.y);
++    const float2 across = grid.xz + (fmod(abs(row), 2.0f) * 0.5f);
++    const float2 cell = floor(across);
++    const uint h = FurHash(int3(int(cell.x), int(row), int(cell.y)));
++    const float random = float(h & 0x3FF) / 1023.0f;
++    // Where the point is in its feather: across (0 the middle) and down it (0 its root at the top, 1 its tip).
++    const float2 side = frac(across) - 0.5f;
++    const float down = 1.0f - frac(grid.y);
++    const float width = 0.64f * (1.0f - 0.3f * share) * (0.85f + 0.3f * random);
++    // A rounded flap: full width near the root, curving in to a rounded tip.
++    const float halfWidth = width * sqrt(saturate(1.0f - down * down * 0.85f));
++    const float sideDistance = length(side);
++    if ((sideDistance > halfWidth) || (down > 1.0f - 0.2f * share)) {
 +        return false;
 +    }
-+    // Darker under the tips, where the feathers overlap.
-+    color *= lerp(0.7f, 1.05f, share);
++    // The flap's rim is darker (where it overlaps the one below), its middle lighter along the shaft.
++    const float rim = smoothstep(halfWidth * 0.55f, halfWidth, sideDistance);
++    const float shaft = 1.0f - smoothstep(0.0f, 0.06f, sideDistance);
++    color *= (0.82f + 0.25f * random) * (1.0f - 0.45f * rim) * (1.0f + 0.15f * shaft) * lerp(0.85f, 1.05f, share);
 +    return true;
 +}
 +
@@ -7167,7 +7206,7 @@ index 0000000..ed2e9a8
 +        // Sheen: a broad soft gloss and a tighter highlight, lit from above left of the camera.
 +        const float3 halfway = normalize(float3(-0.35f, 0.55f, 0.75f) + float3(0.0f, 0.0f, 1.0f));
 +        const float spread = saturate(dot(normalize(viewNormal + float3(0.0f, 0.0f, 1e-4f)), halfway));
-+        const float gloss = 0.25f * pow(spread, 6.0f) + 0.6f * pow(spread, 40.0f);
++        const float gloss = 0.45f * pow(spread, 4.0f) + 0.9f * pow(spread, 24.0f);
 +        color += params.y * gloss * lerp(float3(1.0f, 1.0f, 1.0f), color, 0.35f);
 +    }
 +}
@@ -8499,7 +8538,7 @@ index e7895c3..cb41a9d 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..23bff97 100644
+index 74b1fa0..272f4b0 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,7 +11,8 @@
@@ -8528,14 +8567,14 @@ index 74b1fa0..23bff97 100644
 +
 +        // Banjo-Tooie: a shell of Banjo's fur, pushed out along the vertex's normal by its share of the fur's
 +        // length, the tips drooping a little (by the cube of the height, as in Sorumi's UnityFurShader).
-+        // Kazooie's feathery edges the same way, shorter and without the droop.
++        // Kazooie's feathery edges the same way, each layer also slid down so the feathers overlap like tiles.
 +        const bool feathers = (gConstants.furShells & RASTER_FEATHERS) != 0;
 +        if (gConstants.furShell != 0) {
 +            const float3 normal = furNormals[iVertexId * 2].xyz;
 +            oFurAnchor = furNormals[iVertexId * 2 + 1].xyz;
 +            const float share = float(gConstants.furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = FrParams.furParams;
-+            const float3 offset = feathers ? normal * (FrParams.featherParams.x * share) :
++            const float3 offset = feathers ? normal * (FrParams.featherParams.x * share) - float3(0.0f, 0.6f * FrParams.featherParams.x * share, 0.0f) :
 +                normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
 +        }

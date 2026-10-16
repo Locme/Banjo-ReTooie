@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T289 Kazooie feathers look like feathers, not fur
+- Asked: 2026-10-16 14:27 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn on Kazooie's feather sheen, feathery edges and iridescence at 100
+  2. Look at Kazooie up close in Spiral Mountain and in a cutscene (the poker game in Jolly's works)
+- Look for: Her head, neck and wings show small rounded feathers overlapping each other, not fuzz like Banjo's fur. Her beak, legs and backpack stay smooth. The sheen is a clear glossy highlight that moves as she turns.
+- Status: waiting for L
+
 ## T287 3D grass: Chunk size and Pixel size sliders
 - Asked: 2026-10-16 13:27 UTC
 - Build: main
