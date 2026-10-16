@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T287 3D grass: Chunk size and Pixel size sliders
+- Asked: 2026-10-16 13:27 UTC
+- Build: main
+- Steps:
+  1. Graphics > Grass: set 3D grass above 0, turn on Chunky 3D grass and Pixelated 3D grass
+  2. Move Chunk size (100 to 400) and Pixel size (1 to 8) in Spiral Mountain
+- Look for: Chunk size makes the chunky blades bigger and further apart; Pixel size makes the pixel blocks bigger. Both apply live, alone or together.
+- Status: waiting for L
+
 ## T286 3D grass: Chunky and Pixelated toggles, own Grass section
 - Asked: 2026-10-16 12:56 UTC
 - Build: main
