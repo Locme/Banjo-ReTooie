@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- General > Snout jiggle (on/off, default off): Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey; with Smash Banjo the front of his muzzle moves, on vanilla Banjo his nose (L). Untested on PC (T343).
 - Graphics > Character Shaders > Enemy fur (on/off, default off): the yetis on Hailfire Peaks' Icy Side grow white fur like Banjo's (L). Untested on PC (T336).
 - Banjo fur: his knees (the brown between his shorts and boots) now have fur too; the shorts stay bare (L). Untested on PC (T332).
 - Kazooie feathers: on her wings they now point out along the wing to the tips instead of down, each feather shows the texture colours under it (yellow tips on the wings), and the top of her head is feathered (L). Untested on PC (T331).

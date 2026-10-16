@@ -68,6 +68,8 @@ void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_render_mode(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx);
+void tooie_snout_model(uint8_t* rdram, recomp_context* ctx);
+void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance (src/display/draw_distance.cpp): $v0 holds func_800D2F20's model draw distance.
 void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f20 is func_800D3104's cell gather radius, $f2 func_800D2F44's cell distance.

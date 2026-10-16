@@ -1090,7 +1090,15 @@ text = "tooie_shadow_render_mode(rdram, ctx);"
 [[patches.hook]]
 func = "func_800DE498"
 before_vram = 0x800DE774
-text = "tooie_shadow_note_model(rdram, ctx);"
+text = "tooie_shadow_note_model(rdram, ctx); tooie_snout_model(rdram, ctx);"
+
+# General > Snout jiggle (src/gameplay/snout_jiggle.cpp): the model func_800DE498 draws is noted with
+# the shadow's hook above; a bone node's matrix ($v0 from func_800ADE2C) is swapped for the snout's
+# turned copy before func_80019AA0 pushes it.
+[[patches.hook]]
+func = "func_800DCF48"
+before_vram = 0x800DCF78
+text = "tooie_snout_bone(rdram, ctx);"
 
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.

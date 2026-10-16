@@ -405,6 +405,7 @@ RECOMP_FUNC void func_800DCF48(uint8_t* rdram, recomp_context* ctx) {
     // 0x800DCF74: or          $a0, $a2, $zero
     ctx->r4 = ctx->r6 | 0;
     after_0:
+    tooie_snout_bone(rdram, ctx);
     // 0x800DCF78: lui         $a0, 0x8013
     ctx->r4 = S32(0X8013 << 16);
     // 0x800DCF7C: addiu       $a0, $a0, -0x31A8

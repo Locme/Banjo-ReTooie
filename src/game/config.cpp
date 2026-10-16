@@ -15,6 +15,7 @@
 #include "tooie_boss_rush.h"
 #include "tooie_save_state.h"
 #include "tooie_honeycomb_glitter.h"
+#include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
@@ -223,6 +224,11 @@ void tooie::init_config() {
         false);
     tooie::bottles_revenge::add_option(general);
     tooie::boss_rush::add_option(general);
+    general.add_bool_option(
+        tooie::snout_jiggle::option,
+        "Snout jiggle",
+        "Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey. Works with player model mods that keep his skeleton, such as Smash Banjo.",
+        false);
     general.add_bool_option(
         tooie::wip_tab_option,
         "DEV tab",

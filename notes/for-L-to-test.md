@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T343 Snout jiggle (General)
+- Asked: 2026-10-16 22:56 UTC
+- Build: main from this commit (next Windows build), with Smash Banjo v13 for the Smash part
+- Steps:
+  1. Turn on General > Snout jiggle
+  2. Run, stop, turn, jump and land with vanilla Banjo
+  3. Do the same with Smash Banjo v13 in the mods folder
+  4. Turn the toggle off in the middle of a run
+- Look for: Banjo's snout wobbles on a spring like Mario's nose in Odyssey and settles when he stands still (about 3 wobbles a second, up to about 12 degrees when he lands headless). On vanilla Banjo only his nose ball moves, because that is the only part of his snout on its own bone; on Smash Banjo the front of the muzzle moves. Tell me if you want it bouncier, stiffer, or the whole muzzle on vanilla Banjo too (that needs a model edit). Off: the snout is still.
+
 ## T342 No stutter on the first Jiggy wipe into the save select
 - Asked: 2026-10-16 23:02 UTC
 - Build: main after the shader list change
