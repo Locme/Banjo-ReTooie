@@ -881,6 +881,7 @@ RECOMP_FUNC void _bsstonehead_entrypoint_36(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_8080231C_chklungo(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_klungo_fade(rdram, ctx, 0)) return;
     // 0x8080231C: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x80802320: sw          $ra, 0x14($sp)

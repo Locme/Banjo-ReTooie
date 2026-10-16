@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T331 Klungo's throws and fades above 30 FPS
+- Asked: 2026-10-16 22:10 UTC (L: "Klungo is not throwing the same way as in vanilla", burst-2026-10-16_22-20-17)
+- Build: main (pull and build)
+- Steps:
+  1. Set Graphics > Game Frame Rate to what you play at (175 or Uncapped too, if you use them)
+  2. Fight Klungo (General > Replay or the boss rush, or from a save): watch him drink the potion, hide behind his shield and throw
+  3. Stay back from him so the phials have to fly a long way
+- Look for: Klungo fades back in behind his shield instead of staying invisible, throws each phial overhand from his raised hand in a high arc, and later goes see-through and comes back as in vanilla. Cause: his fade in and fade out added speed x frame time to his see-through value and cut off the fraction every frame; at 30 FPS that is 5 a frame, at 150 FPS and up it is under 1, so he never faded back in (and at 60 and 120 the fades ran at the wrong speed). While he could not be seen, some phials started from his middle instead of his hand, low and flat. Checked headless: at 175 FPS he now fades back in and every logged phial left from his hand (8 of 8; before, 2 of 12 started from his middle); Original unchanged. If the throws still look wrong, say which frame rate and what differs (where the phial starts, its arc, its speed or how often he throws).
+
 ## T330 Icy Side: the ice reflects, and HD Shadows don't switch the water off
 - Asked: 2026-10-16 22:10 UTC
 - Build: main

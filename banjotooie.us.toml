@@ -849,6 +849,22 @@ func = "func_80101A50"
 before_vram = 0x80101A58
 text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
 
+# Klungo's fades (chklungo): func_8080231C fades him out and func_808023A4 in
+# ($a0 Klungo, $a1 the alpha to stop at, $a2 the speed per second, both floats).
+# Each frame they add speed x frame time to the alpha and truncate it to a whole
+# number, so above 30 FPS the fade in rounds down to nothing at 150 FPS and up
+# and he stays invisible. Above 30 FPS the host runs the same fade keeping the
+# fraction between frames.
+[[patches.hook]]
+func = "func_8080231C_chklungo"
+before_vram = 0x8080231C
+text = "if (tooie_klungo_fade(rdram, ctx, 0)) return;"
+
+[[patches.hook]]
+func = "func_808023A4_chklungo"
+before_vram = 0x808023A4
+text = "if (tooie_klungo_fade(rdram, ctx, 1)) return;"
+
 # func_80013D94 queues a sound frame's task in the scheduler's ring ($a0 = the entry). The list is
 # checksummed so a list that changes before it plays is logged (src/game/audio_task_check.cpp).
 [[patches.hook]]

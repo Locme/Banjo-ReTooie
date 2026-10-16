@@ -57,6 +57,7 @@
 #include <vector>
 
 #include "recomp.h"
+#include "funcs.h"
 #include "recompui/config.h"
 
 #include "tooie_debug.h"
@@ -777,6 +778,69 @@ extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
 // frame jumps there, so the eyes still show.
 extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
+}
+
+// Klungo's fades (func_8080231C_chklungo out, func_808023A4_chklungo in; $a0 Klungo,
+// $a1 the alpha to stop at, $a2 the speed per second, both floats): alpha +- speed x
+// frame time, truncated to a whole number and stored, returning 1 once the stop is
+// passed. At 30 FPS that is 5 a frame (150 a second); at 150 FPS and up a fade in
+// adds under 1, which truncates away, so Klungo never came back from invisible (and
+// fades ran at the wrong speed at 60 and 120). Above 30 FPS this runs the same fade
+// but keeps the fraction between frames. Returns 1 when it ran the fade.
+namespace {
+    struct FadeCarry {
+        int32_t alpha;
+        float value;
+    };
+    std::mutex fade_mutex;
+    std::unordered_map<uint32_t, FadeCarry> fade_carry;
+}
+
+extern "C" int tooie_klungo_fade(uint8_t* rdram, recomp_context* ctx, int fade_in) {
+    if (!above_30()) {
+        std::lock_guard lock{ fade_mutex };
+        fade_carry.clear();
+        return 0;
+    }
+    const uint32_t klungo = (uint32_t)ctx->r4;
+    float stop, speed;
+    const uint32_t stop_bits = (uint32_t)ctx->r5, speed_bits = (uint32_t)ctx->r6;
+    std::memcpy(&stop, &stop_bits, sizeof(stop));
+    std::memcpy(&speed, &speed_bits, sizeof(speed));
+
+    recomp_context call = *ctx;
+    _subaddiefade_entrypoint_0(rdram, &call);   // alpha (jal 0x80089C90)
+    const int32_t alpha = (int32_t)call.r2;
+
+    float value = (float)alpha;
+    {
+        std::lock_guard lock{ fade_mutex };
+        auto found = fade_carry.find(klungo);
+        if (found != fade_carry.end() && found->second.alpha == alpha) {
+            value = found->second.value;
+        }
+    }
+    const float step = read_float(rdram, delta_time_addr) * speed;
+    value = fade_in ? value + step : value - step;
+    bool reached = fade_in ? (stop < value) : (value < stop);
+    if (reached) {
+        value = stop;
+    }
+    const int32_t stored = (int32_t)value;
+    {
+        std::lock_guard lock{ fade_mutex };
+        if (fade_carry.size() > 64) {
+            fade_carry.clear();
+        }
+        fade_carry[klungo] = FadeCarry{ stored, value };
+    }
+
+    call = *ctx;
+    call.r4 = ctx->r4;
+    call.r5 = stored;
+    _subaddiefade_entrypoint_1(rdram, &call);   // set alpha (jal 0x80089C98)
+    ctx->r2 = reached ? 1 : 0;
+    return 1;
 }
 
 void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {

@@ -918,6 +918,7 @@ RECOMP_FUNC void _basnowball_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808023A4_chklungo(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_klungo_fade(rdram, ctx, 1)) return;
     // 0x808023A4: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x808023A8: sw          $ra, 0x14($sp)

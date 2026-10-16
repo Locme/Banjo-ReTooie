@@ -10,7 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
-- Kazooie feathers: on her wings they now point out along the wing to the tips instead of down, each feather shows the texture colours under it (yellow tips on the wings), and the top of her head is feathered (L). Untested on PC (T329).
+- Kazooie feathers: on her wings they now point out along the wing to the tips instead of down, each feather shows the texture colours under it (yellow tips on the wings), and the top of her head is feathered (L). Untested on PC (T331).
 - Start menu: Start Game is now Play, with the effects preset beside it (< Vanilla >, Enhanced, Retro, Custom); left and right or the arrows change it, and Play applies it (L). Vanilla (the Effects preset once called Original) turns every shader effect off, also FXAA, FSR and Kazooie feathers. Untested on PC (T327).
 - New cheats: 100% complete (everything done except the last boss, Hag 1: all Jiggies, notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons, moves, worlds and bosses; saving keeps it) and Dragon Kazooie (on: Kazooie is Dragon Kazooie, off: she is Kazooie again). Untested on PC (T326).
 - Fixed: scrolling the Graphics menu with a controller lagged on every step. The option description now shows a moment after you stop on an option instead of on every step. Untested on PC (T319).
@@ -41,6 +41,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
 ### Graphics
+- Fixed: above 30 FPS Klungo's fades ran at the wrong speed, and at 150 FPS and up he never faded back in behind his shield, so some phials started from his middle instead of his raised hand. Untested on PC (T331).
 - Shader speed pass 2: every material's shader is a third of its size for ordinary draws (the grass, snow and fur shells have their own), the night's fireflies and the depth of field's focus are worked out once a frame instead of in every pixel, bounce light reads a half-size copy of the scene (a touch smoother), and the output pass skips its gamma at 1.0. Nothing should look different; night with fireflies and busy scenes should run faster. Untested on PC (T328).
 - 3D grass now reads the textures of what the game lays over the ground: wherever a road, path or dirt patch with a non-grass texture is drawn over grass ground, no blades grow under it (L). Untested on PC (T323).
 - Shader speed pass: 3D grass blades, the water mask, ambient occlusion and sun shadows each do less repeated work on the GPU; nothing should look different. Every shader also compiles clean for both Vulkan and DirectX (QA write-up in notes/shader-qa-2026-10-16.md). Untested on PC (T315).
