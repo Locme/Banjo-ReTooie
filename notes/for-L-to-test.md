@@ -2792,13 +2792,14 @@
 - Look for: Does it reach the title screen with picture and sound, without a crash?
 - Status: waiting for L
 
-## T258 Original Honeycomb model mod (Original Honeycomb v1)
-- Asked: 2026-10-16 (L: "Are you able to backport the normal honeycomb from banjo kazooie?", "Call it Original Honeycomb")
-- Build: any recent build, plus the mod zip from project files: mods/Original Honeycomb v1.zip
+## T258 Back-Port: Original honeycomb
+- Asked: 2026-10-16 (L: "Are you able to backport the normal honeycomb from banjo kazooie?", "If it's included don't make it a mod, make it a backport toggle")
+- Build: main (pull and build). The "Original Honeycomb v1" mod zip is gone; remove it from your mods folder if you added it.
 - Steps:
-  1. Put "Original Honeycomb v1.zip" in the game's mods folder as it is, turn off HoneyComb NB (same model), then turn on "Original Honeycomb" in the Mods menu
-  2. Load a file and go to a health honeycomb (Spiral Mountain's cave has three), then collect one
-- Look for: the combs are Banjo-Kazooie's honeycomb (honey faces, a shiny frame round the sides), spinning as usual, and collecting one heals. The model is Banjo-Kazooie's own, still in Tooie's game files (unused), scaled up to Tooie's comb size. Does the frame shine like in Banjo-Kazooie? Headless it reads as a flat pale gold, so that is the part to check. Checked headless: [v1.png](screens/original-honeycomb/v1.png).
+  1. General > Back-Port: Original honeycomb = On (HoneyComb NB off in the Mods menu: a model mod of the comb wins over the switch)
+  2. Go to a health honeycomb (Spiral Mountain's cave has three), then collect one
+  3. Switch it off while standing there
+- Look for: Step 2, the combs are Banjo-Kazooie's honeycomb (honey faces, a frame round the sides), bobbing and spinning as usual, and collecting one heals. The model is Banjo-Kazooie's own, still in Tooie's game files (unused), built when the comb loads and scaled to Tooie's comb size. Does the frame shine like in Banjo-Kazooie? Headless it reads as a flat pale gold. Step 3, the area reloads and Tooie's comb is back. Checked headless: on, with Glittering honeycombs on too: [backport-on.png](screens/original-honeycomb/backport-on.png); off: Tooie's comb.
 - Status: waiting for L
 
 ## T255 Texture sweep: "Start the texture sweep?" popup, carries on after a restart

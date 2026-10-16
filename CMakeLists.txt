@@ -338,6 +338,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/cutscene_skip.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/honeycomb_glitter.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/original_honeycomb.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/jiggy_dance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/test_room.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/race_warp.cpp

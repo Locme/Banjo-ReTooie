@@ -15,6 +15,7 @@
 #include "tooie_boss_rush.h"
 #include "tooie_save_state.h"
 #include "tooie_honeycomb_glitter.h"
+#include "tooie_original_honeycomb.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
@@ -209,6 +210,11 @@ void tooie::init_config() {
         tooie::honeycomb_glitter::option,
         "Back-Port: Glittering honeycombs",
         "Health honeycombs sparkle like they did in Banjo-Kazooie.",
+        false);
+    general.add_bool_option(
+        tooie::original_honeycomb::option,
+        "Back-Port: Original honeycomb",
+        "Health honeycombs use Banjo-Kazooie's honeycomb model, which is still in Banjo-Tooie's files. Switching it in a level reloads the area.",
         false);
     general.add_bool_option(
         tooie::jiggy_dance::option,

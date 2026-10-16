@@ -39,6 +39,7 @@
 #include <map>
 #include <mutex>
 #include <set>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -53,6 +54,7 @@
 #include "tooie_debug.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
+#include "tooie_original_honeycomb.h"
 #include "tooie_toast.h"
 
 extern "C" void heap_alloc(uint8_t* rdram, recomp_context* ctx);
@@ -119,6 +121,30 @@ namespace {
         return buf;
     }
 
+    // One asset as the game would load it (decompressed). Empty when it can't be read.
+    std::vector<uint8_t> rom_asset(std::span<const uint8_t> rom, const std::vector<Entry>& table, uint32_t id) {
+        std::vector<uint8_t> bytes;
+        if (id >= table.size()) {
+            return bytes;
+        }
+        const Entry& e = table[id];
+        if (e.size == 0 || e.offset + e.size > rom.size()) {
+            return bytes;
+        }
+        const uint8_t* src = rom.data() + e.offset;
+        if (e.kind == kind_gldb || !e.compressed) {
+            bytes.assign(src, src + e.size);
+        } else if (e.size > 2) {
+            size_t out_len = 0;
+            void* out = tinfl_decompress_mem_to_heap(src + 2, e.size - 2, &out_len, 0);
+            if (out != nullptr) {
+                bytes.assign((uint8_t*)out, (uint8_t*)out + out_len);
+                mz_free(out);
+            }
+        }
+        return bytes;
+    }
+
     // ---- Dump ----
 
     std::atomic<bool> dump_running{false};
@@ -143,23 +169,11 @@ namespace {
             if (e.size == 0 || e.offset + e.size > rom.size()) {
                 continue;
             }
-            const uint8_t* src = rom.data() + e.offset;
-            std::vector<uint8_t> bytes;
-            const char* ext = ".bin";
-            if (e.kind == kind_gldb || !e.compressed) {
-                bytes.assign(src, src + e.size);
-                if (e.kind == kind_gldb) {
-                    ext = ".raw";
-                }
-            } else if (e.size > 2) {
-                size_t out_len = 0;
-                void* out = tinfl_decompress_mem_to_heap(src + 2, e.size - 2, &out_len, 0);
-                if (out == nullptr) {
-                    failed++;
-                    continue;
-                }
-                bytes.assign((uint8_t*)out, (uint8_t*)out + out_len);
-                mz_free(out);
+            std::vector<uint8_t> bytes = rom_asset(rom, table, id);
+            const char* ext = e.kind == kind_gldb ? ".raw" : ".bin";
+            if (bytes.empty()) {
+                failed++;
+                continue;
             }
             char line[64];
             snprintf(line, sizeof(line), "%04X  %2u  %u\n", id, e.kind, (unsigned)bytes.size());
@@ -273,6 +287,13 @@ void tooie::asset_mods::reorder(const std::function<size_t(const std::string&)>&
 }
 
 void tooie::asset_mods::tick(uint8_t* rdram) {
+    // Back-Port: Original honeycomb switched: reload the area so the combs load again.
+    static int honeycomb_before = -1;
+    const int honeycomb_now = tooie::original_honeycomb::enabled() ? 1 : 0;
+    if (honeycomb_before != -1 && honeycomb_now != honeycomb_before) {
+        refresh_wanted = true;
+    }
+    honeycomb_before = honeycomb_now;
     // Mods switched on at startup land here on the title screen, where nothing needs reloading.
     if (refresh_wanted.exchange(false) && tooie::debug::can_warp()) {
         uint16_t map = tooie::debug::current_map(rdram);
@@ -306,17 +327,28 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
         std::lock_guard lock{mods_mutex};
         rescan_if_due();
         auto found = replaced_ids.find(id);
-        if (found == replaced_ids.end()) {
-            return 0;
+        if (found != replaced_ids.end()) {
+            path = found->second;
         }
-        path = found->second;
     }
-    {
+    if (!path.empty()) {
         std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            return 0;
+        if (in) {
+            bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
         }
-        bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    } else if (id == tooie::original_honeycomb::health_model && tooie::original_honeycomb::enabled()) {
+        // A model mod of the same comb wins over the back-port; the back-port is built from the ROM.
+        static std::vector<uint8_t> built;
+        if (built.empty()) {
+            std::span<const uint8_t> rom = recomp::get_rom();
+            std::vector<Entry> table = read_table(rom);
+            built = tooie::original_honeycomb::build(rom_asset(rom, table, tooie::original_honeycomb::bk_model),
+                                                     rom_asset(rom, table, tooie::original_honeycomb::health_model));
+            if (built.empty()) {
+                fprintf(stderr, "[assets] Original honeycomb: could not build the comb, Tooie's is used\n");
+            }
+        }
+        bytes.assign(built.begin(), built.end());
     }
     if (bytes.empty()) {
         return 0;
