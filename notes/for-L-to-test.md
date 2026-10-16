@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T317 Smash Banjo v12: backpack lid opens when Kazooie peeks, Kazooie blinks, closed beak, no eye flicker, less glossy
+- Asked: 2026-10-16 21:02 UTC
+- Build: mods/Smash Banjo v12.zip in project files (remove v11 from the mods folder first)
+- Steps:
+  1. Put Smash Banjo v12 in the mods folder and take v11 out
+  2. Stand still and let the idle play until Kazooie peeks out of the backpack
+  3. Zoom the camera in on Kazooie's face and watch her for a while
+  4. Do a few moves where she comes out (beak barge, jump, flap flip)
+  5. Look at her wings with your usual graphics settings
+- Look for: The lid opens whenever Kazooie is out, so she no longer comes up through the shut lid (it snaps open as she appears, there is no opening animation). Her eyes are a little lidded like vanilla's and she blinks slowly, at the same moments as Banjo. Her beak is closed when idle. No flicker round her eyes. Her feathers have Smash's own shading and look less like plastic; tell me which graphics effects you have on if she still looks glossy, because with them all off she looked matte headless.
+- Status: waiting for L
+
 ## T316 Photo panel in the ESC menu style
 - Asked: 2026-10-16 21:02 UTC
 - Build: main @ ae40792
