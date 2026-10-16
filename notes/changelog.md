@@ -36,6 +36,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- The gameplay demo (when you don't press Start) no longer runs too fast. DEV > Force Interpolation in the gameplay demo (off by default) blends it like the opening cutscene. Untested on PC (T307).
+
 - 3D grass blending slider (0 to 100, default 50): the blades take on the ground's colour, most at the roots and further away, so the grass blends in (L). Untested on PC (T301).
 - 3D grass (and the other screen effects) no longer vanish across the level while Bottles' ghost is drawn in Spiral Mountain: the ghost's "no effects" mark stayed on for everything drawn after it when it was the last model of its list (L). Untested on PC (T300).
 - 3D grass: Chunk size (100 to 400%) and Pixel size (0.25 to 8 N64 pixels) sliders for Chunky and Pixelated 3D grass (L). Untested on PC (T287).

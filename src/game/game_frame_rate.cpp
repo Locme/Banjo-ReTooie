@@ -136,6 +136,8 @@ namespace {
     // Game frames left in which an attract demo counts as playing. Set by the
     // demo replay, counted down by each frame's time step.
     std::atomic<int> demo_frames{ 0 };
+    // The recorded time step (VIs) of the demo frame playing, from func_8001608C.
+    std::atomic<int32_t> demo_step{ 2 };
 
     // DEV > Force Interpolation in cutscenes (on by default): the opening
     // cutscene (map 18B, before the title screen; it waits 3 VIs, 20 a second)
@@ -144,8 +146,8 @@ namespace {
     // the screen's. Only when Interpolation is on. Worked out once per game frame.
     std::atomic<bool> scene_forced{ false };
 
-    bool force_option_on() {
-        static const char* env = std::getenv("TOOIE_FORCE_SCENE_INTERP");
+    bool bool_option_on(const std::string& key, const char* env_name) {
+        const char* env = std::getenv(env_name);
         if (env != nullptr) {
             return env[0] == '1';
         }
@@ -153,11 +155,20 @@ namespace {
             return false;
         }
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id)
-                .get_option_value(tooie::game_frame_rate::force_scene_interpolation_option));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(key));
         } catch (...) {
             return false;
         }
+    }
+
+    bool force_option_on() {
+        return bool_option_on(tooie::game_frame_rate::force_scene_interpolation_option, "TOOIE_FORCE_SCENE_INTERP");
+    }
+
+    // DEV > Force Interpolation in the gameplay demo (off by default): the same for the
+    // recorded scenes (demos), its own toggle at L's request (2026-10-16).
+    bool force_demo_option_on() {
+        return bool_option_on(tooie::game_frame_rate::force_demo_interpolation_option, "TOOIE_FORCE_DEMO_INTERP");
     }
 
     void update_scene_forced(uint8_t* rdram) {
@@ -166,8 +177,8 @@ namespace {
         // Only with Interpolation on and a Game Frame Rate other than Original
         // (L, 2026-10-16): otherwise the scene already runs as the game made it.
         bool interpolating = ultramodern::renderer::get_graphics_config().rr_option != ultramodern::renderer::RefreshRate::Original;
-        scene_forced = force_option_on() && interpolating && mode() != Mode::Original &&
-            (demo_frames.load() > 0 || map == opening_cutscene_map);
+        scene_forced = interpolating && mode() != Mode::Original &&
+            ((force_option_on() && map == opening_cutscene_map) || (force_demo_option_on() && demo_frames.load() > 0));
     }
 
     // VIs per game frame for 30 and 60 FPS, or 0 for the other modes (and while a demo plays).
@@ -431,6 +442,12 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
     int32_t rate = paced_rate();
     bool force_interp = scene_forced.load();
     int32_t vis = locked_vis();
+    if (demo_frames.load() > 0) {
+        // A recorded scene steps by the time each frame took on the N64 (often 3 VIs)
+        // but only waits the game's minimum, which the PC always makes: it ran up to
+        // half again too fast (L, 2026-10-16). Each frame now lasts its recorded step.
+        ctx->r2 = std::clamp(demo_step.load(), (int32_t)1, (int32_t)4);
+    }
     if (force_interp) {
         // The game's own wait, and its rate for RT64 to blend from.
         int32_t wait = std::clamp((int32_t)ctx->r2, 1, 4);
@@ -621,10 +638,15 @@ extern "C" void tooie_vi_hang_limit(uint8_t* rdram, recomp_context* ctx) {
 // demos, the game select screen and the intro story cutscenes (seen headless).
 // These run a fixed number of frames, so the game keeps its own pacing while
 // one plays (at 60 FPS it would otherwise run twice as fast).
+// $a0 is loaded in the delay slot, so the step is still at 0x50($sp).
 extern "C" void tooie_demo_frame(uint8_t* rdram, recomp_context* ctx) {
-    (void)rdram;
-    (void)ctx;
     demo_frames = 2;
+    demo_step = (int32_t)MEM_W(0x50, ctx->r29);
+    static const bool log_steps = std::getenv("TOOIE_DEMO_LOG") != nullptr;
+    if (log_steps) {
+        std::printf("[demo] step %d\n", (int)demo_step.load());
+        std::fflush(stdout);
+    }
 }
 
 // Some animations step once per game frame instead of by the delta time, so
@@ -700,9 +722,15 @@ void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
     dev.add_bool_option(
         force_scene_interpolation_option,
         "Force Interpolation in cutscenes",
-        "While the opening cutscene (and the attract demos) play, runs them at the game's own frame rate when Game Frame Rate is above Original, so their pacing is right, "
+        "While the opening cutscene plays, runs it at the game's own frame rate when Game Frame Rate is above Original, so its pacing is right, "
         "and Interpolation blends in-between frames up to its rate. Does nothing while Interpolation is Original.",
         true);
+    dev.add_bool_option(
+        force_demo_interpolation_option,
+        "Force Interpolation in the gameplay demo",
+        "The same for the gameplay demo that plays when you don't press Start (and the other recorded scenes): "
+        "Interpolation blends it up to its rate. The demo keeps its own speed either way.",
+        false);
 }
 
 uint32_t tooie::game_frame_rate::game_ms() {

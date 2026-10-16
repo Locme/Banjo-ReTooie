@@ -3138,3 +3138,14 @@
   3. Turn the camera right with the right stick, and press the X button (the game's B) to attack and roll
 - Look for: Step 2 runs. Step 3: the right stick still turns the camera, and X still attacks and rolls without running. Controls tab > Movement > Run shows the B button. Checked headless: new controls get B on Run; old saved controls with Run unbound move B from C-right to Run once and are saved; controls that use B for something else are left alone.
 - Status: waiting for L
+
+## T307 Gameplay demo speed, and its own Force Interpolation toggle
+- Asked: 2026-10-16 20:35 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Game Frame Rate 60 FPS, Interpolation on; leave the title screen until the gameplay demo plays
+  2. Watch its speed
+  3. DEV > Force Interpolation in the gameplay demo: On (new, off by default), and watch the next demo
+- Look for: Step 2, the demo plays at normal speed, not sped up. It used to replay the N64's frame times but wait only the shortest time each frame, so it ran up to half again too fast; each demo frame now lasts its recorded time, whatever the toggles. Step 3, the demo is blended smooth by Interpolation. Force Interpolation in cutscenes now covers only the opening cutscene. Checked headless at 60 FPS: five demo levels played with game time matching real time, and the opening cutscene still ends at 51 s.
+- Status: waiting for L
+
