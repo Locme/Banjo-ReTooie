@@ -773,7 +773,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
     const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
     const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
-    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers);
+    const bool enemy_fur = tooie::picture_filters::enemy_fur_on();
+    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || enemy_fur);
     if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
@@ -1155,6 +1156,40 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     std::fprintf(stderr, " %.0f units off (%u matrices)", std::sqrt(best_distance), blocks[best].matrices);
                 }
                 std::fprintf(stderr, "\n");
+            }
+        }
+        // Furry enemies get white fur all over (RT64's kind 3): Hailfire Peaks' yetis (L). Known by their model's
+        // print (Block::print), the same in every run.
+        if (enemy_fur) {
+            static constexpr uint32_t furry_enemies[] = {
+                0xE23CADDF, // the yeti on Hailfire Peaks' Icy Side
+            };
+            for (size_t b = 0; b < blocks.size(); b++) {
+                const Block& block = blocks[b];
+                if (block.shadow || block.vertex_command == SIZE_MAX ||
+                    std::find(std::begin(furry_enemies), std::end(furry_enemies), block.print) == std::end(furry_enemies)) {
+                    continue;
+                }
+                size_t first = SIZE_MAX;
+                size_t last = block.vertex_command;
+                for (size_t i = block.vertex_command; i < commands.size(); i++) {
+                    if (commands[i].block != (int)b) {
+                        continue;
+                    }
+                    last = i;
+                    if (first == SIZE_MAX && (commands[i].w0 >> 24) == op_dl) {
+                        first = i;
+                    }
+                }
+                const size_t on_slot = first == SIZE_MAX ? SIZE_MAX : flag_slot(first);
+                if (on_slot == SIZE_MAX || cursor + 64 > limit) {
+                    continue;
+                }
+                set_flag(cursor, on_slot, g_ex_fur_shells_v1, 3);
+                const size_t off_slot = flag_slot(last + 1);
+                if (off_slot != SIZE_MAX) {
+                    set_flag(cursor, off_slot, g_ex_fur_shells_v1, 0);
+                }
             }
         }
         if (best < 0) {

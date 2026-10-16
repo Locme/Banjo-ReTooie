@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Graphics > Character Shaders > Enemy fur (on/off, default off): the yetis on Hailfire Peaks' Icy Side grow white fur like Banjo's (L). Untested on PC (T336).
 - Banjo fur: his knees (the brown between his shorts and boots) now have fur too; the shorts stay bare (L). Untested on PC (T332).
 - Kazooie feathers: on her wings they now point out along the wing to the tips instead of down, each feather shows the texture colours under it (yellow tips on the wings), and the top of her head is feathered (L). Untested on PC (T331).
 - Start menu: Start Game is now Play, with the effects preset beside it (< Vanilla >, Enhanced, Retro, Custom); left and right or the arrows change it, and Play applies it (L). Vanilla (the Effects preset once called Original) turns every shader effect off, also FXAA, FSR and Kazooie feathers. Untested on PC (T327).
@@ -137,6 +138,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Controls
 
+- Button combinations: with Combo binding On (Controls tab footer), a binding slot takes two inputs, held one then pressed the other (for example a back button + Y). A combination wins over the second button's own binding while the first is held. Untested on PC (T338).
 - Fine aim now really slows first-person turning (headless: 44% of the normal turn at the 40% setting; before, about 89%). Its key is bindable: Controls tab, Hotkeys, Fine Aim (R or right trigger by default). Untested on PC (T102).
 - Gyro aim: the controller's turn now moves the view the right way (left/right and up/down were swapped) and by the right amount (it was a rate, not degrees). Untested on PC (T103).
 - Split up anywhere: D-pad left plays Banjo, right plays Kazooie (065b633, 22ee63c). Untested on PC (T55).
@@ -146,6 +148,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Speed-up key test notes and 4.21 marked done (af32c7a). Untested on PC (T59).
 
 ### Audio
+
+- Sound > Mix rate now switches at once, without restarting the game. Untested on PC (T335).
 
 - Sound no longer breaks up with Game Frame Rate at 40 FPS (and the other rates the port paces itself). Untested on PC (T325).
 

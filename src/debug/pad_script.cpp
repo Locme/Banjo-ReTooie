@@ -9,7 +9,14 @@
 //   * Stick: x=<-1..1>, y=<-1..1>, mixed freely with buttons.
 //   * Right stick: rx=<-1..1>, ry=<-1..1> (read by the free camera, which
 //     sees the right stick itself rather than as C buttons).
+//   * Virtual pad buttons: v<0..15> holds that raw button of a virtual SDL controller, attached
+//     when the script has any (a:b0 b:b1 x:b2 y:b3 back:b4 guide:b5 start:b6 leftstick:b7
+//     rightstick:b8 leftshoulder:b9 rightshoulder:b10; b11-b15 are left unmapped, like back
+//     buttons). Unlike the buttons above, these go through the Controls tab's bindings.
 //   * `quit` ends the program.
+// TOOIE_INPUT_LOG=1 logs player 1's bound N64 buttons whenever they change.
+// TOOIE_COMBO_TEST=1 binds N64 A's second slot to the combination Paddle 1 (v11) + Y, for testing
+// button combinations with the virtual pad.
 // Scripted input is added to player 1's real input, so a script and a person
 // can share the controller.
 
@@ -38,6 +45,13 @@
 #include "tooie_texture_sweep.h"
 #include "tooie_totals_checklist.h"
 #include "recompinput/profiles.h"
+#include "recompinput/input_mapping.h"
+
+#ifdef _WIN32
+#include "SDL.h"
+#else
+#include "SDL2/SDL.h"
+#endif
 
 namespace {
     struct Step {
@@ -49,6 +63,7 @@ namespace {
         std::optional<float> rx;
         std::optional<float> ry;
         bool quit;
+        uint16_t vbuttons = 0;
     };
 
     std::vector<Step> steps;
@@ -117,6 +132,9 @@ bool tooie::debug::parse_pad_script(const char* script) {
             else if (action.rfind("y=", 0) == 0) {
                 step.y = std::strtof(action.c_str() + 2, nullptr);
             }
+            else if (action.size() > 1 && action[0] == 'v' && action[1] >= '0' && action[1] <= '9') {
+                step.vbuttons |= (uint16_t)(1u << (std::strtoul(action.c_str() + 1, nullptr, 10) & 15));
+            }
             else {
                 step.buttons |= button_bit(action);
             }
@@ -141,11 +159,81 @@ static uint32_t script_ms() {
         std::chrono::steady_clock::now() - started).count();
 }
 
+// The virtual pad for v<n> steps.
+static void update_virtual_pad(uint32_t now_ms) {
+    static SDL_Joystick* joystick = nullptr;
+    static bool tried = false;
+    static int index = -1;
+    static bool combo_bound = false;
+    uint16_t held = 0;
+    bool used = false;
+    for (const Step& step : steps) {
+        used = used || step.vbuttons != 0;
+        if (now_ms >= step.start_ms && now_ms < step.start_ms + step.hold_ms) {
+            held |= step.vbuttons;
+        }
+    }
+    if (!used) {
+        return;
+    }
+    if (!tried) {
+        tried = true;
+        SDL_VirtualJoystickDesc desc{};
+        desc.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+        desc.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+        desc.naxes = 6;
+        desc.nbuttons = 16;
+        desc.vendor_id = 0x1234;
+        desc.product_id = 0x5678;
+        desc.name = "Pad script";
+        index = SDL_JoystickAttachVirtualEx(&desc);
+        if (index >= 0) {
+            char guid[64];
+            SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(index), guid, sizeof(guid));
+            std::string mapping = std::string(guid) + ",Pad script,a:b0,b:b1,x:b2,y:b3,back:b4,guide:b5,start:b6,"
+                "leftstick:b7,rightstick:b8,leftshoulder:b9,rightshoulder:b10,leftx:a0,lefty:a1,rightx:a2,righty:a3,"
+                "lefttrigger:a4,righttrigger:a5,";
+            SDL_GameControllerAddMapping(mapping.c_str());
+        }
+        fprintf(stderr, "[pad] virtual pad %s\n", index >= 0 ? "attached" : SDL_GetError());
+    }
+    if (joystick == nullptr && index >= 0) {
+        // Opening can fail until the main thread has seen the new device; try again on later reads.
+        joystick = SDL_JoystickOpen(index);
+    }
+    if (joystick == nullptr) {
+        return;
+    }
+    if (!combo_bound && std::getenv("TOOIE_COMBO_TEST") != nullptr) {
+        int profile = recompinput::profiles::get_sp_controller_profile_index();
+        if (profile >= 0) {
+            recompinput::InputField combo = recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_NORTH);
+            combo.modifier_type = recompinput::InputType::ControllerDigital;
+            combo.modifier_id = SDL_CONTROLLER_BUTTON_PADDLE1;
+            recompinput::profiles::set_input_binding(profile, recompinput::GameInput::A, 1, combo);
+            combo_bound = true;
+            fprintf(stderr, "[pad] N64 A also bound to %s\n", combo.to_string().c_str());
+        }
+    }
+    for (int b = 0; b < 16; b++) {
+        SDL_JoystickSetVirtualButton(joystick, b, (held >> b) & 1);
+    }
+}
+
 // Player input with any scripted input added.
 static bool merged_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
+    if (player_index == 0 && !steps.empty()) {
+        update_virtual_pad(script_ms());
+    }
     bool ok = recompinput::profiles::get_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index != 0) {
         return ok;
+    }
+    static const bool log_input = std::getenv("TOOIE_INPUT_LOG") != nullptr;
+    static uint16_t last_logged = 0;
+    if (log_input && *buttons_out != last_logged) {
+        last_logged = *buttons_out;
+        fprintf(stderr, "[input] %u ms: buttons %04X\n", steps.empty() ? 0u : script_ms(), *buttons_out);
     }
     if (steps.empty()) {
         tooie::quick_start_note_input(*buttons_out);

@@ -95,12 +95,16 @@ namespace tooie::picture_filters {
     // Kazooie's feathers (GrassGS.hlsl in lib/rt64): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
     inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
+    // Furry enemies' white fur (the yetis), on or off (L).
+    inline const std::string enemy_fur_option = "enemy_fur";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
     bool sun_shadows_on();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
     bool kazooie_feathers_on();
+    // Whether furry enemies' fur is on, for the model tagging to mark them.
+    bool enemy_fur_on();
     // How far under water the view is, 0 above to 1 under (easing between), for the day and night cycle's rain.
     float underwater();
 

@@ -11,6 +11,38 @@
 - Look for: the stones and cobbles look raised, with the dark gaps and cracks sunk in, and the stones shift against each other as the camera moves instead of looking painted on. Grass, wood, characters and the sky look as before. Tell me if anything looks smeared or swims (most likely on a wall seen almost edge on), which textures should have it and don't, and whether the frame rate drops. Checked headless in Mayahem Temple: the path and doorway stand out; screenshot screens/parallax/mayahem-temple-off-on-headless.png in project files (left off, right on).
 - Status: waiting for L
 
+## T338 Button combinations in Controls
+- Asked: 2026-10-16 22:45 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Esc > Controls. In the footer, press "Combo binding: Off" so it says On
+  2. Click a free binding slot (for example the second slot of Fine Aim, or of an N64 button), hold one button (for example LB or a back button) and press a second one (for example Y). The slot shows both, joined with +
+  3. Press "Combo binding" again to turn it Off; bindings made while it is Off are single buttons as before
+  4. In game, press the second button alone, then hold the first and press the second
+- Look for: Alone, the second button does its usual job. With the first held, only the combination's action happens, not the usual one. Do the bindings stay after restarting the game? Don't use Back/Select as the first button if it opens the menu.
+- Status: waiting for L
+
+## T337 Smash Banjo v13: Kazooie as Smash Kazooie after Split Up
+- Asked: 2026-10-16 22:39 UTC
+- Build: mods/Smash Banjo v13.zip in project files (remove v12 from the mods folder first)
+- Steps:
+  1. Put Smash Banjo v13 in the mods folder and take v12 out
+  2. Use a Split Up pad and switch to Kazooie
+  3. Let her idle, then walk, jump, peck and flap
+  4. Switch to Banjo on his own and check he still has his backpack
+- Look for: Solo Kazooie is Smash's Kazooie with the game's animations. Smash's Kazooie has no hips (they're hidden in the backpack), so I moved her legs and tail up under her body and made her legs a little longer; check there is no gap between her body and legs in any move. She blinks with her own eyes (vanilla's blink timing). Solo Banjo keeps his backpack. Dragon Kazooie is not in this version.
+- Status: waiting for L
+
+## T336 Enemy fur: the yetis' white fur
+- Asked: 2026-10-16 22:31 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn Enemy fur on
+  2. Hailfire Peaks, Icy Side: find a yeti and look at it up close
+  3. Turn Enemy fur off again
+- Look for: The yeti's white body and arms grow white fur strands like Banjo's, while its blue face, red mouth and eyes stay smooth. With Enemy fur off it is smooth again. Banjo only has fur if Banjo fur is on.
+- Status: waiting for L
+
 ## T334 Photo mode: shutter, self-timer, Others row, focus point
 - Asked: 2026-10-16 22:12 UTC
 - Build: main @ 8033ca7
@@ -3420,3 +3452,12 @@
 - Look for: The sound plays smoothly, no crackles, gaps or breaking up. The cause: when the game's VI thread fell behind and two screen ticks waited at once, the second was taken for an extra tick and its sound frame was skipped (headless at 40 FPS, about 15 of every 120 ticks). Headless now: all 120 of 120 ticks run the sound, 60 sound frames every 2 s, as at 30 FPS. The frame pacer's wait also lets the game's other threads run now.
 - Status: waiting for L
 
+## T335 Sound > Mix rate switches at once
+- Asked: 2026-10-16 22:45 UTC
+- Build: main (pull and build)
+- Steps:
+  1. In a level with music, Esc > Sound > Mix rate: High (44 kHz), then Apply
+  2. Listen, then switch back to Original and Apply
+  3. Try it in a room with echo too (a cave or the Jinjo houses), and with General > More game memory on and off
+- Look for: The sound changes right away, with no restart; music and effects keep their pitch and speed, and echoes keep their timing. At most a tiny blip at the moment it switches. Checked headless on the title screen: switched 22 > 44 > 22 > 44 kHz, the sound kept 60 frames every 2 s and the music's pitch stayed in the same range; the reverb's delays were found and changed. Not checked headless: how it sounds.
+- Status: waiting for L
