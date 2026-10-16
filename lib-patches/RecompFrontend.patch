@@ -1680,7 +1680,7 @@ index 34eec3f..cedce38 100644
      Element *select_add_option(std::string_view text, std::string_view value);
      void select_set_selection(std::string_view option_value);
 diff --git a/recompui/src/elements/ui_modal.cpp b/recompui/src/elements/ui_modal.cpp
-index b057f46..c5361ce 100644
+index b057f46..0a580b3 100644
 --- a/recompui/src/elements/ui_modal.cpp
 +++ b/recompui/src/elements/ui_modal.cpp
 @@ -3,6 +3,9 @@
@@ -1930,10 +1930,16 @@ index b057f46..c5361ce 100644
              queue_update();
              break;
          }
-@@ -362,7 +571,14 @@ void TabbedModal::navigate_tab_direction(int direction) {
+@@ -362,7 +571,20 @@ void TabbedModal::navigate_tab_direction(int direction) {
          return;
      }
      int next_index = tabs->get_next_tab_in_direction(tabs->get_active_tab(), direction);
++    // Sidebar: L and R pass over the Search tab, which has no row in the list (its box sits at the top).
++    // Stopping there dropped a page's focus into the search field, so R never reached Mods.
++    int search_index = get_tab_index("search");
++    if (sidebar_layout && next_index >= 0 && next_index == search_index) {
++        next_index = tabs->get_next_tab_in_direction(next_index, direction);
++    }
 +    // Sidebar: L and R from inside a page land inside the next page, not on the sidebar.
 +    Element *focused = get_current_context().get_focused_element();
 +    bool from_page = sidebar_layout && focused != nullptr && body->contains_element(focused);
@@ -1945,7 +1951,7 @@ index b057f46..c5361ce 100644
      // Only focus if the tab changed to the intended tab, otherwise the tab change was cancelled.
      if (current_tab_index == next_index) {
          tabs->focus_on_active_tab();
-@@ -404,6 +620,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
+@@ -404,6 +626,12 @@ void TabbedModal::initialize_tab(TabContext &tab_context) {
      ContextId context = get_current_context();
      if (tabs == nullptr) {
          header->set_padding_left(0.0f); // tabs hug to left side
