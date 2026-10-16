@@ -185,7 +185,7 @@
   1. Put "Banjo X Alt v4.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Open photo mode and look at Banjo's face close up, then walk, jump, flap and roll
 - Look for: half-closed eyelids over blue eyes, the brows, the smile and the peach insides of the ears, as in L's reference picture; the straps stay on the shoulders. The game stores model points as whole numbers, which crushed this model's fine detail (eyelids sank into the eyes, the smile closed). v4 stores the points 8 times larger and scales them back down while drawing. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v4.png: v4 close up, and v4 with HD textures).
-- Status: waiting for L
+- Status: failed (L, 2026-10-16: eyes mid-blink, strap bugged); replaced by T268
 
 ## T245 3D grass on edges
 - Asked: 2026-10-16 09:45 UTC
@@ -2788,4 +2788,13 @@
   2. Play as Mumbo and look at his face close up (photo mode, zoom in): stand still, walk, jump, cast a spell
   3. Go into Mayahem Temple's Mumbo's Skull and talk to him
 - Look for: the face matches the Viva model: the grin with both rows of teeth shows while he stands (in v2 the jaw sat shut over the teeth), the striped rings sit round the eye sockets with dark sockets behind the lids, and the brow band and nose holes are where they are on the original. Nothing flickers or shows through round the eyes. Legs, feet and skirt as in v2. Cause: the game's own animations hold Mumbo's jaw about 9 degrees shut, so the jaw is now modelled that much open; the model is also stored 8 times finer, so the eyelids and socket rims keep their exact shape and texture instead of being rounded to whole units. Checked headless with the zip: photo-mode close-up playing as Mumbo, walking, jumping, a spell, and talking in the skull ([v3.png](screens/viva-mumbo/v3.png)). Swimming was not tried.
+- Status: waiting for L
+
+## T268 Banjo X Alt v5: eyes open and blinking, straps fixed
+- Asked: 2026-10-16 11:30 UTC
+- Build: main, plus mods/Banjo X Alt v5.zip from project files (take v1 to v4 out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v5.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
+  2. Stand still and watch Banjo's eyes, then walk, jump, flap and roll and watch the backpack straps
+- Look for: his eyes are wide open and blink (the FBX has him mid-blink; v5 turns the lids open, closing and shut for the game's blink stages). The straps stay on his shoulders and no longer tear where they meet the bag; the buckles and spikes ride on the straps. Checked headless: open eyes in photo mode, shut lids with a test build, straps in the idle pose (screenshot screens/banjo-x/alt-v5.png). If a strap still looks wrong, a screenshot of it helps.
 - Status: waiting for L
