@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T333 Fat Banjo and Kazooie v1 (model mod)
+- Asked: 2026-10-16 22:10 UTC
+- Build: main, plus mods/Fat Banjo v1.zip
+- Steps:
+  1. Put mods/Fat Banjo v1.zip (project files) in the game's mods folder and turn it on in the Mods menu; turn off Smash Banjo, Banjo X and Banjo X Alt (they replace the same model)
+  2. Load a save and stand still for a bit, then walk, run, jump, flap flip (A twice), roll, beak barge and talon trot
+  3. Watch his face and Kazooie's face up close with the free camera
+- Look for: The fat Banjo from your upload with Kazooie on the pack, moving with the game's own animations. Jumping and flapping, the backpack straps stretch from his shoulders to the pack instead of the pack floating off. Banjo blinks (lids come down over his eyes) and his jaw opens; Kazooie blinks with him, and her lower beak is rigged to open (not seen open headless yet). Kazooie's legs and tail are the game's own ones (the model has none), so they look like vanilla in talon trot. HD textures from the model are included. Checked headless in Mayahem Temple with the game's own bone matrices (stand, jump with his jaw open, flap flip, beak barge) and all 8 blink steps offline. Screenshot: screens/fat-banjo/v1.png. If something looks off, say which move.
+- Status: waiting for L
+
 ## T332 Banjo's knees have fur
 - Asked: 2026-10-16 22:08 UTC
 - Build: main
