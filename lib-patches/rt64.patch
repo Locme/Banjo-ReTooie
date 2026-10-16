@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..578f7c2 100644
+index 79dfc38..4815315 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -184,7 +184,7 @@ index 79dfc38..578f7c2 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,11 +590,39 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +590,43 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -223,7 +223,11 @@ index 79dfc38..578f7c2 100644
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects8XPS.hlsl" "-D SAMPLES_8X")
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
++build_vertex_shader( rt64 "src/shaders/SunShadowMapVS.hlsl")
++build_pixel_shader(rt64 "src/shaders/SunShadowMapPS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
+ build_pixel_shader(  rt64 "src/shaders/DebugPS.hlsl")
+ build_pixel_shader(  rt64 "src/shaders/Im3DPS.hlsl")
 diff --git a/include/rt64_extended_gbi.h b/include/rt64_extended_gbi.h
 index d387090..e12ccfe 100644
 --- a/include/rt64_extended_gbi.h
@@ -1552,7 +1556,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..f736d40 100644
+index 69a82ac..c2b77d2 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,8 @@ namespace RT64 {
@@ -1575,7 +1579,7 @@ index 69a82ac..f736d40 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +665,75 @@ namespace RT64 {
+@@ -659,6 +665,97 @@ namespace RT64 {
          }
      };
  
@@ -1627,6 +1631,7 @@ index 69a82ac..f736d40 100644
 +        uint32_t gWater;
 +        uint32_t gWaterColor;
 +        uint32_t gWaterRipples;
++        uint32_t gSunShadowMap;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -1637,9 +1642,30 @@ index 69a82ac..f736d40 100644
 +            gWater = builder.addTexture(6);
 +            gWaterColor = builder.addTexture(7);
 +            gWaterRipples = builder.addTexture(8);
++            gSunShadowMap = builder.addTexture(9);
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
 +            builder.addImmutableSampler(3, linearSampler);
++            builder.end();
++
++            if (device != nullptr) {
++                create(device);
++            }
++        }
++    };
++
++    // Banjo-Tooie: the sun shadow map's pass: the game's vertices, their model transforms' indices and the
++    // model transforms, as RSPWorldCS reads them.
++    struct SunShadowMapDescriptorSet : RenderDescriptorSetBase {
++        uint32_t srcPos;
++        uint32_t srcWorldIndices;
++        uint32_t worldMats;
++
++        SunShadowMapDescriptorSet(RenderDevice *device = nullptr) {
++            builder.begin();
++            srcPos = builder.addFormattedBuffer(1);
++            srcWorldIndices = builder.addFormattedBuffer(2);
++            worldMats = builder.addStructuredBuffer(3);
 +            builder.end();
 +
 +            if (device != nullptr) {
@@ -1652,7 +1678,7 @@ index 69a82ac..f736d40 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..98d1436 100644
+index 9fae0d4..17e9db2 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1847,7 +1873,22 @@ index 9fae0d4..98d1436 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -465,12 +620,61 @@ namespace RT64 {
+@@ -443,6 +598,14 @@ namespace RT64 {
+         updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
+         updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
+ 
++        // Banjo-Tooie: the sun shadow map's pass reads the game's vertices and model transforms.
++        if (sunShadowSet == nullptr) {
++            sunShadowSet = std::make_unique<SunShadowMapDescriptorSet>(worker->device);
++        }
++        sunShadowSet->setBuffer(sunShadowSet->srcPos, drawBuffers->positionBuffer.get(), drawBuffers->positionBuffer.getView(0));
++        sunShadowSet->setBuffer(sunShadowSet->srcWorldIndices, drawBuffers->worldIndicesBuffer.get(), drawBuffers->worldIndicesBuffer.getView(0));
++        sunShadowSet->setBuffer(sunShadowSet->worldMats, drawBuffers->worldTransformsBuffer.get(), RenderBufferStructuredView(sizeof(interop::float4x4)));
++
+ #   if RT_ENABLED
+         if (raytracingEnabled) {
+             updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
+@@ -465,12 +628,61 @@ namespace RT64 {
          return true;
      }
      
@@ -1911,7 +1952,7 @@ index 9fae0d4..98d1436 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +718,17 @@ namespace RT64 {
+@@ -514,6 +726,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1929,7 +1970,7 @@ index 9fae0d4..98d1436 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +789,72 @@ namespace RT64 {
+@@ -574,10 +797,72 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2002,7 +2043,7 @@ index 9fae0d4..98d1436 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1527,67 @@ namespace RT64 {
+@@ -1250,6 +1535,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2070,7 +2111,7 @@ index 9fae0d4..98d1436 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1634,56 @@ namespace RT64 {
+@@ -1296,9 +1642,80 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2114,7 +2155,31 @@ index 9fae0d4..98d1436 100644
 +                        static const bool rawView = (getenv("TOOIE_FX_RAW_VIEW") != nullptr);
 +                        const interop::float4x4 &effectsView = (!rawView && (effectsIndex < effectsData->modViewTransforms.size())) ?
 +                            effectsData->modViewTransforms[effectsIndex] : effectsData->viewTransforms[effectsIndex];
-+                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea);
++                        // The sun shadow map's casters, drawn from the sun (the scene effects set up the map and the pass).
++                        auto drawSunCasters = [&](RenderCommandList *commandList) {
++                            commandList->setGraphicsDescriptorSet(sunShadowSet->get(), 0);
++                            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
++                            commandList->setIndexBuffer(&indexBufferView);
++                            for (uint32_t i : targetDrawCall.sunCasterInstances) {
++                                const auto &triangles = instanceDrawCallVector[i].triangles;
++                                if (triangles.faceCount > 0) {
++                                    commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
++                                }
++                            }
++                        };
++                        const bool sunCasters = !targetDrawCall.sunCasterInstances.empty() && (sunShadowSet != nullptr);
++                        static const bool casterLog = (getenv("TOOIE_FX_LOG") != nullptr);
++                        if (casterLog) {
++                            static auto lastCasterLog = std::chrono::steady_clock::now();
++                            if (std::chrono::steady_clock::now() - lastCasterLog > std::chrono::milliseconds(1000)) {
++                                lastCasterLog = std::chrono::steady_clock::now();
++                                uint32_t faces = 0;
++                                for (uint32_t i : targetDrawCall.sunCasterInstances) faces += instanceDrawCallVector[i].triangles.faceCount;
++                                fprintf(stderr, "[sunmap] casters %zu faces %u\n", targetDrawCall.sunCasterInstances.size(), faces);
++                            }
++                        }
++                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
++                            sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
 +                    }
 +                    worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
 +                    for (uint32_t sceneIndex : scenesBeforeEffects) {
@@ -2128,7 +2193,7 @@ index 9fae0d4..98d1436 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1739,7 @@ namespace RT64 {
+@@ -1354,6 +1771,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -2136,7 +2201,7 @@ index 9fae0d4..98d1436 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1794,58 @@ namespace RT64 {
+@@ -1408,6 +1826,59 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2145,6 +2210,7 @@ index 9fae0d4..98d1436 100644
 +        targetDrawCall.waterInstances.clear();
 +        targetDrawCall.fallInstances.clear();
 +        targetDrawCall.waterHandedOn.clear();
++        targetDrawCall.sunCasterInstances.clear();
 +        targetDrawCall.waterLeftOutClosed = 0;
 +        targetDrawCall.waterLeftOutSmall = 0;
 +        targetDrawCall.hasExcludedInstances = false;
@@ -2195,7 +2261,7 @@ index 9fae0d4..98d1436 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1894,54 @@ namespace RT64 {
+@@ -1456,6 +1927,54 @@ namespace RT64 {
                  continue;
              }
  
@@ -2250,7 +2316,7 @@ index 9fae0d4..98d1436 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2168,20 @@ namespace RT64 {
+@@ -1682,6 +2201,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2271,7 +2337,7 @@ index 9fae0d4..98d1436 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2247,142 @@ namespace RT64 {
+@@ -1747,8 +2280,156 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2300,8 +2366,8 @@ index 9fae0d4..98d1436 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2309,6 +2375,20 @@ index 9fae0d4..98d1436 100644
 +                    !((instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && instanceDrawCall.triangles.vertexTestZ);
 +                instanceExcludedVector.resize(instanceIndex, 0);
 +                instanceExcludedVector.push_back(excluded ? 1 : 0);
++
++                // Banjo-Tooie: the 3D world's solid draws cast sun shadows from the shadow map (depth written, not
++                // blended, not a decal). Cut-outs (alpha compare, coverage times alpha) are left to the screen-space
++                // shadows: drawn without their textures they would cast solid squares.
++                {
++                    const interop::OtherMode sm = call.shaderDesc.otherMode;
++                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                        (call.callDesc.triangleCount > 0) && sm.zCmp() && sm.zUpd() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) &&
++                        !interop::Blender::usesAlphaBlend(sm) && (sm.alphaCompare() == G_AC_NONE) && !sm.cvgXAlpha())
++                    {
++                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
++                    }
++                }
 +
 +                // Banjo-Tooie: 3D grass grows on the level's own opaque, textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
@@ -2378,8 +2458,8 @@ index 9fae0d4..98d1436 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                if ((furShells > 0) && call.callDesc.extendedFlags.furShells && !excluded && worldOpen && fbPair.depthWrite &&
@@ -2414,7 +2494,7 @@ index 9fae0d4..98d1436 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2392,170 @@ namespace RT64 {
+@@ -1758,13 +2439,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2434,6 +2514,8 @@ index 9fae0d4..98d1436 100644
 +                {
 +                    targetDrawCall.waterInstances.insert(targetDrawCall.waterInstances.begin(), earlier.waterInstances.begin(), earlier.waterInstances.end());
 +                    targetDrawCall.fallInstances.insert(targetDrawCall.fallInstances.begin(), earlier.fallInstances.begin(), earlier.fallInstances.end());
++                    targetDrawCall.sunCasterInstances.insert(targetDrawCall.sunCasterInstances.begin(), earlier.sunCasterInstances.begin(), earlier.sunCasterInstances.end());
++                    earlier.sunCasterInstances.clear();
 +                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
 +                    targetDrawCall.waterLeftOutSmall += earlier.waterLeftOutSmall;
 +                    earlier.waterHandedOn = std::move(earlier.waterInstances);
@@ -2587,10 +2669,10 @@ index 9fae0d4..98d1436 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..f382a33 100644
+index 3add9c3..a107897 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,34 @@ namespace RT64 {
+@@ -48,6 +48,36 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -2611,6 +2693,8 @@ index 3add9c3..f382a33 100644
 +        // Water this part of the picture draws but handed to a later part's effects (see addFramebuffer):
 +        // Modern water leaves it out here too.
 +        std::vector<uint32_t> waterHandedOn;
++        // Banjo-Tooie: the 3D world's solid draws, drawn again from the sun into the sun shadow map.
++        std::vector<uint32_t> sunCasterInstances;
 +        // Draws that looked like water but were left out: drawn while the 3D world was closed, or too small.
 +        uint32_t waterLeftOutClosed = 0;
 +        uint32_t waterLeftOutSmall = 0;
@@ -2625,7 +2709,7 @@ index 3add9c3..f382a33 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +95,43 @@ namespace RT64 {
+@@ -67,6 +97,43 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -2669,7 +2753,7 @@ index 3add9c3..f382a33 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +152,8 @@ namespace RT64 {
+@@ -87,6 +154,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -2678,7 +2762,15 @@ index 3add9c3..f382a33 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -123,6 +190,10 @@ namespace RT64 {
+@@ -100,6 +169,7 @@ namespace RT64 {
+         bool descriptorTextureReplacementMapEnabled = false;
+         std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
+         std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
++        std::unique_ptr<SunShadowMapDescriptorSet> sunShadowSet;
+         interop::FrameParams frameParams;
+         const ShaderLibrary *shaderLibrary = nullptr;
+ 
+@@ -123,6 +193,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2689,7 +2781,7 @@ index 3add9c3..f382a33 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +235,15 @@ namespace RT64 {
+@@ -164,7 +238,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -3723,10 +3815,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..adbcfe1
+index 0000000..bdbb737
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1725 @@
+@@ -0,0 +1,1779 @@
 +//
 +// RT64
 +//
@@ -3757,6 +3849,8 @@ index 0000000..adbcfe1
 +        // Modern water's ripple grid round the player: cells across, and world units per cell.
 +        constexpr uint32_t RippleCells = 256;
 +        constexpr float RippleCellSize = 3.0f;
++        // When the program started (near enough), for the sun shadow map's headless test hook.
++        const auto sunMapProcessStart = std::chrono::steady_clock::now();
 +        std::mutex effectsMutex;
 +        SceneEffectsSettings effectsSettings;
 +
@@ -3783,6 +3877,11 @@ index 0000000..adbcfe1
 +            const RenderTexture *sceneSetColor = nullptr;
 +            const RenderTexture *sceneSetAdapted = nullptr;
 +            const RenderTexture *sceneSetWater = nullptr;
++            // The sun shadow map: the 3D world's solid triangles as seen from the sun, depth only.
++            std::unique_ptr<RenderTexture> sunMapTexture;
++            std::unique_ptr<RenderTextureView> sunMapTextureView;
++            std::unique_ptr<RenderFramebuffer> sunMapFramebuffer;
++            const RenderTexture *sceneSetSunMap = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
 +            std::unique_ptr<RenderTexture> waterTexture;
@@ -4908,7 +5007,8 @@ index 0000000..adbcfe1
 +    std::atomic<uint32_t> sceneEffectsRecorded{ 0 };
 +
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
-+        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area)
++        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area,
++        const std::function<void(RenderCommandList *)> &drawSunCasters)
 +    {
 +
 +        sceneEffectsRecorded++;
@@ -5390,9 +5490,53 @@ index 0000000..adbcfe1
 +            constants.rippleZ.y = float(RippleCells);
 +            constants.rippleX.z = (res.rippleCornerKnown && havePlayer) ? 1.0f : 0.0f;
 +        }
++        // The sun shadow map, made once and cleared to nothing in the way of the sun, so the pass can always read it.
++        if (res.sunMapTexture == nullptr) {
++            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
++            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(SUN_SHADOW_MAP_SIZE, SUN_SHADOW_MAP_SIZE, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
++            res.sunMapTexture->setName("Scene Effects Sun Shadow Map");
++            res.sunMapTextureView = res.sunMapTexture->createTextureView(RenderTextureViewDesc::Texture2D(RenderFormat::D32_FLOAT));
++            const RenderTexture *noColor = nullptr;
++            res.sunMapFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&noColor, 0, res.sunMapTexture.get()));
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
++            commandList->setFramebuffer(res.sunMapFramebuffer.get());
++            commandList->clearDepth(true, 1.0f);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
++        }
++
++        // The 3D world's solid triangles drawn from the sun. The pass works out where the map lies from the same
++        // constants as the effects (SunShadowMap.hlsli); a negative reach tells the effects the map is there.
++        // Headless test hooks: TOOIE_SUN_MAP_OFF leaves the map out, TOOIE_SUN_MAP_OFF_AFTER=<seconds> from then on.
++        static const bool sunMapOff = (getenv("TOOIE_SUN_MAP_OFF") != nullptr);
++        static const char *sunMapOffAfter = getenv("TOOIE_SUN_MAP_OFF_AFTER");
++        const bool sunMapOffNow = sunMapOff || ((sunMapOffAfter != nullptr) && (std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count() > float(atof(sunMapOffAfter))));
++        if (drawSunCasters && !sunMapOffNow && (constants.shadows.x > 0.0f)) {
++            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
++            commandList->setFramebuffer(res.sunMapFramebuffer.get());
++            commandList->clearDepth(true, 1.0f);
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(SUN_SHADOW_MAP_SIZE), float(SUN_SHADOW_MAP_SIZE)));
++            commandList->setScissors(RenderRect(0, 0, SUN_SHADOW_MAP_SIZE, SUN_SHADOW_MAP_SIZE));
++            commandList->setPipeline(shaderLibrary->sunShadowMap.pipeline.get());
++            commandList->setGraphicsPipelineLayout(shaderLibrary->sunShadowMap.pipelineLayout.get());
++            commandList->setGraphicsPushConstants(0, &constants);
++            drawSunCasters(commandList);
++            static const bool mapLog = (getenv("TOOIE_FX_LOG") != nullptr);
++            static auto lastMapLog = std::chrono::steady_clock::now();
++            if (mapLog && (std::chrono::steady_clock::now() - lastMapLog > std::chrono::milliseconds(1000))) {
++                lastMapLog = std::chrono::steady_clock::now();
++                fprintf(stderr, "[sunmap] drawn at %.1f s sun %.3f %.3f %.3f\n", std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count(), constants.sun.x, constants.sun.y, constants.sun.z);
++            }
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
++            WorkloadGpuSections().end(sunMapSpan);
++            // Headless test hook: TOOIE_SUN_MAP_VIEW shows only what the map shades (grey outside it).
++            static const bool sunMapView = (getenv("TOOIE_SUN_MAP_VIEW") != nullptr);
++            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? 100000.0f : 0.0f);
++        }
++
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
-+            (res.sceneSetRipples != res.rippleTexture[0].get())) {
++            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get())) {
 +            if (res.sceneSet != nullptr) {
 +                res.retireLater(std::move(res.sceneSet));
 +            }
@@ -5412,6 +5556,8 @@ index 0000000..adbcfe1
 +            res.sceneSetWaterColor = waterColor;
 +            res.sceneSet->setTexture(res.sceneSet->gWaterRipples, res.rippleTexture[0].get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetRipples = res.rippleTexture[0].get();
++            res.sceneSet->setTexture(res.sceneSet->gSunShadowMap, res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ, res.sunMapTextureView.get());
++            res.sceneSetSunMap = res.sunMapTexture.get();
 +        }
 +
 +        colorTarget->setupColorFramebuffer(worker);
@@ -5454,10 +5600,10 @@ index 0000000..adbcfe1
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..6a414fe
+index 0000000..8fedb12
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,248 @@
 +//
 +// RT64
 +//
@@ -5468,6 +5614,8 @@ index 0000000..6a414fe
 +
 +#include "shared/rt64_hlsl.h"
 +#include "shared/rt64_frame_params.h"
++
++#include <functional>
 +
 +#include "rt64_render_worker.h"
 +#include "rt64_shader_library.h"
@@ -5698,12 +5846,14 @@ index 0000000..6a414fe
 +    // Draws the effects into the color target from the depth target, during a framebuffer's drawing.
 +    // Leaves the color target ready for color writes and the depth target ready for depth writes, with
 +    // no framebuffer set. projection is the 3D world's projection; when it isn't a perspective one
-+    // nothing is drawn.
++    // nothing is drawn. drawSunCasters draws the 3D world's solid triangles into the sun shadow map, with the
++    // map's framebuffer, pipeline and constants already set (it binds its own descriptor set at 0 and index buffer).
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
-+        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area);
++        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area,
++        const std::function<void(RenderCommandList *)> &drawSunCasters = {});
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..d1a10a8 100644
+index d1c5273..d6c055a 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -40,7 +40,27 @@
@@ -5734,7 +5884,16 @@ index d1c5273..d1a10a8 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -86,7 +106,27 @@
+@@ -48,6 +68,8 @@
+ #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
+ #include "shaders/FullScreenVS.hlsl.spirv.h"
+ #include "shaders/Im3DVS.hlsl.spirv.h"
++#include "shaders/SunShadowMapVS.hlsl.spirv.h"
++#include "shaders/SunShadowMapPS.hlsl.spirv.h"
+ #include "shaders/ComposePS.hlsl.spirv.h"
+ #include "shaders/DebugPS.hlsl.spirv.h"
+ #include "shaders/Im3DPS.hlsl.spirv.h"
+@@ -86,7 +108,27 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -5762,7 +5921,16 @@ index d1c5273..d1a10a8 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -131,7 +171,27 @@
+@@ -94,6 +136,8 @@
+ #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
+ #   include "shaders/FullScreenVS.hlsl.dxil.h"
+ #   include "shaders/Im3DVS.hlsl.dxil.h"
++#   include "shaders/SunShadowMapVS.hlsl.dxil.h"
++#   include "shaders/SunShadowMapPS.hlsl.dxil.h"
+ #   include "shaders/ComposePS.hlsl.dxil.h"
+ #   include "shaders/DebugPS.hlsl.dxil.h"
+ #   include "shaders/Im3DPS.hlsl.dxil.h"
+@@ -131,7 +175,27 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -5790,7 +5958,16 @@ index d1c5273..d1a10a8 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -148,6 +208,10 @@
+@@ -139,6 +203,8 @@
+ #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
+ #   include "shaders/FullScreenVS.hlsl.metal.h"
+ #   include "shaders/Im3DVS.hlsl.metal.h"
++#   include "shaders/SunShadowMapVS.hlsl.metal.h"
++#   include "shaders/SunShadowMapPS.hlsl.metal.h"
+ #   include "shaders/ComposePS.hlsl.metal.h"
+ #   include "shaders/DebugPS.hlsl.metal.h"
+ #   include "shaders/Im3DPS.hlsl.metal.h"
+@@ -148,6 +214,10 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -5801,7 +5978,7 @@ index d1c5273..d1a10a8 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -569,6 +633,78 @@ namespace RT64 {
+@@ -569,6 +639,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -5880,7 +6057,7 @@ index d1c5273..d1a10a8 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +719,20 @@ namespace RT64 {
+@@ -583,6 +725,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -5901,7 +6078,7 @@ index d1c5273..d1a10a8 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +982,52 @@ namespace RT64 {
+@@ -832,6 +988,76 @@ namespace RT64 {
              }
          }
  
@@ -5951,19 +6128,45 @@ index d1c5273..d1a10a8 100644
 +            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
 +        }
 +
++        // Banjo-Tooie: the sun shadow map, the 3D world's triangles drawn from the sun into a depth map. The
++        // same constants as the scene effects, so both work out the map's place the same way.
++        {
++            SunShadowMapDescriptorSet descriptorSet;
++            layoutBuilder.begin();
++            layoutBuilder.addDescriptorSet(descriptorSet);
++            layoutBuilder.addPushConstant(0, 0, sizeof(interop::SceneEffectsCB), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL);
++            layoutBuilder.end();
++            sunShadowMap.pipelineLayout = layoutBuilder.create(device);
++
++            std::unique_ptr<RenderShader> vertexShader = device->createShader(CREATE_SHADER_INPUTS(SunShadowMapVSBlobDXIL, SunShadowMapVSBlobSPIRV, SunShadowMapVSBlobMSL, "VSMain", shaderFormat));
++            std::unique_ptr<RenderShader> pixelShader = device->createShader(CREATE_SHADER_INPUTS(SunShadowMapPSBlobDXIL, SunShadowMapPSBlobSPIRV, SunShadowMapPSBlobMSL, "PSMain", shaderFormat));
++            RenderGraphicsPipelineDesc pipelineDesc;
++            pipelineDesc.pipelineLayout = sunShadowMap.pipelineLayout.get();
++            pipelineDesc.vertexShader = vertexShader.get();
++            pipelineDesc.pixelShader = pixelShader.get();
++            pipelineDesc.renderTargetCount = 0;
++            pipelineDesc.depthEnabled = true;
++            pipelineDesc.depthWriteEnabled = true;
++            pipelineDesc.depthFunction = RenderComparisonFunction::LESS;
++            pipelineDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
++            sunShadowMap.pipeline = device->createGraphicsPipeline(pipelineDesc);
++        }
++
          // Post process.
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..342552e 100644
+index 641f3ec..4c8d527 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,24 @@ namespace RT64 {
+@@ -51,8 +51,26 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
 +        // Banjo-Tooie: screen-space effects over the 3D world, at the main targets' sample count.
 +        ShaderRecord sceneEffects;
++        // Banjo-Tooie: the sun shadow map's depth-only pass (SunShadowMapVS.hlsl).
++        ShaderRecord sunShadowMap;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
 +        ShaderRecord bloom;
 +        // Banjo-Tooie: eye adaptation's brightness passes (BloomPS.hlsl passes 3 and 4), to R32_FLOAT.
@@ -8009,10 +8212,10 @@ index 74b1fa0..66e5e3a 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..a3ef354
+index 0000000..7410f39
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2100 @@
+@@ -0,0 +1,2139 @@
 +//
 +// RT64
 +//
@@ -8021,6 +8224,7 @@ index 0000000..a3ef354
 +// occlusion and outlines darken with a, and fog and bloom add its color in rgb as a fades the scene.
 +
 +#include "shared/rt64_scene_effects.h"
++#include "SunShadowMap.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
 +
@@ -8043,6 +8247,8 @@ index 0000000..a3ef354
 +#endif
 +// Modern water's ripple grid round the player: height and speed per cell (rippleX/Z.x hold its corner).
 +Texture2D<float2> gWaterRipples : register(t8);
++// The sun shadow map (SunShadowMap.hlsli), when shadows.y is negative.
++Texture2D<float> gSunShadowMap : register(t9);
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -9703,7 +9909,8 @@ index 0000000..a3ef354
 +    const float bias = 2.0f + distance * 0.004f;
 +    const float3 start = center + normal * bias;
 +    const float2 size = gConstants.projection.zw;
-+    const float reach = gConstants.shadows.y;
++    const bool mapView = (gConstants.shadows.y < -50000.0f);
++    const float reach = abs(gConstants.shadows.y) - (mapView ? 100000.0f : 0.0f);
 +    const int Steps = 24;
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
@@ -9747,6 +9954,41 @@ index 0000000..a3ef354
 +            if (shadow >= 0.99f) {
 +                break;
 +            }
++        }
++    }
++    // The sun shadow map: everything solid casts, on screen or not. Looked up a little off the surface, a few
++    // texels around (wider the softer the shadows), fading out towards the map's edges where the screen-space
++    // shadows above carry on alone.
++    if (gConstants.shadows.y < 0.0f) {
++        const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
++        const float3 worldNormal = normalize(SunMapWorldDirection(gConstants, normal));
++        const float3 world = WorldPosition(center) + worldNormal * (texel * 1.5f + distance * 0.001f);
++        const float3 m = SunMapPosition(gConstants, world);
++        const float cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
++        if ((cover > 0.0f) && (m.z > 0.0f) && (m.z < 1.0f)) {
++            const float depthBias = 2.0f * texel / (2.0f * SunMapRange);
++            const float radius = 1.0f + softness * 2.5f;
++            const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * float(SUN_SHADOW_MAP_SIZE);
++            const float angle = jitter * 6.2831853f;
++            const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
++            const int Taps = 12;
++            const float2 disk[Taps] = {
++                float2(-0.326f, -0.406f), float2(-0.840f, -0.074f), float2(-0.696f, 0.457f), float2(-0.203f, 0.621f),
++                float2(0.962f, -0.195f), float2(0.473f, -0.480f), float2(0.519f, 0.767f), float2(0.185f, -0.893f),
++                float2(0.507f, 0.064f), float2(0.896f, 0.412f), float2(-0.322f, -0.933f), float2(-0.792f, -0.598f)
++            };
++            float blocked = 0.0f;
++            [unroll] for (int k = 0; k < Taps; k++) {
++                const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(SUN_SHADOW_MAP_SIZE - 1, SUN_SHADOW_MAP_SIZE - 1));
++                blocked += ((m.z - depthBias) > gSunShadowMap.Load(int3(at, 0))) ? 1.0f : 0.0f;
++            }
++            shadow = max(shadow, (blocked / float(Taps)) * cover);
++            if (mapView) {
++                return 1.0f - 0.9f * (blocked / float(Taps));
++            }
++        }
++        if (mapView) {
++            return 0.5f;
 +        }
 +    }
 +    // The side turned from the sun darkens over a wider turn the softer the shadows.
@@ -10342,6 +10584,110 @@ index 0000000..87c83c5
 +    color = shade;
 +    return true;
 +}
+diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
+new file mode 100644
+index 0000000..f2f9024
+--- /dev/null
++++ b/src/shaders/SunShadowMap.hlsli
+@@ -0,0 +1,45 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: the sun shadow map. The 3D world's own triangles are drawn again as seen from the sun into a
++// depth map, so things outside the picture cast shadows too. Both that pass (SunShadowMapVS.hlsl) and the
++// scene effects work out where the map lies from the same scene effects constants with this same code, so
++// they always agree: a square of the world round the camera, a little ahead of it, square to the sun.
++
++#include "shared/rt64_scene_effects.h"
++
++// Half the width of the square the map covers, in world units.
++static const float SunMapHalf = 3000.0f;
++// How far ahead of the camera (along the ground) the square's middle sits.
++static const float SunMapAhead = 1800.0f;
++// How far towards and away from the sun the map reaches from its middle.
++static const float SunMapRange = 8000.0f;
++
++float3 SunMapWorldDirection(SceneEffectsCB c, float3 d) {
++    return float3(dot(d, c.worldX.xyz), dot(d, c.worldY.xyz), dot(d, c.worldZ.xyz));
++}
++
++// The map's axes in the world (across, up the map, towards the sun) and its middle.
++void SunMapBasis(SceneEffectsCB c, out float3 across, out float3 up, out float3 towards, out float3 middle) {
++    towards = normalize(SunMapWorldDirection(c, c.sun.xyz));
++    across = (abs(towards.y) > 0.999f) ? float3(1.0f, 0.0f, 0.0f) : normalize(float3(towards.z, 0.0f, -towards.x));
++    up = cross(towards, across);
++    const float3 camera = float3(c.worldX.w, c.worldY.w, c.worldZ.w);
++    const float2 forward = -float2(c.worldX.z, c.worldZ.z);
++    const float forwardLength = length(forward);
++    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * SunMapAhead : float2(0.0f, 0.0f);
++    middle = camera + float3(ahead.x, 0.0f, ahead.y);
++    // Moved in whole texels across the map, so the shadows' edges don't crawl as the camera moves.
++    const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
++    const float a = dot(middle, across), u = dot(middle, up);
++    middle += across * (floor(a / texel) * texel - a) + up * (floor(u / texel) * texel - u);
++}
++
++// A world position on the map: x and y in [-1, 1] across it, z the depth in [0, 1] (0 nearest the sun).
++float3 SunMapPosition(SceneEffectsCB c, float3 world) {
++    float3 across, up, towards, middle;
++    SunMapBasis(c, across, up, towards, middle);
++    const float3 q = world - middle;
++    return float3(dot(q, across) / SunMapHalf, dot(q, up) / SunMapHalf, 0.5f - dot(q, towards) / (2.0f * SunMapRange));
++}
+diff --git a/src/shaders/SunShadowMapPS.hlsl b/src/shaders/SunShadowMapPS.hlsl
+new file mode 100644
+index 0000000..fffa15a
+--- /dev/null
++++ b/src/shaders/SunShadowMapPS.hlsl
+@@ -0,0 +1,20 @@
++//
++// RT64
++//
++// Banjo-Tooie: the sun shadow map's pass. Banjo's own shadow can be left out (as the screen-space shadows
++// do it): what is drawn inside a capsule around him casts none.
++
++#include "shared/rt64_scene_effects.h"
++
++[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
++
++void PSMain(in float4 pos : SV_Position, in float3 world : TEXCOORD0) {
++    const float shadowFlags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
++    if ((shadowFlags > 1.5f) && (gConstants.rippleAge.w > -1e8f)) {
++        const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++        const float2 across = world.xz - banjo.xz;
++        if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
++            discard;
++        }
++    }
++}
+diff --git a/src/shaders/SunShadowMapVS.hlsl b/src/shaders/SunShadowMapVS.hlsl
+new file mode 100644
+index 0000000..54a0234
+--- /dev/null
++++ b/src/shaders/SunShadowMapVS.hlsl
+@@ -0,0 +1,21 @@
++//
++// RT64
++//
++// Banjo-Tooie: the sun shadow map's pass. Each of the 3D world's draws again, from the sun, depth only. The
++// index buffer holds the global vertex indices, so the vertex's world position is worked out here the way
++// RSPWorldCS does it, from the game's own vertices and model transforms.
++
++#include "SunShadowMap.hlsli"
++
++[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
++Buffer<float> srcPos : register(t1);
++Buffer<uint> srcWorldIndices : register(t2);
++StructuredBuffer<float4x4> worldMats : register(t3);
++
++void VSMain(in uint vertexIndex : SV_VertexID, out float4 pos : SV_Position, out float3 world : TEXCOORD0) {
++    const uint posIndex = vertexIndex * 3;
++    const float3 local = float3(srcPos[posIndex + 0], srcPos[posIndex + 1], srcPos[posIndex + 2]);
++    const float4 worldPos = mul(worldMats[srcWorldIndices[vertexIndex]], float4(local, 1.0f));
++    world = worldPos.xyz / worldPos.w;
++    pos = float4(SunMapPosition(gConstants, world), 1.0f);
++}
 diff --git a/src/shaders/TextureUpscaleCS.hlsl b/src/shaders/TextureUpscaleCS.hlsl
 new file mode 100644
 index 0000000..63b1ede
@@ -10730,10 +11076,10 @@ index 0a5c332..d867588 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..7781aaa
+index 0000000..d1667c1
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,79 @@
 +//
 +// RT64
 +//
@@ -10741,6 +11087,9 @@ index 0000000..7781aaa
 +#pragma once
 +
 +#include "shared/rt64_hlsl.h"
++
++// Banjo-Tooie: the sun shadow map's size in texels (SunShadowMap.hlsli).
++#define SUN_SHADOW_MAP_SIZE 2048
 +
 +#ifdef HLSL_CPU
 +namespace interop {
@@ -10790,7 +11139,8 @@ index 0000000..7781aaa
 +        // each, steps of 0.01, then three flags, bit 0 fireflies, bit 1 clouds, bit 2 northern lights: exact as a float below 2^24; negative for no lens
 +        // flare), then the softness (0 to 0.99) plus 2 to leave Banjo's own shadow out, plus 4 * (the day and night cycle's
 +        // mist strength (0 to 100) + 128 * when it shows (0 mornings, 1 mornings and nights, 2 always) + 512 * how wet the
-+        // ground is (0 to 31) + 16384 when raindrops land on the screen).
++        // ground is (0 to 31) + 16384 when raindrops land on the screen). The reach is negative when the sun
++        // shadow map was drawn this frame.
 +        float4 shadows;
 +    };
 +
