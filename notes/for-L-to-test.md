@@ -114,13 +114,13 @@
 - Look for: In the arena the rim's snow is now deep snow too (it was left out: the fight is its own map, and its bluer snow failed the snow colour test). Banjo leaves a darker furrow with footprints. Enemies walking leave a trail, and an attack that falls and lands leaves a crater, if the game draws it as an actor (I could check the polar bear headless, not the dragon's attacks). The snow is half as deep again as in T269 and the trail is darker, so it is easier to see. Tell me if you still see no trail at all, and whether you play on D3D12 or Vulkan.
 - Status: waiting for L
 
-## T312 Jiggy wipe stays black with Ambient Occlusion and the other shaders
-- Asked: 2026-10-16 20:43 UTC
-- Build: main after the Jiggy wipe fix
+## T312 Jiggy wipe stays black with Ambient Occlusion, rain and the other shaders
+- Asked: 2026-10-16 20:43 UTC (rain added 21:35, L saw it on an older build)
+- Build: main at 3bee844 or later
 - Steps:
-  1. Turn on Ambient Occlusion (and Fog, Bloom or the others you use)
+  1. Turn on Ambient Occlusion and the other shaders you use, and Day and night with rain (Weather: Rain or Storm)
   2. Go through any door or use the Warp tab so the Jiggy-shaped wipe plays
-- Look for: Is everything around the Jiggy black (not grey) while it closes and opens?
+- Look for: Is everything around the Jiggy black while it closes and opens: not grey, no rain streaks or night sky? (Film grain still shows faintly over black; it covers the whole picture on purpose.)
 - Status: waiting for L
 
 ## T311 Waterfalls dim at night
