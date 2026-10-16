@@ -189,7 +189,7 @@ F12 screenshots are taken before these filters, so they don't show them.
 - **Day and Night**: a day and night cycle in the levels that are daytime under
   an open sky (Spiral Mountain, Isle o' Hags outside, Mayahem Temple, Jolly
   Roger's Lagoon, Terrydactyland, Hailfire Peaks, Cloud Cuckooland). Cycle runs
-  the clock on game time; Morning, Sunset and Night hold one time of day. The 3D
+  the clock on game time; Dawn, Morning, Noon, Afternoon, Golden Hour, Sunset, Dusk and Night hold one time of day. The 3D
   world and sky are tinted (not the HUD), night has stars and a moon, and the
   sun moves for Sun shadows and Light shafts. Rooms, underwater areas,
   Witchyworld and Cauldron Keep never change. Applies at once. Default: Off.
@@ -207,6 +207,10 @@ F12 screenshots are taken before these filters, so they don't show them.
   over Hailfire Peaks' Icy Side at night. Default: on.
 - **Clouds**: with Day and Night on, soft 3D clouds drift across the sky, lit
   by the sun and the moon (not in Cloud Cuckooland). Default: on.
+- **Mist**: with Day and Night on, pale mist drifting in banks over low ground,
+  thickest on and round water. 0 to 100; 0 turns it off. Default: 50.
+- **Mist Time**: when the mist shows: Mornings, Mornings and Nights, or Always.
+  Default: Mornings.
 - **Night Sounds**: with Day and Night on, crickets and the odd owl at night
   and birdsong in the morning, quietly under the music. Default: on.
 

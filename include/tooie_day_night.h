@@ -9,7 +9,8 @@
 
 namespace tooie::day_night {
     // Off, a running cycle, or one time of day held.
-    enum class Mode : uint32_t { Off, Cycle, Morning, Sunset, Night };
+    // New times go at the end so saved settings keep their meaning; the menu lists them in order of the day.
+    enum class Mode : uint32_t { Off, Cycle, Morning, Sunset, Night, Dawn, Noon, Afternoon, GoldenHour, Dusk };
     inline const std::string option = "day_night";
     // How long a whole day and night takes, in minutes of play.
     inline const std::string length_option = "day_night_length";
@@ -24,6 +25,10 @@ namespace tooie::day_night {
     inline const std::string aurora_option = "day_night_aurora";
     // Soft 3D clouds across the sky.
     inline const std::string clouds_option = "day_night_clouds";
+    // Mist over low ground and round water: how thick (0 off to 100), and when it shows.
+    inline const std::string mist_option = "day_night_mist";
+    enum class MistTime : uint32_t { Mornings, MorningsAndNights, Always };
+    inline const std::string mist_time_option = "day_night_mist_time";
     // Crickets and owls at night, birdsong in the morning (src/gameplay/night_sounds.cpp).
     inline const std::string sounds_option = "day_night_sounds";
 

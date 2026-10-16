@@ -3517,10 +3517,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..5aea7a2
+index 0000000..4992a7c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1358 @@
+@@ -0,0 +1,1368 @@
 +//
 +// RT64
 +//
@@ -3975,6 +3975,12 @@ index 0000000..5aea7a2
 +        effectsSettings.dayMoonPhase = phase & 7u;
 +    }
 +
++    void SetSceneMist(float strength, uint32_t when) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
++        effectsSettings.dayMistWhen = std::min(when, 2u);
++    }
++
 +    void SetSceneWeather(float rain, float flash, bool snow) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayRain = std::clamp(rain, 0.0f, 1.0f);
@@ -4271,6 +4277,8 @@ index 0000000..5aea7a2
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
 +        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.modernWater || (effectsSettings.view == 4) ||
++            // The day and night cycle's mist gathers round water.
++            (effectsSettings.timeOfDay && (effectsSettings.dayMist > 0.0f)) ||
 +            (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
 +    }
 +
@@ -4455,7 +4463,9 @@ index 0000000..5aea7a2
 +            const float moonlight = 1.0f - 0.6f * std::clamp((0.97f - dayBrightest) / 0.3f, 0.0f, 1.0f);
 +            // Rain hides the sun: no sun shadows under it.
 +            const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
-+            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f };
++            // The mist rides above the softness and Banjo's flag: 4 * (strength (0 to 100) + 128 * when).
++            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen)) : 0.0f;
++            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
 +            if (sunLength > 1e-6f) {
 +                float shafts = settings.lightShafts * settings.dayShafts;
 +                if (settings.timeOfDay) {
@@ -4881,10 +4891,10 @@ index 0000000..5aea7a2
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..166910b
+index 0000000..5684703
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,214 @@
+@@ -0,0 +1,218 @@
 +//
 +// RT64
 +//
@@ -4957,6 +4967,9 @@ index 0000000..166910b
 +        bool daySnow = false;
 +        bool dayAurora = false;
 +        uint32_t dayMoonPhase = 4;
++        // The mist's strength (0 off, 1 thickest) and when it shows (0 mornings, 1 mornings and nights, 2 always).
++        float dayMist = 0.5f;
++        uint32_t dayMistWhen = 0;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -5027,6 +5040,7 @@ index 0000000..166910b
 +    // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
 +    // snow: it falls as snow.
 +    void SetSceneWeather(float rain, float flash, bool snow);
++    void SetSceneMist(float strength, uint32_t when);
 +    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
 +    void SetSceneMoonPhase(uint32_t phase);
 +    // Banjo-Tooie: northern lights across the night sky with the day and night cycle.
@@ -7366,10 +7380,10 @@ index 74b1fa0..4b52771 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..5472dce
+index 0000000..90a9c7c
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1852 @@
+@@ -0,0 +1,1904 @@
 +//
 +// RT64
 +//
@@ -8612,21 +8626,72 @@ index 0000000..5472dce
 +        (1.0f - DayNight(tint)) * (1.0f - DayWeather().x);
 +}
 +
-+// Morning mist: a pale haze lying low over the ground (below and a little above Banjo's height), thickening with
-+// distance, lit warm towards the sun. Separate from the Fog setting.
++// The mist setting, from the sun shadows' constant (shadows.w = 4 * (strength (0 to 100) + 128 * when) + 2 to
++// leave Banjo out + softness): x the strength (0 to 1), y when (0 mornings, 1 mornings and nights, 2 always).
++float2 DayMistSetting() {
++    const float packed = floor(gConstants.shadows.w / 4.0f);
++    const float when = floor(packed / 128.0f);
++    return float2((packed - when * 128.0f) / 100.0f, when);
++}
++
++// Mist: pale banks drifting slowly over low ground (below and a little above Banjo's height), thicker with
++// distance, and thickest on and around water, where it hangs just over the surface even close by. Lit warm
++// towards the sun. Separate from the Fog setting.
 +float3 DayMist(float3 color, int2 pixel, float depth, float3 tint) {
++    const float2 setting = DayMistSetting();
 +    const float morning = DayMorning(tint);
-+    if ((morning <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
++    const float night = DayNight(tint) * (1.0f - DayWeather().x * 0.5f);
++    const float when = (setting.y > 1.5f) ? 1.0f : ((setting.y > 0.5f) ? max(morning, night * 0.8f) : morning);
++    if ((setting.x <= 0.0f) || (when <= 0.0f) || (gConstants.rippleAge.w < -1e8f)) {
 +        return color;
 +    }
 +    const float3 center = ViewPosition(pixel, depth);
-+    const float worldY = dot(center, gConstants.worldY.xyz) + gConstants.worldY.w;
-+    const float distance = length(center) * length(gConstants.worldX.xyz);
-+    const float low = saturate(1.0f - (worldY - gConstants.rippleAge.w + 40.0f) / 220.0f);
-+    const float far = 1.0f - exp(-distance / 1400.0f);
-+    const float amount = low * low * far * morning * 0.75f;
-+    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz));
-+    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.6f);
++    const float3 world = WorldPosition(center);
++    const float scale = length(gConstants.worldX.xyz);
++    const float distance = length(center) * scale;
++    const float time = gConstants.view.z;
++
++    // Water nearby: a ring of looks into the water mask, about 260 world units round the point (on screen),
++    // and the point itself. The mist settles at the water's height.
++    float nearWater = 0.0f;
++    float waterY = 0.0f;
++    if (gConstants.water.y > 0.5f) {
++        const float height = gConstants.projection.w;
++        const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / max(-center.z, 1e-3f), 3.0f, height * 0.2f);
++        float found = 0.0f;
++        for (int i = 0; i < 9; i++) {
++            const float angle = float(i) * 0.6981317f;
++            const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
++            const int2 at = pixel + int2(offset);
++            float waterDepth;
++            if (LoadWater(at, waterDepth)) {
++                found += 1.0f;
++                waterY += WorldPosition(ViewPosition(at, waterDepth)).y;
++            }
++        }
++        if (found > 0.0f) {
++            waterY /= found;
++            nearWater = saturate(found / 4.0f);
++        }
++    }
++
++    // Slowly drifting banks, so the mist lies in patches rather than as an even haze.
++    const float2 drift = float2(0.012f, 0.005f) * time;
++    const float banks = smoothstep(0.3f, 0.75f, WaterNoise(world.xz / 900.0f + drift) * 0.65f + WaterNoise(world.xz / 260.0f - drift * 1.7f) * 0.35f);
++    // Two layers: one over the low ground (up to a little above Banjo) and a denser, shallower one just over the
++    // water. Each thickens with how far the view runs through it: across the water it builds up, looking down
++    // through it from above it stays thin.
++    const float cameraY = gConstants.worldY.w;
++    const float groundTop = gConstants.rippleAge.w + 140.0f;
++    const float groundRun = (world.y < groundTop) ? distance * ((cameraY > groundTop) ? (groundTop - world.y) / max(cameraY - world.y, 1.0f) : 1.0f) : 0.0f;
++    const float waterTop = waterY + 70.0f;
++    const float waterRun = ((nearWater > 0.0f) && (world.y < waterTop)) ? distance * ((cameraY > waterTop) ? (waterTop - world.y) / max(cameraY - world.y, 1.0f) : 1.0f) : 0.0f;
++    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f;
++    const float amount = (1.0f - exp(-thickness * when * setting.x * 2.0f)) * 0.85f;
++    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz)) * morning;
++    // Mist in shade (a cave mouth, under trees) is lit less: dimmer where the scene behind it is dark.
++    const float shade = saturate(0.5f + dot(color, float3(0.299f, 0.587f, 0.114f)) * 1.4f);
++    const float3 mist = lerp(float3(0.82f, 0.86f, 0.9f), float3(1.0f, 0.88f, 0.72f), toward * toward) * max(tint, 0.5f) * shade;
 +    return lerp(color, mist, amount);
 +}
 +
@@ -8796,8 +8861,9 @@ index 0000000..5472dce
 +        return 1.0f;
 +    }
 +    // Softness (shadows.w, below 1; 2 is added to leave Banjo out).
-+    const bool skipBanjo = (gConstants.shadows.w > 1.5f) && (gConstants.rippleAge.w > -1e8f);
-+    const float softness = gConstants.shadows.w - (gConstants.shadows.w > 1.5f ? 2.0f : 0.0f);
++    const float shadowFlags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
++    const bool skipBanjo = (shadowFlags > 1.5f) && (gConstants.rippleAge.w > -1e8f);
++    const float softness = shadowFlags - (shadowFlags > 1.5f ? 2.0f : 0.0f);
 +    float3 normal = ViewNormal(pixel, center);
 +    // Characters are low-poly, so a normal read from the depth is flat across each triangle and the side
 +    // turned from the sun was shaded face by face. Soft shadows average the normals a few pixels around,
@@ -9644,10 +9710,10 @@ index 0a5c332..fb7af29 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..8b9fbf8
+index 0000000..4ac4489
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,74 @@
 +//
 +// RT64
 +//
@@ -9702,7 +9768,8 @@ index 0000000..8b9fbf8
 +        // Sun shadows: strength (0 off, 1 strongest), how far towards the sun a shadow is looked for in world
 +        // units, the day and night cycle's tint of the 3D world (0 off, else 1 + its three channels in 7 bits
 +        // each, steps of 0.01, then three flags, bit 0 fireflies, bit 1 clouds, bit 2 northern lights: exact as a float below 2^24; negative for no lens
-+        // flare), then the softness (0 to 0.99) plus 2 to leave Banjo's own shadow out.
++        // flare), then the softness (0 to 0.99) plus 2 to leave Banjo's own shadow out, plus 4 * (the day and night cycle's
++        // mist strength (0 to 100) + 128 * when it shows (0 mornings, 1 mornings and nights, 2 always)).
 +        float4 shadows;
 +    };
 +

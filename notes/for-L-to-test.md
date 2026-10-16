@@ -2549,3 +2549,21 @@
   4. Turn the mod off in the Mods menu while standing by either hut
 - Look for: Step 1, Banjo stands at the door of Mumbo's hut from Banjo-Kazooie (cracked brown skull, window eyes, sandstone teeth, red feathers, bent metal pole), sharp HD textures, about the size of the old skull. Step 2, it takes you into Mumbo's Skull as before. Step 3, the same hut stands on the cloud platform. Step 4, the old skull comes back at once. Only these two skulls are separate models in the game; the other worlds build Mumbo's Skull into the level, so they stay as they were. The old skull's collision is kept, so Banjo may bump into its shape where the new hut is narrower. Checked headless with the mod zip ([v1.png](screens/mumbos-hut/v1.png) in project files): both huts drawn with HD textures and GGM's door entered; CCL's skull door didn't open headless with no file loaded, same as the original.
 - Status: waiting for L
+
+## T242 Day and night: more times of day
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: more times of day, mist settings and mist round water" on main
+- Steps:
+  1. Graphics > Day and Night: try Dawn, Morning, Noon, Afternoon, Golden Hour, Sunset, Dusk and Night in Spiral Mountain
+  2. Set it back to Cycle
+- Look for: Ten choices in order of the day. Dawn is pink and dim with the sun just up, Noon is plain daylight with the sun high, Afternoon is daylight turning faintly warm, Golden Hour is warm and bright, Dusk is violet with the first stars. Cycle still runs the clock. A saved Morning, Sunset or Night setting is kept. Checked headless: [dawn-noon-dusk.png](screens/day-night/dawn-noon-dusk.png).
+
+## T243 Day and night: mist settings and mist round water
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: more times of day, mist settings and mist round water" on main
+- Steps:
+  1. Graphics > Day and Night: Morning, Mist 50 (then 100 and 0), Mist Time: Mornings; go to Jolly Roger's Lagoon and Spiral Mountain's water
+  2. Mist Time: Mornings and Nights, Day and Night: Night
+- Look for: Mist lies in drifting patches over low ground rather than as an even haze, and is thickest just over water, also close to Banjo. Higher Mist is thicker; 0 turns it off. With Mornings and Nights, a cool grey mist hangs over the water at night too; Always keeps it all day. Checked headless: [mist-over-water-on-off.png](screens/day-night/mist-over-water-on-off.png) (moat, Mist 50 on and 0), [night-mist-over-low-ground.png](screens/day-night/night-mist-over-low-ground.png) (Night, Mist 100, Mornings and Nights).

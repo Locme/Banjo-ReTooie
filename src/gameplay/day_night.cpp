@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <mutex>
+#include <utility>
 #include <variant>
 
 #include "recomp.h"
@@ -29,6 +30,7 @@ namespace RT64 {
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
+    void SetSceneMist(float strength, uint32_t when);
     void SetSceneMoonPhase(uint32_t phase);
     void SetSceneAurora(bool enabled);
     void SetSceneNightLights(const uint64_t* hashes, size_t count);
@@ -91,8 +93,21 @@ namespace {
 
     // Held times for the fixed modes.
     constexpr float morning_time = 0.31f;
-    constexpr float sunset_time = 0.72f;
-    constexpr float night_time = 0.0f;
+
+    float held_time(tooie::day_night::Mode m) {
+        using tooie::day_night::Mode;
+        switch (m) {
+            case Mode::Dawn: return 0.25f;
+            case Mode::Morning: return morning_time;
+            case Mode::Noon: return 0.5f;
+            case Mode::Afternoon: return 0.63f;
+            case Mode::GoldenHour: return 0.68f;
+            case Mode::Sunset: return 0.72f;
+            case Mode::Dusk: return 0.75f;
+            case Mode::Night: return 0.0f;
+            default: return morning_time;
+        }
+    }
 
     std::mutex mutex;
     bool active = false;
@@ -110,7 +125,8 @@ namespace {
     bool sent_off = false;
 
     tooie::day_night::Mode mode() {
-        // Test aid: TOOIE_DAY_NIGHT=<0 Off, 1 Cycle, 2 Morning, 3 Sunset, 4 Night> whatever the setting says.
+        // Test aid: TOOIE_DAY_NIGHT=<0 Off, 1 Cycle, 2 Morning, 3 Sunset, 4 Night, 5 Dawn, 6 Noon, 7 Afternoon,
+        // 8 Golden Hour, 9 Dusk> whatever the setting says.
         if (const char* v = std::getenv("TOOIE_DAY_NIGHT")) {
             return static_cast<tooie::day_night::Mode>(std::atoi(v));
         }
@@ -140,6 +156,23 @@ namespace {
             return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
         } catch (...) {
             return true;
+        }
+    }
+
+    // The mist's strength (0 to 1) and when it shows. Test aid: TOOIE_MIST=<0 to 100>,<0 mornings, 1 and nights, 2 always>.
+    std::pair<float, uint32_t> mist_setting() {
+        if (const char* v = std::getenv("TOOIE_MIST")) {
+            float strength = 50.0f;
+            uint32_t when = 0;
+            sscanf(v, "%f,%u", &strength, &when);
+            return { strength / 100.0f, when };
+        }
+        try {
+            auto& config = recompui::config::get_config(recompui::config::graphics::id);
+            return { (float)(std::get<double>(config.get_option_value(tooie::day_night::mist_option)) / 100.0),
+                std::get<uint32_t>(config.get_option_value(tooie::day_night::mist_time_option)) };
+        } catch (...) {
+            return { 0.5f, 0 };
         }
     }
 
@@ -298,7 +331,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
         }
         day_clock -= std::floor(day_clock);
     }
-    const float t = (m == Mode::Morning) ? morning_time : (m == Mode::Sunset) ? sunset_time : (m == Mode::Night) ? night_time : (float)day_clock;
+    const float t = (m == Mode::Cycle) ? (float)day_clock : held_time(m);
 
     // Eases over half a second when switched on or off in a level; a map change (behind its wipe) snaps.
     static uint16_t last_map = 0xFFFF;
@@ -370,6 +403,8 @@ void tooie::day_night::tick(uint8_t* rdram) {
         flash = (float)std::atof(v);
     }
     RT64::SetSceneWeather(rain * amount, flash * amount, snow);
+    const auto [mist, mist_when] = mist_setting();
+    RT64::SetSceneMist(mist, mist_when);
 
     // No fireflies on Hailfire Peaks (lava and ice).
     const bool fireflies = option_on(tooie::day_night::fireflies_option) && (map != 0x127) && (map != 0x128);
@@ -460,8 +495,13 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         {
             {Mode::Off, "Off", "Off"},
             {Mode::Cycle, "Cycle", "Cycle"},
+            {Mode::Dawn, "Dawn", "Dawn"},
             {Mode::Morning, "Morning", "Morning"},
+            {Mode::Noon, "Noon", "Noon"},
+            {Mode::Afternoon, "Afternoon", "Afternoon"},
+            {Mode::GoldenHour, "GoldenHour", "Golden Hour"},
             {Mode::Sunset, "Sunset", "Sunset"},
+            {Mode::Dusk, "Dusk", "Dusk"},
             {Mode::Night, "Night", "Night"},
         },
         Mode::Off);
@@ -507,6 +547,23 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
         "With Day and Night on, soft 3D clouds drift across the sky, lit by the sun and the moon (not in Cloud Cuckooland).",
         true);
     graphics.add_option_hidden_dependency(clouds_option, option, Mode::Off);
+    graphics.add_number_option(
+        mist_option,
+        "Mist",
+        "With Day and Night on, pale mist drifts in banks over low ground and gathers thickest on and round water. 0 turns it off.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_option_hidden_dependency(mist_option, option, Mode::Off);
+    graphics.add_enum_option(
+        mist_time_option,
+        "Mist Time",
+        "When the mist shows: in the early morning, also at night, or all day.",
+        {
+            {MistTime::Mornings, "Mornings", "Mornings"},
+            {MistTime::MorningsAndNights, "MorningsAndNights", "Mornings and Nights"},
+            {MistTime::Always, "Always", "Always"},
+        },
+        MistTime::Mornings);
+    graphics.add_option_hidden_dependency(mist_time_option, option, Mode::Off);
     graphics.add_bool_option(
         sounds_option,
         "Night Sounds",

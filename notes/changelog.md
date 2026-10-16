@@ -28,6 +28,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: five more times of day (Dawn, Noon, Afternoon, Golden Hour, Dusk), and Mist and Mist Time settings; the mist lies in patches and gathers round water (T242, T243).
 - Day and Night: fireflies reworked after Ocarina of Time's forest at night: more of them, warm soft glows floating at all heights and fading in and out (T232). Rain now splashes on the ground (T233). Untested on PC.
 - Day and Night: morning mist lying low over the ground until mid-morning. Untested on PC (T216).
 - Day and Night: golden hour (warm light with richer colours for a while after sunrise and before sunset) and morning dew glinting on the grass. Untested on PC (T215).
