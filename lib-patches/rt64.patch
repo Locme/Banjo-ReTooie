@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..5d8e722 100644
+index 9fae0d4..754ab46 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2444,7 +2444,7 @@ index 9fae0d4..5d8e722 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2059,85 @@ namespace RT64 {
+@@ -1456,6 +2059,105 @@ namespace RT64 {
                  continue;
              }
  
@@ -2520,6 +2520,26 @@ index 9fae0d4..5d8e722 100644
 +                        targetDrawCall.sceneEffectsTransformsIndex = proj.transformsIndex;
 +                    }
 +                }
++                // Banjo-Tooie: a part of the picture whose draws write no depth (see-through ones: Icy Side's long
++                // ledge and green crystal, after an HD shadow switched to its buffer and back) is still the 3D world
++                // when an earlier part of the same picture drew the world with the same projection. It opens the
++                // world too, so the effects go after it; they went before it, and those draws missed the haze and
++                // blur, flickering in and out as the shadows came and went (L, 2026-10-16).
++                else if (!fbPair.depthWrite && (proj.gameCallCount > 0) && !worldOpen && (targetDrawCall.sceneEffectsDrawData == nullptr)) {
++                    for (uint32_t i = 0; (i + 1) < framebufferCount; i++) {
++                        const RenderTargetDrawCall &earlier = framebufferVector[i].renderTargetDrawCall;
++                        if ((earlier.sceneEffectsAfter > 0) && (earlier.sceneEffectsDrawData == &drawData) &&
++                            (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget) &&
++                            (targetDrawCall.fbStorage->depthTarget != nullptr) && (earlier.fbStorage->depthTarget == targetDrawCall.fbStorage->depthTarget) &&
++                            (matrixDifference(drawData.projTransforms[proj.transformsIndex], drawData.projTransforms[earlier.sceneEffectsTransformsIndex]) < 1e-4f))
++                        {
++                            worldOpen = true;
++                            targetDrawCall.sceneEffectsDrawData = &drawData;
++                            targetDrawCall.sceneEffectsTransformsIndex = earlier.sceneEffectsTransformsIndex;
++                            break;
++                        }
++                    }
++                }
 +            }
 +            else if (worldOpen) {
 +                checkRasterScene(rasterScene);
@@ -2530,7 +2550,7 @@ index 9fae0d4..5d8e722 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2288,7 @@ namespace RT64 {
+@@ -1606,6 +2308,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2538,7 +2558,7 @@ index 9fae0d4..5d8e722 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2365,20 @@ namespace RT64 {
+@@ -1682,6 +2385,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2559,7 +2579,7 @@ index 9fae0d4..5d8e722 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2444,279 @@ namespace RT64 {
+@@ -1747,8 +2464,279 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2839,7 +2859,7 @@ index 9fae0d4..5d8e722 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2726,179 @@ namespace RT64 {
+@@ -1758,13 +2746,179 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
