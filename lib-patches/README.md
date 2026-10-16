@@ -127,10 +127,11 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   `ui_tab_set.{h,cpp}`, `ui_config_page_options_menu.{h,cpp}`): `recompui::config::set_sidebar_layout(true)` draws the
   settings tabs as a vertical list on the left (the header becomes a column, the quit and close buttons at its foot) and
   each options page's description in a strip along the bottom instead of a column on the right. The modal and pages
-  check it on every update, so it switches while the menu is open. The game turns it on at start (`src/game/config.cpp`); it is the only layout the port uses (L, 2026-10-16).
+  check it on every update, so it switches while the menu is open. The game turns it on at start (`src/game/config.cpp`); it is the only layout the port uses (L, 2026-10-16). The Graphics page has no Apply footer in any layout, since it saves each change as it is made.
   In that layout a "Search settings" box at the top of the sidebar stands in for the Search tab's row (L and R still
   reach the tab, `TabSet::set_tab_listed`), and each options page shows its tab's name as a heading and a line under
-  each option. The layout is styled after Banjo-Tooie's menus (`recompui/src/elements/ui_sidebar_style.h`): brown
+  each option, with the option's name and its control on one line (`ConfigOptionElement::set_compact`,
+  `ui_config_option.{h,cpp}`). The layout is styled after Banjo-Tooie's menus (`recompui/src/elements/ui_sidebar_style.h`): brown
   panels with a gold border, gold "Luckiest Guy" lettering (the game registers the font), and the picked tab filled
   gold with a Jiggy (`assets/icons/Jiggy.svg`), and switches that are on drawn gold instead of blue
   (`Toggle::set_sidebar_colors`, `ui_toggle.{h,cpp}`, also on the Search tab's rows); turning it off puts the old colours and font back.

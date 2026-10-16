@@ -39,21 +39,21 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::EFFECT_COMPARE, "Effect Compare",
         "Splits the picture: the effects on the left, the original on the right.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::INTERP_CHECK, "Interpolation Check",
-        "Switches the interpolation check on and off. It tints a model red when its blend between game frames looks wrong.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Switches the interpolation check on and off. It tints a model red when its blend between game frames looks wrong.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::BLEND_MODE, "Blend Mode",
-        "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::WARP_AGAIN, "Warp Again",
         "Warps to the last place picked in the Warp tab. Works while the Warp tab is on in the Cheats tab.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::PICK_MODEL, "Pick Model",
-        "Steps a green highlight through the models on screen, nearest the middle first, for tagging how one blends between game frames.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Steps a green highlight through the models on screen, nearest the middle first, for tagging how one blends between game frames.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::TAG_MODEL, "Tag Model",
-        "Steps the picked model's blend between game frames: default (the custom rule: characters blend with vertices, the rest snaps), snap, vertex, untagged. Shows in the custom blend mode.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Steps the picked model's blend between game frames: default (the custom rule: characters blend with vertices, the rest snaps), snap, vertex, untagged. Shows in the custom blend mode.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::SAVE_TAGS, "Save Tags",
-        "Writes the tagged models to interp_tags.txt next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Writes the tagged models to interp_tags.txt next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::UNSAVE_TAG, "Unsave Tag",
-        "Removes the picked model's tag, from the game and from interp_tags.txt.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Removes the picked model's tag, from the game and from interp_tags.txt.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::MODEL_EFFECTS, "Model Effects",
-        "Turns the screen effects (ambient occlusion, outlines, fog, bloom and the rest) off and on for the picked model: it is drawn over them as the game draws it. Save Tags keeps it.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Turns the screen effects (ambient occlusion, outlines, fog, bloom and the rest) off and on for the picked model: it is drawn over them as the game draws it. Save Tags keeps it.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {

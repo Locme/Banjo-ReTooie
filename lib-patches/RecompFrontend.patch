@@ -601,12 +601,42 @@ index 6c84c05..19a7624 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..e9d03ad 100644
+index 86428c9..5aceb1b 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
-@@ -88,13 +88,17 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +87,47 @@ void ConfigOptionElement::process_event(const Event &e) {
+     }
  }
  
++void ConfigOptionElement::set_compact(bool compact) {
++    set_flex_direction(compact ? FlexDirection::Row : FlexDirection::Column);
++    set_align_items(compact ? AlignItems::Center : AlignItems::FlexStart);
++    set_flex_wrap(compact ? FlexWrap::Wrap : FlexWrap::NoWrap);
++    set_padding_top(compact ? 6.0f : config_option_element_margin_vertical);
++    set_padding_bottom(compact ? 6.0f : config_option_element_margin_vertical);
++    set_gap(compact ? 16.0f : 0.0f);
++    if (compact) {
++        name_label->set_margin_bottom(0.0f);
++        name_label->set_width(38.0f, Unit::Percent);
++        name_label->set_flex_shrink(0.0f);
++        name_label->set_typography(theme::Typography::LabelSM);
++    } else {
++        name_label->set_margin_bottom(8.0f);
++        name_label->set_width_auto();
++        name_label->set_typography(theme::Typography::LabelMD);
++    }
++    if (control_root != nullptr && control_grows) {
++        if (compact) {
++            control_root->set_flex_grow(1.0f);
++            control_root->set_flex_shrink(1.0f);
++            control_root->set_flex_basis(0.0f);
++        } else {
++            control_root->set_flex_grow(0.0f);
++            control_root->set_flex_basis_auto();
++        }
++    }
++}
++
  void ConfigOptionElement::update_hidden() {
 -    if (config->is_config_option_hidden(option_index)) {
 +    const bool hidden = config->is_config_option_hidden(option_index);
@@ -623,7 +653,15 @@ index 86428c9..e9d03ad 100644
  }
  
  // ConfigOptionEnum
-@@ -120,25 +124,42 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +143,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+ {
+     ContextId context = recompui::get_current_context();
+     Element *wrapper = context.create_element<Element>(this, 0, "div", false);
++    control_root = wrapper;
+     wrapper->set_display(Display::Flex);
+     wrapper->set_flex_direction(FlexDirection::Row);
+     wrapper->set_align_items(AlignItems::Center);
+@@ -120,25 +154,42 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -683,7 +721,7 @@ index 86428c9..e9d03ad 100644
      }
  
      update_value();
-@@ -153,12 +174,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +204,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -704,7 +742,7 @@ index 86428c9..e9d03ad 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +203,10 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -176,6 +233,10 @@ void ConfigOptionEnum::update_enum_details() {
  
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
@@ -715,8 +753,33 @@ index 86428c9..e9d03ad 100644
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
+@@ -199,6 +260,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+     auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
+ 
+     slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
++    control_root = slider;
+     slider->set_width(100.0f, Unit::Percent);
+     slider->set_max_width(512.0f, Unit::Dp);
+ 
+@@ -245,6 +307,7 @@ ConfigOptionString::ConfigOptionString(
+ 
+     ContextId context = recompui::get_current_context();
+     text_input = context.create_element<TextInput>(this);
++    control_root = text_input;
+     text_input->set_width(100.0f, Unit::Percent);
+     text_input->set_max_width(100.0f, Unit::Percent);
+     update_value();
+@@ -284,6 +347,8 @@ ConfigOptionBool::ConfigOptionBool(
+ 
+     ContextId context = recompui::get_current_context();
+     toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
++    control_root = toggle;
++    control_grows = false;
+ 
+     update_value();
+     toggle->add_checked_callback([this](bool checked){
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..04abac5 100644
+index 0561657..e6b3cb7 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -727,13 +790,25 @@ index 0561657..04abac5 100644
  #include "elements/ui_text_input.h"
  #include "elements/ui_slider.h"
  #include "elements/ui_toggle.h"
-@@ -42,12 +43,16 @@ namespace recompui {
+@@ -20,6 +21,9 @@ namespace recompui {
+         set_option_value_t set_option_value;
+         on_option_hover_t on_hover;
+         Label *name_label = nullptr;
++        // The option's control (row of choices, drop-down, slider, text box or switch).
++        Element *control_root = nullptr;
++        bool control_grows = true;
+ 
+         recomp::config::ConfigValueVariant get_value();
+         bool get_disabled();
+@@ -42,12 +46,18 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
 +        // The group heading shown above this option (hidden together with it).
 +        Element *group_heading = nullptr;
          const std::string &get_option_id() { return option_id; }
++        // Sidebar layout: the name on the left and the control on the right, on one line.
++        void set_compact(bool compact);
      };
  
  class ConfigOptionEnum : public ConfigOptionElement {
@@ -744,7 +819,7 @@ index 0561657..04abac5 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -127,6 +132,7 @@ public:
+@@ -127,6 +137,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -780,7 +855,7 @@ index f379a6f..7687717 100644
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..8fe4b04 100644
+index 6ba64e2..eb27a28 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,9 @@
@@ -793,15 +868,19 @@ index 6ba64e2..8fe4b04 100644
  
  
  namespace recompui {
-@@ -21,6 +26,7 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,8 +26,10 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
 +    apply_description_strip(recompui::config::get_sidebar_layout());
  
-     if (config->requires_confirmation) {
+-    if (config->requires_confirmation) {
++    // Graphics saves each change as it is made, so it has no Apply button.
++    if (config->requires_confirmation && config->id != recompui::config::graphics::id) {
          add_footer();
-@@ -38,6 +44,64 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
+         render_confirmation_footer();
+     }
+@@ -38,6 +45,65 @@ void ConfigPageOptionsMenu::set_description_text(const std::string &text) {
      }
  }
  
@@ -815,11 +894,11 @@ index 6ba64e2..8fe4b04 100644
 +        right->set_flex_grow(0.0f);
 +        right->set_flex_shrink(0.0f);
 +        right->set_flex_basis_auto();
-+        right->set_height(132.0f);
++        right->set_height(112.0f);
 +        right->set_padding_left(32.0f);
 +        right->set_padding_right(32.0f);
-+        right->set_padding_top(16.0f);
-+        right->set_padding_bottom(16.0f);
++        right->set_padding_top(10.0f);
++        right->set_padding_bottom(10.0f);
 +        right->set_border_top_width(theme::border::width);
 +        right->set_border_top_width(2.0f);
 +        right->set_border_top_color(sidebar_style::gold_soft);
@@ -844,6 +923,7 @@ index 6ba64e2..8fe4b04 100644
 +    for (ConfigOptionElement *element : config_option_elements) {
 +        element->set_border_bottom_width(strip ? theme::border::width : 0.0f);
 +        element->set_border_bottom_color(sidebar_style::gold_faint);
++        element->set_compact(strip);
 +        if (auto *bool_element = dynamic_cast<ConfigOptionBool *>(element)) {
 +            bool_element->get_toggle()->set_sidebar_colors(strip);
 +        }
@@ -866,7 +946,7 @@ index 6ba64e2..8fe4b04 100644
  ConfigOptionElement* ConfigPageOptionsMenu::get_element_from_option_id(const std::string &option_id) {
      for (auto *element : config_option_elements) {
          if (element->get_option_id() == option_id) {
-@@ -109,6 +173,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +175,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -876,7 +956,7 @@ index 6ba64e2..8fe4b04 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -149,6 +216,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +218,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -887,7 +967,7 @@ index 6ba64e2..8fe4b04 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +244,17 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,6 +246,17 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -905,7 +985,7 @@ index 6ba64e2..8fe4b04 100644
          config_option_elements.clear();
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +263,30 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +265,30 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -936,7 +1016,7 @@ index 6ba64e2..8fe4b04 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +337,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +339,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };

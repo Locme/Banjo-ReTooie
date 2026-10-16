@@ -2478,4 +2478,21 @@
   2. Stand on the meadow for 1 minute with Graphics > 3D grass at 0, then send console.log
   3. Do it again with 3D grass at 100, then with Banjo's fur off, then with Water set to Original, and send console.log after each (or one log, writing down the times you switched)
 - Look for: the [vram] lines (every 2 seconds). In your log VRAM climbs by about 520 MB every 2 seconds, from 0.8 GB to 16 GB in a minute, while "ours" (the renderer's own memory) stays at about 1.5 GB. Once VRAM passes 100% the card has to swap, which is the 1 fps; when the driver frees it, the speed comes back. Shaders were not compiling then (0 in 5 s). The setting whose 0 or Off stops the climb is the leak.
+## T235 Settings pages use less space
+- Asked: 2026-10-16 08:50 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Open the menu and go to Graphics
+  2. Scroll to the bottom (Frame rate overlay)
+  3. Look at General and QOL too
+- Look for: each option's name sits on the left with its switch, choices or slider on the same line, so about twice as many fit on screen. The description strip at the bottom is shorter but still fits three lines. Graphics has no Apply box and no doubled "Frame rate overlay" row with a white outline. Changes on Graphics still apply and stay after a restart. Checked headless.
+- Status: waiting for L
+
+## T236 Interpolation Debug section in Controls
+- Asked: 2026-10-16 08:50 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Controls tab, scroll to the bottom
+  2. If you had keys bound to Pick Model or Tag Model, press them in game
+- Look for: Debug now holds Effect Debug View, Effect Compare and Warp Again. Below it, Interpolation Debug holds Interpolation Check, Blend Mode, Pick Model, Tag Model, Save Tags, Unsave Tag and Model Effects. Bindings you already had still work. Checked headless.
 - Status: waiting for L
