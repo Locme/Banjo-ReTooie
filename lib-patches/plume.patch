@@ -59,18 +59,22 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..ad76699 100644
+index f1dd503..b392fd6 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
-@@ -11,6 +11,7 @@
+@@ -11,8 +11,11 @@
  #include "plume_vulkan.h"
  
  #include <algorithm>
 +#include <atomic>
  #include <cmath>
  #include <climits>
++#include <map>
++#include <mutex>
  #include <unordered_map>
-@@ -87,10 +88,110 @@ namespace plume {
+ 
+ #if DLSS_ENABLED
+@@ -87,10 +90,223 @@ namespace plume {
          VK_KHR_PRESENT_ID_EXTENSION_NAME,
          VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
          VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
@@ -127,6 +131,119 @@ index f1dd503..ad76699 100644
 +        made = VulkanObjectsMade[kind].load();
 +    }
 +
++    // Banjo-Tooie: the bytes every live buffer and texture holds, grouped by label, so the [vram] log can
++    // say what is filling video memory. A texture or buffer starts under a label made from its kind and
++    // size and moves to its name once RT64 names it; numbered names ("... #12") share one group.
++    struct VideoMemoryTally {
++        int64_t count = 0;
++        int64_t bytes = 0;
++    };
++    static std::mutex VideoMemoryTallyMutex;
++    static std::map<std::string, VideoMemoryTally> VideoMemoryTallies;
++
++    static void TallyVideoMemory(const std::string &label, int64_t bytes, int delta) {
++        if (label.empty()) {
++            return;
++        }
++
++        std::lock_guard<std::mutex> lock(VideoMemoryTallyMutex);
++        VideoMemoryTally &tally = VideoMemoryTallies[label];
++        tally.count += delta;
++        tally.bytes += bytes * delta;
++        if (tally.count <= 0) {
++            VideoMemoryTallies.erase(label);
++        }
++    }
++
++    static void RelabelVideoMemory(std::string &label, const std::string &newLabel, int64_t bytes) {
++        if (label.empty() || (label == newLabel)) {
++            return;
++        }
++
++        TallyVideoMemory(label, bytes, -1);
++        label = newLabel;
++        TallyVideoMemory(label, bytes, +1);
++    }
++
++    std::vector<VideoMemoryGroup> GetVideoMemoryGroups() {
++        std::vector<VideoMemoryGroup> groups;
++        std::lock_guard<std::mutex> lock(VideoMemoryTallyMutex);
++        for (const auto &it : VideoMemoryTallies) {
++            groups.push_back({ it.first, it.second.count, it.second.bytes });
++        }
++
++        return groups;
++    }
++
++    // "Render Target Color #2148007936" -> "Render Target Color".
++    static std::string StripNameNumber(const std::string &name) {
++        size_t hash = name.find(" #");
++        return (hash == std::string::npos) ? name : name.substr(0, hash);
++    }
++
++    // Big textures keep their size in the label (one group per size), small ones are grouped by name alone.
++    static std::string TextureMemoryLabel(const std::string &name, const RenderTextureDesc &desc, uint64_t bytes) {
++        std::string label = name;
++        if (label.empty()) {
++            if (desc.flags & RenderTextureFlag::DEPTH_TARGET) {
++                label = "unnamed depth target";
++            }
++            else if (desc.flags & RenderTextureFlag::RENDER_TARGET) {
++                label = "unnamed render target";
++            }
++            else if (desc.flags & RenderTextureFlag::STORAGE) {
++                label = "unnamed storage texture";
++            }
++            else {
++                label = "unnamed texture";
++            }
++        }
++
++        if (bytes >= (8ULL << 20)) {
++            label += " " + std::to_string(desc.width) + "x" + std::to_string(desc.height);
++        }
++
++        if (desc.multisampling.sampleCount > 1) {
++            label += " MSAA " + std::to_string(desc.multisampling.sampleCount) + "x";
++        }
++
++        return label;
++    }
++
++    static std::string BufferMemoryLabel(const std::string &name, const RenderBufferDesc &desc) {
++        std::string label = name;
++        if (label.empty()) {
++            if (desc.flags & RenderBufferFlag::VERTEX) {
++                label = "unnamed vertex buffer";
++            }
++            else if (desc.flags & RenderBufferFlag::INDEX) {
++                label = "unnamed index buffer";
++            }
++            else if (desc.flags & RenderBufferFlag::CONSTANT) {
++                label = "unnamed constant buffer";
++            }
++            else if (desc.flags & RenderBufferFlag::STORAGE) {
++                label = "unnamed storage buffer";
++            }
++            else {
++                label = "unnamed buffer";
++            }
++        }
++
++        switch (desc.heapType) {
++        case RenderHeapType::UPLOAD:
++            label += " (upload, system RAM)";
++            break;
++        case RenderHeapType::READBACK:
++            label += " (read-back, system RAM)";
++            break;
++        default:
++            break;
++        }
++
++        return label;
++    }
++
 +    // Banjo-Tooie: video memory use for logs. The device that made the allocator last.
 +    static std::atomic<VulkanDevice *> MemoryReportDevice = nullptr;
 +
@@ -181,7 +298,7 @@ index f1dd503..ad76699 100644
      // Common functions.
  
      static uint32_t roundUp(uint32_t value, uint32_t powerOf2Alignment) {
-@@ -813,6 +914,7 @@ namespace plume {
+@@ -813,6 +1029,7 @@ namespace plume {
      // VulkanBuffer
  
      VulkanBuffer::VulkanBuffer(VulkanDevice *device, VulkanPool *pool, const RenderBufferDesc &desc) {
@@ -189,15 +306,30 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -896,6 +998,7 @@ namespace plume {
+@@ -893,9 +1110,14 @@ namespace plume {
+             fprintf(stderr, "vmaCreateBuffer failed with error code 0x%X.\n", res);
+             return;
+         }
++
++        memoryLabel = BufferMemoryLabel(std::string(), desc);
++        TallyVideoMemory(memoryLabel, int64_t(allocationInfo.size), +1);
      }
  
      VulkanBuffer::~VulkanBuffer() {
 +        CountObject(ObjBuffer, -1);
++        TallyVideoMemory(memoryLabel, int64_t(allocationInfo.size), -1);
          if (vk != VK_NULL_HANDLE) {
              vmaDestroyBuffer(device->allocator, vk, allocation);
          }
-@@ -936,6 +1039,7 @@ namespace plume {
+@@ -922,6 +1144,7 @@ namespace plume {
+ 
+     void VulkanBuffer::setName(const std::string &name) {
+         setObjectName(device->vk, VK_OBJECT_TYPE_BUFFER, uint64_t(vk), name);
++        RelabelVideoMemory(memoryLabel, BufferMemoryLabel(StripNameNumber(name), desc), int64_t(allocationInfo.size));
+     }
+ 
+     uint64_t VulkanBuffer::getDeviceAddress() const {
+@@ -936,6 +1159,7 @@ namespace plume {
      // VulkanBufferFormattedView
  
      VulkanBufferFormattedView::VulkanBufferFormattedView(VulkanBuffer *buffer, RenderFormat format) {
@@ -205,7 +337,7 @@ index f1dd503..ad76699 100644
          assert(buffer != nullptr);
          assert((buffer->desc.flags & RenderBufferFlag::FORMATTED) && "Buffer must allow formatted views.");
  
-@@ -956,6 +1060,7 @@ namespace plume {
+@@ -956,6 +1180,7 @@ namespace plume {
      }
  
      VulkanBufferFormattedView::~VulkanBufferFormattedView() {
@@ -213,7 +345,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyBufferView(buffer->device->vk, vk, nullptr);
          }
-@@ -964,6 +1069,7 @@ namespace plume {
+@@ -964,6 +1189,7 @@ namespace plume {
      // VulkanTexture
  
      VulkanTexture::VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc) {
@@ -221,7 +353,14 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1018,6 +1124,7 @@ namespace plume {
+@@ -1014,10 +1240,14 @@ namespace plume {
+             return;
+         }
+ 
++        memoryLabel = TextureMemoryLabel(std::string(), desc, allocationInfo.size);
++        TallyVideoMemory(memoryLabel, int64_t(allocationInfo.size), +1);
++
+         createImageView(imageInfo.format);
      }
  
      VulkanTexture::VulkanTexture(VulkanDevice *device, VkImage image) {
@@ -229,15 +368,24 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
          assert(image != VK_NULL_HANDLE);
  
-@@ -1026,6 +1133,7 @@ namespace plume {
+@@ -1026,6 +1256,8 @@ namespace plume {
      }
  
      VulkanTexture::~VulkanTexture() {
 +        CountObject(ObjTexture, -1);
++        TallyVideoMemory(memoryLabel, int64_t(allocationInfo.size), -1);
          if (imageView != VK_NULL_HANDLE) {
              vkDestroyImageView(device->vk, imageView, nullptr);
          }
-@@ -1074,6 +1182,7 @@ namespace plume {
+@@ -1061,6 +1293,7 @@ namespace plume {
+ 
+     void VulkanTexture::setName(const std::string &name) {
+         setObjectName(device->vk, VK_OBJECT_TYPE_IMAGE, uint64_t(vk), name);
++        RelabelVideoMemory(memoryLabel, TextureMemoryLabel(StripNameNumber(name), desc, allocationInfo.size), int64_t(allocationInfo.size));
+     }
+ 
+     void VulkanTexture::fillSubresourceRange() {
+@@ -1074,6 +1307,7 @@ namespace plume {
      // VulkanTextureView
  
      VulkanTextureView::VulkanTextureView(const VulkanTexture *texture, const RenderTextureViewDesc &desc) {
@@ -245,7 +393,7 @@ index f1dd503..ad76699 100644
          assert(texture != nullptr);
          assert(desc.mipSlice < texture->desc.mipLevels);
          assert(desc.arrayIndex < texture->desc.arraySize);
-@@ -1107,6 +1216,7 @@ namespace plume {
+@@ -1107,6 +1341,7 @@ namespace plume {
      }
  
      VulkanTextureView::~VulkanTextureView() {
@@ -253,7 +401,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyImageView(texture->device->vk, vk, nullptr);
          }
-@@ -1145,6 +1255,7 @@ namespace plume {
+@@ -1145,6 +1380,7 @@ namespace plume {
      // VulkanDescriptorSetLayout
  
      VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanDevice *device, const RenderDescriptorSetDesc &descriptorSetDesc) {
@@ -261,7 +409,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1216,6 +1327,7 @@ namespace plume {
+@@ -1216,6 +1452,7 @@ namespace plume {
      }
  
      VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout() {
@@ -269,7 +417,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyDescriptorSetLayout(device->vk, vk, nullptr);
          }
-@@ -1224,6 +1336,7 @@ namespace plume {
+@@ -1224,6 +1461,7 @@ namespace plume {
      // VulkanPipelineLayout
  
      VulkanPipelineLayout::VulkanPipelineLayout(VulkanDevice *device, const RenderPipelineLayoutDesc &desc) {
@@ -277,7 +425,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1271,6 +1384,7 @@ namespace plume {
+@@ -1271,6 +1509,7 @@ namespace plume {
      }
  
      VulkanPipelineLayout::~VulkanPipelineLayout() {
@@ -285,7 +433,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipelineLayout(device->vk, vk, nullptr);
          }
-@@ -1283,6 +1397,7 @@ namespace plume {
+@@ -1283,6 +1522,7 @@ namespace plume {
      // VulkanShader
  
      VulkanShader::VulkanShader(VulkanDevice *device, const void *data, uint64_t size, const char *entryPointName, RenderShaderFormat format) {
@@ -293,7 +441,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
          assert(data != nullptr);
          assert(size > 0);
-@@ -1305,6 +1420,7 @@ namespace plume {
+@@ -1305,6 +1545,7 @@ namespace plume {
      }
  
      VulkanShader::~VulkanShader() {
@@ -301,7 +449,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyShaderModule(device->vk, vk, nullptr);
          }
-@@ -1317,6 +1433,7 @@ namespace plume {
+@@ -1317,6 +1558,7 @@ namespace plume {
      // VulkanSampler
  
      VulkanSampler::VulkanSampler(VulkanDevice *device, const RenderSamplerDesc &desc) {
@@ -309,7 +457,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1347,6 +1464,7 @@ namespace plume {
+@@ -1347,6 +1589,7 @@ namespace plume {
      }
  
      VulkanSampler::~VulkanSampler() {
@@ -317,7 +465,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroySampler(device->vk, vk, nullptr);
          }
-@@ -1367,6 +1485,7 @@ namespace plume {
+@@ -1367,6 +1610,7 @@ namespace plume {
      // VulkanComputePipeline
  
      VulkanComputePipeline::VulkanComputePipeline(VulkanDevice *device, const RenderComputePipelineDesc &desc) : VulkanPipeline(device, Type::Compute) {
@@ -325,7 +473,7 @@ index f1dd503..ad76699 100644
          assert(desc.computeShader != nullptr);
          assert(desc.pipelineLayout != nullptr);
          assert((desc.threadGroupSizeX > 0) && (desc.threadGroupSizeY > 0) && (desc.threadGroupSizeZ > 0));
-@@ -1398,6 +1517,7 @@ namespace plume {
+@@ -1398,6 +1642,7 @@ namespace plume {
      }
  
      VulkanComputePipeline::~VulkanComputePipeline() {
@@ -333,7 +481,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipeline(device->vk, vk, nullptr);
          }
-@@ -1415,6 +1535,7 @@ namespace plume {
+@@ -1415,6 +1660,7 @@ namespace plume {
      // VulkanGraphicsPipeline
  
      VulkanGraphicsPipeline::VulkanGraphicsPipeline(VulkanDevice *device, const RenderGraphicsPipelineDesc &desc) : VulkanPipeline(device, Type::Graphics) {
@@ -341,7 +489,7 @@ index f1dd503..ad76699 100644
          assert(desc.pipelineLayout != nullptr);
  
          thread_local std::vector<VkPipelineShaderStageCreateInfo> stages;
-@@ -1657,6 +1778,7 @@ namespace plume {
+@@ -1657,6 +1903,7 @@ namespace plume {
      }
  
      VulkanGraphicsPipeline::~VulkanGraphicsPipeline() {
@@ -349,7 +497,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipeline(device->vk, vk, nullptr);
          }
-@@ -1883,6 +2005,7 @@ namespace plume {
+@@ -1883,6 +2130,7 @@ namespace plume {
      // VulkanDescriptorSet
  
      VulkanDescriptorSet::VulkanDescriptorSet(VulkanDevice *device, const RenderDescriptorSetDesc &desc) {
@@ -357,7 +505,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1937,6 +2060,7 @@ namespace plume {
+@@ -1937,6 +2185,7 @@ namespace plume {
      }
  
      VulkanDescriptorSet::~VulkanDescriptorSet() {
@@ -365,7 +513,7 @@ index f1dd503..ad76699 100644
          if (descriptorPool != VK_NULL_HANDLE) {
              vkDestroyDescriptorPool(device->vk, descriptorPool, nullptr);
          }
-@@ -2074,6 +2198,7 @@ namespace plume {
+@@ -2074,6 +2323,7 @@ namespace plume {
      // VulkanSwapChain
  
      VulkanSwapChain::VulkanSwapChain(VulkanCommandQueue *commandQueue, const RenderSwapChainDesc &desc) {
@@ -373,7 +521,7 @@ index f1dd503..ad76699 100644
          assert(commandQueue != nullptr);
          assert(desc.textureCount > 0);
  
-@@ -2241,6 +2366,7 @@ namespace plume {
+@@ -2241,6 +2491,7 @@ namespace plume {
      }
  
      VulkanSwapChain::~VulkanSwapChain() {
@@ -381,7 +529,7 @@ index f1dd503..ad76699 100644
          releaseImageViews();
          releaseSwapChain();
  
-@@ -2294,6 +2420,10 @@ namespace plume {
+@@ -2294,6 +2545,10 @@ namespace plume {
  #else
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
  #endif
@@ -392,7 +540,7 @@ index f1dd503..ad76699 100644
              return false;
          }
  
-@@ -2488,6 +2618,9 @@ namespace plume {
+@@ -2488,6 +2743,9 @@ namespace plume {
          VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
          VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
@@ -402,7 +550,7 @@ index f1dd503..ad76699 100644
              return false;
          }
  
-@@ -2513,6 +2646,7 @@ namespace plume {
+@@ -2513,6 +2771,7 @@ namespace plume {
      // VulkanFramebuffer
      
      VulkanFramebuffer::VulkanFramebuffer(VulkanDevice *device, const RenderFramebufferDesc &desc) {
@@ -410,7 +558,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -2648,6 +2782,7 @@ namespace plume {
+@@ -2648,6 +2907,7 @@ namespace plume {
      }
  
      VulkanFramebuffer::~VulkanFramebuffer() {
@@ -418,7 +566,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFramebuffer(device->vk, vk, nullptr);
          }
-@@ -2680,6 +2815,7 @@ namespace plume {
+@@ -2680,6 +2940,7 @@ namespace plume {
      // VulkanQueryPool
  
      VulkanQueryPool::VulkanQueryPool(VulkanDevice *device, uint32_t queryCount) {
@@ -426,7 +574,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
          assert(queryCount > 0);
  
-@@ -2700,6 +2836,7 @@ namespace plume {
+@@ -2700,6 +2961,7 @@ namespace plume {
      }
  
      VulkanQueryPool::~VulkanQueryPool() {
@@ -434,7 +582,7 @@ index f1dd503..ad76699 100644
          vkDestroyQueryPool(device->vk, vk, nullptr);
      }
  
-@@ -2754,6 +2891,7 @@ namespace plume {
+@@ -2754,6 +3016,7 @@ namespace plume {
      // VulkanCommandList
  
      VulkanCommandList::VulkanCommandList(VulkanCommandQueue *queue) {
@@ -442,7 +590,7 @@ index f1dd503..ad76699 100644
          assert(queue != nullptr);
  
          this->queue = queue;
-@@ -2783,6 +2921,7 @@ namespace plume {
+@@ -2783,6 +3046,7 @@ namespace plume {
      }
  
      VulkanCommandList::~VulkanCommandList() {
@@ -450,7 +598,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkFreeCommandBuffers(queue->device->vk, commandPool, 1, &vk);
          }
-@@ -3229,6 +3368,27 @@ namespace plume {
+@@ -3229,6 +3493,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -478,7 +626,7 @@ index f1dd503..ad76699 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
-@@ -3500,6 +3660,7 @@ namespace plume {
+@@ -3500,6 +3785,7 @@ namespace plume {
      // VulkanCommandFence
  
      VulkanCommandFence::VulkanCommandFence(VulkanDevice *device) {
@@ -486,7 +634,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3515,6 +3676,7 @@ namespace plume {
+@@ -3515,6 +3801,7 @@ namespace plume {
      }
  
      VulkanCommandFence::~VulkanCommandFence() {
@@ -494,7 +642,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFence(device->vk, vk, nullptr);
          }
-@@ -3523,6 +3685,7 @@ namespace plume {
+@@ -3523,6 +3810,7 @@ namespace plume {
      // VulkanCommandSemaphore
  
      VulkanCommandSemaphore::VulkanCommandSemaphore(VulkanDevice *device) {
@@ -502,7 +650,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3538,6 +3701,7 @@ namespace plume {
+@@ -3538,6 +3826,7 @@ namespace plume {
      }
  
      VulkanCommandSemaphore::~VulkanCommandSemaphore() {
@@ -510,7 +658,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroySemaphore(device->vk, vk, nullptr);
          }
-@@ -3647,6 +3811,7 @@ namespace plume {
+@@ -3647,6 +3936,7 @@ namespace plume {
      // VulkanPool
  
      VulkanPool::VulkanPool(VulkanDevice *device, const RenderPoolDesc &desc) {
@@ -518,7 +666,7 @@ index f1dd503..ad76699 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3688,6 +3853,7 @@ namespace plume {
+@@ -3688,6 +3978,7 @@ namespace plume {
      }
  
      VulkanPool::~VulkanPool() {
@@ -526,7 +674,7 @@ index f1dd503..ad76699 100644
          if (vk != VK_NULL_HANDLE) {
              vmaDestroyPool(device->allocator, vk);
          }
-@@ -4084,6 +4250,7 @@ namespace plume {
+@@ -4084,6 +4375,7 @@ namespace plume {
  
          VmaAllocatorCreateInfo allocatorInfo = {};
          allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
@@ -534,7 +682,7 @@ index f1dd503..ad76699 100644
          allocatorInfo.physicalDevice = physicalDevice;
          allocatorInfo.device = vk;
          allocatorInfo.pVulkanFunctions = &vmaFunctions;
-@@ -4097,6 +4264,8 @@ namespace plume {
+@@ -4097,6 +4389,8 @@ namespace plume {
              return;
          }
  
@@ -543,7 +691,7 @@ index f1dd503..ad76699 100644
          // Find the biggest device local memory available on the device.
          VkDeviceSize memoryHeapSize = 0;
          const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
-@@ -4433,6 +4602,8 @@ namespace plume {
+@@ -4433,6 +4727,8 @@ namespace plume {
          nullBuffer = nullptr; // force destruction before destroying allocator
  
          if (allocator != VK_NULL_HANDLE) {
@@ -553,10 +701,10 @@ index f1dd503..ad76699 100644
              allocator = VK_NULL_HANDLE;
          }
 diff --git a/plume_vulkan.h b/plume_vulkan.h
-index 0a1edbe..4f3aa1b 100644
+index 0a1edbe..066fe81 100644
 --- a/plume_vulkan.h
 +++ b/plume_vulkan.h
-@@ -42,6 +42,13 @@
+@@ -42,6 +42,21 @@
  #endif
  
  namespace plume {
@@ -566,7 +714,33 @@ index 0a1edbe..4f3aa1b 100644
 +    int GetVulkanObjectKinds();
 +    const char *GetVulkanObjectName(int kind);
 +    void GetVulkanObjectCount(int kind, int64_t &live, int64_t &made);
++    // Banjo-Tooie: every buffer and texture alive, grouped by what it is (its name, or its kind and size),
++    // with how many there are and the bytes they hold (for the [vram] log).
++    struct VideoMemoryGroup {
++        std::string label;
++        int64_t count = 0;
++        int64_t bytes = 0;
++    };
++    std::vector<VideoMemoryGroup> GetVideoMemoryGroups();
 +
      struct VulkanCommandQueue;
      struct VulkanDevice;
      struct VulkanInterface;
+@@ -56,6 +71,8 @@ namespace plume {
+         VmaAllocationInfo allocationInfo = {};
+         RenderBufferDesc desc;
+         RenderBarrierStages barrierStages = RenderBarrierStage::NONE;
++        // Banjo-Tooie: the group this buffer's memory is counted under (GetVideoMemoryGroups).
++        std::string memoryLabel;
+ 
+         VulkanBuffer() = default;
+         VulkanBuffer(VulkanDevice *device, VulkanPool *pool, const RenderBufferDesc &desc);
+@@ -88,6 +105,8 @@ namespace plume {
+         RenderBarrierStages barrierStages = RenderBarrierStage::NONE;
+         bool ownership = false;
+         RenderTextureDesc desc;
++        // Banjo-Tooie: the group this texture's memory is counted under (GetVideoMemoryGroups).
++        std::string memoryLabel;
+ 
+         VulkanTexture() = default;
+         VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc);

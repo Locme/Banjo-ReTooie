@@ -2647,3 +2647,11 @@
 - Look for: a "Boss rush 1/13: Klungo" notice straight away and Klungo's fight starts (the file is saved first). Then carry on with T219's steps. Cause: the switch's change handler read the old value, so turning it on was taken as turning it off. Checked headless with a file open, through the switch's own change handler.
 - Status: waiting for L
 
+
+## T253 Video memory log: what is using it
+- Asked: 2026-10-16 10:25 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Play as when the frame rate dropped (4K or 3440x1440, MSAA 2x, your mods on) until VRAM has climbed a few GB, then send console.log
+- Look for: each [vram] line (one every 512 MB of change) is now followed by "[vram] using it: N MB in textures and buffers; biggest: ..." naming the biggest groups of the game's textures and buffers with their size and count (for example "Render Target Color 3440x1440 MSAA 2x 760 MB (12)"), and "[vram] changed since the last line: ..." naming what grew or shrank. If VRAM climbs and these stay level, the memory is held by the graphics driver, not by textures or buffers; the "objects alive" line (T244) then says which kind of object. Checked headless: the lines print with names (render targets, scene effects, SMAA, texture cache) and follow the effects as they are made.
+- Status: waiting for L
