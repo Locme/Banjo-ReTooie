@@ -22,8 +22,8 @@ namespace tooie::picture_filters {
     enum class Water : uint32_t { Original, Modern };
 
     inline const std::string preset_option = "effects_preset";
-    // Photo Filters toggle: hides the filter options below it (the filters stay on).
-    inline const std::string section_option = "photo_filters";
+    // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
+    inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";

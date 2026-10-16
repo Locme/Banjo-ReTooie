@@ -587,12 +587,6 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
 void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     created = true;
 
-    graphics.add_bool_option(
-        section_option,
-        "Photo Filters",
-        "Shows the picture filter options below. Hiding them does not turn any filter off.",
-        false);
-
     graphics.add_enum_option(
         preset_option,
         "Effects preset",
@@ -682,6 +676,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sharpening",
         "Sharpens the picture's fine detail, most where it is soft. 0 is off.",
         0, 100, 5, 0, false, 0);
+    graphics.add_bool_option(
+        lighting_section_option,
+        "Lighting, Water, Fog (Experimental)",
+        "Shows the lighting, water, fog and the other effects below. Hiding them does not turn any effect off.",
+        true);
+
     graphics.add_number_option(
         ambient_occlusion_option,
         "Ambient occlusion",
@@ -894,48 +894,37 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             });
     }
 
-    // Hidden until the Photo Filters toggle is on; the filters keep their values either way.
-    graphics.add_option_hidden_dependency(preset_option, section_option, false);
-    graphics.add_option_hidden_dependency(ambient_occlusion_option, section_option, false);
-    graphics.add_option_hidden_dependency(bloom_option, section_option, false);
-    graphics.add_option_hidden_dependency(bounce_light_option, section_option, false);
-    graphics.add_option_hidden_dependency(brightness_option, section_option, false);
-    graphics.add_option_hidden_dependency(brightness_pattern_option, section_option, false);
-    graphics.add_option_hidden_dependency(colourblind_option, section_option, false);
-    graphics.add_option_hidden_dependency(contrast_option, section_option, false);
-    graphics.add_option_hidden_dependency(crt_option, section_option, false);
-    graphics.add_option_hidden_dependency(cutscene_dof_option, section_option, false);
-    graphics.add_option_hidden_dependency(eye_adaptation_option, section_option, false);
-    graphics.add_option_hidden_dependency(fog_colour_option, section_option, false);
-    graphics.add_option_hidden_dependency(fog_option, section_option, false);
-    graphics.add_option_hidden_dependency(fog_start_option, section_option, false);
-    graphics.add_option_hidden_dependency(gameplay_dof_option, section_option, false);
-    graphics.add_option_hidden_dependency(grain_option, section_option, false);
-    graphics.add_option_hidden_dependency(heat_haze_option, section_option, false);
-    graphics.add_option_hidden_dependency(light_shafts_option, section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadows_option, section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadow_banjo_option, section_option, false);
-    graphics.add_option_hidden_dependency(sun_shadow_softness_option, section_option, false);
-    graphics.add_option_hidden_dependency(outline_thickness_option, section_option, false);
-    graphics.add_option_hidden_dependency(outlines_option, section_option, false);
-    graphics.add_option_hidden_dependency(rim_light_option, section_option, false);
-    graphics.add_option_hidden_dependency(saturation_option, section_option, false);
-    graphics.add_option_hidden_dependency(sharpen_option, section_option, false);
-    graphics.add_option_hidden_dependency(texture_upscale_option, section_option, false);
-    graphics.add_option_hidden_dependency(three_point_option, section_option, false);
-    graphics.add_option_hidden_dependency(underwater_distortion_option, section_option, false);
-    graphics.add_option_hidden_dependency(underwater_haze_option, section_option, false);
-    graphics.add_option_hidden_dependency(underwater_tint_option, section_option, false);
-    graphics.add_option_hidden_dependency(vignette_option, section_option, false);
-    graphics.add_option_hidden_dependency(water_reflections_option, section_option, false);
-    graphics.add_option_hidden_dependency(water_waves_option, section_option, false);
-    graphics.add_option_hidden_dependency(wave_speed_option, section_option, false);
-    graphics.add_option_hidden_dependency(grass_option, section_option, false);
-    graphics.add_option_hidden_dependency(grass_height_option, section_option, false);
-    graphics.add_option_hidden_dependency(grass_distance_option, section_option, false);
-    graphics.add_option_hidden_dependency(grass_density_option, section_option, false);
-    graphics.add_option_hidden_dependency(grass_patches_option, section_option, false);
-    graphics.add_option_hidden_dependency(banjo_fur_option, section_option, false);
-    graphics.add_option_hidden_dependency(banjo_fur_length_option, section_option, false);
-    graphics.add_option_hidden_dependency(dither16_option, section_option, false);
+
+    // Hidden when the Lighting, Water, Fog (Experimental) toggle is off; the effects keep their values either way.
+    graphics.add_option_hidden_dependency(ambient_occlusion_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(bounce_light_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_reflections_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_height_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_distance_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_density_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(grass_patches_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(banjo_fur_length_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(sun_shadows_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(sun_shadow_banjo_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(sun_shadow_softness_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(light_shafts_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(bloom_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(eye_adaptation_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(cutscene_dof_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(gameplay_dof_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(fog_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(fog_start_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(fog_colour_option, lighting_section_option, false);
 }

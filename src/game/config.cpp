@@ -426,9 +426,8 @@ void tooie::init_config() {
     // Section headings in the Graphics tab. The options of a group sit next to each other above, and a
     // heading hides with its option.
     recompui::config::set_option_group(recompui::config::graphics::options::res_option, "Display");
-    recompui::config::set_option_group(tooie::picture_filters::section_option, "Photo Filters");
     recompui::config::set_option_group(tooie::picture_filters::preset_option, "Picture and effects");
-    recompui::config::set_option_group(tooie::picture_filters::ambient_occlusion_option, "Lighting, Water, Fog (Experimental)");
+    recompui::config::set_option_group(tooie::picture_filters::lighting_section_option, "Lighting, Water, Fog (Experimental)");
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
