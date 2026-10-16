@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..ef7c445 100644
+index 9fae0d4..4985f30 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2292,7 +2292,7 @@ index 9fae0d4..ef7c445 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1947,55 @@ namespace RT64 {
+@@ -1456,6 +1947,66 @@ namespace RT64 {
                  continue;
              }
  
@@ -2337,6 +2337,17 @@ index 9fae0d4..ef7c445 100644
 +                    {
 +                        worldOpen = true;
 +                    }
++                    // A perspective model in front of a camera of its own that writes no depth, after the world:
++                    // the shaped level wipe (the Jiggy). It goes after the effects like the HUD, or they showed
++                    // through its black (fog, bloom and the others turned it grey).
++                    else if (worldOpen && (targetDrawCall.sceneEffectsDrawData == &drawData) &&
++                        (matrixDifference(drawData.projTransforms[proj.transformsIndex], drawData.projTransforms[targetDrawCall.sceneEffectsTransformsIndex]) >= 1e-4f) &&
++                        std::none_of(proj.gameCalls.begin(), proj.gameCalls.begin() + proj.gameCallCount, [](const GameCall &c) { return c.shaderDesc.otherMode.zUpd(); }))
++                    {
++                        checkRasterScene(rasterScene);
++                        worldEnd = int32_t(targetDrawCall.rasterScenes.size());
++                        worldOpen = false;
++                    }
 +                }
 +            }
 +            else if (worldOpen) {
@@ -2348,7 +2359,7 @@ index 9fae0d4..ef7c445 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2222,20 @@ namespace RT64 {
+@@ -1682,6 +2233,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2369,7 +2380,7 @@ index 9fae0d4..ef7c445 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2301,219 @@ namespace RT64 {
+@@ -1747,8 +2312,219 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2589,7 +2600,7 @@ index 9fae0d4..ef7c445 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2523,172 @@ namespace RT64 {
+@@ -1758,13 +2534,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);

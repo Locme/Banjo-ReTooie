@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T312 Jiggy wipe stays black with Ambient Occlusion and the other shaders
+- Asked: 2026-10-16 20:43 UTC
+- Build: main after the Jiggy wipe fix
+- Steps:
+  1. Turn on Ambient Occlusion (and Fog, Bloom or the others you use)
+  2. Go through any door or use the Warp tab so the Jiggy-shaped wipe plays
+- Look for: Is everything around the Jiggy black (not grey) while it closes and opens?
+- Status: waiting for L
+
 ## T311 Waterfalls dim at night
 - Asked: 2026-10-16 20:42 UTC
 - Build: main

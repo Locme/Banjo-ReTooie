@@ -35,6 +35,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - F1, F6, F7, F8, F9 and F12 are bound in the Controls tab and can be changed; F8 is only Effect Compare now, and blend modes moved to their own Blend Mode key, F5 (T143).
 
 ### Graphics
+- Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T312).
 - 3D grass no longer grows on Spiral Mountain's cobbled road: the grass layer the game blends over the road fades out by its vertices' alpha, which the blades ignored (L). Untested on PC (T309).
 
 - The gameplay demo (when you don't press Start) no longer runs too fast. DEV > Force Interpolation in the gameplay demo (off by default) blends it like the opening cutscene. Untested on PC (T307).
