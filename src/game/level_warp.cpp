@@ -35,6 +35,7 @@
 
 #include "tooie_debug.h"
 #include "tooie_cheats.h"
+#include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_level_warp.h"
 #include "tooie_race_warp.h"
@@ -69,11 +70,11 @@ namespace {
     const std::string tab_id = "debug";
     const std::string option_id = "debug_tab";
 
-    // The switch lives in the Cheats tab and only counts while "Enable cheats" is on.
+    // The switch lives in the DEV tab's Additional Tabs (L, 2026-10-16; it was in Cheats > Tabs and
+    // needed Enable cheats).
     bool debug_tab_on() {
         try {
-            return tooie::cheats::enabled() &&
-                std::get<bool>(recompui::config::get_config("cheats").get_option_value(option_id));
+            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(option_id));
         } catch (...) {
             return false;
         }
@@ -175,21 +176,17 @@ namespace {
 }
 
 void tooie::level_warp::create_tab() {
-    recomp::config::Config& cheats = recompui::config::get_config("cheats");
-    cheats.add_bool_option(option_id, "Warp tab",
+    recompui::config::create_tab("Warp", tab_id, create_contents);
+    show_tab(false);
+}
+
+void tooie::level_warp::add_option(recomp::config::Config& dev) {
+    dev.add_bool_option(option_id, "Warp tab",
         "Shows the Warp tab, with the level warp list. F9 repeats the last warp.", false);
-    // The row only shows while the master switch is on.
-    cheats.add_option_hidden_dependency(option_id, "cheats_enabled", false);
-    recompui::config::set_option_group(option_id, "Tabs");
-    cheats.add_option_change_callback(option_id,
+    dev.add_option_change_callback(option_id,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             tooie::level_warp::refresh();
         });
-    // The saved values are known once the configs load.
-    cheats.set_load_callback([] { show_tab(debug_tab_on()); });
-
-    recompui::config::create_tab("Warp", tab_id, create_contents);
-    show_tab(false);
 }
 
 void tooie::level_warp::start() {

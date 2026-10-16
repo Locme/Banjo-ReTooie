@@ -11,7 +11,6 @@
 #include "recompui/config.h"
 
 #include "tooie_cheats.h"
-#include "tooie_level_warp.h"
 #include "tooie_speedup.h"
 #include "tooie_transform_picker.h"
 
@@ -71,6 +70,8 @@ namespace {
         { "cheat_dragon_kazooie", "Dragon Kazooie",
           "On: Kazooie is Dragon Kazooie, as after Humba's pool on Isle o' Hags. Off: she is Kazooie again. The area reloads when you change it, and saving keeps it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_learn_moves", "Learn Every Move",
+          "Learns every move Jamjars, Bottles and the others teach, as if you had found them all. The area reloads once. Saving keeps them, and switching this off doesn't unlearn them.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);
     constexpr size_t item_count = 20;
@@ -168,11 +169,8 @@ void tooie::cheats::create_tab() {
                 for (const Cheat& cheat : cheat_list) {
                     cfg.update_option_value(cheat.option, false);
                 }
-                cfg.update_option_value("debug_tab", false);
                 tooie::transform_picker::reset(cfg);
             }
-            // The Warp tab follows the master switch too.
-            tooie::level_warp::refresh();
         });
 }
 

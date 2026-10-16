@@ -44,6 +44,10 @@ yellow egg is not affected.
 file is not changed. Only the moves are changed, not the rest of the game's
 progress.
 
+**Learn Every Move**: learns every move for real (the flags the teachers set),
+once each time it is switched on, and the area reloads. Saving keeps them, and
+switching it off doesn't unlearn them.
+
 **Transformation**: choose a form from the list and the area you are in reloads
 with you in it. It comes back in at the entrance you used, not where you were
 standing. Some forms break in areas the game never expects them in. Choosing

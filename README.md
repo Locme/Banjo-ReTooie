@@ -52,8 +52,9 @@ settings. The tabs are General, QOL, Graphics, Controls, Sound, Cheats and Mods.
 - **General**: Back up saves, Save backups to keep, Timer save, Discord status,
   Speed-up factor and Speed-up toggle.
 - **QOL**: Press Start Early to Skip Intro, Text speed and Level transitions.
-- **Cheats**: Enable cheats, which must be on for the cheat options and the
-  Warp tab to show. The Warp tab switch adds a Warp tab listing level warps.
+- **Cheats**: Enable cheats, which must be on for the cheat options to show.
+- **DEV** (shown with General > Developer Mode): its Additional Tabs section
+  shows the Achievements, Cheats and Warp tabs.
 - **Graphics**: changes apply at once, with no Apply button. Aspect Ratio offers
   4:3, Fill and Letterbox 16:9. Graphics API needs a restart.
 - **F11** or **Alt+Enter** toggles fullscreen.

@@ -1748,7 +1748,7 @@ index 49e05db..6b65555 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..fe7c52e 100644
+index 4fdf81f..5e0e414 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -1778,7 +1778,7 @@ index 4fdf81f..fe7c52e 100644
 -            {ultramodern::renderer::AspectRatio::Expand, "Expand"},
 -            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
 +            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
-+            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Default"},
++            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
 +            {ultramodern::renderer::AspectRatio::Manual, "Manual", "Letterbox 16:9"},
          };
  
@@ -1792,15 +1792,6 @@ index 4fdf81f..fe7c52e 100644
              {ultramodern::renderer::RefreshRate::Display, "Display"},
              {ultramodern::renderer::RefreshRate::Manual, "Manual"},
          };
-@@ -92,7 +95,7 @@ namespace recompui {
-         static EnumOptionVector hud_ratio_mode_options = {
-             {ultramodern::renderer::HUDRatioMode::Original, "Original"},
-             {ultramodern::renderer::HUDRatioMode::Clamp16x9, "Clamp16x9", "16:9"},
--            {ultramodern::renderer::HUDRatioMode::Full, "Expand"},
-+            {ultramodern::renderer::HUDRatioMode::Full, "Expand", "Default"},
-         };
- 
-         static const std::string get_downsampling_details(ultramodern::renderer::Resolution res_option, DownsamplingOption ds_option) {
 @@ -100,6 +103,11 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
@@ -1900,7 +1891,7 @@ index 4fdf81f..fe7c52e 100644
                  graphics::options::ar_option,
                  "Aspect Ratio",
 -                "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
-+                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Default</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
++                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
@@ -1934,15 +1925,15 @@ index 4fdf81f..fe7c52e 100644
              config.add_enum_option(
                  graphics::options::msaa_option,
                  "MS Anti-Aliasing",
-@@ -336,7 +364,7 @@ namespace recompui {
-             config.add_enum_option(
-                 graphics::options::hr_option,
+@@ -338,7 +366,7 @@ namespace recompui {
                  "HUD Placement",
--                "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
-+                "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Default</recomp-color> will use the aspect ratio of the game's output window.",
+                 "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
                  hud_ratio_mode_options,
-                 ultramodern::renderer::HUDRatioMode::Clamp16x9
+-                ultramodern::renderer::HUDRatioMode::Clamp16x9
++                ultramodern::renderer::HUDRatioMode::Full
              );
+ 
+             config.add_enum_option(
 @@ -346,7 +374,7 @@ namespace recompui {
                  "Graphics API",
                  "Selects the graphics API to use.",

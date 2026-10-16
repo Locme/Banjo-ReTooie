@@ -10,6 +10,9 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Settings menu: General > DEV tab is now called Developer Mode. The DEV tab has a new Additional Tabs section with Achievements tab (off by default), Cheats tab (moved from General) and Warp tab (moved from Cheats > Tabs; it no longer needs Enable cheats). Saved Cheats tab and Warp tab values carry over (L). Untested on PC (T344).
+- New cheat: Learn Every Move learns every move for real, once each time it is switched on; the area reloads, saving keeps them (L). Untested on PC (T344).
+- Graphics: HUD Placement's choice is called Expand again and is the default (a saved 16:9 changes to Expand once); Aspect Ratio's choice is called Fill again (L). Untested on PC (T344).
 - General > Snout jiggle (on/off, default off): Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey; with Smash Banjo the front of his muzzle moves, on vanilla Banjo his nose (L). Untested on PC (T343).
 - Graphics > Character Shaders > Enemy fur (on/off, default off): the yetis on Hailfire Peaks' Icy Side grow white fur like Banjo's (L). Untested on PC (T336).
 - Banjo fur: his knees (the brown between his shorts and boots) now have fur too; the shorts stay bare (L). Untested on PC (T332).
@@ -18,7 +21,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - New cheats: 100% complete (everything done except the last boss, Hag 1: all Jiggies, notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons, moves, worlds and bosses; saving keeps it) and Dragon Kazooie (on: Kazooie is Dragon Kazooie, off: she is Kazooie again). Untested on PC (T326).
 - Fixed: scrolling the Graphics menu with a controller lagged on every step. The option description now shows a moment after you stop on an option instead of on every step. Untested on PC (T319).
 - Run is now on the controller's B button by default (the button labelled B on an Xbox pad, Circle on PlayStation). That button was a second C-right; the right stick still turns the camera. Saved controls get the change once if Run was unbound and B was only C-right. On Android the touch B button now does the game's B instead of C-right. Untested on PC (T305).
-- The Start menu has a SETTINGS entry under View Totals (L). For now it opens an empty SETTINGS page; B goes back, Start closes the menu. Untested on PC (T270).
+- The Start menu has an ACHIEVEMENTS entry under View Totals (first called Settings, renamed by L). Its page lists the twelve XBLA achievements with how many are unlocked and the G earned; unlocked ones are yellow, up and down pick one and show its description and when it was unlocked (or the count so far for the counted ones). B goes back, Start closes the menu. Untested on PC (T270, T344).
 - Warp tab: Glitter Gulch Mine > Outside Mumbo's Skull, and Cloud Cuckooland > Skull on the cloud (straight ahead), for the Mumbo's Hut Recreation mod (the mod itself is a separate download for the Mods menu). Untested on PC (T241).
 - Graphics > Shaders off now also turns its section's effects off, so the game plays plain; their settings are kept (L). Untested on PC (T321).
 - QOL > Totals checklist is on by default; saved settings keep their value (L). Untested on PC (T322).

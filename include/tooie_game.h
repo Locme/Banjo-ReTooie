@@ -76,10 +76,13 @@ namespace tooie {
     inline const std::string high_detail_models_option = "high_detail_models";
     // HD shadows (src/gameplay/hd_shadows.cpp), Graphics tab.
     inline const std::string hd_shadows_option = "hd_shadows";
-    // DEV tab, formerly WIP (src/game/config.cpp): its id, and the General toggle that shows it.
+    // DEV tab, formerly WIP (src/game/config.cpp): its id, and the General toggle that shows it
+    // (Developer Mode).
     inline const std::string wip_tab_id = "wip";
     inline const std::string wip_tab_option = "wip_tab";
-    // Cheats tab (src/game/cheats.cpp): the General toggle that shows it. Developer section.
+    // DEV > Additional Tabs (L, 2026-10-16): the toggles that show the Achievements and Cheats tabs.
+    // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
+    inline const std::string achievements_tab_option = "achievements_tab";
     inline const std::string cheats_tab_option = "cheats_tab";
     // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";

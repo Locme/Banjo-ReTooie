@@ -105,7 +105,6 @@ namespace {
             {}, {0x02A, 0x02B, 0x02C, 0x02D, 0x02E, 0x02F, 0x032, 0x035, 0x067}, {1, 6}},
     };
 
-    const std::string tab_id = "achievements";
 
     // Counted achievements: the running count is kept with the unlocks under "<id>_count".
     struct Counted {
@@ -424,6 +423,32 @@ namespace {
             }
         }
     }
+}
+
+std::vector<tooie::achievements::PauseEntry> tooie::achievements::pause_entries() {
+    nlohmann::json done;
+    {
+        std::lock_guard lock{unlocked_mutex};
+        done = unlocked;
+    }
+    std::vector<PauseEntry> entries;
+    for (const Achievement& a : achievement_list) {
+        PauseEntry e;
+        e.name = a.name;
+        e.description = a.description;
+        e.points = a.points;
+        e.unlocked = done.contains(a.id);
+        if (e.unlocked && done[a.id].is_string()) {
+            e.unlocked_at = done[a.id].get<std::string>();
+        }
+        if (const Counted* c = a.counted ? counted_of(a.id) : nullptr) {
+            const std::string key = std::string(a.id) + "_count";
+            e.count = done.contains(key) && done[key].is_number_integer() ? done[key].get<int>() : 0;
+            e.goal = c->goal;
+        }
+        entries.push_back(std::move(e));
+    }
+    return entries;
 }
 
 void tooie::achievements::create_tab() {

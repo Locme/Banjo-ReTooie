@@ -23,6 +23,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 
+#include "tooie_achievements.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_totals_checklist.h"
@@ -273,6 +274,7 @@ namespace {
 
     int last_page = -1;
     int last_sub_page = -1;
+    bool last_achievements_open = false;
 }
 
 // What can be got now: the rules of the Archipelago randomizer's Banjo-Tooie world, translated by
@@ -911,6 +913,93 @@ namespace {
     }
 }
 
+namespace {
+    // ---- The pause menu's Achievements page (pause_settings.cpp opens it as a Totals sub page): the
+    // XBLA achievements as a list, unlocked ones in yellow, up/down picks one and its description and
+    // state show under the list. Drawn whatever the Totals checklist option says.
+    constexpr int ach_left = 64;
+    constexpr int ach_right = 256;
+    constexpr int ach_rows = 6;
+    constexpr int ach_description_lines = 4;
+    int ach_cursor = 0;
+    int ach_top = 0;
+
+    void draw_achievements(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, uint32_t& offset, int steps) {
+        const std::vector<tooie::achievements::PauseEntry> entries = tooie::achievements::pause_entries();
+        if (entries.empty()) {
+            return;
+        }
+        const int count = (int)entries.size();
+        ach_cursor = std::clamp(ach_cursor + steps, 0, count - 1);
+        if (ach_cursor < ach_top) {
+            ach_top = ach_cursor;
+        } else if (ach_cursor >= ach_top + ach_rows) {
+            ach_top = ach_cursor - ach_rows + 1;
+        }
+
+        int unlocked = 0;
+        int points = 0;
+        int total = 0;
+        for (const auto& e : entries) {
+            total += e.points;
+            if (e.unlocked) {
+                unlocked++;
+                points += e.points;
+            }
+        }
+        const int header_y = block_y - line_height;
+        print(rdram, ctx, gfx, offset, colour_blue, text_scale, ach_left, header_y,
+              std::to_string(unlocked) + " OF " + std::to_string(count) + " UNLOCKED");
+        print(rdram, ctx, gfx, offset, colour_blue, text_scale, ach_right, header_y,
+              std::to_string(points) + " OF " + std::to_string(total) + "G", true);
+
+        // The list; more above or below is shown by a "-" at the end of the first or last row.
+        constexpr int points_width = 26;
+        for (int row = 0; row < ach_rows && ach_top + row < count; row++) {
+            const auto& e = entries[ach_top + row];
+            const int y = block_y + line_height * row;
+            const bool picked = ach_top + row == ach_cursor;
+            const int colour = e.unlocked ? colour_yellow : colour_white;
+            const std::string name = fit(rdram, ctx, offset, text_scale, printable(e.name), ach_right - ach_left - points_width);
+            print(rdram, ctx, gfx, offset, colour, text_scale, ach_left, y, name, false, !picked);
+            print(rdram, ctx, gfx, offset, colour, text_scale, ach_right, y, std::to_string(e.points) + "G", true, !picked);
+        }
+        if (ach_top > 0) {
+            print(rdram, ctx, gfx, offset, colour_white, text_scale, ach_left - 10, block_y, "-");
+        }
+        if (ach_top + ach_rows < count) {
+            print(rdram, ctx, gfx, offset, colour_white, text_scale, ach_left - 10, block_y + line_height * (ach_rows - 1), "-");
+        }
+
+        // The picked one: its state, then its description.
+        const auto& e = entries[ach_cursor];
+        int y = block_y + line_height * ach_rows + 4;
+        std::string state;
+        int colour = colour_white;
+        if (e.unlocked) {
+            state = "UNLOCKED";
+            if (e.unlocked_at.size() >= 10) {
+                state += " " + e.unlocked_at.substr(0, 10);
+            }
+            colour = colour_yellow;
+        } else if (e.count >= 0) {
+            state = "LOCKED - " + std::to_string(std::min(e.count, e.goal)) + " OF " + std::to_string(e.goal);
+        } else {
+            state = "LOCKED";
+        }
+        print(rdram, ctx, gfx, offset, colour, text_scale, ach_left, y, state);
+        const std::vector<std::string> lines = wrap(rdram, ctx, offset, text_scale, printable(e.description), ach_right - ach_left);
+        for (int i = 0; i < (int)lines.size() && i < ach_description_lines; i++) {
+            y += line_height;
+            std::string line = lines[i];
+            if (i == ach_description_lines - 1 && (int)lines.size() > ach_description_lines) {
+                line = fit(rdram, ctx, offset, text_scale, line + " " + lines[i + 1], ach_right - ach_left);
+            }
+            print(rdram, ctx, gfx, offset, colour_white, text_scale, ach_left, y, line);
+        }
+    }
+}
+
 extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx) {
     const gpr pause = ctx->r16;
     const uint8_t page = MEM_BU(pause_page, pause);
@@ -942,6 +1031,26 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
 
     // Every pause page passes here, so the pad filter learns at once when no table is on screen.
     input_mode.store(mode_none);
+    if (page == page_totals && sub_page == tooie::achievements::pause_sub_page) {
+        if (!last_achievements_open) {
+            ach_cursor = 0;
+            ach_top = 0;
+        }
+        last_achievements_open = true;
+        if (MEM_BU(pause_draw_header, pause) == 0) {
+            return;
+        }
+        page_in = std::min(1.0f, MEM_BU(pause_title_step, pause) / 10.0f);
+        rise = (int)((1.0f - page_in) * 12.0f + 0.5f);
+        presses_a.exchange(0);
+        presses_b.exchange(0);
+        uint32_t offset = 0;
+        drawn_at_ms.store(now_ms());
+        input_mode.store(mode_table);
+        draw_achievements(rdram, ctx, gfx, offset, moves_down.exchange(0));
+        return;
+    }
+    last_achievements_open = false;
     if (page != page_totals || !enabled(Clock::now())) {
         return;
     }

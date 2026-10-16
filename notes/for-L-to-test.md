@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T344 Start menu Achievements page, DEV Additional Tabs, Learn Every Move, HUD Expand
+- Asked: 2026-10-16 22:57 UTC
+- Build: main (next build)
+- Steps:
+  1. Load a file, press Start: the third row says ACHIEVEMENTS; pick it
+  2. On the page, press up and down through the list, then B to go back
+  3. Settings menu: General > Developer Mode on, open DEV and scroll to Additional Tabs; switch Achievements tab and Cheats tab on and off
+  4. Cheats > Enable cheats, then Learn Every Move on, in a level
+  5. Graphics: look at Aspect Ratio and HUD Placement
+- Look for: Step 1-2: the page lists all 12 achievements with how many are unlocked and the G total, unlocked ones in yellow; the picked one shows its state (date, count so far or LOCKED) and description under the list; B goes back, Start closes. Step 3: the tabs appear and disappear in the sidebar at once; Warp tab works without Enable cheats. Step 4: the area reloads once and Jamjars' moves are learned (check the Totals moves page). Step 5: Aspect Ratio shows 4:3 / Fill / Letterbox 16:9, HUD Placement shows Original / 16:9 / Expand with Expand picked. The Achievements row still has the Jiggy icon: Cheato has no picture in the pause menu's icon set.
 ## T343 Snout jiggle (General)
 - Asked: 2026-10-16 22:56 UTC
 - Build: main from this commit (next Windows build), with Smash Banjo v13 for the Smash part

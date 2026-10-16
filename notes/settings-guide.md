@@ -60,6 +60,18 @@ on a controller.
   there; in a level the area reloads (back at its entrance) so the change shows at once, and wins over `mods/assets/` (the mod higher in the list wins when two
   replace the same asset).
 
+- **Developer Mode** (Developer): shows the DEV tab. Default: off.
+
+The DEV tab's **Additional Tabs** section shows or hides tabs:
+
+- **Achievements tab**: the settings menu's Achievements tab (the twelve XBLA
+  achievements, with counts). Achievements are earned whether it shows or not,
+  and the Start menu's ACHIEVEMENTS page always lists them. Default: off.
+- **Cheats tab**: the Cheats tab (it was in General). Hiding it leaves cheats
+  that are on as they are. Default: on.
+- **Warp tab**: the Warp tab (it was in the Cheats tab and needed Enable
+  cheats; it no longer does). See Warp tab under Cheats below. Default: off.
+
 The General tab also has a rumble strength option. It comes from the menu
 framework, not from this port's code, so it is not described here.
 
@@ -144,6 +156,10 @@ Sets how the picture fits the window. Default: Fill.
 - **Fill**: widens the view to the window's shape.
 - **Letterbox 16:9**: widens the view to 16:9 and adds black bars in windows of
   any other shape.
+
+HUD Placement: **Original**, **16:9** or **Expand** (the HUD follows the
+window's shape). Default: Expand; a saved 16:9 from the old default changes to
+Expand once.
 
 Graphics changes apply at once. Graphics API needs a restart: changing it asks "Restart now?", and Restart closes the game and opens it again with the new API. The choices are Vulkan (the default) and, on Windows, D3D12; there is no Auto. A saved Auto is not migrated, so switch it once.
 
@@ -407,7 +423,7 @@ as they are.
   in (missing animations or data). It is a drop-down. Off puts you back as
   Banjo-Kazooie (and reloads the area) if you had picked a form. Default: Off;
   the row goes back to Off when Enable cheats is turned off.
-- **Warp tab**: shows the Warp tab in the menu, with a list of places to warp
+- **Warp tab** (now in DEV > Additional Tabs): shows the Warp tab in the menu, with a list of places to warp
   to. The Warp Again key (Debug section of the Controls tab) repeats the last
   warp. Its last group, Race Warps (Replay Race), starts one of Canary Mary's four races as
   a practice run (your file is not changed and no prize is given). Default: off.

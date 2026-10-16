@@ -12,7 +12,8 @@
 #include "tooie_hooks.h"
 #include "tooie_progress_cheats.h"
 
-// Cheats that work through the game's own flags: the ten Cheato codes (plus HOMING) and Unlock all moves.
+// Cheats that work through the game's own flags: the ten Cheato codes (plus HOMING), Unlock all moves
+// and Learn Every Move.
 //
 // The flag numbers are the N64 ones from the decomp's include/gameflags.h. They are not the XBLA ones
 // the report lists: here a cheat's "active" flag is 0x534 + n (FEATHERS is 0x534), and HOMING is 0x5A3.
@@ -208,6 +209,26 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         unlock_was_on = true;
     } else if (!unlock_on) {
         unlock_was_on = false;
+    }
+
+    // Learn Every Move (L, 2026-10-16), once each time the option is switched on: the moves for real,
+    // where Unlock all moves only makes them count as learned. Saving keeps them.
+    static bool learn_was_on = false;
+    const bool learn_on = tooie::cheats::is_on("cheat_learn_moves");
+    if (learn_on && !learn_was_on && in_level(rdram)) {
+        int count = 0;
+        for (int32_t f = first_move_flag; f <= last_move_flag; f++) {
+            if (!flag_get(rdram, ctx, f)) {
+                flag_set(rdram, ctx, f, true);
+                count++;
+            }
+        }
+        if (count > 0) {
+            reload_area(rdram, ctx, "learn-moves", count);
+        }
+        learn_was_on = true;
+    } else if (!learn_on) {
+        learn_was_on = false;
     }
 
     // 100% complete, once each time the option is switched on (while a save is being played). Like

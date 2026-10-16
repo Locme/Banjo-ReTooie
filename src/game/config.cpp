@@ -56,7 +56,7 @@ namespace {
     void show_cheats_tab() {
         bool on = true;
         try {
-            on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::cheats_tab_option));
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::cheats_tab_option));
         } catch (...) {
         }
         try {
@@ -74,6 +74,52 @@ namespace {
         try {
             recompui::config::set_tab_visible(tooie::wip_tab_id, on);
         } catch (...) {
+        }
+    }
+
+    void show_achievements_tab() {
+        bool on = false;
+        try {
+            on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::achievements_tab_option));
+        } catch (...) {
+        }
+        try {
+            recompui::config::set_tab_visible(tooie::achievements::tab_id, on);
+        } catch (...) {
+        }
+    }
+
+    // The Cheats tab switch moved from General, and the Warp tab switch from Cheats, to DEV > Additional
+    // Tabs (L, 2026-10-16): carry saved values over once, while the DEV tab's file doesn't have them yet.
+    void move_saved_tab_options() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        nlohmann::json dev_json;
+        {
+            std::ifstream dev_file(dir / (tooie::wip_tab_id + ".json"));
+            if (dev_file) {
+                dev_json = nlohmann::json::parse(dev_file, nullptr, false);
+            }
+        }
+        recomp::config::Config& dev = recompui::config::get_config(tooie::wip_tab_id);
+        bool changed = false;
+        auto carry = [&](const char* file, const std::string& option) {
+            if (dev_json.is_object() && dev_json.contains(option)) {
+                return;
+            }
+            std::ifstream old_file(dir / file);
+            if (!old_file) {
+                return;
+            }
+            nlohmann::json old_json = nlohmann::json::parse(old_file, nullptr, false);
+            if (old_json.is_object() && old_json.contains(option) && old_json[option].is_boolean()) {
+                dev.set_option_value(option, old_json[option].get<bool>());
+                changed = true;
+            }
+        };
+        carry("general.json", tooie::cheats_tab_option);
+        carry("cheats.json", "debug_tab");
+        if (changed) {
+            dev.save_config();
         }
     }
 
@@ -155,6 +201,31 @@ namespace {
     }
 }
 
+namespace {
+    // HUD Placement's default became Expand (L, 2026-10-16: "make it the default Option"), and its
+    // label is Expand again after a while as Default. A saved 16:9 from the old default changes to
+    // Expand once; picking 16:9 again afterwards stays. Done on the file before the configs load.
+    void move_saved_hud_placement() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        const std::filesystem::path marker = dir / "hud_expand_default.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        const std::filesystem::path path = dir / "graphics.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (json.is_object() && json.contains(recompui::config::graphics::options::hr_option) &&
+            json[recompui::config::graphics::options::hr_option] == "Clamp16x9") {
+            json[recompui::config::graphics::options::hr_option] = "Expand";
+            std::ofstream file(path, std::ios::trunc);
+            file << json.dump(4);
+        }
+        std::ofstream{marker};
+    }
+}
+
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
@@ -231,21 +302,12 @@ void tooie::init_config() {
         false);
     general.add_bool_option(
         tooie::wip_tab_option,
-        "DEV tab",
-        "Shows the DEV tab, with features for developers and features that are still being worked on.",
+        "Developer Mode",
+        "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs.",
         false);
     general.add_option_change_callback(tooie::wip_tab_option,
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             show_wip_tab();
-        });
-    general.add_bool_option(
-        tooie::cheats_tab_option,
-        "Cheats tab",
-        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on.",
-        true);
-    general.add_option_change_callback(tooie::cheats_tab_option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            show_cheats_tab();
         });
 
     // Section headings in the General tab (the controls and sliders above them have none).
@@ -537,12 +599,37 @@ void tooie::init_config() {
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);
     tooie::texture_slide::add_option(wip);
+    // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
+    wip.add_bool_option(
+        tooie::achievements_tab_option,
+        "Achievements tab",
+        "Shows the Achievements tab. Achievements are still earned while it is hidden, and the Start menu's Achievements page always shows them.",
+        false);
+    wip.add_option_change_callback(tooie::achievements_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_achievements_tab();
+        });
+    wip.add_bool_option(
+        tooie::cheats_tab_option,
+        "Cheats tab",
+        "Shows the Cheats tab. Turn it off to hide it; cheats that are already on stay on.",
+        true);
+    wip.add_option_change_callback(tooie::cheats_tab_option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            show_cheats_tab();
+        });
+    tooie::level_warp::add_option(wip);
+    recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
+    move_saved_hud_placement();
     recompui::config::finalize();
     move_saved_options_to_graphics();
     show_wip_tab();
-    show_cheats_tab();
     move_saved_discord_option();
+    move_saved_tab_options();
+    show_cheats_tab();
+    show_achievements_tab();
+    tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);

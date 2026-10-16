@@ -1,6 +1,8 @@
-// Settings entry in the pause menu (the Start menu). Step 1: the entry shows in the main pause page
-// and opens a page of its own titled SETTINGS, empty for now. B goes back to the main page, Start
-// closes the menu, as on the Totals pages.
+// Achievements entry in the pause menu (the Start menu; L named it Settings first, then Achievements on
+// 2026-10-16). The entry shows in the main pause page and opens a page of its own titled ACHIEVEMENTS,
+// which lists the XBLA achievements (src/game/achievements.cpp) and is drawn by the Totals draw hook
+// (src/gameplay/totals_checklist.cpp). B goes back to the main page, Start closes the menu, as on the
+// Totals pages.
 //
 // The pause menu (overlay gcnewpause, decomp src/overlays/gc/newpause.c) builds its main page from
 // the table D_80802070: one PauseOption per menu variant (8 bytes: text bank, first option, size,
@@ -22,6 +24,7 @@
 #include "recomp.h"
 #include "funcs.h"
 
+#include "tooie_achievements.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 
@@ -53,7 +56,7 @@ namespace {
     // Text index and Totals sub page no bank or page uses (bank entries hold index + 0x80 in a byte,
     // so 0x7E is never one of the game's; Totals sub pages go up to 0xD).
     constexpr uint8_t settings_text = 0x7E;
-    constexpr uint8_t settings_sub_page = 0x7E;
+    constexpr uint8_t settings_sub_page = tooie::achievements::pause_sub_page;
 
     // The variants that get the entry: 0..3, the normal pause menu (+1 with items, +2 with Jinjos).
     // 4..6 are the menus of special modes (decomp func_80800534 case 1), left as they are.
@@ -67,7 +70,7 @@ namespace {
     constexpr gpr option_area = (int32_t)0x80EF1000;
     constexpr uint32_t option_area_variant = 0x80;  // room for max_options rows per variant
     constexpr gpr string_addr = (int32_t)0x80EF1200;
-    const char* const settings_string = "SETTINGS";
+    const char* const settings_string = "ACHIEVEMENTS";
 
     // The open pause menu's PauseState, 0 when it is closed. The game's heap moves it while it is
     // open, so it is read here each time rather than kept.
@@ -125,7 +128,7 @@ namespace {
         return addr >= (gpr)it->second && addr < (gpr)it->second + (gpr)size;
     }
 
-    // Points each normal variant at its copy with the Settings row. A pointer outside the overlay is
+    // Points each normal variant at its copy with the Achievements row. A pointer outside the overlay is
     // one of ours: the game moves the overlay with its heap and shifts every pointer in its data by
     // as much, ours included, so it is set back.
     void patch_table(uint8_t* rdram, gpr table) {
@@ -159,10 +162,13 @@ namespace {
             }
 
             const uint32_t at = insert_index(rdram, options, count);
+
             uint32_t out = 0;
             for (uint32_t i = 0; i <= count; i++) {
                 if (i == at) {
-                    // Same icon as the row above it; the text and function are ours.
+                    // Same icon as the row above it; the text and function are ours. The icon is a talking
+                    // head (gczoomboxdata's portrait list); Cheato has none there (swept 0x00..0xD1
+                    // headless, 2026-10-16).
                     const gpr dst = copy + out * option_size;
                     const gpr like = options + (at > 0 ? at - 1 : 0) * option_size;
                     MEM_H(option_icon, dst) = MEM_HU(option_icon, like);
@@ -241,7 +247,7 @@ extern "C" void tooie_pause_settings_visible(uint8_t* /*rdram*/, recomp_context*
 }
 
 // Start of func_80800CE4 (an option was picked): $a0 the PauseState, $a2 the option. Returns true
-// when it was the Settings entry (handled here).
+// when it was the Achievements entry (handled here).
 extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) {
     const gpr pause = ctx->r4;
     const uint32_t picked = (uint32_t)ctx->r6;
@@ -256,7 +262,7 @@ extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) 
         return 0;
     }
     if (logging()) {
-        fprintf(stderr, "[pause-settings] Settings picked (option %u)\n", picked);
+        fprintf(stderr, "[pause-settings] Achievements picked (option %u)\n", picked);
     }
 
     // As function 1 (open a Totals page), with our sub page and no left/right pages.
@@ -272,7 +278,8 @@ extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) 
     return 1;
 }
 
-// Start of func_80800F2C (a Totals page's counts): $a1 the sub page. Nothing to count on ours.
+// Start of func_80800F2C (a Totals page's counts): $a1 the sub page. Nothing to count on ours; the
+// achievements are drawn by the Totals draw hook.
 extern "C" int tooie_pause_settings_page_counts(uint8_t* /*rdram*/, recomp_context* ctx) {
     if ((uint32_t)ctx->r5 != settings_sub_page) {
         return 0;
