@@ -129,6 +129,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Stability
 
+- Fixed the frame rate falling to about 2 fps after a few minutes: the screen effects kept every descriptor set they replaced, and the driver's memory for them filled the graphics card. They are now freed a few frames later. Untested on PC (T263).
 - General > More game memory (on by default): a bigger game heap (2.8 MB to 12.8 MB), about 4x the per-frame display list, matrix and vertex buffers, and room for 240 animation files and 1023 animations instead of 130 and 135, so scenes crowded with characters no longer crash. Takes effect at the next start. Untested on PC (T122).
 - More game memory also gives the game 48 sound voices instead of 24 (with 180 sample buffers and a 512 KB sound heap), so fewer sounds cut out in busy scenes, and its drawing buffers grow to about 8x. Untested on PC (T155).
 

@@ -3620,10 +3620,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..f2d7a82
+index 0000000..ea1fec3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1387 @@
+@@ -0,0 +1,1428 @@
 +//
 +// RT64
 +//
@@ -3637,7 +3637,9 @@ index 0000000..f2d7a82
 +#include <cmath>
 +#include <cstdio>
 +#include <cstdlib>
++#include <deque>
 +#include <iterator>
++#include <memory>
 +#include <chrono>
 +#include <mutex>
 +#include <unordered_map>
@@ -3718,21 +3720,59 @@ index 0000000..f2d7a82
 +            const RenderTexture *measureSetTexture = nullptr;
 +            std::unique_ptr<SmaaDescriptorSet> adaptSet;
 +            std::chrono::steady_clock::time_point lastAdapt;
-+            std::vector<std::unique_ptr<RenderTexture>> retired;
-+            std::vector<std::unique_ptr<RenderFramebuffer>> retiredFramebuffers;
-+            std::vector<std::unique_ptr<SmaaDescriptorSet>> retiredSets;
-+            std::vector<std::unique_ptr<SceneEffectsDescriptorSet>> retiredSceneSets;
-+            std::vector<std::unique_ptr<RenderTextureView>> retiredViews;
++            // Replaced textures, framebuffers, views and descriptor sets, kept until the GPU can no longer be using
++            // them: at least RetireAfterPasses passes and RetireAfterTime later. The source and measure sets are
++            // replaced whenever the pass reads a different target, which can be every frame, so these must be freed
++            // (they were kept forever, and the driver's memory for them filled the GPU after a few minutes).
++            static constexpr uint64_t RetireAfterPasses = 8;
++            static constexpr std::chrono::milliseconds RetireAfterTime{ 500 };
++            struct RetiredObject {
++                uint64_t pass;
++                std::chrono::steady_clock::time_point time;
++                std::shared_ptr<void> object;
++            };
++            std::deque<RetiredObject> retiredObjects;
++            uint64_t passes = 0;
++            uint64_t retiredSinceLog = 0;
++            std::chrono::steady_clock::time_point retiredLogTime = std::chrono::steady_clock::now();
++
++            template <typename T>
++            void retireLater(std::unique_ptr<T> &&object) {
++                if (object != nullptr) {
++                    retiredSinceLog++;
++                    retiredObjects.push_back({ passes, std::chrono::steady_clock::now(), std::shared_ptr<void>(std::move(object)) });
++                }
++            }
++
++            void freeRetired() {
++                passes++;
++                const auto now = std::chrono::steady_clock::now();
++                // Log how often things are replaced, so a log shows when the pass keeps switching targets.
++                if ((now - retiredLogTime) >= std::chrono::seconds(10)) {
++                    if (retiredSinceLog >= 100) {
++                        fprintf(stderr, "[effects] replaced %llu textures, framebuffers and descriptor sets in %.0f s; %zu waiting to be freed\n",
++                            (unsigned long long)(retiredSinceLog), std::chrono::duration<double>(now - retiredLogTime).count(), retiredObjects.size());
++                    }
++                    retiredSinceLog = 0;
++                    retiredLogTime = now;
++                }
++                while (!retiredObjects.empty() && ((retiredObjects.front().pass + RetireAfterPasses) <= passes) &&
++                    ((now - retiredObjects.front().time) >= RetireAfterTime))
++                {
++                    retiredObjects.pop_front();
++                }
++            }
 +
 +            void retire() {
 +                if (bloomCombineSet != nullptr) {
-+                    retiredSets.emplace_back(std::move(bloomCombineSet));
++                    retireLater(std::move(bloomCombineSet));
 +                }
 +                for (int i = 0; i < BloomTextures; i++) {
 +                    if (bloomTexture[i] != nullptr) {
-+                        retired.emplace_back(std::move(bloomTexture[i]));
-+                        retiredFramebuffers.emplace_back(std::move(bloomFramebuffer[i]));
-+                        retiredSets.emplace_back(std::move(bloomSet[i]));
++                        // Users first: the set and framebuffer go before the texture they point at.
++                        retireLater(std::move(bloomSet[i]));
++                        retireLater(std::move(bloomFramebuffer[i]));
++                        retireLater(std::move(bloomTexture[i]));
 +                    }
 +                }
 +            }
@@ -3762,12 +3802,12 @@ index 0000000..f2d7a82
 +                return;
 +            }
 +            if (res.waterTexture != nullptr) {
-+                res.retired.emplace_back(std::move(res.waterTexture));
-+                res.retiredFramebuffers.emplace_back(std::move(res.waterFramebuffer));
-+                res.retiredViews.emplace_back(std::move(res.waterTextureView));
-+                res.retired.emplace_back(std::move(res.waterColorTexture));
-+                res.retiredFramebuffers.emplace_back(std::move(res.waterColorFramebuffer));
-+                res.retiredViews.emplace_back(std::move(res.waterColorTextureView));
++                res.retireLater(std::move(res.waterFramebuffer));
++                res.retireLater(std::move(res.waterTextureView));
++                res.retireLater(std::move(res.waterTexture));
++                res.retireLater(std::move(res.waterColorFramebuffer));
++                res.retireLater(std::move(res.waterColorTextureView));
++                res.retireLater(std::move(res.waterColorTexture));
 +            }
 +            RenderClearValue clearValue = RenderClearValue::Color(RenderColor(0.0f, 0.0f, 0.0f, 0.0f), colorTarget->format);
 +            res.waterTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, colorTarget->format, colorTarget->multisampling, &clearValue));
@@ -4620,6 +4660,7 @@ index 0000000..f2d7a82
 +
 +        RenderCommandList *commandList = worker->commandList.get();
 +        Resources &res = resourcesFor(worker);
++        res.freeRetired();
 +        const RenderFormat format = RenderTarget::colorBufferFormat(shaderLibrary->usesHDR);
 +        const uint32_t bloomWidth = std::max(colorTarget->width / 4, 1U);
 +        const uint32_t bloomHeight = std::max(colorTarget->height / 4, 1U);
@@ -4675,7 +4716,7 @@ index 0000000..f2d7a82
 +            else {
 +                if ((res.copyTexture == nullptr) || (res.copyWidth != colorTarget->width) || (res.copyHeight != colorTarget->height)) {
 +                    if (res.copyTexture != nullptr) {
-+                        res.retired.emplace_back(std::move(res.copyTexture));
++                        res.retireLater(std::move(res.copyTexture));
 +                    }
 +                    res.copyTexture = worker->device->createTexture(RenderTextureDesc::ColorTarget(colorTarget->width, colorTarget->height, format));
 +                    res.copyTexture->setName("Scene Effects Copy");
@@ -4693,7 +4734,7 @@ index 0000000..f2d7a82
 +
 +            if ((res.sourceSet == nullptr) || (res.sourceSetTexture != source)) {
 +                if (res.sourceSet != nullptr) {
-+                    res.retiredSets.emplace_back(std::move(res.sourceSet));
++                    res.retireLater(std::move(res.sourceSet));
 +                }
 +                res.sourceSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
 +                    shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
@@ -4735,7 +4776,7 @@ index 0000000..f2d7a82
 +        if ((settings.eyeAdaptation > 0.0f) && (source != nullptr)) {
 +            if ((res.measureSet == nullptr) || (res.measureSetTexture != source)) {
 +                if (res.measureSet != nullptr) {
-+                    res.retiredSets.emplace_back(std::move(res.measureSet));
++                    res.retireLater(std::move(res.measureSet));
 +                }
 +                res.measureSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
 +                    shaderLibrary->samplerLibrary.nearest.clampClamp.get(), worker->device);
@@ -4953,7 +4994,7 @@ index 0000000..f2d7a82
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
 +            (res.sceneSetRipples != res.rippleTexture[0].get())) {
 +            if (res.sceneSet != nullptr) {
-+                res.retiredSceneSets.emplace_back(std::move(res.sceneSet));
++                res.retireLater(std::move(res.sceneSet));
 +            }
 +            res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device);
 +            res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());

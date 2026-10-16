@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T263 Video memory no longer fills up (frame rate drops to 2 fps)
+- Asked: 2026-10-16 10:57 UTC
+- Build: main @ next push
+- Steps:
+  1. Play with your usual settings (Uncapped, 3440x1417, MSAA 2x, BT Reloaded) for 10 minutes or more
+  2. Resize the window once or twice
+  3. Send console.log
+- Look for: Does the frame rate stay up? In the log, does 'descriptor sets' in the [vram] objects line stay about the same instead of climbing by thousands each line? An '[effects] replaced ...' line every 10 s is fine; it shows how often the effects pass switches pictures.
+- Status: waiting for L
+
 ## T262 Performance tab under Graphics
 - Asked: 2026-10-16 10:35 UTC
 - Build: main (pull and build)
