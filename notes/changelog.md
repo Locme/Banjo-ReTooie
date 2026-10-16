@@ -37,7 +37,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 - Shader speed pass: 3D grass blades, the water mask, ambient occlusion and sun shadows each do less repeated work on the GPU; nothing should look different. Every shader also compiles clean for both Vulkan and DirectX (QA write-up in notes/shader-qa-2026-10-16.md). Untested on PC (T315).
-- Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T320).
+- Fixed: with Ambient Occlusion, Fog, Bloom or the other shaders on, the Jiggy-shaped level wipe was grey instead of black; the shaders now go on before the wipe is drawn (L). Untested on PC (T317).
 - 3D grass no longer grows on Spiral Mountain's cobbled road: the grass layer the game blends over the road fades out by its vertices' alpha, which the blades ignored (L). Untested on PC (T309).
 
 - The gameplay demo (when you don't press Start) no longer runs too fast. DEV > Force Interpolation in the gameplay demo (off by default) blends it like the opening cutscene. Untested on PC (T307).
