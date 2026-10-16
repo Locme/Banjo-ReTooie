@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T274 Quit prompt takes the mouse after Alt+F4
+- Asked: 2026-10-16 12:12 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Play with the controller for a moment, then press Alt+F4
+  2. Without moving the mouse far, click Quit
+  3. Try again after using the keyboard instead of the controller
+- Look for: Quit closes the game every time. Before, a click used the menu's last known mouse position, which went stale after controller or key presses (small mouse moves weren't passed on), so it could miss the button. Checked headless with the keyboard: a click after a small move quits; the controller case needs your test.
+- Status: waiting for L
+
 ## T273 Sun shadows fill the whole screen (sun shadow map)
 - Asked: 2026-10-16 12:04 UTC
 - Build: 86429fb

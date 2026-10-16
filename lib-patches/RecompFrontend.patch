@@ -462,7 +462,7 @@ index 30c463b..52bbd4c 100644
      bool is_context_capturing_mouse();
      bool is_any_context_shown();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..49b1ab2 100644
+index 277a421..da50d07 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -346,6 +346,13 @@ public:
@@ -479,6 +479,19 @@ index 277a421..49b1ab2 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
+@@ -798,6 +805,12 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+             // Send the event to RmlUi if this type of event is being captured.
+             if (is_mouse_input) {
+                 if (context_capturing_mouse) {
++                    // Small moves after a key or controller press are not passed on (so a nudged mouse doesn't
++                    // take over), so RmlUi's cursor can be out of date: move it to the click first. Without this,
++                    // a click on a prompt opened from the keyboard (Alt+F4's quit prompt) could miss its button.
++                    if (cur_event.type == SDL_EventType::SDL_MOUSEBUTTONDOWN) {
++                        ui_state->context->ProcessMouseMove(cur_event.button.x, cur_event.button.y, RmlSDL::GetKeyModifierState());
++                    }
+                     RmlSDL::InputEventHandler(ui_state->context, cur_event);
+                 }
+             }
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..3cc43e9 100644
 --- a/recompui/src/config/ui_config.cpp

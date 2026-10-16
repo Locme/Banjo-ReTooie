@@ -297,3 +297,4 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.
 * **Context lifetime lock** (`recompui/include/recompui/recompui.h`, `src/core/ui_context.cpp`): `lock_context_lifetime()` and `contexts_alive()`; `destroy_all_contexts` takes the lock and marks contexts gone, so the port's overlay, notice and photo panel threads never open a context after exit tears them down.
+* **Clicks after keyboard or controller use** (`recompui/src/base/ui_state.cpp`): mouse motion isn't passed to RmlUi while the controller is active or after small moves, so a mouse button press first sends RmlUi a move to the click's position; otherwise a click (on Alt+F4's quit prompt, say) could land on the old position.

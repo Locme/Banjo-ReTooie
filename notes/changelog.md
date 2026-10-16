@@ -12,6 +12,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 - The Start menu has a SETTINGS entry under View Totals (L). For now it opens an empty SETTINGS page; B goes back, Start closes the menu. Untested on PC (T270).
 - Warp tab: Glitter Gulch Mine > Outside Mumbo's Skull, and Cloud Cuckooland > Skull on the cloud (straight ahead), for the Mumbo's Hut Recreation mod (the mod itself is a separate download for the Mods menu). Untested on PC (T241).
+- Fixed: after Alt+F4 (or any controller or key press), a click on the quit prompt could miss Quit, because the menu still had an old mouse position; a click now moves the menu's cursor to where you clicked first (L). Untested on PC (T274).
 - QOL: Skip boss intros and Skip other cutscenes are one switch, Fast Forward Cutscenes; Press Start Anytime In Intro (renamed) sits at the bottom of Speed and skipping; photo mode's settings have their own Photo Filter section behind a Hide Settings switch; Canary Mary races moved to a new Balancing section (L). Untested on PC (T264).
 - Graphics: Aspect Ratio's Fill and HUD Placement's Expand are now called Default, and the Lighting, Water, Fog (Experimental) switch is called Shaders (L). Untested on PC (T265).
 - Settings menu with a controller: Back while typing in the search box returns to the Search settings box, and the menu reopens on the tab you left instead of the top of the list (L). Untested on PC (T266).
