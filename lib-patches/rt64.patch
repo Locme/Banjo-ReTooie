@@ -1562,7 +1562,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..0c8ab38 100644
+index 9fae0d4..91f5fa4 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2178,7 +2178,7 @@ index 9fae0d4..0c8ab38 100644
 +                        grassTexture = SceneGrassTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                    }
 +                    grass = grass && grassTexture;
-                 }
++                }
 +                uint8_t grassValue = grass ? 1 : 0;
 +                if (grass && (grassBladePipeline != nullptr)) {
 +                    grassValue = uint8_t(std::min(grassBladePasses(drawData, call, frameParams), 255u));
@@ -2206,7 +2206,7 @@ index 9fae0d4..0c8ab38 100644
 +                if (!nightLightsChecked) {
 +                    nightLightsChecked = true;
 +                    nightLights = ComputeSceneNightLights(frameParams);
-+                }
+                 }
 +                bool nightLight = false;
 +                if (nightLights && (proj.type == Projection::Type::Perspective)) {
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
@@ -2219,7 +2219,7 @@ index 9fae0d4..0c8ab38 100644
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2288,143 @@ namespace RT64 {
+@@ -1758,13 +2288,165 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2246,6 +2246,28 @@ index 9fae0d4..0c8ab38 100644
 +                    earlier.waterInstances.clear();
 +                    earlier.fallInstances.clear();
 +                    earlier.sceneEffectsAfter = -1;
++                    // The camera of the frame's first 3D world, handed on from part to part. A later part's own
++                    // first projection can carry a model's transform in its view (a part that starts with a
++                    // character after a shadow buffer), which moved the sun shadows and the other effects off
++                    // what they belong to, differently from frame to frame.
++                    if (targetDrawCall.sceneEffectsTransformsIndex != earlier.sceneEffectsTransformsIndex) {
++                        targetDrawCall.sceneEffectsTransformsIndex = earlier.sceneEffectsTransformsIndex;
++                        const DrawData &effectsData = *targetDrawCall.sceneEffectsDrawData;
++                        if (targetDrawCall.sceneEffectsTransformsIndex < effectsData.viewTransforms.size()) {
++                            NoteSceneCamera(effectsData.projTransforms[targetDrawCall.sceneEffectsTransformsIndex], effectsData.viewTransforms[targetDrawCall.sceneEffectsTransformsIndex]);
++                        }
++                    }
++                    RenderRect &area = targetDrawCall.sceneEffectsArea;
++                    const RenderRect &earlierArea = earlier.sceneEffectsArea;
++                    if (area.isEmpty()) {
++                        area = earlierArea;
++                    }
++                    else if (!earlierArea.isEmpty()) {
++                        area.left = std::min(area.left, earlierArea.left);
++                        area.top = std::min(area.top, earlierArea.top);
++                        area.right = std::max(area.right, earlierArea.right);
++                        area.bottom = std::max(area.bottom, earlierArea.bottom);
++                    }
 +                }
 +            }
 +        }
