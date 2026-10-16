@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..0392332 100644
+index 9fae0d4..ef7c445 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1900,7 +1900,7 @@ index 9fae0d4..0392332 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +629,61 @@ namespace RT64 {
+@@ -465,12 +629,60 @@ namespace RT64 {
          return true;
      }
      
@@ -1939,11 +1939,10 @@ index 9fae0d4..0392332 100644
 +                worker->commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
 +            }
 +        };
-+        // Modern water: the steep draws too, marked apart (waterMask 3), for its waterfalls. First, so the flat
-+        // water wins where both are drawn (a fall's part under the surface; nothing writes depth here).
-+        if (skippingWater) {
-+            drawWater(3, targetDrawCall.fallInstances);
-+        }
++        // The steep draws too, marked apart (waterMask 3): Modern water's waterfalls, and with either water, so the
++        // night doesn't take a pale fall for a light. First, so the flat water wins where both are drawn (a fall's
++        // part under the surface; nothing writes depth here).
++        drawWater(3, targetDrawCall.fallInstances);
 +        drawWater(1, targetDrawCall.waterInstances);
 +
 +        // Modern water: the same draws' own colours and blending alpha, which tint the new water.
@@ -1964,7 +1963,7 @@ index 9fae0d4..0392332 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +727,17 @@ namespace RT64 {
+@@ -514,6 +726,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1982,7 +1981,7 @@ index 9fae0d4..0392332 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +798,87 @@ namespace RT64 {
+@@ -574,10 +797,87 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2070,7 +2069,7 @@ index 9fae0d4..0392332 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1551,67 @@ namespace RT64 {
+@@ -1250,6 +1550,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2138,7 +2137,7 @@ index 9fae0d4..0392332 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1658,84 @@ namespace RT64 {
+@@ -1296,9 +1657,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2153,7 +2152,7 @@ index 9fae0d4..0392332 100644
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
 +                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
-+                    if ((!targetDrawCall.waterInstances.empty() || (skippingWater && !targetDrawCall.fallInstances.empty())) && SceneWaterWanted()) {
++                    if ((!targetDrawCall.waterInstances.empty() || !targetDrawCall.fallInstances.empty()) && SceneWaterWanted()) {
 +                        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::WaterMask, worker->commandList.get());
 +                        submitWaterMask(worker, framebuffer, targetDrawCall);
 +                    }
@@ -2224,7 +2223,7 @@ index 9fae0d4..0392332 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1791,7 @@ namespace RT64 {
+@@ -1354,6 +1790,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -2232,7 +2231,7 @@ index 9fae0d4..0392332 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1846,60 @@ namespace RT64 {
+@@ -1408,6 +1845,60 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2293,7 +2292,7 @@ index 9fae0d4..0392332 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1948,55 @@ namespace RT64 {
+@@ -1456,6 +1947,55 @@ namespace RT64 {
                  continue;
              }
  
@@ -2349,7 +2348,7 @@ index 9fae0d4..0392332 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2223,20 @@ namespace RT64 {
+@@ -1682,6 +2222,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2370,7 +2369,7 @@ index 9fae0d4..0392332 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2302,219 @@ namespace RT64 {
+@@ -1747,8 +2301,219 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2590,7 +2589,7 @@ index 9fae0d4..0392332 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2524,172 @@ namespace RT64 {
+@@ -1758,13 +2523,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -8799,10 +8798,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..78c5497
+index 0000000..ceee513
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2162 @@
+@@ -0,0 +1,2166 @@
 +//
 +// RT64
 +//
@@ -8932,12 +8931,14 @@ index 0000000..78c5497
 +// it gets, so they stand out at night.
 +// Colours fade towards grey as night comes in, as moonlight does, so the tint reads as blue rather than as a
 +// darker version of the day's colours.
-+float3 DayWorld(float3 color, float3 tint) {
++// glow: whether a bright colour may stay lit at night as a light. Not on water and waterfalls, whose pale
++// colours would otherwise shine out of the dark.
++float3 DayWorld(float3 color, float3 tint, bool glow) {
 +    const float night = DayNight(tint);
 +    // Golden hour: in the warm light after sunrise and before sunset, colours grow richer.
 +    const float warmth = saturate((tint.r - tint.b) * 2.5f) * (1.0f - night);
 +    color = saturate(lerp(dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, color, 1.0f + 0.3f * warmth));
-+    const float bright = smoothstep(0.7f, 0.98f, max(color.r, max(color.g, color.b)));
++    const float bright = glow ? smoothstep(0.7f, 0.98f, max(color.r, max(color.g, color.b))) : 0.0f;
 +    const float3 faded = lerp(color, dot(color, float3(0.3f, 0.59f, 0.11f)).xxx, 0.5f * night * (1.0f - bright));
 +    return faded * lerp(tint, 1.0f, bright * night * 0.6f);
 +}
@@ -10946,7 +10947,9 @@ index 0000000..78c5497
 +        }
 +        if (daytime) {
 +            scene = DayWet(scene, pixel, depth);
-+            scene = DayWorld(scene, dayTint);
++            float wetDepth;
++            const bool wet = (gConstants.water.y > 0.5f) && (LoadWater(pixel, wetDepth) || LoadFall(pixel, wetDepth));
++            scene = DayWorld(scene, dayTint, !wet);
 +            const float3 weather = DayWeather();
 +            scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
 +            scene = DayMist(scene, pixel, depth, dayTint);

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T311 Waterfalls dim at night
+- Asked: 2026-10-16 20:42 UTC
+- Build: main
+- Steps:
+  1. Turn the day and night cycle on and wait for night (or set the time to night)
+  2. Go to the waterfall you sent the screenshot of, with Water on Original and then on Modern
+- Look for: The fall is as dark as the cliffs around it at night and fades into the mist, not bright blue or purple. Lamps, windows and glowing things still shine at night.
+- Status: waiting for L
+
+- Status: waiting for L
+
 ## T310 Day and night: rain splashes reach further and blend in
 - Asked: 2026-10-16 UTC
 - Build: main (pull and build)
