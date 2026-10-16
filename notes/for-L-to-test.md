@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T300 3D grass no longer vanishes near Bottles' ghost
+- Asked: 2026-10-16 19:47 UTC
+- Build: main
+- Steps:
+  1. Spiral Mountain with 3D grass on: walk round the dirt pit with the egg nests and the rock where Bottles' ghost floats
+  2. Turn the camera round there
+- Look for: The grass stays the whole time; before, it all vanished for a while whenever the ghost was in view. The ghost's own glow should still look right (no box round it).
+- Status: waiting for L
+
 ## T299 Controller in the menu: leaving search, and RB to Mods
 - Asked: 2026-10-16 19:37 UTC
 - Build: main @ next Windows build

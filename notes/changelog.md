@@ -35,6 +35,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- 3D grass (and the other screen effects) no longer vanish across the level while Bottles' ghost is drawn in Spiral Mountain: the ghost's "no effects" mark stayed on for everything drawn after it when it was the last model of its list (L). Untested on PC (T300).
 - 3D grass: Chunk size (100 to 400%) and Pixel size (0.25 to 8 N64 pixels) sliders for Chunky and Pixelated 3D grass (L). Untested on PC (T287).
 - 3D grass has its own Grass section in Graphics, with two new toggles (L): Chunky 3D grass (fewer, wider, flat-coloured single-triangle blades) and Pixelated 3D grass (blades drawn in blocks the size of N64 pixels). Untested on PC (T286).
 - Textures use mip LOD bias 0 instead of RT64's -0.25 (L), in both the native samplers and the shader path, so distant textures pick the matching mip level: slightly softer, less shimmer. Untested on PC (T281).

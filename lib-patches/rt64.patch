@@ -1689,7 +1689,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..e457f69 100644
+index 9fae0d4..3588155 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2370,7 +2370,7 @@ index 9fae0d4..e457f69 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2302,168 @@ namespace RT64 {
+@@ -1747,8 +2302,199 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2421,13 +2421,23 @@ index 9fae0d4..e457f69 100644
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
 +                bool grassEdges = false;
 +                bool grassDecal = false;
++                static uint32_t grassWhy[8] = {};
++                if ((proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0)) {
++                    grassWhy[0]++;
++                    grassWhy[1] += (grassShells == 0) ? 1 : 0;
++                    grassWhy[2] += excluded ? 1 : 0;
++                    grassWhy[3] += !worldOpen ? 1 : 0;
++                    grassWhy[4] += !fbPair.depthWrite ? 1 : 0;
++                    grassWhy[5] += instanceDrawCall.triangles.vertexTestZ ? 1 : 0;
++                    grassWhy[6] += ((call.callDesc.minWorldMatrix != call.callDesc.maxWorldMatrix) || (call.callDesc.minWorldMatrix >= drawData.worldTransforms.size())) ? 1 : 0;
++                }
 +                if ((grassShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                    (call.callDesc.tileCount > 0) && (call.callDesc.minWorldMatrix == call.callDesc.maxWorldMatrix) &&
@@ -2469,6 +2479,26 @@ index 9fae0d4..e457f69 100644
 +                }
 +                instanceGrassVector.resize(instanceIndex, 0);
 +                instanceGrassVector.push_back(grassValue);
++                // TOOIE_GRASS_LOG: twice a second, the grass draws of the frame and their blade passes.
++                {
++                    static const bool grassLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
++                    if (grassLog) {
++                        static auto lastLog = std::chrono::steady_clock::now();
++                        static uint32_t logGrass = 0, logBlades = 0, logMaxPasses = 0, logSumPasses = 0;
++                        logGrass += grass ? 1 : 0;
++                        logBlades += ((grassValue & 0x7F) != 0) ? 1 : 0;
++                        logMaxPasses = std::max(logMaxPasses, uint32_t(grassValue & 0x7F));
++                        logSumPasses += grass ? (grassValue & 0x7F) : 0;
++                        if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500)) {
++                            lastLog = std::chrono::steady_clock::now();
++                            fprintf(stderr, "[grass] shells %u draws %u with blades %u passes max %u sum %u camera %.0f %.0f %.0f why %u: noshells %u excl %u noworld %u nodepth %u vtz %u mtx %u\n", grassShells, logGrass, logBlades,
++                                logMaxPasses, logSumPasses, frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w,
++                                grassWhy[0], grassWhy[1], grassWhy[2], grassWhy[3], grassWhy[4], grassWhy[5], grassWhy[6]);
++                            for (uint32_t &w : grassWhy) { w = 0; }
++                            logGrass = logBlades = logMaxPasses = logSumPasses = 0;
++                        }
++                    }
++                }
 +
 +                // Banjo-Tooie: deep snow lies on the level's own opaque, textured ground as 3D grass does; the shader
 +                // keeps only snowy surfaces facing up. Fewer shells further away, none beyond the snow's reach.
@@ -2532,14 +2562,15 @@ index 9fae0d4..e457f69 100644
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
 +                        nightLight = SceneNightLightTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                    }
-                 }
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back(nightLight ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2474,172 @@ namespace RT64 {
+             }
+@@ -1758,13 +2504,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);

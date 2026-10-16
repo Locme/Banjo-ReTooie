@@ -791,6 +791,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         int block;
     };
     std::vector<Command> commands;
+    // Whether the commands end with the list's own end (G_ENDDL or a branch), right after the last of them.
+    bool ends_list = false;
     std::vector<Block> blocks;
     int current = -1;
     bool have_camera = false;
@@ -847,6 +849,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
         }
         else if (op == op_enddl || (op == op_dl && ((w0 >> 16) & 0xFF) != 0)) {
+            ends_list = true;
             break;
         }
         commands.push_back({w0, w1, current});
@@ -999,15 +1002,45 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
     }
 
+    // The command a flag set just before index lands on: texture rectangles (their coordinates follow them) are
+    // passed over. SIZE_MAX when there is none (the list's own end only counts when the walk stopped at it).
+    auto flag_slot = [&](size_t index) -> size_t {
+        for (; index < commands.size(); index++) {
+            const uint32_t op = word(rdram, start + (uint32_t)index * 8) >> 24;
+            if (op != 0xE4 && op != 0xE5 && op != 0xE1 && op != 0xF1) {
+                return index;
+            }
+        }
+        return (index == commands.size() && ends_list) ? index : SIZE_MAX;
+    };
+    // Sets one of RT64's extended flags (G_EX opcode and value) just before command slot (from flag_slot): that
+    // command is called through a small list that sets the flag first. The list's own end (G_ENDDL or a branch) is
+    // branched to the small list instead, which then ends the list as before. Without that, a flag turned on for
+    // the last model of a list (Bottles' ghost: effects off) stayed on for everything drawn after it, the level
+    // included, and the 3D grass and other effects vanished (L, 2026-10-16).
+    auto set_flag = [&](uint32_t& cursor, size_t slot, uint32_t ex_opcode, uint32_t value) {
+        const uint32_t p = start + (uint32_t)slot * 8;
+        const uint32_t w0 = word(rdram, p);
+        const bool end = (slot == commands.size());
+        const uint32_t list = cursor;
+        put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
+        put(rdram, cursor + 8, (rt64_extended_opcode << 24) | ex_opcode, value);
+        put(rdram, cursor + 16, w0, word(rdram, p + 4));
+        put(rdram, cursor + 24, op_enddl << 24, 0);
+        cursor += 32;
+        put(rdram, p, (op_dl << 24) | (end ? (1u << 16) : 0u), list);
+    };
+
     // Models without the screen effects: the command that starts each one
     // (its segment 1) and the command after its last are called through a
     // small list that first sets RT64's exclude flag (on, then off). Reads the
-    // commands as they are now, so after the interpolation tags.
+    // commands as they are now, so after the interpolation tags. A model is
+    // only marked when both its on and its off have a place and room.
     auto mark_no_effects = [&](uint32_t& cursor, uint32_t limit) {
         if (!tooie::interp_tags::any_no_effects()) {
             return;
         }
-        std::vector<int> mark(commands.size(), -1);
+        std::vector<int> mark(commands.size() + 1, -1);
         for (size_t b = 0; b < blocks.size(); b++) {
             const Block& block = blocks[b];
             if (block.print == 0 || block.shadow || block.vertex_command == SIZE_MAX || !tooie::interp_tags::no_effects_for(block.print)) {
@@ -1019,35 +1052,32 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     last = i;
                 }
             }
-            mark[block.vertex_command] = 1;
-            if (last + 1 < commands.size() && mark[last + 1] != 1) {
-                mark[last + 1] = 0;
+            const size_t on = flag_slot(block.vertex_command);
+            const size_t off = flag_slot(last + 1);
+            if (on == SIZE_MAX || off == SIZE_MAX || on >= off) {
+                continue;
+            }
+            mark[on] = 1;
+            if (mark[off] != 1) {
+                mark[off] = 0;
             }
         }
-        for (size_t i = 0; i < commands.size(); i++) {
-            if (mark[i] < 0 || cursor + 32 > limit) {
+        // In order, each change of the flag; an on is only set with room for the off after it.
+        int state = 0;
+        for (size_t i = 0; i < mark.size(); i++) {
+            if (mark[i] < 0 || mark[i] == state) {
                 continue;
             }
-            const uint32_t p = start + (uint32_t)i * 8;
-            const uint32_t w0 = word(rdram, p);
-            const uint32_t op = w0 >> 24;
-            // Texture rectangles carry their coordinates in the commands after
-            // them; they are left as they are.
-            if (op == 0xE4 || op == 0xE5 || op == 0xE1 || op == 0xF1) {
+            if (cursor + (mark[i] == 1 ? 64 : 32) > limit) {
+                if (mark[i] == 1) {
+                    break;
+                }
                 continue;
             }
-            const uint32_t list = cursor;
-            put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
-            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_scene_effects_exclude_v1, (uint32_t)mark[i]);
-            put(rdram, cursor + 16, w0, word(rdram, p + 4));
-            put(rdram, cursor + 24, op_enddl << 24, 0);
-            cursor += 32;
-            put(rdram, p, op_dl << 24, list);
+            set_flag(cursor, i, g_ex_scene_effects_exclude_v1, (uint32_t)mark[i]);
+            state = mark[i];
         }
     };
-    // Banjo's fur: the player's model (Banjo-Kazooie or Banjo alone) is the copy of a model with many bones
-    // nearest to where Banjo stands. The command that starts it (its segment 1) and the one after its last are
-    // called through a small list that first sets RT64's fur flag (on, then off).
     auto mark_fur = [&](uint32_t& cursor, uint32_t limit) {
         if (!fur) {
             return;
@@ -1159,22 +1189,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             return spans;
         }();
         auto wrap = [&](size_t index, uint32_t kind) {
-            if (index >= commands.size() || cursor + 32 > limit) {
+            const size_t slot = flag_slot(index);
+            if (slot == SIZE_MAX || cursor + 32 > limit) {
                 return;
             }
-            const uint32_t p = start + (uint32_t)index * 8;
-            const uint32_t w0 = word(rdram, p);
-            const uint32_t op = w0 >> 24;
-            if (op == 0xE4 || op == 0xE5 || op == 0xE1 || op == 0xF1) {
-                return;
-            }
-            const uint32_t list = cursor;
-            put(rdram, cursor, rt64_hook_word0, (rt64_hook_op_enable << 28) | rt64_extended_opcode);
-            put(rdram, cursor + 8, (rt64_extended_opcode << 24) | g_ex_fur_shells_v1, kind);
-            put(rdram, cursor + 16, w0, word(rdram, p + 4));
-            put(rdram, cursor + 24, op_enddl << 24, 0);
-            cursor += 32;
-            put(rdram, p, op_dl << 24, list);
+            set_flag(cursor, slot, g_ex_fur_shells_v1, kind);
         };
         uint32_t base = blocks[best].first_phys;
         static std::vector<Span> model_skip;
