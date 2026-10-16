@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T302 Day and night: clouds show again
+- Asked: 2026-10-16 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: clouds show again in daylight (a flag lost to rounding)" on main
+- Steps:
+  1. Graphics > Day and Night: Morning or Noon, Clouds on, Fireflies on; Spiral Mountain or Cliff Top, look at the sky
+- Look for: Soft white 3D clouds drifting across the sky, lit by the sun. Before this fix they were missing by day whenever Fireflies was on (the default). Checked headless: [clouds-before-after-fix.png](screens/day-night/clouds-before-after-fix.png) (top before, bottom after).
+
 ## T301 3D grass blending slider
 - Asked: 2026-10-16 19:56 UTC
 - Build: main

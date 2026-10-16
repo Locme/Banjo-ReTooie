@@ -8769,10 +8769,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..622ad4e
+index 0000000..f827f3d
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2139 @@
+@@ -0,0 +1,2142 @@
 +//
 +// RT64
 +//
@@ -8838,10 +8838,13 @@ index 0000000..622ad4e
 +}
 +
 +// Day and night cycle: the 3D world's tint, packed in shadows.z as 1 + three 7-bit channels (steps of 0.01) and
-+// two flags (bit 0 fireflies), negative for no lens flare. False (and no tint) while the cycle is off.
++// three flags (bit 0 fireflies, bit 1 clouds, bit 2 northern lights), negative for no lens flare. False (and no tint) while the cycle is off.
 +uint DayPacked() {
 +    const float packedFloat = abs(gConstants.shadows.z);
-+    return (packedFloat < 1.0f) ? 0u : uint(packedFloat - 1.0f + 0.5f);
++    // The float holds the whole number exactly (below 2^24), so take it as it is: adding a half to round, as this
++    // did, rounded odd values up to the next even one above 2^23 (any daylight tint), which turned the clouds and
++    // fireflies flags into the northern lights' one.
++    return (packedFloat < 1.0f) ? 0u : (uint(packedFloat) - 1u);
 +}
 +
 +bool DayTint(out float3 tint) {
