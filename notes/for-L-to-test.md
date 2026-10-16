@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T272 Smash Banjo v9: fur, straps, wings, blink and wobble
+- Asked: 2026-10-16 UTC
+- Build: main, plus mods/Smash Banjo v9.zip from project files (take v8 and its unpacked folder out of the mods folder)
+- Steps:
+  1. Photo Filters on, Banjo fur at 100, Smash Banjo on. Look at his belt, feet and the soles of his feet close up
+  2. Jump, then roll (B while running), watching the backpack, the straps and Kazooie's wings
+  3. Stand still and watch him blink next to vanilla Banjo, then look closely at his face, the buckles on the back of the pack and Kazooie's eyes
+- Look for: Step 1, no fur strands over the belt, on the feet or under them; the shins keep their fur. Step 2, the straps move with the pack, so it no longer floats free of them (the pack itself swings as vanilla's does; in the moves where it lifts over his head the straps go up with it). Kazooie's wings are 80% of v8's size and no longer make a wide ring in the roll. Step 3, one blink that closes and opens like vanilla's (v8 closed, opened and closed again in every blink). The face is smoother and the buckles and Kazooie's eyes don't flicker: vertex positions are now stored 8 times finer, as in Banjo X Alt v4. Checked headless in Mayahem Temple: belt and feet clear of fur, roll and jump posed from the game's own matrices (screens/smash-banjo/v9.png and v9-roll-before-after.png in project files). Not checked headless: the flicker itself, so please confirm it is gone. Replaces T261's zip.
+- Status: waiting for L
+
 ## T270 Settings in the pause menu (empty page for now)
 - Asked: 2026-10-16 11:36 UTC
 - Build: main (pull and build)
