@@ -2144,7 +2144,7 @@
   1. Put "Banjo X Alt v2.zip" in the mods folder as it is. Turn off Smash Banjo and Banjo X, turn on "Banjo X (alt rig)"
   2. Look at Banjo and Kazooie close up in photo mode, then walk, jump, Feathery Flap, Talon Trot and roll
 - Look for: every triangle of the FBX (42,433 triangles, 32,015 vertices; v1 was cut down). Same rig, jaw, blink and HD textures as v1 (T192). The model was too big for the game's draw-list index, so the first commands are stored before the list and reached with negative indices; if Banjo is invisible or only his belt shows, that trick fails on Windows. Checked headless in Spiral Mountain: loads from the zip, walks, jumps, flaps with Kazooie and crouches (screenshot screens/banjo-x/alt-v2.png).
-- Status: waiting for L
+- Status: failed (L, 2026-10-16: face warped); replaced by T228
 
 
 ## T202 Day and night: fireflies
@@ -2408,4 +2408,13 @@
   3. Look for green ground that isn't grass (moss, mossy stone, leaves, slime) and check no blades grow there
   4. Squares check: do the move that left the white square behind Banjo, and talk fast to the fish by the rock, first with 3D grass at 0, then at 100
 - Look for: the grass grows in patches here and there, with shorter grass round their edges; lower numbers give fewer, smaller patches and 100 covers all the grass. Blades only on grass textures (50 of them, picked by eye from a dump of 22 outdoor levels); if a grassy area now has none, tell me where and I'll add its texture. For the squares: do they still come with 3D grass at 0? The grass only redraws the level's own opaque ground, never sprites or effects, and the squares in your burst look like the black squares from in-between frames (T38). Checked headless in Spiral Mountain at patches 20, 50 and 60.
+- Status: waiting for L
+
+## T228 Banjo X Alt v3: face fixed
+- Asked: 2026-10-16 08:40 UTC
+- Build: main, plus mods/Banjo X Alt v3.zip from project files (take v1 and v2 out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v3.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
+  2. Stand still until Banjo looks around, then walk, jump, flap and talk to someone
+- Look for: Banjo's face stays like L's reference picture: the muzzle, teeth, brows and tongue now move with his head, so the snout no longer stretches and the mouth no longer hangs open when he turns his head (in v2 they followed his chest). Still full detail, as v2. Checked headless in Spiral Mountain through the idle look-around (screenshot screens/banjo-x/alt-v3.png: v2 left, v3 right, v3 front below).
 - Status: waiting for L
