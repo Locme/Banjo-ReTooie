@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T339 Parallax on stone walls, paving and rock
+## T341 Parallax on stone walls, paving and rock
 - Asked: 2026-10-16 22:50 UTC (L: "Add parallax shaders, and give support to parallax in the appropriate textures")
 - Build: main (pull and build)
 - Steps:
