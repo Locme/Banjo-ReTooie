@@ -58,6 +58,7 @@ namespace tooie::picture_filters {
     inline const std::string light_shafts_option = "light_shafts";
     inline const std::string sun_shadows_option = "sun_shadows";
     inline const std::string sun_shadow_banjo_option = "sun_shadow_banjo";
+    inline const std::string sun_shadow_softness_option = "sun_shadow_softness";
     inline const std::string wave_speed_option = "water_wave_speed";
     inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
