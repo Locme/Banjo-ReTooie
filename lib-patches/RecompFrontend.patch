@@ -462,7 +462,7 @@ index 30c463b..52bbd4c 100644
      bool is_context_capturing_mouse();
      bool is_any_context_shown();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..da50d07 100644
+index 277a421..63a4152 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -346,6 +346,13 @@ public:
@@ -479,7 +479,66 @@ index 277a421..da50d07 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -798,6 +805,12 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -570,6 +577,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+     return identifier;
+ }
+ 
++// A text box (search, or a string option) keeps every key it doesn't use from reaching the menu, so a
++// controller's Back, Start, Apply or tab buttons did nothing while it had focus and there was no way out of it.
++// Those buttons skip the text box and go to its parent, so the menu handles them as it does everywhere else.
++static bool is_text_input(Rml::Element *element) {
++    if (element == nullptr) {
++        return false;
++    }
++    const Rml::String &tag = element->GetTagName();
++    if (tag == "textarea") {
++        return true;
++    }
++    if (tag != "input") {
++        return false;
++    }
++    const Rml::String type = element->GetAttribute<Rml::String>("type", "text");
++    return type == "text" || type == "password";
++}
++
++static bool is_menu_action_key(Rml::Input::KeyIdentifier key) {
++    recompui::MenuAction action = recompui::menu_action_mapping::menu_action_from_rml_key(key);
++    return action != recompui::MenuAction::None && action != recompui::MenuAction::Accept;
++}
++
++static void process_menu_key_down(Rml::Context *context, Rml::Input::KeyIdentifier key) {
++    Rml::Element *focused = context->GetFocusElement();
++    if (is_menu_action_key(key) && is_text_input(focused) && focused->GetParentNode() != nullptr) {
++        Rml::Dictionary parameters;
++        parameters["key_identifier"] = (int)key;
++        focused->GetParentNode()->DispatchEvent(Rml::EventId::Keydown, parameters);
++        return;
++    }
++    context->ProcessKeyDown(key, 0);
++}
++
+ bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
+     auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
+     auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
+@@ -731,7 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+             case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
+                 int sdl_key = cont_button_to_key(cur_event.cbutton);
+                 if (context_capturing_input && sdl_key) {
+-                    ui_state->context->ProcessKeyDown(convert_sdl_to_rml(sdl_key), 0);
++                    process_menu_key_down(ui_state->context, convert_sdl_to_rml(sdl_key));
+                     latest_controller_key_pressed = sdl_key;
+                     next_repeat_time = clock::now() + start_repeat_delay;
+                 }
+@@ -776,7 +817,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+                         non_mouse_interacted = true;
+                         int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
+                         if (context_capturing_input && sdl_key) {
+-                            ui_state->context->ProcessKeyDown(convert_sdl_to_rml(sdl_key), 0);
++                            process_menu_key_down(ui_state->context, convert_sdl_to_rml(sdl_key));
+                             latest_controller_key_pressed = sdl_key;
+                             next_repeat_time = clock::now() + start_repeat_delay;
+                         }
+@@ -798,12 +839,26 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              // Send the event to RmlUi if this type of event is being captured.
              if (is_mouse_input) {
                  if (context_capturing_mouse) {
@@ -492,6 +551,30 @@ index 277a421..da50d07 100644
                      RmlSDL::InputEventHandler(ui_state->context, cur_event);
                  }
              }
+             else {
+                 if (context_capturing_input) {
+-                    RmlSDL::InputEventHandler(ui_state->context, cur_event);
++                    // Esc closes the menu from a text box too.
++                    if (cur_event.type == SDL_EventType::SDL_KEYDOWN &&
++                        cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_ESCAPE &&
++                        is_text_input(ui_state->context->GetFocusElement())) {
++                        process_menu_key_down(ui_state->context, Rml::Input::KI_ESCAPE);
++                    }
++                    else {
++                        RmlSDL::InputEventHandler(ui_state->context, cur_event);
++                    }
+                 }
+             }
+         }
+@@ -847,7 +902,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+     if (latest_controller_key_pressed != SDLK_UNKNOWN) {
+         clock::time_point now = clock::now();
+         if (now >= next_repeat_time) {
+-            ui_state->context->ProcessKeyDown(convert_sdl_to_rml(latest_controller_key_pressed), 0);
++            process_menu_key_down(ui_state->context, convert_sdl_to_rml(latest_controller_key_pressed));
+             next_repeat_time += repeat_rate;
+         }
+     }
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..3cc43e9 100644
 --- a/recompui/src/config/ui_config.cpp
