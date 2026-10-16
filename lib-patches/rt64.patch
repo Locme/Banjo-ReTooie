@@ -8865,10 +8865,10 @@ index 74b1fa0..4c9afc4 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..25f9f47
+index 0000000..1926e28
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2172 @@
+@@ -0,0 +1,2181 @@
 +//
 +// RT64
 +//
@@ -9409,9 +9409,18 @@ index 0000000..25f9f47
 +    return (m.a > 0.1f) && (m.a < 0.5f);
 +}
 +
-+// Anything in the water mask (flat water or a steep draw): its depth.
++// Anything in the water mask (flat water or a steep draw): its depth. One read of the mask: flat water has alpha 1
++// and a steep draw a quarter (never exactly a half, from an 8-bit mask), so both are everything above a tenth.
 +bool LoadAnyWater(int2 pixel, out float depth) {
-+    return LoadWater(pixel, depth) || LoadFall(pixel, depth);
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    const float4 m = gWater.Load(pixel, 0);
++#else
++    const float4 m = gWater.Load(int3(pixel, 0));
++#endif
++    const uint3 b = uint3(round(m.rgb * 255.0f));
++    depth = float((b.r << 16) | (b.g << 8) | b.b) / 16777215.0f;
++    return m.a > 0.1f;
 +}
 +
 +// How steep the water mask's surface is at a pixel (0 lying flat, 1 upright), in the world.
