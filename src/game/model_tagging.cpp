@@ -771,9 +771,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now);
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
-    const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
-    const bool kazooie_shaders = tooie::picture_filters::kazooie_shaders_on();
-    const bool fur = !overlay && end > start && (banjo_fur || kazooie_shaders);
+    const bool fur = !overlay && end > start && tooie::picture_filters::banjo_fur_on();
     if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
@@ -1184,8 +1182,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             model_skip = { { kazooie.from, kazooie.to } };
         }
         const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
-        // Each list's kind: 1 Banjo's fur, 2 Kazooie (her feather shaders), 0 neither (his feet and shorts, or a
-        // shader that is off).
+        // Each list's kind: 1 Banjo's fur, 0 none (Kazooie, his feet and shorts).
         uint32_t on = 0;
         size_t last = blocks[best].vertex_command;
         for (size_t i = blocks[best].vertex_command; i < commands.size(); i++) {
@@ -1201,12 +1198,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             for (const Span& span : spans) {
                 banjo = banjo && (offset < span.from || offset > span.to);
             }
-            uint32_t want = banjo ? 1 : (kazooie.found ? 2 : 0);
+            uint32_t want = banjo ? 1 : 0;
             if (banjo && kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr &&
                 std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF)) {
-                want = 0;
-            }
-            if ((want == 1 && !banjo_fur) || (want == 2 && !kazooie_shaders)) {
                 want = 0;
             }
             if (want != on) {

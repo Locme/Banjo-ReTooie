@@ -18,7 +18,7 @@
   2. Look at Kazooie up close in a cutscene (the poker game in Jolly's works) and in Spiral Mountain
   3. Move Kazooie painted feathers strength between 5 and 200
 - Look for: Soft scalloped outlines of overlapping feathers on her head, neck and body, with no raised bumps; the sheen still shows between them. Her beak, legs and backpack stay smooth. The outlines fade when she is far away instead of flickering. Does it look good?
-- Status: waiting for L
+- Status: dropped; L had the Kazooie shaders removed (2026-10-16)
 
 ## T291 Mumbo's Hut Recreation v5: doorway shadows and stronger shading
 - Asked: 2026-10-16 14:50 UTC
@@ -3018,7 +3018,7 @@
   3. Spiral Mountain: stand still until Kazooie pops out, turn the camera round her; then a cutscene with her (the poker one at the start)
   4. Try each strength at 50 and 200, and the Character Shaders switch off and on
 - Look for: Sheen: a soft gloss sliding over her feathers and beak as she or the camera moves. Feathery edges: short feather tips along her outline, crest and wings (her beak and legs stay smooth). Iridescence: her feathers shift colour a little with the angle, most at her outline. None of it on Banjo or anyone else. The switch hides the section's settings without turning them off. Checked headless in the poker cutscene (screenshots/kazooie/off-on-poker.png in project files); not checked in Spiral Mountain up close, on Windows (D3D12) or with model mods.
-- Status: waiting for L
+- Status: Kazooie part dropped (L, 2026-10-16); the Character Shaders section with Banjo fur stays
 
 ## T294 Viva Mumbo Jumbo v4: textures match L's reference picture
 - Asked: 2026-10-16 15:35 UTC
