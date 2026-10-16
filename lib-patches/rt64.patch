@@ -3835,7 +3835,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..77895e7
+index 0000000..d2a8ffb
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1805 @@
@@ -4408,7 +4408,7 @@ index 0000000..77895e7
 +        effectsSettings.grassChunky = chunky;
 +        effectsSettings.grassChunkSize = std::clamp(chunkSize, 1.0f, 4.0f);
 +        effectsSettings.grassPixelated = pixelated;
-+        effectsSettings.grassPixelSize = std::clamp(pixelSize, 1.0f, 8.0f);
++        effectsSettings.grassPixelSize = std::clamp(pixelSize, 0.25f, 8.0f);
 +    }
 +
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
