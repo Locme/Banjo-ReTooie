@@ -4127,7 +4127,7 @@ index 3b991ff..6a469af 100644
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
-index bf7b669..5bb90bc 100644
+index bf7b669..e6c83a3 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
 +++ b/src/render/rt64_raster_shader_cache.cpp
 @@ -4,17 +4,136 @@
@@ -4314,20 +4314,22 @@ index bf7b669..5bb90bc 100644
              }
          }
      }
-@@ -85,8 +221,11 @@ namespace RT64 {
+@@ -85,8 +221,13 @@ namespace RT64 {
  
          descQueueActiveCount = threadCount;
  
-+        // Banjo-Tooie: half of the threads (at least one) work through the shader list, so the rest stay free
-+        // for what the game draws now and the list leaves the CPU to the game and the driver.
-+        const uint32_t listThreadCount = std::max(threadCount / 2U, 1U);
++        // Banjo-Tooie: every thread works through the shader list while the game asks for nothing new (they run at
++        // idle priority, and a shader the game asks for is taken first by the next thread to finish), so the list
++        // is done sooner: with half of them it was often still going at the first Jiggy wipe, and the save select
++        // drew with the ubershader and stuttered.
++        const uint32_t listThreadCount = threadCount;
          for (uint32_t t = 0; t < threadCount; t++) {
 -            compilationThreads.push_back(std::make_unique<CompilationThread>(this));
 +            compilationThreads.push_back(std::make_unique<CompilationThread>(this, t < listThreadCount));
          }
  #endif
      }
-@@ -109,6 +248,82 @@ namespace RT64 {
+@@ -109,6 +250,82 @@ namespace RT64 {
          if (shaderFormat == RenderShaderFormat::SPIRV) {
              optimizerCacheSPIRV.initialize();
          }
@@ -4410,7 +4412,7 @@ index bf7b669..5bb90bc 100644
      }
  
      void RasterShaderCache::submit(const ShaderDescription &desc) {
-@@ -119,10 +334,35 @@ namespace RT64 {
+@@ -119,10 +336,35 @@ namespace RT64 {
              const uint64_t shaderHash = desc.hash();
              bool &found = shaderHashes[shaderHash];
              if (found) {
@@ -4446,7 +4448,7 @@ index bf7b669..5bb90bc 100644
          }
  
          // Push a new shader compilation to the queue.
-@@ -138,6 +378,9 @@ namespace RT64 {
+@@ -138,6 +380,9 @@ namespace RT64 {
          {
              std::unique_lock<std::mutex> queueLock(descQueueMutex);
              descQueue = std::queue<ShaderDescription>();

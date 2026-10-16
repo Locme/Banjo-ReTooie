@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T342 No stutter on the first Jiggy wipe into the save select
+- Asked: 2026-10-16 23:02 UTC
+- Build: main after the shader list change
+- Steps:
+  1. Start the game and watch the bottom-right corner for Compiling shaders N%
+  2. Press Start on the title at once (don't wait), and again on a later start after waiting until the notice is gone
+- Look for: Does the Jiggy wipe into the save select room stay smooth? If it still stutters, was the notice still showing, and roughly how long did it take to reach 100%?
+- Status: waiting for L
+
 ## T341 Parallax on stone walls, paving and rock
 - Asked: 2026-10-16 22:50 UTC (L: "Add parallax shaders, and give support to parallax in the appropriate textures")
 - Build: main (pull and build)
