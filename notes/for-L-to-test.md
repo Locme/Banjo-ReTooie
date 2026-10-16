@@ -2655,3 +2655,13 @@
   1. Play as when the frame rate dropped (4K or 3440x1440, MSAA 2x, your mods on) until VRAM has climbed a few GB, then send console.log
 - Look for: each [vram] line (one every 512 MB of change) is now followed by "[vram] using it: N MB in textures and buffers; biggest: ..." naming the biggest groups of the game's textures and buffers with their size and count (for example "Render Target Color 3440x1440 MSAA 2x 760 MB (12)"), and "[vram] changed since the last line: ..." naming what grew or shrank. If VRAM climbs and these stay level, the memory is held by the graphics driver, not by textures or buffers; the "objects alive" line (T244) then says which kind of object. Checked headless: the lines print with names (render targets, scene effects, SMAA, texture cache) and follow the effects as they are made.
 - Status: waiting for L
+
+## T254 Red square on Bottles' ghost talking head: texture pack or not
+- Asked: 2026-10-16 10:14 UTC
+- Build: main @ a211d4f
+- Steps:
+  1. Turn the texture pack off
+  2. Load a file and go to Spiral Mountain, to the rock by Bottles' ghost near Banjo's house
+  3. Talk to him and speed through his dialogue
+- Look for: Does the red square still show on his talking head with the pack off? (No red square showed headless without a pack.)
+- Status: waiting for L
