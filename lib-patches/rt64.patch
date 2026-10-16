@@ -3563,10 +3563,10 @@ index 0000000..c4df6ec
 +};
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
-index 0000000..4396d39
+index 0000000..36592a7
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.cpp
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,138 @@
 +//
 +// RT64
 +//
@@ -3593,8 +3593,10 @@ index 0000000..4396d39
 +        const bool grid = gradeSettings.grid;
 +        const float dofStrength = gradeSettings.dofStrength;
 +        const uint32_t depthAddress = gradeSettings.depthAddress;
++        const float focusX = gradeSettings.focusX;
++        const float focusY = gradeSettings.focusY;
 +        const float sharpen = gradeSettings.sharpen;
-+        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress, sharpen };
++        gradeSettings = { enabled, look, exposure, contrast, saturation, warmth, vignette, grain, cropAspect, grid, dofStrength, depthAddress, focusX, focusY, sharpen };
 +    }
 +
 +    void SetSharpening(float strength) {
@@ -3606,6 +3608,12 @@ index 0000000..4396d39
 +        const std::scoped_lock lock(gradeMutex);
 +        gradeSettings.dofStrength = strength;
 +        gradeSettings.depthAddress = depthAddress;
++    }
++
++    void SetPhotoFocus(float x, float y) {
++        const std::scoped_lock lock(gradeMutex);
++        gradeSettings.focusX = x;
++        gradeSettings.focusY = y;
 +    }
 +
 +    PhotoGradeSettings GetPhotoGrade() {
@@ -3676,6 +3684,7 @@ index 0000000..4396d39
 +        constants.effects = { settings.vignette, settings.grain, seconds, float(settings.look) };
 +        constants.frame = { settings.cropAspect, (settings.grid && !forScreenshot) ? 1.0f : 0.0f, settings.compare ? 1.0f : 0.0f, 0.0f };
 +        constants.dof = { settings.dofStrength, (depth != nullptr) ? 1.0f : 0.0f, shaderLibrary->usesHDR ? 1.0f : 0.0f, settings.sharpen };
++        constants.focus = { settings.focusX, settings.focusY, 0.0f, 0.0f };
 +
 +        RenderTextureBarrier barriers[] = {
 +            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
@@ -3698,10 +3707,10 @@ index 0000000..4396d39
 +};
 diff --git a/src/render/rt64_photo_grade.h b/src/render/rt64_photo_grade.h
 new file mode 100644
-index 0000000..e400499
+index 0000000..77b81ea
 --- /dev/null
 +++ b/src/render/rt64_photo_grade.h
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,66 @@
 +//
 +// RT64
 +//
@@ -3727,6 +3736,8 @@ index 0000000..e400499
 +        bool grid = false;
 +        float dofStrength = 0.0f;
 +        uint32_t depthAddress = 0;
++        float focusX = 0.5f;
++        float focusY = 0.5f;
 +        float sharpen = 0.0f;
 +        bool compare = false;
 +    };
@@ -3740,6 +3751,8 @@ index 0000000..e400499
 +    // Depth of field (0 off, 1 strongest), focused on the nearest thing at the middle of the picture.
 +    // depthAddress is the game's depth buffer in RDRAM, whose render target gives the scene's depth.
 +    void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
++    // Where depth of field focuses, as a fraction of the picture (0.5, 0.5 is the middle, the default).
++    void SetPhotoFocus(float x, float y);
 +    // Sharpening (0 off, 1 strongest), a contrast-adaptive sharpen drawn in the same pass. It is kept
 +    // apart from the filters above, which photo mode and the game's picture settings take turns to set.
 +    void SetSharpening(float strength);
@@ -9104,10 +9117,10 @@ index 0000000..d6e5a7d
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
-index 0000000..0bbe1d5
+index 0000000..c9288dd
 --- /dev/null
 +++ b/src/shaders/PhotoGradePS.hlsl
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,218 @@
 +//
 +// RT64
 +//
@@ -9198,7 +9211,7 @@ index 0000000..0bbe1d5
 +    return (n * f) / max(f - z * (f - n), 1e-3f);
 +}
 +
-+// Depth of field: the nearest thing in a small box at the middle of the picture is in focus, and the
++// Depth of field: the nearest thing in a small box at the focus point (the middle unless photo mode moved it) is in focus, and the
 +// picture blurs more the further a pixel's distance is from it (in either direction), up to a radius
 +// set by the strength. A golden-angle spiral of taps gathers the blur.
 +float3 DepthOfField(float2 uv, float3 sharp, int2 pixel) {
@@ -9206,7 +9219,8 @@ index 0000000..0bbe1d5
 +    float focus = 1e9f;
 +    [unroll] for (int y = -2; y <= 2; y++) {
 +        [unroll] for (int x = -2; x <= 2; x++) {
-+            focus = min(focus, SceneDistance(int2(size * 0.5f) + int2(x, y) * int(max(1.0f, size.y / 90.0f))));
++            const int2 probe = int2(size * gConstants.focus.xy) + int2(x, y) * int(max(1.0f, size.y / 90.0f));
++            focus = min(focus, SceneDistance(clamp(probe, int2(0, 0), int2(size) - 1)));
 +        }
 +    }
 +
@@ -12637,10 +12651,10 @@ index 0000000..6cb97eb
 +#endif
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
-index 0000000..93ea5da
+index 0000000..b5e1bc4
 --- /dev/null
 +++ b/src/shared/rt64_photo_grade.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,30 @@
 +//
 +// RT64
 +//
@@ -12665,6 +12679,8 @@ index 0000000..93ea5da
 +        // Depth of field strength (0 off, 1 strongest), 1 when the depth texture holds this frame's depth, 1 for
 +        // an HDR colour buffer, then the sharpening (0 off, 1 strongest).
 +        float4 dof;
++        // Depth of field's focus point as a fraction of the picture (0.5, 0.5 is the middle), then unused.
++        float4 focus;
 +    };
 +#ifdef HLSL_CPU
 +};

@@ -88,6 +88,7 @@ namespace RT64 {
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetPhotoFrame(float cropAspect, bool grid);
     void SetPhotoDepthOfField(float strength, uint32_t depthAddress);
+    void SetPhotoFocus(float x, float y);
 }
 
 namespace {
@@ -153,12 +154,21 @@ namespace {
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
     enum class Row { Zoom, Camera, Time, Hud, Banjo, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
-        Vignette, Grain, Focus, Tilt, Crop, Grid, Count };
+        Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Grid, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
     std::atomic<bool> panel_shown{true};
     std::atomic<int> pending_step{0};
     std::atomic<bool> orbit_on{false};
+    // Depth of field's focus point: the middle, Banjo, or one of the rule-of-thirds points.
+    enum class Focus { Middle, Banjo, TopLeft, TopRight, BottomLeft, BottomRight, Count };
+    constexpr const char* focus_names[] = { "Middle", "Banjo", "Top left", "Top right", "Bottom left", "Bottom right" };
+    std::atomic<int> focus_choice{0};
+    // The field of view the game last set while photo mode was on (degrees, vertical), to find Banjo on screen.
+    std::atomic<float> last_fov{45.0f};
+    // Banjo's middle, above his feet.
+    constexpr float banjo_middle = 45.0f;
+
     // Self-timer: the Timer row's choice, and the countdown (on the game thread) once A started it.
     constexpr int timer_seconds[] = { 0, 3, 10 };
     std::atomic<int> timer_choice{0};
@@ -364,7 +374,7 @@ namespace {
         "Teal and orange", "Dream" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
     constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Others", "Timer", "Shutter", "Filter", "Exposure",
-        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Tilt", "Crop", "Grid" };
+        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Grid" };
     static_assert(std::size(row_names) == row_count);
 
     // On the game thread: one step of the picked row, -1 or +1.
@@ -405,6 +415,11 @@ namespace {
             case Row::Timer: {
                 const int n = (int)std::size(timer_seconds);
                 timer_choice = (timer_choice + n + step) % n;
+                break;
+            }
+            case Row::FocusPoint: {
+                const int n = (int)Focus::Count;
+                focus_choice = (focus_choice + n + step) % n;
                 break;
             }
             case Row::Shutter:
@@ -455,6 +470,8 @@ namespace {
             }
             std::snprintf(text, sizeof(text), "%d s", timer_seconds[timer_choice.load()]);
             return text;
+        case Row::FocusPoint:
+            return focus_names[focus_choice.load()];
         case Row::Shutter:
             return qol_value<bool>(tooie::photo_mode::shutter_option, true) ? "Click and flash" : "Off";
         case Row::Exposure:
@@ -519,6 +536,7 @@ namespace {
     void leave() {
         is_active = false;
         apply_filters(false);
+        RT64::SetPhotoFocus(0.5f, 0.5f);
         players_hidden = false;
         others_hidden = false;
         if (!hud_was_hidden && tooie::hide_hud::is_hidden()) {
@@ -593,7 +611,7 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
         "Tilts photo mode's camera, in degrees. 0 is level.",
         -45, 45, 1, 0, false, 0);
     qol.add_number_option(dof_option, "Photo depth of field",
-        "Blurs what is nearer or further than the middle of photo mode's picture, which stays sharp. 0 is off.",
+        "Blurs what is nearer or further than the focus point (the middle of photo mode's picture, unless the photo panel's Focus point row moves it), which stays sharp. 0 is off.",
         0, 100, 5, 0, false, 0);
     qol.add_bool_option(shutter_option, "Photo shutter",
         "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true);
@@ -626,7 +644,11 @@ float tooie::photo_mode::crop_aspect() {
 }
 
 float tooie::photo_mode::adjust_fov(float fov) {
-    return is_active ? fov * fov_scale.load() : fov;
+    if (!is_active) {
+        return fov;
+    }
+    last_fov = fov * fov_scale.load();
+    return last_fov;
 }
 
 void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
@@ -770,6 +792,64 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     write_float(rdram, (uint32_t)delta_time_addr, scale > 0.0f ? dt * scale : frozen_delta);
 }
 
+namespace {
+    // Tells RT64 where depth of field focuses, as a fraction of the picture. For Banjo, his middle is
+    // projected with the photo camera (yaw 0 looks along -z, turning left as it grows; positive pitch
+    // looks up), the game's vertical field of view and the window's shape, then turned with the tilt.
+    void place_focus(uint8_t* rdram, float tilt) {
+        float fx = 0.5f, fy = 0.5f;
+        switch ((Focus)focus_choice.load()) {
+        case Focus::TopLeft: fx = 1.0f / 3.0f; fy = 1.0f / 3.0f; break;
+        case Focus::TopRight: fx = 2.0f / 3.0f; fy = 1.0f / 3.0f; break;
+        case Focus::BottomLeft: fx = 1.0f / 3.0f; fy = 2.0f / 3.0f; break;
+        case Focus::BottomRight: fx = 2.0f / 3.0f; fy = 2.0f / 3.0f; break;
+        case Focus::Banjo: {
+            const uint32_t player = (uint32_t)MEM_W(0, (gpr)(int32_t)player_table);
+            const uint32_t transform = player != 0 ? (uint32_t)MEM_W(player_transform, (gpr)(int32_t)player) : 0;
+            if (transform == 0) {
+                break;
+            }
+            float v[3];
+            for (int i = 0; i < 3; i++) {
+                v[i] = read_float(rdram, transform + 4 * i) - cam.pos[i];
+            }
+            v[1] += banjo_middle;
+            const float sy = std::sin(cam.yaw * deg), cy = std::cos(cam.yaw * deg);
+            const float sp = std::sin(cam.pitch * deg), cp = std::cos(cam.pitch * deg);
+            const float forward[3] = { -sy * cp, sp, -cy * cp };
+            const float right[3] = { cy, 0.0f, -sy };
+            const float up[3] = { right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2],
+                right[0] * forward[1] - right[1] * forward[0] };
+            const float z = v[0] * forward[0] + v[1] * forward[1] + v[2] * forward[2];
+            if (z < 1.0f) {
+                break;
+            }
+            int width = 0, height = 0;
+            recompui::get_window_size(width, height);
+            const float aspect = width > 0 && height > 0 ? (float)width / (float)height : 16.0f / 9.0f;
+            const float t = std::tan(std::clamp(last_fov.load(), 8.0f, 150.0f) * 0.5f * deg);
+            // In units of half the picture's height, so the tilt turns them without stretching.
+            const float x = (v[0] * right[0] + v[1] * right[1] + v[2] * right[2]) / (z * t);
+            const float y = (v[0] * up[0] + v[1] * up[1] + v[2] * up[2]) / (z * t);
+            const float st = std::sin(tilt * deg), ct = std::cos(tilt * deg);
+            const float tx = x * ct + y * st, ty = -x * st + y * ct;
+            fx = std::clamp(0.5f + 0.5f * tx / aspect, 0.02f, 0.98f);
+            fy = std::clamp(0.5f - 0.5f * ty, 0.02f, 0.98f);
+            break;
+        }
+        default:
+            break;
+        }
+        RT64::SetPhotoFocus(fx, fy);
+        static const bool log = std::getenv("TOOIE_PHOTO_LOG") != nullptr;
+        static Clock::time_point last_log;
+        if (log && Clock::now() - last_log >= 500ms) {
+            last_log = Clock::now();
+            fprintf(stderr, "[photo] focus %.3f %.3f\n", fx, fy);
+        }
+    }
+}
+
 bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32_t camera) {
     if (!is_active) {
         return false;
@@ -893,6 +973,8 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
     // Tilt: the camera's roll, positive turning the picture clockwise.
     const float tilt = (float)qol_value<double>(tooie::photo_mode::tilt_option, 0.0);
     write_float(rdram, camera + cam_rot + 8, tilt < 0.0f ? tilt + 360.0f : tilt);
+
+    place_focus(rdram, tilt);
 
     static const bool log = std::getenv("TOOIE_PHOTO_LOG") != nullptr;
     static Clock::time_point last_log;
