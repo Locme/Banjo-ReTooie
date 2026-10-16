@@ -1,0 +1,52 @@
+diff --git a/re-spirv.cpp b/re-spirv.cpp
+index 26f70e5..9f08cfd 100644
+--- a/re-spirv.cpp
++++ b/re-spirv.cpp
+@@ -643,7 +643,11 @@ namespace respv {
+                     }
+ 
+                     uint32_t resultIndex = results[operandId].instructionIndex;
+-                    instructions[resultIndex].adjacentListIndex = addToList(i, instructions[resultIndex].adjacentListIndex);
++                    // A value defined later in the module can only reach an OpPhi over a loop's back-edge. That edge
++                    // would make the graph cyclic, so it is left out; the OpPhi is resolved as a variable instead.
++                    if ((opCode != SpvOpPhi) || (resultIndex < i)) {
++                        instructions[resultIndex].adjacentListIndex = addToList(i, instructions[resultIndex].adjacentListIndex);
++                    }
+                     operandWordIndex += operandWordStride;
+                 }
+             }
+@@ -664,7 +668,10 @@ namespace respv {
+                     }
+ 
+                     uint32_t labelIndex = results[labelId].instructionIndex;
+-                    instructions[i].adjacentListIndex = addToList(labelIndex, instructions[i].adjacentListIndex);
++                    // A branch back to an earlier label is a loop's back-edge: left out, so the graph stays acyclic.
++                    if (labelIndex > i) {
++                        instructions[i].adjacentListIndex = addToList(labelIndex, instructions[i].adjacentListIndex);
++                    }
+                 }
+             }
+ 
+@@ -683,7 +690,10 @@ namespace respv {
+                     }
+ 
+                     uint32_t labelIndex = results[labelId].instructionIndex;
+-                    instructions[labelIndex].adjacentListIndex = addToList(i, instructions[labelIndex].adjacentListIndex);
++                    // A parent block that comes later is the loop's back-edge: left out (see above).
++                    if (labelIndex < i) {
++                        instructions[labelIndex].adjacentListIndex = addToList(i, instructions[labelIndex].adjacentListIndex);
++                    }
+                 }
+             }
+             // Parse decorations.
+@@ -1231,6 +1241,10 @@ namespace respv {
+             // Resolve as constant if Phi operator was compacted to only one option.
+             if (wordCount == 5) {
+                 resolution = rContext.resolutions[optimizedWords[resultWordIndex + 3]];
++                // Its one operand can come over a loop's back-edge and so not be resolved yet: a variable then.
++                if (resolution.type == Resolution::Type::Unknown) {
++                    resolution.type = Resolution::Type::Variable;
++                }
+             }
+             else {
+                 resolution.type = Resolution::Type::Variable;

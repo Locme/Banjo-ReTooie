@@ -171,6 +171,8 @@ function(apply_nested_patch name dir)
     endif()
 endfunction()
 apply_nested_patch(plume lib/rt64/src/contrib/plume)
+# re-spirv (RT64's SPIR-V specialiser): its sort copes with loops, which the raster shaders now have.
+apply_nested_patch(re-spirv lib/rt64/src/contrib/re-spirv)
 
 # Android (android/ is the Gradle project that drives this build): SDL, FreeType and a stand-in for the
 # desktop file dialogs are built here, since the NDK has none of them. Pinned to fixed versions.
