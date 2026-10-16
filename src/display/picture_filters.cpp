@@ -24,7 +24,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include "tooie_game_frame_rate.h"
 #include "recompui/config.h"
@@ -66,7 +68,8 @@ namespace RT64 {
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
     void SetSceneKazooieFeathers(float amount, float size);
-    void SetSceneSnow(bool on, float height);
+    void SetSceneSnow(bool on, float height, bool strictColor);
+    void SetSceneSnowStamps(const float *stamps, uint32_t count);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
     bool GetSceneCameraHeight(float *height);
@@ -109,11 +112,85 @@ namespace {
     // What was last sent (-1 to send again).
     std::atomic<float> snow_sent{-1.0f};
 
-    // The maps with deep snow on their snowy ground: Hailfire Peaks' Icy Side.
+    // The maps with deep snow on their snowy ground: Hailfire Peaks' Icy Side and Chilly Willy's
+    // arena (the shader keeps it to snow-coloured ground facing up). Test aid:
+    // TOOIE_SNOW_MAPS=<hex>,<hex>... replaces the list.
     bool snowy_map(uint16_t map) {
-        return map == 0x128;
+        static const std::vector<uint16_t> maps = [] {
+            std::vector<uint16_t> list;
+            if (const char* forced = std::getenv("TOOIE_SNOW_MAPS")) {
+                for (const char* p = forced; *p != '\0';) {
+                    char* end = nullptr;
+                    const unsigned long value = std::strtoul(p, &end, 16);
+                    if (end == p) {
+                        break;
+                    }
+                    list.push_back((uint16_t)value);
+                    p = (*end == ',') ? end + 1 : end;
+                }
+            }
+            else {
+                list = { 0x128, 0x12C };
+            }
+            return list;
+        }();
+        return std::find(maps.begin(), maps.end(), map) != maps.end();
     }
     float heat_haze_sent = -1.0f;
+
+    // Deep snow's other actors (note_snow_actor): where each was last frame, and whether it was falling.
+    struct SnowActor { float x = 0.0f, y = 0.0f, z = 0.0f, scale = 1.0f; bool falling = false; };
+    std::unordered_map<uint32_t, SnowActor> snow_actors_last;
+    std::unordered_map<uint32_t, SnowActor> snow_actors_now;
+    // Craters from attacks that landed, kept for a few frames so RT64 surely draws a frame with them.
+    struct SnowCrater { float x, y, z, radius; int frames; };
+    std::vector<SnowCrater> snow_craters;
+    bool snow_actors_wanted = false;
+
+    // This frame's stamps for RT64 from the actors drawn last frame: one walking along the ground presses a furrow,
+    // one that was falling and stopped or went away (an attack landing) a crater.
+    void send_snow_stamps(const float player[3], bool have_player) {
+        std::vector<float> stamps;
+        auto add = [&](float x, float y, float z, float radius, float depth) {
+            if (stamps.size() / 5 >= 48) {
+                return;
+            }
+            stamps.insert(stamps.end(), { x, y, z, radius, depth });
+        };
+        for (auto& [actor, now] : snow_actors_now) {
+            const float radius = 12.0f * std::clamp(now.scale, 0.4f, 3.0f);
+            // Banjo has his own trail.
+            if (have_player && std::hypot(now.x - player[0], now.z - player[2]) < 8.0f && std::abs(now.y - player[1]) < 30.0f) {
+                continue;
+            }
+            const auto last = snow_actors_last.find(actor);
+            if (last == snow_actors_last.end()) {
+                continue;
+            }
+            const float moved = std::hypot(now.x - last->second.x, now.z - last->second.z);
+            const float dy = now.y - last->second.y;
+            now.falling = (dy < -1.5f) || (last->second.falling && (dy < -0.2f));
+            if (last->second.falling && !now.falling) {
+                snow_craters.push_back({ now.x, now.y, now.z, radius * 1.4f, 3 });
+            }
+            else if ((moved > 0.3f) && (moved < 60.0f) && (std::abs(dy) < 4.0f)) {
+                add(now.x, now.y, now.z, radius, 0.6f);
+            }
+        }
+        for (const auto& [actor, last] : snow_actors_last) {
+            if (last.falling && (snow_actors_now.find(actor) == snow_actors_now.end())) {
+                snow_craters.push_back({ last.x, last.y, last.z, 12.0f * std::clamp(last.scale, 0.4f, 3.0f) * 1.4f, 3 });
+            }
+        }
+        for (auto& crater : snow_craters) {
+            add(crater.x, crater.y, crater.z, crater.radius, 0.9f);
+            crater.frames--;
+        }
+        snow_craters.erase(std::remove_if(snow_craters.begin(), snow_craters.end(), [](const SnowCrater& c) { return c.frames <= 0; }), snow_craters.end());
+        snow_actors_last = std::move(snow_actors_now);
+        snow_actors_now.clear();
+        RT64::SetSceneSnowStamps(stamps.data(), (uint32_t)(stamps.size() / 5));
+    }
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
     // inside the volcano.
@@ -507,6 +584,25 @@ bool tooie::picture_filters::applying_effects_preset() {
     return applying_preset;
 }
 
+void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, float z, float scale) {
+    if (!snow_actors_wanted || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+        return;
+    }
+    snow_actors_now[actor] = { x, y, z, std::isfinite(scale) ? scale : 1.0f, false };
+    // Test aid: TOOIE_SNOW_LOG=1 also counts the actors seen, every 2 s.
+    static const bool log = std::getenv("TOOIE_SNOW_LOG") != nullptr;
+    if (log) {
+        static auto logged = std::chrono::steady_clock::now();
+        static uint32_t seen = 0;
+        seen++;
+        if (std::chrono::steady_clock::now() - logged > std::chrono::seconds(2)) {
+            logged = std::chrono::steady_clock::now();
+            std::fprintf(stderr, "[snow] %u actor draws seen (last 2 s), e.g. %08X at %.0f %.0f %.0f scale %.2f\n", seen, actor, x, y, z, scale);
+            seen = 0;
+        }
+    }
+}
+
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     // Test aid: TOOIE_PRESET_TEST=<preset number> picks that effects preset on the first frame and logs
@@ -643,9 +739,25 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
         const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : 0.0f;
-        if (snow != snow_sent.load()) {
+        // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
+        const bool strict = (map == 0x128);
+        static bool strict_sent = true;
+        if ((snow != snow_sent.load()) || (strict != strict_sent)) {
             snow_sent = snow;
-            RT64::SetSceneSnow(snow > 0.0f, snow);
+            strict_sent = strict;
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict);
+        }
+        snow_actors_wanted = snow > 0.0f;
+        if (snow_actors_wanted) {
+            float pos[3];
+            const bool valid = banjo_position(rdram, pos);
+            send_snow_stamps(pos, valid);
+        }
+        else if (!snow_actors_last.empty() || !snow_actors_now.empty() || !snow_craters.empty()) {
+            snow_actors_last.clear();
+            snow_actors_now.clear();
+            snow_craters.clear();
+            RT64::SetSceneSnowStamps(nullptr, 0);
         }
     }
     // The fog is measured from Banjo.

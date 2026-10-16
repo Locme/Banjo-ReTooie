@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T313 Deep snow: in Chilly Willy's arena, enemies and attacks press in, deeper
+- Asked: 2026-10-16
+- Build: main (pull and build)
+- Steps:
+  1. Graphics: Shaders switch on, then Deep snow (Snow height 100)
+  2. Fight Chilly Willy (the ice dragon) and walk round the snowy rim; let his attacks land near you
+  3. On Icy Side, walk past a polar bear or other enemy and watch the snow behind them
+- Look for: In the arena the rim's snow is now deep snow too (it was left out: the fight is its own map, and its bluer snow failed the snow colour test). Banjo leaves a darker furrow with footprints. Enemies walking leave a trail, and an attack that falls and lands leaves a crater, if the game draws it as an actor (I could check the polar bear headless, not the dragon's attacks). The snow is half as deep again as in T269 and the trail is darker, so it is easier to see. Tell me if you still see no trail at all, and whether you play on D3D12 or Vulkan.
+- Status: waiting for L
+
 ## T312 Jiggy wipe stays black with Ambient Occlusion and the other shaders
 - Asked: 2026-10-16 20:43 UTC
 - Build: main after the Jiggy wipe fix
@@ -302,7 +312,7 @@
   3. Move Snow height to 300 and to 25 while you play
   4. Jump around, then wait about a minute where you walked
 - Look for: The snow ground is a soft layer with gentle drifts, about ankle deep at 100 and knee deep at 300, changing as you drag the slider. Banjo leaves a furrow with left and right footprints and the snow banks up either side; standing still prints both feet. Jumps leave no marks in the air. After about 6 seconds prints start to fill back in and are gone within about a minute. The ice should stay flat; tell me if any pale ice gets snow on it. Banjo's round shadow may be hidden under deep snow. On a slow GPU this costs more frame time than most effects. Checked headless on Icy Side.
-- Status: waiting for L
+- Status: failed (L, 2026-10-16: no difference, no reaction to Banjo, enemies or the dragon's attacks); replaced by T313
 
 ## T267 No 'invalid UI context' error when quitting
 - Asked: 2026-10-16 11:20 UTC

@@ -36,6 +36,7 @@
 #include "tooie_hd_shadows.h"
 #include "tooie_gfx_budget.h"
 #include "tooie_day_night.h"
+#include "tooie_picture_filters.h"
 
 namespace {
     bool hd_shadows_on() {
@@ -455,6 +456,12 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     }
     const uint32_t draw_callback = draw_callbacks.back();
     draw_callbacks.pop_back();
+    // Deep snow: where each actor drawn stands (picture_filters.cpp).
+    if (draw_callbacks.empty() && !in_shadow_pass) {
+        const gpr drawn_actor = ctx->r16;
+        tooie::picture_filters::note_snow_actor((uint32_t)drawn_actor, load_float(rdram, drawn_actor + 0x4), load_float(rdram, drawn_actor + 0x8),
+            load_float(rdram, drawn_actor + 0xC), load_float(rdram, drawn_actor + 0x38));
+    }
     // Only outermost draws: one nested in another actor's draw (or in a shadow pass) would reset
     // the outer draw's state halfway through.
     if (!draw_callbacks.empty() || in_shadow_pass || !hd_shadows_on()) {

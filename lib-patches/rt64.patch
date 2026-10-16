@@ -4030,10 +4030,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..6c5332e
+index 0000000..5f045fe
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1823 @@
+@@ -0,0 +1,1845 @@
 +//
 +// RT64
 +//
@@ -4590,10 +4590,18 @@ index 0000000..6c5332e
 +        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
-+    void SetSceneSnow(bool on, float height) {
++    void SetSceneSnow(bool on, float height, bool strictColor) {
 +        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.snowStrictColor = strictColor;
 +        effectsSettings.snow = on && (height > 0.0f);
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
++    }
++
++    void SetSceneSnowStamps(const float *stamps, uint32_t count) {
++        const std::scoped_lock lock(effectsMutex);
++        count = std::min(count, SceneEffectsSettings::MaxSnowStamps);
++        effectsSettings.snowStampCount = count;
++        std::copy(stamps, stamps + count * 5, effectsSettings.snowStamps);
 +    }
 +
 +    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend) {
@@ -4915,7 +4923,7 @@ index 0000000..6c5332e
 +    static constexpr float SnowCell = 2.5f;
 +    static constexpr float SnowTicksPerSecond = 20.0f;
 +    // About ankle deep at height 1 (he wades in it at 3); the banks rise a third above it.
-+    static constexpr float SnowDepth = 8.0f;
++    static constexpr float SnowDepth = 12.0f;
 +    static constexpr float SnowBank = 0.35f;
 +    static constexpr uint32_t SnowMinShells = 6;
 +    static constexpr uint32_t SnowMaxShells = 16;
@@ -5025,7 +5033,7 @@ index 0000000..6c5332e
 +            return 0;
 +        }
 +        const float full = SnowDepth * effectsSettings.snowHeight * (1.0f + SnowBank);
-+        return std::clamp(uint32_t(std::lround(full / 1.5f)), SnowMinShells, SnowMaxShells);
++        return std::clamp(uint32_t(std::lround(full / 2.0f)), SnowMinShells, SnowMaxShells);
 +    }
 +
 +    uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams) {
@@ -5106,7 +5114,7 @@ index 0000000..6c5332e
 +                trail.stoodPrinted = false;
 +
 +                // A furrow where he wades through, deeper the deeper the snow, with the snow pushed up either side.
-+                const float furrow = std::clamp(0.4f + 0.2f * (settings.snowHeight - 1.0f), 0.25f, 0.75f);
++                const float furrow = std::clamp(0.6f + 0.15f * (settings.snowHeight - 1.0f), 0.45f, 0.85f);
 +                const uint32_t steps = std::max(uint32_t(std::ceil(moved / 2.0f)), 1u);
 +                for (uint32_t s = 1; s <= steps; s++) {
 +                    const float t = float(s) / float(steps);
@@ -5142,6 +5150,19 @@ index 0000000..6c5332e
 +                trail.last[0] = x;
 +                trail.last[1] = y;
 +                trail.last[2] = z;
++            }
++        }
++
++        // The game's other actors: enemies wading through it and attacks landing in it, near Banjo only (the grid wraps
++        // round further away).
++        if (havePlayer && trail.started) {
++            for (uint32_t i = 0; i < settings.snowStampCount; i++) {
++                const float *stamp = &settings.snowStamps[i * 5];
++                if ((std::abs(stamp[0] - settings.player[0]) > 380.0f) || (std::abs(stamp[2] - settings.player[2]) > 380.0f)) {
++                    continue;
++                }
++                const float radius = std::clamp(stamp[3], 3.0f, 60.0f);
++                SnowPressOval(trail, stamp[0], stamp[2], stamp[1], 1.0f, 0.0f, radius, radius, std::clamp(stamp[4], 0.0f, 1.0f), 0.55f, now, recover);
 +            }
 +        }
 +
@@ -5182,11 +5203,12 @@ index 0000000..6c5332e
 +            for (size_t i = 0; i < trail.cells.size(); i += 2) {
 +                pressed += (trail.cells[i + 1] != 0) ? 1 : 0;
 +            }
-+            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f, %u cells pressed, depth %.1f, recover %.0f s\n", settings.player[0], settings.player[1], settings.player[2],
-+                pressed, depth, recover);
++            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f, %u cells pressed, depth %.1f, recover %.0f s, %u actor stamps\n", settings.player[0], settings.player[1], settings.player[2],
++                pressed, depth, recover, settings.snowStampCount);
 +        }
 +        frameParams.snowSpring = { SnowHoldSeconds, recover, SnowBank, float(now) };
 +        frameParams.snowLight = { light[0] / lightLength, light[1] / lightLength, light[2] / lightLength, 2.2f };
++        frameParams.snowColor = settings.snowStrictColor ? interop::float4{ 0.06f, 0.25f, 0.3f, 0.0f } : interop::float4{ 0.2f, 0.45f, 0.45f, 0.0f };
 +        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * SnowCell * 0.45f : 0.0f };
 +        return true;
 +    }
@@ -5859,10 +5881,10 @@ index 0000000..6c5332e
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..92b150c
+index 0000000..1b28bc2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,266 @@
+@@ -0,0 +1,275 @@
 +//
 +// RT64
 +//
@@ -5972,6 +5994,11 @@ index 0000000..92b150c
 +        float featherSize = 1.0f;
 +        bool snow = false;
 +        float snowHeight = 1.0f;
++        bool snowStrictColor = true;
++        // Deep snow's stamps from the game this frame (SetSceneSnowStamps): x, y, z, radius, depth for each.
++        static constexpr uint32_t MaxSnowStamps = 48;
++        uint32_t snowStampCount = 0;
++        float snowStamps[MaxSnowStamps * 5] = {};
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -6081,8 +6108,12 @@ index 0000000..92b150c
 +    // Whether Kazooie's feathers are on.
 +    bool SceneKazooieFeathers();
 +    // Banjo-Tooie: deep snow that Banjo leaves a trail in (Snow.hlsli), on the snowy ground of the 3D world; on is
-+    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep).
-+    void SetSceneSnow(bool on, float height);
++    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep). strictColor: only white with
++    // hardly any blue counts as snow (a map with pale ice next to its snow); otherwise bluish white counts too.
++    void SetSceneSnow(bool on, float height, bool strictColor);
++    // Where the game's other actors (enemies, attacks landing) press into the snow this frame: x, y (their feet), z,
++    // radius and depth (0 to 1) for each, count of them (at most SceneEffectsSettings::MaxSnowStamps).
++    void SetSceneSnowStamps(const float *stamps, uint32_t count);
 +    // The most shells drawn over a snow draw: 0 when there is no deep snow.
 +    uint32_t SceneSnowShells();
 +    // How many shells a draw nearest the camera at distanceToCamera gets (0 beyond the snow's reach).
@@ -11038,10 +11069,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..87c83c5
+index 0000000..15c9d27
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,168 @@
 +//
 +// RT64
 +//
@@ -11064,13 +11095,15 @@ index 0000000..87c83c5
 +#include "FbRendererCommon.hlsli"
 +#include "Grass.hlsli"
 +
-+// Snowy ground: light and not very colourful (white, lilac or a little warm in the sun), not the ice's cyan (its pale
-+// streaks are as light as snow, but greener and bluer than red).
++// Snowy ground: light and not very colourful (white, lilac or a little warm in the sun). On Icy Side not the ice's
++// cyan (its pale streaks are as light as snow, but greener and bluer than red); in Chilly Willy's arena the snow
++// itself is bluish white (snowColor, from the map).
 +bool SnowColor(float3 baseColor) {
 +    const float brightest = max(baseColor.r, max(baseColor.g, baseColor.b));
 +    const float darkest = min(baseColor.r, min(baseColor.g, baseColor.b));
 +    const float luma = dot(baseColor, float3(0.3f, 0.59f, 0.11f));
-+    return (luma > 0.45f) && ((brightest - darkest) < 0.3f * brightest) && (baseColor.g - baseColor.r < 0.06f) && (baseColor.b - baseColor.r < 0.25f);
++    const float4 limits = FrParams.snowColor;
++    return (luma > 0.45f) && ((brightest - darkest) < limits.z * brightest) && (baseColor.g - baseColor.r < limits.x) && (baseColor.b - baseColor.r < limits.y);
 +}
 +
 +// How far one cell was pressed down and banked up now, after springing back for as long as it has been; 0 for a cell
@@ -11185,7 +11218,7 @@ index 0000000..87c83c5
 +    const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
 +    float3 shade = color * lerp(1.06f, 0.92f, under) * (1.0f + 0.2f * max(lit, 0.0f));
 +    shade = lerp(shade, shade * float3(0.62f, 0.7f, 0.9f), saturate(-lit) * 0.85f);
-+    shade = lerp(shade, shade * float3(0.82f, 0.88f, 1.0f), saturate(under * s.trail.x * 1.4f));
++    shade = lerp(shade, shade * float3(0.64f, 0.72f, 0.92f), saturate(under * s.trail.x * 2.0f));
 +
 +    // A few glints in the sun close by, each catching the light from some places and not others.
 +    if (s.cameraDistance < 700.0f) {
@@ -11562,10 +11595,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..325b327 100644
+index 2e62aaf..83e0dcc 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,74 @@ namespace interop {
+@@ -13,6 +13,76 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -11637,6 +11670,8 @@ index 2e62aaf..325b327 100644
 +        float4 snowLight;
 +        // Banjo's world x, z and y, then how far from him the trail is looked up (0 with no Banjo).
 +        float4 snowPlayer;
++        // Which colours count as snow: the most green and blue may go over red, and the most saturation (Snow.hlsli).
++        float4 snowColor;
      };
  #ifdef HLSL_CPU
  };
