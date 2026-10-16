@@ -2674,3 +2674,22 @@
   2. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
 - Look for: The flat black door is gone; the doorway is now the original skull's short tunnel, shading from the entrance to black inside. The hut takes its light from the level the way the old skull did: warm orange and darker in the mine, plain daylight on the cloud, instead of the same flat light everywhere. The door still takes you inside. Checked headless with the zip ([v2.png](screens/mumbos-hut/v2.png) in project files): both huts drawn, GGM's door entered.
 - Status: waiting for L
+
+## T256 Smash Banjo v7: animation clean-up
+- Asked: 2026-10-16 10:30 UTC
+- Build: main, plus mods/Smash Banjo v7.zip from project files (take v1 to v6 and their unpacked folders out of the mods folder)
+- Steps:
+  1. Load a save with Smash Banjo on and walk, run, jump, flap flip, roll and beak barge, watching his legs from the side
+  2. Flap (A twice) and watch Kazooie's tail feathers under the backpack
+- Look for: Step 1, no long brown spikes stretching out behind his legs or feet (v6 had them whenever he walked: a fur card at the ankles was tied to both feet). Step 2, the tail feathers stay in one piece when they fan out. Everything else is as v6. Checked headless with the game's own bone matrices from 101 frames of walking, jumping, flapping, backflip, roll, beak barge and talon trot: no spikes left. The backpack lifting up behind his head in some moves is what vanilla does too. Screenshot: screens/smash-banjo/v7.png. If you still see an animation problem, say which move.
+- Status: waiting for L
+
+## T257 Banjo fur on model mods
+- Asked: 2026-10-16 10:30 UTC
+- Build: main (next Windows build), plus mods/Smash Banjo v7.zip
+- Steps:
+  1. Graphics > Photo Filters on, Banjo fur at 100, with Smash Banjo on
+  2. Look at Banjo close up, then flap so Kazooie comes out of the backpack
+  3. Turn Smash Banjo off and look again
+- Look for: Smash Banjo's fur gets the fur shells (arms, body, legs), but his muzzle, shorts, backpack and Kazooie don't. Before this, the fur shader looked for Kazooie at fixed places in the vanilla model, so with a model mod it picked the wrong parts. It now reads where Kazooie's parts are from the model itself, so this should also work for Banjo X and other player model mods. Vanilla Banjo looks the same as before. Checked headless in Mayahem Temple with Smash Banjo and vanilla.
+- Status: waiting for L

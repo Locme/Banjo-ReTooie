@@ -172,6 +172,113 @@ namespace {
         MEM_W(4, kseg0(phys)) = (int32_t)w1;
     }
 
+    // Kazooie's lists in a player model, found from the model's own geo tree rather than fixed offsets, so a
+    // model mod (Smash Banjo, Banjo X) keeps fur off Kazooie too. The model is found back from its vertices
+    // (segment 1 = model + its vertex block offset + 0x18; the header starts with 0x0B and holds that offset at
+    // +0x10). Every draw (geo node 0x11, or a joint draw 0x18) on bone 18, Kazooie's root, or a bone under it
+    // is hers; her lists are one run in the model's list (vanilla: commands 1209-2904, Smash Banjo: 6555-14713).
+    struct KazooieLists {
+        uint32_t vertex_base = 0;
+        uint32_t model = 0;
+        uint32_t header[3] = {}; // geo tree, list and vertex offsets, to notice another model loaded in its place
+        bool found = false;
+        uint32_t from = 0, to = 0; // physical addresses of her first and last list
+    };
+
+    uint16_t half(uint8_t* rdram, uint32_t phys) {
+        return (uint16_t)MEM_HU(0, kseg0(phys));
+    }
+
+    uint8_t byte(uint8_t* rdram, uint32_t phys) {
+        return (uint8_t)MEM_BU(0, kseg0(phys));
+    }
+
+    void read_kazooie_lists(uint8_t* rdram, uint32_t vertex_base, KazooieLists& out) {
+        constexpr uint32_t ram_size = 0x00800000;
+        constexpr uint32_t kazooie_root = 18;
+        out = {};
+        out.vertex_base = vertex_base;
+        if (vertex_base < 0x1000 || vertex_base >= ram_size) {
+            return;
+        }
+        uint32_t model = 0;
+        for (uint32_t back = 0x18; back <= 0x60000 && back + 0x60 <= vertex_base; back += 8) {
+            const uint32_t m = vertex_base - back;
+            if (word(rdram, m) == 0x0B && word(rdram, m + 0x10) == back - 0x18) {
+                model = m;
+                break;
+            }
+        }
+        if (model == 0) {
+            return;
+        }
+        const uint32_t geo = word(rdram, model + 0x04), list = word(rdram, model + 0x0C), bones = word(rdram, model + 0x18);
+        out.model = model;
+        out.header[0] = geo;
+        out.header[1] = list;
+        out.header[2] = word(rdram, model + 0x10);
+        if (geo == 0 || list == 0 || bones == 0 || model + geo >= ram_size || model + bones >= ram_size) {
+            return;
+        }
+        const uint32_t bone_count = half(rdram, model + bones + 4);
+        if (bone_count <= kazooie_root || bone_count > 256) {
+            return;
+        }
+        std::vector<bool> kazooie(bone_count, false);
+        for (uint32_t b = 0; b < bone_count; b++) {
+            int guard = 0;
+            for (int32_t c = (int32_t)b; c >= 0 && c < (int32_t)bone_count && guard++ < 64; c = (int16_t)half(rdram, model + bones + 8 + c * 16 + 14)) {
+                if ((uint32_t)c == kazooie_root) {
+                    kazooie[b] = true;
+                    break;
+                }
+            }
+        }
+        // Walk the geo tree (as the game does: 0x02 bone with a child list, 0x0C select with option lists).
+        int32_t lo = INT32_MAX, hi = INT32_MIN;
+        struct Item { uint32_t node; int32_t bone; };
+        std::vector<Item> todo{ { model + geo, -1 } };
+        int visited = 0;
+        while (!todo.empty() && visited < 20000) {
+            Item item = todo.back();
+            todo.pop_back();
+            for (uint32_t node = item.node; node + 16 < ram_size && visited < 20000; visited++) {
+                const uint32_t cmd = word(rdram, node), size = word(rdram, node + 4);
+                if (cmd == 0x02) {
+                    const uint8_t child = byte(rdram, node + 8);
+                    if (child != 0) {
+                        todo.push_back({ node + child, byte(rdram, node + 9) });
+                    }
+                }
+                else if (cmd == 0x0C) {
+                    const uint16_t count = half(rdram, node + 8);
+                    for (uint32_t k = 0; k < count && k < 16; k++) {
+                        const uint32_t option = word(rdram, node + 12 + 4 * k);
+                        if (option != 0) {
+                            todo.push_back({ node + option, item.bone });
+                        }
+                    }
+                }
+                else if ((cmd == 0x11 || cmd == 0x18) && item.bone >= 0 && (uint32_t)item.bone < bone_count && kazooie[item.bone]) {
+                    // Read signed, as the game does (a big model may put lists before the list header).
+                    const int32_t index = (int16_t)half(rdram, node + 8);
+                    lo = std::min(lo, index);
+                    hi = std::max(hi, index);
+                }
+                if (size == 0 || size > 0x10000) {
+                    break;
+                }
+                node += size;
+            }
+        }
+        if (lo > hi) {
+            return;
+        }
+        out.found = true;
+        out.from = (uint32_t)((int32_t)(model + list + 8) + lo * 8);
+        out.to = (uint32_t)((int32_t)(model + list + 8) + hi * 8);
+    }
+
     // Matrix translation from an N64 fixed-point matrix (integer halfwords,
     // then fraction halfwords; translation is row 3).
     void read_translation(uint8_t* rdram, uint32_t phys, float out[3]) {
@@ -965,7 +1072,27 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             cursor += 32;
             put(rdram, p, op_dl << 24, list);
         };
-        const uint32_t base = blocks[best].first_phys;
+        uint32_t base = blocks[best].first_phys;
+        static KazooieLists kazooie;
+        static std::vector<Span> model_skip;
+        const uint32_t vertex_base = commands[blocks[best].vertex_command].w1 & 0x1FFFFFFF;
+        if (std::getenv("TOOIE_FUR_SKIP") == nullptr) {
+            const bool same = kazooie.vertex_base == vertex_base && (kazooie.model == 0 ||
+                (word(rdram, kazooie.model) == 0x0B && word(rdram, kazooie.model + 0x04) == kazooie.header[0] &&
+                 word(rdram, kazooie.model + 0x0C) == kazooie.header[1] && word(rdram, kazooie.model + 0x10) == kazooie.header[2]));
+            if (!same) {
+                read_kazooie_lists(rdram, vertex_base, kazooie);
+                if (log_fur) {
+                    std::fprintf(stderr, "[fur] Kazooie's lists %s: %X-%X\n",
+                        kazooie.found ? "found" : "not found", kazooie.from, kazooie.to);
+                }
+            }
+            if (kazooie.found) {
+                base = 0; // the spans below are physical addresses
+                model_skip = { { kazooie.from, kazooie.to } };
+            }
+        }
+        const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
         bool on = false;
         size_t last = blocks[best].vertex_command;
         for (size_t i = blocks[best].vertex_command; i < commands.size(); i++) {
@@ -978,7 +1105,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             const uint32_t offset = (commands[i].w1 & 0x1FFFFFFF) - base;
             bool want = true;
-            for (const Span& span : skip) {
+            for (const Span& span : spans) {
                 want = want && (offset < span.from || offset > span.to);
             }
             if (want != on) {
