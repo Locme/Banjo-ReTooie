@@ -101,6 +101,13 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 * **Fine Aim input** (`recompinput/include/recompinput/input_types.h`): a
   `FINE_AIM` game input, so the game's Fine aim key can be bound in the Controls
   tab.
+* **Button combinations** (`input_types.h`, `input_binding.{h,cpp}`,
+  `input_state.cpp`, `profiles.{h,cpp}`, `ui_config_page_controls.cpp`): an
+  `InputField` can carry a modifier input (`modifier_type`, `modifier_id`, saved
+  in controls.json only when set) that must be held for it to count. While a
+  combination's modifier is held, the same input bound alone does not count.
+  The Controls tab footer's "Combo binding" button makes binding take two
+  inputs, the first held while the second is pressed.
 * **Interpolation rows** (`ui_config_tab_graphics.cpp`, `recompui/config.h`): the Framerate option is
   named Interpolation, its Original choice reads Off (saved key unchanged), and it is added by
   `graphics::add_interpolation_options()`, which the port calls right after Game Frame Rate.

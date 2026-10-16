@@ -28,11 +28,33 @@ index 0000000..56f8df6
 +    bool get_controller_button(SDL_GameController* controller, SDL_GameControllerButton button);
 +    void log_controller_buttons(SDL_GameController* controller);
 +}
+diff --git a/recompinput/include/recompinput/input_binding.h b/recompinput/include/recompinput/input_binding.h
+index f39ad89..3d7e354 100644
+--- a/recompinput/include/recompinput/input_binding.h
++++ b/recompinput/include/recompinput/input_binding.h
+@@ -13,5 +13,10 @@ namespace recompinput {
+         bool should_skip_events();
+         void stop_skipping_events();
+         recompinput::GameInput get_scanning_game_input();
++        // Combo binding: when on, binding a slot takes two inputs, the first held while the second is pressed.
++        void set_combo_mode(bool enabled);
++        bool get_combo_mode();
++        // Whether the first input of a combo has been taken and the second is awaited.
++        bool is_awaiting_combo_button();
+     }
+ }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..6060abf 100644
+index 1961e29..75cdb79 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
-@@ -40,6 +40,11 @@ namespace recompinput {
+@@ -35,11 +35,18 @@ namespace recompinput {
+     float get_input_analog(int controller_num, const std::span<const InputField> fields);
+     bool get_input_digital(int controller_num, const InputField& field);
+     bool get_input_digital(int controller_num, const std::span<const InputField> fields);
++    // Whether the input itself is held, ignoring button combinations.
++    bool is_input_field_held(int controller_num, const InputField& field);
+     void get_gyro_deltas(int controller_num, float* x, float* y);
+     void get_mouse_deltas(float* x, float* y);
      void get_right_analog(int controller_num, float* x, float* y);
      void apply_joystick_deadzone(float x_in, float y_in, float* x_out, float* y_out);
      void set_right_analog_suppressed(bool suppressed);
@@ -45,7 +67,7 @@ index 1961e29..6060abf 100644
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..62ba2e7 100644
+index f5ed6c0..ba1ba29 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
 @@ -37,10 +37,38 @@ namespace recompinput {
@@ -88,7 +110,51 @@ index f5ed6c0..62ba2e7 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -127,6 +155,10 @@ namespace recompinput {
+@@ -72,6 +100,9 @@ namespace recompinput {
+         InputType input_type;
+         // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
+         int32_t input_id;
++        // Button combination: a second input that must be held for this one to count (None for a single input).
++        InputType modifier_type = InputType::None;
++        int32_t modifier_id = 0;
+         std::string to_string() const;
+         auto operator<=>(const InputField& rhs) const = default;
+ 
+@@ -90,15 +121,33 @@ namespace recompinput {
+         bool is_empty() const {
+             return input_type == InputType::None;
+         }
++
++        bool has_modifier() const {
++            return modifier_type != InputType::None;
++        }
++
++        InputField modifier() const {
++            return InputField{ modifier_type, modifier_id };
++        }
++
++        InputField without_modifier() const {
++            return InputField{ input_type, input_id };
++        }
+     };
+ 
+     inline void to_json(nlohmann::json& j, const InputField& field) {
+         j = nlohmann::json{ {"input_type", field.input_type}, {"input_id", field.input_id} };
++        if (field.has_modifier()) {
++            j["modifier_type"] = field.modifier_type;
++            j["modifier_id"] = field.modifier_id;
++        }
+     }
+ 
+     inline void from_json(const nlohmann::json& j, InputField& field) {
+         j.at("input_type").get_to(field.input_type);
+         j.at("input_id").get_to(field.input_id);
++        field.modifier_type = j.value("modifier_type", InputType::None);
++        field.modifier_id = j.value("modifier_id", 0);
+     }
+ 
+     // Represents the types of mapping/profiles that can be done.
+@@ -127,6 +176,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -99,6 +165,19 @@ index f5ed6c0..62ba2e7 100644
  
      const std::string& get_game_input_enum_name(GameInput input);
  }
+diff --git a/recompinput/include/recompinput/profiles.h b/recompinput/include/recompinput/profiles.h
+index 45bedd1..22aaaa0 100644
+--- a/recompinput/include/recompinput/profiles.h
++++ b/recompinput/include/recompinput/profiles.h
+@@ -35,6 +35,8 @@ namespace recompinput {
+         recompinput::InputField& get_input_binding(int profile_index, GameInput input, size_t binding_index);
+         void set_input_binding(int profile_index, recompinput::GameInput input, size_t binding_index, recompinput::InputField value);
+         void clear_input_binding(int profile_index, GameInput input);
++        // Whether a combo (modifier + this input) in the player's profiles has its modifier held.
++        bool is_shadowed_by_combo(int player_index, const InputField& field);
+         void reset_input_binding(int profile_index, InputDevice device, GameInput input);
+         void reset_profile_bindings(int profile_index, InputDevice device);
+         int add_input_profile(const std::string &key, const std::string &name, InputDevice device, bool custom);
 diff --git a/recompinput/src/extra_buttons.cpp b/recompinput/src/extra_buttons.cpp
 new file mode 100644
 index 0000000..0660cae
@@ -199,6 +278,56 @@ index 0000000..0660cae
 +        }
 +    }
 +}
+diff --git a/recompinput/src/input_binding.cpp b/recompinput/src/input_binding.cpp
+index 45d55a7..b7c867d 100644
+--- a/recompinput/src/input_binding.cpp
++++ b/recompinput/src/input_binding.cpp
+@@ -15,8 +15,11 @@ namespace recompinput {
+         int binding_index = -1;
+         recompinput::InputField new_binding = {};
+         recompinput::InputDevice device = recompinput::InputDevice::COUNT;
++        // Combo binding: the first input, held while the second is pressed.
++        recompinput::InputField pending_modifier = {};
+ 
+         void reset() {
++            pending_modifier = {};
+             active = false;
+             skip_events = false;
+             player_index = -1;
+@@ -65,7 +68,33 @@ namespace recompinput {
+         return false;
+     }
+ 
++    static bool combo_mode = false;
++
++    void binding::set_combo_mode(bool enabled) {
++        combo_mode = enabled;
++    }
++
++    bool binding::get_combo_mode() {
++        return combo_mode;
++    }
++
++    bool binding::is_awaiting_combo_button() {
++        return BindingState.active && !BindingState.pending_modifier.is_empty();
++    }
++
+     void binding::set_scanned_input(recompinput::InputField value) {
++        if (combo_mode) {
++            if (BindingState.pending_modifier.is_empty()) {
++                BindingState.pending_modifier = value;
++                return;
++            }
++            if (value == BindingState.pending_modifier) {
++                // The first input again (a held trigger repeats): still waiting for the second.
++                return;
++            }
++            value.modifier_type = BindingState.pending_modifier.input_type;
++            value.modifier_id = BindingState.pending_modifier.input_id;
++        }
+         profiles::set_input_binding(
+             profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
+             BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
 index c76a1dc..8614c47 100644
 --- a/recompinput/src/input_events.cpp
@@ -264,18 +393,19 @@ index c76a1dc..8614c47 100644
          break;
      case SDL_EventType::SDL_MOUSEMOTION:
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..f3e5e63 100644
+index 03ed871..12054fc 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
-@@ -7,6 +7,7 @@
+@@ -7,6 +7,8 @@
  #include "recompinput/input_state.h"
  #include "recompinput/input_binding.h"
  #include "recompinput/players.h"
++#include "recompinput/profiles.h"
 +#include "recompinput/extra_buttons.h"
  #include "recompui/config.h"
  
  using namespace recompinput;
-@@ -134,21 +135,36 @@ void recompinput::update_rumble() {
+@@ -134,21 +136,36 @@ void recompinput::update_rumble() {
      }
  }
  
@@ -315,7 +445,7 @@ index 03ed871..f3e5e63 100644
                  }
              }
          }
-@@ -183,7 +199,12 @@ float controller_axis_state(int controller_num, int32_t input_id, bool allow_sup
+@@ -183,7 +200,12 @@ float controller_axis_state(int controller_num, int32_t input_id, bool allow_sup
              };
  
              std::lock_guard lock{ InputState.controllers_mutex };
@@ -329,8 +459,62 @@ index 03ed871..f3e5e63 100644
                  for (SDL_GameController *controller : InputState.detected_controllers) {
                      float controller_state = gather_axis_state(controller);
                      if (fabsf(controller_state) > fabsf(ret)) {
+@@ -215,7 +237,10 @@ bool recompinput::should_override_keystate(SDL_Scancode key, SDL_Keymod mod) {
+     return false;
+ }
+ 
+-float recompinput::get_input_analog(int controller_num, const InputField& field) {
++static bool raw_input_digital(int controller_num, const recompinput::InputField& field);
++
++static float raw_input_analog(int controller_num, const recompinput::InputField& field) {
++    using namespace recompinput;
+     switch (field.input_type) {
+     case InputType::Keyboard:
+         if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
+@@ -237,6 +262,31 @@ float recompinput::get_input_analog(int controller_num, const InputField& field)
+     }
+ }
+ 
++// Button combinations: a combo counts only while its modifier is held, and a single input
++// does not count while the modifier of a combo on the same input is held, so that pressing
++// the combo does not also trigger the single input's action.
++float recompinput::get_input_analog(int controller_num, const InputField& field) {
++    if (field.has_modifier()) {
++        return raw_input_digital(controller_num, field.modifier()) ? raw_input_analog(controller_num, field.without_modifier()) : 0.0f;
++    }
++    float value = raw_input_analog(controller_num, field);
++    if (value != 0.0f && profiles::is_shadowed_by_combo(controller_num, field)) {
++        return 0.0f;
++    }
++    return value;
++}
++
++bool recompinput::get_input_digital(int controller_num, const InputField& field) {
++    if (field.has_modifier()) {
++        return raw_input_digital(controller_num, field.modifier()) && raw_input_digital(controller_num, field.without_modifier());
++    }
++    return raw_input_digital(controller_num, field) && !profiles::is_shadowed_by_combo(controller_num, field);
++}
++
++bool recompinput::is_input_field_held(int controller_num, const InputField& field) {
++    return raw_input_digital(controller_num, field);
++}
++
+ float recompinput::get_input_analog(int controller_num, const std::span<const InputField> fields) {
+     float ret = 0.0f;
+     for (const auto& field : fields) {
+@@ -245,7 +295,8 @@ float recompinput::get_input_analog(int controller_num, const std::span<const In
+     return std::clamp(ret, 0.0f, 1.0f);
+ }
+ 
+-bool recompinput::get_input_digital(int controller_num, const InputField& field) {
++static bool raw_input_digital(int controller_num, const recompinput::InputField& field) {
++    using namespace recompinput;
+     switch (field.input_type) {
+     case InputType::Keyboard:
+         if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
-index c6786e6..60450ac 100644
+index c6786e6..36eeb81 100644
 --- a/recompinput/src/input_types.cpp
 +++ b/recompinput/src/input_types.cpp
 @@ -81,6 +81,30 @@ bool get_game_input_is_menu(GameInput input) {
@@ -364,11 +548,50 @@ index c6786e6..60450ac 100644
  const std::string& get_game_input_enum_name(GameInput input) {
      return game_input_enum_names.at(static_cast<size_t>(input));
  }
+@@ -251,6 +275,9 @@ static std::string controller_axis_to_string(int axis) {
+ }
+ 
+ std::string recompinput::InputField::to_string() const {
++    if (has_modifier()) {
++        return modifier().to_string() + " + " + without_modifier().to_string();
++    }
+     switch (input_type) {
+     case InputType::None:
+         return "";
 diff --git a/recompinput/src/profiles.cpp b/recompinput/src/profiles.cpp
-index c89956e..e781099 100644
+index c89956e..12b7644 100644
 --- a/recompinput/src/profiles.cpp
 +++ b/recompinput/src/profiles.cpp
-@@ -399,6 +399,10 @@ namespace recompinput {
+@@ -72,6 +72,28 @@ namespace recompinput {
+         }
+     }
+ 
++    bool profiles::is_shadowed_by_combo(int player_index, const InputField& field) {
++        if (player_index < 0 || player_index >= (int)recompinput::max_num_players_supported) {
++            return false;
++        }
++        int profile_index_cont = players::is_single_player_mode() ? profiles::get_sp_controller_profile_index() : players_input_profile_indices[player_index].first;
++        int profile_index_kb = players::is_single_player_mode() ? profiles::get_sp_keyboard_profile_index() : players_input_profile_indices[player_index].second;
++        for (int profile_index : { profile_index_cont, profile_index_kb }) {
++            if (profile_index < 0 || profile_index >= (int)input_profiles.size()) {
++                continue;
++            }
++            for (const input_mapping& mapping : input_profiles[profile_index].mappings) {
++                for (const InputField& bound : mapping) {
++                    if (bound.has_modifier() && bound.input_type == field.input_type && bound.input_id == field.input_id &&
++                        recompinput::is_input_field_held(player_index, bound.modifier())) {
++                        return true;
++                    }
++                }
++            }
++        }
++        return false;
++    }
++
+     void profiles::clear_input_binding(int profile_index, GameInput input) {
+         for (size_t binding_index = 0; binding_index < recompinput::num_bindings_per_input; binding_index++) {
+             profiles::set_input_binding(profile_index, input, binding_index, InputField{});
+@@ -399,6 +421,10 @@ namespace recompinput {
              
              int profile_index_cont = players::is_single_player_mode() ? profiles::get_sp_controller_profile_index() : players_input_profile_indices[player_index].first;
              int profile_index_kb = players::is_single_player_mode() ? profiles::get_sp_keyboard_profile_index() : players_input_profile_indices[player_index].second;
@@ -1188,7 +1411,7 @@ index 0561657..e6b3cb7 100644
  
  } // namespace recompui
 diff --git a/recompui/src/config/ui_config_page_controls.cpp b/recompui/src/config/ui_config_page_controls.cpp
-index f379a6f..7687717 100644
+index f379a6f..388d5a2 100644
 --- a/recompui/src/config/ui_config_page_controls.cpp
 +++ b/recompui/src/config/ui_config_page_controls.cpp
 @@ -206,6 +206,22 @@ void ConfigPageControls::create_game_input_contexts() {
@@ -1214,6 +1437,22 @@ index f379a6f..7687717 100644
          } else {
              game_input_sections.n64.contexts.push_back(input_ctx);
          }
+@@ -485,6 +501,15 @@ void ConfigPageControls::render_footer() {
+     {
+         auto footer_right = footer->get_right();
+         footer_right->clear_children();
++        // Combo binding: while on, binding a slot takes two inputs (hold the first, press the second).
++        auto combo_label = []() {
++            return std::string(recompinput::binding::get_combo_mode() ? "Combo binding: On" : "Combo binding: Off");
++        };
++        auto combo_button = context.create_element<Button>(footer_right, combo_label(), ButtonStyle::Secondary);
++        combo_button->add_pressed_callback([combo_button, combo_label]() {
++            recompinput::binding::set_combo_mode(!recompinput::binding::get_combo_mode());
++            combo_button->set_text(combo_label());
++        });
+         auto reset_to_defaults_button = context.create_element<Button>(footer_right, "Reset to defaults", ButtonStyle::Warning);
+         reset_to_defaults_button->add_pressed_callback([this]() {
+             recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
 index 6ba64e2..881a3e8 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
