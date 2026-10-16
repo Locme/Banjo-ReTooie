@@ -1393,7 +1393,7 @@ index 2970e71..1f7f905 100644
          present.debuggerFramebuffer.view = (debuggerInspector.renderer.framebufferIndex >= 0);
      }
 diff --git a/src/hle/rt64_vi.cpp b/src/hle/rt64_vi.cpp
-index a870166..5d69aea 100644
+index a870166..b45dfbe 100644
 --- a/src/hle/rt64_vi.cpp
 +++ b/src/hle/rt64_vi.cpp
 @@ -3,6 +3,7 @@
@@ -1404,7 +1404,7 @@ index a870166..5d69aea 100644
  #include <cassert>
  #include <memory.h>
  #include <stdio.h>
-@@ -13,6 +14,36 @@
+@@ -13,6 +14,26 @@
  #include "rt64_vi.h"
  
  namespace RT64 {
@@ -1428,20 +1428,10 @@ index a870166..5d69aea 100644
 +        return fixedFrameRate.load();
 +    }
 +
-+    static std::atomic<bool> forcedInterpolation{ false };
-+
-+    void SetForcedInterpolation(bool forced) {
-+        forcedInterpolation = forced;
-+    }
-+
-+    bool GetForcedInterpolation() {
-+        return forcedInterpolation.load();
-+    }
-+
      // VI
      
      hlslpp::float4 VI::viewRectangle() const {
-@@ -162,8 +193,11 @@ namespace RT64 {
+@@ -162,8 +183,11 @@ namespace RT64 {
      }
  
      uint32_t VIHistory::logicalRateFromFactors() {
@@ -1455,10 +1445,10 @@ index a870166..5d69aea 100644
          }
          else {
 diff --git a/src/hle/rt64_vi.h b/src/hle/rt64_vi.h
-index 5b70e01..b997df7 100644
+index 5b70e01..d52c622 100644
 --- a/src/hle/rt64_vi.h
 +++ b/src/hle/rt64_vi.h
-@@ -170,4 +170,24 @@ namespace RT64 {
+@@ -170,4 +170,19 @@ namespace RT64 {
          uint32_t logicalRateFromFactors();
          const Present &top() const;
      };
@@ -1473,11 +1463,6 @@ index 5b70e01..b997df7 100644
 +    void SetFixedFrameRate(uint32_t rate);
 +    uint32_t GetFixedFrameRate();
 +
-+    // Banjo-Tooie: blend frames up to the screen's rate even with the refresh rate set to Original
-+    // (DEV > Force Interpolation in cutscenes, while a recorded scene plays).
-+    void SetForcedInterpolation(bool forced);
-+    bool GetForcedInterpolation();
-+
 +    // Banjo-Tooie: waits until at most maxBacklog frames are queued to be shown and not shown yet (or the
 +    // timeout passes; returns false then), so a game running faster than frames can be shown doesn't
 +    // fill the GPU with frames that are never seen. Defined in rt64_present_queue.cpp.
@@ -1485,10 +1470,10 @@ index 5b70e01..b997df7 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..673e60e 100644
+index 5a331aa..8bb8f1a 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
-@@ -4,9 +4,13 @@
+@@ -4,9 +4,12 @@
  
  #include "rt64_workload_queue.h"
  
@@ -1497,12 +1482,11 @@ index 5a331aa..673e60e 100644
  #include "common/rt64_thread.h"
  
  #include "rt64_present_queue.h"
-+#include "rt64_vi.h"
 +#include "render/rt64_gpu_sections.h"
  
  #define ENABLE_HIGH_RESOLUTION_RENDERER 1
  
-@@ -52,9 +56,14 @@ namespace RT64 {
+@@ -52,9 +55,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a workload being used by the GPU.
          bool waitForBarrier;
@@ -1518,7 +1502,7 @@ index 5a331aa..673e60e 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -101,6 +110,7 @@ namespace RT64 {
+@@ -101,6 +109,7 @@ namespace RT64 {
          rspProcessor = std::make_unique<RSPProcessor>(ext.device);
          vertexProcessor = std::make_unique<VertexProcessor>(ext.device);
          framebufferRenderer = std::make_unique<FramebufferRenderer>(ext.workloadGraphicsWorker, true, ext.createdGraphicsAPI, ext.shaderLibrary);
@@ -1526,17 +1510,7 @@ index 5a331aa..673e60e 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -229,7 +239,8 @@ namespace RT64 {
-             break;
-         case UserConfiguration::RefreshRate::Original:
-         default:
--            workloadConfig.targetRate = 0;
-+            // Banjo-Tooie: forced on for recorded scenes, as with Display.
-+            workloadConfig.targetRate = GetForcedInterpolation() ? ext.sharedResources->swapChainRate : 0;
-             break;
-         }
- 
-@@ -701,6 +712,7 @@ namespace RT64 {
+@@ -701,6 +710,7 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1544,7 +1518,7 @@ index 5a331aa..673e60e 100644
              framebufferRenderer->endFramebuffers(ext.workloadGraphicsWorker, &workload.drawBuffers, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
-@@ -838,6 +850,7 @@ namespace RT64 {
+@@ -838,6 +848,7 @@ namespace RT64 {
              }
  
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 1);
@@ -1552,7 +1526,7 @@ index 5a331aa..673e60e 100644
              ext.workloadGraphicsWorker->commandList->end();
              framebufferRenderer->waitForUploaders();
              ext.workloadGraphicsWorker->execute();
-@@ -848,6 +861,8 @@ namespace RT64 {
+@@ -848,6 +859,8 @@ namespace RT64 {
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -1561,7 +1535,7 @@ index 5a331aa..673e60e 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -867,6 +882,7 @@ namespace RT64 {
+@@ -867,6 +880,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();

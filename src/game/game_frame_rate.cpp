@@ -63,13 +63,13 @@
 #include "tooie_game.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_hooks.h"
+#include "ultramodern/config.hpp"
 #include "ultramodern/ultramodern.hpp"
 
 namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
     void SetFixedFrameRate(uint32_t rate);
     bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
-    void SetForcedInterpolation(bool forced);
     // lib/rt64/src/common/rt64_timer.h: short sleeps, then a spin for the last bit.
     struct Timer {
         static void preciseSleepUntil(const std::chrono::high_resolution_clock::time_point endTime);
@@ -140,8 +140,8 @@ namespace {
     // DEV > Force Interpolation in cutscenes (on by default): the opening
     // cutscene (map 18B, before the title screen; it waits 3 VIs, 20 a second)
     // and the recorded scenes (demos) run at the game's own pace whatever the
-    // Game Frame Rate, and RT64 blends frames up to the screen's rate even with
-    // Interpolation set to Original. Worked out once per game frame.
+    // Game Frame Rate, and RT64 is told that rate so Interpolation blends up to
+    // the screen's. Only when Interpolation is on. Worked out once per game frame.
     std::atomic<bool> scene_forced{ false };
 
     bool force_option_on() {
@@ -163,7 +163,11 @@ namespace {
     void update_scene_forced(uint8_t* rdram) {
         constexpr int opening_cutscene_map = 0x18B;
         int map = MEM_HU(0, (gpr)(int32_t)0x80132DC2);
-        scene_forced = force_option_on() && (demo_frames.load() > 0 || map == opening_cutscene_map);
+        // Only with Interpolation on and a Game Frame Rate other than Original
+        // (L, 2026-10-16): otherwise the scene already runs as the game made it.
+        bool interpolating = ultramodern::renderer::get_graphics_config().rr_option != ultramodern::renderer::RefreshRate::Original;
+        scene_forced = force_option_on() && interpolating && mode() != Mode::Original &&
+            (demo_frames.load() > 0 || map == opening_cutscene_map);
     }
 
     // VIs per game frame for 30 and 60 FPS, or 0 for the other modes (and while a demo plays).
@@ -426,11 +430,6 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
     }
     int32_t rate = paced_rate();
     bool force_interp = scene_forced.load();
-    static bool forced_applied = false;
-    if (force_interp != forced_applied) {
-        RT64::SetForcedInterpolation(force_interp);
-        forced_applied = force_interp;
-    }
     int32_t vis = locked_vis();
     if (force_interp) {
         // The game's own wait, and its rate for RT64 to blend from.
@@ -701,8 +700,8 @@ void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
     dev.add_bool_option(
         force_scene_interpolation_option,
         "Force Interpolation in cutscenes",
-        "While the opening cutscene (and the attract demos) play, runs them at the game's own frame rate whatever Game Frame Rate says, so their pacing is right, "
-        "and blends in-between frames up to your screen's refresh rate even when Interpolation is Original.",
+        "While the opening cutscene (and the attract demos) play, runs them at the game's own frame rate when Game Frame Rate is above Original, so their pacing is right, "
+        "and Interpolation blends in-between frames up to its rate. Does nothing while Interpolation is Original.",
         true);
 }
 

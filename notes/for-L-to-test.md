@@ -2912,10 +2912,10 @@
 - Asked: 2026-10-16 12:45 UTC
 - Build: your local build of main
 - Steps:
-  1. Game Frame Rate Uncapped (or 120 / 175 / 240), Interpolation Original; DEV > Force Interpolation in cutscenes on (the default)
+  1. Game Frame Rate Uncapped (or 120 / 175 / 240), Interpolation Display; DEV > Force Interpolation in cutscenes on (the default)
   2. Start the game and watch the opening cutscene before the title screen
   3. Turn the toggle off and watch it again
-- Look for: With it on, the cutscene plays at its own pace (as on the N64, the same length as at Original) and looks smooth at your screen's refresh rate; with it off it runs at the chosen Game Frame Rate as before. Gameplay afterwards uses your Game Frame Rate again.
+- Look for: With Interpolation on and Game Frame Rate above Original, the cutscene plays at its own 20 FPS pace (same length as at Original), blended smooth by Interpolation; with Interpolation Original, or the toggle off, it runs at the chosen Game Frame Rate as before. Gameplay afterwards uses your Game Frame Rate again.
 - Status: waiting for L
 
 ## T276 Banjo fur: not on feet, shorts or Mumbo; on cutscene Banjo; density and noisiness sliders
