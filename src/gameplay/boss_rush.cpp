@@ -24,6 +24,7 @@
 // Headless test aids:
 //   TOOIE_BOSS_RUSH=<ms>[:<first boss>]  starts a rush that long after the game loop first runs, optionally
 //                                        from boss <first> (0-12, rush order) instead of the first
+//   TOOIE_BOSS_RUSH_MENU=<ms>            turns the General switch on that long after start, as the menu does
 //   TOOIE_BOSS_RUSH_LOSS_IS_WIN=1        counts a loss as a win, to test the chaining without beating bosses
 //   TOOIE_REPLAY=<hex>@<ms>              starts that one replay number (TOOIE_REPLAY_SCAN=1: log every number's map)
 
@@ -265,8 +266,9 @@ void tooie::boss_rush::add_option(recomp::config::Config& general) {
         "rush ends; turning it off stops after the current fight.",
         false);
     general.add_option_change_callback(option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant value, recomp::config::OptionChangeContext) {
-            if (resetting_option) {
+        // The callback gets (new value, previous value, context).
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (resetting_option || context == recomp::config::OptionChangeContext::Load) {
                 return;
             }
             const bool on = std::holds_alternative<bool>(value) && std::get<bool>(value);
@@ -291,6 +293,17 @@ void tooie::boss_rush::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     });
     replay_probe(rdram, ctx);
+    if (const char* env = std::getenv("TOOIE_BOSS_RUSH_MENU")) {
+        static bool done = false;
+        if (!done && std::chrono::steady_clock::now() - env_start >= std::chrono::milliseconds(std::atoi(env))) {
+            done = true;
+            std::thread([] {
+                recomp::config::Config& general = recompui::config::get_general_config();
+                general.set_option_value(tooie::boss_rush::option, true);
+                std::fprintf(stderr, "[boss-rush] menu switch set on\n");
+            }).detach();
+        }
+    }
     if (env_rush_first >= 0 && stage == Stage::Idle &&
         std::chrono::steady_clock::now() - env_start >= std::chrono::milliseconds(env_rush_ms)) {
         start_requested = true;

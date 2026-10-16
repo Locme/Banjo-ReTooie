@@ -2331,7 +2331,7 @@
   3. Lose a fight on purpose: answer Yes to "Do you want to play again?" once, then lose again and answer No
   4. Load your file again
 - Look for: Step 1, a "Boss rush 1/13: Klungo" notice and Klungo's fight starts, with the moves and eggs the fight needs. Step 2, each win hands over to the next boss (order: Klungo, Targitzan, Old King Coal, Mr. Patch, Lord Woo Fak Fak, Klungo 2, Terry, Weldar, Chilli Billi, Chilly Willy, Mingy Jongo, Klungo 3, Hag 1). Step 3, Yes restarts the same boss; No ends the rush with "Boss rush over: N of 13 bosses beaten" and the switch is off again. Step 4, your file is where you left it. Does a win ever end the rush by mistake, or a loss carry on? Is the order right? Checked headless: Klungo's fight handing over to Targitzan's, and a loss ending the rush; winning a fight can't be done headless, so wins are only tested through a stand-in: [klungo-to-targitzan-headless.png](screens/boss-rush/klungo-to-targitzan-headless.png).
-- Status: waiting for L
+- Status: failed (the switch never started a rush); fixed, retest with T252
 
 ## T220 Windows build fixed: 3D grass shader
 - Asked: 2026-10-16 07:40 UTC
@@ -2637,3 +2637,13 @@
 - Steps:
   1. Weather: Rain, Raindrops on Screen on; look around, then point the camera up at the sky
 - Look for: A few drops land on the screen, hold, then run down leaving a thin trail; each bends what is behind it with a dark rim and a glint. Many more when looking up. None under water or in snow. Off removes them.
+
+## T252 Boss rush starts from the switch (fix for T219)
+- Asked: 2026-10-16 (L: "It never entered a arena")
+- Build: main (pull and build)
+- Commit: "Boss rush: the General switch starts the rush (T252)" on main
+- Steps:
+  1. Load a file, then General > Boss rush = On and close the menu
+- Look for: a "Boss rush 1/13: Klungo" notice straight away and Klungo's fight starts (the file is saved first). Then carry on with T219's steps. Cause: the switch's change handler read the old value, so turning it on was taken as turning it off. Checked headless with a file open, through the switch's own change handler.
+- Status: waiting for L
+
