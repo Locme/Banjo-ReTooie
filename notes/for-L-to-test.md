@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T270 Settings in the pause menu (empty page for now)
+- Asked: 2026-10-16 11:36 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Load a file and press Start in any world
+  2. Move down to SETTINGS (under View Totals) with the stick and press A
+  3. On the SETTINGS page press B, then open it again and press Start
+  4. If your file has Jinjos and items, check the menu scrolls to Save and Quit
+- Look for: SETTINGS shows in the Start menu with the Jiggy icon. A opens a page titled SETTINGS with only the B button on it. B goes back to the menu with SETTINGS still picked; Start closes the menu. With Objects and Items and Jinjos showing the menu has six rows and scrolls down to Save and Quit. Nothing else in the pause menu changes. Checked headless in Mayahem Temple (4-row and 6-row menus; screens/pause-settings/ in project files).
+- Status: waiting for L
+
 ## T269 Deep snow with footprints (Icy Side)
 - Asked: 2026-10-16
 - Build: main (pull and build)
