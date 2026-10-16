@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T303 Menu navigation crash and Honey B. in the test room
+- Asked: 2026-10-16 20:05 UTC
+- Build: main
+- Steps:
+  1. Open the menu with a controller and move around every tab, including the search box, L and R, and back out
+  2. Warp > Test > Test room
+- Look for: No crash in the menu. If a [menu] navigation line appears in console.log, the guard caught the case that crashed before: tell me what you pressed. Honey B. is no longer in the test room line-up.
+- Status: waiting for L
+
 ## T302 Day and night: clouds show again
 - Asked: 2026-10-16 UTC
 - Build: main (pull and build)

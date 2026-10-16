@@ -65,7 +65,7 @@
 // crashes here: { 1, 0x2A1, "Humba Wumba" },
 { 1, 0x18F, "Jamjars" },
 { 1, 0x135, "Cheato" },
-{ 1, 0x4B0, "Honey B." },
+// crashes here: { 1, 0x4B0, "Honey B." }, // L 2026-10-16, ncpod_entrypoint_17 from her update (inferred: she wants the Hive)
 { 1, 0x514, "Heggy" },
 { 1, 0x438, "King Jingaling" },
 // crashes here: { 1, 0x43B, "Mrs. Bottles" },

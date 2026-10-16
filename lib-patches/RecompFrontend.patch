@@ -1549,10 +1549,18 @@ index cf2a311..486e08d 100644
          case EventType::Update:
              break;
 diff --git a/recompui/src/elements/ui_document.cpp b/recompui/src/elements/ui_document.cpp
-index a60c585..1a57764 100644
+index a60c585..cae83dd 100644
 --- a/recompui/src/elements/ui_document.cpp
 +++ b/recompui/src/elements/ui_document.cpp
-@@ -196,6 +196,15 @@ namespace recompui {
+@@ -7,6 +7,7 @@
+ 
+ #ifdef RECOMPUI_NAV_DEBUG
+ #include <iostream>
++#include <cstdio>
+ #endif
+ 
+ // For debugging purposes. Each doc gets a unique number.
+@@ -196,9 +197,25 @@ namespace recompui {
                  return this_element;
              }
  
@@ -1567,8 +1575,19 @@ index a60c585..1a57764 100644
 +
              int cur_element_index = get_element_index(this_element, nav_parent->nav_children);
              if (cur_element_index == -1) {
-                 throw std::runtime_error("This should never ever ever happen. Element not found in its parent's nav children.");
-@@ -396,6 +405,12 @@ namespace recompui {
+-                throw std::runtime_error("This should never ever ever happen. Element not found in its parent's nav children.");
++                // The parent's list was rebuilt without this element (L's crash of 2026-10-16 threw here
++                // and closed the game). Treat it as nowhere to go instead.
++                printf("[menu] navigation: an element is missing from its parent's list; staying put\n");
++                Element *root = this_element;
++                while (root->get_nav_parent() != nullptr) {
++                    root = root->get_nav_parent();
++                }
++                return root;
+             }
+ 
+             // Process grid navigation if retained_grid_index is valid and grid navs are different.
+@@ -396,6 +413,12 @@ namespace recompui {
              std::cout << "\nNAV START\n";
              #endif
  
