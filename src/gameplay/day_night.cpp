@@ -29,6 +29,7 @@ namespace RT64 {
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
+    void SetSceneMoonPhase(uint32_t phase);
 }
 
 namespace {
@@ -86,6 +87,8 @@ namespace {
     double day_clock = std::getenv("TOOIE_TIME_OF_DAY") ? std::atof(std::getenv("TOOIE_TIME_OF_DAY")) : morning_time;
     uint32_t last_ms = 0;
     bool had_ms = false;
+    // Whole days gone by with Cycle, for the moon's phase.
+    uint32_t days = 0;
     // How far the look has come in, 0 to 1, so it eases in and out when the option changes.
     float amount = 0.0f;
     bool sent_off = false;
@@ -265,6 +268,9 @@ void tooie::day_night::tick(uint8_t* rdram) {
     had_ms = true;
     if (m == Mode::Cycle) {
         day_clock += dt / (day_minutes() * 60.0);
+        if (day_clock >= 1.0) {
+            days++;
+        }
         day_clock -= std::floor(day_clock);
     }
     const float t = (m == Mode::Morning) ? morning_time : (m == Mode::Sunset) ? sunset_time : (m == Mode::Night) ? night_time : (float)day_clock;
@@ -346,6 +352,17 @@ void tooie::day_night::tick(uint8_t* rdram) {
     const bool clouds = option_on(tooie::day_night::clouds_option) && (map != 0x136);
     RT64::SetSceneTimeOfDay(true, look.tint, shafts, option_on(tooie::day_night::flare_option), fireflies, clouds);
     RT64::SetSceneSun(true, sky[0], sky[1], sky[2]);
+    // The moon goes round its phases in eight days: full on the first night, waning, new on the fifth, waxing.
+    // Held at full when a time of day is held. Test aid: TOOIE_MOON_PHASE=<0 new to 7>.
+    uint32_t phase = 4;
+    if (m == Mode::Cycle) {
+        // The night after day n belongs to day n (it starts before midnight).
+        phase = (4u + days - ((t < 0.5f) && (days > 0) ? 1u : 0u)) % 8u;
+    }
+    if (const char* v = std::getenv("TOOIE_MOON_PHASE")) {
+        phase = (uint32_t)std::atoi(v) & 7u;
+    }
+    RT64::SetSceneMoonPhase(phase);
 
     // Night sounds: crickets and owls through the night, birds from dawn into the morning and a few through
     // the day. Quiet while the game stands still (the pause menu). No crickets on Hailfire Peaks or in Cloud

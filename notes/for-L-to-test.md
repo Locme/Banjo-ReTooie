@@ -2249,3 +2249,14 @@
   3. Slide Sun shadow softness from 0 to 100
 - Look for: Characters' shading gets smoother and less triangly as softness goes up, and shadow edges fade more gently
 - Status: waiting for L
+
+## T212 Day and night: shooting stars and moon phases
+- Asked: 2026-10-16 01:40 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: shooting stars and moon phases" on main
+- Steps:
+  1. Graphics > Day and Night: Night, Weather: Clear, in Spiral Mountain; look at the starry sky for a minute
+  2. Day and Night: Cycle with Day Length 4, and play through a few nights, finding the moon each night
+- Look for: Step 1, now and then a short bright streak slides down part of the sky and fades (about one every 18 seconds, wherever you look, so not every one is in view). The moon is full. Step 2, the moon goes round its phases over eight days: full on the first night, then waning, new (dark) on the fifth, then waxing. Checked headless: [shooting-star.png](screens/day-night/shooting-star.png) (with one forced into view) and [moon-phases-first-and-last-quarter.png](screens/day-night/moon-phases-first-and-last-quarter.png).
+- Status: waiting for L
+

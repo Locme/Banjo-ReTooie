@@ -3416,10 +3416,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3d5b7eb
+index 0000000..7c75d57
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1291 @@
+@@ -0,0 +1,1298 @@
 +//
 +// RT64
 +//
@@ -3811,6 +3811,11 @@ index 0000000..3d5b7eb
 +            effectsSettings.sunDirection[1] = y;
 +            effectsSettings.sunDirection[2] = z;
 +        }
++    }
++
++    void SetSceneMoonPhase(uint32_t phase) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.dayMoonPhase = phase & 7u;
 +    }
 +
 +    void SetSceneWeather(float rain, float flash, bool snow) {
@@ -4292,13 +4297,15 @@ index 0000000..3d5b7eb
 +            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f };
 +            if (sunLength > 1e-6f) {
 +                float shafts = settings.lightShafts * settings.dayShafts;
-+                if (rain > 0.0f) {
-+                    // Weather: -(1 + rain * 255 in the bits above 8, the shafts' strength * 255 below, then the
-+                    // lightning as the fraction), so it all fits the one constant. The shafts fade with the rain.
++                if (settings.timeOfDay) {
++                    // Weather and the moon: -(1 + the moon's phase (0 to 7) in bits 17 to 19, snow in bit 16, rain * 255
++                    // in bits 8 to 15, the shafts' strength * 255 below, then the lightning as the fraction), so it all
++                    // fits the one constant. The shafts fade with the rain.
 +                    const float rain8 = std::round(rain * 255.0f);
 +                    const float shafts8 = std::round(std::clamp(shafts * (1.0f - rain), 0.0f, 1.0f) * 255.0f);
 +                    const float snow = settings.daySnow ? 65536.0f : 0.0f;
-+                    shafts = -(1.0f + snow + rain8 * 256.0f + shafts8 + std::min(settings.dayFlash, 0.99f));
++                    const float moon = float(settings.dayMoonPhase & 7u) * 131072.0f;
++                    shafts = -(1.0f + moon + snow + rain8 * 256.0f + shafts8 + std::min(settings.dayFlash, 0.99f));
 +                }
 +                constants.sun = { sunView[0] / sunLength, sunView[1] / sunLength, sunView[2] / sunLength, shafts };
 +            }
@@ -4713,10 +4720,10 @@ index 0000000..3d5b7eb
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..50280c0
+index 0000000..0bbf945
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,200 @@
 +//
 +// RT64
 +//
@@ -4787,6 +4794,7 @@ index 0000000..50280c0
 +        float dayRain = 0.0f;
 +        float dayFlash = 0.0f;
 +        bool daySnow = false;
++        uint32_t dayMoonPhase = 4;
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
@@ -4856,6 +4864,8 @@ index 0000000..50280c0
 +    // and sky, thickens the clouds and draws falling rain; flash (0 to 1) is lightning lighting everything up.
 +    // snow: it falls as snow.
 +    void SetSceneWeather(float rain, float flash, bool snow);
++    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
++    void SetSceneMoonPhase(uint32_t phase);
 +    // Banjo-Tooie: three ripples on the water (world x and z, age in seconds, below 0 for none).
 +    void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
 +    // Banjo-Tooie: the 3D world's camera, noted as each frame's draws are gathered, whatever effects are on.
@@ -7136,10 +7146,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..b08dbc9
+index 0000000..ae262e2
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1553 @@
+@@ -0,0 +1,1601 @@
 +//
 +// RT64
 +//
@@ -7235,6 +7245,12 @@ index 0000000..b08dbc9
 +    const float whole = floor(v);
 +    const uint packed = uint(whole + 0.5f);
 +    return float3(float((packed >> 8) & 255u) / 255.0f, float(packed & 255u) / 255.0f, v - whole);
++}
++
++// The moon's phase, 0 to 7 (0 new, 4 full).
++uint DayMoonPhase() {
++    const float w = gConstants.sun.w;
++    return (w < 0.0f) ? ((uint(floor(-w - 1.0f) + 0.5f) >> 17) & 7u) : 4u;
 +}
 +
 +// True when the weather's rain falls as snow.
@@ -7395,10 +7411,52 @@ index 0000000..b08dbc9
 +            const float star = saturate(1.0f - length(grid - place) / size) * twinkle;
 +            sky += float3(0.9f, 0.93f, 1.0f) * (star * 1.6f) * night * saturate(world.y * 5.0f);
 +        }
-+        // The moon, with a faint halo.
++        // Now and then a shooting star: in each six-second slot one time in three, a short streak down part of the
++        // sky that fades as it goes.
++        {
++            const float time = gConstants.view.z;
++            const float slot = floor(time / 6.0f);
++            if (DayHash(float3(slot, 1.7f, 9.1f)) < 0.35f) {
++                const float t = (time - slot * 6.0f - 2.0f * DayHash(float3(slot, 4.3f, 2.2f))) / 0.7f;
++                if ((t > 0.0f) && (t < 1.4f)) {
++                    const float azimuth = DayHash(float3(slot, 8.8f, 5.5f)) * 6.2831853f;
++                    const float elevation = 0.35f + 0.4f * DayHash(float3(slot, 3.1f, 7.7f));
++                    const float turn = (0.25f + 0.2f * DayHash(float3(slot, 6.6f, 1.1f))) * ((DayHash(float3(slot, 2.4f, 8.3f)) < 0.5f) ? -1.0f : 1.0f);
++                    const float drop = elevation - 0.15f - 0.1f * DayHash(float3(slot, 9.9f, 4.4f));
++                    const float3 from = float3(cos(elevation) * cos(azimuth), sin(elevation), cos(elevation) * sin(azimuth));
++                    const float3 to = float3(cos(drop) * cos(azimuth + turn), sin(drop), cos(drop) * sin(azimuth + turn));
++                    const float3 normal = normalize(cross(from, to));
++                    const float off = abs(dot(world, normal));
++                    const float3 onArc = normalize(world - normal * dot(world, normal));
++                    const float span = acos(saturate(dot(from, to)));
++                    const float along = acos(clamp(dot(from, onArc), -1.0f, 1.0f)) / span * ((dot(cross(from, onArc), normal) >= 0.0f) ? 1.0f : -1.0f);
++                    const float head = saturate(t);
++                    const float trail = smoothstep(head - 0.35f, head, along) * step(along, head);
++                    const float pixelAngle = 2.0f / (gConstants.projection.y * gConstants.projection.w);
++                    const float width = pixelAngle * 1.2f;
++                    const float streak = saturate(1.0f - off / width);
++                    const float fade = 1.0f - saturate((t - 1.0f) / 0.4f);
++                    sky += float3(1.0f, 0.95f, 0.85f) * (streak * trail * fade * 1.5f) * night;
++                }
++            }
++        }
++        // The moon, with a faint halo, in its phase: the part in shadow is cut off by a second disc beside it,
++        // on the right while it waxes and the left while it wanes, and only just shows.
 +        const float disc = smoothstep(0.99925f, 0.99945f, toward);
-+        sky = lerp(sky, float3(0.92f, 0.94f, 1.0f), disc * night);
-+        sky += float3(0.25f, 0.3f, 0.45f) * pow(toward, 40.0f) * 0.35f * night;
++        const uint phase = DayMoonPhase();
++        float lit = 1.0f;
++        if ((phase != 4u) && (disc > 0.0f)) {
++            const float3 across = look - gConstants.sun.xyz * dot(look, gConstants.sun.xyz);
++            const float3 side = normalize(cross(gConstants.sun.xyz, float3(0.0f, 1.0f, 0.0f)));
++            const float2 local = float2(dot(across, side), dot(across, normalize(cross(side, gConstants.sun.xyz)))) / 0.036f;
++            // How far the shadow's disc sits from the moon's, in moon radii: 0 covers it all (new), 2 none.
++            const float shift = float(phase < 4u ? phase : 8u - phase) * 0.5f;
++            const float2 shadow = float2((phase < 4u) ? -shift : shift, 0.0f);
++            lit = smoothstep(0.92f, 1.0f, length(local - shadow));
++        }
++        sky = lerp(sky, float3(0.92f, 0.94f, 1.0f) * lerp(0.08f, 1.0f, lit), disc * night);
++        const float fullness = 1.0f - abs(float(phase) - 4.0f) / 4.0f;
++        sky += float3(0.25f, 0.3f, 0.45f) * pow(toward, 40.0f) * 0.35f * night * (0.2f + 0.8f * fullness);
 +        sky = lerp(sky, before, saturate(rain * 1.6f));
 +    }
 +
@@ -9107,7 +9165,7 @@ index 0a5c332..c4e4004 100644
  };
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..d051a93
+index 0000000..98b5130
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,73 @@
@@ -9154,8 +9212,8 @@ index 0000000..d051a93
 +        // The same for world y: its xyz is also the normal of level ground, in view space.
 +        float4 worldY;
 +        // The light shafts' sun: its direction in view space (towards it), then the strength (0 off, 1 strongest).
-+        // While the day and night cycle's weather rains, w is negative: -(1 + 65536 when it snows + rain (0 to
-+        // 255) * 256 + the shafts' strength (0 to 255) + the lightning (0 to 0.99)).
++        // While the day and night cycle is on, w is negative: -(1 + the moon's phase (0 to 7) * 131072 + 65536
++        // when it snows + rain (0 to 255) * 256 + the shafts' strength (0 to 255) + the lightning (0 to 0.99)).
 +        float4 sun;
 +        // Banjo's ripples: three rings' world x, world z and age in seconds (below 0 for none) in xyz; the w
 +        // components hold Banjo's world x, z and y (y below -1e8 when there is no Banjo), for the fog.

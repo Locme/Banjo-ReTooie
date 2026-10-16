@@ -26,6 +26,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- Day and Night: shooting stars now and then on clear nights, and the moon goes round its phases over eight days with Cycle (full when a time of day is held). Untested on PC (T212).
 - Day and Night: snow on Hailfire Peaks' Icy Side, light unless Weather is Clear and heavy in a storm. Untested on PC (T210).
 - Day and Night: rain and thunderstorms, with an overcast sky, falling rain, lightning, the sound of rain and thunder (Graphics > Weather: Clear, Changing, Rain, Storm; Changing by default). Untested on PC (T209).
 - Day and Night: soft 3D clouds drift across the sky, white by day, orange at sunset and dark at night (Graphics > Clouds, on; not in Cloud Cuckooland). Untested on PC (T207).
