@@ -69,6 +69,8 @@ namespace tooie::picture_filters {
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";
     inline const std::string grass_patches_option = "grass_3d_patches";
+    inline const std::string grass_thickness_option = "grass_3d_thickness";
+    inline const std::string grass_random_length_option = "grass_3d_random_length";
     inline const std::string grass_edges_option = "grass_3d_edges";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.

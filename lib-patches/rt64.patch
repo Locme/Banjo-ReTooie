@@ -1678,7 +1678,7 @@ index 69a82ac..c2b77d2 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..17e9db2 100644
+index 9fae0d4..c36f79a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2337,7 +2337,7 @@ index 9fae0d4..17e9db2 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2280,156 @@ namespace RT64 {
+@@ -1747,8 +2280,160 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2366,8 +2366,8 @@ index 9fae0d4..17e9db2 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2390,10 +2390,11 @@ index 9fae0d4..17e9db2 100644
 +                    }
 +                }
 +
-+                // Banjo-Tooie: 3D grass grows on the level's own opaque, textured ground (drawn without a model
++                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
 +                bool grassEdges = false;
++                bool grassDecal = false;
 +                if ((grassShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                    (call.callDesc.tileCount > 0) && (call.callDesc.minWorldMatrix == call.callDesc.maxWorldMatrix) &&
@@ -2407,8 +2408,11 @@ index 9fae0d4..17e9db2 100644
 +                            off = std::max(off, std::abs(w[r][c] - ((r == c) ? 1.0f : 0.0f)));
 +                        }
 +                    }
-+                    grass = (off < 1e-3f) && gm.zCmp() && gm.zUpd() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
-+                        !interop::Blender::usesAlphaBlend(gm);
++                    // Opaque ground, or (for blades) a grass layer the game blends over the ground as a decal: in places
++                    // (Spiral Mountain round the tree stumps) the green ground is only that layer over dirt.
++                    grassDecal = (grassBladePipeline != nullptr) && (gm.zMode() == ZMODE_DEC) && interop::Blender::usesAlphaBlend(gm);
++                    grass = (off < 1e-3f) && gm.zCmp() && (gm.cycleType() != G_CYC_COPY) &&
++                        ((gm.zUpd() && (gm.zMode() != ZMODE_DEC) && !interop::Blender::usesAlphaBlend(gm)) || grassDecal);
 +
 +                    // Only on grass textures, or with grass along an edge.
 +                    uint32_t grassTexture = 0;
@@ -2458,8 +2462,8 @@ index 9fae0d4..17e9db2 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                if ((furShells > 0) && call.callDesc.extendedFlags.furShells && !excluded && worldOpen && fbPair.depthWrite &&
@@ -2494,7 +2498,7 @@ index 9fae0d4..17e9db2 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2439,172 @@ namespace RT64 {
+@@ -1758,13 +2443,172 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3815,10 +3819,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..089faf3
+index 0000000..08321df
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1781 @@
+@@ -0,0 +1,1787 @@
 +//
 +// RT64
 +//
@@ -4381,6 +4385,12 @@ index 0000000..089faf3
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
 +    }
 +
++    void SetSceneGrassBlades(float thickness, float randomLength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.grassThickness = std::clamp(thickness, 0.25f, 4.0f);
++        effectsSettings.grassRandomLength = std::clamp(randomLength, 0.0f, 1.0f);
++    }
++
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.fur = amount;
@@ -4597,7 +4607,7 @@ index 0000000..089faf3
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
 +        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, GrassBladeCell / std::sqrt(settings.grassDensity) };
 +        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
-+        frameParams.grassPatches = { settings.grassPatches, 220.0f, 0.0f, 0.0f };
++        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -5602,10 +5612,10 @@ index 0000000..089faf3
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..e58c4d0
+index 0000000..8b29f72
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,250 @@
+@@ -0,0 +1,254 @@
 +//
 +// RT64
 +//
@@ -5699,6 +5709,9 @@ index 0000000..e58c4d0
 +        float grassDistance = 2500.0f;
 +        float grassDensity = 1.0f;
 +        float grassPatches = 1.0f;
++        // 3D grass blades: width (1 as before) and how much their lengths differ (0 all alike, 1 from none to full).
++        float grassThickness = 1.0f;
++        float grassRandomLength = 0.4f;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
@@ -5787,6 +5800,7 @@ index 0000000..e58c4d0
 +    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal)
 +    // and how much of the green ground their patches cover (1 all of it).
 +    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
++    void SetSceneGrassBlades(float thickness, float randomLength);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
@@ -7498,10 +7512,10 @@ index 0000000..b6496e1
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..4f5ef39
+index 0000000..d906d1e
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,355 @@
 +//
 +// RT64
 +//
@@ -7613,18 +7627,53 @@ index 0000000..4f5ef39
 +    return position;
 +}
 +
-+// The cell size for a triangle this far from the camera: doubled for every doubling of distance past the near
-+// distance, then again until the triangle's cells fit in the passes drawn.
-+float GrassCellSize(float distanceToCamera, float2 extent, float capacity) {
-+    float cell = FrParams.grassBlades.w * exp2(max(floor(log2(max(distanceToCamera, 1.0f) / FrParams.grassBlades.x)), 0.0f));
-+    for (int i = 0; i < 8; i++) {
-+        const float2 cells = floor(extent / cell) + 2.0f;
++#define GRASS_MAX_LEVEL 8
++
++// The grid's level for a distance from the camera: one more for every doubling past the near distance.
++uint GrassDistanceLevel(float distanceToCamera) {
++    return uint(min(max(floor(log2(max(distanceToCamera, 1.0f) / FrParams.grassBlades.x)), 0.0f), float(GRASS_MAX_LEVEL)));
++}
++
++// The level a triangle this far from the camera is drawn at: its distance's level, or coarser until its cells
++// fit in the passes drawn. A level's cells are 2^level of the finest grid's cells across.
++uint GrassTriangleLevel(float distanceToCamera, float2 extent, float capacity) {
++    uint level = GrassDistanceLevel(distanceToCamera);
++    for (; level < GRASS_MAX_LEVEL; level++) {
++        const float2 cells = floor(extent / (FrParams.grassBlades.w * exp2(float(level)))) + 2.0f;
 +        if (cells.x * cells.y <= capacity) {
 +            break;
 +        }
-+        cell *= 2.0f;
 +    }
-+    return cell;
++    return level;
++}
++
++// Every blade belongs to a cell of the finest grid and never moves. A cell of a coarser level shows the blade of
++// one of its four cells a level finer, picked by a hash of the coarse cell (so every blade a coarse level shows,
++// every finer level shows too): moving nearer only adds blades and moving away only takes them away.
++float2 GrassQuadrant(float2 coarse, uint level) {
++    const uint q = min(uint(GrassHash1(float3(coarse, 613.0f + float(level))) * 4.0f), 3u);
++    return float2(float(q & 1u), float(q >> 1u));
++}
++
++float2 GrassFinestCell(float2 coarse, uint level) {
++    float2 c = coarse;
++    for (uint l = level; l > 0; l--) {
++        c = c * 2.0f + GrassQuadrant(c, l);
++    }
++    return c;
++}
++
++// Whether the blade a cell of this level shows is still shown at a coarser level.
++bool GrassShownAt(float2 coarse, uint level, uint coarser) {
++    float2 c = coarse;
++    for (uint l = level + 1; l <= coarser; l++) {
++        const float2 parent = floor(c * 0.5f);
++        if (any(GrassQuadrant(parent, l) != (c - parent * 2.0f))) {
++            return false;
++        }
++        c = parent;
++    }
++    return true;
 +}
 +
 +void GrassEmit(inout TriangleStream<GrassVertex> stream, GrassVertex root, float4 rootClip, float3 offset) {
@@ -7673,7 +7722,9 @@ index 0000000..4f5ef39
 +    const float2 low = min(min(p0, p1), p2);
 +    const float2 high = max(max(p0, p1), p2);
 +    const float capacity = float(passes * GRASS_INVOCATIONS * GRASS_BLADES_PER_INVOCATION);
-+    const float cell = GrassCellSize(triangleDistance, high - low, capacity);
++    const uint level = GrassTriangleLevel(triangleDistance, high - low, capacity);
++    const float baseCell = FrParams.grassBlades.w;
++    const float cell = baseCell * exp2(float(level));
 +    const float2 first = floor(low / cell);
 +    const float2 count = floor(high / cell) - first + 1.0f;
 +    const uint cellCount = uint(count.x * count.y);
@@ -7702,14 +7753,15 @@ index 0000000..4f5ef39
 +            break;
 +        }
 +
-+        const float2 cellIndex = first + float2(index % uint(count.x), index / uint(count.x));
-+        const float4 r = GrassHash4(float3(cellIndex, cell + float(plane) * 1009.0f));
++        const float2 coarseIndex = first + float2(index % uint(count.x), index / uint(count.x));
++        const float2 cellIndex = GrassFinestCell(coarseIndex, level);
++        const float4 r = GrassHash4(float3(cellIndex, float(plane) * 1009.0f));
 +        if (r.w > params.w) {
 +            continue;
 +        }
 +
-+        // A point somewhere in the cell, if it is in this triangle.
-+        const float2 spot = (cellIndex + 0.1f + 0.8f * r.xy) * cell;
++        // A point somewhere in its finest cell, if it is in this triangle.
++        const float2 spot = (cellIndex + 0.1f + 0.8f * r.xy) * baseCell;
 +        const float w1 = ((spot.x - a.x) * (c.y - a.y) - (c.x - a.x) * (spot.y - a.y)) / area;
 +        const float w2 = ((b.x - a.x) * (spot.y - a.y) - (spot.x - a.x) * (b.y - a.y)) / area;
 +        const float w0 = 1.0f - w1 - w2;
@@ -7724,9 +7776,25 @@ index 0000000..4f5ef39
 +            continue;
 +        }
 +
++        // Further out than the triangle's nearest point, the blade goes by its own distance's level: hidden where
++        // that level no longer shows it, and shrinking away over the last fifth of the way to the next level when
++        // that one won't, so the triangle can step a level coarser without anything vanishing at once.
++        const uint bladeLevel = max(GrassDistanceLevel(cameraDistance), level);
++        if (!GrassShownAt(coarseIndex, level, bladeLevel)) {
++            continue;
++        }
++        float lodShrink = 1.0f;
++        if ((bladeLevel < GRASS_MAX_LEVEL) && !GrassShownAt(coarseIndex, level, bladeLevel + 1)) {
++            const float nextDistance = FrParams.grassBlades.x * exp2(float(bladeLevel + 1));
++            lodShrink = saturate((nextDistance - cameraDistance) / (nextDistance * 0.2f));
++            if (lodShrink < 0.02f) {
++                continue;
++            }
++        }
++
 +        // Only in patches; toward a patch's edge the blades thin out and get shorter.
 +        const float patch = GrassPatch(root.xz);
-+        if (patch <= GrassHash1(float3(cellIndex, cell + 53.0f)) * 0.6f) {
++        if (patch <= GrassHash1(float3(cellIndex, 53.0f)) * 0.6f) {
 +            continue;
 +        }
 +
@@ -7783,9 +7851,11 @@ index 0000000..4f5ef39
 +            bend *= 0.95f / bendLength;
 +        }
 +
-+        const float bladeHeight = height * lerp(0.6f, 1.0f, r.y) * lerp(0.35f, 1.0f, fade) * lerp(0.3f, 1.0f, patch);
-+        // As wide as at density 1 whatever the density, widening as the grid coarsens with distance.
-+        const float bladeWidth = 2.4f * (cell / FrParams.grassBlades.w) * lerp(0.75f, 1.25f, r.x);
++        const float bladeHeight = height * lerp(1.0f - FrParams.grassPatches.w, 1.0f, r.y) * lerp(0.35f, 1.0f, fade) *
++            lerp(0.3f, 1.0f, patch) * lodShrink;
++        // Wider with distance as the grid thins out (smoothly, by the blade's own distance), and by the thickness.
++        const float widen = clamp(cameraDistance / FrParams.grassBlades.x, 1.0f, exp2(float(bladeLevel + 1))) * exp2(float(level - min(level, GrassDistanceLevel(triangleDistance))));
++        const float bladeWidth = 2.4f * widen * FrParams.grassPatches.z * lerp(0.75f, 1.25f, r.x);
 +        const float lean = min(length(bend), 0.95f);
 +        const float rise = bladeHeight * sqrt(1.0f - lean * lean * 0.85f);
 +        const float3 side = float3(facing.x, 0.0f, facing.y) * (bladeWidth * 0.5f);
@@ -8025,7 +8095,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..0bc9258 100644
+index e7895c3..b46a6e0 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,9 @@
@@ -8073,7 +8143,7 @@ index e7895c3..0bc9258 100644
          return false;
      }
  #endif
-@@ -254,6 +278,41 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +278,50 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -8086,6 +8156,15 @@ index e7895c3..0bc9258 100644
 +        }
 +    }
 +    else if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0)) {
++        // Grown from a grass layer blended over the ground: only where the layer shows, coloured by it alone (the
++        // blades draw opaque).
++        if (alphaBlend) {
++            if (combinerColor.a < 0.5f) {
++                return false;
++            }
++            resultColor.rgb = combinerColor.rgb;
++            resultAlpha = 1.0f;
++        }
 +        if (!GrassBlade(grassWorld, combinerColor.rgb, vertexFlatColor.a, resultColor.rgb)) {
 +            return false;
 +        }
@@ -8115,7 +8194,7 @@ index e7895c3..0bc9258 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +320,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +329,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8139,7 +8218,7 @@ index e7895c3..0bc9258 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +363,7 @@ void PSMain(
+@@ -287,6 +372,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8147,7 +8226,7 @@ index e7895c3..0bc9258 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +380,7 @@ void PSMain(
+@@ -303,7 +389,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -10914,7 +10993,7 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..65cb83b 100644
+index 2e62aaf..6ece70e 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
 @@ -13,6 +13,65 @@ namespace interop {
@@ -10952,7 +11031,7 @@ index 2e62aaf..65cb83b 100644
 +        float4 grassClipToWorld[4];
 +        float4 grassBlades;
 +        // Grass grows in patches: how much of the green ground they cover (1 all of it, no patches), their size in
-+        // world units, then unused.
++        // world units; then the blades' width (1 normal) and how much their lengths differ (0 to 1).
 +        float4 grassPatches;
 +        // Banjo-Tooie: Banjo's fur (Fur.hlsli, RasterVS.hlsl). A world vector's clip-space offset (as RasterVS's
 +        // positions) per world unit along x, y and z.

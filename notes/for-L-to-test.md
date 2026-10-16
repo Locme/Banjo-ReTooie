@@ -1,5 +1,23 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T279 3D grass thickness and random length sliders
+- Asked: 2026-10-16 12:22 UTC
+- Build: main @ next push
+- Steps:
+  1. Graphics > 3D grass thickness: try 100, 200 and 400
+  2. Graphics > 3D grass random length: try 0, 40 and 100
+- Look for: Do the blades get wider with thickness, and do lengths go from all alike (0) to anything from very short to full length (100)? Both should change live.
+- Status: waiting for L
+
+## T278 3D grass: stays put while you move, grows over grass laid on dirt, not on the yellow road or stone
+- Asked: 2026-10-16 12:22 UTC
+- Build: main @ next push
+- Steps:
+  1. Turn on 3D grass (any amount) with your usual pack and settings
+  2. In Spiral Mountain walk from Banjo's house past Bottles and the tree stumps, turning the camera now and then
+  3. Look at the yellow road and the stone and brick walls with moss
+  4. Stand still for a few seconds, then walk again
+- Look for: Do blades stay where they are as you move (thinning out far away without jumping about)? Is there grass round the tree stumps and by Bottles, where it used to vanish? Is the yellow road and the stone free of blades?
 ## T277 Mumbo's Hut Recreation v4: shading
 - Asked: 2026-10-16 12:25 UTC
 - Build: main (pull and build), plus the v4 mod zip
