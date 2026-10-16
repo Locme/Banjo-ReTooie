@@ -2850,7 +2850,7 @@
   1. Put "Banjo X Alt v5.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
   2. Stand still and watch Banjo's eyes, then walk, jump, flap and roll and watch the backpack straps
 - Look for: his eyes are wide open and blink (the FBX has him mid-blink; v5 turns the lids open, closing and shut for the game's blink stages). The straps stay on his shoulders and no longer tear where they meet the bag; the buckles and spikes ride on the straps. Checked headless: open eyes in photo mode, shut lids with a test build, straps in the idle pose (screenshot screens/banjo-x/alt-v5.png). If a strap still looks wrong, a screenshot of it helps.
-- Status: waiting for L
+- Status: failed (L, 2026-10-16: yellow patch on the stomach, fur too dark, straps not over the shoulders); replaced by T275
 
 ## T271 Modern waterfalls look good again, Shore foam for Original water
 - Asked: 2026-10-16 11:55 UTC
@@ -2860,4 +2860,13 @@
   2. Graphics > Water: Original, then turn Shore foam on (under Water)
   3. Look along the edges of the pool round the tree trunk, and of the other pools
 - Look for: Step 1, the falls keep the game's own flowing texture, with soft white streaks pouring down them, sparkles when the sun is out and mist where they land, all moving smoothly. Steps 2 and 3, a thin broken white line of foam drifts along the water's edges, as in Modern. Shore foam off leaves the game's water as it was. Checked headless in Spiral Mountain.
+- Status: waiting for L
+
+## T275 Banjo X Alt v6: fur colour, stomach and straps
+- Asked: 2026-10-16 12:20 UTC
+- Build: main, plus mods/Banjo X Alt v6.zip from project files (take v1 to v5 out of the mods folder)
+- Steps:
+  1. Put "Banjo X Alt v6.zip" in the mods folder as it is and turn on "Banjo X (alt rig)" (Smash Banjo and Banjo X off)
+  2. Look at Banjo in photo mode, then walk, jump, flap and roll
+- Look for: the fur is the lighter brown of L's T-pose preview (the FBX's brown base colour had been multiplied onto the fur texture); no yellow shorts above the belt; the backpack straps go over his shoulders (they had followed his arms). Eyes open and blink as in v5. Checked headless in photo mode with the zip (screenshot screens/banjo-x/alt-v6.png).
 - Status: waiting for L
