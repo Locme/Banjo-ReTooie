@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T304 Photo mode: Time frozen stands still, 1/167 step
+- Asked: 2026-10-16 20:16 UTC
+- Build: main @ 181272f
+- Steps:
+  1. Load a file and go anywhere with Banjo standing idle
+  2. Press the Photo Mode key (F10) and wait 30 seconds
+  3. Press Start once, then twice more
+- Look for: Step 2: nothing moves at all, not Banjo's idle animation or anything around him. Step 3: Start goes to 1/167 (the old Frozen speed, everything creeps), then 1/8, then 1/4, then back to Frozen. The photo panel's Time row shows the same four. Checked headless in Spiral Mountain: Frozen, 0 pixels changed over 60 s; 1/167 moves as Frozen did before.
+- Status: waiting for L
+
 ## T303 Menu navigation crash and Honey B. in the test room
 - Asked: 2026-10-16 20:05 UTC
 - Build: main
