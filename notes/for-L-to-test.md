@@ -2362,12 +2362,13 @@
 
 ## T223 Bee Banjo model mod: replaces the Bee transformation
 - Asked: 2026-10-16 08:00 UTC
-- Build: main, plus mods/Bee Banjo v1.zip from project files
+- Build: main, plus mods/Bee Banjo v2.zip from project files (take Bee Banjo v1.zip out of the mods folder)
 - Steps:
-  1. Put "Bee Banjo v1.zip" in the mods folder as it is and turn on "Bee Banjo" in the Mods menu
+  1. Put "Bee Banjo v2.zip" in the mods folder as it is and turn on "Bee Banjo" in the Mods menu
   2. In Cloud Cuckooland, turn into the bee at Humba Wumba's (or with the transformation cheat)
   3. Look at the bee close up in photo mode, then walk, fly, shoot stingers and talk to someone
 - Look for: the round Bee Banjo from your FBX (belt, shorts, backpack, HD textures) instead of the game's bee, the same size and in the same place. The wings are translucent and flap with the game's own animation; arms, legs and the mouth move too. Only the Bee transformation changes; Banjo himself is untouched. Checked headless in Cloud Cuckooland: loads from the zip, stands, turns and walks (screenshot screens/bee-banjo/v1.png).
+- v2 (2026-10-16 09:30 UTC, L: "issues with eyes"): nothing was ever simplified. The game stores positions in whole units, which bent the small eyes and warped the irises; v2 re-fits the textures to the rounded shape so the irises are round again (screens/bee-banjo/v2.png). Do the eyes look right now?
 - Status: waiting for L
 
 ## T224 Refresh Mods in game
