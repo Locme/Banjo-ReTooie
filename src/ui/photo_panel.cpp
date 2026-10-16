@@ -1,6 +1,6 @@
 // The photo panel (handoff 4.82): while photo mode is on and the panel isn't hidden (L), a list at the
 // left of the screen shows photo mode's rows (tooie::photo_mode::panel_state) with the picked one
-// highlighted, and the controls under it. Like the toasts it is a UI layer that never takes input, so
+// highlighted, and the controls under it, styled like the settings menu. Like the toasts it is a UI layer that never takes input, so
 // it is never in screenshots.
 
 #include <chrono>
@@ -12,6 +12,8 @@
 #include "recompui/recompui.h"
 #include "elements/ui_element.h"
 #include "elements/ui_label.h"
+#include "elements/ui_sidebar_style.h"
+#include "elements/ui_svg.h"
 
 #include "tooie_photo_mode.h"
 #include "tooie_photo_panel.h"
@@ -23,21 +25,36 @@ namespace {
     constexpr auto ui_wait = 500ms;
     constexpr size_t max_rows = 20;
     const char* const help_lines[] = {
-        "D-pad: pick and change a row  ·  L: hide this list",
-        "Left stick: move  ·  Right stick: look  ·  Z / R: down / up",
-        "A: photo  ·  Start: time  ·  B: back to the game",
+        "D-pad: pick and change a row",
+        "Left stick: move  ·  Right stick: look",
+        "Z / R: down / up  ·  A: photo  ·  L: hide list",
+        "Start: time  ·  B: back to the game",
     };
 
     std::once_flag started;
 
+    namespace style = recompui::sidebar_style;
+    const recompui::Color clear{ 0, 0, 0, 0 };
+
+    // One row of the list: a Jiggy shown on the picked row (as on the settings menu's picked tab), the
+    // row's name and its value.
+    struct RowView {
+        recompui::Element* box = nullptr;
+        recompui::Svg* jiggy = nullptr;
+        recompui::Label* name = nullptr;
+        recompui::Label* value = nullptr;
+    };
+
     struct Panel {
         recompui::ContextId context = recompui::ContextId::null();
-        std::vector<recompui::Label*> rows;
+        std::vector<RowView> rows;
         bool shown = false;
         std::vector<std::string> last_rows;
         int last_picked = -1;
     };
 
+    // In the settings menu's colours and lettering (L: "You can copy the ESC menu"): a brown panel with a
+    // gold border, the title in Luckiest Guy, the picked row in gold with brown letters.
     bool build(Panel& p) {
         auto lifetime = recompui::lock_context_lifetime();
         if (!recompui::contexts_alive()) {
@@ -54,31 +71,82 @@ namespace {
             recompui::Element* box = ctx.create_element<recompui::Element>(root);
             box->set_display(recompui::Display::Flex);
             box->set_flex_direction(recompui::FlexDirection::Column);
-            box->set_align_items(recompui::AlignItems::FlexStart);
+            box->set_align_items(recompui::AlignItems::Stretch);
             box->set_position(recompui::Position::Absolute);
             box->set_top(24);
             box->set_left(24);
+            box->set_width(470);
             box->set_padding(14);
             box->set_border_radius(recompui::theme::border::radius_lg);
-            box->set_background_color(recompui::theme::color::ModalOverlay);
+            box->set_border_width(3);
+            box->set_border_color(style::gold);
+            box->set_background_color(style::panel);
             box->set_pointer_events(recompui::PointerEvents::None);
 
-            recompui::Label* title = ctx.create_element<recompui::Label>(box, "Photo mode", recompui::LabelStyle::Normal);
+            recompui::Label* title = ctx.create_element<recompui::Label>(box, "Photo Mode", recompui::LabelStyle::Normal);
             title->set_pointer_events(recompui::PointerEvents::None);
-            title->set_margin_bottom(6);
-            // One label per row: a label is laid out as a single line.
+            title->set_font_family(style::font);
+            title->set_font_weight(400);
+            title->set_font_size(38);
+            title->set_letter_spacing(2);
+            title->set_color(style::gold);
+            title->set_margin_bottom(8);
+            title->set_padding_left(6);
+
             for (size_t i = 0; i < max_rows; i++) {
-                recompui::Label* row = ctx.create_element<recompui::Label>(box, "", recompui::LabelStyle::Small);
-                row->set_pointer_events(recompui::PointerEvents::None);
-                p.rows.push_back(row);
+                RowView r;
+                r.box = ctx.create_element<recompui::Element>(box);
+                r.box->set_display(recompui::Display::Flex);
+                r.box->set_flex_direction(recompui::FlexDirection::Row);
+                r.box->set_align_items(recompui::AlignItems::Center);
+                r.box->set_position(recompui::Position::Relative);
+                r.box->set_padding_top(3);
+                r.box->set_padding_bottom(2);
+                r.box->set_padding_left(36);
+                r.box->set_padding_right(10);
+                r.box->set_border_radius(recompui::theme::border::radius_md);
+                r.box->set_border_width(2);
+                r.box->set_border_color(recompui::theme::color::Transparent);
+                r.box->set_border_bottom_color(style::gold_faint);
+                r.box->set_pointer_events(recompui::PointerEvents::None);
+
+                r.jiggy = ctx.create_element<recompui::Svg>(r.box, "icons/Jiggy.svg");
+                r.jiggy->set_position(recompui::Position::Absolute);
+                r.jiggy->set_left(6);
+                r.jiggy->set_top(50.0f, recompui::Unit::Percent);
+                r.jiggy->set_width(22);
+                r.jiggy->set_height(22);
+                r.jiggy->set_margin_top(-11);
+                r.jiggy->set_pointer_events(recompui::PointerEvents::None);
+
+                r.name = ctx.create_element<recompui::Label>(r.box, "", recompui::LabelStyle::Small);
+                r.name->set_pointer_events(recompui::PointerEvents::None);
+                r.name->set_font_family(style::font);
+                r.name->set_font_weight(400);
+                r.name->set_font_size(20);
+                r.name->set_letter_spacing(1);
+                r.name->set_flex_grow(1);
+
+                r.value = ctx.create_element<recompui::Label>(r.box, "", recompui::LabelStyle::Small);
+                r.value->set_pointer_events(recompui::PointerEvents::None);
+                r.value->set_text_align(recompui::TextAlign::Right);
+                p.rows.push_back(r);
             }
-            for (size_t i = 0; i < std::size(help_lines); i++) {
-                recompui::Label* help = ctx.create_element<recompui::Label>(box, help_lines[i], recompui::LabelStyle::Annotation);
+
+            recompui::Element* help_box = ctx.create_element<recompui::Element>(box);
+            help_box->set_display(recompui::Display::Flex);
+            help_box->set_flex_direction(recompui::FlexDirection::Column);
+            help_box->set_margin_top(10);
+            help_box->set_padding(8);
+            help_box->set_border_radius(recompui::theme::border::radius_md);
+            help_box->set_border_top_width(2);
+            help_box->set_border_top_color(style::gold_soft);
+            help_box->set_background_color(style::sidebar);
+            help_box->set_pointer_events(recompui::PointerEvents::None);
+            for (const char* line : help_lines) {
+                recompui::Label* help = ctx.create_element<recompui::Label>(help_box, line, recompui::LabelStyle::Annotation);
                 help->set_pointer_events(recompui::PointerEvents::None);
-                help->set_color(recompui::theme::color::TextDim);
-                if (i == 0) {
-                    help->set_margin_top(8);
-                }
+                help->set_color(style::cream_dim);
             }
             ctx.close();
 
@@ -102,16 +170,29 @@ namespace {
         }
         p.context.open();
         for (size_t i = 0; i < p.rows.size(); i++) {
-            recompui::Label* label = p.rows[i];
-            if (i < rows.size()) {
-                const bool is_picked = (int)i == picked;
-                label->set_text((is_picked ? "> " : "   ") + rows[i]);
-                label->set_color(is_picked ? recompui::theme::color::Primary : recompui::theme::color::Text);
-                label->set_display(recompui::Display::Block);
+            RowView& r = p.rows[i];
+            if (i >= rows.size()) {
+                r.box->set_display(recompui::Display::None);
+                continue;
             }
-            else {
-                label->set_display(recompui::Display::None);
+            // Rows come as "Name: value".
+            const std::string& text = rows[i];
+            const size_t split = text.find(": ");
+            const std::string name = split == std::string::npos ? text : text.substr(0, split);
+            const std::string value = split == std::string::npos ? "" : text.substr(split + 2);
+            const bool is_picked = (int)i == picked;
+            r.name->set_text(name);
+            // Arrows on the picked row: D-pad left and right change it.
+            r.value->set_text(is_picked && !value.empty() ? "\u2039 " + value + " \u203A" : value);
+            r.name->set_color(is_picked ? style::brown_text : style::cream);
+            r.value->set_color(is_picked ? style::brown_text : style::gold);
+            r.box->set_background_color(is_picked ? style::gold : clear);
+            r.box->set_border_color(is_picked ? style::orange : clear);
+            if (!is_picked) {
+                r.box->set_border_bottom_color(style::gold_faint);
             }
+            r.jiggy->set_display(is_picked ? recompui::Display::Block : recompui::Display::None);
+            r.box->set_display(recompui::Display::Flex);
         }
         p.context.close();
         p.last_rows = rows;
