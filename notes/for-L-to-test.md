@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T345 HD Shadows: Icy Side ledge and crystal no longer flicker
+- Asked: 2026-10-16 23:12 UTC
+- Build: main, commit 'HD shadows: see-through scenery no longer flickers between pale and solid'
+- Steps:
+  1. Graphics: HD Shadows on, your usual settings
+  2. Go to Hailfire Peaks' Icy Side and stand at the start, looking at the long ledge over the cliff and the green crystal
+  3. Turn the camera slowly back and forth
+- Look for: The ledge and the green crystal stay the same pale, hazy look as with HD Shadows off, instead of turning solid and back. Checked headless: before the fix they turned solid in every run with HD Shadows on (7 runs); after it, in none (4 runs).
+- Status: waiting for L
+
 ## T344 Start menu Achievements page, DEV Additional Tabs, Learn Every Move, HUD Expand
 - Asked: 2026-10-16 22:57 UTC
 - Build: main (next build)
