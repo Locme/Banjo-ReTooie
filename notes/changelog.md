@@ -10,7 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
-- DEV > Sidebar menu (preview), off by default: the settings tabs as a list down the left side and the selected option's description in a strip along the bottom (layout A). Switches at once. Untested on PC (T194).
+- The settings menu has a new layout in Banjo-Tooie's style: the tabs as a list down the left side with a search box on top, and the selected option's description in a strip along the bottom (layout A). It replaces the old layout; there is no switch (L). Untested on PC (T194, T217).
 - Warp > Race Warps (at the bottom of the Warp tab): starts any of Canary Mary's four races, Glitter Gulch Mine first and second and Cloud Cuckooland first and second, whatever your file has done. It goes to Mary's spot in that world first, then straight into the race with the countdown. Practice runs: your file is left as it was and no Jiggy or Cheato page is given. Untested on PC (T186).
 - QOL > Transform anywhere (off by default): the Transform key (T; bind a controller button in Controls > Movement) changes Banjo into the world's Humba Wumba form where he stands, with the game's own spin-up, and back. A world's form works once you have changed in its Humba pool, and only in that world. Terrydactyland gives the Daddy T-Rex once Humba's tent is big (refused where it has no room), the baby T-Rex before. Humba says her line on the 1st, 3rd, 5th change. Refused with a sound in the air, swimming, while talking or in a cutscene; the submarine changes in water only. Untested on PC (T184).
 - QOL > Totals checklist is now off by default, and a saved On from an earlier build starts Off too. Turn it on in QOL to get the table and lists back.

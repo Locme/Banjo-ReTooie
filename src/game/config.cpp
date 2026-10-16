@@ -475,15 +475,6 @@ void tooie::init_config() {
         "Discord status",
         "Shows the level you are playing in your Discord status while Discord is running.",
         true);
-    wip.add_bool_option(
-        tooie::sidebar_menu_option,
-        "Sidebar menu (preview)",
-        "Shows this menu in the new layout: the tabs as a list down the left side and the description of the selected option in a strip along the bottom. L and R still switch tabs. Off keeps the tabs across the top.",
-        false);
-    wip.add_option_change_callback(tooie::sidebar_menu_option,
-        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
-            recompui::config::set_sidebar_layout(std::get<bool>(value));
-        });
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);
@@ -494,8 +485,8 @@ void tooie::init_config() {
     show_wip_tab();
     show_cheats_tab();
     move_saved_discord_option();
-    recompui::config::set_sidebar_layout(
-        std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::sidebar_menu_option)));
+    // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
+    recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();
     tooie::smaa::apply();
     tooie::texture_slide::apply();

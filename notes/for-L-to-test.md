@@ -2300,3 +2300,13 @@
 - Look for: A pale haze lying low over the ground in the distance, warm towards the sun, gone by mid-morning and absent in the evening, at night and in rain. It is separate from the Fog setting. Too thick, too thin? Checked headless: [morning-mist.png](screens/day-night/morning-mist.png) (Terrydactyland left, Jinjo Village right).
 - Status: waiting for L
 
+## T217 Sidebar menu is the only settings layout
+- Asked: 2026-10-16 05:10 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Open the settings menu (Esc, or Back / Select on a controller)
+  2. Look in the DEV tab
+  3. Type in the Search tab and look at a switch in the results
+- Look for: Step 1, the menu opens with the brown and gold sidebar layout without turning anything on. Step 2, there is no Sidebar menu (preview) switch any more. Step 3, switches that are on are gold there too. Checked headless with keyboard and mouse.
+- Status: waiting for L
+
