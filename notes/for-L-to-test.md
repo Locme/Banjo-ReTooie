@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T299 Controller in the menu: leaving search, and RB to Mods
+- Asked: 2026-10-16 19:37 UTC
+- Build: main @ next Windows build
+- Steps:
+  1. Open the menu with a controller
+  2. Go up to Search settings, press right and type something
+  3. Press your menu Back button (X by default), then go back into the search box and press your menu Close button (Select by default)
+  4. From inside any page press RB until you reach Mods
+- Look for: Back leaves the search box for the sidebar, the close button closes the menu from the search box, and RB walks the tabs all the way to Mods (it skips the search page)
+- Status: waiting for L
+
 ## T298 Start-up stutter with saved shaders
 - Asked: 2026-10-16 19:25 UTC
 - Build: latest Windows build from main
