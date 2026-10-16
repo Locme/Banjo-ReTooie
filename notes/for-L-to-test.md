@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T281 Textures: mip bias 0 (RT64 sampler)
+- Asked: 2026-10-16 12:34 UTC
+- Build: main
+- Steps:
+  1. Run this build
+  2. Look at ground and walls a few metres away and far off, e.g. Spiral Mountain grass and paths
+  3. Move the camera slowly
+- Look for: Distant textures may be a touch softer than before and should shimmer less. Say if anything looks blurrier than you want.
+- Status: waiting for L
+
 ## T279 3D grass thickness and random length sliders
 - Asked: 2026-10-16 12:22 UTC
 - Build: main @ next push

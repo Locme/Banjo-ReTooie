@@ -5897,7 +5897,7 @@ index 0000000..8b29f72
 +        const std::function<void(RenderCommandList *)> &drawSunCasters = {});
 +};
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..d6c055a 100644
+index d1c5273..3f5a2a4 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -40,7 +40,27 @@
@@ -6022,6 +6022,15 @@ index d1c5273..d6c055a 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
+@@ -204,7 +274,7 @@ namespace RT64 {
+             samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
+ 
+             // This matches the bias used in the shader when native samplers are not used.
+-            samplerDesc.mipLODBias = -0.25f;
++            samplerDesc.mipLODBias = 0.0f; // Banjo-Tooie: no negative bias, so distant textures use the matching mip level (L, 2026-10-16). Was -0.25.
+ 
+             // WRAP.
+             samplerDesc.addressU = RenderTextureAddressMode::WRAP;
 @@ -569,6 +639,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
@@ -10802,6 +10811,19 @@ index 0000000..54a0234
 +    world = worldPos.xyz / worldPos.w;
 +    pos = float4(SunMapPosition(gConstants, world), 1.0f);
 +}
+diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
+index 1ceb2ce..e6f0ef3 100644
+--- a/src/shaders/TextureSampler.hlsli
++++ b/src/shaders/TextureSampler.hlsli
+@@ -278,7 +278,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+             float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
+             float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
+             float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
+-            float mipBias = -0.25f;
++            float mipBias = 0.0f; // Banjo-Tooie: as the native samplers' bias (rt64_shader_library.cpp), was -0.25.
+             mip = 0.5 * log2(ddMax) + mipBias;
+             float maxMip = float(gpuTile.textureDimensions.z - 1);
+             RDPMipLevels[0] = min(floor(mip), maxMip);
 diff --git a/src/shaders/TextureUpscaleCS.hlsl b/src/shaders/TextureUpscaleCS.hlsl
 new file mode 100644
 index 0000000..63b1ede
