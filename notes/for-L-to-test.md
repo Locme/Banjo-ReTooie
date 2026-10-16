@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T273 Sun shadows fill the whole screen (sun shadow map)
+- Asked: 2026-10-16 12:04 UTC
+- Build: 86429fb
+- Steps:
+  1. Graphics > Photo Filters: Sun shadows on (60 or more)
+  2. Stand in Spiral Mountain or a level with cliffs and trees, turn the camera so the sun is up and to one side
+  3. Look at the edges of the screen towards the sun
+- Look for: Shadows from cliffs, trees and walls outside the picture now reach into it, so the left and top are no longer left bright. Shadow edges stay steady when the camera moves, with no dark speckles on lit ground. Fences and leaves still use the old screen-space shadows.
+- Status: waiting for L
+
 ## T272 Smash Banjo v9: fur, straps, wings, blink and wobble
 - Asked: 2026-10-16 UTC
 - Build: main, plus mods/Smash Banjo v9.zip from project files (take v8 and its unpacked folder out of the mods folder)
