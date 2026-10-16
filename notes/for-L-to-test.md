@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T291 Mumbo's Hut Recreation v5: doorway shadows and stronger shading
+- Asked: 2026-10-16 14:50 UTC
+- Build: main (pull and build), plus the v5 mod zip
+- Steps:
+  1. Put mods/Mumbo's Hut Recreation v5.zip (project files) in the game's mods folder in place of v4
+  2. Load a file, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull, look at the hut, then walk in
+  3. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
+- Look for: The inside of the arch and the wall round the door darken into the doorway. The hut has a clear lit side (left) and shaded side (right), with darker teeth and underside. Checked headless with the models (screens/mumbos-hut/v5.png in project files): both huts drawn, GGM's door entered. Asked 2026-10-16 14:41 UTC (L: "Add shadows going Into the doorway, also add shading to the hut")
+- Status: waiting for L
+
 ## T290 Banjo X Alt v7: no clipping at the straps, fur shader
 - Asked: 2026-10-16 14:32 UTC
 - Build: main, plus mods/Banjo X Alt v7.zip from project files (take v6 out of the mods folder)
@@ -74,7 +84,7 @@
   2. Load a file, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull and look at the hut
   3. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
 - Look for: Does the hut look like it belongs now? It has its own shading: the top of the skull lit, the underside, the teeth's lower halves and the areas under the overhang darker, on top of the level's colour from v2. Checked headless with the models (screens/mumbos-hut/v4.png in project files). Asked 2026-10-16 12:14 UTC (L: "It still looks like it does not belong, maybe it's missing shading?")
-- Status: waiting for L
+- Status: replaced by T291 (v5)
 
 ## T274 Quit prompt takes the mouse after Alt+F4
 - Asked: 2026-10-16 12:12 UTC
