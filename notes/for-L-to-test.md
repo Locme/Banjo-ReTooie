@@ -97,7 +97,7 @@
   2. Go into Mayahem Temple's Mumbo's Skull, look at Mumbo sitting and talk to him
   3. Play as Mumbo: walk, run, jump, crouch, swim, use the wand, and look at his feet and skirt close up (photo mode helps)
 - Look for: closed, solid toes and feet (v1 showed orange holes on top of the toes), legs lit like the rest of the body instead of dark and flat, a skirt with its full colours, no eyelids showing through the eyes, thumbs and feet joined cleanly while moving, no orange rim round the soles, and the soles orange underneath when he sits with his feet up. The cause of the toes: the source model's legs, feet, skirt and feathers were built inside out, and the game hides the inside of a model. Checked headless with the zip, playing as Mumbo in Spiral Mountain and sitting in Mayahem Temple's skull: [v2.png](screens/viva-mumbo/v2.png). Swimming and the wand spell were not tried.
-- Status: waiting for L
+- Status: replaced by T260 (v3)
 
 ## T247 Uncapped and 240 FPS: the screen shows the frames the game makes
 - Asked: 2026-10-16 10:10 UTC
@@ -2708,4 +2708,14 @@
   3. Pick it again and press Start sweep: it starts warping
   4. Close the game mid-sweep and start it again, then load a file
 - Look for: after the restart a notice says the sweep carries on, and it goes on from the next map (the map it was in is skipped and listed as skipped in sweep.txt). Setting Texture dump to Off stops it for good.
+- Status: waiting for L
+
+## T260 Viva Mumbo Jumbo v3: face and full check
+- Asked: 2026-10-16 10:40 UTC
+- Build: main, plus mods/Viva Mumbo Jumbo v3.zip from project files (replaces v2; delete the v1/v2 zips and their unpacked folders from the mods folder first)
+- Steps:
+  1. Put "Viva Mumbo Jumbo v3.zip" in the mods folder as it is and turn on "Viva Mumbo Jumbo"
+  2. Play as Mumbo and look at his face close up (photo mode, zoom in): stand still, walk, jump, cast a spell
+  3. Go into Mayahem Temple's Mumbo's Skull and talk to him
+- Look for: the face matches the Viva model: the grin with both rows of teeth shows while he stands (in v2 the jaw sat shut over the teeth), the striped rings sit round the eye sockets with dark sockets behind the lids, and the brow band and nose holes are where they are on the original. Nothing flickers or shows through round the eyes. Legs, feet and skirt as in v2. Cause: the game's own animations hold Mumbo's jaw about 9 degrees shut, so the jaw is now modelled that much open; the model is also stored 8 times finer, so the eyelids and socket rims keep their exact shape and texture instead of being rounded to whole units. Checked headless with the zip: photo-mode close-up playing as Mumbo, walking, jumping, a spell, and talking in the skull ([v3.png](screens/viva-mumbo/v3.png)). Swimming was not tried.
 - Status: waiting for L
