@@ -3478,7 +3478,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a6ff2e4
+index 0000000..ba8c34d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1340 @@
@@ -4007,8 +4007,8 @@ index 0000000..a6ff2e4
 +    // Real blades (GrassGS.hlsl): the finest grid's cell size at density 1, and how many blades a pass can grow on a triangle.
 +    static constexpr float GrassBladeCell = 3.0f;
 +    static constexpr uint32_t GrassBladeInvocations = 32;
-+    static constexpr uint32_t GrassBladesPerInvocation = 14;
-+    static constexpr uint32_t GrassBladeMaxPasses = 24;
++    static constexpr uint32_t GrassBladesPerInvocation = 12;
++    static constexpr uint32_t GrassBladeMaxPasses = 28;
 +
 +    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell) {
 +        // As GrassCellSize in GrassGS.hlsl: the passes the triangle's grid needs at its distance, at most GrassBladeMaxPasses.
@@ -4824,7 +4824,7 @@ index 0000000..a6ff2e4
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..31dfcfc
+index 0000000..78c49cd
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
 @@ -0,0 +1,209 @@
@@ -4992,7 +4992,7 @@ index 0000000..31dfcfc
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
-+    // camera needs (GrassGS.hlsl grows up to 448 a pass), with the finest grid's cells baseCell wide, coarsening from lodNear on.
++    // camera needs (GrassGS.hlsl grows up to 384 a pass), with the finest grid's cells baseCell wide, coarsening from lodNear on.
 +    uint32_t SceneGrassBladePasses(const float (&low)[2], const float (&high)[2], float distanceToCamera, float lodNear, float baseCell);
 +    // Fills the frame's grass terms from the 3D world's projection (as adjusted for the aspect ratio), view,
 +    // view-projection and viewport (as the RSP used them), the framebuffer's resolution in game pixels and
@@ -6604,7 +6604,7 @@ index 0000000..8735575
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..eff3fe6
+index 0000000..44493ea
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
 @@ -0,0 +1,261 @@
@@ -6619,8 +6619,8 @@ index 0000000..eff3fe6
 +// texture coordinates and colours at their root, so the pixel shader colours them from the ground under them
 +// (and keeps only green ground); the root's height goes in the flat colour's alpha (RasterPS.hlsl).
 +//
-+// Every blade is 5 vertices of 14 values, 14 blades to an invocation (the 1024 values a geometry shader may
-+// output), 32 invocations a triangle, and the draw is repeated for as many passes as its largest triangle needs
++// Every blade is 5 vertices of 17 values (GrassVertex), 12 blades to an invocation (D3D12 allows 1024 values out of
++// one; anything added to GrassVertex means fewer blades, here and in rt64_scene_effects.cpp), 32 invocations a triangle, and the draw is repeated for as many passes as its largest triangle needs
 +// (RasterParams.grassShell is the pass, 1 to the count in grassShells' low bits).
 +
 +#include "shared/rt64_raster_params.h"
@@ -6629,7 +6629,7 @@ index 0000000..eff3fe6
 +
 +[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
 +
-+#define GRASS_BLADES_PER_INVOCATION 14
++#define GRASS_BLADES_PER_INVOCATION 12
 +#define GRASS_INVOCATIONS 32
 +#define GRASS_PASS_MASK 0xFFFFu
 +

@@ -2332,3 +2332,12 @@
   4. Load your file again
 - Look for: Step 1, a "Boss rush 1/13: Klungo" notice and Klungo's fight starts, with the moves and eggs the fight needs. Step 2, each win hands over to the next boss (order: Klungo, Targitzan, Old King Coal, Mr. Patch, Lord Woo Fak Fak, Klungo 2, Terry, Weldar, Chilli Billi, Chilly Willy, Mingy Jongo, Klungo 3, Hag 1). Step 3, Yes restarts the same boss; No ends the rush with "Boss rush over: N of 13 bosses beaten" and the switch is off again. Step 4, your file is where you left it. Does a win ever end the rush by mistake, or a loss carry on? Is the order right? Checked headless: Klungo's fight handing over to Targitzan's, and a loss ending the rush; winning a fight can't be done headless, so wins are only tested through a stand-in: [klungo-to-targitzan-headless.png](screens/boss-rush/klungo-to-targitzan-headless.png).
 - Status: waiting for L
+
+## T220 Windows build fixed: 3D grass shader
+- Asked: 2026-10-16 07:40 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Pull main and build as usual
+  2. Graphics > 3D grass to 100 and walk through Spiral Mountain's meadow
+- Look for: the build finishes (it stopped in GrassGS.hlsl line 116 with "Declared output vertex count (70) ... equals 1190"). The grass should look as before; each pass now draws 12 blades per step instead of 14, with more passes allowed, so the same number of blades. Checked: the same DXC error reproduced on Linux with the Windows-style DXIL compile, the fixed shader validates, and the grass draws headless in Spiral Mountain.
+- Status: waiting for L
