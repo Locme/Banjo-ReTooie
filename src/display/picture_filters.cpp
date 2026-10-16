@@ -63,6 +63,7 @@ namespace RT64 {
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length);
+    void SetSceneSnow(bool on, float height);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
     bool GetSceneCameraHeight(float *height);
@@ -97,6 +98,16 @@ namespace {
     // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
     std::atomic<bool> modern_water{false};
     std::atomic<bool> banjo_fur{false};
+    // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
+    std::atomic<bool> deep_snow{false};
+    std::atomic<float> snow_height{1.0f};
+    // What was last sent (-1 to send again).
+    std::atomic<float> snow_sent{-1.0f};
+
+    // The maps with deep snow on their snowy ground: Hailfire Peaks' Icy Side.
+    bool snowy_map(uint16_t map) {
+        return map == 0x128;
+    }
     float heat_haze_sent = -1.0f;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
@@ -291,6 +302,7 @@ namespace {
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
+        { &tooie::picture_filters::deep_snow_option, false },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
@@ -414,6 +426,16 @@ void tooie::picture_filters::apply() {
     }
     banjo_fur = fur > 0.0;
     RT64::SetSceneFur((float)(fur / 100.0), (float)(value<double>(banjo_fur_length_option, 100.0) / 100.0));
+    bool snow = value<bool>(deep_snow_option, false);
+    if (const char* forced = std::getenv("TOOIE_DEEP_SNOW")) {
+        snow = std::atoi(forced) != 0;
+    }
+    deep_snow = snow;
+    snow_height = (float)(value<double>(snow_height_option, 100.0) / 100.0);
+    if (const char* forced = std::getenv("TOOIE_SNOW_HEIGHT")) {
+        snow_height = (float)(std::atof(forced) / 100.0);
+    }
+    snow_sent = -1.0f;
     modern_water = value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
@@ -486,15 +508,22 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         std::min(std::chrono::duration<float>(now - underwater_at).count(), 0.25f);
     underwater_at = now;
     const float target = under_water(rdram, state) ? 1.0f : 0.0f;
-    // Headless test aid: TOOIE_TELEPORT=<x>,<y>,<z>@<ms> puts Banjo at that place (held for 30 frames), that
-    // long after the program started, to reach a spot without steering him there.
+    // Headless test aid: TOOIE_TELEPORT=<x>,<y>,<z>@<ms>[;<x>,<y>,<z>@<ms>...] puts Banjo at that place (held for 30
+    // frames), that long after the program started, to reach a spot without steering him there; several go in turn.
     if (const char* teleport = std::getenv("TOOIE_TELEPORT")) {
         static const auto started = now;
+        static size_t entry = 0;
         static int holds = 0;
+        // The entry in use: the list's entry-th, separated by ';'.
+        const char* text = teleport;
+        for (size_t i = 0; (i < entry) && (text != nullptr); i++) {
+            text = std::strchr(text, ';');
+            text = (text != nullptr) ? text + 1 : nullptr;
+        }
         float x = 0.0f, y = 0.0f, z = 0.0f;
         long ms = 0;
         const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
-        if ((holds < 30) && (std::sscanf(teleport, "%f,%f,%f@%ld", &x, &y, &z, &ms) == 4) && valid_pointer(player) &&
+        if ((text != nullptr) && (std::sscanf(text, "%f,%f,%f@%ld", &x, &y, &z, &ms) == 4) && valid_pointer(player) &&
             (tooie::game_frame_rate::pad_on_game_time() ? (long)tooie::game_frame_rate::game_ms() > ms
                                                         : now - started > std::chrono::milliseconds(ms)))
         {
@@ -512,6 +541,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
                         MEM_W(4 * i, (int32_t)base) = (int32_t)bits;
                     }
                 }
+            }
+            if (holds >= 30) {
+                holds = 0;
+                entry++;
             }
         }
     }
@@ -577,6 +610,15 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetSceneWaterRipples(x, z, age);
     }
 
+    // Deep snow on the maps with snow only.
+    {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : 0.0f;
+        if (snow != snow_sent.load()) {
+            snow_sent = snow;
+            RT64::SetSceneSnow(snow > 0.0f, snow);
+        }
+    }
     // The fog is measured from Banjo.
     {
         float pos[3];
@@ -793,6 +835,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "3D grass on edges",
         "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
         true);
+    graphics.add_bool_option(
+        deep_snow_option,
+        "Deep snow",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo wades through it, leaving a furrow and footprints with the snow banked up either side, and after a while the snow fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
+        false);
+    graphics.add_number_option(
+        snow_height_option,
+        "Snow height",
+        "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
+        25, 300, 5, 0, false, 100);
     graphics.add_number_option(
         banjo_fur_option,
         "Banjo fur",
@@ -894,7 +946,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -935,6 +987,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_density_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_patches_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_edges_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(banjo_fur_length_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);

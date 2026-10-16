@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T269 Deep snow with footprints (Icy Side)
+- Asked: 2026-10-16
+- Build: main (pull and build)
+- Steps:
+  1. Graphics: turn on the Shaders switch, then Deep snow (Snow height starts at 100)
+  2. Go to Hailfire Peaks' Icy Side and walk, run and stand still on the snow
+  3. Move Snow height to 300 and to 25 while you play
+  4. Jump around, then wait about a minute where you walked
+- Look for: The snow ground is a soft layer with gentle drifts, about ankle deep at 100 and knee deep at 300, changing as you drag the slider. Banjo leaves a furrow with left and right footprints and the snow banks up either side; standing still prints both feet. Jumps leave no marks in the air. After about 6 seconds prints start to fill back in and are gone within about a minute. The ice should stay flat; tell me if any pale ice gets snow on it. Banjo's round shadow may be hidden under deep snow. On a slow GPU this costs more frame time than most effects. Checked headless on Icy Side.
+- Status: waiting for L
+
 ## T267 No 'invalid UI context' error when quitting
 - Asked: 2026-10-16 11:20 UTC
 - Build: main (pull and build)

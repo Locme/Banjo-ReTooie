@@ -1552,27 +1552,30 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..ea72790 100644
+index 69a82ac..f736d40 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -212,6 +212,7 @@ namespace RT64 {
+@@ -212,6 +212,8 @@ namespace RT64 {
          uint32_t gFilteredDirectLight;
          uint32_t gFilteredIndirectLight;
          uint32_t gBlueNoise;
 +        uint32_t furNormals;
++        uint32_t snowTrail;
  
          FramebufferRendererDescriptorCommonSet(const SamplerLibrary &samplerLibrary, bool raytracing, RenderDevice *device = nullptr) {
              builder.begin();
-@@ -282,6 +283,8 @@ namespace RT64 {
+@@ -282,6 +284,10 @@ namespace RT64 {
              gFilteredDirectLight = builder.addReadWriteTexture(65);
              gFilteredIndirectLight = builder.addReadWriteTexture(66);
              gBlueNoise = builder.addTexture(67);
 +            // Banjo-Tooie: Banjo's fur normals (RasterVS.hlsl).
 +            furNormals = builder.addStructuredBuffer(68);
++            // Banjo-Tooie: deep snow's trail grid (Snow.hlsli).
++            snowTrail = builder.addStructuredBuffer(69);
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +662,75 @@ namespace RT64 {
+@@ -659,6 +665,75 @@ namespace RT64 {
          }
      };
  
@@ -1649,7 +1652,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..77d672d 100644
+index 9fae0d4..98d1436 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1675,7 +1678,7 @@ index 9fae0d4..77d672d 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +132,105 @@ namespace RT64 {
+@@ -125,6 +132,136 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -1778,16 +1781,50 @@ index 9fae0d4..77d672d 100644
 +        return true;
 +    }
 +
++    // Banjo-Tooie: the shells of deep snow a ground draw gets: by its triangles facing up nearest the camera, or 0
++    // with none facing up within the snow's reach. Level ground has no model transform, so its positions are in the world.
++    static uint32_t snowShellCount(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
++        const uint32_t start = call.meshDesc.faceIndicesStart;
++        const uint32_t end = start + call.callDesc.triangleCount * 3;
++        if (end > drawData.faceIndices.size()) {
++            return 0;
++        }
++        const hlslpp::float3 camera(frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w);
++        float nearest = 1e30f;
++        for (uint32_t i = start; i < end; i += 3) {
++            hlslpp::float3 p[3];
++            for (uint32_t k = 0; k < 3; k++) {
++                const uint32_t v = drawData.faceIndices[i + k];
++                if ((v * 3 + 2) >= drawData.posFloats.size()) {
++                    return 0;
++                }
++                p[k] = hlslpp::float3(drawData.posFloats[v * 3 + 0], drawData.posFloats[v * 3 + 1], drawData.posFloats[v * 3 + 2]);
++            }
++            const hlslpp::float3 n = hlslpp::cross(p[1] - p[0], p[2] - p[0]);
++            const float nLength = float(hlslpp::length(n));
++            if ((nLength <= 1e-4f) || (std::abs(float(n.y)) < 0.6f * nLength)) {
++                continue;
++            }
++            const hlslpp::float3 center = (p[0] + p[1] + p[2]) / 3.0f;
++            const float radius = std::max({ float(hlslpp::length(p[0] - center)), float(hlslpp::length(p[1] - center)), float(hlslpp::length(p[2] - center)) });
++            nearest = std::min(nearest, std::max(float(hlslpp::length(center - camera)) - radius, 0.0f));
++        }
++        return (nearest < 1e29f) ? SceneSnowShellsAt(nearest, frameParams) : 0;
++    }
++
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +275,19 @@ namespace RT64 {
+@@ -169,6 +306,22 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
 +        instanceExcludedVector.clear();
 +        instanceGrassVector.clear();
 +        grassShells = 0;
++        instanceSnowVector.clear();
++        snowShells = 0;
++        frameParams.snowGrid.w = 0.0f;
 +        instanceFurVector.clear();
 +        instanceNightLightVector.clear();
 +        nightLightsChecked = false;
@@ -1801,15 +1838,16 @@ index 9fae0d4..77d672d 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +492,7 @@ namespace RT64 {
+@@ -373,6 +526,8 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
 +        descCommonSet->setBuffer(descCommonSet->furNormals, furNormalsBuffer.get(), RenderBufferStructuredView(sizeof(interop::float4)));
++        descCommonSet->setBuffer(descCommonSet->snowTrail, snowTrailBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -465,12 +585,61 @@ namespace RT64 {
+@@ -465,12 +620,61 @@ namespace RT64 {
          return true;
      }
      
@@ -1873,7 +1911,7 @@ index 9fae0d4..77d672d 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +683,17 @@ namespace RT64 {
+@@ -514,6 +718,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1891,7 +1929,7 @@ index 9fae0d4..77d672d 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +754,51 @@ namespace RT64 {
+@@ -574,10 +789,72 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -1927,6 +1965,27 @@ index 9fae0d4..77d672d 100644
 +                    rasterParams.grassShells = 0;
 +                }
 +
++                // Banjo-Tooie: deep snow, the same triangles again as shells further up each time.
++                if ((snowShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0)) {
++                    const uint32_t shells = instanceSnowVector[i];
++                    // (The draw's own pipeline, not the grass blades' one.)
++                    if (previousPipeline != triangles.pipeline) {
++                        worker->commandList->setPipeline(triangles.pipeline);
++                        previousPipeline = triangles.pipeline;
++                    }
++                    rasterParams.grassShells = shells | RASTER_SNOW_SHELLS;
++                    // From the top down: a shell's kept pixels hide the ones below them from the depth test before
++                    // they are shaded (Snow.hlsli).
++                    for (uint32_t shell = shells; shell >= 1; shell--) {
++                        rasterParams.grassShell = shell;
++                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                        drawCallTriangles(drawCall);
++                    }
++                    rasterParams.grassShell = 0;
++                    rasterParams.grassShells = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
++
 +                // Banjo-Tooie: Banjo's fur, the same triangles again as shells pushed further out each time.
 +                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] != 0)) {
 +                    rasterParams.furShells = furShells;
@@ -1943,7 +2002,7 @@ index 9fae0d4..77d672d 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1471,67 @@ namespace RT64 {
+@@ -1250,6 +1527,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2011,7 +2070,7 @@ index 9fae0d4..77d672d 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1578,56 @@ namespace RT64 {
+@@ -1296,9 +1634,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2069,7 +2128,7 @@ index 9fae0d4..77d672d 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1683,7 @@ namespace RT64 {
+@@ -1354,6 +1739,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -2077,7 +2136,7 @@ index 9fae0d4..77d672d 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1738,58 @@ namespace RT64 {
+@@ -1408,6 +1794,58 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2136,7 +2195,7 @@ index 9fae0d4..77d672d 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1838,48 @@ namespace RT64 {
+@@ -1456,6 +1894,54 @@ namespace RT64 {
                  continue;
              }
  
@@ -2157,6 +2216,12 @@ index 9fae0d4..77d672d 100644
 +                                framebuffer.viewport.width, framebuffer.viewport.height, p.submissionFrame, frameParams))
 +                            {
 +                                grassShells = SceneGrassShells();
++                                // Banjo-Tooie: deep snow, from the same camera.
++                                if ((snowShells == 0) && ComputeSceneSnow(drawData.modProjTransforms[proj.transformsIndex], drawData.modViewProjTransforms[proj.transformsIndex],
++                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrailVector))
++                                {
++                                    snowShells = SceneSnowShells();
++                                }
 +                            }
 +                        }
 +                        // Banjo-Tooie: Banjo's fur, from the first 3D world of the frame.
@@ -2185,7 +2250,7 @@ index 9fae0d4..77d672d 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2106,20 @@ namespace RT64 {
+@@ -1682,6 +2168,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2206,7 +2271,7 @@ index 9fae0d4..77d672d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2185,115 @@ namespace RT64 {
+@@ -1747,8 +2247,142 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2288,6 +2353,33 @@ index 9fae0d4..77d672d 100644
 +                instanceGrassVector.resize(instanceIndex, 0);
 +                instanceGrassVector.push_back(grassValue);
 +
++                // Banjo-Tooie: deep snow lies on the level's own opaque, textured ground as 3D grass does; the shader
++                // keeps only snowy surfaces facing up. Fewer shells further away, none beyond the snow's reach.
++                uint8_t snowValue = 0;
++                if ((snowShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                    (call.callDesc.tileCount > 0) && levelGeometry(drawData, call))
++                {
++                    const interop::OtherMode sm = call.shaderDesc.otherMode;
++                    if (sm.zCmp() && sm.zUpd() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
++                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams), 255u));
++                    }
++                }
++                instanceSnowVector.resize(instanceIndex, 0);
++                instanceSnowVector.push_back(snowValue);
++                if ((snowValue != 0) && (std::getenv("TOOIE_SNOW_LOG") != nullptr)) {
++                    static auto snowDrawLogged = std::chrono::steady_clock::now();
++                    static uint32_t snowDraws = 0, snowShellDraws = 0;
++                    snowDraws++;
++                    snowShellDraws += snowValue;
++                    if (std::chrono::steady_clock::now() - snowDrawLogged > std::chrono::seconds(2)) {
++                        snowDrawLogged = std::chrono::steady_clock::now();
++                        fprintf(stderr, "[snow] %u ground draws with shells, %u shell draws (last 2 s)\n", snowDraws, snowShellDraws);
++                        snowDraws = 0;
++                        snowShellDraws = 0;
++                    }
++                }
++
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                if ((furShells > 0) && call.callDesc.extendedFlags.furShells && !excluded && worldOpen && fbPair.depthWrite &&
@@ -2322,7 +2414,7 @@ index 9fae0d4..77d672d 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2303,165 @@ namespace RT64 {
+@@ -1758,13 +2392,170 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2481,16 +2573,21 @@ index 9fae0d4..77d672d 100644
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
          bool shaderViewRtEnabled = false;
 +        finishFurNormals();
++        // Banjo-Tooie: deep snow's trail grid (a cell or two of nothing without it).
++        if ((snowShells == 0) || snowTrailVector.empty()) {
++            snowTrailVector.assign(2, 0u);
++        }
          std::vector<BufferUploader::Upload> shaderUploads = {
              { renderIndicesVector.data(), { 0, renderIndicesVector.size() }, sizeof(interop::RenderIndices), RenderBufferFlag::STORAGE, { }, &renderIndicesBuffer},
 -            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer}
 +            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer},
-+            { furShaderVector.data(), { 0, furShaderVector.size() }, sizeof(interop::float4), RenderBufferFlag::STORAGE, { }, &furNormalsBuffer}
++            { furShaderVector.data(), { 0, furShaderVector.size() }, sizeof(interop::float4), RenderBufferFlag::STORAGE, { }, &furNormalsBuffer},
++            { snowTrailVector.data(), { 0, snowTrailVector.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &snowTrailBuffer}
          };
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..161b220 100644
+index 3add9c3..f382a33 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -48,6 +48,34 @@ namespace RT64 {
@@ -2528,7 +2625,7 @@ index 3add9c3..161b220 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +95,37 @@ namespace RT64 {
+@@ -67,6 +95,43 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -2542,6 +2639,12 @@ index 3add9c3..161b220 100644
 +        bool skippingWater = false;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t grassShells = 0;
++        // Banjo-Tooie: for each instance, 0, or the shells of deep snow drawn over it.
++        std::vector<uint8_t> instanceSnowVector;
++        // Banjo-Tooie: the most shells of deep snow (0 when there is none this frame), and its trail grid.
++        uint32_t snowShells = 0;
++        std::vector<uint32_t> snowTrailVector;
++        BufferPair snowTrailBuffer;
 +        // Banjo-Tooie: Banjo's fur. 1 for each instance draw call that gets fur shells over it (marked by the game).
 +        std::vector<uint8_t> instanceFurVector;
 +        // Banjo-Tooie: per instance, 1 for a window or lamp that lights up at night.
@@ -2566,7 +2669,7 @@ index 3add9c3..161b220 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +146,8 @@ namespace RT64 {
+@@ -87,6 +152,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -2575,7 +2678,7 @@ index 3add9c3..161b220 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -123,6 +184,10 @@ namespace RT64 {
+@@ -123,6 +190,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2586,7 +2689,7 @@ index 3add9c3..161b220 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +229,15 @@ namespace RT64 {
+@@ -164,7 +235,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -3620,10 +3723,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..ea1fec3
+index 0000000..1c7a7f5
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1428 @@
+@@ -0,0 +1,1720 @@
 +//
 +// RT64
 +//
@@ -4168,6 +4271,12 @@ index 0000000..ea1fec3
 +        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
++    void SetSceneSnow(bool on, float height) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.snow = on && (height > 0.0f);
++        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
++    }
++
 +    void SetSceneFur(float amount, float length) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.fur = amount;
@@ -4293,7 +4402,8 @@ index 0000000..ea1fec3
 +        float viewportWidth, float viewportHeight, uint64_t workloadId, interop::FrameParams &frameParams)
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
-+        if ((settings.grass <= 0.0f) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++        // (Deep snow needs the camera's terms worked out here too.)
++        if (((settings.grass <= 0.0f) && !settings.snow) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
 +            return false;
 +        }
 +        UsePlayerFrame(settings, workloadId);
@@ -4430,6 +4540,291 @@ index 0000000..ea1fec3
 +        }
 +        const float trailRadius = frameParams.grassPlayer.w;
 +        frameParams.grassTrailBounds = { low[0] - trailRadius, low[1] - trailRadius, high[0] + trailRadius, high[1] + trailRadius };
++        return true;
++    }
++
++    // Banjo-Tooie: deep snow (Snow.hlsli). Banjo's trail is kept in a grid of cells over the world's x and z that wraps
++    // round (a cell's place is its world cell modulo the grid's size, the rest kept as a tag), so nothing has to move as
++    // he goes. Each cell holds how far the snow was pressed down there, how far it was pushed up into a bank beside the
++    // trail, Banjo's height when it was (so a jump leaves nothing, and the trail only shows on the ground he walked on),
++    // when, and its tag. Snow.hlsli springs it back from then on: held a few seconds, then filling back in.
++    static constexpr uint32_t SnowGridSize = 320;
++    static constexpr float SnowCell = 2.5f;
++    static constexpr float SnowTicksPerSecond = 20.0f;
++    // About ankle deep at height 1 (he wades in it at 3); the banks rise a third above it.
++    static constexpr float SnowDepth = 8.0f;
++    static constexpr float SnowBank = 0.35f;
++    static constexpr uint32_t SnowMinShells = 6;
++    static constexpr uint32_t SnowMaxShells = 16;
++    // How long a print stays as it was, then how long it takes to fill back in (less while it snows).
++    static constexpr float SnowHoldSeconds = 6.0f;
++    static constexpr float SnowRecoverSeconds = 45.0f;
++    // The snow thins out to nothing by this far from the camera.
++    static constexpr float SnowReach = 2600.0f;
++
++    namespace {
++        struct SnowTrail {
++            std::vector<uint32_t> cells = std::vector<uint32_t>(SnowGridSize * SnowGridSize * 2, 0);
++            bool started = false;
++            float last[3] = {};
++            float heading[2] = { 0.0f, 1.0f };
++            float stride = 0.0f;
++            bool leftFoot = false;
++            float stillSeconds = 0.0f;
++            bool stoodPrinted = false;
++            uint32_t sweepRow = 0;
++            std::chrono::steady_clock::time_point lastTime{};
++            double seconds = 0.0;
++        };
++
++        SnowTrail snowTrail;
++    }
++
++    static float SnowSpringBack(float age, float recover) {
++        if (age <= SnowHoldSeconds) {
++            return 1.0f;
++        }
++        const float t = std::min((age - SnowHoldSeconds) / std::max(recover, 1.0f), 1.0f);
++        return 1.0f - t * t * (3.0f - 2.0f * t);
++    }
++
++    // Presses one cell down by depth (0 to 1) and pushes it up into a bank by bank (0 to 1), as Banjo stood at footY.
++    static void SnowPressCell(SnowTrail &trail, int32_t worldX, int32_t worldZ, float footY, float depth, float bank, uint32_t now, float recover) {
++        const int32_t n = int32_t(SnowGridSize);
++        const int32_t slotX = ((worldX % n) + n) % n;
++        const int32_t slotZ = ((worldZ % n) + n) % n;
++        const uint32_t tagX = uint32_t((worldX - slotX) / n) & 0xFFu;
++        const uint32_t tagZ = uint32_t((worldZ - slotZ) / n) & 0xFFu;
++        uint32_t &a = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2];
++        uint32_t &b = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2 + 1];
++        float oldDepth = 0.0f;
++        float oldBank = 0.0f;
++        if ((b != 0) && (((b >> 16) & 0xFFu) == tagX) && ((b >> 24) == tagZ)) {
++            const float age = float((now - (b & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond;
++            const float spring = SnowSpringBack(age, recover);
++            oldDepth = float(a & 0xFFu) / 255.0f * spring;
++            oldBank = float((a >> 8) & 0xFFu) / 255.0f * spring;
++            const float oldY = float(int16_t(a >> 16));
++            if ((oldDepth > 0.01f) || (oldBank > 0.01f)) {
++                if (footY > oldY + 15.0f) {
++                    // In the air over an earlier print: that one stays.
++                    return;
++                }
++                if (footY < oldY - 15.0f) {
++                    // Lower down than the old one, which was left in the air.
++                    oldDepth = 0.0f;
++                    oldBank = 0.0f;
++                }
++            }
++        }
++        const float newDepth = std::max(oldDepth, depth);
++        const float newBank = std::max(oldBank, bank);
++        if ((newDepth < 0.004f) && (newBank < 0.004f)) {
++            return;
++        }
++        const int32_t y = std::clamp(int32_t(std::lround(footY)), -32768, 32767);
++        a = uint32_t(std::lround(newDepth * 255.0f)) | (uint32_t(std::lround(newBank * 255.0f)) << 8) | (uint32_t(uint16_t(int16_t(y))) << 16);
++        // A time of 0 with tag 0 would read as an empty cell.
++        b = (now & 0xFFFFu) | (tagX << 16) | (tagZ << 24);
++        if (b == 0) {
++            b = 1;
++        }
++    }
++
++    // Presses an oval into the snow round (x, z): `along` long in the direction (dirX, dirZ) and `across` wide, with a
++    // flat floor and sloping walls, and a bank pushed up round it out to 1.7 times its size.
++    static void SnowPressOval(SnowTrail &trail, float x, float z, float footY, float dirX, float dirZ, float along, float across, float depth, float bank,
++        uint32_t now, float recover)
++    {
++        const float reach = std::max(along, across) * 1.7f;
++        const int32_t lowX = int32_t(std::floor((x - reach) / SnowCell)), highX = int32_t(std::floor((x + reach) / SnowCell));
++        const int32_t lowZ = int32_t(std::floor((z - reach) / SnowCell)), highZ = int32_t(std::floor((z + reach) / SnowCell));
++        for (int32_t cz = lowZ; cz <= highZ; cz++) {
++            for (int32_t cx = lowX; cx <= highX; cx++) {
++                const float dx = (float(cx) + 0.5f) * SnowCell - x;
++                const float dz = (float(cz) + 0.5f) * SnowCell - z;
++                const float u = (dx * dirX + dz * dirZ) / along;
++                const float v = (dz * dirX - dx * dirZ) / across;
++                const float r = std::sqrt(u * u + v * v);
++                if (r >= 1.7f) {
++                    continue;
++                }
++                const float pressed = depth * std::clamp((1.0f - r) / 0.35f, 0.0f, 1.0f);
++                const float pushed = (r > 0.85f) ? bank * std::clamp(1.0f - std::abs(r - 1.25f) / 0.45f, 0.0f, 1.0f) : 0.0f;
++                SnowPressCell(trail, cx, cz, footY, pressed, pushed, now, recover);
++            }
++        }
++    }
++
++    uint32_t SceneSnowShells() {
++        const std::scoped_lock lock(effectsMutex);
++        if (!effectsSettings.snow) {
++            return 0;
++        }
++        const float full = SnowDepth * effectsSettings.snowHeight * (1.0f + SnowBank);
++        return std::clamp(uint32_t(std::lround(full / 1.5f)), SnowMinShells, SnowMaxShells);
++    }
++
++    uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams) {
++        const float reach = frameParams.snowParams.z;
++        const uint32_t most = uint32_t(frameParams.snowGrid.w > 0.0f ? frameParams.snowParams.w : 0.0f);
++        if ((most == 0) || (distanceToCamera >= reach)) {
++            return 0;
++        }
++        // All of them near the camera, down to two fifths of them far away, where the steps between them don't show.
++        const float t = std::clamp((distanceToCamera - reach * 0.25f) / (reach * 0.75f), 0.0f, 1.0f);
++        return std::max(uint32_t(std::lround(float(most) * (1.0f - 0.6f * t))), std::min(most, 4u));
++    }
++
++    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
++        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
++        std::vector<uint32_t> &trailCells)
++    {
++        SceneEffectsSettings settings = GetSceneEffects();
++        frameParams.snowGrid.w = 0.0f;
++        if (!settings.snow || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++            return false;
++        }
++        UsePlayerFrame(settings, workloadId);
++
++        const float (&m)[4][4] = projection.m;
++        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
++        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
++            return false;
++        }
++
++        // The snow's full height straight up, as RasterVS has its positions (as ComputeSceneGrass's grassClipUp).
++        const float depth = SnowDepth * settings.snowHeight;
++        const float full = depth * (1.0f + SnowBank);
++        float clip[4];
++        for (int c = 0; c < 4; c++) {
++            clip[c] = full * (rowVector ? viewProj.m[1][c] : viewProj.m[c][1]);
++        }
++        const float halfWidth = resolution.x / 2.0f;
++        const float halfHeight = resolution.y / 2.0f;
++        frameParams.snowClipUp = {
++            clip[0] * (viewportScale.x / halfWidth) + clip[3] * ((viewportTranslate.x - halfWidth) / halfWidth),
++            clip[1] * (viewportScale.y / halfHeight) - clip[3] * ((viewportTranslate.y - halfHeight) / halfHeight),
++            clip[2] * viewportScale.z + clip[3] * viewportTranslate.z,
++            clip[3]
++        };
++
++        // Falling snow fills the trail back in sooner.
++        const float snowfall = settings.daySnow ? std::clamp(settings.dayRain, 0.0f, 1.0f) : 0.0f;
++        const float recover = SnowRecoverSeconds / (1.0f + 1.5f * snowfall);
++
++        SnowTrail &trail = snowTrail;
++        const auto nowTime = std::chrono::steady_clock::now();
++        const float dt = trail.started ? std::clamp(std::chrono::duration<float>(nowTime - trail.lastTime).count(), 0.0f, 0.25f) : 0.0f;
++        trail.lastTime = nowTime;
++        trail.seconds += dt;
++        const uint32_t now = uint32_t(trail.seconds * SnowTicksPerSecond) & 0xFFFFu;
++
++        const bool havePlayer = settings.player[1] > -1e8f;
++        if (havePlayer) {
++            const float x = settings.player[0], y = settings.player[1], z = settings.player[2];
++            const float dx = x - trail.last[0], dz = z - trail.last[2];
++            const float moved = std::sqrt(dx * dx + dz * dz);
++            if (!trail.started || (moved > 400.0f) || (std::abs(y - trail.last[1]) > 400.0f)) {
++                // A new map or a warp: the old trail is somewhere else.
++                std::fill(trail.cells.begin(), trail.cells.end(), 0u);
++                trail.started = true;
++                trail.last[0] = x;
++                trail.last[1] = y;
++                trail.last[2] = z;
++                trail.stride = 0.0f;
++                trail.stillSeconds = 0.0f;
++                trail.stoodPrinted = false;
++            }
++            else if (moved > 0.4f) {
++                trail.heading[0] = dx / moved;
++                trail.heading[1] = dz / moved;
++                trail.stillSeconds = 0.0f;
++                trail.stoodPrinted = false;
++
++                // A furrow where he wades through, deeper the deeper the snow, with the snow pushed up either side.
++                const float furrow = std::clamp(0.4f + 0.2f * (settings.snowHeight - 1.0f), 0.25f, 0.75f);
++                const uint32_t steps = std::max(uint32_t(std::ceil(moved / 2.0f)), 1u);
++                for (uint32_t s = 1; s <= steps; s++) {
++                    const float t = float(s) / float(steps);
++                    SnowPressOval(trail, trail.last[0] + dx * t, trail.last[2] + dz * t, trail.last[1] + (y - trail.last[1]) * t,
++                        trail.heading[0], trail.heading[1], 15.0f, 15.0f, furrow, 0.5f, now, recover);
++                }
++
++                // A footprint every stride, left and right in turn, deeper than the furrow.
++                trail.stride += moved;
++                while (trail.stride >= 26.0f) {
++                    trail.stride -= 26.0f;
++                    trail.leftFoot = !trail.leftFoot;
++                    const float side = trail.leftFoot ? 6.5f : -6.5f;
++                    const float back = trail.stride;
++                    const float px = x - trail.heading[0] * back - trail.heading[1] * side;
++                    const float pz = z - trail.heading[1] * back + trail.heading[0] * side;
++                    SnowPressOval(trail, px, pz, y, trail.heading[0], trail.heading[1], 9.0f, 5.0f, 1.0f, 0.7f, now, recover);
++                }
++            }
++            else {
++                // Standing still: both feet pressed in where he stands.
++                trail.stillSeconds += dt;
++                if ((trail.stillSeconds > 0.5f) && !trail.stoodPrinted) {
++                    trail.stoodPrinted = true;
++                    for (float side : { 6.5f, -6.5f }) {
++                        SnowPressOval(trail, x - trail.heading[1] * side, z + trail.heading[0] * side, y, trail.heading[0], trail.heading[1], 9.0f, 5.0f, 1.0f, 0.7f, now, recover);
++                    }
++                }
++            }
++            // Kept from the last time he moved far enough, so many small steps (frames drawn more often than the game
++            // moves him) still add up.
++            if ((moved > 0.4f) || !trail.started) {
++                trail.last[0] = x;
++                trail.last[1] = y;
++                trail.last[2] = z;
++            }
++        }
++
++        // Cells long since filled back in are emptied a few rows at a time, so their times can't wrap round to new.
++        const uint32_t sweepRows = 4;
++        for (uint32_t r = 0; r < sweepRows; r++) {
++            const uint32_t row = (trail.sweepRow + r) % SnowGridSize;
++            for (uint32_t c = 0; c < SnowGridSize; c++) {
++                uint32_t *cell = &trail.cells[(row * SnowGridSize + c) * 2];
++                if ((cell[1] != 0) && (float((now - (cell[1] & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond > SnowHoldSeconds + SnowRecoverSeconds + 10.0f)) {
++                    cell[0] = 0;
++                    cell[1] = 0;
++                }
++            }
++        }
++        trail.sweepRow = (trail.sweepRow + sweepRows) % SnowGridSize;
++        trailCells = trail.cells;
++
++        // The light on the snow: the day and night cycle's sun when it is up, otherwise one from high to one side.
++        float light[3] = { 0.42f, 0.8f, 0.43f };
++        if (settings.customSun && (settings.sunDirection[1] > 0.15f)) {
++            for (int c = 0; c < 3; c++) {
++                light[c] = settings.sunDirection[c];
++            }
++        }
++        const float lightLength = std::sqrt(light[0] * light[0] + light[1] * light[1] + light[2] * light[2]);
++        frameParams.snowParams = { depth, full, SnowReach, float(SceneSnowShells()) };
++        // Test aid: TOOIE_SNOW_DEBUG=1 tints the shells from blue at the ground to magenta at the top, =2 shows the trail
++        // (Snow.hlsli).
++        static const bool snowDebug = (std::getenv("TOOIE_SNOW_DEBUG") != nullptr);
++        frameParams.snowGrid = { SnowCell, 1.0f / SnowCell, float(SnowGridSize), snowDebug ? 1.0f + float(std::max(std::atoi(std::getenv("TOOIE_SNOW_DEBUG")), 1)) : 1.0f };
++        // Test aid: TOOIE_SNOW_LOG=1 logs Banjo's place and how much of the trail is pressed, every 2 seconds.
++        static const bool snowLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr);
++        static double snowLogged = 0.0;
++        if (snowLog && (trail.seconds - snowLogged >= 2.0)) {
++            snowLogged = trail.seconds;
++            uint32_t pressed = 0;
++            for (size_t i = 0; i < trail.cells.size(); i += 2) {
++                pressed += (trail.cells[i + 1] != 0) ? 1 : 0;
++            }
++            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f, %u cells pressed, depth %.1f, recover %.0f s\n", settings.player[0], settings.player[1], settings.player[2],
++                pressed, depth, recover);
++        }
++        frameParams.snowSpring = { SnowHoldSeconds, recover, SnowBank, float(now) };
++        frameParams.snowLight = { light[0] / lightLength, light[1] / lightLength, light[2] / lightLength, 2.2f };
++        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * SnowCell * 0.45f : 0.0f };
 +        return true;
 +    }
 +
@@ -5054,15 +5449,17 @@ index 0000000..ea1fec3
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..19f76e1
+index 0000000..d419e18
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,242 @@
 +//
 +// RT64
 +//
 +
 +#pragma once
++
++#include <vector>
 +
 +#include "shared/rt64_hlsl.h"
 +#include "shared/rt64_frame_params.h"
@@ -5148,6 +5545,8 @@ index 0000000..19f76e1
 +        float grassPatches = 1.0f;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
++        bool snow = false;
++        float snowHeight = 1.0f;
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -5249,6 +5648,18 @@ index 0000000..19f76e1
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams);
++    // Banjo-Tooie: deep snow that Banjo leaves a trail in (Snow.hlsli), on the snowy ground of the 3D world; on is
++    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep).
++    void SetSceneSnow(bool on, float height);
++    // The most shells drawn over a snow draw: 0 when there is no deep snow.
++    uint32_t SceneSnowShells();
++    // How many shells a draw nearest the camera at distanceToCamera gets (0 beyond the snow's reach).
++    uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams);
++    // Fills the frame's snow terms (as ComputeSceneGrass, which must have filled the camera's terms first) and its
++    // trail grid (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
++    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
++        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
++        std::vector<uint32_t> &trail);
 +    // Banjo-Tooie: the textures (RT64 hashes) of windows and lamps that light up at night with the day and night cycle.
 +    void SetSceneNightLights(const uint64_t *hashes, size_t count);
 +    // Banjo-Tooie: the textures 3D grass grows on (RT64 texture hashes); with none set, any green ground.
@@ -6323,15 +6734,17 @@ index 0000000..75eb198
 +    return float4(color, 1.0f);
 +}
 diff --git a/src/shaders/FbRendererCommon.hlsli b/src/shaders/FbRendererCommon.hlsli
-index bc250a2..eb55280 100644
+index bc250a2..162e8de 100644
 --- a/src/shaders/FbRendererCommon.hlsli
 +++ b/src/shaders/FbRendererCommon.hlsli
-@@ -38,6 +38,8 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
+@@ -38,6 +38,10 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
  SamplerState gNearestClampWrapSampler : register(s22, space0);
  SamplerState gNearestClampMirrorSampler : register(s23, space0);
  SamplerState gNearestClampClampSampler : register(s24, space0);
 +// Banjo-Tooie: Banjo's fur, two for each vertex index: its normal, then its place on the model (binding 68).
 +StructuredBuffer<float4> furNormals : register(t68, space0);
++// Banjo-Tooie: deep snow's trail grid, two for each cell (Snow.hlsli, binding 69).
++StructuredBuffer<uint> snowTrail : register(t69, space0);
  
  // Set 1 - RGBA32 texture cache.
  Texture2D<float4> gTextures[8192] : register(t0, space1);
@@ -7393,19 +7806,20 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..caaadea 100644
+index e7895c3..0bc9258 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
-@@ -8,6 +8,8 @@
+@@ -8,6 +8,9 @@
  
  #include "Depth.hlsli"
  #include "FbRendererCommon.hlsli"
 +#include "Grass.hlsli"
++#include "Snow.hlsli"
 +#include "Fur.hlsli"
  #include "Library.hlsli"
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
-@@ -46,11 +48,24 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +49,32 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -7425,6 +7839,14 @@ index e7895c3..caaadea 100644
 +        grassDy = ddy(grassWorld);
 +    }
 +
++    // Banjo-Tooie: a shell of deep snow throws away its pixels above the snow before the draw's colours are worked out.
++    SnowSample snowSample = (SnowSample)0;
++    const bool snowShell = (gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0);
++    const float snowShare = snowShell ? float(gConstants.grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK) : 0.0f;
++    if (snowShell && !SnowShellShape(grassWorld, grassDx, grassDy, snowShare, snowSample)) {
++        return false;
++    }
++
  #if defined(DYNAMIC_RENDER_PARAMS)
 -    if ((otherMode.cycleType() != G_CYC_COPY) && renderFlagCulling(rp.flags) && isFrontFace) {
 +    // (Banjo-Tooie: 3D grass blades show both faces.)
@@ -7432,13 +7854,19 @@ index e7895c3..caaadea 100644
          return false;
      }
  #endif
-@@ -254,6 +269,35 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +278,41 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
 +    // Banjo-Tooie: a 3D grass blade grown from green ground is shaded from its root to its tip; a 3D grass shell
 +    // keeps only the blades crossing it, on green ground facing up.
-+    if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0)) {
++    // Banjo-Tooie: a shell of deep snow keeps only where the snow reaches it, on snowy ground facing up.
++    if (snowShell) {
++        if (!SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, resultColor.rgb)) {
++            return false;
++        }
++    }
++    else if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) != 0)) {
 +        if (!GrassBlade(grassWorld, combinerColor.rgb, vertexFlatColor.a, resultColor.rgb)) {
 +            return false;
 +        }
@@ -7468,7 +7896,7 @@ index e7895c3..caaadea 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +305,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +320,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -7492,7 +7920,7 @@ index e7895c3..caaadea 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +348,7 @@ void PSMain(
+@@ -287,6 +363,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -7500,7 +7928,7 @@ index e7895c3..caaadea 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +365,7 @@ void PSMain(
+@@ -303,7 +380,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -7510,7 +7938,7 @@ index e7895c3..caaadea 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..4b52771 100644
+index 74b1fa0..66e5e3a 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,7 +11,8 @@
@@ -7523,13 +7951,17 @@ index 74b1fa0..4b52771 100644
      float4 ndcPos = iPosition;
      
      // Skip any sort of transformation on the coordinates when rendering rects.
-@@ -19,6 +20,22 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -19,6 +20,26 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.xy -= float2(FbParams.resolution / 2);
          ndcPos.xy /= float2(FbParams.resolution.x / 2.0f, FbParams.resolution.y / -2.0f);
          ndcPos.xyz *= ndcPos.w;
 +
 +        // Banjo-Tooie: a 3D grass shell, moved straight up in the world by its share of the blade height.
-+        if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0)) {
++        // Banjo-Tooie: a shell of deep snow, the same way by its share of the snow's full height.
++        if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0)) {
++            ndcPos += FrParams.snowClipUp * (float(gConstants.grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK));
++        }
++        else if ((gConstants.grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0)) {
 +            ndcPos += FrParams.grassClipUp * (float(gConstants.grassShell) / float(gConstants.grassShells));
 +        }
 +
@@ -7546,7 +7978,7 @@ index 74b1fa0..4b52771 100644
      }
      
      // Apply screen scale and offset.
-@@ -53,17 +70,19 @@ void VSMain(
+@@ -53,17 +74,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -9668,6 +10100,178 @@ index 0000000..d6b151f
 +    return SMAANeighborhoodBlendingPS(uv, offset, gTexture0, gTexture1);
 +#endif
 +}
+diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
+new file mode 100644
+index 0000000..87c83c5
+--- /dev/null
++++ b/src/shaders/Snow.hlsli
+@@ -0,0 +1,166 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: deep snow that Banjo wades through, in the style of Red Dead Redemption 2's. The level's snowy ground
++// draws are drawn again as shells, each moved further up by its share of the snow's full height (RasterVS.hlsl); each
++// shell keeps only where the snow reaches it, so a stack of them reads as a layer of snow lying on the ground, with
++// soft drifts in it. Banjo presses a furrow and footprints into it as he goes, the snow he pushes aside banks up
++// either side, and after a while it all fills back in. The trail is kept on the CPU (ComputeSceneSnow) in a grid of
++// cells that wraps round over the world's x and z (snowTrail): each cell how far it was pressed down (bits 0 to 7),
++// how far it was banked up (8 to 15) and Banjo's height then (16 to 31, signed), and in its second uint when (bits
++// 0 to 15, in twentieths of a second) and which world cell it is (the tag: x in 16 to 23, z in 24 to 31).
++//
++// The shells are drawn from the top down, so where one keeps a pixel the ones below it are hidden by the depth
++// test before they are shaded, and SnowShellShape throws away a shell's pixels above the snow before the draw's
++// textures and colours are worked out: most pixels are shaded once or twice, not once for every shell.
++
++#pragma once
++
++#include "FbRendererCommon.hlsli"
++#include "Grass.hlsli"
++
++// Snowy ground: light and not very colourful (white, lilac or a little warm in the sun), not the ice's cyan (its pale
++// streaks are as light as snow, but greener and bluer than red).
++bool SnowColor(float3 baseColor) {
++    const float brightest = max(baseColor.r, max(baseColor.g, baseColor.b));
++    const float darkest = min(baseColor.r, min(baseColor.g, baseColor.b));
++    const float luma = dot(baseColor, float3(0.3f, 0.59f, 0.11f));
++    return (luma > 0.45f) && ((brightest - darkest) < 0.3f * brightest) && (baseColor.g - baseColor.r < 0.06f) && (baseColor.b - baseColor.r < 0.25f);
++}
++
++// How far one cell was pressed down and banked up now, after springing back for as long as it has been; 0 for a cell
++// that holds another part of the world, or that was pressed with Banjo well above this ground (in the air).
++float2 SnowCell(int2 cell, float groundY) {
++    const int n = int(FrParams.snowGrid.z);
++    const int2 slot = ((cell % n) + n) % n;
++    const uint2 tag = uint2((cell - slot) / n) & 0xFFu;
++    const uint index = (uint(slot.y) * uint(n) + uint(slot.x)) * 2;
++    const uint b = snowTrail[index + 1];
++    if ((b == 0) || (((b >> 16) & 0xFFu) != tag.x) || ((b >> 24) != tag.y)) {
++        return 0.0f;
++    }
++    const uint a = snowTrail[index];
++    // On Icy Side the snow is drawn 20 to 60 units above where Banjo walks (his feet sink into it); a print with
++    // Banjo higher than that was made in the air.
++    const float above = groundY - float(int(a) >> 16);
++    if ((above < -20.0f) || (above > 80.0f)) {
++        return 0.0f;
++    }
++    const float4 spring = FrParams.snowSpring;
++    const float age = float((uint(spring.w) - (b & 0xFFFFu)) & 0xFFFFu) / 20.0f;
++    const float t = saturate((age - spring.x) / max(spring.y, 1.0f));
++    const float back = 1.0f - t * t * (3.0f - 2.0f * t);
++    return float2(float(a & 0xFFu), float((a >> 8) & 0xFFu)) / 255.0f * back;
++}
++
++// The trail's press (x) and bank (y) at a world position, blended between the four nearest cells.
++float2 SnowTrailAt(float2 xz, float groundY) {
++    const float2 g = xz * FrParams.snowGrid.y - 0.5f;
++    const float2 first = floor(g);
++    const float2 f = g - first;
++    const int2 c = int2(first);
++    const float2 a = lerp(SnowCell(c, groundY), SnowCell(c + int2(1, 0), groundY), f.x);
++    const float2 b = lerp(SnowCell(c + int2(0, 1), groundY), SnowCell(c + int2(1, 1), groundY), f.x);
++    return lerp(a, b, f.y);
++}
++
++// The snow's height over the ground (world units) where it is pressed down by trail.x and banked up by trail.y, its
++// untouched height being surface. The banks only rise beside the trail, not in it.
++float SnowHeight(float surface, float2 trail) {
++    const float bank = trail.y * saturate(1.0f - trail.x * 3.0f) * FrParams.snowSpring.z * FrParams.snowParams.x;
++    return surface * (1.0f - 0.88f * trail.x) + bank;
++}
++
++// What SnowShellShape found out about a shell's pixel, for SnowShellShade.
++struct SnowSample {
++    float surface;
++    float height;
++    float shellY;
++    float2 trail;
++    bool nearTrail;
++    float cameraDistance;
++};
++
++// The snow's shape at a shell's pixel at height share (0 to 1 of the snow's full height): false when the pixel is
++// above the snow, or not on ground facing up, so it can be thrown away before the draw's colours are worked out.
++bool SnowShellShape(float3 world, float3 worldDx, float3 worldDy, float share, out SnowSample s) {
++    s = (SnowSample)0;
++
++    // Ground facing up: the shell lies parallel to it, so its slopes give the ground's normal.
++    const float3 normal = cross(worldDx, worldDy);
++    const float normalLength = length(normal);
++    if ((normalLength <= 0.0f) || (abs(normal.y) < 0.6f * normalLength)) {
++        return false;
++    }
++
++    // Thinner far away, gone by the snow's reach, so it ends without an edge.
++    const float4 params = FrParams.snowParams;
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    s.cameraDistance = distance(world, camera);
++    const float thin = saturate(1.0f - (s.cameraDistance - params.z * 0.55f) / (params.z * 0.45f));
++    if (thin <= 0.02f) {
++        return false;
++    }
++
++    // Soft drifts: the snow lies a little deeper in some places than others.
++    const float drift = GrassPatchNoise(world.xz / 140.0f + 23.0f) * 0.65f + GrassPatchNoise(world.xz / 37.0f + 71.0f) * 0.35f;
++    s.surface = params.x * thin * (0.8f + 0.35f * drift);
++
++    // Banjo's trail, near him only.
++    s.shellY = share * params.y;
++    const float4 player = FrParams.snowPlayer;
++    s.nearTrail = (player.w > 0.0f) && all(abs(world.xz - player.xy) < player.w);
++    s.trail = s.nearTrail ? SnowTrailAt(world.xz, world.y - s.shellY) : 0.0f;
++    s.height = SnowHeight(s.surface, s.trail);
++    return s.shellY <= s.height;
++}
++
++// Shades a shell's pixel inside the snow; false when the ground under it isn't snowy (baseColor, the draw's colour).
++bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, inout float3 color) {
++    if (!SnowColor(baseColor)) {
++        return false;
++    }
++
++    // The trail's slopes light up toward the light and fall into soft blue shade away from it.
++    float lit = 0.0f;
++    if (s.nearTrail && ((s.trail.x > 0.003f) || (s.trail.y > 0.003f))) {
++        const float e = 1.25f;
++        const float groundY = world.y - s.shellY;
++        const float hx0 = SnowHeight(s.surface, SnowTrailAt(world.xz - float2(e, 0.0f), groundY));
++        const float hx1 = SnowHeight(s.surface, SnowTrailAt(world.xz + float2(e, 0.0f), groundY));
++        const float hz0 = SnowHeight(s.surface, SnowTrailAt(world.xz - float2(0.0f, e), groundY));
++        const float hz1 = SnowHeight(s.surface, SnowTrailAt(world.xz + float2(0.0f, e), groundY));
++        const float3 n = normalize(float3(-(hx1 - hx0) / (2.0f * e), 1.0f, -(hz1 - hz0) / (2.0f * e)));
++        const float3 light = FrParams.snowLight.xyz;
++        lit = clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++    }
++
++    // Deeper under the snow's untouched surface (the floor and walls of the trail) it is packed down and in shade:
++    // greyer and bluer. The top is a little brighter than the ground below it.
++    const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
++    float3 shade = color * lerp(1.06f, 0.92f, under) * (1.0f + 0.2f * max(lit, 0.0f));
++    shade = lerp(shade, shade * float3(0.62f, 0.7f, 0.9f), saturate(-lit) * 0.85f);
++    shade = lerp(shade, shade * float3(0.82f, 0.88f, 1.0f), saturate(under * s.trail.x * 1.4f));
++
++    // A few glints in the sun close by, each catching the light from some places and not others.
++    if (s.cameraDistance < 700.0f) {
++        const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++        const float3 glint = GrassHash(floor(world.xz * 1.6f) + floor(camera.xz * 0.04f) * 17.0f);
++        if ((glint.x > 0.992f) && (s.height - s.shellY < FrParams.snowParams.y * 0.12f)) {
++            shade += 0.35f * (1.0f - s.cameraDistance / 700.0f) * glint.y;
++        }
++    }
++
++    // Test aids (TOOIE_SNOW_DEBUG): 1 colours the shells from blue at the ground to magenta at the snow's full
++    // height; 2 shows the trail near Banjo (yellow untouched, brighter where pressed, red where banked).
++    if (FrParams.snowGrid.w > 2.5f) {
++        shade = s.nearTrail ? float3(saturate(0.6f + s.trail.y * 4.0f), saturate(0.6f + s.trail.x * 4.0f) * (1.0f - s.trail.y), 0.0f) : float3(0.1f, 0.2f, 1.0f);
++    }
++    else if (FrParams.snowGrid.w > 1.5f) {
++        shade = lerp(float3(0.1f, 0.2f, 1.0f), float3(1.0f, 0.1f, 0.9f), share);
++    }
++
++    color = shade;
++    return true;
++}
 diff --git a/src/shaders/TextureUpscaleCS.hlsl b/src/shaders/TextureUpscaleCS.hlsl
 new file mode 100644
 index 0000000..63b1ede
@@ -9885,10 +10489,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..5fea553 100644
+index 2e62aaf..65cb83b 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,49 @@ namespace interop {
+@@ -13,6 +13,65 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9935,6 +10539,22 @@ index 2e62aaf..5fea553 100644
 +        // Banjo-Tooie: the day and night cycle's lit windows and lamps (RasterPS.hlsl): how far night has come in
 +        // (0 day, 1 night), then the light's colour.
 +        float4 nightLights;
++        // Banjo-Tooie: deep snow (Snow.hlsli, RasterVS.hlsl). The snow's full height (with the banks pushed up beside
++        // the trail) straight up in the world, as RasterVS's positions (as grassClipUp).
++        float4 snowClipUp;
++        // The snow's depth in world units, its full height with the banks (the shells' reach), the distance it thins
++        // out to nothing by, then the most shells a draw gets.
++        float4 snowParams;
++        // The trail grid (snowTrail, two uints a cell): a cell's size in world units, cells per world unit, cells along
++        // each side, then 1 when there is deep snow this frame.
++        float4 snowGrid;
++        // How long a print is held in seconds, how long it then takes to fill back in, how high the banks rise (a
++        // share of the depth), then the time now (in the cells' twentieths of a second, 0 to 65535).
++        float4 snowSpring;
++        // The light on the snow: its direction (world, toward the light), then how strongly it shapes the trail.
++        float4 snowLight;
++        // Banjo's world x, z and y, then how far from him the trail is looked up (0 with no Banjo).
++        float4 snowPlayer;
      };
  #ifdef HLSL_CPU
  };
@@ -10000,10 +10620,10 @@ index 0000000..93ea5da
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..50c6be9 100644
+index 0a5c332..d867588 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,29 @@
+@@ -9,11 +9,33 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -10013,6 +10633,10 @@ index 0a5c332..50c6be9 100644
 +    // Banjo-Tooie: with RASTER_GRASS_BLADES, the draw has a texture with grass along its edge (a cliff top, a wall's
 +    // foot), so blades grow on its sloped and upright triangles too, wherever the texture is green.
 +#define RASTER_GRASS_EDGES 0x40000000u
++    // Banjo-Tooie: set in grassShells when the redraw is a shell of deep snow (Snow.hlsli) instead of grass; grassShell
++    // is then the shell and the low bits of grassShells the shell count.
++#define RASTER_SNOW_SHELLS 0x20000000u
++#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +
      struct RasterParams {
          uint renderIndex;
