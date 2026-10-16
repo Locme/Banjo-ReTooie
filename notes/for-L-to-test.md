@@ -2310,3 +2310,14 @@
 - Look for: Step 1, the menu opens with the brown and gold sidebar layout without turning anything on. Step 2, there is no Sidebar menu (preview) switch any more. Step 3, switches that are on are gold there too. Checked headless with keyboard and mouse.
 - Status: waiting for L
 
+
+## T218 Modern water: waterfalls remade, stronger waves from Banjo
+- Asked: 2026-10-16 05:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Water: Modern
+  2. In Spiral Mountain, look at the stream that runs down past the tree trunk into the pool, and any other waterfall you know
+  3. Swim around a pool, then stand still in it
+  4. Go into Mumbo's Skull
+- Look for: Step 2, the steep parts of the water have streaks pouring down them in the level's water colour, with white foam boiling where they land, and no hard white wedges. Step 3, Banjo pushes bigger waves out round him when swimming and gentle ones when still. Step 4, the light beams still look like the game's. Checked headless in Spiral Mountain and Mumbo's Skull.
+- Status: waiting for L

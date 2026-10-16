@@ -1562,7 +1562,7 @@ index 69a82ac..ea72790 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..5f67ef6 100644
+index 9fae0d4..f906a0d 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1588,7 +1588,7 @@ index 9fae0d4..5f67ef6 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +132,81 @@ namespace RT64 {
+@@ -125,6 +132,97 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -1667,10 +1667,26 @@ index 9fae0d4..5f67ef6 100644
 +        return passes;
 +    }
 +
++    // Banjo-Tooie: whether a draw is part of the level itself (one world matrix, the identity), not a model.
++    static bool levelGeometry(const DrawData &drawData, const GameCall &call) {
++        if ((call.callDesc.minWorldMatrix != call.callDesc.maxWorldMatrix) || (call.callDesc.minWorldMatrix >= drawData.worldTransforms.size())) {
++            return false;
++        }
++        const float (&w)[4][4] = drawData.worldTransforms[call.callDesc.minWorldMatrix].m;
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                if (std::abs(w[r][c] - ((r == c) ? 1.0f : 0.0f)) > 1e-3f) {
++                    return false;
++                }
++            }
++        }
++        return true;
++    }
++
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +251,19 @@ namespace RT64 {
+@@ -169,6 +267,19 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1690,7 +1706,7 @@ index 9fae0d4..5f67ef6 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +468,7 @@ namespace RT64 {
+@@ -373,6 +484,7 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -1698,7 +1714,7 @@ index 9fae0d4..5f67ef6 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -465,12 +561,55 @@ namespace RT64 {
+@@ -465,12 +577,61 @@ namespace RT64 {
          return true;
      }
      
@@ -1718,10 +1734,10 @@ index 9fae0d4..5f67ef6 100644
 +        worker->commandList->setVertexBuffers(0, indexedVertexViews.data(), uint32_t(indexedVertexViews.size()), vertexInputSlots.data());
 +        worker->commandList->setIndexBuffer(&indexBufferView);
 +
-+        auto drawWater = [&](uint32_t mode) {
++        auto drawWater = [&](uint32_t mode, const std::vector<uint32_t> &instances) {
 +            interop::RasterParams rasterParams = {};
 +            rasterParams.waterMask = mode;
-+            for (uint32_t i : targetDrawCall.waterInstances) {
++            for (uint32_t i : instances) {
 +                const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
 +                const auto &triangles = drawCall.triangles;
 +                if (triangles.scissor.isEmpty() || (triangles.pipeline == nullptr)) {
@@ -1737,12 +1753,18 @@ index 9fae0d4..5f67ef6 100644
 +                worker->commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
 +            }
 +        };
-+        drawWater(1);
++        // Modern water: the steep draws too, marked apart (waterMask 3), for its waterfalls. First, so the flat
++        // water wins where both are drawn (a fall's part under the surface; nothing writes depth here).
++        if (skippingWater) {
++            drawWater(3, targetDrawCall.fallInstances);
++        }
++        drawWater(1, targetDrawCall.waterInstances);
 +
 +        // Modern water: the same draws' own colours and blending alpha, which tint the new water.
 +        if (skippingWater) {
 +            BeginSceneWaterMask(worker, colorTarget, depthTarget, true);
-+            drawWater(2);
++            drawWater(2, targetDrawCall.fallInstances);
++            drawWater(2, targetDrawCall.waterInstances);
 +        }
 +    }
 +
@@ -1756,7 +1778,7 @@ index 9fae0d4..5f67ef6 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +653,17 @@ namespace RT64 {
+@@ -514,6 +675,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -1774,7 +1796,7 @@ index 9fae0d4..5f67ef6 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +724,51 @@ namespace RT64 {
+@@ -574,10 +746,51 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -1826,7 +1848,7 @@ index 9fae0d4..5f67ef6 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1441,66 @@ namespace RT64 {
+@@ -1250,6 +1463,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -1863,10 +1885,11 @@ index 9fae0d4..5f67ef6 100644
 +        // the game's water shows under the new water.
 +        const bool modernWater = sceneEffectsEnabled && SceneModernWater();
 +        const bool handedOn = modernWater && (colorTarget != nullptr) && !targetDrawCall.waterHandedOn.empty() && SceneEffectsWanted(depthTarget);
-+        skippingWater = (drawSceneEffects && !targetDrawCall.waterInstances.empty() && (targetDrawCall.sceneEffectsDrawData != nullptr) && modernWater) || handedOn;
++        skippingWater = (drawSceneEffects && (!targetDrawCall.waterInstances.empty() || !targetDrawCall.fallInstances.empty()) &&
++            (targetDrawCall.sceneEffectsDrawData != nullptr) && modernWater) || handedOn;
 +        if (skippingWater) {
 +            instanceWaterSkipVector.assign(instanceDrawCallVector.size(), 0);
-+            for (const std::vector<uint32_t> *list : { &targetDrawCall.waterInstances, &targetDrawCall.waterHandedOn }) {
++            for (const std::vector<uint32_t> *list : { &targetDrawCall.waterInstances, &targetDrawCall.fallInstances, &targetDrawCall.waterHandedOn }) {
 +                for (uint32_t i : *list) {
 +                    if (i < instanceWaterSkipVector.size()) {
 +                        instanceWaterSkipVector[i] = 1;
@@ -1880,11 +1903,11 @@ index 9fae0d4..5f67ef6 100644
 +        if (modernWater && drawSceneEffects) {
 +            static int lastState = -1;
 +            static std::chrono::steady_clock::time_point lastLog;
-+            const int state = (skippingWater ? 1 : 0) | (targetDrawCall.waterInstances.empty() ? 2 : 0) | ((targetDrawCall.waterLeftOutClosed > 0) ? 4 : 0) | (handedOn ? 8 : 0);
++            const int state = (skippingWater ? 1 : 0) | (targetDrawCall.waterInstances.empty() ? 2 : 0) | (targetDrawCall.fallInstances.empty() ? 16 : 0) | ((targetDrawCall.waterLeftOutClosed > 0) ? 4 : 0) | (handedOn ? 8 : 0);
 +            const auto now = std::chrono::steady_clock::now();
 +            if ((state != lastState) && (now - lastLog > std::chrono::milliseconds(500))) {
-+                fprintf(stderr, "[modern water] %s: %zu water draws%s, left out %u drawn after the 3D world closed and %u small\n",
-+                    skippingWater ? "replacing" : "not replacing", targetDrawCall.waterInstances.size(), handedOn ? " (some from an earlier part)" : "",
++                fprintf(stderr, "[modern water] %s: %zu water draws, %zu steep ones%s, left out %u drawn after the 3D world closed and %u small\n",
++                    skippingWater ? "replacing" : "not replacing", targetDrawCall.waterInstances.size(), targetDrawCall.fallInstances.size(), handedOn ? " (some from an earlier part)" : "",
 +                    targetDrawCall.waterLeftOutClosed, targetDrawCall.waterLeftOutSmall);
 +                lastState = state;
 +                lastLog = now;
@@ -1893,7 +1916,7 @@ index 9fae0d4..5f67ef6 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1547,56 @@ namespace RT64 {
+@@ -1296,9 +1570,56 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -1908,7 +1931,7 @@ index 9fae0d4..5f67ef6 100644
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
 +                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
-+                    if (!targetDrawCall.waterInstances.empty() && SceneWaterWanted()) {
++                    if ((!targetDrawCall.waterInstances.empty() || (skippingWater && !targetDrawCall.fallInstances.empty())) && SceneWaterWanted()) {
 +                        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::WaterMask, worker->commandList.get());
 +                        submitWaterMask(worker, framebuffer, targetDrawCall);
 +                    }
@@ -1951,7 +1974,7 @@ index 9fae0d4..5f67ef6 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1354,6 +1652,7 @@ namespace RT64 {
+@@ -1354,6 +1675,7 @@ namespace RT64 {
          postBlendDitherNoiseAddPipeline = rasterShaderUber->postBlendDitherNoiseAddPipeline.get();
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
@@ -1959,13 +1982,14 @@ index 9fae0d4..5f67ef6 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1707,57 @@ namespace RT64 {
+@@ -1408,6 +1730,58 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
++        targetDrawCall.fallInstances.clear();
 +        targetDrawCall.waterHandedOn.clear();
 +        targetDrawCall.waterLeftOutClosed = 0;
 +        targetDrawCall.waterLeftOutSmall = 0;
@@ -2017,7 +2041,7 @@ index 9fae0d4..5f67ef6 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1456,6 +1806,48 @@ namespace RT64 {
+@@ -1456,6 +1830,48 @@ namespace RT64 {
                  continue;
              }
  
@@ -2066,7 +2090,7 @@ index 9fae0d4..5f67ef6 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1682,6 +2074,20 @@ namespace RT64 {
+@@ -1682,6 +2098,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2087,7 +2111,7 @@ index 9fae0d4..5f67ef6 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2153,94 @@ namespace RT64 {
+@@ -1747,8 +2177,98 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2096,12 +2120,15 @@ index 9fae0d4..5f67ef6 100644
 +                    // no depth write, not a decal) made of several triangles lying flat; the shader keeps only
 +                    // surfaces lying over something further down.
 +                    const interop::OtherMode om = call.shaderDesc.otherMode;
-+                    if ((proj.type == Projection::Type::Perspective) && fbPair.depthWrite && worldOpen &&
++                    const bool waterLike = (proj.type == Projection::Type::Perspective) && fbPair.depthWrite && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        (call.callDesc.triangleCount >= 4) && om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) &&
-+                        (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om) && flatInWorld(drawData, call))
-+                    {
++                        (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
++                    if (waterLike && flatInWorld(drawData, call)) {
 +                        targetDrawCall.waterInstances.push_back(instanceIndex);
++                    }
++                    else if (waterLike && levelGeometry(drawData, call)) {
++                        targetDrawCall.fallInstances.push_back(instanceIndex);
 +                    }
 +                    else if ((proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) && interop::Blender::usesAlphaBlend(om))
@@ -2113,8 +2140,8 @@ index 9fae0d4..5f67ef6 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2175,14 +2202,15 @@ index 9fae0d4..5f67ef6 100644
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
 +                        nightLight = SceneNightLightTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                    }
-                 }
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back(nightLight ? 1 : 0);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2251,140 @@ namespace RT64 {
+             }
+@@ -1758,13 +2278,143 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -2201,10 +2229,13 @@ index 9fae0d4..5f67ef6 100644
 +                    (earlier.fbStorage->colorTarget == targetDrawCall.fbStorage->colorTarget))
 +                {
 +                    targetDrawCall.waterInstances.insert(targetDrawCall.waterInstances.begin(), earlier.waterInstances.begin(), earlier.waterInstances.end());
++                    targetDrawCall.fallInstances.insert(targetDrawCall.fallInstances.begin(), earlier.fallInstances.begin(), earlier.fallInstances.end());
 +                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
 +                    targetDrawCall.waterLeftOutSmall += earlier.waterLeftOutSmall;
 +                    earlier.waterHandedOn = std::move(earlier.waterInstances);
++                    earlier.waterHandedOn.insert(earlier.waterHandedOn.end(), earlier.fallInstances.begin(), earlier.fallInstances.end());
 +                    earlier.waterInstances.clear();
++                    earlier.fallInstances.clear();
 +                    earlier.sceneEffectsAfter = -1;
 +                }
 +            }
@@ -2325,10 +2356,10 @@ index 9fae0d4..5f67ef6 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..c15f0f7 100644
+index 3add9c3..161b220 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,30 @@ namespace RT64 {
+@@ -48,6 +48,34 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -2342,6 +2373,10 @@ index 3add9c3..c15f0f7 100644
 +        // Banjo-Tooie: the 3D world's draws that look like water (see addFramebuffer), redrawn into the
 +        // scene effects' water mask.
 +        std::vector<uint32_t> waterInstances;
++        // Banjo-Tooie: the level's own steep translucent draws (waterfalls, and light beams that look the same to
++        // the renderer). Modern water leaves them out and redraws them marked apart in the water mask; the shader
++        // turns the watery ones into its waterfalls and puts the rest back as the game drew them.
++        std::vector<uint32_t> fallInstances;
 +        // Water this part of the picture draws but handed to a later part's effects (see addFramebuffer):
 +        // Modern water leaves it out here too.
 +        std::vector<uint32_t> waterHandedOn;
@@ -2359,7 +2394,7 @@ index 3add9c3..c15f0f7 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +91,37 @@ namespace RT64 {
+@@ -67,6 +95,37 @@ namespace RT64 {
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -2397,7 +2432,7 @@ index 3add9c3..c15f0f7 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +142,8 @@ namespace RT64 {
+@@ -87,6 +146,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -2406,7 +2441,7 @@ index 3add9c3..c15f0f7 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -123,6 +180,10 @@ namespace RT64 {
+@@ -123,6 +184,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -2417,7 +2452,7 @@ index 3add9c3..c15f0f7 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +225,15 @@ namespace RT64 {
+@@ -164,7 +229,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -3443,7 +3478,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..16acb6a
+index 0000000..a6ff2e4
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1340 @@
@@ -4668,8 +4703,8 @@ index 0000000..16acb6a
 +                commandList->setGraphicsPipelineLayout(shaderLibrary->luminance.pipelineLayout.get());
 +                commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +                // A moving player keeps pushing (a wake); one standing still bobs a little.
-+                const float bob = 0.012f * std::sin(float(std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0)) * 5.0f);
-+                const float push = std::min(speed / 300.0f, 1.0f) * 0.1f + bob;
++                const float bob = 0.03f * std::sin(float(std::fmod(std::chrono::duration<double>(now.time_since_epoch()).count(), 1000.0)) * 5.0f);
++                const float push = std::min(speed / 250.0f, 1.5f) * 0.3f + bob;
 +                for (int step = 0; step < steps; step++) {
 +                    const int from = step & 1;
 +                    const int to = from ^ 1;
@@ -4681,7 +4716,7 @@ index 0000000..16acb6a
 +                    simConstants.params = { 1.0f / float(RippleCells), RippleCellSize, 7.0f, 0.0f };
 +                    simConstants.waterSim = { (step == 0) ? float(shiftX) : 0.0f, (step == 0) ? float(shiftZ) : 0.0f,
 +                        settings.player[0] / RippleCellSize - float(cornerX), settings.player[2] / RippleCellSize - float(cornerZ) };
-+                    simConstants.waterPush = { push, 5.0f, (splash && (step == 0)) ? 3.0f : 0.0f, 0.995f };
++                    simConstants.waterPush = { push, 6.0f, (splash && (step == 0)) ? 6.0f : 0.0f, 0.995f };
 +                    commandList->setFramebuffer(res.rippleFramebuffer[to].get());
 +                    commandList->setGraphicsDescriptorSet(res.rippleSet[from]->get(), 0);
 +                    commandList->setGraphicsPushConstants(0, &simConstants);
@@ -7058,7 +7093,7 @@ index 0000000..0bbe1d5
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ac464f2 100644
+index e7895c3..caaadea 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,6 +8,8 @@
@@ -7133,7 +7168,7 @@ index e7895c3..ac464f2 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +305,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +305,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -7144,10 +7179,12 @@ index e7895c3..ac464f2 100644
 +        return true;
 +    }
 +
-+    // Banjo-Tooie: redrawn into the water mask, the surface's depth (24 bits over rgb) instead of its colour.
++    // Banjo-Tooie: redrawn into the water mask, the surface's depth (24 bits over rgb) instead of its colour, and
++    // in alpha what it is: 1 for flat water, a quarter for Modern water's steep draws (waterMask 3, waterfalls).
 +    if (gConstants.waterMask != 0) {
 +        const uint depthBits = uint(saturate(vertexPosition.z) * 16777215.0f);
-+        resultColor = float4(float((depthBits >> 16) & 0xFF), float((depthBits >> 8) & 0xFF), float(depthBits & 0xFF), 255.0f) / 255.0f;
++        const float kind = (gConstants.waterMask == 3) ? 64.0f : 255.0f;
++        resultColor = float4(float((depthBits >> 16) & 0xFF), float((depthBits >> 8) & 0xFF), float(depthBits & 0xFF), kind) / 255.0f;
 +        resultAlpha = 1.0f;
 +        return true;
 +    }
@@ -7155,7 +7192,7 @@ index e7895c3..ac464f2 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +346,7 @@ void PSMain(
+@@ -287,6 +348,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -7163,7 +7200,7 @@ index e7895c3..ac464f2 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +363,7 @@ void PSMain(
+@@ -303,7 +365,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -7233,10 +7270,10 @@ index 74b1fa0..031d451 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..8bcd819
+index 0000000..ebb78db
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,1690 @@
+@@ -0,0 +1,1832 @@
 +//
 +// RT64
 +//
@@ -7739,6 +7776,69 @@ index 0000000..8bcd819
 +    return m.a > 0.5f;
 +}
 +
++// Modern water's colours: the game's own water colour (rgb) and how opaque it drew it (a) at a pixel.
++float4 LoadWaterColor(int2 pixel) {
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    return gWaterColor.Load(pixel, 0);
++#else
++    return gWaterColor.Load(int3(pixel, 0));
++#endif
++}
++
++// Modern water's steep draws (waterfalls, and the light beams the renderer can't tell from them): their depth,
++// from the water mask, where they are marked with a quarter alpha.
++bool LoadFall(int2 pixel, out float depth) {
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    const float4 m = gWater.Load(pixel, 0);
++#else
++    const float4 m = gWater.Load(int3(pixel, 0));
++#endif
++    const uint3 b = uint3(round(m.rgb * 255.0f));
++    depth = float((b.r << 16) | (b.g << 8) | b.b) / 16777215.0f;
++    return (m.a > 0.1f) && (m.a < 0.5f);
++}
++
++// Anything in the water mask (flat water or a steep draw): its depth.
++bool LoadAnyWater(int2 pixel, out float depth) {
++    return LoadWater(pixel, depth) || LoadFall(pixel, depth);
++}
++
++// How steep the water mask's surface is at a pixel (0 lying flat, 1 upright), in the world.
++float SteepAt(int2 pixel) {
++    float d, dr, dd, dl, du;
++    if (!LoadAnyWater(pixel, d)) {
++        return 0.0f;
++    }
++    const float3 c = ViewPosition(pixel, d);
++    const float3 px = LoadAnyWater(pixel + int2(1, 0), dr) ? ViewPosition(pixel + int2(1, 0), dr) - c : (LoadAnyWater(pixel - int2(1, 0), dl) ? c - ViewPosition(pixel - int2(1, 0), dl) : float3(1.0f, 0.0f, 0.0f));
++    const float3 py = LoadAnyWater(pixel + int2(0, 1), dd) ? ViewPosition(pixel + int2(0, 1), dd) - c : (LoadAnyWater(pixel - int2(0, 1), du) ? c - ViewPosition(pixel - int2(0, 1), du) : float3(0.0f, 0.0f, 1.0f));
++    const float3 n = cross(px, py);
++    if (dot(n, n) < 1e-10f) {
++        return 0.0f;
++    }
++    return 1.0f - saturate((abs(dot(normalize(n), normalize(gConstants.worldY.xyz))) - 0.45f) * 4.0f);
++}
++
++// How watery a steep draw's colour is round a pixel, 0 to 1: water is bluer than it is red, the light beams
++// are warm or white. Averaged over a few pixels so the scrolling texture doesn't decide it. Gives the colour.
++float FallWatery(int2 pixel, out float3 tint) {
++    const int reach = max(2, int(gConstants.projection.w / 120.0f));
++    tint = 0.0f;
++    float count = 0.0f;
++    [unroll] for (int i = 0; i < 5; i++) {
++        const int2 offset = (i == 0) ? int2(0, 0) : (i == 1) ? int2(reach, 0) : (i == 2) ? int2(-reach, 0) : (i == 3) ? int2(0, reach) : int2(0, -reach);
++        float d;
++        if (LoadAnyWater(pixel + offset, d)) {
++            tint += LoadWaterColor(pixel + offset).rgb;
++            count += 1.0f;
++        }
++    }
++    tint = (count > 0.0f) ? tint / count : 0.0f;
++    return (count > 0.0f) ? saturate((tint.b - tint.r) * 8.0f - 0.1f) : 0.0f;
++}
++
 +// How much a water pixel reflects (0 to 1): only flat surfaces facing up, lying over something further
 +// down (so shadows and decals on the ground don't count), fading in from the shore. Gives the surface's
 +// view-space position and normal.
@@ -7942,16 +8042,6 @@ index 0000000..8bcd819
 +    return float4(gColor.Load(int3(at, 0)).rgb, (LoadDepth(at) >= 0.99999f) ? 0.5f : 0.3f);
 +}
 +
-+// Modern water's colours: the game's own water colour (rgb) and how opaque it drew it (a) at a pixel.
-+float4 LoadWaterColor(int2 pixel) {
-+    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
-+#ifdef MULTISAMPLING
-+    return gWaterColor.Load(pixel, 0);
-+#else
-+    return gWaterColor.Load(int3(pixel, 0));
-+#endif
-+}
-+
 +// A world position from a view-space one.
 +float3 WorldPosition(float3 view) {
 +    return float3(dot(view, gConstants.worldX.xyz) + gConstants.worldX.w, dot(view, gConstants.worldY.xyz) + gConstants.worldY.w,
@@ -8003,10 +8093,13 @@ index 0000000..8bcd819
 +    const float2 c = gWaterRipples.SampleLevel(LinearSampler, uv, 0);
 +    const float hx = gWaterRipples.SampleLevel(LinearSampler, uv + float2(texel.x, 0.0f), 0).r - gWaterRipples.SampleLevel(LinearSampler, uv - float2(texel.x, 0.0f), 0).r;
 +    const float hz = gWaterRipples.SampleLevel(LinearSampler, uv + float2(0.0f, texel.y), 0).r - gWaterRipples.SampleLevel(LinearSampler, uv - float2(0.0f, texel.y), 0).r;
-+    // Kept gentle: steep slopes right where the player pushes would mirror the sky over their body.
++    // Kept gentle right where the player pushes (steep slopes there would mirror the sky over their body), and
++    // stronger further out, where the wake and rings spread.
 +    float2 slope = float2(hx, hz) / (2.0f * cell);
-+    slope *= min(1.0f, 0.3f / max(length(slope), 1e-4f));
-+    return float4(clamp(c.r, -6.0f, 6.0f), slope, abs(c.g));
++    const float fromPlayer = length(p - float2(gConstants.rippleX.w, gConstants.rippleZ.w));
++    const float steepest = lerp(0.3f, 0.75f, saturate((fromPlayer - 40.0f) / 40.0f));
++    slope *= min(1.0f, steepest / max(length(slope), 1e-4f));
++    return float4(clamp(c.r, -14.0f, 14.0f), slope, abs(c.g));
 +}
 +
 +// Modern water's surface height above the flat surface at a world x and z (waves and ripples).
@@ -8048,7 +8141,7 @@ index 0000000..8bcd819
 +
 +    // The moving surface: the flat surface raised and lowered by the waves and ripples. Where the eye's ray first
 +    // meets it is found by stepping along the ray through the band they can reach.
-+    const float band = 9.0f * strength + 6.0f;
++    const float band = 9.0f * strength + 14.0f;
 +    const float along = dot(v, up);
 +    if (abs(along) > 0.02f) {
 +        const float tFlat = length(surface);
@@ -8167,8 +8260,77 @@ index 0000000..8bcd819
 +    const float nearPlayer = (gConstants.rippleAge.w > -1e8f) ? saturate((length(p - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 60.0f) / 30.0f) : 1.0f;
 +    const float shore = (sceneDepth < 0.99999f) ? saturate(1.0f - floorDepth / 16.0f) * nearPlayer : 0.0f;
 +    const float shoreFoam = saturate((shore * 1.2f - (1.0f - pattern) * 1.0f) * 2.5f) * saturate(1.5f - distance / 4000.0f);
-+    const float allFoam = saturate(max(shoreFoam, foam * (0.15f + 0.45f * pattern)));
++    // White water where a waterfall comes down into it: a fall just above on screen, near in distance.
++    float boil = 0.0f;
++    [unroll] for (int k = 1; k <= 3; k++) {
++        float fallDepth;
++        const int2 above = pixel - int2(0, k * max(2, int(gConstants.projection.w / 60.0f)));
++        if (LoadFall(above, fallDepth) || (LoadWater(above, fallDepth) && (SteepAt(above) > 0.5f))) {
++            float3 fallTint;
++            const float near = saturate(1.0f - abs(-ViewPosition(above, fallDepth).z - distance) / 150.0f);
++            boil = max(boil, near * FallWatery(above, fallTint) * (1.0f - 0.25f * float(k - 1)));
++        }
++    }
++    const float boilFoam = saturate(boil * (0.6f + 0.6f * pattern) - 0.15f);
++    const float allFoam = saturate(max(max(shoreFoam, foam * (0.15f + 0.45f * pattern)), boilFoam));
 +    color = lerp(color, float3(0.93f, 0.96f, 0.98f), allFoam * 0.55f);
++    return color;
++}
++
++// Modern water's waterfalls: white water streaming down over a bluer body in the level's water colour, with
++// what is behind seen wobbling through its thinner parts and the sun catching the streaks.
++float3 ModernFall(int2 pixel, float fallDepth, float3 scene, float3 tint) {
++    const float3 surface = ViewPosition(pixel, fallDepth);
++    const float3 v = normalize(surface);
++    // The fall's facing, from its neighbours in the mask (the smaller step on each axis).
++    float dr, dl, dd, du;
++    const float3 right = LoadAnyWater(pixel + int2(1, 0), dr) ? ViewPosition(pixel + int2(1, 0), dr) : surface;
++    const float3 left = LoadAnyWater(pixel - int2(1, 0), dl) ? ViewPosition(pixel - int2(1, 0), dl) : surface;
++    const float3 down = LoadAnyWater(pixel + int2(0, 1), dd) ? ViewPosition(pixel + int2(0, 1), dd) : surface;
++    const float3 upper = LoadAnyWater(pixel - int2(0, 1), du) ? ViewPosition(pixel - int2(0, 1), du) : surface;
++    const float3 dx = (abs(right.z - surface.z) < abs(surface.z - left.z)) ? (right - surface) : (surface - left);
++    const float3 dy = (abs(down.z - surface.z) < abs(surface.z - upper.z)) ? (down - surface) : (surface - upper);
++    float3 normal = cross(dx, dy);
++    normal = (dot(normal, normal) > 1e-8f) ? normalize(normal) : -v;
++    if (dot(normal, -surface) < 0.0f) {
++        normal = -normal;
++    }
++
++    // Along the fall: across it (horizontal in the world) and down it (the world's height).
++    const float3 world = WorldPosition(surface);
++    const float3 normalWorld = float3(dot(normal, gConstants.worldX.xyz), dot(normal, gConstants.worldY.xyz), dot(normal, gConstants.worldZ.xyz));
++    float3 across = cross(float3(0.0f, 1.0f, 0.0f), normalWorld);
++    across = (dot(across, across) > 1e-4f) ? normalize(across) : float3(1.0f, 0.0f, 0.0f);
++    const float u = dot(world, across);
++    const float t = gConstants.ambientOcclusion.z;
++    // Streaks stretched down the fall and pouring down it, two sizes falling at two speeds.
++    const float coarse = WaterNoise(float2(u / 9.0f, world.y / 70.0f + t * 4.0f));
++    const float fine = WaterNoise(float2(u / 3.5f, world.y / 28.0f + t * 9.0f));
++    const float streak = saturate(coarse * 0.65f + fine * 0.45f);
++    const float white = saturate((streak - 0.42f) * 2.6f);
++
++    // The level's water colour, kept saturated, darker in its body.
++    const float luma = dot(tint, float3(0.299f, 0.587f, 0.114f));
++    const float3 hue = saturate(lerp(luma.xxx, tint, 1.35f));
++    const float3 body = hue * 0.75f + float3(0.03f, 0.06f, 0.09f);
++
++    // Behind it, wobbling with the streaks, only from things further away.
++    const int2 bent = clamp(pixel + int2(int((fine - 0.5f) * gConstants.projection.w * 0.012f), 0), int2(0, 0), int2(gConstants.projection.zw) - 1);
++    float3 behind = scene;
++    const float bentDepth = LoadDepth(bent);
++    if ((bentDepth >= 0.99999f) || (-ViewPosition(bent, bentDepth).z > -surface.z)) {
++        behind = gColor.Load(int3(bent, 0)).rgb;
++    }
++    const float3 seen = behind * lerp(float3(1.0f, 1.0f, 1.0f), hue / max(max(hue.r, max(hue.g, hue.b)), 0.05f), 0.5f);
++
++    // Thick where it is white, a little clearer between the streaks.
++    float3 color = lerp(seen, body, 0.55f);
++    color = lerp(color, float3(0.9f, 0.95f, 1.0f), white * 0.7f);
++    // The sun catching the white water, and a soft sheen from the sky along its edges.
++    const float3 sun = (gConstants.sun.z < 0.98f) ? gConstants.sun.xyz : normalize(float3(0.3f, 0.8f, -0.5f));
++    color += float3(1.0f, 0.97f, 0.9f) * white * saturate(dot(normal, sun)) * 0.25f;
++    const float rim = pow(1.0f - saturate(dot(-v, normal)), 3.0f);
++    color = lerp(color, float3(0.75f, 0.85f, 0.92f), rim * 0.3f);
 +    return color;
 +}
 +
@@ -8869,8 +9031,25 @@ index 0000000..8bcd819
 +                    scene = (flat > 0.0f) ? lerp(original, ModernWaterBelow(pixel, flatSurface, -n, scene), flat) : original;
 +                }
 +                else {
-+                    scene = (amount > 0.0f) ? lerp(original, ModernWater(pixel, depth, surface, normal, scene), amount) : original;
++                    // Steep parts of a water draw (a stream going over a drop) become a waterfall when watery.
++                    float3 back = original;
++                    const float steep = (amount < 1.0f) ? SteepAt(pixel) : 0.0f;
++                    if ((amount < 1.0f) && (steep > 0.0f)) {
++                        float3 tint;
++                        const float watery = FallWatery(pixel, tint);
++                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, scene, tint), watery * steep) : original;
++                    }
++                    scene = (amount > 0.0f) ? lerp(back, ModernWater(pixel, depth, surface, normal, scene), amount) : back;
 +                }
++            }
++            else if ((gConstants.water.y < 2.5f) && LoadFall(pixel, waterDepth)) {
++                // A steep draw: a waterfall gets Modern water's own; anything else (light beams) is put back
++                // as the game drew it.
++                const float4 game = LoadWaterColor(pixel);
++                const float3 original = lerp(scene, game.rgb, saturate(game.a));
++                float3 tint;
++                const float watery = FallWatery(pixel, tint);
++                scene = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, scene, tint), watery) : original;
 +            }
 +            else if ((gConstants.rippleZ.z > 0.0f) && (depth < 0.99999f)) {
 +                // Under the water: caustics on what faces up below the surface.
