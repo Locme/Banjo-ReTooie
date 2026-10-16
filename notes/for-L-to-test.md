@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T323 3D grass skips the road's texture
+- Asked: 2026-10-16 21:10 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass in Graphics > Grass
+  2. Walk Spiral Mountain's cobbled road from Banjo's house to Bottles' ghost and the dirt pit
+  3. Check other paths too (Jinjo Village, Mayahem Temple)
+- Look for: No blades stand on the cobbles or on dirt paths laid over the grass; grass still grows right up to their edges
+- Status: waiting for L
+
 ## T322 Totals checklist on by default
 - Asked: 2026-10-16 21:08 UTC
 - Build: main (pull and build)
