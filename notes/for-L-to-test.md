@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T259 Mumbo's Hut Recreation v3: doorway fits the arch
+- Asked: 2026-10-16 10:25 UTC
+- Build: main (pull and build), plus the v3 mod zip
+- Steps:
+  1. Put mods/Mumbo's Hut Recreation v3.zip (project files) in the game's mods folder in place of v2
+  2. Load a file, then Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
+  3. Warp > Glitter Gulch Mine > Outside Mumbo's Skull, look at the door, then walk in
+- Look for: The original doorway now fills the hut's arch, with no sky or gaps round the black in either world. Lighting as in v2, and the door still takes you inside. Checked headless with the zip (screens/mumbos-hut/v3.png in project files): both doorways fill the arch, GGM's door entered. Asked 2026-10-16 10:21 UTC (L: "In your second image, you can see the black doorway does not fit, make it fit")
+- Status: waiting for L
+
 ## T257 Banjo fur on model mods
 - Asked: 2026-10-16 10:30 UTC
 - Build: main (next Windows build), plus mods/Smash Banjo v7.zip
@@ -26,7 +36,7 @@
   1. Load a file, then Warp > Glitter Gulch Mine > Outside Mumbo's Skull and look at the hut, then walk into its door
   2. Warp > Cloud Cuckooland > Skull on the cloud (straight ahead) and walk up to the hut
 - Look for: The flat black door is gone; the doorway is now the original skull's short tunnel, shading from the entrance to black inside. The hut takes its light from the level the way the old skull did: warm orange and darker in the mine, plain daylight on the cloud, instead of the same flat light everywhere. The door still takes you inside. Checked headless with the zip ([v2.png](screens/mumbos-hut/v2.png) in project files): both huts drawn, GGM's door entered.
-- Status: waiting for L
+- Status: replaced by T259 (v3)
 
 ## T254 Red square on Bottles' ghost talking head: texture pack or not
 - Asked: 2026-10-16 10:14 UTC
