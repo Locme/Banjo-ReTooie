@@ -35,6 +35,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 
+- 3D grass blending slider (0 to 100, default 50): the blades take on the ground's colour, most at the roots and further away, so the grass blends in (L). Untested on PC (T301).
 - 3D grass (and the other screen effects) no longer vanish across the level while Bottles' ghost is drawn in Spiral Mountain: the ghost's "no effects" mark stayed on for everything drawn after it when it was the last model of its list (L). Untested on PC (T300).
 - 3D grass: Chunk size (100 to 400%) and Pixel size (0.25 to 8 N64 pixels) sliders for Chunky and Pixelated 3D grass (L). Untested on PC (T287).
 - 3D grass has its own Grass section in Graphics, with two new toggles (L): Chunky 3D grass (fewer, wider, flat-coloured single-triangle blades) and Pixelated 3D grass (blades drawn in blocks the size of N64 pixels). Untested on PC (T286).

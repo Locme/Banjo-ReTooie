@@ -4000,10 +4000,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..62c42e3
+index 0000000..6c5332e
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1821 @@
+@@ -0,0 +1,1823 @@
 +//
 +// RT64
 +//
@@ -4566,7 +4566,7 @@ index 0000000..62c42e3
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
 +    }
 +
-+    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize) {
++    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.grassThickness = std::clamp(thickness, 0.25f, 4.0f);
 +        effectsSettings.grassRandomLength = std::clamp(randomLength, 0.0f, 1.0f);
@@ -4574,6 +4574,7 @@ index 0000000..62c42e3
 +        effectsSettings.grassChunkSize = std::clamp(chunkSize, 1.0f, 4.0f);
 +        effectsSettings.grassPixelated = pixelated;
 +        effectsSettings.grassPixelSize = std::clamp(pixelSize, 0.25f, 8.0f);
++        effectsSettings.grassBlend = std::clamp(blend, 0.0f, 1.0f);
 +    }
 +
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -4823,6 +4824,7 @@ index 0000000..62c42e3
 +        // Patches of grass about 220 units across (Banjo is about 150 tall), from a few to all the green ground.
 +        frameParams.grassPatches = { settings.grassPatches, 220.0f, settings.grassThickness, settings.grassRandomLength };
 +        frameParams.grassStyle = { settings.grassChunky ? 1.0f : 0.0f, settings.grassPixelated ? 1.0f : 0.0f, settings.grassChunkSize, settings.grassPixelSize };
++        frameParams.grassLook = { settings.grassBlend, 0.0f, 0.0f, 0.0f };
 +
 +        // Banjo's trail: a point every tenth of a second he moves, each springing back up over about a second.
 +        struct TrailPoint { float x, y, z, time; };
@@ -5827,10 +5829,10 @@ index 0000000..62c42e3
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..e04e3bb
+index 0000000..92b150c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,266 @@
 +//
 +// RT64
 +//
@@ -5931,6 +5933,7 @@ index 0000000..e04e3bb
 +        float grassChunkSize = 2.0f;
 +        bool grassPixelated = false;
 +        float grassPixelSize = 1.0f;
++        float grassBlend = 0.5f;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
@@ -6021,7 +6024,7 @@ index 0000000..e04e3bb
 +    // (1 normal), the distance from the camera they fade out by, in world units, and how closely they grow (1 normal)
 +    // and how much of the green ground their patches cover (1 all of it).
 +    void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-+    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize);
++    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
@@ -7559,10 +7562,10 @@ index 0000000..e0b28f6
 +}
 diff --git a/src/shaders/Grass.hlsli b/src/shaders/Grass.hlsli
 new file mode 100644
-index 0000000..1284731
+index 0000000..5f2f131
 --- /dev/null
 +++ b/src/shaders/Grass.hlsli
-@@ -0,0 +1,221 @@
+@@ -0,0 +1,231 @@
 +//
 +// RT64
 +//
@@ -7781,6 +7784,16 @@ index 0000000..1284731
 +    float3 shade = color * lerp(0.42f, 1.08f, t) * lerp(0.9f, 1.08f, variation);
 +    shade = lerp(shade, shade * float3(1.3f, 1.24f, 0.62f) + float3(0.045f, 0.05f, 0.0f), t * t * 0.8f);
 +    shade = lerp(shade, shade * float3(1.18f, 1.15f, 0.7f) + float3(0.03f, 0.03f, 0.0f), patch * 0.6f * t);
++
++    // Blending (grassLook.x, 0 to 1): the blades take on the ground's own colour, most at the root (no dark line
++    // where they meet the ground) and further away, so they melt into the ground instead of standing out.
++    const float blend = FrParams.grassLook.x;
++    if (blend > 0.0f) {
++        const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++        const float far = smoothstep(0.2f, 0.8f, distance(world, camera) / max(FrParams.grassParams.z, 1.0f));
++        shade = lerp(shade, color, saturate(blend * max(lerp(1.0f, 0.35f, t), far)));
++    }
++
 +    color = shade;
 +    return true;
 +}
@@ -11482,10 +11495,10 @@ index 3f33475..cb122d1 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..6d4c7ca 100644
+index 2e62aaf..325b327 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,72 @@ namespace interop {
+@@ -13,6 +13,74 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -11526,6 +11539,8 @@ index 2e62aaf..6d4c7ca 100644
 +        // blades (y 1: drawn in whole blocks of pixels), then how many times further apart and wider chunky blades
 +        // are, and a pixelated block's size in N64 pixels.
 +        float4 grassStyle;
++        // Banjo-Tooie: how much the blades take on the ground's colour (0 to 1).
++        float4 grassLook;
 +        // Banjo-Tooie: Banjo's fur (Fur.hlsli, RasterVS.hlsl). A world vector's clip-space offset (as RasterVS's
 +        // positions) per world unit along x, y and z.
 +        float4 furClipX;

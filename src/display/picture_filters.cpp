@@ -61,7 +61,7 @@ namespace RT64 {
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
-    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize);
+    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
@@ -423,7 +423,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneGrassBlades((float)(value<double>(grass_thickness_option, 100.0) / 100.0),
         (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
         (float)(value<double>(grass_chunk_size_option, 200.0) / 100.0), value<bool>(grass_pixelated_option, false),
-        (float)value<double>(grass_pixel_size_option, 1.0));
+        (float)value<double>(grass_pixel_size_option, 1.0), (float)(value<double>(grass_blend_option, 50.0) / 100.0));
     RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
     RT64::SetSceneGrassEdgeTextures(grass_edge_textures, value<bool>(grass_edges_option, true) ? std::size(grass_edge_textures) : 0);
     double fur = value<double>(banjo_fur_option, 0.0);
@@ -1006,6 +1006,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "3D grass random length",
         "How much the 3D grass blades' lengths differ from each other, in percent. 0 makes every blade as long as 3D grass height; 100 makes them anything from very short to full length.",
         0, 100, 5, 0, false, 40);
+    graphics.add_number_option(
+        grass_blend_option,
+        "3D grass blending",
+        "How much the 3D grass takes on the colour of the ground it grows from, so it blends in instead of standing out: most at the roots (no dark line where the blades meet the ground) and further away. 0 is off.",
+        0, 100, 5, 0, false, 50);
     graphics.add_bool_option(
         grass_chunky_option,
         "Chunky 3D grass",
@@ -1036,7 +1041,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &water_option, &shore_foam_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -1079,6 +1084,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_patches_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_thickness_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_random_length_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_blend_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_chunky_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_pixelated_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_chunk_size_option, grass_section_option, false);

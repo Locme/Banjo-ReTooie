@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T301 3D grass blending slider
+- Asked: 2026-10-16 19:56 UTC
+- Build: main
+- Steps:
+  1. Graphics > Grass: move 3D grass blending (0 to 100, default 50) in Spiral Mountain
+- Look for: Higher makes the blades take on the ground's colour, most at the roots and in the distance, so the grass melts into the ground; 0 is the old look. Say if you want an actual blur on top.
+- Status: waiting for L
+
 ## T300 3D grass no longer vanishes near Bottles' ghost
 - Asked: 2026-10-16 19:47 UTC
 - Build: main
