@@ -2440,3 +2440,14 @@
   4. Look at the waterfalls themselves and the trunk-pool stream
 - Look for: Step 2, the water is smooth with no triangle-shaped bright and dark blocks. Step 3, the water stays Modern (reflections) the whole way instead of switching from the game's grey water to Modern partway. Step 4, the falls are the game's own smooth-scrolling ones, a little thicker and brighter, with foam where they land; no stutter and no white wedges. Checked headless in Spiral Mountain and Mumbo's Skull.
 - Status: waiting for L
+
+## T231 Photo mode: Home button is the default controller button
+- Asked: 2026-10-16 08:29 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Start a new game, or load a save, and go to any level
+  2. Press the Home button on your controller (not the Share or Misc button)
+  3. Check that photo mode opens, the list appears, and the game freezes
+  4. Press B to go back to the game
+- Look for: Step 2, photo mode opens from Home with no remapping. Step 4, B returns to the game. Keyboard F10 still opens photo mode. Nothing else changes when you press Home. Checked in the code only: no other default uses the Home button.
+- Status: waiting for L
