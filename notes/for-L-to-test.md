@@ -2280,3 +2280,13 @@
 - Look for: Soft green curtains of light, violet at their tops, waving slowly across the night sky. Too faint, too strong? Hidden under rain or heavy snow. Checked headless with them forced on in Spiral Mountain, where the sky shows from the start: [northern-lights.png](screens/day-night/northern-lights.png).
 - Status: waiting for L
 
+## T215 Day and night: golden hour and morning dew
+- Asked: 2026-10-16 03:15 UTC
+- Build: main (pull and build)
+- Commit: "Day and night: golden hour and morning dew" on main
+- Steps:
+  1. Graphics > Day and Night: Cycle with Day Length 4, Weather: Clear, in Spiral Mountain; watch from sunrise to mid-morning, and again in the late afternoon
+  2. Day and Night: Morning, stand on the grass and turn the camera slowly
+- Look for: Step 1, the warm light lasts a while after sunrise and before sunset, with richer colours, then fades to plain daylight. Step 2, tiny glints of dew twinkle on level grass while the sun is low in the morning, and go as it climbs (none in the evening or in rain). Too strong, too faint? Checked headless: [morning-dew-golden-hour.png](screens/day-night/morning-dew-golden-hour.png) (the dew is faint in a still screenshot).
+- Status: waiting for L
+
