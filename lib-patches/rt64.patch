@@ -1247,6 +1247,27 @@ index 3708220..f2206f7 100644
  
          void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
          uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
+diff --git a/src/hle/rt64_rsp.cpp b/src/hle/rt64_rsp.cpp
+index ee2030b..83943f8 100644
+--- a/src/hle/rt64_rsp.cpp
++++ b/src/hle/rt64_rsp.cpp
+@@ -1150,6 +1150,16 @@ namespace RT64 {
+                 drawRect.lry = std::max(drawRect.lry, int32_t(hlslpp::ceil(v.y).x * 4.0f));
+             }
+ 
++            // Triangles left or right of the scissor still count their rows: with a widened (Expand)
++            // picture they are drawn there, and a pair whose triangles all lie in those side areas
++            // would otherwise be skipped, or cut off below its lowest centred triangle.
++            drawRect.ulx = std::clamp(drawRect.ulx, scissorRect.ulx, scissorRect.lrx);
++            drawRect.lrx = std::clamp(drawRect.lrx, scissorRect.ulx, scissorRect.lrx);
++            if (drawRect.lrx <= drawRect.ulx) {
++                drawRect.lrx = std::min(drawRect.ulx + 4, scissorRect.lrx);
++                drawRect.ulx = drawRect.lrx - 4;
++            }
++
+             drawRect = scissorRect.intersection(drawRect);
+             if (!drawRect.isNull()) {
+                 fbPair.drawColorRect.merge(drawRect);
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 2970e71..1f7f905 100644
 --- a/src/hle/rt64_state.cpp
