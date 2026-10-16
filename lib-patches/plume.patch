@@ -59,7 +59,7 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..86bf70a 100644
+index f1dd503..ad76699 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
 @@ -11,6 +11,7 @@
@@ -70,7 +70,7 @@ index f1dd503..86bf70a 100644
  #include <cmath>
  #include <climits>
  #include <unordered_map>
-@@ -87,10 +88,63 @@ namespace plume {
+@@ -87,10 +88,110 @@ namespace plume {
          VK_KHR_PRESENT_ID_EXTENSION_NAME,
          VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
          VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
@@ -80,6 +80,53 @@ index f1dd503..86bf70a 100644
          VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
      };
  
++    // Banjo-Tooie: how many of each kind of object are alive and how many were ever made, for the [vram] log
++    // (driver memory that VMA doesn't see, such as pipelines and descriptor pools, shows as a climbing count).
++    enum VulkanObjectKind {
++        ObjBuffer,
++        ObjBufferFormattedView,
++        ObjTexture,
++        ObjTextureView,
++        ObjDescriptorSetLayout,
++        ObjPipelineLayout,
++        ObjShader,
++        ObjSampler,
++        ObjComputePipeline,
++        ObjGraphicsPipeline,
++        ObjDescriptorSet,
++        ObjSwapChain,
++        ObjFramebuffer,
++        ObjQueryPool,
++        ObjCommandList,
++        ObjCommandFence,
++        ObjCommandSemaphore,
++        ObjPool,
++        ObjCount
++    };
++    static const char *VulkanObjectNames[ObjCount] = { "buffers", "buffer views", "textures", "texture views", "descriptor set layouts", "pipeline layouts", "shaders", "samplers", "compute pipelines", "graphics pipelines", "descriptor sets", "swap chains", "framebuffers", "query pools", "command lists", "fences", "semaphores", "memory pools" };
++    static std::atomic<int64_t> VulkanObjectsLive[ObjCount];
++    static std::atomic<int64_t> VulkanObjectsMade[ObjCount];
++
++    static void CountObject(VulkanObjectKind kind, int delta) {
++        VulkanObjectsLive[kind] += delta;
++        if (delta > 0) {
++            VulkanObjectsMade[kind] += delta;
++        }
++    }
++
++    int GetVulkanObjectKinds() {
++        return ObjCount;
++    }
++
++    const char *GetVulkanObjectName(int kind) {
++        return VulkanObjectNames[kind];
++    }
++
++    void GetVulkanObjectCount(int kind, int64_t &live, int64_t &made) {
++        live = VulkanObjectsLive[kind].load();
++        made = VulkanObjectsMade[kind].load();
++    }
++
 +    // Banjo-Tooie: video memory use for logs. The device that made the allocator last.
 +    static std::atomic<VulkanDevice *> MemoryReportDevice = nullptr;
 +
@@ -134,7 +181,207 @@ index f1dd503..86bf70a 100644
      // Common functions.
  
      static uint32_t roundUp(uint32_t value, uint32_t powerOf2Alignment) {
-@@ -2294,6 +2348,10 @@ namespace plume {
+@@ -813,6 +914,7 @@ namespace plume {
+     // VulkanBuffer
+ 
+     VulkanBuffer::VulkanBuffer(VulkanDevice *device, VulkanPool *pool, const RenderBufferDesc &desc) {
++        CountObject(ObjBuffer, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -896,6 +998,7 @@ namespace plume {
+     }
+ 
+     VulkanBuffer::~VulkanBuffer() {
++        CountObject(ObjBuffer, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vmaDestroyBuffer(device->allocator, vk, allocation);
+         }
+@@ -936,6 +1039,7 @@ namespace plume {
+     // VulkanBufferFormattedView
+ 
+     VulkanBufferFormattedView::VulkanBufferFormattedView(VulkanBuffer *buffer, RenderFormat format) {
++        CountObject(ObjBufferFormattedView, +1);
+         assert(buffer != nullptr);
+         assert((buffer->desc.flags & RenderBufferFlag::FORMATTED) && "Buffer must allow formatted views.");
+ 
+@@ -956,6 +1060,7 @@ namespace plume {
+     }
+ 
+     VulkanBufferFormattedView::~VulkanBufferFormattedView() {
++        CountObject(ObjBufferFormattedView, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyBufferView(buffer->device->vk, vk, nullptr);
+         }
+@@ -964,6 +1069,7 @@ namespace plume {
+     // VulkanTexture
+ 
+     VulkanTexture::VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc) {
++        CountObject(ObjTexture, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -1018,6 +1124,7 @@ namespace plume {
+     }
+ 
+     VulkanTexture::VulkanTexture(VulkanDevice *device, VkImage image) {
++        CountObject(ObjTexture, +1);
+         assert(device != nullptr);
+         assert(image != VK_NULL_HANDLE);
+ 
+@@ -1026,6 +1133,7 @@ namespace plume {
+     }
+ 
+     VulkanTexture::~VulkanTexture() {
++        CountObject(ObjTexture, -1);
+         if (imageView != VK_NULL_HANDLE) {
+             vkDestroyImageView(device->vk, imageView, nullptr);
+         }
+@@ -1074,6 +1182,7 @@ namespace plume {
+     // VulkanTextureView
+ 
+     VulkanTextureView::VulkanTextureView(const VulkanTexture *texture, const RenderTextureViewDesc &desc) {
++        CountObject(ObjTextureView, +1);
+         assert(texture != nullptr);
+         assert(desc.mipSlice < texture->desc.mipLevels);
+         assert(desc.arrayIndex < texture->desc.arraySize);
+@@ -1107,6 +1216,7 @@ namespace plume {
+     }
+ 
+     VulkanTextureView::~VulkanTextureView() {
++        CountObject(ObjTextureView, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyImageView(texture->device->vk, vk, nullptr);
+         }
+@@ -1145,6 +1255,7 @@ namespace plume {
+     // VulkanDescriptorSetLayout
+ 
+     VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanDevice *device, const RenderDescriptorSetDesc &descriptorSetDesc) {
++        CountObject(ObjDescriptorSetLayout, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -1216,6 +1327,7 @@ namespace plume {
+     }
+ 
+     VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout() {
++        CountObject(ObjDescriptorSetLayout, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyDescriptorSetLayout(device->vk, vk, nullptr);
+         }
+@@ -1224,6 +1336,7 @@ namespace plume {
+     // VulkanPipelineLayout
+ 
+     VulkanPipelineLayout::VulkanPipelineLayout(VulkanDevice *device, const RenderPipelineLayoutDesc &desc) {
++        CountObject(ObjPipelineLayout, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -1271,6 +1384,7 @@ namespace plume {
+     }
+ 
+     VulkanPipelineLayout::~VulkanPipelineLayout() {
++        CountObject(ObjPipelineLayout, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyPipelineLayout(device->vk, vk, nullptr);
+         }
+@@ -1283,6 +1397,7 @@ namespace plume {
+     // VulkanShader
+ 
+     VulkanShader::VulkanShader(VulkanDevice *device, const void *data, uint64_t size, const char *entryPointName, RenderShaderFormat format) {
++        CountObject(ObjShader, +1);
+         assert(device != nullptr);
+         assert(data != nullptr);
+         assert(size > 0);
+@@ -1305,6 +1420,7 @@ namespace plume {
+     }
+ 
+     VulkanShader::~VulkanShader() {
++        CountObject(ObjShader, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyShaderModule(device->vk, vk, nullptr);
+         }
+@@ -1317,6 +1433,7 @@ namespace plume {
+     // VulkanSampler
+ 
+     VulkanSampler::VulkanSampler(VulkanDevice *device, const RenderSamplerDesc &desc) {
++        CountObject(ObjSampler, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -1347,6 +1464,7 @@ namespace plume {
+     }
+ 
+     VulkanSampler::~VulkanSampler() {
++        CountObject(ObjSampler, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroySampler(device->vk, vk, nullptr);
+         }
+@@ -1367,6 +1485,7 @@ namespace plume {
+     // VulkanComputePipeline
+ 
+     VulkanComputePipeline::VulkanComputePipeline(VulkanDevice *device, const RenderComputePipelineDesc &desc) : VulkanPipeline(device, Type::Compute) {
++        CountObject(ObjComputePipeline, +1);
+         assert(desc.computeShader != nullptr);
+         assert(desc.pipelineLayout != nullptr);
+         assert((desc.threadGroupSizeX > 0) && (desc.threadGroupSizeY > 0) && (desc.threadGroupSizeZ > 0));
+@@ -1398,6 +1517,7 @@ namespace plume {
+     }
+ 
+     VulkanComputePipeline::~VulkanComputePipeline() {
++        CountObject(ObjComputePipeline, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyPipeline(device->vk, vk, nullptr);
+         }
+@@ -1415,6 +1535,7 @@ namespace plume {
+     // VulkanGraphicsPipeline
+ 
+     VulkanGraphicsPipeline::VulkanGraphicsPipeline(VulkanDevice *device, const RenderGraphicsPipelineDesc &desc) : VulkanPipeline(device, Type::Graphics) {
++        CountObject(ObjGraphicsPipeline, +1);
+         assert(desc.pipelineLayout != nullptr);
+ 
+         thread_local std::vector<VkPipelineShaderStageCreateInfo> stages;
+@@ -1657,6 +1778,7 @@ namespace plume {
+     }
+ 
+     VulkanGraphicsPipeline::~VulkanGraphicsPipeline() {
++        CountObject(ObjGraphicsPipeline, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyPipeline(device->vk, vk, nullptr);
+         }
+@@ -1883,6 +2005,7 @@ namespace plume {
+     // VulkanDescriptorSet
+ 
+     VulkanDescriptorSet::VulkanDescriptorSet(VulkanDevice *device, const RenderDescriptorSetDesc &desc) {
++        CountObject(ObjDescriptorSet, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -1937,6 +2060,7 @@ namespace plume {
+     }
+ 
+     VulkanDescriptorSet::~VulkanDescriptorSet() {
++        CountObject(ObjDescriptorSet, -1);
+         if (descriptorPool != VK_NULL_HANDLE) {
+             vkDestroyDescriptorPool(device->vk, descriptorPool, nullptr);
+         }
+@@ -2074,6 +2198,7 @@ namespace plume {
+     // VulkanSwapChain
+ 
+     VulkanSwapChain::VulkanSwapChain(VulkanCommandQueue *commandQueue, const RenderSwapChainDesc &desc) {
++        CountObject(ObjSwapChain, +1);
+         assert(commandQueue != nullptr);
+         assert(desc.textureCount > 0);
+ 
+@@ -2241,6 +2366,7 @@ namespace plume {
+     }
+ 
+     VulkanSwapChain::~VulkanSwapChain() {
++        CountObject(ObjSwapChain, -1);
+         releaseImageViews();
+         releaseSwapChain();
+ 
+@@ -2294,6 +2420,10 @@ namespace plume {
  #else
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
  #endif
@@ -145,7 +392,7 @@ index f1dd503..86bf70a 100644
              return false;
          }
  
-@@ -2488,6 +2546,9 @@ namespace plume {
+@@ -2488,6 +2618,9 @@ namespace plume {
          VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
          VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
@@ -155,7 +402,55 @@ index f1dd503..86bf70a 100644
              return false;
          }
  
-@@ -3229,6 +3290,27 @@ namespace plume {
+@@ -2513,6 +2646,7 @@ namespace plume {
+     // VulkanFramebuffer
+     
+     VulkanFramebuffer::VulkanFramebuffer(VulkanDevice *device, const RenderFramebufferDesc &desc) {
++        CountObject(ObjFramebuffer, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -2648,6 +2782,7 @@ namespace plume {
+     }
+ 
+     VulkanFramebuffer::~VulkanFramebuffer() {
++        CountObject(ObjFramebuffer, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyFramebuffer(device->vk, vk, nullptr);
+         }
+@@ -2680,6 +2815,7 @@ namespace plume {
+     // VulkanQueryPool
+ 
+     VulkanQueryPool::VulkanQueryPool(VulkanDevice *device, uint32_t queryCount) {
++        CountObject(ObjQueryPool, +1);
+         assert(device != nullptr);
+         assert(queryCount > 0);
+ 
+@@ -2700,6 +2836,7 @@ namespace plume {
+     }
+ 
+     VulkanQueryPool::~VulkanQueryPool() {
++        CountObject(ObjQueryPool, -1);
+         vkDestroyQueryPool(device->vk, vk, nullptr);
+     }
+ 
+@@ -2754,6 +2891,7 @@ namespace plume {
+     // VulkanCommandList
+ 
+     VulkanCommandList::VulkanCommandList(VulkanCommandQueue *queue) {
++        CountObject(ObjCommandList, +1);
+         assert(queue != nullptr);
+ 
+         this->queue = queue;
+@@ -2783,6 +2921,7 @@ namespace plume {
+     }
+ 
+     VulkanCommandList::~VulkanCommandList() {
++        CountObject(ObjCommandList, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkFreeCommandBuffers(queue->device->vk, commandPool, 1, &vk);
+         }
+@@ -3229,6 +3368,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -183,7 +478,55 @@ index f1dd503..86bf70a 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
-@@ -4084,6 +4166,7 @@ namespace plume {
+@@ -3500,6 +3660,7 @@ namespace plume {
+     // VulkanCommandFence
+ 
+     VulkanCommandFence::VulkanCommandFence(VulkanDevice *device) {
++        CountObject(ObjCommandFence, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -3515,6 +3676,7 @@ namespace plume {
+     }
+ 
+     VulkanCommandFence::~VulkanCommandFence() {
++        CountObject(ObjCommandFence, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroyFence(device->vk, vk, nullptr);
+         }
+@@ -3523,6 +3685,7 @@ namespace plume {
+     // VulkanCommandSemaphore
+ 
+     VulkanCommandSemaphore::VulkanCommandSemaphore(VulkanDevice *device) {
++        CountObject(ObjCommandSemaphore, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -3538,6 +3701,7 @@ namespace plume {
+     }
+ 
+     VulkanCommandSemaphore::~VulkanCommandSemaphore() {
++        CountObject(ObjCommandSemaphore, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vkDestroySemaphore(device->vk, vk, nullptr);
+         }
+@@ -3647,6 +3811,7 @@ namespace plume {
+     // VulkanPool
+ 
+     VulkanPool::VulkanPool(VulkanDevice *device, const RenderPoolDesc &desc) {
++        CountObject(ObjPool, +1);
+         assert(device != nullptr);
+ 
+         this->device = device;
+@@ -3688,6 +3853,7 @@ namespace plume {
+     }
+ 
+     VulkanPool::~VulkanPool() {
++        CountObject(ObjPool, -1);
+         if (vk != VK_NULL_HANDLE) {
+             vmaDestroyPool(device->allocator, vk);
+         }
+@@ -4084,6 +4250,7 @@ namespace plume {
  
          VmaAllocatorCreateInfo allocatorInfo = {};
          allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
@@ -191,7 +534,7 @@ index f1dd503..86bf70a 100644
          allocatorInfo.physicalDevice = physicalDevice;
          allocatorInfo.device = vk;
          allocatorInfo.pVulkanFunctions = &vmaFunctions;
-@@ -4097,6 +4180,8 @@ namespace plume {
+@@ -4097,6 +4264,8 @@ namespace plume {
              return;
          }
  
@@ -200,7 +543,7 @@ index f1dd503..86bf70a 100644
          // Find the biggest device local memory available on the device.
          VkDeviceSize memoryHeapSize = 0;
          const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
-@@ -4433,6 +4518,8 @@ namespace plume {
+@@ -4433,6 +4602,8 @@ namespace plume {
          nullBuffer = nullptr; // force destruction before destroying allocator
  
          if (allocator != VK_NULL_HANDLE) {
@@ -210,15 +553,19 @@ index f1dd503..86bf70a 100644
              allocator = VK_NULL_HANDLE;
          }
 diff --git a/plume_vulkan.h b/plume_vulkan.h
-index 0a1edbe..65123b8 100644
+index 0a1edbe..4f3aa1b 100644
 --- a/plume_vulkan.h
 +++ b/plume_vulkan.h
-@@ -42,6 +42,9 @@
+@@ -42,6 +42,13 @@
  #endif
  
  namespace plume {
 +    // Banjo-Tooie: video memory in use and the budget the driver gives this process, summed over the device-local heaps.
 +    bool GetVideoMemoryUse(uint64_t &usage, uint64_t &budget);
++    // Banjo-Tooie: live and ever-made counts of each kind of Vulkan object (for the [vram] log).
++    int GetVulkanObjectKinds();
++    const char *GetVulkanObjectName(int kind);
++    void GetVulkanObjectCount(int kind, int64_t &live, int64_t &made);
 +
      struct VulkanCommandQueue;
      struct VulkanDevice;

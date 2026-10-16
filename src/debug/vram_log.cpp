@@ -7,7 +7,8 @@
 // stuck. It logs the first reading, a warning once use passes 90% of the budget (again
 // after it falls below 80%), and a line whenever use moved by 512 MB since the last line.
 // Each line also says how much of it the renderer's own allocations account for, and how
-// many textures and render targets are alive, so a climb can be pinned on one of them.
+// many textures and render targets are alive, so a climb can be pinned on one of them; a second
+// line counts every kind of Vulkan object alive and made since the last line.
 
 #include <algorithm>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "tooie_vram_log.h"
 
@@ -25,6 +27,9 @@ namespace plume {
     // lib/rt64/src/contrib/plume/plume_vulkan.h (from lib-patches/plume.patch).
     bool GetVideoMemoryUse(uint64_t &usage, uint64_t &budget);
     bool GetVideoMemoryDetail(uint64_t &allocationBytes, uint64_t &allocationCount, uint64_t &blockBytes);
+    int GetVulkanObjectKinds();
+    const char *GetVulkanObjectName(int kind);
+    void GetVulkanObjectCount(int kind, int64_t &live, int64_t &made);
 }
 
 namespace RT64 {
@@ -60,6 +65,31 @@ namespace {
         return text;
     }
 
+    // Every kind of Vulkan object alive, with how many were made since the last line, the busiest first:
+    // memory the driver keeps for objects VMA doesn't see (pipelines, descriptor pools, command lists)
+    // shows up as one of these climbing.
+    std::string describe_objects() {
+        static int64_t last_made[64] = {};
+        struct Row { const char *name; int64_t live; int64_t made; };
+        std::vector<Row> rows;
+        const int kinds = std::min(plume::GetVulkanObjectKinds(), 64);
+        for (int i = 0; i < kinds; i++) {
+            int64_t live = 0, made = 0;
+            plume::GetVulkanObjectCount(i, live, made);
+            rows.push_back({ plume::GetVulkanObjectName(i), live, made - last_made[i] });
+            last_made[i] = made;
+        }
+        std::stable_sort(rows.begin(), rows.end(), [](const Row &a, const Row &b) { return a.made > b.made; });
+        std::string text = "[vram] objects alive (made since the last line):";
+        for (const Row &row : rows) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), " %s %lld (+%lld),", row.name, (long long)row.live, (long long)row.made);
+            text += buf;
+        }
+        text.pop_back();
+        return text;
+    }
+
     void watch() {
         // TOOIE_VRAM_STEP_MB=<n>: log every n MB of change instead of 512 (finding slow leaks headless).
         static const uint64_t step = std::getenv("TOOIE_VRAM_STEP_MB") ? std::max<uint64_t>(1, std::strtoull(std::getenv("TOOIE_VRAM_STEP_MB"), nullptr, 10)) * mb : change_step;
@@ -89,6 +119,7 @@ namespace {
             first = false;
             last_logged = usage;
             printf("[vram] %s (%llu%%)%s%s\n", describe(usage, budget).c_str(), (unsigned long long)percent, note[0] ? ", " : "", note);
+            printf("%s\n", describe_objects().c_str());
             fflush(stdout);
         }
     }

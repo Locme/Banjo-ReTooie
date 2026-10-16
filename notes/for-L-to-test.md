@@ -2567,3 +2567,12 @@
   1. Graphics > Day and Night: Morning, Mist 50 (then 100 and 0), Mist Time: Mornings; go to Jolly Roger's Lagoon and Spiral Mountain's water
   2. Mist Time: Mornings and Nights, Day and Night: Night
 - Look for: Mist lies in drifting patches over low ground rather than as an even haze, and is thickest just over water, also close to Banjo. Higher Mist is thicker; 0 turns it off. With Mornings and Nights, a cool grey mist hangs over the water at night too; Always keeps it all day. Checked headless: [mist-over-water-on-off.png](screens/day-night/mist-over-water-on-off.png) (moat, Mist 50 on and 0), [night-mist-over-low-ground.png](screens/day-night/night-mist-over-low-ground.png) (Night, Mist 100, Mornings and Nights).
+
+## T244 What is filling video memory (log)
+- Asked: 2026-10-16 09:25 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Same setup as your console.log of 09:41 (3440x1440, MSAA 2x, Vulkan, Spiral Mountain)
+  2. Play until the 1 fps comes (or for 2 minutes), then send console.log
+- Look for: every [vram] line now has a second line, "[vram] objects alive (made since the last line): ...", counting every kind of graphics object the game has alive, busiest first. Whatever climbs along with VRAM is what fills it (for example "descriptor sets 5000 (+2400)" would point at descriptor sets). This replaces the setting-by-setting check in T234 if you'd rather just send one log. Checked headless: the line prints, and nothing climbs here in Spiral Mountain with 3D grass on (the software renderer doesn't show your leak).
+- Status: waiting for L
