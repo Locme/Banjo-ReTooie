@@ -25,6 +25,7 @@
 #include "ultramodern/config.hpp"
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_picture_filters.h"
 
 namespace RT64 {
     void SetStretchPerspective(bool stretch);
@@ -41,13 +42,22 @@ namespace {
     // more models drawn just outside the picture.
     constexpr float wide_margin_degrees = 10.0f;
 
+    // Sun shadows come from the sun shadow map, which draws what the game drew: a cliff or ledge just past
+    // the picture's edge, culled by the game, cast no shadow into it (the left and top of the title screen
+    // stayed lit). With sun shadows on, every side keeps this much more.
+    constexpr float sun_shadow_margin_degrees = 25.0f;
+
+    float sun_margin() {
+        return tooie::picture_filters::sun_shadows_on() ? sun_shadow_margin_degrees : 0.0f;
+    }
+
     float side_angle(float aspect_times_half_fov) {
         const float scale = tooie::widescreen_scale();
         float angle = aspect_times_half_fov * scale;
         if (scale > 1.0f) {
             angle += wide_margin_degrees;
         }
-        return std::min(angle, 89.0f);
+        return std::min(angle + sun_margin(), 89.0f);
     }
 }
 
@@ -146,7 +156,7 @@ extern "C" void func_800CA218(uint8_t* rdram, recomp_context* ctx) {
     func_800EFA4C(rdram, ctx);
     ctx->r4 = camera + 0x104;
     ctx->r5 = camera + 0x104;
-    ctx->r6 = float_bits(tooie::widescreen_scale() > 1.0f ? std::min(half_fov + wide_margin_degrees * 0.5f, 89.0f) : half_fov);
+    ctx->r6 = float_bits(std::min(half_fov + (tooie::widescreen_scale() > 1.0f ? wide_margin_degrees * 0.5f : 0.0f) + sun_margin(), 89.0f));
     func_800EF8BC(rdram, ctx);
 
     // camera + 0xF8 = (-1, 0, 0) turned by aspect * half_fov.

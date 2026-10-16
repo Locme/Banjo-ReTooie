@@ -101,6 +101,7 @@ namespace {
     // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
     std::atomic<bool> modern_water{false};
     std::atomic<bool> banjo_fur{false};
+    std::atomic<bool> sun_shadows{false};
     std::atomic<bool> kazooie_feathers{false};
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
@@ -415,6 +416,7 @@ void tooie::picture_filters::apply() {
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(value<double>(bounce_light_option, 0.0) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
+    sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
@@ -491,6 +493,10 @@ void tooie::picture_filters::effect_changed() {
 
 bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
+}
+
+bool tooie::picture_filters::sun_shadows_on() {
+    return sun_shadows;
 }
 
 bool tooie::picture_filters::kazooie_feathers_on() {
