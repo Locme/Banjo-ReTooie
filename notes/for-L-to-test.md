@@ -2820,3 +2820,13 @@
   2. Stand still and watch Banjo's eyes, then walk, jump, flap and roll and watch the backpack straps
 - Look for: his eyes are wide open and blink (the FBX has him mid-blink; v5 turns the lids open, closing and shut for the game's blink stages). The straps stay on his shoulders and no longer tear where they meet the bag; the buckles and spikes ride on the straps. Checked headless: open eyes in photo mode, shut lids with a test build, straps in the idle pose (screenshot screens/banjo-x/alt-v5.png). If a strap still looks wrong, a screenshot of it helps.
 - Status: waiting for L
+
+## T271 Modern waterfalls look good again, Shore foam for Original water
+- Asked: 2026-10-16 11:55 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Water: Modern. Look at the two waterfalls in Spiral Mountain and the stream past the tree trunk
+  2. Graphics > Water: Original, then turn Shore foam on (under Water)
+  3. Look along the edges of the pool round the tree trunk, and of the other pools
+- Look for: Step 1, the falls keep the game's own flowing texture, with soft white streaks pouring down them, sparkles when the sun is out and mist where they land, all moving smoothly. Steps 2 and 3, a thin broken white line of foam drifts along the water's edges, as in Modern. Shore foam off leaves the game's water as it was. Checked headless in Spiral Mountain.
+- Status: waiting for L

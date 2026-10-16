@@ -55,6 +55,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
+    void SetSceneShoreFoam(bool enabled);
     void SetSceneModernWater(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
@@ -305,6 +306,7 @@ namespace {
         { &tooie::picture_filters::deep_snow_option, false },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
+        { &tooie::picture_filters::shore_foam_option, false },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -441,6 +443,11 @@ void tooie::picture_filters::apply() {
         modern_water = std::atoi(forced) != 0;
     }
     RT64::SetSceneModernWater(modern_water);
+    bool shore_foam = value<bool>(shore_foam_option, false);
+    if (const char* forced = std::getenv("TOOIE_SHORE_FOAM")) {
+        shore_foam = std::atoi(forced) != 0;
+    }
+    RT64::SetSceneShoreFoam(shore_foam);
     water_waves_on = (value<double>(water_waves_option, 0.0) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(value<double>(water_waves_option, 0.0) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     RT64::SetSceneWaterReflections((float)(value<double>(water_reflections_option, 0.0) / 100.0));
@@ -805,6 +812,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             {Water::Modern, "Modern", "Modern"},
         },
         Water::Original);
+    graphics.add_bool_option(
+        shore_foam_option,
+        "Shore foam",
+        "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
+        false);
     graphics.add_number_option(
         grass_option,
         "3D grass",
@@ -946,7 +958,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &water_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &banjo_fur_option, &banjo_fur_length_option, &water_option, &shore_foam_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -981,6 +993,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, lighting_section_option, false);

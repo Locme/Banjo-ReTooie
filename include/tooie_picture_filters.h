@@ -63,6 +63,8 @@ namespace tooie::picture_filters {
     inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
     inline const std::string water_option = "water_style";
+    // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
+    inline const std::string shore_foam_option = "water_shore_foam";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";

@@ -3723,10 +3723,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..1c7a7f5
+index 0000000..adbcfe1
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1720 @@
+@@ -0,0 +1,1725 @@
 +//
 +// RT64
 +//
@@ -3999,6 +3999,11 @@ index 0000000..1c7a7f5
 +    void SetSceneWaterReflections(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.waterReflections = strength;
++    }
++
++    void SetSceneShoreFoam(bool enabled) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.shoreFoam = enabled;
 +    }
 +
 +    void SetSceneModernWater(bool enabled) {
@@ -4830,7 +4835,7 @@ index 0000000..1c7a7f5
 +
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
-+        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.modernWater || (effectsSettings.view == 4) ||
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
 +            // The day and night cycle's mist gathers round water.
 +            // and the rain rings on water need it too.
 +            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
@@ -4896,7 +4901,7 @@ index 0000000..1c7a7f5
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -5099,7 +5104,7 @@ index 0000000..1c7a7f5
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -5369,7 +5374,7 @@ index 0000000..1c7a7f5
 +        RenderTexture *waterColor = res.waterColorTexture.get();
 +        // water.y 3: Modern water with no water drawn this frame (its caustics under the water still show).
 +        const bool modernOn = settings.modernWater;
-+        constants.water = { (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? 1.0f : 0.0f)), settings.bounceLight,
++        constants.water = { (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
 +            modernOn ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
 +        if (modernOn) {
 +            // Modern water reads the ripple grid instead of the rings: its corner in world x and z, its cell size,
@@ -5449,10 +5454,10 @@ index 0000000..1c7a7f5
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..d419e18
+index 0000000..6a414fe
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,244 @@
 +//
 +// RT64
 +//
@@ -5498,6 +5503,7 @@ index 0000000..d419e18
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
 +        float waterReflections = 0.0f;
++        bool shoreFoam = false; // Original water: Modern's shore foam on the game's water.
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
 +        // Modern water: the game's water isn't drawn; the pass draws its own in its place.
@@ -5579,6 +5585,7 @@ index 0000000..d419e18
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: Modern water (Graphics > Water): the game's water draws are left out of the 3D world and the
 +    // scene effects pass draws new water where they were, from the water mask and their colours.
++    void SetSceneShoreFoam(bool enabled);
 +    void SetSceneModernWater(bool enabled);
 +    // Whether the game's water draws are left out this frame (Modern water, with the effects pass drawing).
 +    bool SceneModernWater();
@@ -8002,10 +8009,10 @@ index 74b1fa0..66e5e3a 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..fb8ed7a
+index 0000000..a3ef354
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2037 @@
+@@ -0,0 +1,2100 @@
 +//
 +// RT64
 +//
@@ -8864,6 +8871,27 @@ index 0000000..fb8ed7a
 +// surface. The water is drawn over it: the floor seen through the surface, bent by the waves and fading into
 +// the water's own colour with depth (from the game's water colour, so each level keeps its look), the sky
 +// and scenery reflected more at low angles, the sun's glint, and foam along the shore and round the player.
++// Original water with Shore foam on: water.y is 1.25 instead of 1.
++bool OriginalShoreFoamOn() {
++    return (gConstants.water.y > 1.1f) && (gConstants.water.y < 1.5f);
++}
++
++// Shore foam on the game's own water (Original): Modern water's broken white line where the floor comes up near the
++// surface. The game's water doesn't write depth, so the depth under it is the floor.
++float OriginalShoreFoam(int2 pixel, float waterDepth, float sceneDepth) {
++    if (sceneDepth >= 0.99999f) {
++        return 0.0f;
++    }
++    const float3 surface = ViewPosition(pixel, waterDepth);
++    const float3 surfaceWorld = WorldPosition(surface);
++    const float floorDepth = max(surfaceWorld.y - WorldPosition(ViewPosition(pixel, sceneDepth)).y, 0.0f);
++    const float t = gConstants.ambientOcclusion.z;
++    const float2 p = surfaceWorld.xz;
++    const float pattern = WaterNoise(p / 18.0f + float2(t * 0.15f, 0.0f)) * 0.6f + WaterNoise(p / 7.0f - float2(0.0f, t * 0.3f)) * 0.4f;
++    const float shore = saturate(1.0f - floorDepth / 16.0f);
++    return saturate((shore * 1.2f - (1.0f - pattern)) * 2.5f) * saturate(1.5f - length(surface) / 4000.0f);
++}
++
 +float3 ModernWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
 +    const float3 v = normalize(surface);
 +    const float3 up = normalize(gConstants.worldY.xyz);
@@ -9012,16 +9040,53 @@ index 0000000..fb8ed7a
 +    return color;
 +}
 +
-+// Modern water's waterfalls: the game's own fall, a little thicker and brighter in its white water.
-+float3 ModernFall(int2 pixel, float3 original, float4 game) {
-+    // The game's own fall texture and its scrolling are kept (they move smoothly at any frame rate);
-+    // its white water is lifted a little and the fall drawn a touch thicker, with a soft glow from the sun.
-+    const float luma = dot(game.rgb, float3(0.299f, 0.587f, 0.114f));
-+    const float white = saturate((luma - 0.5f) * 2.5f);
-+    float3 color = lerp(original, game.rgb, 0.2f * saturate(game.a + 0.25f));
++// Modern water's waterfalls: the game's own fall (its texture keeps scrolling as the game moves it), drawn a little
++// thicker, with soft streaks of white water pouring down over it, sparkles where the sun catches it, and mist
++// gathering at its foot where it lands in flat water. Everything is laid out in the world (across the fall as the
++// camera sees it, and down it by height), so it stays put on the fall as the camera moves and never shows the
++// game's triangles. All of it moves on the effects' own clock, smoothly at any frame rate.
++float3 ModernFall(int2 pixel, float fallDepth, float3 original, float4 game) {
++    const float3 surface = ViewPosition(pixel, fallDepth);
++    const float distance = length(surface);
++    const float3 world = WorldPosition(surface);
++    // Across the fall: the camera's right, flattened onto the ground.
++    float2 across = float2(gConstants.worldX.x, gConstants.worldZ.x);
++    across = (dot(across, across) > 1e-6f) ? normalize(across) : float2(1.0f, 0.0f);
++    const float u = dot(world.xz, across);
++    const float t = gConstants.ambientOcclusion.z;
++    // Finer detail fades out with distance, where it would shimmer.
++    const float fine = saturate(1.0f - distance / 1800.0f);
++
++    // Streaks: broad bands pouring down slowly and narrow ones faster, soft-edged.
++    const float broad = WaterNoise(float2(u / 7.0f, world.y / 55.0f + t * 1.6f));
++    const float narrow = WaterNoise(float2(u / 2.6f, world.y / 22.0f + t * 3.2f));
++    const float streak = lerp(broad, broad * 0.55f + narrow * 0.45f, fine);
++    const float white = smoothstep(0.5f, 0.9f, streak);
++
++    // The fall's body: the game's, a little thicker, shaded along the streaks.
++    float3 color = lerp(original, game.rgb, 0.3f * saturate(game.a + 0.3f));
++    color *= 0.86f + 0.28f * streak;
++    color = lerp(color, float3(0.9f, 0.94f, 0.98f), white * 0.4f);
++
++    // Sparkles where the sun catches the falling water.
 +    const float3 sun = (gConstants.sun.z < 0.98f) ? gConstants.sun.xyz : normalize(float3(0.3f, 0.8f, -0.5f));
 +    const float sunUp = saturate(dot(sun, normalize(gConstants.worldY.xyz)) + 0.3f);
-+    color += float3(0.95f, 0.97f, 1.0f) * white * 0.12f * sunUp;
++    const float glitter = pow(WaterNoise(float2(u / 1.4f, world.y / 5.0f + t * 5.0f)), 14.0f) * fine;
++    color += float3(1.0f, 0.98f, 0.92f) * glitter * 1.6f * sunUp;
++
++    // Mist at the foot: flat water a little below on screen, close in distance.
++    float foot = 0.0f;
++    const int step = max(2, int(gConstants.projection.w / 70.0f));
++    [unroll] for (int k = 1; k <= 4; k++) {
++        float d;
++        const int2 below = pixel + int2(0, k * step);
++        if (LoadWater(below, d) && (SteepAt(below) < 0.5f)) {
++            const float near = saturate(1.0f - abs(length(ViewPosition(below, d)) - distance) / 120.0f);
++            foot = max(foot, near * (1.0f - 0.2f * float(k - 1)));
++        }
++    }
++    const float mist = foot * (0.55f + 0.45f * WaterNoise(float2(u / 10.0f, world.y / 14.0f - t * 0.8f)));
++    color = lerp(color, float3(0.88f, 0.92f, 0.95f), saturate(mist) * 0.6f);
 +    return saturate(color);
 +}
 +
@@ -9844,7 +9909,7 @@ index 0000000..fb8ed7a
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.5f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -9972,7 +10037,7 @@ index 0000000..fb8ed7a
 +                    if (steep > 0.0f) {
 +                        float3 tint;
 +                        const float watery = FallWatery(pixel, tint);
-+                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, original, game), watery * steep) : original;
++                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, original, game), watery * steep) : original;
 +                    }
 +                    scene = (amount > 0.0f) ? lerp(back, ModernWater(pixel, depth, surface, normal, scene), amount) : back;
 +                }
@@ -9984,7 +10049,7 @@ index 0000000..fb8ed7a
 +                const float3 original = lerp(scene, game.rgb, saturate(game.a));
 +                float3 tint;
 +                const float watery = FallWatery(pixel, tint);
-+                scene = (watery > 0.0f) ? lerp(original, ModernFall(pixel, original, game), watery) : original;
++                scene = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, original, game), watery) : original;
 +            }
 +            else if ((gConstants.rippleZ.z > 0.0f) && (depth < 0.99999f)) {
 +                // Under the water: caustics on what faces up below the surface.
@@ -9993,7 +10058,7 @@ index 0000000..fb8ed7a
 +                scene *= 1.0f + 0.6f * gConstants.rippleZ.z * CausticsAt(pixel, view, below);
 +            }
 +        }
-+        else if ((gConstants.water.x > 0.0f) || (gConstants.water.w > 0.0f)) {
++        else if ((gConstants.water.x > 0.0f) || (gConstants.water.w > 0.0f) || OriginalShoreFoamOn()) {
 +            float3 surface, normal;
 +            const float amount = WaterAmount(pixel, depth, surface, normal);
 +            if ((amount > 0.0f) && (gConstants.water.w > 0.0f)) {
@@ -10020,6 +10085,11 @@ index 0000000..fb8ed7a
 +                const float4 reflection = WaterReflection(surface, normal);
 +                const float fresnel = 0.25f + 0.75f * pow(1.0f - saturate(dot(-normalize(surface), normal)), 3.0f);
 +                scene = lerp(scene, reflection.rgb, saturate(gConstants.water.x * amount * fresnel * reflection.a));
++            }
++            float shoreDepth;
++            // Not weighted by how much water there is: the shore is exactly where that runs out.
++            if (OriginalShoreFoamOn() && LoadWater(pixel, shoreDepth) && (SteepAt(pixel) < 0.5f)) {
++                scene = lerp(scene, float3(0.93f, 0.96f, 0.98f), OriginalShoreFoam(pixel, shoreDepth, depth) * 0.55f);
 +            }
 +        }
 +        if (daytime) {
