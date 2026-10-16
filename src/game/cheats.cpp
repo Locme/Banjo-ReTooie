@@ -66,6 +66,10 @@ namespace {
           "Marks the Stop 'n' Swop mystery eggs (blue and pink) as collected from the Banjo-Kazooie link, without a Banjo-Kazooie save.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_unlock_everything", "Unlock everything",
           "Learns every move and opens every world, warp pad, silo, train station, Isle o' Hags path and Cheato code, and the doors and shortcuts that have a switch of their own. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_complete", "100% complete",
+          "Everything done except the last boss: all 90 Jiggies, 900 notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons and moves, every world and Jiggywiggy challenge, and every boss but Hag 1 beaten. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_dragon_kazooie", "Dragon Kazooie",
+          "On: Kazooie is Dragon Kazooie, as after Humba's pool on Isle o' Hags. Off: she is Kazooie again. The area reloads when you change it, and saving keeps it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
     };
     constexpr size_t cheat_count = sizeof(cheat_list) / sizeof(cheat_list[0]);

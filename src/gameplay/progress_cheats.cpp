@@ -70,6 +70,17 @@ namespace {
         0x3EE,                                   // the first warp pad
     };
 
+    // 100% complete: the flags of a save with everything done except Hag 1, plus two counters the game
+    // keeps as numbers (lowest bit first): Jiggywiggy's challenges done (11 = all, the Hag 1 battle open)
+    // and Honey B's health upgrades (5 = all).
+#include "complete_flags.inc"
+    constexpr int32_t jiggywiggy_count_flag = 0x35C;
+    constexpr int32_t honey_b_count_flag = 0x4EA;
+
+    // Dragon Kazooie is a learned "ability" flag, not a form (ScriptHawk's toggle flips the same flag):
+    // Humba's Isle o' Hags pool sets and clears it.
+    constexpr int32_t dragon_kazooie_flag = 0x3EC;
+
     // Frames between checks. A cheat only needs to take hold within a fraction of a second.
     constexpr int check_interval = 10;
 
@@ -94,6 +105,40 @@ namespace {
         ctx->r5 = value ? 1 : 0;
         func_800DA3B8(rdram, ctx);
         *ctx = saved;
+    }
+
+    // Writes a number into `bits` flags from `first` on, lowest bit first (func_800DA7A8).
+    void flag_set_value(uint8_t* rdram, recomp_context* ctx, int32_t first, int32_t value, int32_t bits) {
+        recomp_context saved = *ctx;
+        ctx->r4 = (uint64_t)(int64_t)first;
+        ctx->r5 = (uint64_t)(int64_t)value;
+        ctx->r6 = (uint64_t)(int64_t)bits;
+        func_800DA7A8(rdram, ctx);
+        *ctx = saved;
+    }
+
+    // Reloads the area Banjo is in, the way the warp changes maps (src/debug/warp.cpp), so what the
+    // flags changed is redrawn.
+    void reload_area(uint8_t* rdram, recomp_context* ctx, const char* why, int count) {
+        const uint16_t map = tooie::debug::current_map(rdram);
+        const uint8_t exit = rdram[((0x80127630u + 0x13) ^ 3u) - 0x80000000u];
+        std::printf("[%s] set %d flags, reloading map 0x%X exit %u\n", why, count, map, exit);
+        std::fflush(stdout);
+        recomp_context saved = *ctx;
+        ctx->r4 = map;
+        ctx->r5 = exit;
+        ctx->r6 = 1;
+        func_800A7990(rdram, ctx);
+        *ctx = saved;
+    }
+
+    // Banjo is in a level of a save being played, with no map change under way: the game's level id
+    // (0x8012762C) is 0x0F..0x1B but not 0x11, as for saving (src/game/timer_save.cpp). Not in the
+    // intro or a cutscene map, where a reload would cut the scene short.
+    bool in_level(uint8_t* rdram) {
+        const int level = MEM_BU(0, (gpr)(int32_t)0x8012762C);
+        return tooie::debug::can_warp() && level >= 0x0F && level < 0x1C && level != 0x11 &&
+            MEM_B(0x12, (gpr)(int32_t)0x80127630) == 0;
     }
 
     // The flag the getter is currently asked about, saved at its entry for the hook at its return.
@@ -158,21 +203,47 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
             unlock(f);
         }
         if (count > 0) {
-            const uint16_t map = tooie::debug::current_map(rdram);
-            const uint8_t exit = rdram[((0x80127630u + 0x13) ^ 3u) - 0x80000000u];
-            std::printf("[unlock] set %d flags, reloading map 0x%X exit %u\n", count, map, exit);
-            std::fflush(stdout);
-            // The map change as the warp makes it (src/debug/warp.cpp), on a copy of the context.
-            recomp_context saved = *ctx;
-            ctx->r4 = map;
-            ctx->r5 = exit;
-            ctx->r6 = 1;
-            func_800A7990(rdram, ctx);
-            *ctx = saved;
+            reload_area(rdram, ctx, "unlock", count);
         }
         unlock_was_on = true;
     } else if (!unlock_on) {
         unlock_was_on = false;
+    }
+
+    // 100% complete, once each time the option is switched on (while a save is being played). Like
+    // Unlock everything it only adds: saving keeps it and switching it off undoes nothing.
+    static bool complete_was_on = false;
+    const bool complete_on = tooie::cheats::is_on("cheat_complete");
+    if (complete_on && !complete_was_on && in_level(rdram)) {
+        int count = 0;
+        for (const auto& range : complete_ranges) {
+            for (int32_t f = range[0]; f <= range[1]; f++) {
+                if (!flag_get(rdram, ctx, f)) {
+                    flag_set(rdram, ctx, f, true);
+                    count++;
+                }
+            }
+        }
+        flag_set_value(rdram, ctx, jiggywiggy_count_flag, 11, 4);
+        flag_set_value(rdram, ctx, honey_b_count_flag, 5, 3);
+        reload_area(rdram, ctx, "complete", count);
+        complete_was_on = true;
+    } else if (!complete_on) {
+        complete_was_on = false;
+    }
+
+    // Dragon Kazooie: while on, Kazooie is the dragon (in every save played); switching it off makes her
+    // Kazooie again. Left off and untouched, the save's own state (Humba's pool) stands. The area reloads
+    // so her model changes.
+    static bool dragon_was_on = false;
+    const bool dragon_on = tooie::cheats::is_on("cheat_dragon_kazooie");
+    if (in_level(rdram)) {
+        const bool is_dragon = flag_get(rdram, ctx, dragon_kazooie_flag);
+        if ((dragon_on && !is_dragon) || (!dragon_on && dragon_was_on && is_dragon)) {
+            flag_set(rdram, ctx, dragon_kazooie_flag, dragon_on);
+            reload_area(rdram, ctx, "dragon", 1);
+        }
+        dragon_was_on = dragon_on;
     }
 
     for (size_t i = 0; i < cheato_count; i++) {
