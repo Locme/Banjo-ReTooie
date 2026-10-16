@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T296 Smash Banjo v11: slow blink
+- Asked: 2026-10-16 UTC
+- Build: main, plus mods/Smash Banjo v11.zip from project files (take v10 and its unpacked folder out of the mods folder)
+- Steps:
+  1. With Smash Banjo on, stand still close to his face and wait for him to blink; compare with vanilla Banjo
+- Look for: The lid slides down over his eyes and back up over several frames, like vanilla's, instead of snapping shut for one frame. Smash has only an open eye and a shut lid, so the shut lid is turned up about the eyeballs for the in-between steps the game asks for. Checked with a posed render of all 8 eye steps (screens/smash-banjo/v11-blink-steps.png in project files) and the game loads v11 headless; the blink itself was not caught headless. Everything else as v10 (T295).
+- Status: waiting for L
+
 ## T295 Smash Banjo v10: straps stretch with the backpack
 - Asked: 2026-10-16 UTC
 - Build: main, plus mods/Smash Banjo v10.zip from project files (take v9 and its unpacked folder out of the mods folder)
