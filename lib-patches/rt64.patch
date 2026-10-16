@@ -7872,10 +7872,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..e5ef5be
+index 0000000..ceffc1f
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,521 @@
+@@ -0,0 +1,531 @@
 +//
 +// RT64
 +//
@@ -8019,6 +8019,15 @@ index 0000000..e5ef5be
 +    float2 c = coarse;
 +    for (uint l = level; l > 0; l--) {
 +        c = c * 2.0f + GrassQuadrant(c, l);
++    }
++    return c;
++}
++
++// The cell of a coarser level that holds a cell of this level.
++float2 GrassCoarseCell(float2 cell, uint level, uint coarser) {
++    float2 c = cell;
++    for (uint l = level; l < coarser; l++) {
++        c = floor(c * 0.5f);
 +    }
 +    return c;
 +}
@@ -8293,8 +8302,9 @@ index 0000000..e5ef5be
 +        if (!GrassShownAt(coarseIndex, level, bladeLevel)) {
 +            continue;
 +        }
++        // Shown at the blade's level, so whether the next level shows it too is that one step more.
 +        float lodShrink = 1.0f;
-+        if ((bladeLevel < GRASS_MAX_LEVEL) && !GrassShownAt(coarseIndex, level, bladeLevel + 1)) {
++        if ((bladeLevel < GRASS_MAX_LEVEL) && !GrassShownAt(GrassCoarseCell(coarseIndex, level, bladeLevel), bladeLevel, bladeLevel + 1)) {
 +            const float nextDistance = FrParams.grassBlades.x * exp2(float(bladeLevel + 1));
 +            lodShrink = saturate((nextDistance - cameraDistance) / (nextDistance * 0.2f));
 +            if (lodShrink < 0.02f) {
