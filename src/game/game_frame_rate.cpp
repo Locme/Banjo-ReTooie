@@ -68,6 +68,7 @@
 namespace RT64 {
     // lib/rt64/src/hle/rt64_vi.h (from lib-patches/rt64.patch).
     void SetFixedFrameRate(uint32_t rate);
+    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
     // lib/rt64/src/common/rt64_timer.h: short sleeps, then a spin for the last bit.
     struct Timer {
         static void preciseSleepUntil(const std::chrono::high_resolution_clock::time_point endTime);
@@ -178,7 +179,8 @@ namespace {
     }
 
     // Rate given to RT64 for Uncapped: above any screen, so RT64 neither blends
-    // frames nor holds each present to the Interpolation rate. With 0 (frame
+    // frames nor holds each present to the Interpolation rate, and presents
+    // without vsync (as for any rate above the screen's). With 0 (frame
     // rate unknown) it held presents to that rate, which capped Uncapped at it
     // (L: Uncapped about 100 FPS where 175 FPS reached 175, 2026-10-16).
     constexpr int32_t uncapped_rt64_rate = 100000;
@@ -398,6 +400,10 @@ extern "C" void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx) {
     if (vis != 0) {
         ctx->r2 = vis;
     } else if (rate != 0) {
+        // Don't run more than two frames ahead of the screen: frames the renderer
+        // can't show in time took GPU time from the ones it shows (L: Uncapped
+        // made 300+ game frames a second but showed 100, 2026-10-16).
+        RT64::WaitForPresentBacklog(2, 100);
         if (rate > 0) {
             pace_frame(rate);
         }
@@ -665,6 +671,7 @@ void tooie::game_frame_rate::add_option(recomp::config::Config& graphics) {
         "How often the game itself updates. <recomp-color primary>Original</recomp-color> follows the game's own timing, which moves between frame lengths. "
         "<recomp-color primary>30</recomp-color> to <recomp-color primary>240 FPS</recomp-color> keep every game frame the same length. "
         "<recomp-color primary>Uncapped</recomp-color> runs the game as fast as your PC can, with no limit. "
+        "Above your screen's refresh rate (and always in Uncapped) the picture is shown without vsync, so it can tear. "
         "<recomp-color warning>Above 60 FPS is experimental: some objects may move at the wrong speed.</recomp-color> "
         "This is not the Interpolation option, which adds in-between frames without changing the game.",
         {

@@ -165,6 +165,9 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `logicalRateFromFactors` worked the game's frame rate out from (no longer used by the game).
   `SetFixedFrameRate` gives that rate outright (40 to 240) when Game Frame Rate paces the frames itself
   with extra VIs, so Interpolation can still blend above it; 0 goes back to working it out.
+  When that rate is above the screen's refresh rate (Uncapped gives 100000) the present thread turns
+  vsync off (`setVsyncEnabled`, the swap chain is made again), and `WaitForPresentBacklog` (in
+  `rt64_present_queue.cpp`) lets the game wait until no more than n presents are queued and not shown.
 * **Camera split** (`src/common/rt64_math.cpp`, `matrixDecomposeViewProj`): Banjo-Tooie loads one
   combined view-projection matrix, which RT64 splits back into a view and a projection. The near and far
   scale was taken from row 0 alone (`vp[0][2] / -vp[0][3]`, the x of the camera's facing), so with the

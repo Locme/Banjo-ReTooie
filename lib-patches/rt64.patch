@@ -611,10 +611,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..0a53383 100644
+index 3227ab1..852100b 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,122 @@
+@@ -4,12 +4,146 @@
  
  #include "rt64_present_queue.h"
  
@@ -628,8 +628,32 @@ index 3227ab1..0a53383 100644
  #include "rhi/rt64_render_hooks.h"
  
  #include "rt64_workload_queue.h"
++#include "rt64_vi.h"
  
  namespace RT64 {
++    namespace {
++        // Banjo-Tooie: presents queued and presents shown or skipped, for WaitForPresentBacklog.
++        std::mutex backlogMutex;
++        std::condition_variable backlogCondition;
++        uint64_t presentsQueued = 0;
++        uint64_t presentsDone = 0;
++
++        void countPresentDone() {
++            {
++                std::scoped_lock lock(backlogMutex);
++                presentsDone = std::min(presentsDone + 1, presentsQueued);
++            }
++            backlogCondition.notify_all();
++        }
++    }
++
++    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs) {
++        std::unique_lock lock(backlogMutex);
++        return backlogCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [&]() {
++            return (presentsQueued - presentsDone) <= maxBacklog;
++        });
++    }
++
 +    namespace {
 +        std::mutex screenshotMutex;
 +        ScreenshotCallback screenshotCallback;
@@ -737,7 +761,7 @@ index 3227ab1..0a53383 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -40,9 +150,14 @@ namespace RT64 {
+@@ -40,9 +174,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
          bool waitForBarrier;
@@ -753,7 +777,19 @@ index 3227ab1..0a53383 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -87,6 +202,10 @@ namespace RT64 {
+@@ -51,6 +190,11 @@ namespace RT64 {
+             writeCursor = nextWriteCursor;
+         }
+ 
++        {
++            std::scoped_lock lock(backlogMutex);
++            presentsQueued++;
++        }
++
+         cursorCondition.notify_all();
+     }
+ 
+@@ -87,6 +231,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -764,7 +800,7 @@ index 3227ab1..0a53383 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +234,7 @@ namespace RT64 {
+@@ -115,6 +263,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -772,7 +808,7 @@ index 3227ab1..0a53383 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +332,31 @@ namespace RT64 {
+@@ -212,6 +361,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -804,7 +840,7 @@ index 3227ab1..0a53383 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +411,8 @@ namespace RT64 {
+@@ -266,6 +440,8 @@ namespace RT64 {
              }
          }
          
@@ -813,7 +849,7 @@ index 3227ab1..0a53383 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -310,6 +457,8 @@ namespace RT64 {
+@@ -310,6 +486,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -822,7 +858,7 @@ index 3227ab1..0a53383 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +488,109 @@ namespace RT64 {
+@@ -339,17 +517,109 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -932,7 +968,7 @@ index 3227ab1..0a53383 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +601,18 @@ namespace RT64 {
+@@ -360,12 +630,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -951,7 +987,7 @@ index 3227ab1..0a53383 100644
                  }
              }
  
-@@ -401,7 +648,41 @@ namespace RT64 {
+@@ -401,7 +677,41 @@ namespace RT64 {
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
@@ -993,7 +1029,7 @@ index 3227ab1..0a53383 100644
              }
          }
      }
-@@ -428,6 +709,7 @@ namespace RT64 {
+@@ -428,6 +738,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1001,6 +1037,47 @@ index 3227ab1..0a53383 100644
      }
  
      void PresentQueue::threadLoop() {
+@@ -449,6 +760,7 @@ namespace RT64 {
+         uint32_t displayTimingRate = UINT32_MAX;
+         const bool displayTiming = ext.device->getCapabilities().displayTiming;
+         bool swapChainValid = !ext.swapChain->needsResize();
++        bool vsyncApplied = true;
+         while (presentThreadRunning) {
+             {
+                 std::unique_lock<std::mutex> cursorLock(cursorMutex);
+@@ -465,6 +777,24 @@ namespace RT64 {
+ 
+             if (processCursor >= 0) {
+                 std::unique_lock<std::mutex> threadLock(threadMutex);
++
++                // Banjo-Tooie: when the game makes frames faster than the screen refreshes (Game Frame Rate
++                // Uncapped, or a fixed rate above the screen's), present without vsync so they can be seen;
++                // vsync otherwise. The swap chain is made again on the change (needsResize).
++                {
++                    const uint32_t gameRate = GetFixedFrameRate();
++                    uint32_t screenRate;
++                    {
++                        std::scoped_lock<std::mutex> configurationLock(ext.sharedResources->configurationMutex);
++                        screenRate = ext.sharedResources->swapChainRate;
++                    }
++                    const bool vsyncWanted = (gameRate == 0) || (screenRate == 0) || (gameRate <= screenRate + 2);
++                    if (vsyncWanted != vsyncApplied) {
++                        ext.swapChain->setVsyncEnabled(vsyncWanted);
++                        vsyncApplied = vsyncWanted;
++                    }
++                }
++
+                 const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
+                 if (needsResize) {
+                     ext.presentGraphicsWorker->commandList->begin();
+@@ -528,6 +858,7 @@ namespace RT64 {
+                     threadAdvanceBarrier();
+                 }
+ 
++                countPresentDone();
+                 processCursor = -1;
+             }
+         }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
 index e08b02c..cad0222 100644
 --- a/src/hle/rt64_present_queue.h
@@ -1312,7 +1389,7 @@ index 2970e71..1f7f905 100644
          present.debuggerFramebuffer.view = (debuggerInspector.renderer.framebufferIndex >= 0);
      }
 diff --git a/src/hle/rt64_vi.cpp b/src/hle/rt64_vi.cpp
-index a870166..61231ba 100644
+index a870166..b45dfbe 100644
 --- a/src/hle/rt64_vi.cpp
 +++ b/src/hle/rt64_vi.cpp
 @@ -3,6 +3,7 @@
@@ -1323,7 +1400,7 @@ index a870166..61231ba 100644
  #include <cassert>
  #include <memory.h>
  #include <stdio.h>
-@@ -13,6 +14,22 @@
+@@ -13,6 +14,26 @@
  #include "rt64_vi.h"
  
  namespace RT64 {
@@ -1343,10 +1420,14 @@ index a870166..61231ba 100644
 +        fixedFrameRate = rate;
 +    }
 +
++    uint32_t GetFixedFrameRate() {
++        return fixedFrameRate.load();
++    }
++
      // VI
      
      hlslpp::float4 VI::viewRectangle() const {
-@@ -162,8 +179,11 @@ namespace RT64 {
+@@ -162,8 +183,11 @@ namespace RT64 {
      }
  
      uint32_t VIHistory::logicalRateFromFactors() {
@@ -1360,10 +1441,10 @@ index a870166..61231ba 100644
          }
          else {
 diff --git a/src/hle/rt64_vi.h b/src/hle/rt64_vi.h
-index 5b70e01..8518c7b 100644
+index 5b70e01..d52c622 100644
 --- a/src/hle/rt64_vi.h
 +++ b/src/hle/rt64_vi.h
-@@ -170,4 +170,13 @@ namespace RT64 {
+@@ -170,4 +170,19 @@ namespace RT64 {
          uint32_t logicalRateFromFactors();
          const Present &top() const;
      };
@@ -1376,6 +1457,12 @@ index 5b70e01..8518c7b 100644
 +    // Banjo-Tooie: the game's own frame rate when the port paces its frames itself (40, 120, 175 or
 +    // 240 a second), or 0 to work it out from the VIs per frame as usual.
 +    void SetFixedFrameRate(uint32_t rate);
++    uint32_t GetFixedFrameRate();
++
++    // Banjo-Tooie: waits until at most maxBacklog frames are queued to be shown and not shown yet (or the
++    // timeout passes; returns false then), so a game running faster than frames can be shown doesn't
++    // fill the GPU with frames that are never seen. Defined in rt64_present_queue.cpp.
++    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp

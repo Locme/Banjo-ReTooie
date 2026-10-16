@@ -2585,6 +2585,14 @@
   2. Mayahem Temple's entrance courtyard: look at the foot of the stone walls, then turn 3D grass on edges off and on
   3. Spiral Mountain and Isle o' Hags: look along cliff tops and banks with a grass fringe
 - Look for: blades also grow on the green parts of textures that are only partly grass (a grass fringe along a cliff top or bank, grass at the foot of a rock or wall), leaning out from slopes and walls; off goes back to grass only on the grass textures. 36 such textures, picked by eye from the same texture dump as T227; tell me any spot that should have edge grass and doesn't. Checked headless in Mayahem Temple: on, blades rise along the foot of the courtyard walls; off, none (screens/n64-3d-grass-edges-mayahem-on-off.png). Also fixed: Graphics > Sun shadow on Banjo was shown with the softness slider's name since 3860208.
+
+## T247 Uncapped and 240 FPS: the screen shows the frames the game makes
+- Asked: 2026-10-16 10:10 UTC
+- Build: your local build of main
+- Steps:
+  1. Your usual settings; Game Frame Rate Uncapped in Spiral Mountain, then 240, then 175
+  2. Look at the overlay's screen frame rate next to the game frame rate
+- Look for: In Uncapped and 240 the screen frame rate now follows the game frame rate, past your screen's refresh rate where your PC can, instead of dropping to 100. Above the refresh rate the picture is shown without vsync, so it may tear: tell me if that bothers you. 175 should still be 175 with no tearing. Send the session log if the screen still sits near 100.
 - Status: waiting for L
 
 ## T246 Banjo X Alt v4: eyes, lids, smile and ears like the reference
