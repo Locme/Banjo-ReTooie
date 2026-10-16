@@ -1,5 +1,5 @@
 // Headless settings script: TOOIE_SET="<ms>:<option>=<value>[,<option>=<value>...];<ms>:..."
-// changes Graphics options at those times after the game started, the same way
+// changes Graphics (or Sound) options at those times after the game started, the same way
 // the menu does (set_option_value, which saves and applies them at once), so a
 // run can switch settings live without anyone at the keyboard. Enum options take
 // the index of their choice (game_frame_rate: 0 Original, 1 30 FPS, 2 60 FPS, 3 120 FPS, 4 Unlocked;
@@ -51,7 +51,12 @@ namespace {
 
     void apply(const Change& c) {
         try {
-            recomp::config::Config& graphics = recompui::config::get_graphics_config();
+            // Graphics options, or Sound ones (mix_rate) when Graphics has no such option.
+            recomp::config::Config* config = &recompui::config::get_graphics_config();
+            if (!config->has_option(c.option) && recompui::config::get_sound_config().has_option(c.option)) {
+                config = &recompui::config::get_sound_config();
+            }
+            recomp::config::Config& graphics = *config;
             recomp::config::ConfigValueVariant current = graphics.get_option_value(c.option);
             if (std::holds_alternative<uint32_t>(current)) {
                 graphics.set_option_value(c.option, (uint32_t)c.value);

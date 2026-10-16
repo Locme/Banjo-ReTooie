@@ -3409,3 +3409,13 @@
 - Look for: The sound plays smoothly, no crackles, gaps or breaking up. The cause: when the game's VI thread fell behind and two screen ticks waited at once, the second was taken for an extra tick and its sound frame was skipped (headless at 40 FPS, about 15 of every 120 ticks). Headless now: all 120 of 120 ticks run the sound, 60 sound frames every 2 s, as at 30 FPS. The frame pacer's wait also lets the game's other threads run now.
 - Status: waiting for L
 
+## T335 Sound > Mix rate switches at once
+- Asked: 2026-10-16 22:45 UTC
+- Build: main (pull and build)
+- Steps:
+  1. In a level with music, Esc > Sound > Mix rate: High (44 kHz), then Apply
+  2. Listen, then switch back to Original and Apply
+  3. Try it in a room with echo too (a cave or the Jinjo houses), and with General > More game memory on and off
+- Look for: The sound changes right away, with no restart; music and effects keep their pitch and speed, and echoes keep their timing. At most a tiny blip at the moment it switches. Checked headless on the title screen: switched 22 > 44 > 22 > 44 kHz, the sound kept 60 frames every 2 s and the music's pitch stayed in the same range; the reverb's delays were found and changed. Not checked headless: how it sounds.
+- Status: waiting for L
+

@@ -146,6 +146,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Audio
 
+- Sound > Mix rate now switches at once, without restarting the game. Untested on PC (T335).
+
 - Sound no longer breaks up with Game Frame Rate at 40 FPS (and the other rates the port paces itself). Untested on PC (T325).
 
 - Music player in the Sound tab (098bb74). Untested on PC (T57).
