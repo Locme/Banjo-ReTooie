@@ -37,7 +37,7 @@
   3. Turn the camera around Banjo, then walk
   4. Try Original, 60 and your usual 175
 - Look for: Is the shadow a steady dark patch over the grass, with no flicker or shake? Does it still shake anywhere with 3D Grass off?
-- Status: waiting for L
+- Status: withdrawn (L, 2026-10-17: not what L meant; change reverted)
 
 ## T363 Texture sweep: Banjo's house, All Jinjos and Tower of Tragedy swept; race warp from inside a race
 - Asked: 2026-10-17 08:58 UTC

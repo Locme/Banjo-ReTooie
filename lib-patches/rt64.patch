@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..015770f 100644
+index 9fae0d4..cc26d69 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2616,7 +2616,7 @@ index 9fae0d4..015770f 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2480,306 @@ namespace RT64 {
+@@ -1747,8 +2480,300 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2911,19 +2911,13 @@ index 9fae0d4..015770f 100644
 +                    }
 +                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
-+                // Banjo-Tooie: a shadow drawn into its 8-bit buffer is a decal against the scene's depth, which 3D grass
-+                // blades raise over the floor, so it only showed in the gaps between them, and those moved with the
-+                // camera (Banjo's shadow shook, L 2026-10-17). It is let through over the blades too (RasterPS.hlsl).
-+                const bool shadowOverGrass = (grassShells > 0) && (fbPair.colorImage.siz == G_IM_SIZ_8b) &&
-+                    (call.shaderDesc.otherMode.zMode() == ZMODE_DEC) && (proj.type == Projection::Type::Perspective);
-+                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0) |
-+                    (shadowOverGrass ? RASTER_SHADOW_OVER_GRASS : 0));
++                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
 +
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2789,213 @@ namespace RT64 {
+@@ -1758,13 +2783,213 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -10086,7 +10080,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..d09c5db 100644
+index e7895c3..df747bf 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -10167,29 +10161,7 @@ index e7895c3..d09c5db 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -107,12 +154,45 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
-         const float DepthTolerance = max(CoplanarDepthTolerance(surfaceDepth), dz);
-         const float pixelDepth = select(depthClampNear, max(vertexPosition.z, 0.0f), vertexPosition.z);
-         if (abs(pixelDepth - surfaceDepth) > DepthTolerance) {
--            return false;
-+            // Banjo-Tooie: a shadow flattened onto the floor (RASTER_SHADOW_OVER_GRASS) also lands on 3D grass blades in
-+            // front of it, as long as what is there stands no higher over the floor than a blade, and not far off to
-+            // the side, so the shadow lies over the grass instead of showing only through the gaps. Banjo himself is
-+            // drawn after his shadow, so this never darkens him.
-+            bool overGrass = false;
-+            if (((gConstants.nightLight & RASTER_SHADOW_OVER_GRASS) != 0) && (surfaceDepth < pixelDepth)) {
-+                const float3 floorAt = GrassWorldPosition(float4(vertexPosition.xy, pixelDepth, 1.0f));
-+                const float3 surfaceAt = GrassWorldPosition(float4(vertexPosition.xy, surfaceDepth, 1.0f));
-+                const float rise = surfaceAt.y - floorAt.y;
-+                const float height = max(FrParams.grassParams.x, 1.0f);
-+                overGrass = (rise > -2.0f) && (rise < height * 1.15f) && (length(surfaceAt.xz - floorAt.xz) < height * 4.0f);
-+            }
-+
-+            if (!overGrass) {
-+                return false;
-+            }
-         }
-     }
+@@ -113,6 +160,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -10214,7 +10186,7 @@ index e7895c3..d09c5db 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -182,6 +262,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +247,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -10253,7 +10225,7 @@ index e7895c3..d09c5db 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +366,111 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +351,111 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -10365,7 +10337,7 @@ index e7895c3..d09c5db 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +478,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +463,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -10389,7 +10361,7 @@ index e7895c3..d09c5db 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +521,7 @@ void PSMain(
+@@ -287,6 +506,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -10397,7 +10369,7 @@ index e7895c3..d09c5db 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +538,7 @@ void PSMain(
+@@ -303,7 +523,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -13578,10 +13550,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..668ef85 100644
+index 0a5c332..710ee86 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,52 @@
+@@ -9,11 +9,49 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -13608,9 +13580,6 @@ index 0a5c332..668ef85 100644
 +#define RASTER_NIGHT_LIGHT 0x1u
 +#define RASTER_PARALLAX 0x2u
 +#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
-+    // Banjo-Tooie: a decal drawn into an 8-bit colour image (a character's shadow, flattened onto the floor, before it is
-+    // pasted) while 3D grass grows: it also lands where blades stand over the floor, RasterPS.hlsl.
-+#define RASTER_SHADOW_OVER_GRASS 0x2000000u
 +
      struct RasterParams {
          uint renderIndex;
