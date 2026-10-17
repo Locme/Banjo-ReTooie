@@ -10,6 +10,9 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Ice reflections: Banjo is reflected once instead of as a stack of faded copies, and looking down on the ice no longer smears him or the walls down it. The see-through ice blocks round notes reflect too. Stomping Plains' floor by the gate no longer reflects (it shares a texture with Icy Side's ice; ice textures now count only in Hailfire's icy maps) (L). Untested on PC (T401).
+- Settings menu: the slider you point at or select now turns its whole bar yellow, not only the dot (L). Untested on PC (T400).
+- Snout jiggle: no more gap at the corner of the mouth when the snout bends (the jaw now bends with it), the snout sits straight at rest instead of leaning right, and it no longer snaps back to rest. New physics: it trails behind the way Banjo moves and folds back towards his eyes in a fall or dive, and the new Floppiness slider makes it hang and flop like a shaken hot dog. Nose jiggle is gone (L). Untested on PC (T399).
 - Character Shaders: Enemy fur is now **NPC fur**, with its own length, density and noisiness sliders, and Canary Mary moved to **NPC feathers** with its own amount, size, length, density, noisiness and transparency (L). The yeti's face, eyes and hands stay bare; Mary's crest, beak and face stay bare. Kazooie's crest (hairdo) stays bare, her wings' yellow tips get feathers and the dark feathers from the back of her wings are gone. Banjo keeps his fur on Icy Side's ice (a yeti in view turned it inwards) and his brightest-lit fur no longer shows bald patches. Untested on PC (T392).
 - Game Frame Rate 60 and up: Banjo's jumps and falls are as high and long as at 30 FPS (they peaked about 6% higher before). Untested on PC (T377).
 - New Freeze key (under Interpolation Debug in the Controls tab, no default; no menu switch, L): holds the game on two of its frames so you can switch the blend mode and compare the frames blended between them; sound is muted while frozen (L). Fixed with it: a Load State could leave the game hung for good when it landed while the game had paused its graphics output. Untested on PC (T371).
@@ -66,11 +69,12 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Gameplay
 
-- Warp tab: new Glitter Gulch Mine place, Flooded Caves (Torch enemy), which lands at the cave entrance by the first torch (L). Untested on PC (T395).
-- New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves, three of them. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him; they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
+- Warp tab: new Glitter Gulch Mine place, Flooded Caves, which lands at the cave entrance (L). Untested on PC (T395).
+- New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves: two of them against the back wall of the dry chamber at the far end, where L picked. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him, with a boing on every hop (the Springy Step Shoes jump sound); they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- New Graphics > Sun shadow distance slider (1500 to 20000, default 3000, L): how far round the camera sun shadows reach, up to a whole level. Fixed with it: sun shadows came and went as the camera turned, because the level's pieces just off screen weren't drawn, so they cast nothing; everything within the distance now casts, on screen or not. Untested on PC (T398).
 - Fixed: Banjo's own shadow shook and never quite matched him, at every frame rate. The game poses the shadow before it animates Banjo, so the shadow showed last frame's pose in this frame's place. It now gets this frame's pose. HD Shadows draws its shadow another way and is unchanged. Untested on PC (T397).
 - Bottles' ghost (Bottles' Revenge) no longer cuts a box out of the screen effects: his glow is a see-through square that wrote depth over its whole box, so sun shadows, ambient occlusion and fog stopped at its edges. His see-through parts now leave the depth alone, and his shimmer is drawn under the effects again. Untested on PC (T396).
 - Banjo fur length now goes up to 500 (was 300), for fun (L). The default stays 100.

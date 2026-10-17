@@ -20,7 +20,7 @@
 { "Glitter Gulch Mine", "Waterfall Cavern", 0xCE, 0 },
 { "Glitter Gulch Mine", "Canary Cave", 0xDB, 0 },
 { "Glitter Gulch Mine", "Outside Mumbo's Skull", 0xC7, 8 },
-{ "Glitter Gulch Mine", "Flooded Caves (Torch enemy)", 0xCC, 0 },
+{ "Glitter Gulch Mine", "Flooded Caves", 0xCC, 0 },
 { "Witchyworld", "Witchyworld", 0xD6, 0 },
 { "Witchyworld", "Crazy Castle Stockade", 0xE1, 0 },
 { "Witchyworld", "Cave of Horrors", 0xEA, 0 },

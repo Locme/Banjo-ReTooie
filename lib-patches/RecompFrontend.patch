@@ -1842,9 +1842,9 @@ index 4fdf81f..5e0e414 100644
 -            {ultramodern::renderer::AspectRatio::Original, "Original"},
 -            {ultramodern::renderer::AspectRatio::Expand, "Expand"},
 -            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
-+            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
 +            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
-+            {ultramodern::renderer::AspectRatio::Manual, "Manual", "Letterbox 16:9"},
++            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
++            {ultramodern::renderer::AspectRatio::Manual, "Manual", "16:9"},
          };
  
          static EnumOptionVector antialiasing_options = {
@@ -1956,7 +1956,7 @@ index 4fdf81f..5e0e414 100644
                  graphics::options::ar_option,
                  "Aspect Ratio",
 -                "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
-+                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
++                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
@@ -2680,6 +2680,40 @@ index 0000000..e5b6a0c
 +    // Luckiest Guy (Apache 2.0, assets/LuckiestGuy-LICENSE.txt), registered by the game.
 +    inline constexpr const char *font = "Luckiest Guy";
 +}
+diff --git a/recompui/src/elements/ui_slider.cpp b/recompui/src/elements/ui_slider.cpp
+index 7a50da4..2ff4201 100644
+--- a/recompui/src/elements/ui_slider.cpp
++++ b/recompui/src/elements/ui_slider.cpp
+@@ -89,15 +89,20 @@ namespace recompui {
+         case EventType::Update:
+             if (is_enabled()) {
+                 if (circle_element->is_style_enabled(focus_state)) {
+-                    circle_element->set_background_color(recompui::get_pulse_color(750));
++                    // Hovered or selected: the whole bar pulses with the dot.
++                    recompui::Color pulse_color = recompui::get_pulse_color(750);
++                    circle_element->set_background_color(pulse_color);
++                    bar_element->set_background_color(pulse_color);
+                     queue_update();
+                 }
+                 else {
+                     circle_element->set_background_color(theme::color::TextDim);
++                    bar_element->set_background_color(theme::color::WhiteA20);
+                 }
+             }
+             else {
+                 circle_element->set_background_color(theme::color::BW25);
++                bar_element->set_background_color(theme::color::WhiteA20);
+             }
+             break;
+         case EventType::Navigate:
+@@ -125,6 +130,7 @@ namespace recompui {
+                     set_cursor(Cursor::None);
+                     set_focusable(false);
+                     circle_element->set_background_color(theme::color::BW25);
++                    bar_element->set_background_color(theme::color::WhiteA20);
+                 }
+             }
+             break;
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
 index 2c5dc52..396c645 100644
 --- a/recompui/src/elements/ui_tab_set.cpp

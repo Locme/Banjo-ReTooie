@@ -1,5 +1,38 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
+- Asked: 2026-10-17 20:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: Ice reflections at 60 or more
+  2. Hailfire Peaks Icy Side: stand on the ice by the warp pads; look with the camera low behind Banjo, then raise it to look down on him
+  3. Go to an ice block with a note inside and look at its faces
+  4. Terrydactyland Stomping Plains: the floor in front of the gate by the Jiggy pad (where you saw the reflection)
+- Look for: Low camera: one upside-down Banjo under him, no stack of faded copies. From above: no copies at all, and no ghost of the walls running down the ice. The note blocks shine with a reflection now. Stomping Plains' floor by the gate no longer mirrors the gate and pad. Headless before/after: screens/ice-reflections/t401-banjo-once.png, t401-stomping-plains.png, t401-ice-block.png
+- Status: waiting for L
+
+## T399 Snout jiggle: no mouth gap, centred at rest, floppy physics
+- Asked: 2026-10-17 20:27 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on (Nose jiggle is gone). Stand still: the snout sits straight, no lean to the right
+  2. Close up in Photo Mode mid-wobble: the snout and mouth stay in one piece, no dark gap at the corner of the mouth; the lower jaw bends with the snout
+  3. Run, stop, jump, fall off a ledge and dive with Kazooie: the snout trails behind the way he moves and folds back towards his eyes in a fall or dive
+  4. Put every Snout jiggle slider at the top (Floppiness is new): the snout flops about like a shaken hot dog even standing still. Then turn them down to taste
+- Look for: No gap in the model, no right lean, no snapping back to rest, and the wobble reacts to how he moves. Checked headless in Spiral Mountain: before/after close-up at screens/snout-jiggle/mouth-gap-before-after.png (left: the old corner tear, right: fixed)
+- Status: waiting for L
+
+## T398 Sun shadow distance; sun shadows no longer come and go
+- Asked: 2026-10-17 20:15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Sun shadows on (any strength), Sun shadow distance left at 3000
+  2. Go to the spot of your burst in Spiral Mountain (the path by the honeycomb cave and the stumps) and turn the camera slowly both ways
+  3. Move Sun shadow distance to 20000 while playing, then to 1500
+  4. Try Mayahem Temple's open area at 20000
+- Look for: Do the cliffs' shadows on the path stay put while the camera turns (no popping in and out)? Do far hills and buildings get shadows at 20000 and lose them at 1500, at once without Apply? Is the frame rate still fine at 20000?
+- Status: waiting for L
+
 ## T397 Banjo's shadow follows his pose (no more shaking)
 - Asked: 2026-10-17 20:12 UTC
 - Build: main
@@ -21,14 +54,14 @@
 - Look for: Do the shadows, fog and shading carry on right up to Bottles' glow, with no rectangle or square edge around him, and does the ghost himself still look as before (glow, halo, shimmer)?
 - Status: waiting for L
 
-## T395 Warp tab: Flooded Caves (Torch enemy)
+## T395 Warp tab: Flooded Caves
 - Asked: 2026-10-17 19:20 UTC
 - Build: main
 - Steps:
   1. Load a file
   2. Open the Warp tab, Glitter Gulch Mine group
-  3. Pick Flooded Caves (Torch enemy)
-- Look for: Do you land at the Flooded Caves entrance, with the torch on the ledge ahead when Cut Content: Torch enemy is on?
+  3. Pick Flooded Caves
+- Look for: Do you land at the Flooded Caves entrance?
 - Status: waiting for L
 
 ## T394 Cut Content: Torch enemy in the Flooded Caves
@@ -37,11 +70,11 @@
 - Steps:
   1. Settings > General > Back-Ports and cut content: turn on Cut Content: Torch enemy
   2. Go to Glitter Gulch Mine and enter the Flooded Caves
-  3. Look at the torch on the entrance ledge: it should stand still with no eyes; walk right up to it and its eyes should open smoothly before it springs
-  4. Let it burn you once, then claw swipe it or shoot an egg at it
-  5. Swim to the two dry chambers at the far end; each has one more torch
+  3. Swim to the dry chamber at the far end: two torches stand against its back wall, where you picked (2051/2649, 136, -8710)
+  4. Walk right up to one: it should stand still with no eyes, then open them smoothly and spring with a boing on each hop
+  5. Let it burn you once, then claw swipe it or shoot an egg at it
   6. Turn the option off while a torch is lit
-- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it walk back and go still again (eyes closing) when you run away? Do the far torches stand on dry floor? Does turning the option off remove them at once?
+- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it boing on every hop? Does it walk back to the wall and go still again (eyes closing) when you run away? Do both stand against the wall facing into the room, and is the old one near them gone? Does turning the option off remove them at once?
 - Status: waiting for L
 
 ## T393 Texture seams blend everywhere (DEV Blend texture seams, on)

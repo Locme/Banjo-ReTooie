@@ -1162,6 +1162,20 @@ func = "func_800DF830"
 before_vram = 0x800DF830
 text = "tooie_shadow_render_mode(rdram, ctx);"
 
+# Sun shadows (src/game/widescreen.cpp): func_800E3E8C(position, radius) is the game's "is this sphere in view"
+# test for models and effects. Its answer ($v1) is turned to visible for what lies within the Sun
+# shadow distance, so things off screen still cast their shadows into the picture.
+[[patches.hook]]
+func = "func_800E3E8C"
+before_vram = 0x800E3EE8
+text = "tooie_sun_shadow_cull(rdram, ctx);"
+
+# The same for func_800E3D0C(min, max), the box test the level's own geometry is culled with.
+[[patches.hook]]
+func = "func_800E3D0C"
+before_vram = 0x800E3DAC
+text = "tooie_sun_shadow_cull_box(rdram, ctx);"
+
 # The model func_800DE498 settled on (0x10C($sp)), kept so an actor's shadow redraws that model
 # instead of fetching it a second time this frame (which unbalanced the model cache).
 [[patches.hook]]

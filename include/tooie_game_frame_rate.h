@@ -26,6 +26,8 @@ namespace tooie::game_frame_rate {
     // With TOOIE_PAD_GAME_TIME=1 the pad script and TOOIE_TELEPORT run on it,
     // so a headless run that can't keep up (120 FPS) gets the same inputs.
     uint32_t game_ms();
+    // The same in seconds, unrounded (src/gameplay/snout_jiggle.cpp steps its swing by it).
+    double game_seconds();
     bool pad_on_game_time();
 }
 
