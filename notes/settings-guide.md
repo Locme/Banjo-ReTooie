@@ -185,6 +185,31 @@ Graphics changes apply at once. Graphics API needs a restart: changing it asks "
 
 F12 screenshots are taken before these filters, so they don't show them.
 
+## Graphics: Parallax
+
+- **Parallax** (under Shaders): 0 to 100. Stone, brick, rock, plank walls,
+  roof tiles and carved panels get depth: the raised parts stand out, the gaps
+  and cracks sink in and fall into shadow (lit from above), and it all shifts
+  as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
+  about 150 tall). Fades out on walls seen edge on and in the distance.
+  Default: 0 (off).
+- **Parallax on original textures**: the game's own textures (1,690 of them,
+  picked by eye), whose depth is worked out from how dark each part is. Off,
+  only texture pack textures that come with a height map get parallax.
+  Default: on.
+
+### Height maps in texture packs
+
+A texture pack (an RT64 `.rtz` or folder pack) can give any texture its own
+depth: put a height map beside the replacement, named like it with `_height`
+added: `textures/wall.png` gets `textures/wall_height.png` (`.png` or `.dds`).
+White is the top of the surface and black the deepest part; it can be any size
+(it is stretched over the texture). Grey is read from the red channel. A pack
+texture with a height map gets parallax whenever Parallax is above 0, whether
+or not Parallax on original textures is on, and its height map wins over the
+game's brightness for that texture. Height maps are loaded the first time
+their texture is drawn.
+
 ## Graphics: SMAA Anti-Aliasing
 
 - **SMAA Anti-Aliasing**: Off, Low, Medium, High or Ultra. Smooths jagged edges

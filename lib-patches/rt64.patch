@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..336e389 100644
+index 9fae0d4..ce67112 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1973,7 +1973,33 @@ index 9fae0d4..336e389 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -373,6 +595,9 @@ namespace RT64 {
+@@ -219,6 +441,7 @@ namespace RT64 {
+         textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
+         textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
+         textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
++        textureCacheHeightBases = textureCache->textureMap.heightBases;
+         dynamicTextureViewVector.clear();
+         dynamicTextureBarrierVector.clear();
+     }
+@@ -250,6 +473,7 @@ namespace RT64 {
+                     gpuTile.flags.fromCopy = true;
+                     gpuTile.flags.rawTMEM = false;
+                     gpuTile.flags.hasMipmaps = false;
++                    gpuTile.flags.hasHeight = false;
+                 }
+             }
+             else {
+@@ -272,6 +496,9 @@ namespace RT64 {
+                 gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
+                 gpuTile.flags.hasMipmaps = hasMipmaps;
+                 gpuTile.flags.shiftedByHalf = shiftedByHalf;
++
++                // Banjo-Tooie: the texture pack's height map, for parallax mapping.
++                gpuTile.flags.hasHeight = textureReplaced && textureCache->useHeight(callTile.tmemHashOrID, submissionFrame, gpuTile.heightIndex, gpuTile.heightDimensions);
+             }
+         }
+     }
+@@ -373,6 +600,9 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -1983,7 +2009,7 @@ index 9fae0d4..336e389 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +668,14 @@ namespace RT64 {
+@@ -443,6 +673,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -1998,7 +2024,7 @@ index 9fae0d4..336e389 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +698,61 @@ namespace RT64 {
+@@ -465,12 +703,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2062,7 +2088,7 @@ index 9fae0d4..336e389 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +796,17 @@ namespace RT64 {
+@@ -514,6 +801,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2080,7 +2106,7 @@ index 9fae0d4..336e389 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +867,93 @@ namespace RT64 {
+@@ -574,10 +872,93 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2174,7 +2200,7 @@ index 9fae0d4..336e389 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1626,67 @@ namespace RT64 {
+@@ -1250,6 +1631,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2242,7 +2268,7 @@ index 9fae0d4..336e389 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1733,84 @@ namespace RT64 {
+@@ -1296,9 +1738,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2328,7 +2354,7 @@ index 9fae0d4..336e389 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1862,30 @@ namespace RT64 {
+@@ -1350,10 +1867,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2359,7 +2385,7 @@ index 9fae0d4..336e389 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1940,61 @@ namespace RT64 {
+@@ -1408,6 +1945,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2421,7 +2447,7 @@ index 9fae0d4..336e389 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2018,22 @@ namespace RT64 {
+@@ -1431,6 +2023,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2444,7 +2470,7 @@ index 9fae0d4..336e389 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2059,105 @@ namespace RT64 {
+@@ -1456,6 +2064,105 @@ namespace RT64 {
                  continue;
              }
  
@@ -2550,7 +2576,7 @@ index 9fae0d4..336e389 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2308,7 @@ namespace RT64 {
+@@ -1606,6 +2313,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2558,7 +2584,7 @@ index 9fae0d4..336e389 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2385,20 @@ namespace RT64 {
+@@ -1682,6 +2390,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2579,7 +2605,7 @@ index 9fae0d4..336e389 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2464,292 @@ namespace RT64 {
+@@ -1747,7 +2469,296 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2616,8 +2642,8 @@ index 9fae0d4..336e389 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -2828,7 +2854,7 @@ index 9fae0d4..336e389 100644
 +                if (!nightLightsChecked) {
 +                    nightLightsChecked = true;
 +                    nightLights = ComputeSceneNightLights(frameParams);
-+                }
+                 }
 +                bool nightLight = false;
 +                if (nightLights && (proj.type == Projection::Type::Perspective)) {
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
@@ -2843,6 +2869,11 @@ index 9fae0d4..336e389 100644
 +                {
 +                    const interop::OtherMode pm = call.shaderDesc.otherMode;
 +                    if (pm.zCmp() && (pm.cycleType() != G_CYC_COPY) && (pm.cycleType() != G_CYC_FILL)) {
++                        // A texture pack's height map, else the original texture's own brightness if it's in the list.
++                        const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex].tmemHashOrID;
++                        if (textureCacheReplacementMapEnabled && (textureCacheHeightBases.find(hash) != textureCacheHeightBases.end())) {
++                            parallax = (RASTER_PARALLAX_HEIGHT_MAP >> 8);
++                        }
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (parallax == 0); t++) {
 +                            parallax = SceneParallaxTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                        }
@@ -2856,7 +2887,7 @@ index 9fae0d4..336e389 100644
 +                            const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
 +                            if (parallaxLogged.insert(hash).second) {
 +                                fprintf(stdout, "[parallax-tex] %016llx %s tile %u, %u triangles\n", (unsigned long long)hash,
-+                                    (SceneParallaxTexture(hash) != 0) ? "on" : "off", t, call.callDesc.triangleCount);
++                                    (SceneParallaxTexture(hash) != 0) ? "on" : ((textureCacheHeightBases.find(hash) != textureCacheHeightBases.end()) ? "pack" : "off"), t, call.callDesc.triangleCount);
 +                            }
 +                        }
 +                    }
@@ -2868,11 +2899,10 @@ index 9fae0d4..336e389 100644
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-             }
-@@ -1758,13 +2759,179 @@ namespace RT64 {
+@@ -1758,13 +2769,179 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3054,10 +3084,18 @@ index 9fae0d4..336e389 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..b4e62ee 100644
+index 3add9c3..03e2bb3 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -48,6 +48,37 @@ namespace RT64 {
+@@ -5,6 +5,7 @@
+ #pragma once
+ 
+ #include <stdint.h>
++#include <unordered_set>
+ 
+ #include "common/rt64_emulator_configuration.h"
+ #include "common/rt64_user_configuration.h"
+@@ -48,6 +49,37 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -3095,7 +3133,14 @@ index 3add9c3..b4e62ee 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -67,6 +98,54 @@ namespace RT64 {
+@@ -62,11 +94,61 @@ namespace RT64 {
+         std::vector<uint32_t> textureCacheVersions;
+         std::vector<Texture *> textureCacheTextures;
+         std::vector<Texture *> textureCacheTextureReplacements;
++        // Banjo-Tooie: the textures a texture pack gives a height map (parallax mapping).
++        std::unordered_set<uint64_t> textureCacheHeightBases;
+         std::vector<uint32_t> textureCacheFreeSpaces;
+         uint32_t textureCacheSize = 0;
          uint32_t textureCacheGlobalVersion = 0;
          bool textureCacheReplacementMapEnabled = false;
          std::vector<InstanceDrawCall> instanceDrawCallVector;
@@ -3150,7 +3195,7 @@ index 3add9c3..b4e62ee 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +166,8 @@ namespace RT64 {
+@@ -87,6 +169,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -3159,7 +3204,7 @@ index 3add9c3..b4e62ee 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +181,7 @@ namespace RT64 {
+@@ -100,6 +184,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -3167,7 +3212,7 @@ index 3add9c3..b4e62ee 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +205,10 @@ namespace RT64 {
+@@ -123,6 +208,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -3178,7 +3223,7 @@ index 3add9c3..b4e62ee 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +250,15 @@ namespace RT64 {
+@@ -164,7 +253,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -4609,10 +4654,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..0685600
+index 0000000..15314e5
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1993 @@
+@@ -0,0 +1,1999 @@
 +//
 +// RT64
 +//
@@ -5136,9 +5181,10 @@ index 0000000..0685600
 +    static std::mutex parallaxMutex;
 +    static std::unordered_map<uint64_t, uint32_t> parallaxTextures;
 +
-+    void SetSceneParallax(float depth, bool all) {
++    void SetSceneParallax(float depth, bool original, bool all) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.parallax = std::clamp(depth, 0.0f, 1.0f);
++        effectsSettings.parallaxOriginal = original;
 +        effectsSettings.parallaxAll = all;
 +    }
 +
@@ -5152,6 +5198,7 @@ index 0000000..0685600
 +    }
 +
 +    static bool parallaxAllTextures = false;
++    static bool parallaxOriginalTextures = true;
 +
 +    bool ComputeSceneParallax(interop::FrameParams &frameParams) {
 +        float depth = 0.0f;
@@ -5159,18 +5206,22 @@ index 0000000..0685600
 +            const std::scoped_lock lock(effectsMutex);
 +            depth = effectsSettings.parallax;
 +            parallaxAllTextures = effectsSettings.parallaxAll;
++            parallaxOriginalTextures = effectsSettings.parallaxOriginal;
 +        }
-+        // At the full setting, 8 world units deep (Banjo is about 150 tall, a stone block about 60 to 120 across);
-+        // flat by 2500 units away, where a few texels cover a pixel and it can't be seen.
-+        frameParams.parallaxParams = { 8.0f * depth, 1200.0f, 2500.0f, 16.0f };
-+        if (depth <= 0.0f) {
-+            return false;
-+        }
-+        const std::scoped_lock lock(parallaxMutex);
-+        return parallaxAllTextures || !parallaxTextures.empty();
++        // At the full setting, 16 world units deep (Banjo is about 150 tall, a stone block about 60 to 120 across);
++        // flat by 2800 units away, where a few texels cover a pixel and it can't be seen. Up to 24 steps down the ray.
++        frameParams.parallaxParams = { 16.0f * depth, 1300.0f, 2800.0f, 24.0f };
++        // The deepest parts a third darker, and the shadows the stones cast half as dark, less at a lower setting.
++        const float shade = std::min(1.0f, 0.4f + depth * 0.6f);
++        frameParams.parallaxShading = { 0.35f * shade, 0.5f * shade, 0.0f, 0.0f };
++        // On whenever it is set, as a texture pack's height maps need nothing else.
++        return depth > 0.0f;
 +    }
 +
 +    uint32_t SceneParallaxTexture(uint64_t hash) {
++        if (!parallaxOriginalTextures) {
++            return 0u;
++        }
 +        const std::scoped_lock lock(parallaxMutex);
 +        const auto it = parallaxTextures.find(hash);
 +        if (it != parallaxTextures.end()) {
@@ -6608,10 +6659,10 @@ index 0000000..0685600
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f49e66d
+index 0000000..f5cdcd8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,295 @@
+@@ -0,0 +1,297 @@
 +//
 +// RT64
 +//
@@ -6726,6 +6777,7 @@ index 0000000..f49e66d
 +        float featherNoisiness = 0.5f;
 +        float featherTransparency = 0.0f;
 +        float parallax = 0.0f;
++        bool parallaxOriginal = true;
 +        bool parallaxAll = false;
 +        bool snow = false;
 +        float snowHeight = 1.0f;
@@ -6873,15 +6925,16 @@ index 0000000..f49e66d
 +    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
 +    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
 +    bool SceneNightLightTexture(uint64_t hash);
-+    // Banjo-Tooie: parallax mapping (0 off, 1 the deepest) on the textures listed (RT64 hashes); all lets it on
-+    // every textured draw of the 3D world instead, to look for textures that suit it.
-+    void SetSceneParallax(float depth, bool all);
++    // Banjo-Tooie: parallax mapping (0 off, 1 the deepest), on the textures a texture pack gives a height map and, with
++    // original on, the game's own textures listed (RT64 hashes), by their brightness; all lets it on every textured
++    // draw of the 3D world instead, to look for textures that suit it.
++    void SetSceneParallax(float depth, bool original, bool all);
 +    // ranges: each texture's darkest and lightest brightness (0 to 255, two a texture), its deepest and highest parts.
 +    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
 +    // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
 +    bool ComputeSceneParallax(interop::FrameParams &frameParams);
-+    // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none (only meaningful after
-+    // ComputeSceneParallax returned true).
++    // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none or when the original
++    // textures are off (only meaningful after ComputeSceneParallax returned true).
 +    uint32_t SceneParallaxTexture(uint64_t hash);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
@@ -7556,7 +7609,7 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..449ae45 100644
+index 0848f3e..8126772 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -20,6 +20,8 @@
@@ -7625,7 +7678,73 @@ index 0848f3e..449ae45 100644
      }
  
      bool ReplacementMap::saveDatabase(std::ostream &stream) {
-@@ -980,8 +1016,17 @@ namespace RT64 {
+@@ -211,6 +247,9 @@ namespace RT64 {
+             }
+         }
+ 
++        // Banjo-Tooie: the height maps are those of the texture packs that were in use; they're looked up again.
++        heightBases.clear();
++        heightMissing.clear();
+         globalVersion++;
+     }
+ 
+@@ -288,6 +327,42 @@ namespace RT64 {
+         }
+     }
+ 
++    void TextureMap::setHeight(uint64_t hash, uint64_t creationFrame, Texture *texture) {
++        const uint64_t heightHash = hash ^ HeightHashSalt;
++        const auto it = hashMap.find(heightHash);
++        if (it == hashMap.end()) {
++            add(heightHash, creationFrame, texture);
++        }
++        else {
++            // One from a texture pack used before: freed as an evicted texture is.
++            evictedTextures.emplace_back(textures[it->second]);
++            textures[it->second] = texture;
++            cachedTextureDimensions[it->second] = interop::float3(float(texture->width), float(texture->height), 1.0f);
++            versions[it->second]++;
++            globalVersion++;
++        }
++
++        heightBases.insert(hash);
++    }
++
++    bool TextureMap::useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions) {
++        if (!replacementMapEnabled || (heightBases.find(hash) == heightBases.end())) {
++            return false;
++        }
++
++        interop::float2 textureScale;
++        interop::float3 dimensions;
++        bool textureReplaced = false;
++        bool hasMipmaps = false;
++        bool shiftedByHalf = false;
++        if (!use(hash ^ HeightHashSalt, submissionFrame, textureIndex, textureScale, dimensions, textureReplaced, hasMipmaps, shiftedByHalf)) {
++            return false;
++        }
++
++        textureDimensions = interop::float2(dimensions.x, dimensions.y);
++        return true;
++    }
++
+     bool TextureMap::use(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf) {
+         textureScale = IdentityScale;
+         hasMipmaps = false;
+@@ -352,6 +427,7 @@ namespace RT64 {
+                 listIterators[textureIndex] = accessList.end();
+                 hashMap.erase(textureHash);
+                 evictedHashes.push_back(textureHash);
++                heightBases.erase(textureHash ^ HeightHashSalt);
+                 it = decltype(it)(accessList.erase(std::next(it).base()));
+ 
+                 // If a texture replacement was used for this texture, decrease the reference in the map.
+@@ -976,12 +1052,22 @@ namespace RT64 {
+         std::vector<StreamResult> streamResultQueueCopy;
+         std::vector<TextureMapAddition> textureMapAdditions;
+         std::vector<ReplacementMapAddition> replacementMapAdditions;
++        std::vector<TextureMapAddition> heightAdditions;
+         std::vector<RenderTextureBarrier> beforeCopyBarriers;
          std::vector<RenderTextureBarrier> beforeDecodeBarriers;
          std::vector<RenderTextureBarrier> afterDecodeBarriers;
          std::vector<uint8_t> replacementBytes;
@@ -7643,7 +7762,7 @@ index 0848f3e..449ae45 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1036,15 @@ namespace RT64 {
+@@ -991,10 +1077,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -7661,7 +7780,58 @@ index 0848f3e..449ae45 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1222,6 +1272,24 @@ namespace RT64 {
+@@ -1174,6 +1265,50 @@ namespace RT64 {
+                         bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
+                         replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
+                     }
++
++                    // Banjo-Tooie: the replacement's height map for parallax mapping, "<name>_height" beside it, loaded here
++                    // the first time the texture is replaced.
++                    if (!resolvedPath.relativePath.empty()) {
++                        const std::string missingKey = std::to_string(resolvedPath.fileSystemIndex) + ":" + resolvedPath.relativePath;
++                        bool lookUp = false;
++                        {
++                            std::unique_lock lock(textureMapMutex);
++                            lookUp = (textureMap.heightBases.find(resolvedPath.textureHash) == textureMap.heightBases.end()) &&
++                                (textureMap.heightMissing.find(missingKey) == textureMap.heightMissing.end());
++                            for (const TextureMapAddition &addition : heightAdditions) {
++                                lookUp = lookUp && (addition.hash != resolvedPath.textureHash);
++                            }
++                        }
++
++                        if (lookUp) {
++                            const FileSystem *fileSystem = textureMap.replacementMap.fileSystems[resolvedPath.fileSystemIndex].get();
++                            const std::string &path = resolvedPath.relativePath;
++                            const size_t dot = path.find_last_of('.');
++                            const size_t slash = path.find_last_of('/');
++                            const std::string stem = ((dot != std::string::npos) && ((slash == std::string::npos) || (dot > slash))) ? path.substr(0, dot) : path;
++                            const std::string extensions[] = { (stem.size() < path.size()) ? path.substr(stem.size()) : std::string(".png"), ".png", ".dds" };
++                            Texture *heightTexture = nullptr;
++                            for (const std::string &extension : extensions) {
++                                const std::string heightPath = stem + "_height" + extension;
++                                if (fileSystem->exists(heightPath) && textureMap.replacementMap.fileSystems[resolvedPath.fileSystemIndex]->load(heightPath, replacementBytes)) {
++                                    replacementUploadResources.emplace_back();
++                                    heightTexture = TextureCache::loadTextureFromBytes(copyWorker->device, copyWorker->commandList.get(), replacementBytes, replacementUploadResources.back());
++                                    if (heightTexture != nullptr) {
++                                        break;
++                                    }
++                                }
++                            }
++
++                            if (heightTexture != nullptr) {
++                                afterDecodeBarriers.emplace_back(heightTexture->texture.get(), RenderTextureLayout::SHADER_READ);
++                                heightAdditions.emplace_back(TextureMapAddition{ resolvedPath.textureHash, heightTexture });
++                            }
++                            else {
++                                std::unique_lock lock(textureMapMutex);
++                                textureMap.heightMissing.insert(missingKey);
++                            }
++                        }
++                    }
+                 }
+                 
+                 // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
+@@ -1222,6 +1357,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -7686,7 +7856,7 @@ index 0848f3e..449ae45 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1298,7 @@ namespace RT64 {
+@@ -1230,6 +1383,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -7694,7 +7864,22 @@ index 0848f3e..449ae45 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1258,6 +1327,110 @@ namespace RT64 {
+@@ -1242,6 +1396,14 @@ namespace RT64 {
+                         textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
+                     }
+ 
++                    for (const TextureMapAddition &addition : heightAdditions) {
++                        const auto baseIt = textureMap.hashMap.find(addition.hash);
++                        const uint64_t creationFrame = (baseIt != textureMap.hashMap.end()) ? textureMap.creationFrames[baseIt->second] : 0;
++                        textureMap.setHeight(addition.hash, creationFrame, addition.texture);
++                    }
++
++                    heightAdditions.clear();
++
+                     textureMap.replacementMap.evict(textureMap.evictedTextures);
+                 }
+ 
+@@ -1258,6 +1420,110 @@ namespace RT64 {
          }
      }
  
@@ -7805,11 +7990,44 @@ index 0848f3e..449ae45 100644
      void TextureCache::queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM) {
          assert(!decodeTMEM || ((width > 0) && (height > 0)));
  
+@@ -1317,6 +1583,11 @@ namespace RT64 {
+         return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
+     }
+ 
++    bool TextureCache::useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions) {
++        std::unique_lock lock(textureMapMutex);
++        return textureMap.useHeight(hash, submissionFrame, textureIndex, textureDimensions);
++    }
++
+     bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex) {
+         interop::float2 textureScale;
+         interop::float3 textureDimensions;
 diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
-index 9131697..4d50a97 100644
+index 9131697..ec4c1d6 100644
 --- a/src/render/rt64_texture_cache.h
 +++ b/src/render/rt64_texture_cache.h
-@@ -151,6 +151,16 @@ namespace RT64 {
+@@ -137,12 +137,20 @@ namespace RT64 {
+         std::vector<Texture *> evictedTextures;
+         ReplacementMap replacementMap;
+         bool replacementMapEnabled;
++        // Banjo-Tooie: texture packs' height maps for parallax mapping. A replacement "x.png" can come with "x_height.png"
++        // (white high, black deep). Each is kept as a texture of its own, at its texture's hash ^ HeightHashSalt, so
++        // it has its own place in the descriptor set and goes when it isn't used, as the game's own textures do.
++        static constexpr uint64_t HeightHashSalt = 0x9E3779B97F4A7C15ULL;
++        std::unordered_set<uint64_t> heightBases;
++        std::unordered_set<std::string> heightMissing;
+ 
+         TextureMap();
+         ~TextureMap();
+         void clearReplacements();
+         void add(uint64_t hash, uint64_t creationFrame, Texture *texture);
+         void replace(uint64_t hash, Texture *texture, bool shiftedByHalf, bool referenceCounted);
++        void setHeight(uint64_t hash, uint64_t creationFrame, Texture *texture);
++        bool useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions);
+         bool use(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf);
+         bool evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes);
+         void incrementLock();
+@@ -151,6 +159,16 @@ namespace RT64 {
          size_t getMaxIndex() const;
      };
  
@@ -7826,7 +8044,7 @@ index 9131697..4d50a97 100644
      struct TextureCache {
          struct StreamDescription {
              uint32_t fileSystemIndex = 0;
-@@ -205,6 +215,11 @@ namespace RT64 {
+@@ -205,6 +223,11 @@ namespace RT64 {
          std::vector<std::unique_ptr<RenderBuffer>> tmemUploadResources;
          std::vector<std::unique_ptr<RenderBuffer>> replacementUploadResources;
          std::vector<std::unique_ptr<TextureDecodeDescriptorSet>> descriptorSets;
@@ -7838,7 +8056,7 @@ index 9131697..4d50a97 100644
          std::mutex uploadQueueMutex;
          std::condition_variable uploadQueueChanged;
          std::condition_variable uploadQueueFinished;
-@@ -233,6 +248,10 @@ namespace RT64 {
+@@ -233,11 +256,17 @@ namespace RT64 {
          TextureCache(RenderWorker *directWorker, RenderWorker *copyWorker, uint32_t threadCount, const ShaderLibrary *shaderLibrary);
          ~TextureCache();
          void uploadThreadLoop();
@@ -7849,6 +8067,13 @@ index 9131697..4d50a97 100644
          void queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM);
          void waitForGPUUploads();
          void addResolvedPaths(uint64_t hash, uint32_t width, uint32_t height, uint32_t tlut, const LoadTile &loadTile, const std::vector<uint8_t> &bytesTMEM, bool decodeTMEM, std::vector<ReplacementResolvedPath> &resolvedPaths, uint64_t exclusiveDbHash = 0);
+         bool useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf);
+         bool useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex);
++        // Banjo-Tooie: the texture pack's height map for a replaced texture, if it has one (parallax mapping).
++        bool useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions);
+         bool addReplacement(uint64_t hash, const std::string &relativePath, ReplacementShift shift);
+         bool hasReplacement(uint64_t hash);
+         void clearReplacementDirectories();
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
 index b4ff4e9..ef54bf8 100644
 --- a/src/render/rt64_vi_renderer.cpp
@@ -9279,10 +9504,10 @@ index 0000000..1cc68ed
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..2748b01
+index 0000000..22bc7fc
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,160 @@
 +//
 +// RT64
 +//
@@ -9310,18 +9535,37 @@ index 0000000..2748b01
 +    return float3(ndc.x * -z / p.x, ndc.y * -z / p.y, z);
 +}
 +
-+// How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest), from its brightness within
-+// the texture's own range (x its darkest, y its lightest): its darkest gaps at the bottom, its lightest faces on top.
-+float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range) {
++// The tile to look up a texture pack's height map with: as the texture's own tile, scaled to the height map's size.
++GPUTile ParallaxHeightTile(GPUTile gpuTile) {
++    GPUTile heightTile = gpuTile;
++    const float2 scale = gpuTile.heightDimensions / max(gpuTile.textureDimensions.xy, float2(1.0f, 1.0f));
++    heightTile.tcScale = gpuTile.tcScale * scale;
++    heightTile.ulScale = gpuTile.ulScale * scale;
++    heightTile.textureIndex = gpuTile.heightIndex;
++    heightTile.textureDimensions = float3(gpuTile.heightDimensions, 1.0f);
++    heightTile.flags = gpuTile.flags & ~(0x8u | 0x10u);
++    return heightTile;
++}
++
++// How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest): from a texture pack's height map
++// (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest):
++// its darkest gaps at the bottom, its lightest faces on top.
++float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap) {
 +    const float4 c = sampleTexture(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, false);
++    if (heightMap) {
++        return saturate(1.0f - c.r);
++    }
++
 +    const float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
 +    return saturate((range.y - luma) / max(range.y - range.x, 0.05f));
 +}
 +
 +// How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
-+// field. 0 where it is flat: seen edge on, or far away.
-+float2 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range) {
++// field (xy), and how lit that place is (z): darker deep down and in the shadow the stones above it cast, with the
++// light from straight up in the world. No change where it is flat: seen edge on, or far away.
++float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range) {
 +    const float4 params = FrParams.parallaxParams;
++    const float4 shading = FrParams.parallaxShading;
 +    const float3 p = ParallaxViewPosition(pixelPosition);
 +    const float3 dp1 = ddx(p);
 +    const float3 dp2 = ddy(p);
@@ -9329,7 +9573,7 @@ index 0000000..2748b01
 +    float3 n = cross(dp1, dp2);
 +    const float nLength = length(n);
 +    if ((nLength <= 1e-12f) || (distance <= 1e-4f) || (params.x <= 0.0f)) {
-+        return 0.0f;
++        return float3(0.0f, 0.0f, 1.0f);
 +    }
 +
 +    // The triangle's normal, turned toward the camera, and the way to the camera.
@@ -9339,9 +9583,9 @@ index 0000000..2748b01
 +        n = -n;
 +    }
 +    const float vn = dot(n, v);
-+    const float fade = saturate((vn - 0.15f) / 0.35f) * (1.0f - smoothstep(params.y, params.z, distance));
++    const float fade = saturate((vn - 0.12f) / 0.33f) * (1.0f - smoothstep(params.y, params.z, distance));
 +    if (fade <= 0.0f) {
-+        return 0.0f;
++        return float3(0.0f, 0.0f, 1.0f);
 +    }
 +
 +    // How the texture coordinates change along the triangle: their slopes in view space (a frame worked out from the
@@ -9350,36 +9594,79 @@ index 0000000..2748b01
 +    const float3 dp1perp = cross(n, dp1);
 +    const float det = dot(dp1, dp2perp);
 +    if (abs(det) <= 1e-12f) {
-+        return 0.0f;
++        return float3(0.0f, 0.0f, 1.0f);
 +    }
 +    const float3 gu = (dp2perp * ddxUV.x + dp1perp * ddyUV.x) / det;
 +    const float3 gv = (dp2perp * ddxUV.y + dp1perp * ddyUV.y) / det;
 +
++    const bool heightMap = gpuTileFlagHasHeight(gpuTile.flags);
++    GPUTile heightTile = gpuTile;
++    if (heightMap) {
++        heightTile = ParallaxHeightTile(gpuTile);
++    }
++    const float depthScale = params.x * fade;
++
 +    // Going down the view ray to the deepest part, the place on the surface it passes under moves this far.
-+    const float3 lateral = (n - v / max(vn, 0.35f)) * (params.x * fade);
++    const float3 lateral = (n - v / max(vn, 0.3f)) * depthScale;
 +    const float2 uvFull = float2(dot(gu, lateral), dot(gv, lateral));
 +
-+    // Down the ray in even steps (more of them seen at a slant) until it goes under the surface, then between the
-+    // last two steps where the two cross.
-+    const float steps = lerp(params.w, 6.0f, vn);
++    // Down the ray in even steps (more of them seen at a slant) until it goes under the surface, then halving the
++    // last step to find where the two cross.
++    const float steps = lerp(params.w, 8.0f, vn);
 +    const float stepSize = 1.0f / steps;
 +    float layer = 0.0f;
-+    float surface = ParallaxDepthAt(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, range);
++    float surface = ParallaxDepthAt(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
 +    float previousLayer = 0.0f;
 +    float previousSurface = surface;
 +    [loop]
-+    for (uint i = 0; (i < 32) && (layer < surface); i++) {
++    for (uint i = 0; (i < 48) && (layer < surface); i++) {
 +        previousLayer = layer;
 +        previousSurface = surface;
 +        layer = min(layer + stepSize, 1.0f);
-+        surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, gpuTile, range);
++        surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++    }
++
++    [loop]
++    for (uint j = 0; (j < 4) && (layer > previousLayer); j++) {
++        const float middle = (previousLayer + layer) * 0.5f;
++        const float middleSurface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * middle, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++        if (middle < middleSurface) {
++            previousLayer = middle;
++            previousSurface = middleSurface;
++        }
++        else {
++            layer = middle;
++            surface = middleSurface;
++        }
 +    }
 +
 +    const float after = surface - layer;
 +    const float before = previousSurface - previousLayer;
 +    const float share = (before - after > 1e-5f) ? saturate(before / (before - after)) : 1.0f;
 +    const float hit = lerp(previousLayer, layer, share);
-+    return uvFull * hit;
++    const float2 hitUV = uv + uvFull * hit;
++
++    // Shade: darker the deeper it is, and in shadow where the surface rises between it and the light (straight up in
++    // the world, tipped a little toward the camera so the shadows fall where they can be seen).
++    float lit = 1.0f - shading.x * hit;
++    const float3 up = normalize(FrParams.grassWorldY.xyz);
++    const float3 l = normalize(up + v * 0.35f);
++    const float nl = dot(n, l);
++    if ((shading.y > 0.0f) && (nl > 0.05f) && (hit > 0.02f)) {
++        const float3 lateralLight = (l - n * nl) / max(nl, 0.25f) * depthScale;
++        const float2 uvLight = float2(dot(gu, lateralLight), dot(gv, lateralLight));
++        float shadow = 0.0f;
++        [loop]
++        for (uint k = 1; k <= 6; k++) {
++            const float rise = hit * (float(k) / 6.0f);
++            const float rayLayer = hit - rise;
++            const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++            shadow = max(shadow, saturate((rayLayer - s) * 6.0f) * (1.0f - float(k - 1) / 6.0f));
++        }
++        lit *= 1.0f - shading.y * shadow;
++    }
++
++    return float3(uvFull * hit, lerp(1.0f, lit, fade));
 +}
 diff --git a/src/shaders/PhotoGradePS.hlsl b/src/shaders/PhotoGradePS.hlsl
 new file mode 100644
@@ -9710,7 +9997,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..d1192e5 100644
+index e7895c3..c5b5802 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -9791,11 +10078,12 @@ index e7895c3..d1192e5 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +160,21 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +160,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
 +
++    float parallaxLight = 1.0f;
 +    // Banjo-Tooie: parallax mapping on stone: the textures are looked up where the view ray meets the surface their
 +    // brightness makes (Parallax.hlsli). The slopes above stay those of the triangle, so the texture detail chosen
 +    // doesn't jump at the stones' edges.
@@ -9808,12 +10096,14 @@ index e7895c3..d1192e5 100644
 +            rdpTile.nativeSampler = renderFlagNativeSampler0(rp.flags);
 +        }
 +        const float2 range = float2((gConstants.nightLight >> 8) & 0xFF, (gConstants.nightLight >> 16) & 0xFF) / 255.0f;
-+        vertexUV += ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range);
++        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range);
++        vertexUV += parallax.xy;
++        parallaxLight = parallax.z;
 +    }
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -182,6 +244,36 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +247,36 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -9850,7 +10140,7 @@ index e7895c3..d1192e5 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +346,105 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +349,108 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -9944,6 +10234,9 @@ index e7895c3..d1192e5 100644
 +        }
 +    }
 +
++    // Banjo-Tooie: parallax mapping's shading: darker deep down and in the stones' shadows.
++    resultColor.rgb *= parallaxLight;
++
 +    // Banjo-Tooie: a window or lamp lights up at night: a warm light, a little of its own pattern kept.
 +    if (((gConstants.nightLight & RASTER_NIGHT_LIGHT) != 0) && (FrParams.nightLights.x > 0.0f)) {
 +        // Only the lighter parts (the glass or the flame), not a dark frame round them.
@@ -9956,7 +10249,7 @@ index e7895c3..d1192e5 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +452,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +458,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -9980,7 +10273,7 @@ index e7895c3..d1192e5 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +495,7 @@ void PSMain(
+@@ -287,6 +501,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -9988,7 +10281,7 @@ index e7895c3..d1192e5 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +512,7 @@ void PSMain(
+@@ -303,7 +518,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -12978,10 +13271,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..a27f527 100644
+index 2e62aaf..30e14e7 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,85 @@ namespace interop {
+@@ -13,6 +13,87 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -13064,6 +13357,8 @@ index 2e62aaf..a27f527 100644
 +        // part of a texture lies under its surface in world units, the distance it starts to flatten out from and
 +        // the distance it is flat by, then the most steps the depth is searched in.
 +        float4 parallaxParams;
++        // Banjo-Tooie: parallax mapping's shading: how much darker the deepest parts are, and the shadows the stones cast.
++        float4 parallaxShading;
      };
  #ifdef HLSL_CPU
  };
@@ -13094,6 +13389,41 @@ index 0000000..6cb97eb
 +#ifdef HLSL_CPU
 +};
 +#endif
+diff --git a/src/shared/rt64_gpu_tile.h b/src/shared/rt64_gpu_tile.h
+index 4548f15..784123d 100644
+--- a/src/shared/rt64_gpu_tile.h
++++ b/src/shared/rt64_gpu_tile.h
+@@ -18,6 +18,8 @@ namespace interop {
+             uint rawTMEM : 1;
+             uint hasMipmaps : 1;
+             uint shiftedByHalf : 1;
++            // Banjo-Tooie: a texture pack's height map for parallax mapping is at heightIndex.
++            uint hasHeight : 1;
+         };
+ 
+         uint value;
+@@ -49,6 +51,10 @@ namespace interop {
+     bool gpuTileFlagShiftedByHalf(GPUTileFlags flags) {
+         return flags & 0x20;
+     }
++
++    bool gpuTileFlagHasHeight(GPUTileFlags flags) {
++        return flags & 0x40;
++    }
+ #endif
+     struct GPUTile {
+         float2 ulScale;
+@@ -58,6 +64,10 @@ namespace interop {
+         uint textureIndex;
+         float3 textureDimensions;
+         GPUTileFlags flags;
++        // Banjo-Tooie: the texture pack's height map for this texture (parallax mapping) and its size, when
++        // flags.hasHeight is set.
++        uint heightIndex;
++        float2 heightDimensions;
+     };
+ #ifdef HLSL_CPU
+ };
 diff --git a/src/shared/rt64_photo_grade.h b/src/shared/rt64_photo_grade.h
 new file mode 100644
 index 0000000..ad4cab2
@@ -13132,10 +13462,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..4aba962 100644
+index 0a5c332..3e9f1a8 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,44 @@
+@@ -9,11 +9,46 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -13158,6 +13488,7 @@ index 0a5c332..4aba962 100644
 +    // Banjo-Tooie: the bits of RasterParams.nightLight.
 +#define RASTER_NIGHT_LIGHT 0x1u
 +#define RASTER_PARALLAX 0x2u
++#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
 +
      struct RasterParams {
          uint renderIndex;
@@ -13176,7 +13507,8 @@ index 0a5c332..4aba962 100644
 +        uint furShells;
 +        // Banjo-Tooie: RASTER_NIGHT_LIGHT when the draw's texture is a window or lamp that lights up at night
 +        // (FrameParams.nightLights), RASTER_PARALLAX when it is stone with parallax mapping (Parallax.hlsli), with its
-+        // texture's darkest brightness in bits 8 to 15 and its lightest in 16 to 23.
++        // texture's darkest brightness in bits 8 to 15 and its lightest in 16 to 23, or RASTER_PARALLAX_HEIGHT_MAP when
++        // a texture pack gives its height (GPUTile.heightIndex).
 +        uint nightLight;
      };
  #ifdef HLSL_CPU

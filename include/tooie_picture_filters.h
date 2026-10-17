@@ -85,6 +85,7 @@ namespace tooie::picture_filters {
     // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
+    inline const std::string parallax_original_option = "parallax_original";
     // Banjo's fur: shells of strands over his brown fur (lib/rt64/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";

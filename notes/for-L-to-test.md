@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T354 Parallax: deeper, shadows, original-textures switch, texture pack height maps
+- Asked: 2026-10-17 06:38 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Shaders on, set Parallax to 100, Parallax on original textures on
+  2. Warp to Grunty Industries and Mayahem Temple and look at the stone walls and flagstones, turning the camera
+  3. Also look at plank walls, crates, roof tiles and carved panels (new in this sweep)
+  4. Turn Parallax on original textures off: the game's own textures go flat
+  5. With a texture pack that has wall_height.png beside wall.png, those textures get depth even with the switch off
+- Look for: Much more depth than before: the stones stand well out, the gaps sink in and the stones cast shadows into them from above. Tell me if anything smears or looks lumpy, which textures look wrong with it, and the frame rate at 100. Checked headless in Grunty Industries; screenshots screens/parallax/grunty-industries-deeper-off-on-headless.png and grunty-industries-pack-off-on-headless.png in project files (left off, right on).
+- Status: waiting for L
+
 ## T352 Photo mode: open the Album from photo mode
 - Asked: 2026-10-17 05:54 UTC
 - Build: main @ 042eefc
