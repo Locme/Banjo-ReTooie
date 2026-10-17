@@ -1844,7 +1844,7 @@ index 4fdf81f..5e0e414 100644
 -            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
 +            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
 +            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
-+            {ultramodern::renderer::AspectRatio::Manual, "Manual", "Letterbox 16:9"},
++            {ultramodern::renderer::AspectRatio::Manual, "Manual", "16:9"},
          };
  
          static EnumOptionVector antialiasing_options = {
@@ -1956,7 +1956,7 @@ index 4fdf81f..5e0e414 100644
                  graphics::options::ar_option,
                  "Aspect Ratio",
 -                "Sets the horizontal aspect ratio. <recomp-color primary>Original</recomp-color> uses the game's original 4:3 aspect ratio. <recomp-color primary>Expand</recomp-color> will adjust to match the game window's aspect ratio.",
-+                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>Letterbox 16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
++                "Sets how the picture fits the window. <recomp-color primary>4:3</recomp-color> keeps the game's original shape. <recomp-color primary>Fill</recomp-color> widens the view to the window's shape. <recomp-color primary>16:9</recomp-color> widens the view to 16:9 and adds black bars in windows of any other shape.",
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
