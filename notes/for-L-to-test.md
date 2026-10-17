@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T360 Esc menu: mouse clicks land where you point with Mouse Sensitivity on
+- Asked: 2026-10-17 07:45 UTC
+- Build: main
+- Steps:
+  1. Esc > General: Mouse Sensitivity above 0% (for example 25%), close the menu
+  2. Play a few seconds, moving the mouse to aim
+  3. Press Esc and click a few tabs and switches with the mouse
+- Look for: The cursor appears in the middle of the window; hovering a row shows its description at the bottom, and the first click on a tab or switch works. After closing the menu the mouse aims again.
+- Status: waiting for L
+
 ## T359 Kazooie: feathers cover the top of her head
 - Asked: 2026-10-17 07:18 UTC
 - Build: main

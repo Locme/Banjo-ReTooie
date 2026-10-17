@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Esc menu: with Mouse Sensitivity above 0%, mouse clicks land where you point again (they hit an old spot before), and the cursor starts in the middle of the window. Untested on PC (T360).
 - Kazooie feathers: the very top of her head is feathered too, no bare band (L). Untested on PC (T359).
 - Kazooie feathers: no more orange flecks on the top of her beak, and her wing feathers reach all the way up the wing (L). Untested on PC (T357).
 - Kazooie feathers: none on her beak, eyes or mouth any more, fuller wings, and new Kazooie feather length, density, noisiness and transparency sliders in Character Shaders (L). Untested on PC (T347).

@@ -329,7 +329,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..8614c47 100644
+index c76a1dc..62b8939 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,6 +1,7 @@
@@ -392,6 +392,70 @@ index c76a1dc..8614c47 100644
          }
          break;
      case SDL_EventType::SDL_MOUSEMOTION:
+@@ -246,26 +269,49 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+     return false;
+ }
+ 
++// Lock the cursor if all three conditions are true: mouse aiming is enabled, game input is not disabled, and the game has been started.
++static void update_cursor_lock() {
++    static bool was_locked = false;
++    bool has_mouse_sensitivity = recompui::config::general::has_mouse_sensitivity_option();
++    bool cursor_locked = (has_mouse_sensitivity && recompui::config::general::get_mouse_sensitivity() != 0) && !recompinput::game_input_disabled() && ultramodern::is_game_started();
++
++    // Hide the cursor based on its enable state, but override visibility to false if the cursor is locked.
++    bool cursor_visible = recompui::get_cursor_visible();
++    if (cursor_locked) {
++        cursor_visible = false;
++    }
++
++    SDL_ShowCursor(cursor_visible ? SDL_ENABLE : SDL_DISABLE);
++    SDL_SetRelativeMouseMode(cursor_locked ? SDL_TRUE : SDL_FALSE);
++
++    // While locked, SDL's idea of where the cursor is stops following the real one, so the menu opened
++    // over the game aimed every click at that old spot. Putting the cursor in the middle of the window on
++    // unlock makes the two agree again, and the motion event it sends moves the menu's cursor there too.
++    if (was_locked && !cursor_locked) {
++        SDL_Window *window = SDL_GetMouseFocus();
++        if (window == nullptr) {
++            window = SDL_GetKeyboardFocus();
++        }
++        if (window != nullptr) {
++            int w = 0;
++            int h = 0;
++            SDL_GetWindowSize(window, &w, &h);
++            SDL_WarpMouseInWindow(window, w / 2, h / 2);
++        }
++    }
++    was_locked = cursor_locked;
++}
++
+ void handle_events() {
+     SDL_Event cur_event;
+     static bool started = false;
+     static bool exited = false;
++    // Also checked before any event arrives: the menu opens a frame after the key that opens it, and
++    // waiting for the next event left the mouse locked (and its position stale) until the mouse moved.
++    update_cursor_lock();
+     while (SDL_PollEvent(&cur_event) && !exited) {
+         exited = sdl_event_filter(nullptr, &cur_event);
+-
+-        bool has_mouse_sensitivity = recompui::config::general::has_mouse_sensitivity_option();
+-
+-        // Lock the cursor if all three conditions are true: mouse aiming is enabled, game input is not disabled, and the game has been started. 
+-        bool cursor_locked = (has_mouse_sensitivity && recompui::config::general::get_mouse_sensitivity() != 0) && !recompinput::game_input_disabled() && ultramodern::is_game_started();
+-
+-        // Hide the cursor based on its enable state, but override visibility to false if the cursor is locked.
+-        bool cursor_visible = recompui::get_cursor_visible();
+-        if (cursor_locked) {
+-            cursor_visible = false;
+-        }
+-
+-        SDL_ShowCursor(cursor_visible ? SDL_ENABLE : SDL_DISABLE);
+-        SDL_SetRelativeMouseMode(cursor_locked ? SDL_TRUE : SDL_FALSE);
++        update_cursor_lock();
+     }
+ 
+     binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
 index 03ed871..12054fc 100644
 --- a/recompinput/src/input_state.cpp
