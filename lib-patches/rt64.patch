@@ -4596,10 +4596,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..cd04b53
+index 0000000..0685600
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1982 @@
+@@ -0,0 +1,1993 @@
 +//
 +// RT64
 +//
@@ -5181,6 +5181,18 @@ index 0000000..cd04b53
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
 +        effectsSettings.dayMistWhen = std::min(when, 2u);
++    }
++
++    // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
++    // F8 compare as the sign, so it fits in one float of the effects' push constants (CloudShape in
++    // SceneEffectsPS.hlsl). Height steps in log2 and speed in its square root, as the settings do.
++    static float PackSceneClouds(const float shape[4], bool compare) {
++        auto bits = [](float v, float low, float high) {
++            return uint32_t(std::lround(std::clamp((v - low) / (high - low), 0.0f, 1.0f) * 63.0f));
++        };
++        const uint32_t packed = bits(shape[0], 0.0f, 1.0f) | (bits(std::log2(std::max(shape[1], 0.25f)), -2.0f, 2.0f) << 6) |
++            (bits(shape[2], 0.1f, 2.0f) << 12) | (bits(std::sqrt(std::max(shape[3], 0.0f)), 0.0f, std::sqrt(8.0f)) << 18);
++        return compare ? -(float(packed) + 1.0f) : float(packed);
 +    }
 +
 +    void SetSceneClouds(float cover, float height, float thickness, float speed) {
@@ -5948,13 +5960,12 @@ index 0000000..cd04b53
 +            return;
 +        }
 +        interop::SceneEffectsCB constants;
-+        constants.clouds = { settings.dayCloudShape[0], settings.dayCloudShape[1], settings.dayCloudShape[2], settings.dayCloudShape[3] };
 +        constants.depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, depthScale, depthTranslate);
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
 +        constants.ambientOcclusion = { settings.ambientOcclusion, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
-+        constants.view = { float(settings.view), settings.compare ? 1.0f : 0.0f, seconds, settings.heatHaze };
++        constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, settings.heatHaze };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        // The fog darkens with the time of day as the sky does.
 +        const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
@@ -6584,7 +6595,7 @@ index 0000000..cd04b53
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..aec4215
+index 0000000..f49e66d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
 @@ -0,0 +1,295 @@
@@ -6671,7 +6682,7 @@ index 0000000..aec4215
 +        // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
 +        float dayWet = 0.0f;
 +        bool dayDrops = false;
-+        // The clouds' cover, height, thickness and wind speed (see SceneEffectsCB::clouds).
++        // The clouds' cover, height, thickness and wind speed (packed into SceneEffectsCB::view.y).
 +        float dayCloudShape[4] = { 0.5f, 1.0f, 0.6f, 1.0f };
 +        float rippleX[3] = {};
 +        float rippleZ[3] = {};
@@ -10062,10 +10073,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..1e71b51
+index 0000000..8930352
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2286 @@
+@@ -0,0 +1,2296 @@
 +//
 +// RT64
 +//
@@ -10239,11 +10250,21 @@ index 0000000..1e71b51
 +    return lerp(lerp(x00, x10, f.y), lerp(x01, x11, f.y), f.z);
 +}
 +
++// The cloud shape packed in view.y (PackSceneClouds in rt64_scene_effects.cpp): cover (0 to 1), height (0.25 to 4),
++// thickness (0.1 to 2) and wind speed (0 to 8). The sign is F8 compare.
++float4 CloudShape() {
++    const float packedValue = gConstants.view.y;
++    const uint packed = uint(((packedValue < 0.0f) ? (-packedValue - 1.0f) : packedValue) + 0.5f);
++    const float4 f = float4(packed & 63u, (packed >> 6) & 63u, (packed >> 12) & 63u, (packed >> 18) & 63u) / 63.0f;
++    const float speed = f.w * sqrt(8.0f);
++    return float4(f.x, exp2(lerp(-2.0f, 2.0f, f.y)), lerp(0.1f, 2.0f, f.z), speed * speed);
++}
++
 +// How thick the cloud is at a point of the layer (in layer units, 0 at its floor, 1 at its top), 0 for clear air.
 +float CloudDensity(float3 p, int octaves, float rain) {
 +    const float time = gConstants.view.z;
 +    // Drifts slowly with the wind, the small shapes a little faster so the clouds churn as they go.
-+    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f) * gConstants.clouds.w;
++    const float3 wind = float3(time * 0.012f, 0.0f, time * 0.005f) * CloudShape().w;
 +    float n = CloudNoise(p * 0.55f + wind) * 0.6f;
 +    n += CloudNoise(p * 1.4f + wind * 1.6f + 13.7f) * 0.27f;
 +    if (octaves > 2) {
@@ -10253,7 +10274,7 @@ index 0000000..1e71b51
 +    const float height = saturate(p.y);
 +    const float shape = smoothstep(0.0f, 0.18f, height) * smoothstep(1.0f, 0.45f, height);
 +    // How much of the sky they cover (the Cloud Amount setting: 0.5 the usual); rain spreads them over all of it.
-+    const float cover = gConstants.clouds.x;
++    const float cover = CloudShape().x;
 +    const float threshold = (cover < 0.5f) ? lerp(0.82f, 0.52f, cover * 2.0f) : lerp(0.52f, 0.26f, (cover - 0.5f) * 2.0f);
 +    return saturate((n - lerp(threshold, min(threshold, 0.3f), rain)) * 3.5f) * shape;
 +}
@@ -10271,8 +10292,8 @@ index 0000000..1e71b51
 +    // walking about moves it a little.
 +    const float3 camera = float3(gConstants.worldX.w, 0.0f, gConstants.worldZ.w) / 9000.0f;
 +    // Its height and thickness from the Cloud Height and Cloud Thickness settings.
-+    const float base = gConstants.clouds.y;
-+    const float depth = gConstants.clouds.z;
++    const float base = CloudShape().y;
++    const float depth = CloudShape().z;
 +    const float start = base / world.y;
 +    const float end = min((base + depth) / world.y, start + 3.0f * max(base, 1.0f));
 +    const int steps = 10;
@@ -12070,7 +12091,7 @@ index 0000000..1e71b51
 +    const float depth = LoadDepth(pixel);
 +
 +    // F8 compare: the effects only on the left half, a line down the middle.
-+    if (gConstants.view.y > 0.5f) {
++    if (gConstants.view.y < 0.0f) {
 +        const float middle = gConstants.projection.z * 0.5f;
 +        if (abs(pos.x - middle) < max(1.0f, gConstants.projection.w / 540.0f)) {
 +            return float4(1.0f, 1.0f, 1.0f, 0.0f);
@@ -13186,7 +13207,7 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ef68323
+index 0000000..2b117fd
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,83 @@
@@ -13219,8 +13240,8 @@ index 0000000..ef68323
 +        // The fog's color (rgb), then the outlines: 0 off, else strength (0 to 1, above 0) + 2 * (thickness - 1)
 +        // for a thickness of 1 to 4.
 +        float4 fogColor;
-+        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), 1 to draw the effects only
-+        // on the left half of the picture (F8 compare), a time in seconds, then the heat haze (0 off,
++        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), the day and night
++        // cycle's cloud shape packed with F8 compare (see PackSceneClouds), a time in seconds, then the heat haze (0 off,
 +        // 1 strongest).
 +        float4 view;
 +        // Water reflections strength (0 off), 1 when the water mask was drawn this frame (2: and Modern water draws
@@ -13252,11 +13273,11 @@ index 0000000..ef68323
 +        // ground is (0 to 31) + 16384 when raindrops land on the screen). The reach is negative when the sun
 +        // shadow map was drawn this frame.
 +        float4 shadows;
-+        // The day and night cycle's clouds: how much of the sky they cover (0 to 1, 0.5 the usual), the layer's
-+        // height (0.5 to 2 times the usual), its thickness (in the layer's units, 0.6 the usual), then the wind's
-+        // speed (1 the usual).
-+        float4 clouds;
 +    };
++#ifdef HLSL_CPU
++    // Push constants: Vulkan guarantees only 256 bytes (NVIDIA allows no more), and going over can lose the device.
++    static_assert(sizeof(SceneEffectsCB) <= 256, "SceneEffectsCB is bigger than the 256 bytes of push constants");
++#endif
 +
 +    // Banjo-Tooie: the bloom passes (BloomPS.hlsl): the source's texel size, the pass (0 bright parts at a
 +    // quarter of the size, 1 blur across, 2 blur down, 3 measure the average brightness, 4 move the adapted

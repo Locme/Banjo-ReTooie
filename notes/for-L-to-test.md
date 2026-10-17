@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T351 GPU device lost in Terrydactyland with Interpolation on Display
+- Asked: 2026-10-17 01:09 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Pull and build
+  2. Graphics > Interpolation: Display, with your usual effects and Day and Night clouds on
+  3. Walk from Terry's Nest into Terrydactyland and play there a few minutes
+  4. Also check the clouds still look as before, and that F8 compare still splits the screen
+- Look for: The game keeps running (no frozen or black window), and the console log has no 'failed with error code 0xFFFFFFFC' lines. The cause found: the screen effects' settings had grown to 272 bytes when the cloud sliders were added, over the 256 bytes NVIDIA allows, so the driver could lose the GPU. They are back to 256. Checked headless: the Vulkan validation error is gone and the clouds look the same; the software GPU never lost the device, so only your PC can confirm the fix.
+- Status: waiting for L
+
 ## T350 DEV: Talking heads at 20 FPS
 - Asked: 2026-10-17 00:52 UTC
 - Build: main
