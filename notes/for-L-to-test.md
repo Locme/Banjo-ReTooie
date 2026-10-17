@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T389 Title logo seams blend fully (DEV Blend texture seams, on)
+- Asked: 2026-10-17 13:23 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Start the game and wait for the BANJO-TOOIE logo
+  2. Look where the logo's pieces meet, across and down
+  3. Settings > DEV > Blend texture seams: Off, then On, and compare
+- Look for: With it On, are the lines between the logo's pieces gone (both the upright and the level ones)? Does the game start as quickly as before (the first black screen was a little longer with T383)?
+
 ## T388 DEV > Heap check toggle
 - Asked: 2026-10-17 13:17 UTC
 - Build: main (pull and build)
