@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T376 No reflections on dirt
+- Asked: 2026-10-17 11:10 UTC
+- Build: main
+- Steps:
+  1. Graphics: Water reflections on (60 or more)
+  2. Mayahem Temple: the dirt and grass path up to the statue, from your screenshot
+  3. Hailfire Peaks, Icy Side: the frozen lake
+- Look for: The temple's dirt and grass have no shine or mirrored statue on them. Water still reflects, and Icy Side's ice still does.
+- Status: waiting for L
+
 ## T375 Texture upscale: no lines where tiles meet (title logo, rocks)
 - Asked: 2026-10-17 11:01 UTC
 - Build: main (pull and build)

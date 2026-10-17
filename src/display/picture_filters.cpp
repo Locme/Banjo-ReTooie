@@ -61,6 +61,7 @@ namespace RT64 {
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
     void SetSceneModernWater(bool enabled);
+    void SetSceneIceReflections(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
@@ -3416,6 +3417,12 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
         const bool icy = modern_water && (map == 0x128);
+        // Only Icy Side's flat see-through decals are ice; elsewhere they are dirt and grass blended onto the ground.
+        static int ice_sent = -1;
+        if (int(map == 0x128) != ice_sent) {
+            ice_sent = int(map == 0x128);
+            RT64::SetSceneIceReflections(map == 0x128);
+        }
         static bool icy_sent = false;
         if ((icy != icy_sent) || water_settings_changed.exchange(false)) {
             icy_sent = icy;

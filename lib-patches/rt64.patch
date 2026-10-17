@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..dcbbd1a 100644
+index 9fae0d4..c70edfd 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2619,7 +2619,7 @@ index 9fae0d4..dcbbd1a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2483,308 @@ namespace RT64 {
+@@ -1747,8 +2483,309 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2633,11 +2633,12 @@ index 9fae0d4..dcbbd1a 100644
 +                        (call.callDesc.triangleCount >= 4) && om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) &&
 +                        (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
 +                    // Ice: see-through level decals lying flat on a floor (Icy Side's frozen water). Kept as the game
-+                    // draws it, but marked in the mask so it reflects.
++                    // draws it, but marked in the mask so it reflects. Only where the game says the level is icy: other
++                    // levels blend dirt, grass and paths onto the ground with the same kind of decal.
 +                    const bool iceLike = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() == ZMODE_DEC) && (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
-+                    if (iceLike && levelGeometry(drawData, call) && flatInWorld(drawData, call)) {
++                    if (iceLike && SceneIceReflections() && levelGeometry(drawData, call) && flatInWorld(drawData, call)) {
 +                        targetDrawCall.iceInstances.push_back(instanceIndex);
 +                    }
 +                    else if (waterLike && flatInWorld(drawData, call)) {
@@ -2928,7 +2929,7 @@ index 9fae0d4..dcbbd1a 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2794,213 @@ namespace RT64 {
+@@ -1758,13 +2795,213 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -4716,10 +4717,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..52712bd
+index 0000000..323f1ed
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,1999 @@
+@@ -0,0 +1,2009 @@
 +//
 +// RT64
 +//
@@ -5013,6 +5014,16 @@ index 0000000..52712bd
 +    void SetSceneWaterReflections(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.waterReflections = strength;
++    }
++
++    static std::atomic<bool> sceneIceReflections{ false };
++
++    void SetSceneIceReflections(bool enabled) {
++        sceneIceReflections = enabled;
++    }
++
++    bool SceneIceReflections() {
++        return sceneIceReflections.load(std::memory_order_relaxed);
 +    }
 +
 +    void SetSceneShoreFoam(bool enabled) {
@@ -6721,10 +6732,10 @@ index 0000000..52712bd
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f5cdcd8
+index 0000000..799e245
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,297 @@
+@@ -0,0 +1,301 @@
 +//
 +// RT64
 +//
@@ -6884,6 +6895,10 @@ index 0000000..f5cdcd8
 +    void SetSceneModernWater(bool enabled);
 +    // Whether the game's water draws are left out this frame (Modern water, with the effects pass drawing).
 +    bool SceneModernWater();
++    // Banjo-Tooie: whether flat see-through level decals are ice that reflects (Icy Side only; elsewhere the same kind
++    // of decal is dirt, grass or paths blended onto the ground).
++    void SetSceneIceReflections(bool enabled);
++    bool SceneIceReflections();
 +    // Modern water's caustics while under water: how far under (0 to 1), the surface's height, a whole level under water.
 +    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
