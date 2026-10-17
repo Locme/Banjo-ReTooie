@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T396 Bottles' ghost: no box cut out of the effects
+- Asked: 2026-10-17 19:59 UTC
+- Build: main
+- Steps:
+  1. Turn on Sun shadows, Ambient occlusion and Fog (any strength) in Graphics
+  2. Settings > General: turn on Bottles' Revenge and start a file that has not seen its intro (or a new file) so the ghost scene plays in Spiral Mountain
+  3. Watch Bottles' ghost with his halo and glow, and walk or turn the camera around him if you can
+  4. If you reach the spot from your screenshot, look at the ground and shadows around him there too
+- Look for: Do the shadows, fog and shading carry on right up to Bottles' glow, with no rectangle or square edge around him, and does the ghost himself still look as before (glow, halo, shimmer)?
+- Status: waiting for L
+
 ## T395 Warp tab: Flooded Caves (Torch enemy)
 - Asked: 2026-10-17 19:20 UTC
 - Build: main
