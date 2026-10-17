@@ -1,13 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T395 Warp tab: Flooded Caves (Torch enemy)
+## T395 Warp tab: Flooded Caves
 - Asked: 2026-10-17 19:20 UTC
 - Build: main
 - Steps:
   1. Load a file
   2. Open the Warp tab, Glitter Gulch Mine group
-  3. Pick Flooded Caves (Torch enemy)
-- Look for: Do you land at the Flooded Caves entrance, with the torch on the ledge ahead when Cut Content: Torch enemy is on?
+  3. Pick Flooded Caves
+- Look for: Do you land at the Flooded Caves entrance?
 - Status: waiting for L
 
 ## T394 Cut Content: Torch enemy in the Flooded Caves
@@ -16,11 +16,11 @@
 - Steps:
   1. Settings > General > Back-Ports and cut content: turn on Cut Content: Torch enemy
   2. Go to Glitter Gulch Mine and enter the Flooded Caves
-  3. Look at the torch on the entrance ledge: it should stand still with no eyes; walk right up to it and its eyes should open smoothly before it springs
-  4. Let it burn you once, then claw swipe it or shoot an egg at it
-  5. Swim to the two dry chambers at the far end; each has one more torch
+  3. Swim to the dry chamber at the far end: two torches stand against its back wall, where you picked (2051/2649, 136, -8710)
+  4. Walk right up to one: it should stand still with no eyes, then open them smoothly and spring with a boing on each hop
+  5. Let it burn you once, then claw swipe it or shoot an egg at it
   6. Turn the option off while a torch is lit
-- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it walk back and go still again (eyes closing) when you run away? Do the far torches stand on dry floor? Does turning the option off remove them at once?
+- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it boing on every hop? Does it walk back to the wall and go still again (eyes closing) when you run away? Do both stand against the wall facing into the room, and is the old one near them gone? Does turning the option off remove them at once?
 - Status: waiting for L
 
 ## T393 Texture seams blend everywhere (DEV Blend texture seams, on)

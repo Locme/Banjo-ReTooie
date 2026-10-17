@@ -86,12 +86,11 @@ namespace {
         float pos[3];
         float yaw;
     };
-    // The entrance ledge, and the two dry chambers at the far end (by the hillbillies and mine lamps). Heights
-    // are snapped to the floor when they spawn.
+    // Against the back wall of the dry chamber at the far end, the places L picked. Each is snapped to the floor
+    // and faced out from the wall (the yaw here is only used when no wall is found).
     constexpr Spot cave_spots[] = {
-        { { 0.0f, 312.0f, 1000.0f }, 180.0f },
-        { { -3850.0f, 190.0f, -7600.0f }, 90.0f },
-        { { 2200.0f, 128.0f, -8150.0f }, 0.0f },
+        { { 2051.0f, 136.0f, -8708.0f }, 0.0f },
+        { { 2649.0f, 136.0f, -8711.0f }, 0.0f },
     };
 
     // Actor states, which index the animation table below.
@@ -172,6 +171,7 @@ namespace {
         float timer = 0.0f;
         float rest = 0.0f;
         float flicker = 0.0f;
+        float hop = 0.0f;                       // time into the current hop (one hop per chase animation loop)
         bool hit_this_lunge = false;
         bool gone = false;
     };
@@ -540,6 +540,8 @@ namespace {
         anim_table = 0;
     }
 
+    void play_boing(uint8_t* rdram, recomp_context* ctx, const float pos[3], float volume);
+
     void set_state(uint8_t* rdram, recomp_context* ctx, Torch& t, uint32_t object, State s) {
         if (t.state == s) {
             return;
@@ -553,8 +555,14 @@ namespace {
         if (shots_on) {
             tooie::screenshot::take();
         }
-        GameCall call(rdram, ctx);
-        call(func_80101FDC, object, s);
+        {
+            GameCall call(rdram, ctx);
+            call(func_80101FDC, object, s);
+        }
+        if (s == state_chase || s == state_return || s == state_lunge) {
+            t.hop = 0.0f;
+            play_boing(rdram, ctx, t.pos, s == state_return ? 0.7f : 1.0f);
+        }
     }
 
     void light_update(uint8_t* rdram, recomp_context* ctx, Torch& t, float scale) {
@@ -679,6 +687,39 @@ namespace {
         return true;
     }
 
+    // Faces a spot out from the wall behind it: line tests out in 32 directions at chest height, and the
+    // normals of the walls they hit close by, the nearest counting most (in a corner it faces out between the
+    // two walls). The spot itself stays where it is; it should already be up against the wall.
+    bool face_off_wall(uint8_t* rdram, recomp_context* ctx, Spot& spot) {
+        constexpr float reach = 300.0f;
+        constexpr float close = 100.0f;
+        constexpr float height = 80.0f;
+        float sum_x = 0.0f;
+        float sum_z = 0.0f;
+        for (int i = 0; i < 32; i++) {
+            const float rad = (float)i * 3.14159265f * 2.0f / 32.0f;
+            const float from[3] = { spot.pos[0], spot.pos[1] + height, spot.pos[2] };
+            float to[3] = { from[0] + std::sin(rad) * reach, from[1], from[2] + std::cos(rad) * reach };
+            float normal[3];
+            if (!tooie::free_camera::sweep_line(rdram, ctx, from, to, normal) || std::fabs(normal[1]) > 0.5f) {
+                continue;
+            }
+            const float dx = to[0] - from[0];
+            const float dz = to[2] - from[2];
+            const float dist = std::sqrt(dx * dx + dz * dz);
+            if (dist < close) {
+                const float weight = 1.0f / (dist + 10.0f);
+                sum_x += normal[0] * weight;
+                sum_z += normal[2] * weight;
+            }
+        }
+        if (sum_x * sum_x + sum_z * sum_z < 1e-6f) {
+            return false;
+        }
+        spot.yaw = std::fmod(std::atan2(sum_x, sum_z) * 180.0f / 3.14159265f + 360.0f, 360.0f);
+        return true;
+    }
+
     bool banjo_attacking(uint8_t* rdram, const float torch_pos[3], const float banjo[3]) {
         if (distance(torch_pos, banjo) > attack_range) {
             return false;
@@ -722,6 +763,30 @@ namespace {
     // One honeycomb, through the game's own health change, then the hurt state (it knocks Banjo back and
     // flashes him, as any enemy's hit does): 0x0E for Banjo and Kazooie together, 0x100 for Kazooie alone.
     // bs_setState(PlayerState, state) switches Banjo's state as the game's own moves do.
+    // A boing as it hops, as Banjo-Kazooie's Flotsam boings on every bounce: the Springy Step Shoes' jump sound
+    // (0x4598, as bskazshoesspringjump plays it), through func_800C401C(sound, pitch, volume, position, near,
+    // far, 2), the game's sound at a place (func_800C4140 unpacks into it), heard up to boing_far away.
+    constexpr uint32_t boing_sound = 0x4598;
+    constexpr float boing_near = 150.0f;
+    constexpr float boing_far = 1800.0f;
+
+    void play_boing(uint8_t* rdram, recomp_context* ctx, const float pos[3], float volume) {
+        GameCall call(rdram, ctx);
+        call.vec(0, pos);
+        const uint32_t sp = call.scratch - 0x80u;
+        write_float(rdram, sp + 0x10, boing_near);
+        write_float(rdram, sp + 0x14, boing_far);
+        write_word(rdram, sp + 0x18, 2);
+        const float pitch = 0.95f + 0.15f * (float)(std::rand() % 100) / 100.0f;
+        uint32_t pitch_bits;
+        std::memcpy(&pitch_bits, &pitch, 4);
+        const uint32_t handle = (uint32_t)call(func_800C401C, boing_sound, pitch_bits, (uint32_t)(0x7FFF * std::clamp(volume, 0.0f, 1.0f)), call.scratch);
+        if (log_on) {
+            printf("[torch] boing (sound handle %u)\n", handle);
+            fflush(stdout);
+        }
+    }
+
     void burn_banjo(uint8_t* rdram, recomp_context* ctx, const float torch_pos[3]) {
         const uint32_t player = player_pointer(rdram);
         if (player == 0) {
@@ -793,6 +858,14 @@ namespace {
             return;
         }
         t.timer += dt;
+        // One boing per hop while it hops along (the chase and return animations loop once a hop).
+        if (t.state == state_chase || t.state == state_return) {
+            t.hop += dt;
+            if (t.hop >= anim_durations[t.state]) {
+                t.hop -= anim_durations[t.state];
+                play_boing(rdram, ctx, t.pos, t.state == state_return ? 0.7f : 1.0f);
+            }
+        }
         t.flicker += dt;
         t.rest = std::max(0.0f, t.rest - dt);
         if (log_on) {
@@ -1100,6 +1173,9 @@ void tooie::torch_enemy::tick(uint8_t* rdram, recomp_context* ctx) {
             }
             if (found) {
                 spot.pos[1] = floor_y;
+            }
+            if (!env_spots_set && face_off_wall(rdram, ctx, spot) && log_on) {
+                printf("[torch] against the wall at %.0f %.0f %.0f, facing %.0f\n", spot.pos[0], spot.pos[1], spot.pos[2], spot.yaw);
             }
             spawn_torch(rdram, ctx, spot);
         }

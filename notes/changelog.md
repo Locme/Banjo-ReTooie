@@ -66,8 +66,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Gameplay
 
-- Warp tab: new Glitter Gulch Mine place, Flooded Caves (Torch enemy), which lands at the cave entrance by the first torch (L). Untested on PC (T395).
-- New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves, three of them. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him; they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
+- Warp tab: new Glitter Gulch Mine place, Flooded Caves, which lands at the cave entrance (L). Untested on PC (T395).
+- New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves: two of them against the back wall of the dry chamber at the far end, where L picked. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him, with a boing on every hop (the Springy Step Shoes jump sound); they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
