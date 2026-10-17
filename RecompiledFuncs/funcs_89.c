@@ -384,7 +384,7 @@ L_800A74FC:
     // 0x800A7508: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     after_18:
-    tooie_draw2d_mark(rdram, ctx, 6);
+    tooie_draw2d_mark(rdram, ctx, 6); tooie_list_end_guard(rdram, ctx, 0);
     // 0x800A750C: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;
     // 0x800A7510: jal         0x800C940C
@@ -395,6 +395,7 @@ L_800A74FC:
     // 0x800A7514: or          $a1, $s0, $zero
     ctx->r5 = ctx->r16 | 0;
     after_19:
+    tooie_list_end_guard(rdram, ctx, 1);
     // 0x800A7518: jal         0x800E7EF4
     // 0x800A751C: or          $a0, $s1, $zero
     ctx->r4 = ctx->r17 | 0;

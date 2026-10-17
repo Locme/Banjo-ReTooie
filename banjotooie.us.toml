@@ -1040,7 +1040,15 @@ text = "tooie_draw2d_mark(rdram, ctx, 5);"
 [[patches.hook]]
 func = "func_800A73F4"
 before_vram = 0x800A750C
-text = "tooie_draw2d_mark(rdram, ctx, 6);"
+text = "tooie_draw2d_mark(rdram, ctx, 6); tooie_list_end_guard(rdram, ctx, 0);"
+
+# Then func_800C940C draws the transition (fades, the warp's fade-in) and the
+# viewport, and func_800E7EF4 closes the list. The list-end guard runs before
+# and after the transition (src/display/gfx_budget.cpp).
+[[patches.hook]]
+func = "func_800A73F4"
+before_vram = 0x800A7518
+text = "tooie_list_end_guard(rdram, ctx, 1);"
 # --- Level transition speed (src/gameplay/fast_transitions.cpp) -------------
 # gctransitionDll_entrypoint_9 updates a screen wipe: the frame time is in $f2
 # and the wipe in $a3 here.

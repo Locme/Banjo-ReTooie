@@ -55,6 +55,8 @@ void tooie_hud_element_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_dialogue_timer_advanced(uint8_t* rdram, recomp_context* ctx);
 // Hide HUD (src/game/hide_hud.cpp): marks between the 2D draw calls of func_800A73F4.
 void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index);
+// Keeps the frame's closing commands inside the display list buffer (src/display/gfx_budget.cpp).
+void tooie_list_end_guard(uint8_t* rdram, recomp_context* ctx, int step);
 void tooie_scene_begin(uint8_t* rdram, recomp_context* ctx);
 // Achievements (src/game/achievements.cpp): an enemy hit in func_80108F08, an Inky starting to freeze.
 void tooie_ach_enemy_hit(uint8_t* rdram, recomp_context* ctx);
