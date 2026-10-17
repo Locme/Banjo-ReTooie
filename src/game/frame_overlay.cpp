@@ -63,6 +63,7 @@
 #include "tooie_toast.h"
 #include "build_info.h"
 #include "tooie_watchdog.h"
+#include "tooie_rdram.h"
 
 namespace RT64 {
     // lib/rt64/src/hle/rt64_present_queue.h (from lib-patches/rt64.patch).
@@ -372,20 +373,9 @@ namespace {
         }
     }
 
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
-
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
-    }
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
 
     // Present intervals of the last few seconds, for the 1% low and hitches.
     struct Interval {

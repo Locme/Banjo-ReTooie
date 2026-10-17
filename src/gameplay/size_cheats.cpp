@@ -26,6 +26,7 @@
 #include "recomp.h"
 #include "tooie_cheats.h"
 #include "tooie_size_cheats.h"
+#include "tooie_rdram.h"
 
 namespace {
     constexpr float big_head = 2.5f, small_head = 0.5f, big_body = 1.6f, tiny_body = 0.5f;
@@ -36,26 +37,12 @@ namespace {
 
     struct Vec { float x, y, z; };
 
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-    int16_t read_half(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u));
-    }
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
-    }
-    void write_float(uint8_t* rdram, uint32_t addr, float value) {
-        uint32_t bits;
-        std::memcpy(&bits, &value, sizeof(bits));
-        *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)) = bits;
-    }
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_half;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_float;
+
     Vec transform(const float m[16], Vec p) {
         return { p.x * m[0] + p.y * m[4] + p.z * m[8] + m[12],
                  p.x * m[1] + p.y * m[5] + p.z * m[9] + m[13],

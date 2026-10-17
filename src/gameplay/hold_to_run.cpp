@@ -51,6 +51,7 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_hold_to_run.h"
+#include "tooie_rdram.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -101,16 +102,12 @@ namespace {
     // A left stick tilted past this counts as moving.
     constexpr float move_tilt = 0.2f;
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_word;
 
     uint8_t rd_byte(uint8_t* rdram, uint32_t addr) {
         return MEM_BU(0, (gpr)(int32_t)addr);
-    }
-
-    void wr_word(uint8_t* rdram, uint32_t addr, uint32_t value) {
-        *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)) = value;
     }
 
     float as_float(uint32_t bits) {
@@ -123,10 +120,6 @@ namespace {
         uint32_t bits;
         std::memcpy(&bits, &f, sizeof(bits));
         return bits;
-    }
-
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
     }
 
     const RunForm* find_form(uint8_t form) {
@@ -574,8 +567,8 @@ namespace {
     }
 
     uint32_t player_state(uint8_t* rdram, uint32_t player) {
-        const uint32_t block = rd_word(rdram, player + state_offset);
-        return valid_ptr(block) ? rd_word(rdram, block + state_current) : 0;
+        const uint32_t block = read_word(rdram, player + state_offset);
+        return valid_ptr(block) ? read_word(rdram, block + state_current) : 0;
     }
 }
 
@@ -648,7 +641,7 @@ void tooie::hold_to_run::apply(float* x, float* y) {
 }
 
 void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
-    const uint32_t player = rd_word(rdram, player_table);
+    const uint32_t player = read_word(rdram, player_table);
     if (!valid_ptr(player)) {
         form_can_run = false;
         cadence_set = false;
@@ -665,25 +658,25 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         static auto last = Clock::now();
         if (Clock::now() - last > 100ms) {
             last = Clock::now();
-            const uint32_t physics = rd_word(rdram, player + 0xC8);
+            const uint32_t physics = read_word(rdram, player + 0xC8);
             float target = 0, vx = 0, vz = 0;
             if (valid_ptr(physics)) {
-                uint32_t bits = rd_word(rdram, physics + 0x3C);
+                uint32_t bits = read_word(rdram, physics + 0x3C);
                 std::memcpy(&target, &bits, sizeof(target));
-                bits = rd_word(rdram, physics + 0x10);
+                bits = read_word(rdram, physics + 0x10);
                 std::memcpy(&vx, &bits, sizeof(vx));
-                bits = rd_word(rdram, physics + 0x18);
+                bits = read_word(rdram, physics + 0x18);
                 std::memcpy(&vz, &bits, sizeof(vz));
             }
             float duration = 0;
             if (ctrl != 0) {
-                duration = as_float(rd_word(rdram, ctrl + 0xC)); // as anctrl_setDuration stores it
+                duration = as_float(read_word(rdram, ctrl + 0xC)); // as anctrl_setDuration stores it
             }
-            const uint32_t block = rd_word(rdram, player + 0x4);
+            const uint32_t block = read_word(rdram, player + 0x4);
             float map[4] = {};
             if (valid_ptr(block)) {
                 for (int i = 0; i < 4; i++) {
-                    map[i] = as_float(rd_word(rdram, block + 0x24 + 4 * i));
+                    map[i] = as_float(read_word(rdram, block + 0x24 + 4 * i));
                 }
             }
             std::printf("[run] form 0x%X state %u anim 0x%X target %.1f speed %.1f duration %.3f (map %.0f-%.0f to %.3f-%.3f) held %d blend %.2f\n",
@@ -692,7 +685,7 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         }
     }
 
-    const uint32_t anim = rd_word(rdram, player + 0x4);
+    const uint32_t anim = read_word(rdram, player + 0x4);
     if (!valid_ptr(anim)) {
         cadence_set = false;
         return;
@@ -736,8 +729,8 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         sprint_source = rf->run_anim;
         sprint_blend = 1.0f;
     }
-    const uint32_t cur_speed = rd_word(rdram, anim + map_top_speed);
-    const uint32_t cur_duration = rd_word(rdram, anim + map_top_duration);
+    const uint32_t cur_speed = read_word(rdram, anim + map_top_speed);
+    const uint32_t cur_duration = read_word(rdram, anim + map_top_duration);
     if (sprinting) {
         // The run animation's duration follows the speed linearly from map_top_speed down to
         // map_top_duration. Stretching that end to the sprint speed, with the duration shortened as
@@ -750,13 +743,13 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
         const float f = blend_factor();
         sprint_speed_bits = as_bits(as_float(saved_speed) * f);
         sprint_duration_bits = as_bits(as_float(saved_duration) / f);
-        wr_word(rdram, anim + map_top_speed, sprint_speed_bits);
-        wr_word(rdram, anim + map_top_duration, sprint_duration_bits);
+        write_word(rdram, anim + map_top_speed, sprint_speed_bits);
+        write_word(rdram, anim + map_top_duration, sprint_duration_bits);
         cadence_set = true;
     } else if (cadence_set) {
         if (cur_speed == sprint_speed_bits && cur_duration == sprint_duration_bits) {
-            wr_word(rdram, anim + map_top_speed, saved_speed);
-            wr_word(rdram, anim + map_top_duration, saved_duration);
+            write_word(rdram, anim + map_top_speed, saved_speed);
+            write_word(rdram, anim + map_top_duration, saved_duration);
         }
         cadence_set = false;
     }
@@ -767,7 +760,7 @@ extern "C" void tooie_run_target_speed(uint8_t* rdram, recomp_context* ctx) {
     if (sprint_blend.load() <= 0.0f) {
         return;
     }
-    const uint32_t player = rd_word(rdram, player_table);
+    const uint32_t player = read_word(rdram, player_table);
     if ((uint32_t)ctx->r4 != player || !valid_ptr(player)) {
         return;
     }
