@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T414 Smash Banjo v14: blink, arm clipping, shoulder spot
+- Asked: 2026-10-17 22:59 UTC
+- Build: main 488dfb2 (mod-only change, any recent build)
+- Steps:
+  1. Install Smash Banjo v14.zip from project files mods/ (remove v13)
+  2. Stand still until Banjo blinks
+  3. Walk and run slowly, watch his arms against his shorts
+  4. Zoom in on both shoulders by the straps
+- Look for: Both eyes shut and open together like vanilla; hands no longer sink into the shorts; no yellow spot on either shoulder. Fur on Smash is a separate fix in the fur thread
+- Status: waiting for L
+
 ## T413 Parallax pick mode
 - Asked: 2026-10-17 22:38 UTC
 - Build: main (parallax pick mode)
