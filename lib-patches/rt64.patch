@@ -1930,7 +1930,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..5891308 100644
+index 9fae0d4..9c03392 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -2777,7 +2777,7 @@ index 9fae0d4..5891308 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2148,160 @@ namespace RT64 {
+@@ -1450,12 +2148,162 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -2797,8 +2797,10 @@ index 9fae0d4..5891308 100644
 +            uint32_t pointStart, pointCount;
 +            // The texture's format and size, the same for the pieces of one picture.
 +            uint32_t format;
-+            // In the 3D world: the shader then also checks the colours meet (TextureSampler.hlsli).
++            // In the 3D world (the top bit of its neighbours' tile indices).
 +            bool world;
++            // The material's shader: a picture drawn twice in layers (a Split-Up pad's) pairs within each layer.
++            uint64_t shader;
 +        };
 +        std::vector<SeamPiece> seamPieces;
 +        std::vector<SeamPoint> seamPoints;
@@ -2938,7 +2940,7 @@ index 9fae0d4..5891308 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2452,7 @@ namespace RT64 {
+@@ -1606,6 +2454,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2946,7 +2948,7 @@ index 9fae0d4..5891308 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2529,20 @@ namespace RT64 {
+@@ -1682,6 +2531,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2967,7 +2969,7 @@ index 9fae0d4..5891308 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2608,824 @@ namespace RT64 {
+@@ -1747,24 +2610,830 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3320,9 +3322,9 @@ index 9fae0d4..5891308 100644
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
                  }
-+                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers once along s and t (from within a
-+                // texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend texture
-+                // seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
++                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
++                // within a texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend
++                // texture seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
 +                // diagonally).
 +                if (seamsOn && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0) &&
 +                    (call.callDesc.triangleCount > 0) && (call.callDesc.triangleCount <= 16) && (seamPieces.size() < 2048))
@@ -3355,16 +3357,17 @@ index 9fae0d4..5891308 100644
 +                            }
 +                        }
 +                        // (Cliff faces stop a little short of their tile's last texel, 62.9 of 64.)
-+                        fits = fits && (std::abs(uMin) <= 1.0f) && (std::abs(tMin) <= 1.0f) &&
-+                            (std::abs(uMax - float(width)) <= 1.0f) && (std::abs(tMax - float(height)) <= 1.0f);
++                        // A piece may cover only part of its tile (each Split-Up pad picture tile is drawn in halves): its
++                        // vertices on the tile's sides are the edge points below.
++                        fits = fits && (uMin >= -1.0f) && (tMin >= -1.0f) && (uMax <= float(width) + 1.0f) && (tMax <= float(height) + 1.0f);
 +                        if (fits) {
 +                            const uint32_t pointStart = uint32_t(seamPoints.size());
 +                            for (uint32_t k = 0; k < indexCount; k++) {
 +                                const uint32_t v = drawData.faceIndices[start + k];
 +                                const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
 +                                const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
-+                                const uint32_t edges = ((std::abs(u - uMin) < 0.05f) ? 1u : 0u) | ((std::abs(u - uMax) < 0.05f) ? 2u : 0u) |
-+                                    ((std::abs(t - tMin) < 0.05f) ? 4u : 0u) | ((std::abs(t - tMax) < 0.05f) ? 8u : 0u);
++                                const uint32_t edges = ((u <= 0.05f) ? 1u : 0u) | ((u >= float(width) - 1.15f) ? 2u : 0u) |
++                                    ((t <= 0.05f) ? 4u : 0u) | ((t >= float(height) - 1.15f) ? 8u : 0u);
 +                                const hlslpp::float4 &cp = drawData.posTransformed[v];
 +                                const float w = float(cp.w);
 +                                if ((edges == 0) || (w <= 1e-6f)) {
@@ -3373,7 +3376,7 @@ index 9fae0d4..5891308 100644
 +                                seamPoints.push_back({ { float(cp.x) / w, float(cp.y) / w, w }, edges, u, t });
 +                            }
 +                            seamPieces.push_back({ instanceIndex, call.callDesc.tileIndex, width, height, pointStart, uint32_t(seamPoints.size()) - pointStart, (uint32_t(st.fmt) << 8) | uint32_t(st.siz),
-+                                proj.type == Projection::Type::Perspective });
++                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
 +                }
@@ -3432,7 +3435,7 @@ index 9fae0d4..5891308 100644
 +                                    continue;
 +                                }
 +                                const SeamPiece &b = seamPieces[bi];
-+                                if (b.format != a.format) {
++                                if ((b.format != a.format) || (b.shader != a.shader)) {
 +                                    continue;
 +                                }
 +                                if (alongT ? ((b.height != a.height) || (std::abs(pb.t - pa.t) > 0.1f)) : ((b.width != a.width) || (std::abs(pb.u - pa.u) > 0.1f))) {
@@ -3464,9 +3467,14 @@ index 9fae0d4..5891308 100644
 +                        }
 +                    }
 +                }
++                // Of pieces alike at the same place, the nearest in draw order.
++                uint32_t bestGap = 0xFFFFFFFFu;
 +                for (uint32_t c = 0; c < candidateCount; c++) {
-+                    if ((counts[c] >= 2) && (counts[c] > bestCount)) {
++                    const uint32_t bInstance = seamPieces[candidates[c]].instance;
++                    const uint32_t gap = (bInstance > a.instance) ? (bInstance - a.instance) : (a.instance - bInstance);
++                    if ((counts[c] >= 2) && ((counts[c] > bestCount) || ((counts[c] == bestCount) && (gap < bestGap)))) {
 +                        bestCount = counts[c];
++                        bestGap = gap;
 +                        best = seamPieces[candidates[c]].tile | (a.world ? 0x80000000u : 0u);
 +                    }
 +                }
@@ -14264,7 +14272,7 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..a3bcc09 100644
+index 1ceb2ce..11e9af8 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
 @@ -139,7 +139,18 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
@@ -14287,7 +14295,7 @@ index 1ceb2ce..a3bcc09 100644
      float2 tcScale = gpuTile.tcScale;
      float mipScale = float(1U << mipLevel);
      uvCoord /= mipScale;
-@@ -186,6 +197,57 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
+@@ -186,6 +197,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
  #endif
      }
      
@@ -14307,8 +14315,7 @@ index 1ceb2ce..a3bcc09 100644
 +            const bool low = clamped && (edge[axis] > 0) && (base == -1);
 +            const uint neighbour = (axis == 0) ? (high ? gSeamTiles.x : gSeamTiles.z) : (high ? gSeamTiles.y : gSeamTiles.w);
 +            if ((high || low) && (neighbour != 0xFFFFFFFFu)) {
-+                // The top bit asks for the colour check below (pieces of the 3D world).
-+                const bool checkColour = (neighbour & 0x80000000u) != 0;
++                // (The top bit marks pieces of the 3D world.)
 +                const uint neighbourTile = neighbour & 0x7FFFFFFFu;
 +                const GPUTile nGpu = GPUTiles[neighbourTile];
 +                if (all(abs(nGpu.tcScale - tcScale) < 0.001f)) {
@@ -14318,25 +14325,15 @@ index 1ceb2ce..a3bcc09 100644
 +                    const int2 outside = (axis == 0) ? (high ? int2(2, 3) : int2(0, 1)) : (high ? int2(1, 3) : int2(0, 2));
 +                    const int along = high ? 0 : seamEdge(nRdp, tcScale)[axis];
 +                    const bool nUsesTMEM = canDecodeTMEM && gpuTileFlagRawTMEM(nGpu.flags);
-+                    // The texels inside the edge, next to the two past it.
-+                    const int2 inside = (axis == 0) ? (high ? int2(0, 1) : int2(2, 3)) : (high ? int2(0, 2) : int2(1, 3));
 +                    float4 found[2];
-+                    bool alike = true;
 +                    [loop]
 +                    for (int k = 0; k < 2; k++) {
 +                        int2 texel = texelBaseInt + ((axis == 0) ? int2(0, k) : int2(k, 0));
 +                        texel[axis] = along;
 +                        found[k] = clampWrapMirrorSample(nRdp, nGpu, tcScale, texel, tlut, nUsesTMEM, 0);
-+                        // In the 3D world, a piece of another surface that only happens to meet this one (a pad's rim and
-+                        // its picture) is told apart by its colour jumping at the edge: those edges stay as they are. (Not
-+                        // on 2D pictures, whose pieces are always one picture: the title logo's failed this check.)
-+                        const float4 jump = abs(found[k] - samples[inside[k]]);
-+                        alike = alike && (!checkColour || (max(max(jump.r, jump.g), max(jump.b, jump.a)) < 0.3f));
 +                    }
-+                    if (alike) {
-+                        samples[outside[0]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[0];
-+                        samples[outside[1]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[1];
-+                    }
++                    samples[outside[0]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[0];
++                    samples[outside[1]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[1];
 +                }
 +            }
 +        }
@@ -14345,7 +14342,7 @@ index 1ceb2ce..a3bcc09 100644
      float4 sample00 = samples[0];
      if (filtering) {
          float2 fracPart = uvCoord - texelBaseInt;
-@@ -278,7 +340,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -278,7 +329,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
              float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
              float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
              float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
@@ -14354,7 +14351,7 @@ index 1ceb2ce..a3bcc09 100644
              mip = 0.5 * log2(ddMax) + mipBias;
              float maxMip = float(gpuTile.textureDimensions.z - 1);
              RDPMipLevels[0] = min(floor(mip), maxMip);
-@@ -326,13 +388,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -326,13 +377,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
  #if USE_FOR_LOOPS
      [unroll]
      for (uint i = 0; i < numRDPSamples; i++) {
@@ -14793,7 +14790,7 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..1a87c8c 100644
+index 0a5c332..d62faab 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
 @@ -9,11 +9,56 @@
@@ -14849,7 +14846,7 @@ index 0a5c332..1a87c8c 100644
 +        uint seamPadding;
 +        // Banjo-Tooie: Blend texture seams: the tiles (global indices) of the pieces of the same picture drawn right of,
 +        // below, left of and above this one, which its texture blends into at its edges (TextureSampler.hlsli), or
-+        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world, whose colours must also meet.
++        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world.
 +        uint4 seamTiles;
      };
  #ifdef HLSL_CPU
