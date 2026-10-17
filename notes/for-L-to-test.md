@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T394 Cut Content: Torch enemy in the Flooded Caves
+- Asked: 2026-10-17 15:32 UTC
+- Build: main
+- Steps:
+  1. Settings > General > Back-Ports and cut content: turn on Cut Content: Torch enemy
+  2. Go to Glitter Gulch Mine and enter the Flooded Caves
+  3. Wait on the entrance ledge: a torch comes at you and lunges
+  4. Let it burn you once, then claw swipe it or shoot an egg at it
+  5. Swim to the two dry chambers at the far end; each has one more torch
+  6. Turn the option off while a torch is lit
+- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, and does it move/animate believably (idle, chase, lunge)? Do the far torches stand on dry floor? Does turning the option off remove them at once?
+- Status: waiting for L
+
 ## T393 Texture seams blend everywhere (DEV Blend texture seams, on)
 - Asked: 2026-10-17 15:02 UTC
 - Build: main

@@ -883,9 +883,8 @@ namespace {
 
 void tooie::torch_enemy::add_option(recomp::config::Config& general) {
     general.add_bool_option(option, "Cut Content: Torch enemy",
-        "The angry torch cut from Glitter Gulch Mine, back in the Flooded Caves where it was meant to be. "
-        "It lights up the dark around it, chases Banjo when he comes near and lunges to burn him. "
-        "Attacks and eggs put it out.",
+        "Level: Glitter Gulch Mine. The angry torch cut from the game, back where it was meant to be. It lights "
+        "up the dark around it, chases Banjo when he comes near and lunges to burn him. Attacks and eggs put it out.",
         false);
 }
 

@@ -29,9 +29,8 @@ on a controller.
   turns itself off when the rush ends, and turning it off stops after the
   current fight. Not with Bottles' Revenge on. Default: off.
 - **Cut Content: Torch enemy** (Back-Ports and cut content): brings back the
-  angry torch cut from Glitter Gulch Mine. Three torches wait in the Flooded
-  Caves (on the entrance ledge and in the two dry chambers at the far end). Each
-  lights up the dark around it with a warm flickering glow, chases Banjo when he
+  angry torch cut from the game. Level: Glitter Gulch Mine (the menu names only
+  the level, to keep where they hide a surprise). Each torch lights up the dark around it with a warm flickering glow, chases Banjo when he
   comes near, and lunges to burn him for one honeycomb and knock him back. Any
   attack (claw swipe, roll, peck, Beak Barge, Beak Buster and the rest) or any
   egg puts it out; it comes back the next time the area loads. Applies at once.
