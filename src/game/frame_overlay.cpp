@@ -176,11 +176,44 @@ namespace {
 
     void toggle_benchmark();
 
+    // F4 was the Benchmark key's default until L asked for it gone (2026-10-17). Saved controls
+    // that still have F4 on it lose it once. Returns false until the keyboard profile is loaded.
+    bool take_f4_off_benchmark() {
+        const std::filesystem::path marker = recomp::get_config_path() / "benchmark_no_f4.done";
+        std::error_code ec;
+        if (std::filesystem::exists(marker, ec)) {
+            return true;
+        }
+        const int profile = recompinput::profiles::get_sp_keyboard_profile_index();
+        if (profile < 0) {
+            return false;
+        }
+        const recompinput::InputField f4 = recompinput::InputField::keyboard(SDL_SCANCODE_F4);
+        bool changed = false;
+        for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+            if (recompinput::profiles::get_input_binding(profile, benchmark_input, b) == f4) {
+                recompinput::profiles::set_input_binding(profile, benchmark_input, b, recompinput::InputField{});
+                changed = true;
+            }
+        }
+        if (changed) {
+            recompinput::profiles::save_controls_config(recomp::get_config_path() / "controls.json");
+            std::printf("[benchmark] F4 taken off the Benchmark key\n");
+            std::fflush(stdout);
+        }
+        std::ofstream(marker) << "F4 was taken off the Benchmark key once (frame_overlay.cpp).\n";
+        return true;
+    }
+
     void key_worker() {
         bool was_down = false;
         bool benchmark_was_down = false;
+        bool f4_checked = false;
         for (;;) {
             std::this_thread::sleep_for(key_poll);
+            if (!f4_checked) {
+                f4_checked = take_f4_off_benchmark();
+            }
             bool benchmark_down = key_down(benchmark_input);
             if (benchmark_down && !benchmark_was_down) {
                 toggle_benchmark();
@@ -670,7 +703,7 @@ namespace {
         return text;
     }
 
-    // Benchmark (the Benchmark key, F4): records what the overlay measures to
+    // Benchmark (the Benchmark key, unbound by default since L 2026-10-17): records what the overlay measures to
     // benchmarks/benchmark_<date>.csv, one row per update (four a second), and on
     // stopping writes a summary with the settings next to it (.txt), so two settings
     // or two builds can be compared on the same PC. TOOIE_BENCHMARK=<seconds> records
@@ -1020,7 +1053,8 @@ void tooie::frame_overlay::register_input() {
     recompinput::set_game_input_name(benchmark_input, "Benchmark");
     recompinput::set_game_input_description(benchmark_input,
         "Starts and stops recording the frame rate overlay's figures to the benchmarks folder, with a summary and your settings, for comparing settings or builds.");
-    recompinput::set_default_mapping_for_keyboard(benchmark_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F4) });
+    // No default key (L, 2026-10-17: it was F4); bind it in the Controls tab.
+    recompinput::set_default_mapping_for_keyboard(benchmark_input, {});
     recompinput::set_default_mapping_for_controller(benchmark_input, {});
 
     recompinput::set_game_input_name(overlay_input, "Frame Rate Overlay");

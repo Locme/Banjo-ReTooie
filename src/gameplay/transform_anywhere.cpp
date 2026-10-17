@@ -1,6 +1,6 @@
 // Transform anywhere (L, 2026-10-15): QOL > Transform anywhere, off by default.
 //
-// The Transform key (Controls tab, Movement; keyboard T by default) changes Banjo-Kazooie into the
+// The Transform key (Controls tab, Movement; keyboard T and controller LT + Y by default) changes Banjo-Kazooie into the
 // form Humba Wumba gives in the world he is in, where he stands, and changes him back. A world's
 // form works only once Banjo has jumped in that world's Humba pool and changed at least once (the
 // game's own "first time transformed" flags, 0x345-0x34D, kept in the save file), and only in that
@@ -38,6 +38,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -50,6 +52,7 @@
 
 #include "recomp.h"
 #include "funcs.h"
+#include "librecomp/game.hpp"
 #include "recompinput/recompinput.h"
 #include "recompinput/input_binding.h"
 #include "recompinput/profiles.h"
@@ -183,6 +186,46 @@ namespace {
             }
         }
         return held;
+    }
+
+    // The controller default, LT + Y (L, 2026-10-17): Y counts only while LT is held. While LT is
+    // held, Y alone (C-left by default) does not reach the game; the right stick still gives C-left.
+    recompinput::InputField lt_y() {
+        recompinput::InputField field = recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_NORTH);
+        const recompinput::InputField lt = recompinput::InputField::controller_analog(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
+        field.modifier_type = lt.input_type;
+        field.modifier_id = lt.input_id;
+        return field;
+    }
+
+    // Saved controls from before LT + Y was the default get it once, if Transform has nothing on
+    // the controller. Returns false until the controller profile is loaded.
+    bool give_transform_lt_y() {
+        const std::filesystem::path marker = recomp::get_config_path() / "transform_default_lt_y.done";
+        std::error_code ec;
+        if (std::filesystem::exists(marker, ec)) {
+            return true;
+        }
+        const int profile = recompinput::profiles::get_sp_controller_profile_index();
+        if (profile < 0) {
+            return false;
+        }
+        bool bound = false;
+        for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+            if (recompinput::profiles::get_input_binding(profile, transform_input, b).input_type != recompinput::InputType::None) {
+                bound = true;
+            }
+        }
+        if (!bound) {
+            recompinput::profiles::set_input_binding(profile, transform_input, 0, lt_y());
+            recompinput::profiles::save_controls_config(recomp::get_config_path() / "controls.json");
+            std::printf("[transform-anywhere] Transform bound to LT + Y on the controller\n");
+        } else {
+            std::printf("[transform-anywhere] Transform kept as saved on the controller\n");
+        }
+        std::fflush(stdout);
+        std::ofstream(marker) << "Transform was given LT + Y on the controller once (transform_anywhere.cpp).\n";
+        return true;
     }
 
     // Headless presses (TOOIE_TRANSFORM_PRESS).
@@ -399,10 +442,14 @@ void tooie::transform_anywhere::register_input() {
         "A world's form works once you have changed in its Humba pool.");
     recompinput::set_game_input_section(transform_input, "Movement");
     recompinput::set_default_mapping_for_keyboard(transform_input, { recompinput::InputField::keyboard(SDL_SCANCODE_T) });
-    recompinput::set_default_mapping_for_controller(transform_input, {});
+    recompinput::set_default_mapping_for_controller(transform_input, { lt_y() });
 }
 
 void tooie::transform_anywhere::tick(uint8_t* rdram, recomp_context* ctx) {
+    static bool migrated = false;
+    if (!migrated) {
+        migrated = give_transform_lt_y();
+    }
     const bool env_pressed = env_press();
     const bool held = key_held();
     const bool pressed = (held && !state.was_held) || env_pressed;

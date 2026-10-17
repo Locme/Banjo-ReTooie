@@ -13,6 +13,7 @@
 //     when the script has any (a:b0 b:b1 x:b2 y:b3 back:b4 guide:b5 start:b6 leftstick:b7
 //     rightstick:b8 leftshoulder:b9 rightshoulder:b10; b11-b15 are left unmapped, like back
 //     buttons). Unlike the buttons above, these go through the Controls tab's bindings.
+//     vlt and vrt pull the virtual pad's left and right triggers all the way.
 //   * `quit` ends the program.
 // TOOIE_INPUT_LOG=1 logs player 1's bound N64 buttons whenever they change.
 // TOOIE_COMBO_TEST=1 binds N64 A's second slot to the combination Paddle 1 (v11) + Y, for testing
@@ -64,6 +65,7 @@ namespace {
         std::optional<float> ry;
         bool quit;
         uint16_t vbuttons = 0;
+        uint8_t vtriggers = 0;   // 1 left, 2 right
     };
 
     std::vector<Step> steps;
@@ -132,6 +134,9 @@ bool tooie::debug::parse_pad_script(const char* script) {
             else if (action.rfind("y=", 0) == 0) {
                 step.y = std::strtof(action.c_str() + 2, nullptr);
             }
+            else if (action == "vlt" || action == "vrt") {
+                step.vtriggers |= action == "vlt" ? 1 : 2;
+            }
             else if (action.size() > 1 && action[0] == 'v' && action[1] >= '0' && action[1] <= '9') {
                 step.vbuttons |= (uint16_t)(1u << (std::strtoul(action.c_str() + 1, nullptr, 10) & 15));
             }
@@ -166,11 +171,13 @@ static void update_virtual_pad(uint32_t now_ms) {
     static int index = -1;
     static bool combo_bound = false;
     uint16_t held = 0;
+    uint8_t triggers = 0;
     bool used = false;
     for (const Step& step : steps) {
-        used = used || step.vbuttons != 0;
+        used = used || step.vbuttons != 0 || step.vtriggers != 0;
         if (now_ms >= step.start_ms && now_ms < step.start_ms + step.hold_ms) {
             held |= step.vbuttons;
+            triggers |= step.vtriggers;
         }
     }
     if (!used) {
@@ -218,6 +225,8 @@ static void update_virtual_pad(uint32_t now_ms) {
     for (int b = 0; b < 16; b++) {
         SDL_JoystickSetVirtualButton(joystick, b, (held >> b) & 1);
     }
+    SDL_JoystickSetVirtualAxis(joystick, 4, (triggers & 1) ? 32767 : -32768);
+    SDL_JoystickSetVirtualAxis(joystick, 5, (triggers & 2) ? 32767 : -32768);
 }
 
 // Player input with any scripted input added.

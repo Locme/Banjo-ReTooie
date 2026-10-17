@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T367 F4 no longer benchmarks; LT + Y transforms
+- Asked: 2026-10-17 09:39 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Pull and build, start the game with your controls as they are
+  2. Press F4 in game
+  3. With QOL > Transform anywhere on, stand on the ground in a world where you have changed in Humba's pool, hold LT and press Y
+  4. Press LT alone and Y alone
+  5. Open Controls > Hotkeys and Controls > Movement
+- Look for: Step 2: no benchmark toast and nothing new in benchmarks. Step 3: Banjo changes into the world's form (LT makes him crouch first, that's the game's Z). Step 4: LT crouches, Y does C-left, neither transforms; while LT is held Y does not also act as C-left. Step 5: Benchmark has no key; Transform shows LT + Y for the controller (your saved controls got it once, unless you had already bound something there). Checked headless: LT + Y pressed Transform, LT or Y alone did not, F4 did nothing, and an old controls.json with F4 on Benchmark and nothing on Transform was changed once.
 ## T366 DEV tab: Discord Status label
 - Asked: 2026-10-17 09:39 UTC
 - Build: main 1bbdc73

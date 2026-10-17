@@ -102,7 +102,7 @@ framework, not from this port's code, so it is not described here.
   not bound on the keyboard) run faster as Banjo-Kazooie, Banjo or Kazooie.
   Default: On.
 - **Transform anywhere**: On or Off. On lets the Transform key (Controls tab,
-  Movement; T on the keyboard, not bound on a controller) change Banjo-Kazooie
+  Movement; T on the keyboard, LT + Y on a controller) change Banjo-Kazooie
   into the world's Humba Wumba form where he stands, with the game's own spin-up
   transformation, and change him back. A world's form works only after you have
   jumped in that world's Humba pool and changed at least once, and only in that
@@ -135,7 +135,7 @@ framework, not from this port's code, so it is not described here.
   under Movement. The game still sees every button as usual.
 - **Transform**: with QOL > Transform anywhere on, changes Banjo into the
   world's Humba Wumba form where he stands, and back. Default: T on the
-  keyboard, nothing on a controller. Rebind it in the Controls tab under
+  keyboard, LT + Y on a controller. Rebind it in the Controls tab under
   Movement.
 - **Run**: hold it while moving to run faster as Banjo-Kazooie, Banjo or
   Kazooie, with a sprint animation. Not bound by default: bind it in the
@@ -354,7 +354,7 @@ Game Frame Rate.
   - a graph of the last 100 frame times, newest on the right. Twice the usual
     frame time fills it; a hitch is drawn in red.
   Default: Off.
-- **Benchmark key** (F4, rebindable under Hotkeys in the Controls tab): records
+- **Benchmark key** (no default key, bind it under Hotkeys in the Controls tab): records
   the overlay's figures to `benchmarks\` next to the exe until pressed again, then
   writes a summary with the settings (notes/keys.md). Use it to compare two
   settings or two builds on the same spot.
