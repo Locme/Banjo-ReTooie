@@ -68,7 +68,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
-- 3D grass no longer grows through stone floors laid on grass (Mayahem Temple by the entrance), and keeps off gently sloping parts of roads and paths too (L). Untested on PC (T381).
+- 3D grass no longer grows through stone floors laid on grass (Mayahem Temple by the entrance), and keeps off gently sloping parts of roads and paths too (L). Untested on PC (T382).
 - The save select's global settings (the TV) no longer list the game's own Wide-screen Mode, which squashed the picture; Screen Alignment and Speaker Mode stay, and the game's widescreen mode is kept off, also on saves that had it on. DEV > Hide Vanilla Widescreen Entry in the Game Menu (on by default) brings it back when turned off (L). Untested on PC (T374).
 - 3D grass no longer grows as Banjo walks up to it: blades are full height up close, and far ones thin out instead of getting shorter. No blades where the yellow path fades into the grass either, and pixelated grass with a pixel size under 1 no longer shimmers (L). Untested on PC (T373).
 - 3D grass's road check is cheaper: only the area a road or path covers goes to the graphics card each frame (1 to 90 KB, was 200 KB), and ground far from any road skips the check. Looks the same. Untested on PC (T356).
@@ -208,6 +208,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Stability
 
+- Fixed (guarded): the crash after warping into Hailfire Peaks' Icy Side, where one frame filled the game's whole drawing list and the end of it broke the game's memory. Such a frame now drops its last few drawing commands instead, and console.log says so ([gfx] list full). What fills the list is still unknown. Untested on PC (T382).
 - Fixed the GPU being lost (window freezes, the log fills with 0xFFFFFFFC) on NVIDIA cards since the cloud sliders were added: the screen effects' settings were too big for the driver. Untested on PC (T351).
 - Fixed the frame rate falling to about 2 fps after a few minutes: the screen effects kept every descriptor set they replaced, and the driver's memory for them filled the graphics card. They are now freed a few frames later. Untested on PC (T263).
 - General > More game memory (on by default): a bigger game heap (2.8 MB to 12.8 MB), about 4x the per-frame display list, matrix and vertex buffers, and room for 240 animation files and 1023 animations instead of 130 and 135, so scenes crowded with characters no longer crash. Takes effect at the next start. Untested on PC (T122).

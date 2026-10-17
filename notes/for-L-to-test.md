@@ -1,5 +1,13 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T382 Icy Side crash after a warp: drawing list guard
+- Asked: 2026-10-17 11:44 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Warp to Hailfire Peaks, Icy Side the way you did before the crash (Level warp)
+  2. Play there a while, and warp in and out a few times
+- Look for: No crash. If the game would have overflowed, console.log has a line starting [gfx] list full (or [gfx] list ran ... past its buffer); please send console.log if you see either. That frame may miss a few things for one frame. Not reproduced headless, so this only stops the heap damage; the cause of the overfill is still unknown.
+
 ## T381 3D grass off Mayahem Temple's stone floors
 - Asked: 2026-10-17 11:42 UTC
 - Build: main
