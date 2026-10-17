@@ -1,5 +1,25 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T408 Snout jiggle: heaviness slider, mouth stays put, your defaults
+- Asked: 2026-10-17 21:40 UTC
+- Build: main
+- Steps:
+  1. Settings > General > Snout jiggle: the sliders start at your settings (wobble 30%, bounce 75, speed 3.0, exaggeration 150%, stretch 50%, size 90%, reach 6, floppiness 80%) if you never saved them; the new Heaviness slider is at the bottom
+  2. Each slider now goes 50% further than before
+  3. Move Heaviness up and down while running, stopping and landing
+  4. Close up in Photo Mode mid-wobble
+- Look for: Only the snout swings: the lips, mouth corners and jaw stay where they are, with no gap. Heavier makes slower, bigger swings and more droop. Not checked headless (L asked to skip it); it boots and the swing runs.
+- Status: waiting for L
+
+## T407 Intro: the music keeps playing between scenes
+- Asked: 2026-10-17 21:21 UTC
+- Build: next build from main
+- Steps:
+  1. Start a new game and watch the intro from the start
+  2. Listen through the black screens between scenes (after Klungo, after the poker game, and so on)
+- Look for: The intro music keeps playing through each black screen between scenes, and the scenes stay in step with the music. The black screens themselves are the original game's timing (2 to 7 s each); they're just no longer silent. Checked headless: before, about 11 s of music went missing over the first three scene changes; now none
+- Status: waiting for L
+
 ## T406 Deep snow: trail after a warp, no snow on the ice, Vulkan check
 - Asked: 2026-10-17 21:20 UTC
 - Build: main (next push)
