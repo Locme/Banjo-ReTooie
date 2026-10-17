@@ -163,7 +163,7 @@ namespace {
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
     enum class Row { Zoom, Camera, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
-        Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Count };
+        Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Album, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
     std::atomic<bool> panel_shown{true};
@@ -236,6 +236,8 @@ namespace {
     constexpr int timer_seconds[] = { 0, 3, 10 };
     std::atomic<int> timer_choice{0};
     std::atomic<bool> timer_requested{false};
+    // A on the Album row: the photo panel opens the menu's Album tab (on its own thread, which may touch the menus).
+    std::atomic<bool> album_requested{false};
     bool timer_running = false;
     Clock::time_point timer_end{};
     int timer_shown = -1;
@@ -440,7 +442,7 @@ namespace {
     constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
     constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
-        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid" };
+        "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid", "Album" };
     static_assert(std::size(row_names) == row_count);
 
     // On the game thread: one step of the picked row, -1 or +1.
@@ -501,6 +503,11 @@ namespace {
                 focus_choice = (focus_choice + n + step) % n;
                 break;
             }
+            case Row::Album:
+                if (step > 0) {
+                    album_requested = true;
+                }
+                break;
             case Row::Shutter:
                 qol.update_option_value(tooie::photo_mode::shutter_option, !qol_value<bool>(tooie::photo_mode::shutter_option, true));
                 break;
@@ -560,6 +567,8 @@ namespace {
             return text;
         case Row::FocusPoint:
             return focus_names[focus_choice.load()];
+        case Row::Album:
+            return "A to open";
         case Row::Shutter:
             return qol_value<bool>(tooie::photo_mode::shutter_option, true) ? "Click and flash" : "Off";
         case Row::Exposure:
@@ -831,6 +840,10 @@ bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_
     return true;
 }
 
+bool tooie::photo_mode::take_album_request() {
+    return album_requested.exchange(false) && is_active;
+}
+
 bool tooie::photo_mode::active() {
     return is_active;
 }
@@ -864,7 +877,10 @@ void tooie::photo_mode::apply_input(uint16_t* buttons, float* x, float* y) {
         leave_requested = true;
     }
     if (pressed & button_a) {
-        if (timer_choice == 0) {
+        if ((Row)picked.load() == Row::Album) {
+            album_requested = true;
+        }
+        else if (timer_choice == 0) {
             shoot();
         }
         else {

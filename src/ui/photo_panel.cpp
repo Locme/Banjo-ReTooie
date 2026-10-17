@@ -3,6 +3,7 @@
 // highlighted, and the controls under it, styled like the settings menu. Like the toasts it is a UI layer that never takes input, so
 // it is never in screenshots.
 
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <string>
@@ -14,7 +15,10 @@
 #include "elements/ui_label.h"
 #include "elements/ui_sidebar_style.h"
 #include "elements/ui_svg.h"
+#include "elements/ui_modal.h"
+#include "recompui/config.h"
 
+#include "tooie_photo_album.h"
 #include "tooie_photo_mode.h"
 #include "tooie_photo_panel.h"
 
@@ -52,6 +56,7 @@ namespace {
         bool shown = false;
         std::vector<std::string> last_rows;
         int last_picked = -1;
+        size_t first = 0; // the first row shown, when there are more rows than fit
     };
 
     // In the settings menu's colours and lettering (L: "You can copy the ESC menu"): a brown panel with a
@@ -169,9 +174,25 @@ namespace {
         if (rows == p.last_rows && picked == p.last_picked) {
             return;
         }
+        // More rows than fit: the list scrolls, moving only when the picked row would leave it.
+        const size_t shown = p.rows.size();
+        if (rows.size() <= shown) {
+            p.first = 0;
+        }
+        else {
+            const size_t pick = (size_t)std::max(picked, 0);
+            if (pick < p.first) {
+                p.first = pick;
+            }
+            else if (pick >= p.first + shown) {
+                p.first = pick + 1 - shown;
+            }
+            p.first = std::min(p.first, rows.size() - shown);
+        }
         p.context.open();
-        for (size_t i = 0; i < p.rows.size(); i++) {
-            RowView& r = p.rows[i];
+        for (size_t v = 0; v < shown; v++) {
+            RowView& r = p.rows[v];
+            const size_t i = p.first + v;
             if (i >= rows.size()) {
                 r.box->set_display(recompui::Display::None);
                 continue;
@@ -284,6 +305,30 @@ namespace {
         p.shown = false;
     }
 
+    bool menu_open() {
+        try {
+            return recompui::config::get_config_modal()->is_open_now();
+        } catch (...) {
+            return false;
+        }
+    }
+
+    // The Album row: the menu, opened on its Album tab. Closing it goes back to photo mode.
+    void open_album() {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
+        try {
+            recompui::ContextId context = recompui::config::get_config_context_id();
+            context.open();
+            recompui::config::set_tab(tooie::photo_album::tab_id);
+            recompui::config::open();
+            context.close();
+        } catch (...) {
+        }
+    }
+
     void worker() {
         Panel panel;
         Flash flash;
@@ -296,8 +341,12 @@ namespace {
                     set_flash(flash, tooie::photo_mode::flash_level());
                 }
             }
+            if (tooie::photo_mode::take_album_request()) {
+                open_album();
+            }
             int picked = 0;
-            const bool want = tooie::photo_mode::panel_state(rows, picked);
+            // The panel steps aside while the menu is open over photo mode.
+            const bool want = tooie::photo_mode::panel_state(rows, picked) && !menu_open();
             if (!want) {
                 if (panel.shown) {
                     hide(panel);

@@ -50,7 +50,6 @@
 namespace fs = std::filesystem;
 
 namespace {
-    const std::string tab_id = "album";
     constexpr size_t max_photos = 60;
     constexpr int thumb_width = 240;
     constexpr int large_width = 960;

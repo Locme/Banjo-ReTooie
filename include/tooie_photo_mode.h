@@ -60,6 +60,8 @@ namespace tooie::photo_mode {
 
     // How white the shutter flash is now, 1 just after a photo down to 0 (read by src/ui/photo_panel.cpp).
     float flash_level();
+    // True once after A on the Album row: the photo panel then opens the menu on its Album tab.
+    bool take_album_request();
 
     // Adds the shutter's click to interleaved stereo float samples (main.cpp queue_samples, audio thread).
     void mix_shutter(float* stereo, size_t frames, uint32_t rate, float volume);
