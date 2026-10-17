@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T358 Icy Side stays icy with Modern water
+- Asked: 2026-10-17 07:20 UTC
+- Build: main
+- Steps:
+  1. Graphics: Water on Modern (Water reflections on or off)
+  2. Hailfire Peaks, Icy Side: the lake by the warp pad from your capture, and the big frozen lake
+  3. Then go to any other level with water
+- Look for: On Icy Side the water and ice keep the game's own icy look and reflect softly when you look across them, with HD Shadows on or off. Other levels still get Modern water.
+- Status: waiting for L
+
 ## T357 Kazooie: no flecks on her beak; wing feathers reach the top
 - Asked: 2026-10-17 07:07 UTC
 - Build: main

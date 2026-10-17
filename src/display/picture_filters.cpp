@@ -107,6 +107,9 @@ namespace {
     std::atomic<bool> water_waves_on{false};
     // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
     std::atomic<bool> modern_water{false};
+    // The Water reflections setting (0 to 1), and set when the water settings change, for Icy Side's override.
+    std::atomic<float> water_reflections_set{0.0f};
+    std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
     std::atomic<bool> sun_shadows{false};
     std::atomic<bool> kazooie_feathers{false};
@@ -2303,7 +2306,9 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneShoreFoam(shore_foam);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
-    RT64::SetSceneWaterReflections((float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0));
+    water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
+    RT64::SetSceneWaterReflections(water_reflections_set.load());
+    water_settings_changed = true;
     RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
@@ -2520,6 +2525,19 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
             age[i] = !ripples[i].used ? -1.0f : ripples[i].splash ? 4.0f + std::min(seconds, 3.9f) : std::min(seconds, 3.9f);
         }
         RT64::SetSceneWaterRipples(x, z, age);
+    }
+
+    // Icy Side keeps the game's icy water with Modern water on (L's pick, 2026-10-17): the game's own water there,
+    // reflecting at least as much as the ice does in Modern.
+    {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        const bool icy = modern_water && (map == 0x128);
+        static bool icy_sent = false;
+        if ((icy != icy_sent) || water_settings_changed.exchange(false)) {
+            icy_sent = icy;
+            RT64::SetSceneModernWater(modern_water && !icy);
+            RT64::SetSceneWaterReflections(icy ? std::max(water_reflections_set.load(), 0.6f) : water_reflections_set.load());
+        }
     }
 
     // Deep snow on the maps with snow only.
