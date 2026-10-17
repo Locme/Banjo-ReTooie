@@ -17,6 +17,7 @@
 #include "recompinput/profiles.h"
 
 #include "tooie_tiptoe.h"
+#include "tooie_hotkeys.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -31,20 +32,7 @@ namespace {
 
     // Whether any keyboard key or controller button bound to Tiptoe (Controls tab, Hotkeys) is held.
     bool key_down() {
-        // Pressing the key to bind it in the Controls tab should not tiptoe.
-        if (recompinput::binding::is_binding()) {
-            return false;
-        }
-        bool down = false;
-        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
-            if (profile < 0) {
-                continue;
-            }
-            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
-                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, tiptoe_input, b));
-            }
-        }
-        return down;
+        return tooie::hotkeys::down(tiptoe_input);
     }
 
     // Test hook for headless runs, where no key can be pressed: TOOIE_TIPTOE_HOLD=<from ms>:<to ms>

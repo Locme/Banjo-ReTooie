@@ -23,6 +23,7 @@
 #include "tooie_cheats.h"
 #include "tooie_speedup.h"
 #include "tooie_toast.h"
+#include "tooie_hotkeys.h"
 
 extern uint64_t total_vis;
 
@@ -46,20 +47,7 @@ namespace {
 
     // Whether any keyboard key or controller button bound to Speed-Up (Controls tab, Cheats section) is held.
     bool key_down() {
-        // Pressing the key to bind it in the Controls tab should not switch the speed-up on.
-        if (recompinput::binding::is_binding()) {
-            return false;
-        }
-        bool down = false;
-        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
-            if (profile < 0) {
-                continue;
-            }
-            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
-                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, speed_up_input, b));
-            }
-        }
-        return down;
+        return tooie::hotkeys::down(speed_up_input);
     }
 
     // Test hook for headless runs, where no key can be pressed: TOOIE_SPEEDUP_HOLD=<from ms>:<to ms>

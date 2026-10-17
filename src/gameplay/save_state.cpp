@@ -43,6 +43,7 @@
 #include "tooie_game.h"
 #include "tooie_save_state.h"
 #include "tooie_toast.h"
+#include "tooie_hotkeys.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -97,19 +98,7 @@ namespace {
     } test;
 
     bool input_down(recompinput::GameInput input) {
-        if (recompinput::binding::is_binding()) {
-            return false;
-        }
-        bool down = false;
-        for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
-            if (profile < 0) {
-                continue;
-            }
-            for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
-                down = down || recompinput::get_input_digital(0, recompinput::profiles::get_input_binding(profile, input, b));
-            }
-        }
-        return down;
+        return tooie::hotkeys::down(input);
     }
 
     void worker() {
