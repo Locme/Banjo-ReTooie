@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T366 DEV tab: Discord Status label
+- Asked: 2026-10-17 09:39 UTC
+- Build: main 1bbdc73
+- Steps:
+  1. Open the menu
+  2. Go to the DEV tab
+- Look for: The Discord entry reads "Discord Status (Non-functional ATM)"
+- Status: waiting for L
+
 ## T365 Title screen Play preset starts on Vanilla
 - Asked: 2026-10-17 09:32 UTC
 - Build: main @ 3bffac4
