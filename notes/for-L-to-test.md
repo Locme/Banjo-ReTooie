@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T348 Photo mode: poses, Tooie photo borders and the Album tab
+- Asked: 2026-10-17 00:36 UTC
+- Build: main @ 19506eb
+- Steps:
+  1. Enter photo mode, pick the Pose row and step through the poses with D-pad left/right; set Time to Frozen and use Pose frame to pick a moment of the pose
+  2. Pick the Border row and try Instant photo, Film strip, Honeycomb, Jiggy and Wooden, then take a photo with A
+  3. Leave photo mode, open the ESC menu and go to the Album tab; move between the photos with the D-pad and press Open folder
+- Look for: Banjo holds each pose and goes back to normal when you leave photo mode; the border shows on screen and in the saved photo; the Album shows your photos newest first, the picked one large with its date, and Open folder opens the screenshots folder
+- Status: waiting for L
+
 ## T347 Kazooie: no feathers on her beak, eyes or mouth; fuller wings; feather sliders
 - Asked: 2026-10-16 23:27 UTC
 - Build: main
