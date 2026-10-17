@@ -29,6 +29,8 @@ namespace tooie::asset_mods {
     // Asset `id` as the game loads it now: an asset mod's file when one replaces it, else decompressed from the
     // ROM. Empty when it can't be read.
     std::vector<uint8_t> asset_bytes(uint32_t id);
+    // Asset `id` from the ROM, whatever replaces it.
+    std::vector<uint8_t> rom_asset_bytes(uint32_t id);
 }
 
 #endif

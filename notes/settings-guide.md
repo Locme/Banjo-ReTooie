@@ -233,6 +233,28 @@ F12 screenshots are taken before these filters, so they don't show them.
   only texture pack textures that come with a height map get parallax.
   Default: on.
 
+### Parallax pick mode
+
+Bind **Parallax Pick Mode** (Controls, Debug) and press it in a level. The mouse
+becomes a crosshair, the texture under it pulses light blue, and a label beside
+the cursor names the texture and its parallax ("yours" or "built-in").
+
+- **Left click**: the shape, in turn Stone (only the dark gaps sink), Bumpy (the
+  whole surface follows its brightness), Inverted (the light parts sink),
+  Cracks (only the darkest lines sink), Terraced (a few flat steps), Rounded
+  (faces bulge like cobbles), then Off.
+- **Right click**: the depth, as a share of the Parallax slider: 100, 150, 200,
+  300, 25 and 50%.
+- **Middle click**: its shadows off or on.
+- **Shift + left click**: back to the built-in choice.
+- **Mouse wheel**: the surface behind it (when several are under the cursor).
+
+Every change shows at once and is saved to `parallax_tags.txt` next to the save
+files (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
+`<hash> off`). Picks override the built-in list and load again next time; send
+the file in to have them added to the port. Parallax must be above 0 to see the
+result. Press the key again for the normal mouse.
+
 ### Height maps in texture packs
 
 A texture pack (an RT64 `.rtz` or folder pack) can give any texture its own

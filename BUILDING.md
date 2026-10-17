@@ -42,6 +42,11 @@ build fills a new folder, it copies the saves, the settings files, `mods` and
 never moves or deletes the old files. `build-cmake` from older versions is no
 longer used and can be deleted.
 
+`clean_build.bat` deletes the build folders (`build-cmake-compatible`,
+`build-cmake-modern`, and the old `build-cmake`) to free disk space. It shows their
+sizes and asks first, and it never touches `Release\`. The next build after it
+starts from scratch, so it takes as long as a first build.
+
 To build by hand, open an "x64 Native Tools Command Prompt for VS 2022" (or
 the version you have) and run:
 

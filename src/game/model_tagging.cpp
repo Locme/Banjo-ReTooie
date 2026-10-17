@@ -59,13 +59,14 @@
 #include "tooie_hooks.h"
 #include "tooie_interp_check.h"
 #include "tooie_interp_tags.h"
+#include "tooie_parallax_pick.h"
 #include "tooie_model_tagging.h"
 #include "tooie_picture_filters.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_toast.h"
 
 namespace RT64 {
-    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags);
+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale);
 }
 
 namespace {
@@ -221,6 +222,23 @@ namespace {
     // The player's model (asset 0x062A, or the model mod that replaces it).
     constexpr uint32_t player_model_asset = 0x062A;
 
+    // How tall a model is in its own units (its vertices' heights), from the model as loaded; 0 if it can't be read.
+    float model_height(const std::vector<uint8_t>& asset) {
+        auto rd32 = [&](size_t o) { return o + 4 <= asset.size() ? (uint32_t(asset[o]) << 24) | (uint32_t(asset[o + 1]) << 16) | (uint32_t(asset[o + 2]) << 8) | asset[o + 3] : 0u; };
+        const size_t vertices = rd32(0x10) + 0x18;
+        const size_t count = (rd32(vertices - 4) & 0xFFFF) / 2;
+        if (count == 0 || vertices + count * 16 > asset.size()) {
+            return 0.0f;
+        }
+        int low = INT32_MAX, high = INT32_MIN;
+        for (size_t v = 0; v < count; v++) {
+            const int y = (int16_t)((asset[vertices + v * 16 + 2] << 8) | asset[vertices + v * 16 + 3]);
+            low = std::min(low, y);
+            high = std::max(high, y);
+        }
+        return float(high - low);
+    }
+
     // Kazooie's lists in a player model, found from the model's own geo tree rather than fixed offsets, so a
     // model mod (Smash Banjo, Banjo X) keeps fur off Kazooie too. The model is found back from its vertices
     // (segment 1 = model + its vertex block offset + 0x18; the header starts with 0x0B and holds that offset at
@@ -235,6 +253,7 @@ namespace {
         uint32_t bone_count = 0;
         int32_t kazooie_parent = -1; // bone 18's parent: 13 in Banjo's skeleton
         std::vector<uint32_t> bare; // lists that get no fur or feathers (his feet and hips, her crest), sorted
+        std::vector<uint32_t> lists; // her lists (physical addresses), sorted: a model mod can put his among them
     };
 
     // Banjo-Kazooie's skeletons: the player's (68 bones) and the cutscenes' double (62 bones), told apart from
@@ -415,6 +434,7 @@ namespace {
                     const int32_t index = (int16_t)half(rdram, node + 8);
                     lo = std::min(lo, index);
                     hi = std::max(hi, index);
+                    out.lists.push_back((uint32_t)((int32_t)(model + list + 8) + index * 8));
                     if (bare[item.bone]) {
                         out.bare.push_back((uint32_t)((int32_t)(model + list + 8) + index * 8));
                     }
@@ -437,6 +457,7 @@ namespace {
             return;
         }
         std::sort(out.bare.begin(), out.bare.end());
+        std::sort(out.lists.begin(), out.lists.end());
         out.found = true;
         out.from = (uint32_t)((int32_t)(model + list + 8) + lo * 8);
         out.to = (uint32_t)((int32_t)(model + list + 8) + hi * 8);
@@ -1418,7 +1439,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             const uint32_t block = skeleton && model.model != 0 && !marks_off ? model.model + model.header[2] + 0x18 : 0;
             if (block != sent_block || (block != 0 && std::memcmp(sent_header, model.header, sizeof(sent_header)) != 0)) {
                 if (sent_block != 0) {
-                    RT64::SetFurVertexFlags(sent_block, {});
+                    RT64::SetFurVertexFlags(sent_block, {}, 1.0f);
                 }
                 sent_block = block;
                 std::memcpy(sent_header, model.header, sizeof(sent_header));
@@ -1426,6 +1447,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     const std::vector<uint8_t> asset = tooie::asset_mods::asset_bytes(player_model_asset);
                     auto rd32 = [&](size_t o) { return o + 4 <= asset.size() ? (uint32_t(asset[o]) << 24) | (uint32_t(asset[o + 1]) << 16) | (uint32_t(asset[o + 2]) << 8) | asset[o + 3] : 0u; };
                     std::vector<uint8_t> marks;
+                    // A model mod made at another scale (Smash Banjo's vertices are 8 times Tooie's) gets the fur's
+                    // strands as thick as on Tooie's Banjo, by its height against his.
+                    static const float vanilla_height = model_height(tooie::asset_mods::rom_asset_bytes(player_model_asset));
+                    const float height = model_height(asset);
+                    const float anchor_scale = (vanilla_height > 0.0f && height > 0.0f) ? std::clamp(vanilla_height / height, 0.01f, 100.0f) : 1.0f;
                     if (rd32(0x04) == model.header[0] && rd32(0x0C) == model.header[1] && rd32(0x10) == model.header[2]) {
                         const size_t vertices = model.header[2] + 0x18;
                         const size_t count = (rd32(model.header[2] + 0x14) & 0xFFFF) / 2;
@@ -1437,9 +1463,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                             }
                         }
                     }
-                    RT64::SetFurVertexFlags(block, marks);
+                    RT64::SetFurVertexFlags(block, marks, anchor_scale);
                     if (log_fur) {
-                        std::fprintf(stderr, "[fur] vertex marks at %X: %zu vertices%s\n", block, marks.size(), marks.empty() ? " (not the player's model)" : "");
+                        std::fprintf(stderr, "[fur] vertex marks at %X: %zu vertices, anchor scale %.3f%s\n", block, marks.size(), anchor_scale,
+                            marks.empty() ? " (not the player's model)" : "");
                     }
                 }
             }
@@ -1521,8 +1548,15 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             const uint32_t offset = (commands[i].w1 & 0x1FFFFFFF) - base;
             bool banjo = true;
-            for (const Span* span = spans_begin; span != spans_end; span++) {
-                banjo = banjo && (offset < span->from || offset > span->to);
+            if (use_model_skip) {
+                // Her lists themselves, not the span from her first to her last: Smash Banjo v13 has his lists
+                // among hers, which left him with no fur at all (L).
+                banjo = !std::binary_search(kazooie.lists.begin(), kazooie.lists.end(), commands[i].w1 & 0x1FFFFFFF);
+            }
+            else {
+                for (const Span* span = spans_begin; span != spans_end; span++) {
+                    banjo = banjo && (offset < span->from || offset > span->to);
+                }
             }
             uint32_t want = banjo ? 1 : (kazooie.found ? 2 : 0);
             if (use_model_skip &&
@@ -2503,6 +2537,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     tooie::frame_overlay::note_scene_done();
     tooie::interp_check::start();
     tooie::interp_tags::start();
+    tooie::parallax_pick::start();
     if (tooie::interp_check::enabled()) {
         static bool filled = false;
         if (!filled) {

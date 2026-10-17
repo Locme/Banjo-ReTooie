@@ -2011,15 +2011,16 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..57ef50d 100644
+index 9fae0d4..64a325f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
-@@ -4,6 +4,13 @@
+@@ -4,6 +4,14 @@
  
  #include "rt64_framebuffer_renderer.h"
  
 +#include <array>
 +#include <chrono>
++#include <cfloat>
 +#include <cmath>
 +#include <cstdio>
 +#include <unordered_map>
@@ -2028,7 +2029,7 @@ index 9fae0d4..57ef50d 100644
  #include "../include/rt64_extended_gbi.h"
  
  #include "common/rt64_elapsed_timer.h"
-@@ -12,8 +19,10 @@
+@@ -12,8 +20,10 @@
  #include "gbi/rt64_f3d.h"
  #include "shared/rt64_framebuffer_params.h"
  #include "shared/rt64_raster_params.h"
@@ -2039,7 +2040,7 @@ index 9fae0d4..57ef50d 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +134,274 @@ namespace RT64 {
+@@ -125,6 +135,274 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2314,7 +2315,7 @@ index 9fae0d4..57ef50d 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +446,54 @@ namespace RT64 {
+@@ -169,11 +447,56 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2332,6 +2333,8 @@ index 9fae0d4..57ef50d 100644
 +        instanceFurVector.clear();
 +        instanceNightLightVector.clear();
 +        instanceSeamVector.clear();
++        // Banjo-Tooie: picks among last frame's surfaces under the pick mode cursor.
++        FinishScenePick();
 +        nightLightsChecked = false;
 +        nightLights = false;
 +        parallaxOn = false;
@@ -2369,7 +2372,7 @@ index 9fae0d4..57ef50d 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +539,7 @@ namespace RT64 {
+@@ -219,6 +542,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2377,7 +2380,7 @@ index 9fae0d4..57ef50d 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +571,7 @@ namespace RT64 {
+@@ -250,6 +574,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2385,7 +2388,7 @@ index 9fae0d4..57ef50d 100644
                  }
              }
              else {
-@@ -272,6 +594,9 @@ namespace RT64 {
+@@ -272,6 +597,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2395,7 +2398,7 @@ index 9fae0d4..57ef50d 100644
              }
          }
      }
-@@ -373,6 +698,10 @@ namespace RT64 {
+@@ -373,6 +701,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2406,7 +2409,7 @@ index 9fae0d4..57ef50d 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +772,14 @@ namespace RT64 {
+@@ -443,6 +775,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2421,7 +2424,7 @@ index 9fae0d4..57ef50d 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +802,61 @@ namespace RT64 {
+@@ -465,12 +805,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2485,7 +2488,7 @@ index 9fae0d4..57ef50d 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +900,17 @@ namespace RT64 {
+@@ -514,6 +903,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2503,7 +2506,7 @@ index 9fae0d4..57ef50d 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +971,109 @@ namespace RT64 {
+@@ -574,10 +974,109 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2613,7 +2616,7 @@ index 9fae0d4..57ef50d 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1746,67 @@ namespace RT64 {
+@@ -1250,6 +1749,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2681,7 +2684,7 @@ index 9fae0d4..57ef50d 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1853,84 @@ namespace RT64 {
+@@ -1296,9 +1856,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2767,7 +2770,7 @@ index 9fae0d4..57ef50d 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1982,33 @@ namespace RT64 {
+@@ -1350,10 +1985,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2801,7 +2804,7 @@ index 9fae0d4..57ef50d 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2063,61 @@ namespace RT64 {
+@@ -1408,6 +2066,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2863,7 +2866,7 @@ index 9fae0d4..57ef50d 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2141,22 @@ namespace RT64 {
+@@ -1431,6 +2144,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2886,7 +2889,7 @@ index 9fae0d4..57ef50d 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2176,162 @@ namespace RT64 {
+@@ -1450,12 +2179,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -2914,6 +2917,12 @@ index 9fae0d4..57ef50d 100644
 +        std::vector<SeamPiece> seamPieces;
 +        std::vector<SeamPoint> seamPoints;
 +        const bool seamsOn = SceneTextureSeams();
++        float pickCursorX = 0.0f, pickCursorY = 0.0f;
++        uint64_t pickHighlight = 0;
++        const bool pickOn = ScenePickCursor(pickCursorX, pickCursorY, pickHighlight);
++        // TOOIE_PICK_HIGHLIGHT=0: none (headless, for screenshots of the picked texture itself).
++        static const bool pickHighlightOff = (getenv("TOOIE_PICK_HIGHLIGHT") != nullptr) && (atoi(getenv("TOOIE_PICK_HIGHLIGHT")) == 0);
++        const bool pickPulse = !pickHighlightOff && ((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count() % 1200) < 400);
          for (uint32_t pr = 0; (pr < fbPair.projectionCount) && (globalCallIndex < p.maxGameCall); pr++) {
              const Projection &proj = fbPair.projections[pr];
              if (proj.scissorRect.isNull()) {
@@ -3049,7 +3058,7 @@ index 9fae0d4..57ef50d 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2482,7 @@ namespace RT64 {
+@@ -1606,6 +2491,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3057,7 +3066,7 @@ index 9fae0d4..57ef50d 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2559,20 @@ namespace RT64 {
+@@ -1682,6 +2568,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3078,7 +3087,7 @@ index 9fae0d4..57ef50d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2638,901 @@ namespace RT64 {
+@@ -1747,24 +2647,968 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3423,7 +3432,8 @@ index 9fae0d4..57ef50d 100644
 +                        // A texture pack's height map, else the original texture's own brightness if it's in the list.
 +                        const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex].tmemHashOrID;
 +                        if (textureCacheReplacementMapEnabled && (textureCacheHeightBases.find(hash) != textureCacheHeightBases.end())) {
-+                            parallax = (RASTER_PARALLAX_HEIGHT_MAP >> 8);
++                            // (With the shape, depth and shadows picked for it, if any.)
++                            parallax = (RASTER_PARALLAX_HEIGHT_MAP >> 8) | (SceneParallaxTexture(hash) & 0xFE0000u);
 +                        }
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (parallax == 0); t++) {
 +                            parallax = SceneParallaxTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
@@ -3448,6 +3458,69 @@ index 9fae0d4..57ef50d 100644
 +                    // Drawn with its material's shader built with parallax mapping.
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
++                    }
++                }
++                // Banjo-Tooie: parallax pick mode: a textured surface of the 3D world under the cursor is a hit at its depth,
++                // and the draws with the texture picked last frame are highlighted.
++                if (pickOn && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0) &&
++                    call.shaderDesc.otherMode.zCmp())
++                {
++                    // The texture parallax goes by: the first of the draw's listed, else its first.
++                    uint64_t hash = drawData.callTiles[call.callDesc.tileIndex].tmemHashOrID;
++                    for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                        const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                        if ((SceneParallaxTexture(tileHash) != 0) || (textureCacheHeightBases.find(tileHash) != textureCacheHeightBases.end())) {
++                            hash = tileHash;
++                            break;
++                        }
++                    }
++                    // Pulsing (on for 0.4 s of every 1.2 s), so the surface can be judged between.
++                    if ((pickHighlight != 0) && (hash == pickHighlight) && pickPulse) {
++                        renderIndicesVector.back().highlightColor = 0x30E0FF70u;
++                    }
++                    const uint32_t start = call.meshDesc.faceIndicesStart;
++                    const uint32_t indexCount = call.callDesc.triangleCount * 3;
++                    float nearest = FLT_MAX;
++                    for (uint32_t k = 0; (k + 2 < indexCount) && ((start + k + 2) < drawData.faceIndices.size()); k += 3) {
++                        float px[3], py[3], pw[3];
++                        bool ok = true;
++                        for (uint32_t j = 0; j < 3; j++) {
++                            const uint32_t v = drawData.faceIndices[start + k + j];
++                            ok = ok && (v < drawData.posTransformed.size());
++                            if (!ok) {
++                                break;
++                            }
++                            const hlslpp::float4 &c = drawData.posTransformed[v];
++                            pw[j] = float(c.w);
++                            ok = pw[j] > 1e-3f;
++                            if (!ok) {
++                                break;
++                            }
++                            // As RasterVS places it on the framebuffer.
++                            px[j] = float(c.x) / pw[j] * triangles.screenScale.x + triangles.screenOffset.x;
++                            py[j] = float(c.y) / pw[j] * triangles.screenScale.y + triangles.screenOffset.y;
++                        }
++                        if (!ok) {
++                            continue;
++                        }
++                        const float d = (px[1] - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (py[1] - py[0]);
++                        if (std::abs(d) < 1e-12f) {
++                            continue;
++                        }
++                        const float b1 = ((pickCursorX - px[0]) * (py[2] - py[0]) - (px[2] - px[0]) * (pickCursorY - py[0])) / d;
++                        const float b2 = ((px[1] - px[0]) * (pickCursorY - py[0]) - (pickCursorX - px[0]) * (py[1] - py[0])) / d;
++                        if ((b1 < 0.0f) || (b2 < 0.0f) || (b1 + b2 > 1.0f)) {
++                            continue;
++                        }
++                        // w is linear in screen space through 1/w.
++                        const float invW = (1.0f - b1 - b2) / pw[0] + b1 / pw[1] + b2 / pw[2];
++                        if (invW > 0.0f) {
++                            nearest = std::min(nearest, 1.0f / invW);
++                        }
++                    }
++                    if (nearest < FLT_MAX) {
++                        AddScenePickHit(nearest, hash);
 +                    }
 +                }
 +                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
@@ -3694,7 +3767,7 @@ index 9fae0d4..57ef50d 100644
 +    // (the colour test), never unmarked and bare through fur (a backpack's textured top and its bare blue sides grew fur
 +    // along their seam).
 +    static float FurMarkW(uint8_t flag) {
-+        switch (flag) {
++        switch (flag & FUR_VERTEX_MARK_MASK) {
 +        case FUR_VERTEX_BARE:
 +            return 1.0f;
 +        case FUR_VERTEX_COVERED:
@@ -3712,6 +3785,7 @@ index 9fae0d4..57ef50d 100644
 +        if (end > drawData.faceIndices.size()) {
 +            return;
 +        }
++        const float anchorScale = FurVertexAnchorScale();
 +        const uint32_t call = furCallCount++;
 +        if (furNormalVector.size() < drawData.vertexCount()) {
 +            furNormalVector.resize(drawData.vertexCount(), interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -3751,8 +3825,10 @@ index 9fae0d4..57ef50d 100644
 +                    if (furShaderVector.size() < furNormalVector.size() * 2) {
 +                        furShaderVector.resize(furNormalVector.size() * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +                    }
-+                    const float mark = FurMarkW((v[k] < drawData.furVertexFlags.size()) ? drawData.furVertexFlags[v[k]] : 0);
-+                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0], drawData.posFloats[v[k] * 3 + 1], drawData.posFloats[v[k] * 3 + 2], mark };
++                    const uint8_t flag = (v[k] < drawData.furVertexFlags.size()) ? drawData.furVertexFlags[v[k]] : 0;
++                    const float scale = ((flag & FUR_VERTEX_IN_BLOCK) != 0) ? anchorScale : 1.0f;
++                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0] * scale, drawData.posFloats[v[k] * 3 + 1] * scale,
++                        drawData.posFloats[v[k] * 3 + 2] * scale, FurMarkW(flag) };
 +                    furShaderFirst = std::min(furShaderFirst, size_t(v[k]) * 2);
 +                    furShaderEnd = std::max(furShaderEnd, size_t(v[k]) * 2 + 2);
 +                }
@@ -3773,7 +3849,7 @@ index 9fae0d4..57ef50d 100644
 +            if (furShaderVector.size() < (size_t(v) + 1) * 2) {
 +                furShaderVector.resize((size_t(v) + 1) * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +            }
-+            if ((v >= drawData.furVertexFlags.size()) || (drawData.furVertexFlags[v] == 0)) {
++            if ((v >= drawData.furVertexFlags.size()) || ((drawData.furVertexFlags[v] & FUR_VERTEX_MARK_MASK) == 0)) {
 +                continue;
 +            }
 +            if (furShaderVector[v * 2 + 1].w == 0.0f) {
@@ -5753,10 +5829,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..9239101
+index 0000000..d46a94f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2191 @@
+@@ -0,0 +1,2269 @@
 +//
 +// RT64
 +//
@@ -6333,13 +6409,84 @@ index 0000000..9239101
 +        return textureSeamsBlend;
 +    }
 +
-+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count) {
++    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles) {
 +        std::unordered_map<uint64_t, uint32_t> textures;
 +        for (size_t i = 0; i < count; i++) {
-+            textures[hashes[i]] = uint32_t(ranges[i * 2]) | (uint32_t(std::max(ranges[i * 2 + 1], uint8_t(ranges[i * 2] + 1))) << 8);
++            // The style goes in bits 17 to 23, which the renderer moves up by 8 into RasterParams.nightLight.
++            const uint32_t style = (styles != nullptr) ? (uint32_t(styles[i]) & 0x7Fu) : 0u;
++            textures[hashes[i]] = uint32_t(ranges[i * 2]) | (uint32_t(std::max(ranges[i * 2 + 1], uint8_t(ranges[i * 2] + 1))) << 8) | (style << 17);
 +        }
 +        const std::scoped_lock lock(parallaxMutex);
 +        parallaxTextures.swap(textures);
++    }
++
++    static std::mutex pickMutex;
++    static bool pickOn = false;
++    static float pickX = 0.5f, pickY = 0.5f;
++    static uint32_t pickLayer = 0;
++    static float outputRect[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
++    static std::vector<std::pair<float, uint64_t>> pickHits;
++    static uint64_t pickHash = 0;
++    static uint32_t pickLayers = 0;
++
++    void SetScenePick(bool on, float x, float y, uint32_t layer) {
++        const std::scoped_lock lock(pickMutex);
++        pickOn = on;
++        pickX = x;
++        pickY = y;
++        pickLayer = layer;
++        if (!on) {
++            pickHash = 0;
++            pickLayers = 0;
++        }
++    }
++
++    void ScenePickResult(uint64_t &hash, uint32_t &layers) {
++        const std::scoped_lock lock(pickMutex);
++        hash = pickHash;
++        layers = pickLayers;
++    }
++
++    void SetSceneOutputRect(float x, float y, float width, float height) {
++        const std::scoped_lock lock(pickMutex);
++        outputRect[0] = x;
++        outputRect[1] = y;
++        outputRect[2] = std::max(width, 1e-4f);
++        outputRect[3] = std::max(height, 1e-4f);
++    }
++
++    bool ScenePickCursor(float &ndcX, float &ndcY, uint64_t &highlight) {
++        const std::scoped_lock lock(pickMutex);
++        ndcX = ((pickX - outputRect[0]) / outputRect[2]) * 2.0f - 1.0f;
++        ndcY = 1.0f - ((pickY - outputRect[1]) / outputRect[3]) * 2.0f;
++        highlight = pickHash;
++        return pickOn;
++    }
++
++    void AddScenePickHit(float w, uint64_t hash) {
++        const std::scoped_lock lock(pickMutex);
++        if (pickHits.size() < 4096) {
++            pickHits.emplace_back(w, hash);
++        }
++    }
++
++    void FinishScenePick() {
++        const std::scoped_lock lock(pickMutex);
++        if (!pickOn) {
++            pickHits.clear();
++            return;
++        }
++        // Nearest first, each texture once (a wall drawn in several pieces is one layer).
++        std::sort(pickHits.begin(), pickHits.end());
++        std::vector<uint64_t> layers;
++        for (const auto &hit : pickHits) {
++            if (std::find(layers.begin(), layers.end(), hit.second) == layers.end()) {
++                layers.push_back(hit.second);
++            }
++        }
++        pickLayers = uint32_t(layers.size());
++        pickHash = layers.empty() ? 0 : layers[pickLayer % layers.size()];
++        pickHits.clear();
 +    }
 +
 +    static bool parallaxAllTextures = false;
@@ -6483,12 +6630,13 @@ index 0000000..9239101
 +        struct FurVertexBlock {
 +            uint32_t address;
 +            std::vector<uint8_t> flags;
++            float anchorScale;
 +        };
 +        std::mutex furVertexMutex;
 +        std::vector<FurVertexBlock> furVertexBlocks;
 +    }
 +
-+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags) {
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale) {
 +        const std::scoped_lock lock(furVertexMutex);
 +        auto found = std::find_if(furVertexBlocks.begin(), furVertexBlocks.end(), [&](const FurVertexBlock &b) { return b.address == address; });
 +        if (flags.empty()) {
@@ -6498,13 +6646,14 @@ index 0000000..9239101
 +        }
 +        else if (found != furVertexBlocks.end()) {
 +            found->flags = flags;
++            found->anchorScale = anchorScale;
 +        }
 +        else {
 +            // (A few models at most; the oldest goes when another is loaded in its place.)
 +            if (furVertexBlocks.size() >= 8) {
 +                furVertexBlocks.erase(furVertexBlocks.begin());
 +            }
-+            furVertexBlocks.push_back({ address, flags });
++            furVertexBlocks.push_back({ address, flags, anchorScale });
 +        }
 +    }
 +
@@ -6519,11 +6668,16 @@ index 0000000..9239101
 +            for (uint32_t i = 0; i < count; i++) {
 +                const uint64_t at = uint64_t(address) + uint64_t(i) * stride;
 +                if ((at < end) && (((at - b.address) % 16) == 0)) {
-+                    out[i] = b.flags[(at - b.address) / 16];
++                    out[i] = b.flags[(at - b.address) / 16] | FUR_VERTEX_IN_BLOCK;
 +                }
 +            }
 +            return;
 +        }
++    }
++
++    float FurVertexAnchorScale() {
++        const std::scoped_lock lock(furVertexMutex);
++        return furVertexBlocks.empty() ? 1.0f : furVertexBlocks.back().anchorScale;
 +    }
 +
 +    void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency) {
@@ -7950,10 +8104,10 @@ index 0000000..9239101
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..a5ecd4e
+index 0000000..3529265
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,355 @@
+@@ -0,0 +1,375 @@
 +//
 +// RT64
 +//
@@ -8204,10 +8358,16 @@ index 0000000..a5ecd4e
 +    // lights them (its lighting changes their colours every frame, so colour alone gave different coats in different
 +    // places, L). One byte per vertex of the block at RDRAM address `address` (16 bytes each): 0 to tell by the lit
 +    // colour as before, FUR_VERTEX_COVERED, FUR_VERTEX_BARE or FUR_VERTEX_FEATHERS. An empty list forgets the block.
-+    enum : uint8_t { FUR_VERTEX_UNKNOWN = 0, FUR_VERTEX_COVERED = 1, FUR_VERTEX_BARE = 2, FUR_VERTEX_FEATHERS = 3 };
-+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags);
-+    // The marks for `count` vertices of `stride` bytes from `address` (all 0 where no block covers them).
++    // anchorScale turns the block's vertex positions into the fur's units (a model mod stored bigger, Smash Banjo's 8
++    // times, would otherwise get strands that much finer).
++    enum : uint8_t { FUR_VERTEX_UNKNOWN = 0, FUR_VERTEX_COVERED = 1, FUR_VERTEX_BARE = 2, FUR_VERTEX_FEATHERS = 3, FUR_VERTEX_MARK_MASK = 0x7F,
++        FUR_VERTEX_IN_BLOCK = 0x80 };
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale = 1.0f);
++    // The marks for `count` vertices of `stride` bytes from `address`, with FUR_VERTEX_IN_BLOCK on those a block covers
++    // (all 0 elsewhere).
 +    void FurVertexFlags(uint32_t address, uint32_t stride, uint32_t count, uint8_t *out);
++    // The anchor scale of the block set last (1 when there is none).
++    float FurVertexAnchorScale();
 +    // Fills the frame's fur terms from the 3D world's projection and view-projection and viewport (as the RSP
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
@@ -8279,7 +8439,21 @@ index 0000000..a5ecd4e
 +    void SetSceneTextureSeams(bool blend);
 +    bool SceneTextureSeams();
 +    // ranges: each texture's darkest and lightest brightness (0 to 255, two a texture), its deepest and highest parts.
-+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
++    // styles (or none): each texture's shape (bits 0 to 2), depth (3 to 5) and no shadows (6), as
++    // RASTER_PARALLAX_NO_SHADOWS and the bits beside it in rt64_raster_params.h.
++    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles = nullptr);
++    // Banjo-Tooie: parallax pick mode: the cursor (x, y from 0 to 1 across the window) picks the nearest textured
++    // surface of the 3D world under it, or the one layer deeper, and draws with that texture are highlighted.
++    void SetScenePick(bool on, float x, float y, uint32_t layer);
++    // The texture last picked (0 for none) and how many textured surfaces lie under the cursor.
++    void ScenePickResult(uint64_t &hash, uint32_t &layers);
++    // Where the game's picture is drawn in the window (fractions of the window), set by the VI renderer.
++    void SetSceneOutputRect(float x, float y, float width, float height);
++    // For the frame being drawn: pick mode on, the cursor in normalized device coordinates, the texture to highlight.
++    bool ScenePickCursor(float &ndcX, float &ndcY, uint64_t &highlight);
++    // A textured surface under the cursor at that depth (w); FinishScenePick picks among those of the frame.
++    void AddScenePickHit(float w, uint64_t hash);
++    void FinishScenePick();
 +    // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
 +    bool ComputeSceneParallax(interop::FrameParams &frameParams);
 +    // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none or when the original
@@ -9424,10 +9598,10 @@ index 9131697..ec4c1d6 100644
          bool hasReplacement(uint64_t hash);
          void clearReplacementDirectories();
 diff --git a/src/render/rt64_vi_renderer.cpp b/src/render/rt64_vi_renderer.cpp
-index b4ff4e9..ef54bf8 100644
+index b4ff4e9..f5e37b2 100644
 --- a/src/render/rt64_vi_renderer.cpp
 +++ b/src/render/rt64_vi_renderer.cpp
-@@ -4,10 +4,35 @@
+@@ -4,10 +4,36 @@
  
  #include "rt64_vi_renderer.h"
  
@@ -9437,6 +9611,7 @@ index b4ff4e9..ef54bf8 100644
 +
  #include "shared/rt64_hlsl.h"
  #include "shared/rt64_video_interface.h"
++#include "rt64_scene_effects.h"
  
  namespace RT64 {
 +    namespace {
@@ -9463,7 +9638,17 @@ index b4ff4e9..ef54bf8 100644
      // VIRenderer
  
      VIRenderer::VIRenderer() { }
-@@ -78,6 +103,22 @@ namespace RT64 {
+@@ -73,11 +99,32 @@ namespace RT64 {
+         p.commandList->setViewports(viewport);
+         p.commandList->setScissors(scissor);
+ 
++        // Banjo-Tooie: where the picture lands in the window, for parallax pick mode's cursor.
++        const float windowWidth = std::max(float(p.swapChain->getWidth()), 1.0f);
++        const float windowHeight = std::max(float(p.swapChain->getHeight()), 1.0f);
++        SetSceneOutputRect(viewport.x / windowWidth, viewport.y / windowHeight, viewport.width / windowWidth, viewport.height / windowHeight);
++
+         interop::VideoInterfaceCB pushConstants;
+         pushConstants.videoResolution = computeHDSize(hlslpp::float2(p.vi->fbSize()), p.resolutionScale, p.downsamplingScale);
          pushConstants.textureResolution = { float(p.textureWidth), float(p.textureHeight) };
          pushConstants.gamma = p.vi->gamma();
  
@@ -10898,10 +11083,10 @@ index 0000000..b3907b6
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..9f834ed
+index 0000000..cd6222a
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,211 @@
 +//
 +// RT64
 +//
@@ -10942,27 +11127,63 @@ index 0000000..9f834ed
 +}
 +
 +// How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest): from a texture pack's height map
-+// (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest):
-+// its darkest gaps at the bottom, its faces flat on top.
-+float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap) {
++// (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest),
++// in the texture's shape (RASTER_PARALLAX_SHAPE_*, picked per texture in pick mode).
++float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap, uint shape) {
 +    const float4 c = sampleTexture(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, false);
 +    if (heightMap) {
 +        return saturate(1.0f - c.r);
 +    }
 +
-+    // The speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest
-+    // parts (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
 +    const float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
 +    const float darkness = saturate((range.y - luma) / max(range.y - range.x, 0.05f));
-+    return smoothstep(0.65f, 0.95f, darkness);
++    switch (shape) {
++    // Bumpy: the whole surface follows its brightness (rough rock, bark).
++    case 1u:
++        return darkness;
++    // Inverted: the light parts lie deep (carvings whose grooves are lighter).
++    case 2u:
++        return smoothstep(0.65f, 0.95f, 1.0f - darkness);
++    // Cracks: only the darkest lines sink (cracked floors, mortar); the faces stay put.
++    case 3u:
++        return smoothstep(0.85f, 0.98f, darkness);
++    // Terraced: a few flat steps (bricks, tiles, stacked slabs).
++    case 4u: {
++        const float s = darkness * 3.0f;
++        const float f = min(floor(s), 2.0f);
++        return (f + smoothstep(0.4f, 0.6f, s - f)) / 3.0f;
++    }
++    // Rounded: the faces bulge like pebbles or cobbles, steep only near the gaps.
++    case 5u:
++        return 1.0f - sqrt(saturate(1.0f - darkness));
++    // Stone: the speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest parts
++    // (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
++    default:
++        return smoothstep(0.65f, 0.95f, darkness);
++    }
++}
++
++// A texture's depth from its RASTER_PARALLAX_DEPTH_* index: 100% (the default), 25, 50, 150, 200 or 300%.
++float ParallaxDepthScale(uint index) {
++    switch (index) {
++    case 1u: return 0.25f;
++    case 2u: return 0.5f;
++    case 3u: return 1.5f;
++    case 4u: return 2.0f;
++    case 5u: return 3.0f;
++    default: return 1.0f;
++    }
 +}
 +
 +// How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
 +// field (xy), and how lit that place is (z): darker deep down and in the shadow the stones above it cast, with the
 +// light from straight up in the world. No change where it is flat: seen edge on, or far away.
-+float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range) {
-+    const float4 params = FrParams.parallaxParams;
-+    const float4 shading = FrParams.parallaxShading;
++float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixelPosition, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, uint bits) {
++    // The texture's own shape, depth and shadows (RasterParams.nightLight, rt64_raster_params.h).
++    const uint shape = (bits >> 25) & 0x7u;
++    float4 params = FrParams.parallaxParams;
++    params.x *= ParallaxDepthScale((bits >> 28) & 0x7u);
++    const float4 shading = ((bits & RASTER_PARALLAX_NO_SHADOWS) != 0) ? float4(0.0f, 0.0f, 0.0f, 0.0f) : FrParams.parallaxShading;
 +    const float3 p = ParallaxViewPosition(pixelPosition);
 +    const float3 dp1 = ddx(p);
 +    const float3 dp2 = ddy(p);
@@ -11020,7 +11241,7 @@ index 0000000..9f834ed
 +    const float steps = lerp(params.w, 8.0f, vn);
 +    const float stepSize = 1.0f / steps;
 +    float layer = 0.0f;
-+    float surface = ParallaxDepthAt(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++    float surface = ParallaxDepthAt(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
 +    float previousLayer = 0.0f;
 +    float previousSurface = surface;
 +    [loop]
@@ -11028,13 +11249,13 @@ index 0000000..9f834ed
 +        previousLayer = layer;
 +        previousSurface = surface;
 +        layer = min(layer + stepSize, 1.0f);
-+        surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++        surface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * layer, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
 +    }
 +
 +    [loop]
 +    for (uint j = 0; (j < 4) && (layer > previousLayer); j++) {
 +        const float middle = (previousLayer + layer) * 0.5f;
-+        const float middleSurface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * middle, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++        const float middleSurface = ParallaxDepthAt(otherMode, renderFlags, uv + uvFull * middle, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
 +        if (middle < middleSurface) {
 +            previousLayer = middle;
 +            previousSurface = middleSurface;
@@ -11069,7 +11290,7 @@ index 0000000..9f834ed
 +        for (uint k = 1; k <= 6; k++) {
 +            const float rise = hit * (float(k) / 6.0f);
 +            const float rayLayer = hit - rise;
-+            const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
++            const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
 +            shadow = max(shadow, saturate((rayLayer - s) * 3.0f) * (1.0f - float(k - 1) / 6.0f));
 +        }
 +        lit *= 1.0f - shading.y * shadow;
@@ -11406,7 +11627,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..5a2fd4b 100644
+index e7895c3..8c5c3c0 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11517,7 +11738,7 @@ index e7895c3..5a2fd4b 100644
 +            rdpTile.nativeSampler = renderFlagNativeSampler0(rp.flags);
 +        }
 +        const float2 range = float2((gConstants.nightLight >> 8) & 0xFF, (gConstants.nightLight >> 16) & 0xFF) / 255.0f;
-+        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range);
++        const float3 parallax = ParallaxOffset(otherMode, rp.flags, vertexPosition, vertexUV, ddxVertexUV, ddyVertexUV, rdpTile, GPUTiles[globalTileIndex], range, gConstants.nightLight);
 +        vertexUV += parallax.xy;
 +        parallaxLight = parallax.z;
 +    }
@@ -15378,10 +15599,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..0077443 100644
+index 0a5c332..9eb2c44 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,59 @@
+@@ -9,11 +9,62 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -15411,6 +15632,9 @@ index 0a5c332..0077443 100644
 +#define RASTER_NIGHT_LIGHT 0x1u
 +#define RASTER_PARALLAX 0x2u
 +#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
++// Banjo-Tooie: a texture's parallax shape in bits 25 to 27 (0 stone, 1 bumpy, 2 inverted, 3 cracks, 4 terraced,
++// 5 rounded), its depth in 28 to 30 (0 100%, 1 25%, 2 50%, 3 150%, 4 200%, 5 300%) and no shadows in 31.
++#define RASTER_PARALLAX_NO_SHADOWS 0x80000000u
 +    // Banjo-Tooie: no piece beside the draw on that side (RasterParams.seamTiles).
 +#define RASTER_SEAM_NONE 0xFFFFFFFFu
 +

@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..75cdb79 100644
+index 1961e29..616c34b 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,11 +66,21 @@ index 1961e29..75cdb79 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
+@@ -49,4 +56,9 @@ namespace recompinput {
+     void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
+     void add_mouse_deltas(float delta_x, float delta_y);
+     void add_mouse_wheel_delta(int32_t delta);
++    // Banjo-Tooie: the mouse wheel's total travel (up positive), for pick mode.
++    int32_t get_mouse_wheel_pos();
++    // Banjo-Tooie: parallax pick mode: the cursor shows and moves freely (a crosshair), and the mouse stops aiming.
++    void set_pick_mode(bool on);
++    bool pick_mode();
+ }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..d6f62f6 100644
+index f5ed6c0..56d84ea 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,39 @@ namespace recompinput {
+@@ -37,10 +37,40 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -98,6 +108,7 @@ index f5ed6c0..d6f62f6 100644
 +        DEFINE_INPUT(SAVE_TAGS, 0, "Save Tags") \
 +        DEFINE_INPUT(UNSAVE_TAG, 0, "Unsave Tag") \
 +        DEFINE_INPUT(MODEL_EFFECTS, 0, "Model Effects") \
++        DEFINE_INPUT(PARALLAX_PICK, 0, "Parallax Pick Mode") \
 +        DEFINE_INPUT(BENCHMARK, 0, "Benchmark") \
 +        DEFINE_INPUT(TRANSFORM, 0, "Transform") \
 +        DEFINE_INPUT(FREEZE, 0, "Freeze")
@@ -111,7 +122,7 @@ index f5ed6c0..d6f62f6 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +101,9 @@ namespace recompinput {
+@@ -72,6 +102,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -121,7 +132,7 @@ index f5ed6c0..d6f62f6 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +122,33 @@ namespace recompinput {
+@@ -90,15 +123,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -155,7 +166,7 @@ index f5ed6c0..d6f62f6 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +177,10 @@ namespace recompinput {
+@@ -127,6 +178,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -330,7 +341,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..62b8939 100644
+index c76a1dc..e534824 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,6 +1,7 @@
@@ -372,7 +383,7 @@ index c76a1dc..62b8939 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
-@@ -208,13 +226,18 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -208,17 +226,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              ControllerState& state = recompinput::get_controller_state(event->csensor.which);
              uint64_t cur_timestamp = event->csensor.timestamp;
              uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
@@ -393,7 +404,12 @@ index c76a1dc..62b8939 100644
          }
          break;
      case SDL_EventType::SDL_MOUSEMOTION:
-@@ -246,26 +269,49 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+-        if (!recompinput::game_input_disabled()) {
++        if (!recompinput::game_input_disabled() && !recompinput::pick_mode()) {
+             SDL_MouseMotionEvent* motion_event = &event->motion;
+             recompinput::add_mouse_deltas(motion_event->xrel, motion_event->yrel);
+         }
+@@ -246,26 +269,64 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -407,6 +423,21 @@ index c76a1dc..62b8939 100644
 +    bool cursor_visible = recompui::get_cursor_visible();
 +    if (cursor_locked) {
 +        cursor_visible = false;
++    }
++    // Banjo-Tooie: pick mode frees and shows the cursor, as a crosshair over the game.
++    static SDL_Cursor *crosshair = nullptr;
++    static bool was_picking = false;
++    const bool picking = recompinput::pick_mode() && !recompinput::game_input_disabled();
++    if (picking) {
++        cursor_locked = false;
++        cursor_visible = true;
++    }
++    if (picking != was_picking) {
++        if (picking && (crosshair == nullptr)) {
++            crosshair = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_CROSSHAIR);
++        }
++        SDL_SetCursor(picking && (crosshair != nullptr) ? crosshair : SDL_GetDefaultCursor());
++        was_picking = picking;
 +    }
 +
 +    SDL_ShowCursor(cursor_visible ? SDL_ENABLE : SDL_DISABLE);
@@ -458,7 +489,7 @@ index c76a1dc..62b8939 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..12054fc 100644
+index 03ed871..be5bc91 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -578,6 +609,27 @@ index 03ed871..12054fc 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
+@@ -411,6 +462,20 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+     InputState.pending_mouse_delta[0] += delta_x;
+     InputState.pending_mouse_delta[1] += delta_y;
+ }
++int32_t recompinput::get_mouse_wheel_pos() {
++    return InputState.mouse_wheel_pos.load();
++}
++
++static std::atomic_bool pick_mode_on = false;
++
++void recompinput::set_pick_mode(bool on) {
++    pick_mode_on.store(on);
++}
++
++bool recompinput::pick_mode() {
++    return pick_mode_on.load();
++}
++
+ void recompinput::add_mouse_wheel_delta(int32_t delta) {
+     InputState.mouse_wheel_pos.fetch_add(delta);
+ }
 diff --git a/recompinput/src/input_types.cpp b/recompinput/src/input_types.cpp
 index c6786e6..36eeb81 100644
 --- a/recompinput/src/input_types.cpp

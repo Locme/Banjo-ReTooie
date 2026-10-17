@@ -1,5 +1,46 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T415 Smash Banjo fur
+- Asked: 2026-10-17 23:20 UTC
+- Build: main (Smash Banjo fur commit)
+- Steps:
+  1. Turn on the Smash Banjo model mod and Banjo's fur
+  2. Walk around Spiral Mountain, then turn the mod off again
+- Look for: Does Smash Banjo grow fur on his coat at about the same strand size as the normal Banjo, with none on his skin, shorts or backpack? Does normal Banjo look the same as before?
+- Status: waiting for L
+
+## T414 Smash Banjo v14: blink, arm clipping, shoulder spot
+- Asked: 2026-10-17 22:59 UTC
+- Build: main 488dfb2 (mod-only change, any recent build)
+- Steps:
+  1. Install Smash Banjo v14.zip from project files mods/ (remove v13)
+  2. Stand still until Banjo blinks
+  3. Walk and run slowly, watch his arms against his shorts
+  4. Zoom in on both shoulders by the straps
+- Look for: Both eyes shut and open together like vanilla; hands no longer sink into the shorts; no yellow spot on either shoulder. Fur on Smash is a separate fix in the fur thread
+- Status: waiting for L
+
+## T413 Parallax pick mode
+- Asked: 2026-10-17 22:38 UTC
+- Build: main (parallax pick mode)
+- Steps:
+  1. Set Parallax above 0 and bind Parallax Pick Mode (Controls, Debug)
+  2. Press it in a level: the cursor turns into a crosshair and the texture under it pulses blue with a label beside it
+  3. Left click steps the shape (Stone, Bumpy, Inverted, Cracks, Terraced, Rounded, then Off); right click steps the depth (100, 150, 200, 300, 25, 50%); middle click turns its shadows off or on
+  4. Shift + left click puts it back to the built-in choice; the wheel picks the surface behind it
+  5. Press the key again to get the normal mouse back
+- Look for: Does the highlight land on the surface under the cursor, and does each click change it at once? Is parallax_tags.txt next to the save files with your picks, and still applied after a restart?
+- Status: waiting for L
+
+## T412 Fast Forward Scene wording
+- Asked: 2026-10-17 22:35 UTC
+- Build: main (Fast Forward Scene wording commit)
+- Steps:
+  1. QOL: Fast Forward Cutscenes on
+  2. Talk to any NPC or start a boss intro and press Start, then press Start again
+- Look for: The first Start shows "Fast Forward Scene" and the scene speeds through silently; the second shows "Fast Forward stopped" and the scene plays on at normal speed
+- Status: waiting for L
+
 ## T411 Deep snow as a real dented surface (tessellation)
 - Asked: 2026-10-17 21:52 UTC
 - Build: main (deep snow tessellation commit)
