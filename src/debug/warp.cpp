@@ -123,6 +123,15 @@ bool tooie::debug::can_warp() {
     return map != 0 && map != title_map && map != game_select_map;
 }
 
+bool tooie::debug::warp_pending() {
+    std::lock_guard lock{request_mutex};
+    return pending.has_value();
+}
+
+bool tooie::debug::map_change_busy(uint8_t* rdram) {
+    return MEM_B(0x12, game_state_addr) != 0;
+}
+
 uint16_t tooie::debug::current_map(uint8_t* rdram) {
     return (uint16_t)MEM_H(0x0, current_map_addr);
 }

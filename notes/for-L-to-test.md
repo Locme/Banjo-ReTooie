@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T385 Texture sweep: repeated entrances skipped, no more early reads during loading
+- Asked: 2026-10-17 12:19 UTC
+- Build: main
+- Steps:
+  1. Empty texture_dump, load a spare save
+  2. DEV > Texture dump: Sweep all maps, Start sweep
+  3. Watch a few maps with several entrances (Mayahem Temple, Treasure Chamber)
+- Look for: An entrance that lands in the same room as an earlier one, or finds no new textures, is logged as 'same' in sweep.txt; 3 in a row and the sweep moves on. Each entrance now waits for the game to finish loading, so no entrance should be 'missed' or sit black for long. Short black flashes are exits a map doesn't have (Banjo at 0 0 0 in sweep.txt); those move on after about 3 s. Kickball arenas only show from outside: they can only be entered through the minigame. Send sweep.txt and the PNG count.
+- Status: waiting for L
+
 ## T384 Ice reflections slider: all ice reflects, from any camera height
 - Asked: 2026-10-17 11:40 UTC
 - Build: main (pull)

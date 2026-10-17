@@ -395,7 +395,7 @@ namespace {
     enum class Phase { Idle, WaitForFile, Warping, Settling, Turning, Returning, Done };
 
     // Times per map: the wipe-out and load before the map shows, the fade-in, and the camera turn.
-    constexpr auto load_timeout = 25s;
+    constexpr auto load_timeout = 50s;
     constexpr auto settle_time = 3s;
     constexpr auto turn_time = 6s;
     // C-right is pressed in pulses; each press swings the camera an eighth of a turn.
@@ -405,13 +405,16 @@ namespace {
     constexpr uint64_t sweep_pool_limit = 1024ull * 1024 * 1024;
     // Every entrance (L, 2026-10-17): each map is entered from exit 0, 1, 2, ... A spawn within
     // same_spawn units of one already seen in this map is a repeat (an exit the map doesn't have
-    // puts Banjo at another one); after max_repeats repeats in a row, or max_exits, the sweep
-    // moves on to the next map.
+    // puts Banjo at another one, or two doors open into the same room: L saw the Treasure Chamber
+    // twice with 150), and so is an entrance that found no new textures; after max_repeats repeats
+    // in a row, or max_exits, the sweep moves on to the next map.
     constexpr uint8_t max_exits = 16;
-    constexpr int max_repeats = 2;
-    constexpr float same_spawn = 150.0f;
-    // A warp within the same map doesn't change the map id, so the load is given this long first.
-    constexpr auto min_load_time = 4s;
+    constexpr int max_repeats = 3;
+    constexpr float same_spawn = 800.0f;
+    // At least this long per warp; if the game's map change was never seen, this long.
+    constexpr auto min_load_time = 1s;
+    constexpr auto no_load_seen_time = 10s;
+    bool load_seen = false;
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t player_pos_ptr = 0xE4;
 
@@ -436,6 +439,7 @@ namespace {
     uint16_t start_map = 0;
     steady::time_point phase_start;
     uint32_t pngs_at_map_start = 0;
+    uint32_t pngs_at_exit_start = 0;
     uint8_t exit_now = 0;
     int repeats = 0;
     std::vector<std::array<float, 3>> spawns;
@@ -648,6 +652,8 @@ namespace {
     void warp_exit() {
         const Target& t = targets[next_target];
         log_line("start " + where() + " " + t.name);
+        pngs_at_exit_start = new_pngs.load();
+        load_seen = false;
         std::snprintf(entry_now, sizeof(entry_now), "%s %s", where().c_str(), t.name.c_str());
         // Headless check of the pass-over restart: TOOIE_SWEEP_CRASH_TEST=0B8:1 crashes there.
         if (const char* test = std::getenv("TOOIE_SWEEP_CRASH_TEST")) {
@@ -724,7 +730,15 @@ namespace {
                 }
                 break;
             case Phase::Warping:
-                if (elapsed > min_load_time && tooie::debug::current_map(rdram) == targets[next_target].map && tooie::debug::can_warp()) {
+                // A warp inside the same map leaves the map id as it was, so waiting a fixed time
+                // could read Banjo's old spot, or catch the game still loading on a black screen
+                // (L, 2026-10-17). Wait for the game's own map change to start and finish instead.
+                if (tooie::debug::map_change_busy(rdram)) {
+                    load_seen = true;
+                }
+                if (!tooie::debug::warp_pending() && !tooie::debug::map_change_busy(rdram) &&
+                    (load_seen || elapsed > no_load_seen_time) && elapsed > min_load_time &&
+                    tooie::debug::current_map(rdram) == targets[next_target].map && tooie::debug::can_warp()) {
                     enter(Phase::Settling);
                 } else if (elapsed > load_timeout) {
                     finish_exit(rdram, "missed", true);
@@ -763,7 +777,12 @@ namespace {
             case Phase::Turning:
                 if (elapsed > turn_time) {
                     turning = false;
-                    finish_exit(rdram, "done", false);
+                    // Nothing new from here: it showed what an earlier entrance showed.
+                    if (new_pngs.load() == pngs_at_exit_start) {
+                        finish_exit(rdram, "same", true);
+                    } else {
+                        finish_exit(rdram, "done", false);
+                    }
                 }
                 break;
             default:

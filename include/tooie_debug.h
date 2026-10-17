@@ -19,6 +19,10 @@ namespace tooie::debug {
     uint16_t current_map(uint8_t* rdram);
     // True while a save file is being played, so a warp can be issued.
     bool can_warp();
+    // A warp asked for with request_warp that the game hasn't been told about yet.
+    bool warp_pending();
+    // The game is changing maps: the go byte stays set from the wipe-out until the new map runs.
+    bool map_change_busy(uint8_t* rdram);
 }
 
 namespace tooie::dl_dump {
