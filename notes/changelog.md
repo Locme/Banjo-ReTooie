@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Ice reflections: Banjo's reflection no longer cuts out when the camera looks down on the ice; it stays under him at every camera height. Seen low across it, the ice keeps its own surface showing through the reflection and no longer ripples like water (L). Untested on PC (T416).
 - Snout jiggle: new Heaviness slider; only the snout swings now, the mouth (lips, corners, jaw) stays put; L's settings are the defaults (wobble 30%, bounce 75, speed 3.0, exaggeration 150%, stretch 50%, size 90%, reach 6, floppiness 80%) and every slider goes 50% further (L). Untested on PC (T408).
 - Ice reflections: Banjo is reflected once instead of as a stack of faded copies, and looking down on the ice no longer smears him or the walls down it. The see-through ice blocks round notes reflect too. Stomping Plains' floor by the gate no longer reflects (it shares a texture with Icy Side's ice; ice textures now count only in Hailfire's icy maps) (L). Untested on PC (T401).
 - Settings menu: the option you point at or select is marked with an orange band across the whole row, a gold edge on the left and its name in gold (L). Untested on PC (T400).

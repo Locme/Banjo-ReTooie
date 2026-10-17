@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T416 Ice: reflection stays at every camera height; ice looks like ice up close
+- Asked: 2026-10-17 23:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: Ice reflections at your usual setting
+  2. Icy Side: stand in the shallow ice water by the igloo (where your screenshot was), camera low across the ice
+  3. Raise the camera slowly until you look down on Banjo, then lower it again
+- Look for: Banjo's reflection stays under him the whole way up instead of cutting out past about 45 degrees (it gets shorter as you look down, as a real one would). Low across the ice it still reflects, but you see the ice's own surface through it and it no longer ripples like water. Headless before/after: screens/ice-reflections/t416-reflection-stays.png and t416-low-angle-look.png
+- Status: waiting for L
+
 ## T415 Smash Banjo fur
 - Asked: 2026-10-17 23:20 UTC
 - Build: main (Smash Banjo fur commit)
