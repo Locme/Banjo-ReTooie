@@ -124,6 +124,8 @@ ultramodern::input::connected_device_info_t get_connected_device_info(int contro
 namespace RT64 {
     // lib/rt64/src/render/rt64_raster_shader_cache.h (from lib-patches/rt64.patch).
     void SetShaderListPath(const std::filesystem::path &path);
+    // lib/rt64/src/hle/rt64_present_queue.cpp (from lib-patches/rt64.patch).
+    void SetIdleRepaint(bool enabled);
 }
 
 #if defined(__gnu_linux__)
@@ -222,6 +224,15 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
 void update_gfx(void*) {
     tooie::watchdog::note_window_update();
     recompinput::handle_events();
+    // The menus are drawn, and read their input, only when a frame is shown. While one is open, RT64 shows
+    // the last frame again when the game sends none (a map change or a load), so the menu keeps responding.
+    // Checked every 50 ms: it takes the UI's lock, which the UI holds while it draws.
+    static auto next_menu_check = std::chrono::steady_clock::time_point{};
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= next_menu_check) {
+        next_menu_check = now + std::chrono::milliseconds(50);
+        RT64::SetIdleRepaint(ultramodern::is_game_started() && recompui::is_context_capturing_input());
+    }
 #ifdef __ANDROID__
     tooie::android::update_touch();
 #endif

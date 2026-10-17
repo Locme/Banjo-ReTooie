@@ -631,10 +631,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..efa3797 100644
+index 3227ab1..2090418 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,158 @@
+@@ -4,12 +4,171 @@
  
  #include "rt64_present_queue.h"
  
@@ -658,6 +658,15 @@ index 3227ab1..efa3797 100644
 +        uint64_t presentsQueued = 0;
 +        uint64_t presentsDone = 0;
 +
++        // Banjo-Tooie: the frontend's UI (the Esc menu) is drawn, and reads its input, only when a frame is
++        // presented, and frames are only presented when the game sends one. While the game sends none (a
++        // map change, a load, a long stall) an open menu froze and ignored every button. While a menu is
++        // open (SetIdleRepaint), the last frame is drawn again with the menu over it whenever the game has
++        // sent nothing for idleRepaintAfter, every idleRepaintInterval.
++        std::atomic<bool> idleRepaintWanted = false;
++        constexpr auto idleRepaintAfter = std::chrono::milliseconds(100);
++        constexpr auto idleRepaintInterval = std::chrono::milliseconds(16);
++
 +        void countPresentDone() {
 +            {
 +                std::scoped_lock lock(backlogMutex);
@@ -665,6 +674,10 @@ index 3227ab1..efa3797 100644
 +            }
 +            backlogCondition.notify_all();
 +        }
++    }
++
++    void SetIdleRepaint(bool enabled) {
++        idleRepaintWanted = enabled;
 +    }
 +
 +    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs) {
@@ -793,7 +806,7 @@ index 3227ab1..efa3797 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -40,9 +186,14 @@ namespace RT64 {
+@@ -40,9 +199,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
          bool waitForBarrier;
@@ -809,7 +822,7 @@ index 3227ab1..efa3797 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -51,6 +202,11 @@ namespace RT64 {
+@@ -51,6 +215,11 @@ namespace RT64 {
              writeCursor = nextWriteCursor;
          }
  
@@ -821,7 +834,7 @@ index 3227ab1..efa3797 100644
          cursorCondition.notify_all();
      }
  
-@@ -87,6 +243,10 @@ namespace RT64 {
+@@ -87,6 +256,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -832,7 +845,7 @@ index 3227ab1..efa3797 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +275,7 @@ namespace RT64 {
+@@ -115,6 +288,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -840,7 +853,54 @@ index 3227ab1..efa3797 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +373,31 @@ namespace RT64 {
+@@ -135,10 +309,18 @@ namespace RT64 {
+             }
+         }
+ 
++        // Banjo-Tooie: a repaint doesn't wait for a workload that is drawing (the game is stuck in one, often):
++        // the menu is then drawn over black until the game's picture can be read again.
++        bool repaintFrame = true;
++        if (repainting) {
++            repaintFrame = ext.sharedResources->workloadMutex.try_lock();
++            lockedWorkloadMutex = repaintFrame;
++        }
++
+         // Present the VI specified by the event.
+         // Attempt to find the matching framebuffer for the VI based on the origin address.
+         // If that fails, we look at the shared storage.
+-        if (present.screenVI.visible()) {
++        if (present.screenVI.visible() && repaintFrame) {
+             Framebuffer *viFb = nullptr;
+             if (!viewRDRAM) {
+                 viFb = fbManager.find(present.screenVI.fbAddress());
+@@ -155,7 +337,13 @@ namespace RT64 {
+             }
+             
+             if ((presentFb != nullptr) && (viFb != nullptr)) {
++                // A repaint draws the last frame as it is: no interpolated frames, and the framebuffers'
++                // interpolation marks (which a workload may be setting up for its own present) are left alone.
+                 for (uint32_t colorAddress : ext.sharedResources->colorImageAddressVector) {
++                    if (repainting) {
++                        break;
++                    }
++
+                     Framebuffer *colorFb = fbManager.find(colorAddress);
+                     if (colorFb == nullptr) {
+                         continue;
+@@ -186,10 +374,10 @@ namespace RT64 {
+                     }
+                 }
+ 
+-                if (presentFb->interpolationEnabled) {
++                if (presentFb->interpolationEnabled && !repainting) {
+                     framesToPresent = frameCounters.count;
+                 }
+-                else {
++                else if (!lockedWorkloadMutex) {
+                     lockedWorkloadMutex = true;
+                     ext.sharedResources->workloadMutex.lock();
+                 }
+@@ -212,11 +400,36 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -872,7 +932,13 @@ index 3227ab1..efa3797 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +452,8 @@ namespace RT64 {
+             }
+-            else {
++            else if (!repainting) {
+                 uint32_t fbAddress = present.screenVI.fbAddress();
+ 
+                 // Use a scratch framebuffer to upload the RAM to the render target.
+@@ -266,6 +479,8 @@ namespace RT64 {
              }
          }
          
@@ -881,7 +947,16 @@ index 3227ab1..efa3797 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -310,6 +498,8 @@ namespace RT64 {
+@@ -293,7 +508,7 @@ namespace RT64 {
+                     colorTarget = nullptr;
+                 }
+             }
+-            else if (framesToPresent == 1) {
++            else if ((framesToPresent == 1) && !repainting) {
+                 frameCountersNextPresented = frameCounters.count;
+             }
+ 
+@@ -310,6 +525,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -890,7 +965,7 @@ index 3227ab1..efa3797 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +529,109 @@ namespace RT64 {
+@@ -339,17 +556,109 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -1000,7 +1075,7 @@ index 3227ab1..efa3797 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +642,18 @@ namespace RT64 {
+@@ -360,12 +669,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -1019,10 +1094,20 @@ index 3227ab1..efa3797 100644
                  }
              }
  
-@@ -401,7 +689,41 @@ namespace RT64 {
+@@ -384,7 +699,7 @@ namespace RT64 {
+             }
+ 
+             // As soon as we're done with the first render target, we notify the workload queue it can proceed.
+-            if (i == 0) {
++            if ((i == 0) && !repainting) {
+                 notifyPresentId(present);
+             }
+ 
+@@ -401,11 +716,58 @@ namespace RT64 {
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
+-                presentProfiler.logAndRestart();
 +
 +                // Banjo-Tooie, headless testing: TOOIE_FAKE_VSYNC=<hz> holds each present to that rate, as a
 +                // vsync'd monitor does (software rendering on a virtual display presents at once).
@@ -1037,10 +1122,13 @@ index 3227ab1..efa3797 100644
 +                    nextVsync = std::max(nextVsync + interval, Timer::current());
 +                }
 +
-                 presentProfiler.logAndRestart();
++                // A repaint isn't a game frame: the frame rate overlay and the latency figures leave it out.
++                if (!repainting) {
++                    presentProfiler.logAndRestart();
++                }
 +
 +                // The interval just logged, for the frame rate overlay.
-+                if (presentProfiler.size() > 0) {
++                if (!repainting && (presentProfiler.size() > 0)) {
 +                    const double ms = presentProfiler.data()[(presentProfiler.index() + presentProfiler.size() - 1) % presentProfiler.size()];
 +                    const std::scoped_lock lock(frameStatsMutex);
 +                    frameStats.presents++;
@@ -1061,7 +1149,21 @@ index 3227ab1..efa3797 100644
              }
          }
      }
-@@ -428,6 +750,7 @@ namespace RT64 {
+ 
++    void PresentQueue::threadRepaint(bool &swapChainValid) {
++        if (!swapChainValid || ext.swapChain->isEmpty() || ext.swapChain->needsResize()) {
++            return;
++        }
++
++        repainting = true;
++        threadPresent(lastPresent, swapChainValid);
++        repainting = false;
++    }
++
+     void PresentQueue::skipInterpolation() {
+         {
+             std::unique_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
+@@ -428,6 +790,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1069,16 +1171,42 @@ index 3227ab1..efa3797 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,6 +772,7 @@ namespace RT64 {
+@@ -449,22 +812,55 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
 +        bool vsyncApplied = true;
          while (presentThreadRunning) {
++            bool repaintDue = false;
              {
                  std::unique_lock<std::mutex> cursorLock(cursorMutex);
-@@ -465,6 +789,24 @@ namespace RT64 {
+-                cursorCondition.wait(cursorLock, [&]() {
++                const auto presentReady = [&]() {
+                     return (writeCursor != threadCursor) || !presentThreadRunning;
+-                });
++                };
  
+-                if (presentThreadRunning) {
++                // Banjo-Tooie: wake up now and then to draw an open menu again while the game sends no frames.
++                if (!cursorCondition.wait_for(cursorLock, idleRepaintInterval, presentReady)) {
++                    repaintDue = idleRepaintWanted && lastPresentValid && ((std::chrono::steady_clock::now() - lastGamePresentTime) >= idleRepaintAfter);
++                    if (!repaintDue) {
++                        continue;
++                    }
++                }
++                else if (presentThreadRunning) {
+                     processCursor = threadCursor;
+                     threadCursor = (threadCursor + 1) % presents.size();
+                     skipPresent = (writeCursor != threadCursor);
+                 }
+             }
+ 
++            if (repaintDue) {
++                std::unique_lock<std::mutex> threadLock(threadMutex);
++                threadRepaint(swapChainValid);
++                continue;
++            }
++
              if (processCursor >= 0) {
                  std::unique_lock<std::mutex> threadLock(threadMutex);
 +
@@ -1102,7 +1230,23 @@ index 3227ab1..efa3797 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -528,6 +870,7 @@ namespace RT64 {
+@@ -518,6 +914,15 @@ namespace RT64 {
+                     threadPresent(present, swapChainValid);
+                 }
+ 
++                // Kept for repaints: the VI only (the framebuffer writes were done above, and the slot can be reused).
++                lastPresent.screenVI = present.screenVI;
++                lastPresent.debuggerFramebuffer = present.debuggerFramebuffer;
++                lastPresent.presentId = present.presentId;
++                lastPresent.workloadId = present.workloadId;
++                lastPresent.paused = true;
++                lastPresentValid = true;
++                lastGamePresentTime = std::chrono::steady_clock::now();
++
+                 if (!present.paused) {
+                     if (!present.fbOperations.empty()) {
+                         const std::scoped_lock lock(screenFbChangePoolMutex);
+@@ -528,6 +933,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
@@ -1111,13 +1255,14 @@ index 3227ab1..efa3797 100644
              }
          }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..996c7c6 100644
+index e08b02c..e722ecc 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
-@@ -4,8 +4,16 @@
+@@ -4,8 +4,17 @@
  
  #pragma once
  
++#include <chrono>
 +#include <functional>
 +#include <vector>
 +
@@ -1131,7 +1276,7 @@ index e08b02c..996c7c6 100644
  #include "render/rt64_vi_renderer.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +25,46 @@
+@@ -17,6 +26,46 @@
  namespace RT64 {
      struct WorkloadQueue;
  
@@ -1178,7 +1323,7 @@ index e08b02c..996c7c6 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -36,6 +84,7 @@ namespace RT64 {
+@@ -36,6 +85,7 @@ namespace RT64 {
          int barrierCursor;
          std::mutex cursorMutex;
          std::condition_variable cursorCondition;
@@ -1186,7 +1331,7 @@ index e08b02c..996c7c6 100644
          uint64_t presentId;
          std::mutex presentIdMutex;
          std::condition_variable presentIdCondition;
-@@ -52,6 +101,12 @@ namespace RT64 {
+@@ -52,10 +102,22 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -1199,6 +1344,24 @@ index e08b02c..996c7c6 100644
          std::unique_ptr<Inspector> inspector;
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
+         VIHistory viHistory;
++        // Banjo-Tooie: the last frame the game sent (its VI only), drawn again under an open menu while the
++        // game sends none, and when the game last sent one.
++        Present lastPresent;
++        bool lastPresentValid = false;
++        std::chrono::steady_clock::time_point lastGamePresentTime;
++        bool repainting = false;
+         bool presentWaitEnabled = false;
+ 
+         PresentQueue();
+@@ -68,6 +130,7 @@ namespace RT64 {
+         void waitForPresentId(uint64_t waitId);
+         void setup(const External &ext);
+         void threadPresent(const Present &present, bool &swapChainValid);
++        void threadRepaint(bool &swapChainValid);
+         void skipInterpolation();
+         void notifyPresentId(const Present &present);
+         void threadAdvanceBarrier();
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
 index a10c11a..3071d72 100644
 --- a/src/hle/rt64_rdp.cpp
