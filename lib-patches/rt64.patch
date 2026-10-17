@@ -10520,10 +10520,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..8930352
+index 0000000..22488c9
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2296 @@
+@@ -0,0 +1,2286 @@
 +//
 +// RT64
 +//
@@ -11925,9 +11925,8 @@ index 0000000..8930352
 +    return DayMistAndRain().xy;
 +}
 +
-+// Wet ground in and after the rain: everything darkens a little, and what faces up darkens more and turns
-+// shiny, reflecting what is round it (a ray across the screen, as the water's reflections) with a sheen that
-+// comes and goes over the ground. Not on Banjo himself, nor on the water.
++// Wet ground in and after the rain: everything darkens a little, and what faces up darkens more, in patches
++// fixed to the ground. Not on Banjo himself, nor on the water.
 +float3 DayWet(float3 scene, int2 pixel, float depth) {
 +    const float wet = DayMistAndRain().z;
 +    if ((wet <= 0.0f) || (depth >= 0.99999f) || (gConstants.fog.w > 0.0f)) {
@@ -11950,17 +11949,8 @@ index 0000000..8930352
 +    const float level = saturate((dot(normal, normalize(gConstants.worldY.xyz)) - 0.55f) * 4.0f);
 +    // Wet patches and drier ones, fixed to the ground.
 +    const float patches = 0.55f + 0.45f * smoothstep(0.25f, 0.7f, WaterNoise(world.xz / 90.0f));
-+    float3 result = scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
-+    const float shine = wet * level * patches;
-+    if (shine > 0.02f) {
-+        // A slightly rough surface: the normal wobbles with the position.
-+        const float2 rough = float2(WaterNoise(world.xz / 7.0f), WaterNoise(world.zx / 7.0f + 13.0f)) - 0.5f;
-+        const float3 n = normalize(normal + (normalize(gConstants.worldX.xyz) * rough.x + normalize(gConstants.worldZ.xyz) * rough.y) * 0.08f);
-+        const float4 reflection = WaterReflection(center, n);
-+        const float fresnel = 0.05f + 0.95f * pow(1.0f - saturate(dot(-normalize(center), n)), 5.0f);
-+        result = lerp(result, reflection.rgb, saturate(shine * fresnel * reflection.a * 0.85f));
-+    }
-+    return result;
++    // No reflection: L wants only water and Icy Side's ice to reflect (2026-10-17), so wet grass and dirt only darken.
++    return scene * (1.0f - wet * (0.12f + 0.2f * level * patches));
 +}
 +
 +// Mist: pale banks drifting slowly over low ground (below and a little above Banjo's height), thicker with

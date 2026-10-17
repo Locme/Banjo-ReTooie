@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T379 Wet grass and dirt no longer reflect
+- Asked: 2026-10-17 11:35 UTC
+- Build: main
+- Steps:
+  1. Turn the day and night cycle on in a level with weather (Terrydactyland or Mayahem Temple) and wait for rain, or come back after it
+  2. Look at grass, dirt and paths, then at water
+- Look for: Wet ground only goes a little darker in patches, with no mirrored statues, rocks or enemies in it. Water still reflects, and Icy Side's ice still does.
+- Status: waiting for L
+
 ## T378 Code clean-up: hotkeys and the frame rate overlay still work
 - Asked: 2026-10-17 11:15 UTC
 - Build: main (pull and build)
