@@ -24,6 +24,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -55,9 +56,16 @@ namespace {
     };
     // Models drawn without the screen effects by default.
     const uint32_t default_no_effects[] = {
-        // Bottles' ghost shimmer (Bottles' Revenge): a grid of quads in front of the camera that redraws the
-        // picture behind him wobbling. It writes a near depth over its whole box, so the effects took it for a
-        // wall in front of the camera: box edges, outlines and fog cut off around his glow (L, 2026-10-15).
+        0,
+    };
+    // Models drawn in their place, under the effects, with their see-through draws not writing depth.
+    const uint32_t default_no_depth[] = {
+        // Bottles' ghost (Bottles' Revenge, Spiral Mountain): his glow is a blended square drawn last that writes a
+        // near depth over its whole box, so the effects took it for a wall in front of the camera: inside the box
+        // the sun shadows, ambient occlusion and fog were cut off (L, 2026-10-15 and 2026-10-17, T396).
+        0x119DCD82,
+        // His shimmer (a grid of see-through quads around him, at 0,0,0). It was drawn after the effects (T152)
+        // while it was taken for the box; it writes no depth and is drawn under the effects again.
         0x3050A671,
     };
 
@@ -103,7 +111,9 @@ namespace {
         }
         no_effects.clear();
         for (uint32_t model : default_no_effects) {
-            no_effects.insert(model);
+            if (model != 0) {
+                no_effects.insert(model);
+            }
         }
         std::ifstream in(file_path());
         std::string line;
@@ -294,7 +304,16 @@ bool tooie::interp_tags::take_effects() {
 }
 
 bool tooie::interp_tags::any_no_effects() {
-    return have_no_effects.load(std::memory_order_relaxed);
+    return have_no_effects.load(std::memory_order_relaxed) || std::size(default_no_depth) != 0;
+}
+
+bool tooie::interp_tags::no_depth_for(uint32_t model) {
+    for (uint32_t m : default_no_depth) {
+        if (m == model) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool tooie::interp_tags::no_effects_for(uint32_t model) {

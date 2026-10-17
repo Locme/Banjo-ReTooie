@@ -1,5 +1,37 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T398 Sun shadow distance; sun shadows no longer come and go
+- Asked: 2026-10-17 20:15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Sun shadows on (any strength), Sun shadow distance left at 3000
+  2. Go to the spot of your burst in Spiral Mountain (the path by the honeycomb cave and the stumps) and turn the camera slowly both ways
+  3. Move Sun shadow distance to 20000 while playing, then to 1500
+  4. Try Mayahem Temple's open area at 20000
+- Look for: Do the cliffs' shadows on the path stay put while the camera turns (no popping in and out)? Do far hills and buildings get shadows at 20000 and lose them at 1500, at once without Apply? Is the frame rate still fine at 20000?
+- Status: waiting for L
+
+## T397 Banjo's shadow follows his pose (no more shaking)
+- Asked: 2026-10-17 20:12 UTC
+- Build: main
+- Steps:
+  1. Turn HD Shadows off (the game's own shadow)
+  2. Stand, walk and turn the camera around Banjo on grass in Spiral Mountain
+  3. Try Game Frame Rate Original, 60 and 175
+- Look for: The shadow moves with Banjo instead of shaking or showing a slightly wrong shape
+- Status: waiting for L
+
+## T396 Bottles' ghost: no box cut out of the effects
+- Asked: 2026-10-17 19:59 UTC
+- Build: main
+- Steps:
+  1. Turn on Sun shadows, Ambient occlusion and Fog (any strength) in Graphics
+  2. Settings > General: turn on Bottles' Revenge and start a file that has not seen its intro (or a new file) so the ghost scene plays in Spiral Mountain
+  3. Watch Bottles' ghost with his halo and glow, and walk or turn the camera around him if you can
+  4. If you reach the spot from your screenshot, look at the ground and shadows around him there too
+- Look for: Do the shadows, fog and shading carry on right up to Bottles' glow, with no rectangle or square edge around him, and does the ghost himself still look as before (glow, halo, shimmer)?
+- Status: waiting for L
+
 ## T395 Warp tab: Flooded Caves
 - Asked: 2026-10-17 19:20 UTC
 - Build: main

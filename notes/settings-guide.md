@@ -264,6 +264,10 @@ their texture is drawn.
   shadow model (works in every transformation); enemies and NPCs, which have
   no shadow on N64, get one too (up to 12 per frame, straight down onto the
   floor). Applies at once. Default: off.
+- **Sun shadow distance**: how far from the camera Sun shadows reach, 1500 to
+  20000 game units. Everything within it casts its shadow whether it is on screen
+  or not, so shadows don't come and go as the camera turns. Past 6000 shadows get
+  a little blurrier, and higher costs more. Applies at once. Default: 3000.
 - **Day and Night**: a day and night cycle in the levels that are daytime under
   an open sky (Spiral Mountain, Isle o' Hags outside, Mayahem Temple, Jolly
   Roger's Lagoon, Terrydactyland, Hailfire Peaks, Cloud Cuckooland). Cycle runs
