@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6597c99 100644
+index 9fae0d4..c1a5a57 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2869,7 +2869,7 @@ index 9fae0d4..6597c99 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2551,356 @@ namespace RT64 {
+@@ -1747,8 +2551,359 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3220,13 +3220,16 @@ index 9fae0d4..6597c99 100644
 +                    }
 +                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
-+                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
++                // The player's shadow: the flattened model decal-tested into the game's 8-bit shadow buffer.
++                const bool shadowDecal = (fbPair.colorImage.siz == G_IM_SIZ_8b) && (call.shaderDesc.otherMode.zMode() == ZMODE_DEC);
++                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0) |
++                    (shadowDecal ? RASTER_SHADOW_DECAL : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
 +
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2910,263 @@ namespace RT64 {
+@@ -1758,13 +2913,263 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -10533,7 +10536,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..acb38aa 100644
+index e7895c3..ea404b0 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -10548,9 +10551,13 @@ index e7895c3..acb38aa 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,54 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -45,12 +49,58 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+ }
  #endif
  
++// Banjo-Tooie: how many times the usual decal tolerance the player's shadow gets (RASTER_SHADOW_DECAL).
++static const float ShadowDecalSlack = 16.0f;
++
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
 -    bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
 +    float3 vertexFurAnchor, bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
@@ -10605,7 +10612,7 @@ index e7895c3..acb38aa 100644
          return false;
      }
  #endif
-@@ -88,7 +135,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +138,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -10616,7 +10623,22 @@ index e7895c3..acb38aa 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +162,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -103,6 +155,14 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+             dz = (abs(ddx(vertexPosition.z)) + abs(ddy(vertexPosition.z))) * FbParams.resolutionScale.y;
+         }
+ 
++        // Banjo-Tooie: the player's shadow (RASTER_SHADOW_DECAL) is the character flattened onto one plane at its feet and
++        // decal-tested against the ground, which only lies in that plane under the feet. The few pixels that matched
++        // elsewhere changed every time the camera moved, so the shadow flickered; it is allowed this many times the
++        // usual tolerance, enough for uneven ground but not for a wall or rock in front of it.
++        if ((gConstants.nightLight & RASTER_SHADOW_DECAL) != 0) {
++            dz *= ShadowDecalSlack;
++        }
++
+         // Perform the decal depth tolerance check.
+         const float DepthTolerance = max(CoplanarDepthTolerance(surfaceDepth), dz);
+         const float pixelDepth = select(depthClampNear, max(vertexPosition.z, 0.0f), vertexPosition.z);
+@@ -113,6 +173,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -10641,7 +10663,7 @@ index e7895c3..acb38aa 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -182,6 +249,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +260,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -10680,7 +10702,7 @@ index e7895c3..acb38aa 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +353,111 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +364,111 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -10792,7 +10814,7 @@ index e7895c3..acb38aa 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +465,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +476,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -10816,7 +10838,7 @@ index e7895c3..acb38aa 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +508,7 @@ void PSMain(
+@@ -287,6 +519,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -10824,7 +10846,7 @@ index e7895c3..acb38aa 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +525,7 @@ void PSMain(
+@@ -303,7 +536,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -14166,10 +14188,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..710ee86 100644
+index 0a5c332..8cfc165 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,49 @@
+@@ -9,11 +9,51 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -14196,6 +14218,8 @@ index 0a5c332..710ee86 100644
 +#define RASTER_NIGHT_LIGHT 0x1u
 +#define RASTER_PARALLAX 0x2u
 +#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
++    // Banjo-Tooie: a decal drawn into an 8-bit colour image, which is the player's shadow (flattened model, see RasterPS).
++#define RASTER_SHADOW_DECAL 0x2000000u
 +
      struct RasterParams {
          uint renderIndex;

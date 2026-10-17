@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T387 Banjo's shadow no longer flickers
+- Asked: 2026-10-17 13:13 UTC
+- Build: main
+- Steps:
+  1. Stand on grass in Spiral Mountain (uneven ground is best)
+  2. Turn the camera around Banjo, then walk and stand still
+  3. Try Game Frame Rate Original, 60 and 175
+- Look for: The shadow under Banjo keeps its shape and doesn't flicker or jump while the camera turns; it doesn't show on rocks or walls in front of him
+- Status: waiting for L
+
 ## T386 Deep snow: trail, no stripes or colour bands, Chilly Willy marks
 - Asked: 2026-10-17 12:44 UTC
 - Build: main @ (this commit)
