@@ -64,6 +64,8 @@
 #include "tooie_toast.h"
 
 namespace {
+    // When the program started, for the headless list cycles below.
+    const std::chrono::steady_clock::time_point program_start = std::chrono::steady_clock::now();
     constexpr uint32_t op_vtx = 0x01;
     constexpr uint32_t op_popmtx = 0xD8;
     constexpr uint32_t op_mtx = 0xDA;
@@ -186,24 +188,27 @@ namespace {
         uint32_t from = 0, to = 0; // physical addresses of her first and last list
         uint32_t bone_count = 0;
         int32_t kazooie_parent = -1; // bone 18's parent: 13 in Banjo's skeleton
-        std::vector<uint32_t> bare; // Banjo's own lists that get no fur (feet, shorts), sorted
+        std::vector<uint32_t> bare; // lists that get no fur or feathers (his feet and hips, her crest), sorted
     };
 
     // Banjo-Kazooie's skeletons: the player's (68 bones) and the cutscenes' double (62 bones), told apart from
     // other models by the bone count and the parent of Kazooie's root (bone 18). Model mods keep them. Each has the
     // bones that get no fur: his feet and his hips. The thighs keep theirs, for his knees (L); their shorts stay bare
-    // by colour (FurColor in Fur.hlsli). TOOIE_FUR_BARE_BONES=<n>,<n>... picks those instead (headless aid).
+    // by colour (FurColor in Fur.hlsli). Kazooie's crest gets no feathers (L): the second bone of the chain on her
+    // head (head 20 -> 21 -> 22 in the player's, head 25 -> 26 -> 27 in the cutscenes'). TOOIE_FUR_BARE_BONES=<n>,...
+    // picks his bare bones instead and TOOIE_KAZOOIE_BARE_BONES=<n>,... hers (headless aids).
     struct BanjoSkeleton {
         uint32_t bone_count;
         int32_t kazooie_parent;
         std::vector<uint32_t> bare;
+        std::vector<uint32_t> kazooie_bare; // Kazooie's bones that get no feathers: her crest (L)
     };
 
     const BanjoSkeleton* banjo_skeleton(uint32_t bone_count, int32_t kazooie_parent) {
         static const std::vector<BanjoSkeleton> skeletons = [] {
             std::vector<BanjoSkeleton> out = {
-                { 68, 13, { 1, 62, 63, 66, 67 } },
-                { 62, 17, { 1, 53, 54, 57, 58 } },
+                { 68, 13, { 1, 62, 63, 66, 67 }, { 22 } },
+                { 62, 17, { 1, 53, 54, 57, 58 }, { 27 } },
             };
             if (const char* text = std::getenv("TOOIE_FUR_BARE_BONES")) {
                 std::vector<uint32_t> bones;
@@ -219,6 +224,22 @@ namespace {
                 }
                 for (BanjoSkeleton& skeleton : out) {
                     skeleton.bare = bones;
+                }
+            }
+            if (const char* text = std::getenv("TOOIE_KAZOOIE_BARE_BONES"); text != nullptr && *text != 0) {
+                std::vector<uint32_t> bones;
+                char* p = const_cast<char*>(text);
+                while (*p != 0) {
+                    char* next = p;
+                    const uint32_t bone = (uint32_t)std::strtoul(p, &next, 10);
+                    if (next == p) {
+                        break;
+                    }
+                    bones.push_back(bone);
+                    p = *next == ',' ? next + 1 : next;
+                }
+                for (BanjoSkeleton& skeleton : out) {
+                    skeleton.kazooie_bare = bones;
                 }
             }
             return out;
@@ -239,13 +260,12 @@ namespace {
         return (uint8_t)MEM_BU(0, kseg0(phys));
     }
 
-    void read_kazooie_lists(uint8_t* rdram, uint32_t vertex_base, uint32_t first_list, KazooieLists& out) {
+    // A model's header, found back from its vertices (segment 1 = model + its vertex block offset + 0x18; the header
+    // starts with 0x0B and holds that offset at +0x10); 0 if not found.
+    uint32_t find_model(uint8_t* rdram, uint32_t vertex_base, uint32_t first_list) {
         constexpr uint32_t ram_size = 0x00800000;
-        constexpr uint32_t kazooie_root = 18;
-        out = {};
-        out.vertex_base = vertex_base;
         if (vertex_base < 0x1000 || vertex_base >= ram_size) {
-            return;
+            return 0;
         }
         uint32_t model = 0;
         for (uint32_t back = 0x18; back <= 0x60000 && back + 0x60 <= vertex_base; back += 8) {
@@ -267,6 +287,18 @@ namespace {
                 }
             }
         }
+        return model;
+    }
+
+    void read_kazooie_lists(uint8_t* rdram, uint32_t vertex_base, uint32_t first_list, KazooieLists& out) {
+        constexpr uint32_t ram_size = 0x00800000;
+        constexpr uint32_t kazooie_root = 18;
+        out = {};
+        out.vertex_base = vertex_base;
+        if (vertex_base < 0x1000 || vertex_base >= ram_size) {
+            return;
+        }
+        const uint32_t model = find_model(rdram, vertex_base, first_list);
         if (model == 0) {
             return;
         }
@@ -287,6 +319,11 @@ namespace {
         std::vector<bool> bare(bone_count, false);
         if (const BanjoSkeleton* skeleton = banjo_skeleton(bone_count, out.kazooie_parent)) {
             for (uint32_t b : skeleton->bare) {
+                if (b < bone_count) {
+                    bare[b] = true;
+                }
+            }
+            for (uint32_t b : skeleton->kazooie_bare) {
                 if (b < bone_count) {
                     bare[b] = true;
                 }
@@ -332,6 +369,13 @@ namespace {
                     const int32_t index = (int16_t)half(rdram, node + 8);
                     lo = std::min(lo, index);
                     hi = std::max(hi, index);
+                    if (bare[item.bone]) {
+                        out.bare.push_back((uint32_t)((int32_t)(model + list + 8) + index * 8));
+                    }
+                    if (std::getenv("TOOIE_KAZOOIE_LIST_CYCLE") != nullptr) {
+                        std::fprintf(stderr, "[fur] %u-bone model: Kazooie's bone %d (parent %d) draws list %X\n", bone_count, item.bone,
+                            (int16_t)half(rdram, model + bones + 8 + item.bone * 16 + 14), (uint32_t)((int32_t)(model + list + 8) + index * 8));
+                    }
                 }
                 else if ((cmd == 0x11 || cmd == 0x18) && item.bone >= 0 && (uint32_t)item.bone < bone_count && bare[item.bone]) {
                     const int32_t index = (int16_t)half(rdram, node + 8);
@@ -774,9 +818,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
     const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
     const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
-    const bool enemy_fur = tooie::picture_filters::enemy_fur_on();
+    const bool npc_fur = tooie::picture_filters::npc_fur_on();
     const bool npc_feathers = tooie::picture_filters::npc_feathers_on();
-    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || enemy_fur || npc_feathers);
+    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || npc_fur || npc_feathers);
     if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
@@ -880,7 +924,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool custom = blend_mode == tooie::interp_check::blend_custom;
     // (Furry enemies and feathered NPCs are known by their prints too.)
     const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids ||
-        excluding || (end > start && (enemy_fur || npc_feathers)));
+        excluding || (end > start && (npc_fur || npc_feathers)));
     if (tags_wanted) {
         for (Block& block : blocks) {
             // Particles (fire, say) have a print too: their lists are built
@@ -1164,69 +1208,149 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         // Furry enemies get white fur all over (RT64's kind 3): Hailfire Peaks' yetis (L). Feathered NPCs get feathers
         // like Kazooie's in their own colours (kind 4): Canary Mary (L). Known by their model's print (Block::print),
         // the same in every run, and where another model prints the same (Mary's race cart does), by how many
-        // matrices it has (0: any). TOOIE_FEATHER_PRINTS=<hex>,... adds feathered ones (headless aid).
+        // matrices it has (0: any). Lists that stay bare are listed for each, by where they are from the model's first
+        // own list (Mary: her crest, beak and face; the yeti: his face, eyes and hands, L).
+        // TOOIE_FEATHER_PRINTS=<hex>,... adds feathered ones and TOOIE_NPC_BARE_LISTS=<hex>[-<hex>],... sets every
+        // one's bare lists (headless aids, with TOOIE_FUR_LOG listing a model's lists).
         struct Covered {
             uint32_t print;
             uint32_t kind;
             uint32_t matrices;
+            std::vector<uint32_t> bare; // its lists that stay bare, by where they are from its first own list
         };
         static const std::vector<Covered> covered = [] {
             std::vector<Covered> out = {
-                { 0xE23CADDF, 3, 0 }, // the yeti on Hailfire Peaks' Icy Side
-                { 0x765B856B, 4, 41 }, // Canary Mary (her Glitter Gulch Mine race)
+                { 0xE23CADDF, 3, 0, {} }, // the yeti on Hailfire Peaks' Icy Side
+                { 0x765B856B, 4, 41, { 0x160, 0x538 } }, // Canary Mary (her races); her crest, and her face and beak
             };
             if (const char* text = std::getenv("TOOIE_FEATHER_PRINTS")) {
                 char* p = const_cast<char*>(text);
                 while (*p != 0) {
-                    out.push_back({ (uint32_t)std::strtoul(p, &p, 16), 4, 0 });
+                    out.push_back({ (uint32_t)std::strtoul(p, &p, 16), 4, 0, {} });
                     if (*p != ',') {
                         break;
                     }
                     p++;
                 }
             }
+            if (const char* text = std::getenv("TOOIE_NPC_BARE_LISTS"); text != nullptr && *text != 0) {
+                std::vector<uint32_t> bones;
+                char* p = const_cast<char*>(text);
+                while (*p != 0) {
+                    const uint32_t from = (uint32_t)std::strtoul(p, &p, 16);
+                    const uint32_t to = *p == '-' ? (uint32_t)std::strtoul(p + 1, &p, 16) : from;
+                    for (uint32_t o = from; o <= to && bones.size() < 4096; o += 8) {
+                        bones.push_back(o);
+                    }
+                    if (*p != ',') {
+                        break;
+                    }
+                    p++;
+                }
+                std::sort(bones.begin(), bones.end());
+                for (Covered& c : out) {
+                    c.bare = bones;
+                }
+            }
             return out;
         }();
-        if (enemy_fur || npc_feathers) {
+        if (npc_fur || npc_feathers) {
             for (size_t b = 0; b < blocks.size(); b++) {
                 const Block& block = blocks[b];
                 if (block.shadow || block.vertex_command == SIZE_MAX) {
                     continue;
                 }
-                uint32_t kind = 0;
+                const Covered* match = nullptr;
                 for (const Covered& c : covered) {
-                    if (c.print == block.print && (c.matrices == 0 || c.matrices == block.matrices) && ((c.kind == 3) ? enemy_fur : npc_feathers)) {
-                        kind = c.kind;
+                    if (c.print == block.print && (c.matrices == 0 || c.matrices == block.matrices) && ((c.kind == 3) ? npc_fur : npc_feathers)) {
+                        match = &c;
                     }
                 }
-                if (kind == 0) {
+                if (match == nullptr) {
                     continue;
                 }
-                size_t first = SIZE_MAX;
+                // Its first own list (Mary's first call is a list other models share, which gives her print).
+                uint32_t own = 0;
+                for (size_t i = block.vertex_command; i < commands.size() && own == 0; i++) {
+                    const uint32_t target = commands[i].w1 & 0x1FFFFFFF;
+                    if (commands[i].block == (int)b && (commands[i].w0 >> 24) == op_dl && target > block.first_phys) {
+                        own = target;
+                    }
+                }
+                if (log_fur) {
+                    static std::unordered_set<uint32_t> dumped;
+                    if (dumped.insert(block.print * 31 + block.matrices).second) {
+                        std::fprintf(stderr, "[fur] model %08X (%u matrices) lists from its first:", block.print, block.matrices);
+                        for (size_t i = block.vertex_command; i < commands.size(); i++) {
+                            if (commands[i].block == (int)b && (commands[i].w0 >> 24) == op_dl) {
+                                std::fprintf(stderr, " %X", (commands[i].w1 & 0x1FFFFFFF) - own);
+                            }
+                        }
+                        std::fprintf(stderr, "\n");
+                    }
+                }
+                // TOOIE_NPC_LIST_CYCLE=<from ms>:<every ms>[:<calls>] covers only one of its calls at a time, the next every so
+                // often, logged, to tell which call draws which part (headless aid).
+                static const struct Cycle { bool on = false; long from = 0, every = 1000, count = 64; } cycle = [] {
+                    Cycle c;
+                    if (const char* text = std::getenv("TOOIE_NPC_LIST_CYCLE")) {
+                        c.on = std::sscanf(text, "%ld:%ld:%ld", &c.from, &c.every, &c.count) >= 2 && c.every > 0 && c.count > 0;
+                    }
+                    return c;
+                }();
+                long only = -1;
+                if (cycle.on) {
+                    const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - program_start).count();
+                    only = ms < cycle.from ? -2 : ((ms - cycle.from) / cycle.every) % cycle.count;
+                    static long logged_only = -3;
+                    if (only != logged_only) {
+                        logged_only = only;
+                        std::fprintf(stderr, "[fur] cycle: only call %ld\n", only);
+                    }
+                }
+                long call = 0;
+                uint32_t on = 0;
                 size_t last = block.vertex_command;
+                bool marked = false;
                 for (size_t i = block.vertex_command; i < commands.size(); i++) {
                     if (commands[i].block != (int)b) {
                         continue;
                     }
                     last = i;
-                    if (first == SIZE_MAX && (commands[i].w0 >> 24) == op_dl) {
-                        first = i;
+                    if ((commands[i].w0 >> 24) != op_dl) {
+                        continue;
+                    }
+                    uint32_t want = std::binary_search(match->bare.begin(), match->bare.end(), (commands[i].w1 & 0x1FFFFFFF) - own) ? 0 : match->kind;
+                    if (cycle.on && call++ != only) {
+                        want = 0;
+                    }
+                    if (want != on) {
+                        const size_t slot = flag_slot(i);
+                        if (slot == SIZE_MAX || cursor + 64 > limit) {
+                            if (log_fur) {
+                                static uint32_t logged_miss = 0;
+                                if ((logged_miss++ % 120) == 0) {
+                                    std::fprintf(stderr, "[fur] model %08X: no room to mark list %X (%s)\n", block.print, (commands[i].w1 & 0x1FFFFFFF) - own, slot == SIZE_MAX ? "no slot" : "area full");
+                                }
+                            }
+                            continue;
+                        }
+                        set_flag(cursor, slot, g_ex_fur_shells_v1, want);
+                        on = want;
+                        marked = true;
                     }
                 }
-                const size_t on_slot = first == SIZE_MAX ? SIZE_MAX : flag_slot(first);
+                if (on != 0) {
+                    const size_t off_slot = flag_slot(last + 1);
+                    if (off_slot != SIZE_MAX && cursor + 32 <= limit) {
+                        set_flag(cursor, off_slot, g_ex_fur_shells_v1, 0);
+                    }
+                }
                 if (log_fur) {
                     static uint32_t logged_covered = 0;
                     if ((logged_covered++ % 120) == 0) {
-                        std::fprintf(stderr, "[fur] model %08X gets kind %u (%s)\n", block.print, kind, on_slot == SIZE_MAX ? "no slot" : "marked");
+                        std::fprintf(stderr, "[fur] model %08X gets kind %u (%s)\n", block.print, match->kind, marked ? "marked" : "no slot");
                     }
-                }
-                if (on_slot == SIZE_MAX || cursor + 64 > limit) {
-                    continue;
-                }
-                set_flag(cursor, on_slot, g_ex_fur_shells_v1, kind);
-                const size_t off_slot = flag_slot(last + 1);
-                if (off_slot != SIZE_MAX) {
-                    set_flag(cursor, off_slot, g_ex_fur_shells_v1, 0);
                 }
             }
         }
@@ -1276,6 +1400,25 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             model_skip = { { kazooie.from, kazooie.to } };
         }
         const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
+        // TOOIE_KAZOOIE_LIST_CYCLE=<from ms>:<every ms>[:<calls>] feathers only one of Kazooie's calls at a time, the next every
+        // so often, logged with its list's address, to tell which call draws which part (headless aid).
+        static const struct KazooieCycle { bool on = false; long from = 0, every = 1000, count = 64; } kazooie_cycle = [] {
+            KazooieCycle c;
+            if (const char* text = std::getenv("TOOIE_KAZOOIE_LIST_CYCLE")) {
+                c.on = std::sscanf(text, "%ld:%ld:%ld", &c.from, &c.every, &c.count) >= 2 && c.every > 0 && c.count > 0;
+            }
+            return c;
+        }();
+        long kazooie_only = -1, kazooie_call = 0;
+        if (kazooie_cycle.on) {
+            const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - program_start).count();
+            kazooie_only = ms < kazooie_cycle.from ? -2 : ((ms - kazooie_cycle.from) / kazooie_cycle.every) % kazooie_cycle.count;
+            static long logged_only = -3;
+            if (kazooie_only != logged_only) {
+                logged_only = kazooie_only;
+                std::fprintf(stderr, "[fur] Kazooie cycle: only call %ld\n", kazooie_only);
+            }
+        }
         // Each list's kind: 1 Banjo's fur, 2 Kazooie's feathers, 0 neither (his feet and shorts, or one that is off).
         uint32_t on = 0;
         size_t last = blocks[best].vertex_command;
@@ -1293,12 +1436,22 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 banjo = banjo && (offset < span.from || offset > span.to);
             }
             uint32_t want = banjo ? 1 : (kazooie.found ? 2 : 0);
-            if (banjo && kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr &&
+            if (kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr &&
                 std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF)) {
                 want = 0;
             }
             if ((want == 1 && !banjo_fur) || (want == 2 && !kazooie_feathers)) {
                 want = 0;
+            }
+            if (want == 2 && kazooie_cycle.on && kazooie_call++ != kazooie_only) {
+                want = 0;
+            }
+            else if (want == 2 && kazooie_cycle.on) {
+                static long logged_call = -3;
+                if (logged_call != kazooie_only) {
+                    logged_call = kazooie_only;
+                    std::fprintf(stderr, "[fur] Kazooie cycle: call %ld is list %X\n", kazooie_only, commands[i].w1 & 0x1FFFFFFF);
+                }
             }
             if (want != on) {
                 wrap(i, want);

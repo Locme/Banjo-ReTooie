@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T392 NPC fur and NPC feathers sliders; Kazooie's crest, wings; Banjo on ice; yeti face; Mary's head
+- Asked: 2026-10-17 14:40 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur, Kazooie feathers, NPC fur and NPC feathers all on (NPC fur replaces Enemy fur; both NPC options are 0-100 sliders with their own sub-sliders)
+  2. Spiral Mountain or any level: look at Kazooie up close, with her out (Talon Trot or a cutscene)
+  3. Hailfire Peaks Icy Side: walk slowly on the ice by the entrance, then go near the yeti
+  4. Glitter Gulch Mine: talk to Canary Mary after a race (Race Warps)
+  5. Move the NPC sliders (size, length, density, noisiness, transparency) and watch Mary and the yeti change
+- Look for: Kazooie: is her crest (hairdo) completely bare, do the yellow tips of her wings have feathers, and are there no dark feathers on her wings? Banjo: any bald patches left, and does he keep his fur walking slowly on ice with the yeti nearby? Yeti: are his face, eyes and hands bare and his body furred? Mary: are her crest, face and beak bare with her dress and wings feathered? Do the NPC sliders change only the NPCs, not Banjo or Kazooie?
+- Status: waiting for L
+
 ## T391 Achievement icons and in-game unlock pop-up
 - Asked: 2026-10-17 14:31 UTC
 - Build: main from this commit
