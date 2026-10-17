@@ -9557,10 +9557,10 @@ index 0000000..70b522e
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..22bc7fc
+index 0000000..7a348a6
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,163 @@
 +//
 +// RT64
 +//
@@ -9602,15 +9602,18 @@ index 0000000..22bc7fc
 +
 +// How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest): from a texture pack's height map
 +// (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest):
-+// its darkest gaps at the bottom, its lightest faces on top.
++// its darkest gaps at the bottom, its faces flat on top.
 +float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap) {
 +    const float4 c = sampleTexture(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, false);
 +    if (heightMap) {
 +        return saturate(1.0f - c.r);
 +    }
 +
++    // The speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest
++    // parts (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
 +    const float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
-+    return saturate((range.y - luma) / max(range.y - range.x, 0.05f));
++    const float darkness = saturate((range.y - luma) / max(range.y - range.x, 0.05f));
++    return smoothstep(0.65f, 0.95f, darkness);
 +}
 +
 +// How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
