@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T378 Code clean-up: hotkeys and the frame rate overlay still work
+- Asked: 2026-10-17 11:15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Hold F2 (Speed-Up, with cheats on), tap F3 twice (overlay Compact, then Full), F10 (Photo Mode), and your Tiptoe, Fine Aim and Save State keys
+  2. With the overlay on Full, look for the 'GPU screen passes' line
+  3. Turn the overlay off and play a minute
+- Look for: Does every key do what it did before, and does Full still show the GPU passes line? Nothing should look or play differently.
+- Status: waiting for L
+
 ## T377 Jumps and falls at 120/175/Uncapped match 30 FPS
 - Asked: 2026-10-17 11:11 UTC
 - Build: main @ a3ea02f
