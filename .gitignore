@@ -9,6 +9,7 @@ decompressed*
 build/
 build-cmake/
 build-cmake-*/
+cmake-build/
 Release/
 out/
 patches/*.o
