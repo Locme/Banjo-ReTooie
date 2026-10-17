@@ -80,6 +80,7 @@ namespace RT64 {
         uint32_t sectionCount[10] = {};
     };
     FrameStats TakeFrameStats();
+    void SetGpuSectionTiming(bool wanted);
     void NoteInputRead(int64_t steadyNs);
 }
 
@@ -999,6 +1000,9 @@ namespace {
             }
 
             Mode mode = current_mode();
+            // The per-pass GPU times are only shown in Full and written by the benchmark and the log;
+            // otherwise RT64 skips its timestamps (64 a frame, each a separate copy on D3D12).
+            RT64::SetGpuSectionTiming(log || mode == Mode::Full || benchmark_running());
             if (mode == Mode::Off) {
                 if (overlay.shown) {
                     hide(overlay);

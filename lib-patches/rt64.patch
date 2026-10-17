@@ -631,10 +631,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..852100b 100644
+index 3227ab1..efa3797 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,146 @@
+@@ -4,12 +4,158 @@
  
  #include "rt64_present_queue.h"
  
@@ -763,6 +763,18 @@ index 3227ab1..852100b 100644
 +        frameStats.sectionCount[uint32_t(section)]++;
 +    }
 +
++    namespace {
++        std::atomic<bool> gpuSectionTiming{false};
++    }
++
++    void SetGpuSectionTiming(bool wanted) {
++        gpuSectionTiming.store(wanted, std::memory_order_relaxed);
++    }
++
++    bool GpuSectionTimingWanted() {
++        return gpuSectionTiming.load(std::memory_order_relaxed);
++    }
++
 +    GpuSectionTimer &WorkloadGpuSections() {
 +        static GpuSectionTimer timer;
 +        return timer;
@@ -781,7 +793,7 @@ index 3227ab1..852100b 100644
      // PresentQueue
  
      PresentQueue::PresentQueue() {
-@@ -40,9 +174,14 @@ namespace RT64 {
+@@ -40,9 +186,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
          bool waitForBarrier;
@@ -797,7 +809,7 @@ index 3227ab1..852100b 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -51,6 +190,11 @@ namespace RT64 {
+@@ -51,6 +202,11 @@ namespace RT64 {
              writeCursor = nextWriteCursor;
          }
  
@@ -809,7 +821,7 @@ index 3227ab1..852100b 100644
          cursorCondition.notify_all();
      }
  
-@@ -87,6 +231,10 @@ namespace RT64 {
+@@ -87,6 +243,10 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -820,7 +832,7 @@ index 3227ab1..852100b 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +263,7 @@ namespace RT64 {
+@@ -115,6 +275,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -828,7 +840,7 @@ index 3227ab1..852100b 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -212,6 +361,31 @@ namespace RT64 {
+@@ -212,6 +373,31 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -860,7 +872,7 @@ index 3227ab1..852100b 100644
                  if (!present.paused && (viHistory.top().vi != present.screenVI)) {
                      viHistory.pushVI(present.screenVI, viFb->width);
                  }
-@@ -266,6 +440,8 @@ namespace RT64 {
+@@ -266,6 +452,8 @@ namespace RT64 {
              }
          }
          
@@ -869,7 +881,7 @@ index 3227ab1..852100b 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -310,6 +486,8 @@ namespace RT64 {
+@@ -310,6 +498,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -878,7 +890,7 @@ index 3227ab1..852100b 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +517,109 @@ namespace RT64 {
+@@ -339,17 +529,109 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -988,7 +1000,7 @@ index 3227ab1..852100b 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +630,18 @@ namespace RT64 {
+@@ -360,12 +642,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -1007,7 +1019,7 @@ index 3227ab1..852100b 100644
                  }
              }
  
-@@ -401,7 +677,41 @@ namespace RT64 {
+@@ -401,7 +689,41 @@ namespace RT64 {
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
@@ -1049,7 +1061,7 @@ index 3227ab1..852100b 100644
              }
          }
      }
-@@ -428,6 +738,7 @@ namespace RT64 {
+@@ -428,6 +750,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1057,7 +1069,7 @@ index 3227ab1..852100b 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,6 +760,7 @@ namespace RT64 {
+@@ -449,6 +772,7 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1065,7 +1077,7 @@ index 3227ab1..852100b 100644
          while (presentThreadRunning) {
              {
                  std::unique_lock<std::mutex> cursorLock(cursorMutex);
-@@ -465,6 +777,24 @@ namespace RT64 {
+@@ -465,6 +789,24 @@ namespace RT64 {
  
              if (processCursor >= 0) {
                  std::unique_lock<std::mutex> threadLock(threadMutex);
@@ -1090,7 +1102,7 @@ index 3227ab1..852100b 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -528,6 +858,7 @@ namespace RT64 {
+@@ -528,6 +870,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
@@ -1099,7 +1111,7 @@ index 3227ab1..852100b 100644
              }
          }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..cad0222 100644
+index e08b02c..996c7c6 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
 @@ -4,8 +4,16 @@
@@ -1119,7 +1131,7 @@ index e08b02c..cad0222 100644
  #include "render/rt64_vi_renderer.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +25,44 @@
+@@ -17,6 +25,46 @@
  namespace RT64 {
      struct WorkloadQueue;
  
@@ -1154,6 +1166,8 @@ index e08b02c..cad0222 100644
 +    };
 +
 +    FrameStats TakeFrameStats();
++    // Turns the per-pass GPU timers (FrameStats::sectionMs) on or off; off by default.
++    void SetGpuSectionTiming(bool wanted);
 +    void RecordGpuFrameTime(double ms);
 +    void RecordShaderCompiled();
 +    // The game read the controller at this steady_clock time (ns). The next game frame
@@ -1164,7 +1178,7 @@ index e08b02c..cad0222 100644
      struct PresentQueue {
          struct External {
              ApplicationWindow *appWindow = nullptr;
-@@ -36,6 +82,7 @@ namespace RT64 {
+@@ -36,6 +84,7 @@ namespace RT64 {
          int barrierCursor;
          std::mutex cursorMutex;
          std::condition_variable cursorCondition;
@@ -1172,7 +1186,7 @@ index e08b02c..cad0222 100644
          uint64_t presentId;
          std::mutex presentIdMutex;
          std::condition_variable presentIdCondition;
-@@ -52,6 +99,12 @@ namespace RT64 {
+@@ -52,6 +101,12 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -3604,10 +3618,10 @@ index 0000000..c9187db
 +};
 diff --git a/src/render/rt64_gpu_sections.h b/src/render/rt64_gpu_sections.h
 new file mode 100644
-index 0000000..c4df6ec
+index 0000000..cfc6d4b
 --- /dev/null
 +++ b/src/render/rt64_gpu_sections.h
-@@ -0,0 +1,120 @@
+@@ -0,0 +1,128 @@
 +//
 +// RT64
 +//
@@ -3640,6 +3654,10 @@ index 0000000..c4df6ec
 +
 +    void RecordGpuSectionTime(GpuSection section, double ms);
 +
++    // Whether anything reads the section times (the overlay in Full, a benchmark or TOOIE_FRAME_LOG).
++    // While nothing does, the timers write no timestamps and read nothing back (SetGpuSectionTiming).
++    bool GpuSectionTimingWanted();
++
 +    struct GpuSectionTimer {
 +        static constexpr uint32_t Capacity = 32;
 +        std::unique_ptr<RenderQueryPool> pool;
@@ -3653,12 +3671,16 @@ index 0000000..c4df6ec
 +
 +        // Call with the command list open, outside any render pass.
 +        void begin(RenderDevice *device, RenderCommandList *list) {
++            spans.clear();
++            if (!GpuSectionTimingWanted()) {
++                commandList = nullptr;
++                return;
++            }
 +            if (pool == nullptr) {
 +                pool = device->createQueryPool(Capacity);
 +            }
 +            commandList = list;
 +            commandList->resetQueryPool(pool.get(), 0, Capacity);
-+            spans.clear();
 +        }
 +
 +        // Returns the span to pass to end(), or -1 when the pool is full, or when the pass is being
