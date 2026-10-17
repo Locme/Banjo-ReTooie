@@ -13,6 +13,7 @@
 #include "tooie_control_scheme.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
+#include "tooie_torch_enemy.h"
 #include "tooie_boss_rush.h"
 #include "tooie_save_state.h"
 #include "tooie_honeycomb_glitter.h"
@@ -278,6 +279,7 @@ void tooie::init_config() {
         "Banjo does Banjo-Kazooie's jiggy dance when he collects a Jiggy.",
         false);
     tooie::bottles_revenge::add_option(general);
+    tooie::torch_enemy::add_option(general);
     tooie::boss_rush::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::option,

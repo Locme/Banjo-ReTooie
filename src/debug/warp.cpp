@@ -30,6 +30,7 @@
 #include "tooie_music_player.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
+#include "tooie_torch_enemy.h"
 #include "tooie_save_state.h"
 #include "tooie_motion_aim.h"
 #include "tooie_game.h"
@@ -160,6 +161,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::transform_anywhere::tick(rdram, ctx);
     tooie::music_player::tick(rdram, ctx);
     tooie::bottles_revenge::tick(rdram, ctx);
+    tooie::torch_enemy::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);

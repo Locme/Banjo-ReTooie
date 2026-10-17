@@ -65,6 +65,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Gameplay
 
+- New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves, three of them. They light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC.
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
