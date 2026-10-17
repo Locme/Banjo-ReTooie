@@ -14544,7 +14544,7 @@ index 0000000..1c1a389
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..48dfb71
+index 0000000..8f8f5f8
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
 @@ -0,0 +1,156 @@
@@ -14575,8 +14575,8 @@ index 0000000..48dfb71
 +    float2 uv : TEXCOORD;
 +    float4 smoothColor : COLOR0;
 +    nointerpolation float4 flatColor : COLOR1;
-+    // The ground's place in the world (RasterVS.hlsl).
-+    float3 furAnchor : TEXCOORD1;
++    // The ground's place in the world (RasterVS.hlsl; w unused here).
++    float4 furAnchor : TEXCOORD1;
 +};
 +
 +struct SnowPatch {
@@ -14645,9 +14645,9 @@ index 0000000..48dfb71
 +
 +SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
 +    SnowPatch p;
-+    const float3 a = patch[0].furAnchor;
-+    const float3 b = patch[1].furAnchor;
-+    const float3 c = patch[2].furAnchor;
++    const float3 a = patch[0].furAnchor.xyz;
++    const float3 b = patch[1].furAnchor.xyz;
++    const float3 c = patch[2].furAnchor.xyz;
 +    p.normal = cross(b - a, c - a);
 +
 +    // None at all on a wall, or where all of the triangle is past the snow's reach.
@@ -14693,7 +14693,7 @@ index 0000000..48dfb71
 +    // then through the draw's screen scale and offset as the position already went.
 +    SnowSample s;
 +    float height = SnowTessLeast;
-+    if (SnowTessShape(v.furAnchor, p.normal, s)) {
++    if (SnowTessShape(v.furAnchor.xyz, p.normal, s)) {
 +        height = max(s.height, SnowTessLeast);
 +    }
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
