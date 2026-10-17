@@ -152,7 +152,7 @@ namespace {
     float heat_haze_sent = -1.0f;
 
     // Deep snow's other actors (note_snow_actor): where each was last frame, and whether it was falling.
-    struct SnowActor { float x = 0.0f, y = 0.0f, z = 0.0f, scale = 1.0f; bool falling = false; };
+    struct SnowActor { float x = 0.0f, y = 0.0f, z = 0.0f, scale = 1.0f, peak = 1.0f; bool falling = false; };
     std::unordered_map<uint32_t, SnowActor> snow_actors_last;
     std::unordered_map<uint32_t, SnowActor> snow_actors_now;
     // Craters from attacks that landed, kept for a few frames so RT64 surely draws a frame with them.
@@ -160,12 +160,18 @@ namespace {
     std::vector<SnowCrater> snow_craters;
     bool snow_actors_wanted = false;
 
+    // A crater's radius from the biggest its maker was while it fell.
+    float crater_radius(float peak) {
+        return 12.0f * std::clamp(peak, 1.0f, 3.0f) * 1.6f;
+    }
+
     // This frame's stamps for RT64 from the actors drawn last frame: one walking along the ground presses a furrow,
     // one that was falling and stopped or went away (an attack landing) a crater.
     void send_snow_stamps(const float player[3], bool have_player) {
         std::vector<float> stamps;
         auto add = [&](float x, float y, float z, float radius, float depth) {
-            if (stamps.size() / 5 >= 48) {
+            // RT64 keeps a trail near Banjo only: the rest would only use up the 48.
+            if ((stamps.size() / 5 >= 48) || !have_player || (std::abs(x - player[0]) > 380.0f) || (std::abs(z - player[2]) > 380.0f)) {
                 return;
             }
             stamps.insert(stamps.end(), { x, y, z, radius, depth });
@@ -183,20 +189,23 @@ namespace {
             const float moved = std::hypot(now.x - last->second.x, now.z - last->second.z);
             const float dy = now.y - last->second.y;
             now.falling = (dy < -1.5f) || (last->second.falling && (dy < -0.2f));
+            // Something that came down (an attack such as Chilly Willy's ice balls, which shrink as they break)
+            // leaves a crater by the biggest it was on the way down, never a small one.
+            now.peak = now.falling ? std::max(now.scale, last->second.falling ? last->second.peak : now.scale) : now.scale;
             if (last->second.falling && !now.falling) {
-                snow_craters.push_back({ now.x, now.y, now.z, radius * 1.4f, 3 });
+                snow_craters.push_back({ now.x, now.y, now.z, crater_radius(last->second.peak), 3 });
             }
             else if ((moved > 0.3f) && (moved < 60.0f) && (std::abs(dy) < 4.0f)) {
-                add(now.x, now.y, now.z, radius, 0.6f);
+                add(now.x, now.y, now.z, radius, 0.85f);
             }
         }
         for (const auto& [actor, last] : snow_actors_last) {
             if (last.falling && (snow_actors_now.find(actor) == snow_actors_now.end())) {
-                snow_craters.push_back({ last.x, last.y, last.z, 12.0f * std::clamp(last.scale, 0.4f, 3.0f) * 1.4f, 3 });
+                snow_craters.push_back({ last.x, last.y, last.z, crater_radius(last.peak), 3 });
             }
         }
         for (auto& crater : snow_craters) {
-            add(crater.x, crater.y, crater.z, crater.radius, 0.9f);
+            add(crater.x, crater.y, crater.z, crater.radius, 1.0f);
             crater.frames--;
         }
         snow_craters.erase(std::remove_if(snow_craters.begin(), snow_craters.end(), [](const SnowCrater& c) { return c.frames <= 0; }), snow_craters.end());
@@ -4132,7 +4141,7 @@ void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, f
     if (!snow_actors_wanted || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
         return;
     }
-    snow_actors_now[actor] = { x, y, z, std::isfinite(scale) ? scale : 1.0f, false };
+    snow_actors_now[actor] = { x, y, z, std::isfinite(scale) ? scale : 1.0f, std::isfinite(scale) ? scale : 1.0f, false };
     // Test aid: TOOIE_SNOW_LOG=1 also counts the actors seen, every 2 s.
     static const bool log = std::getenv("TOOIE_SNOW_LOG") != nullptr;
     if (log) {
@@ -4143,6 +4152,14 @@ void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, f
             logged = std::chrono::steady_clock::now();
             std::fprintf(stderr, "[snow] %u actor draws seen (last 2 s), e.g. %08X at %.0f %.0f %.0f scale %.2f\n", seen, actor, x, y, z, scale);
             seen = 0;
+        }
+        // TOOIE_SNOW_LOG=2: every actor drawn, once a second each.
+        static const bool every = std::atoi(std::getenv("TOOIE_SNOW_LOG")) >= 2;
+        static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> printed;
+        auto& last = printed[actor];
+        if (every && (std::chrono::steady_clock::now() - last > std::chrono::seconds(1))) {
+            last = std::chrono::steady_clock::now();
+            std::fprintf(stderr, "[snow] actor %08X at %.0f %.0f %.0f scale %.2f\n", actor, x, y, z, scale);
         }
     }
 }

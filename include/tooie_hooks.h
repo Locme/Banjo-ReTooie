@@ -75,6 +75,7 @@ void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
 // Same file: func_80101808's entry ($a1 is the draw callback) and just after it draws the actor ($s0) model.
 void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
+void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_render_mode(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_snout_model(uint8_t* rdram, recomp_context* ctx);

@@ -450,18 +450,28 @@ extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) 
     draw_callbacks.push_back((uint32_t)ctx->r5);
 }
 
+// Deep snow: where each model drawn stands (picture_filters.cpp), at the entry of the model draw
+// func_800DE498(gfx, position, rotation, scale, ...). Every model goes through it, not only the actors
+// func_80101808 draws: attacks such as Chilly Willy's ice balls are drawn straight from their own code.
+// The position's address tells one model from another from frame to frame.
+extern "C" void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t position = (uint32_t)ctx->r5;
+    if (in_shadow_pass || (position < 0x80000000u) || (position >= 0x80800000u) || ((position & 3) != 0)) {
+        return;
+    }
+    uint32_t scale_bits = (uint32_t)ctx->r7;
+    float scale;
+    std::memcpy(&scale, &scale_bits, sizeof(scale));
+    tooie::picture_filters::note_snow_actor(position, load_float(rdram, (int32_t)position), load_float(rdram, (int32_t)position + 4),
+        load_float(rdram, (int32_t)position + 8), scale);
+}
+
 extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     if (draw_callbacks.empty()) {
         return;
     }
     const uint32_t draw_callback = draw_callbacks.back();
     draw_callbacks.pop_back();
-    // Deep snow: where each actor drawn stands (picture_filters.cpp).
-    if (draw_callbacks.empty() && !in_shadow_pass) {
-        const gpr drawn_actor = ctx->r16;
-        tooie::picture_filters::note_snow_actor((uint32_t)drawn_actor, load_float(rdram, drawn_actor + 0x4), load_float(rdram, drawn_actor + 0x8),
-            load_float(rdram, drawn_actor + 0xC), load_float(rdram, drawn_actor + 0x38));
-    }
     // Only outermost draws: one nested in another actor's draw (or in a shadow pass) would reset
     // the outer draw's state halfway through.
     if (!draw_callbacks.empty() || in_shadow_pass || !hd_shadows_on()) {

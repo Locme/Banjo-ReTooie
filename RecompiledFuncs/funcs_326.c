@@ -4418,6 +4418,7 @@ L_80800A1C:
 RECOMP_FUNC void func_800DE498(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_snow_model_drawn(rdram, ctx);
     // 0x800DE498: addiu       $sp, $sp, -0xF8
     ctx->r29 = ADD32(ctx->r29, -0XF8);
     // 0x800DE49C: sw          $s0, 0x38($sp)

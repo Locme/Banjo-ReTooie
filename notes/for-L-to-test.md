@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T386 Deep snow: trail, no stripes or colour bands, Chilly Willy marks
+- Asked: 2026-10-17 12:44 UTC
+- Build: main @ (this commit)
+- Steps:
+  1. Settings > Graphics: Deep snow on
+  2. Go to Hailfire Peaks Icy Side and walk, roll and jump across open snow
+  3. Watch an enemy (polar bear) walk through snow
+  4. Look at snow ledges and slopes up close
+  5. Fight Chilly Willy and let his ice balls land near you
+- Look for: Does Banjo leave a deep trail with footprints that slowly fills back in? Do enemies leave trails? Are the stacked layers and the lilac colour bands gone? Does Chilly Willy's arena rim have deep snow, and do his ice balls leave marks?
 ## T385 Texture sweep: repeated entrances skipped, no more early reads during loading
 - Asked: 2026-10-17 12:19 UTC
 - Build: main

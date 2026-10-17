@@ -1130,6 +1130,12 @@ func = "func_800A6250"
 before_vram = 0x800A62C0
 text = "tooie_player_shadow_model(rdram, ctx);"
 
+# Deep snow: every model drawn (func_800DE498, the model draw), where it stands.
+[[patches.hook]]
+func = "func_800DE498"
+before_vram = 0x800DE498
+text = "tooie_snow_model_drawn(rdram, ctx);"
+
 # The generic actor draw func_80101808(actor, draw callback): its entry, and
 # just after func_800DE448 has drawn the actor ($s0 still holds it).
 [[patches.hook]]
