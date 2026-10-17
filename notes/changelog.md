@@ -67,6 +67,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Fixed: with Texture upscale on (2x or 4x, Enhanced preset), thin lines showed across the title logo and along rock textures where their tiles meet. The upscaler wrapped round at each texture's edges and blended them with the opposite side; it now stops at the edge (L). Untested on PC (T375).
 - The save select's global settings (the TV) no longer list the game's own Wide-screen Mode, which squashed the picture; Screen Alignment and Speaker Mode stay. DEV > Hide Vanilla Widescreen Entry in the Game Menu (on by default) brings it back when turned off (L). Untested on PC (T374).
 - 3D grass no longer grows as Banjo walks up to it: blades are full height up close, and far ones thin out instead of getting shorter. No blades where the yellow path fades into the grass either, and pixelated grass with a pixel size under 1 no longer shimmers (L). Untested on PC (T373).
 - 3D grass's road check is cheaper: only the area a road or path covers goes to the graphics card each frame (1 to 90 KB, was 200 KB), and ground far from any road skips the check. Looks the same. Untested on PC (T356).

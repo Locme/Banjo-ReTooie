@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T375 Texture upscale: no lines where tiles meet (title logo, rocks)
+- Asked: 2026-10-17 11:01 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Texture upscale 2x or 4x (the Enhanced preset sets 2x)
+  2. Watch the title screen logo and the rocks around it, then walk past rock and cliff walls
+- Look for: No thin lines across the logo or along rock tiles where they meet; with Texture upscale Off it should look the same as before. Checked headless: the dark line through the logo at 4x is gone (screens/parallax/title-logo-upscale-seam-off-old-fixed.png in project files: off, old 4x, fixed 4x).
+- Status: waiting for L
+
 ## T374 Save select: game's Wide-screen Mode hidden (DEV toggle)
 - Asked: 2026-10-17 10:53 UTC
 - Build: main @ next push
