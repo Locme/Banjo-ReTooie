@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T417 DEV Sound test (find the torch enemy's grunt)
+## T418 DEV Sound test (find the torch enemy's grunt)
 - Asked: 2026-10-17 23:32 UTC
 - Build: main
 - Steps:
@@ -9,6 +9,15 @@
   3. Change the number with the arrows: each change plays that sound at Banjo (close the menu if you hear nothing while it is open)
   4. Note the numbers of any 'hurr' grunts that would suit the torch
 - Look for: Does each number play a sound (some are silent), and does the previous one stop when the next plays? Which number(s) sound like the grunt you want?
+## T417 Deep snow: trail everywhere on Icy Side, no prints from jumps, smooth trench walls; Graphics API in the menu
+- Asked: 2026-10-17 23:32 UTC
+- Build: main (this commit)
+- Steps:
+  1. Go to the spot where the trail was missing (about 2558, 96, -1983) with Snow height 300 and walk through the snow
+  2. Jump over the snow a few times
+  3. Look back along a long trail and at its walls
+  4. Check Settings > Graphics: Graphics API is there (changing it restarts the game)
+- Look for: The trail shows there too and Banjo carves a trench instead of being buried. Jumps leave no marks until he lands. The trench walls are smooth, with no spikes. The trail reaches about twice as far behind him as before.
 - Status: waiting for L
 
 ## T416 Ice: reflection stays at every camera height; ice looks like ice up close
