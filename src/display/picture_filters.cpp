@@ -82,7 +82,7 @@ namespace RT64 {
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
-    void SetScenePlayer(bool valid, float x, float y, float z);
+    void SetScenePlayer(bool valid, float x, float y, float z, bool grounded);
     bool GetSceneCameraHeight(float *height);
     // lib/rt64/src/render/rt64_texture_cache.h.
     void SetTextureUpscale(uint32_t factor);
@@ -175,7 +175,7 @@ namespace {
         std::vector<float> stamps;
         auto add = [&](float x, float y, float z, float radius, float depth) {
             // RT64 keeps a trail near Banjo only: the rest would only use up the 48.
-            if ((stamps.size() / 5 >= 48) || !have_player || (std::abs(x - player[0]) > 380.0f) || (std::abs(z - player[2]) > 380.0f)) {
+            if ((stamps.size() / 5 >= 48) || !have_player || (std::abs(x - player[0]) > 720.0f) || (std::abs(z - player[2]) > 720.0f)) {
                 return;
             }
             stamps.insert(stamps.end(), { x, y, z, radius, depth });
@@ -274,6 +274,20 @@ namespace {
             pos[i] = read_f32(rdram, transform + 4 * i);
         }
         return true;
+    }
+
+    // Banjo stands on the ground, not in the air (the game's own test, func_800A0FCC: player->0x150->0x2); true when
+    // it can't be read.
+    bool banjo_grounded(uint8_t* rdram) {
+        const uint32_t player = (uint32_t)MEM_W(0, (int32_t)0x80135490);
+        if (!valid_pointer(player)) {
+            return true;
+        }
+        const uint32_t state = (uint32_t)MEM_W(0x150, (int32_t)player);
+        if (!valid_pointer(state)) {
+            return true;
+        }
+        return MEM_BU(0x2, (int32_t)state) != 0;
     }
 
     // Banjo's height, false when there is no player.
@@ -4384,7 +4398,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         float pos[3];
         const bool valid = banjo_position(rdram, pos);
-        RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f);
+        RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f, banjo_grounded(rdram));
     }
 
     // The same shimmer, gentler, under water.
