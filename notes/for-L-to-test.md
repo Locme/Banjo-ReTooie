@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T364 Banjo's shadow no longer shakes on 3D grass
+- Asked: 2026-10-17 09:23 UTC
+- Build: main @ next push
+- Steps:
+  1. Turn 3D Grass on (Graphics)
+  2. Stand on grass, e.g. Spiral Mountain or Isle o' Hags
+  3. Turn the camera around Banjo, then walk
+  4. Try Original, 60 and your usual 175
+- Look for: Is the shadow a steady dark patch over the grass, with no flicker or shake? Does it still shake anywhere with 3D Grass off?
+- Status: waiting for L
+
 ## T363 Texture sweep: Banjo's house, All Jinjos and Tower of Tragedy swept; race warp from inside a race
 - Asked: 2026-10-17 08:58 UTC
 - Build: main
