@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T402 Swimming under water above 60 FPS
+- Asked: 2026-10-17 20:46 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Game Frame Rate 120, 175, 240 or Uncapped
+  2. Spiral Mountain: dive into the moat (B) and swim around under water
+  3. Hold the stick left or right to turn, then let go; try small taps too
+  4. Compare with 60 FPS
+- Look for: Turning under water feels the same as at 60: Banjo turns at the same speed and stops soon after you let go, instead of spinning on. Headless at 240 FPS a held turn went 246 degrees a second (60 FPS: 247) and ran on 31 degrees after letting go (60 FPS: 29); before the fix it ran on 161 degrees. Banjo alone uses the same steering. Surface paddling was already fine.
+- Status: waiting for L
+
 ## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
 - Asked: 2026-10-17 20:40 UTC
 - Build: main
