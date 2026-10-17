@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T405 Banjo's shadow holds still in 16:9 and Fill
+- Asked: 2026-10-17 21:09 UTC
+- Build: main
+- Steps:
+  1. Aspect ratio 16:9 or Fill, HD Shadows off
+  2. Walk Banjo around on flat grass and turn the camera
+  3. Switch to 4:3 and compare
+- Look for: The shadow stays under Banjo's feet without jumping sideways, the same as at 4:3
+- Status: waiting for L
+
 ## T404 Swimming under water above 60 FPS
 - Asked: 2026-10-17 20:46 UTC
 - Build: main (pull and build)

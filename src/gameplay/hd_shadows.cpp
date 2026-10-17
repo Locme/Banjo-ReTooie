@@ -539,8 +539,11 @@ void tooie::hd_shadows::fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end)
             if (op == 0xE4 && !have_dx) {
                 const int lrx = (word(last) >> 12) & 0xFFF, ulx = (word(last + 4) >> 12) & 0xFFF;
                 const float middle = (ulx + lrx) / 8.0f;
-                dx = (int)std::lround((paste_x(middle) - middle) * 4.0f);
-                dx = std::clamp(dx, -ulx, std::max(-ulx, 304 * 4 - lrx));
+                // Whole pixels only: moved by a fraction, RT64 samples the buffer up to a pixel to the
+                // side, and as the fraction changed with each step Banjo or the camera took, the
+                // shadow shook sideways (L, 2026-10-17: gone at 4:3).
+                dx = (int)std::lround(paste_x(middle) - middle) * 4;
+                dx = std::clamp(dx, -(ulx & ~3), std::max(-(ulx & ~3), (304 * 4 - lrx) & ~3));
                 have_dx = true;
             }
             if (op != 0xF5 && op != 0xE6 && op != 0xE7 && op != 0xE8 && op != 0xF4 && op != 0xF2 && op != 0xE4 && op != 0xE1 && op != 0xF1) {
