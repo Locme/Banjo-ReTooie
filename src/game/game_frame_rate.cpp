@@ -771,6 +771,33 @@ extern "C" int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return portrait_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
+// Gravity. The game's physics (func_8009AE08 and the two copies at 0x8009B168 and 0x8009B1F8)
+// adds gravity x frame time to the vertical speed, then moves the object by that new speed x
+// frame time. That makes a fall or jump trace the true parabola minus gravity x step / 2 for
+// each second gone by, so a 30 FPS jump peaks lower than one at a smaller step (Banjo's
+// standing jump: +139 units at 30 FPS, +148 at 60 to 175). Above 30 FPS this takes the
+// difference to a 1/30 s step off each frame's move, so jumps and falls match 30 FPS.
+// The move is the vector at +0x28 of the physics block, its vertical part at +0x2C; gravity
+// (negative) is at +0x34.
+extern "C" void tooie_gravity_bias(uint8_t* rdram, recomp_context* ctx, uint32_t physics_owner) {
+    static const bool off = std::getenv("TOOIE_NO_GRAVITY_BIAS") != nullptr;   // A/B for tests
+    if (off || !above_30()) {
+        return;
+    }
+    const uint32_t physics = (uint32_t)MEM_W(0xC8, (int32_t)physics_owner);
+    const float dt = read_float(rdram, delta_time_addr);
+    constexpr float step = 1.0f / 30.0f;
+    if (physics < 0x80000000u || dt <= 0.0f || dt >= step) {
+        return;
+    }
+    const float gravity = read_float(rdram, (int32_t)(physics + 0x34));
+    float move = read_float(rdram, (int32_t)(physics + 0x2C));
+    move += gravity * (step - dt) * 0.5f * dt;
+    uint32_t bits;
+    std::memcpy(&bits, &move, sizeof(bits));
+    MEM_W(0x2C, (int32_t)physics) = (int32_t)bits;
+}
+
 // func_808005F4_chbanjocurrent, as it pushes Banjo along a water current (Jolly Roger's
 // Lagoon): $f12 holds 8, the push per game frame. The game adds it to his position each frame
 // with no delta time, so above 30 FPS the current grew stronger with the frame rate (headless

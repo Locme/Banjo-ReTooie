@@ -41,6 +41,7 @@
 #include "funcs.h"
 #include "recompui/config.h"
 #include "tooie_boss_rush.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_bottles_revenge.h"
 #include "tooie_debug.h"
 #include "tooie_toast.h"
@@ -219,8 +220,10 @@ namespace {
     // TOOIE_REPLAY: one replay number, or with TOOIE_REPLAY_SCAN each number from it up, one a frame, logging
     // the map each asks for and cancelling the change.
     void replay_probe(uint8_t* rdram, recomp_context* ctx) {
+        static const bool game_clock = std::getenv("TOOIE_SCREENSHOT_GAME") != nullptr;   // QA: times in game time
         if (env_replay < 0 || changing(rdram) ||
-            std::chrono::steady_clock::now() - env_start < std::chrono::milliseconds(env_replay_ms)) {
+            (game_clock ? tooie::game_frame_rate::game_ms() < env_replay_ms
+                        : std::chrono::steady_clock::now() - env_start < std::chrono::milliseconds(env_replay_ms))) {
             return;
         }
         start_replay(rdram, ctx, env_replay);

@@ -935,6 +935,23 @@ func = "scinfobar_entrypoint_24"
 before_vram = 0x80800898
 text = "tooie_hud_element_end(rdram, ctx);"
 
+# Gravity integrators (src/game/game_frame_rate.cpp): the frame's move is worked out, and about to be
+# added to the position. $s0 / $a3 / $a0 hold the object whose physics block is at +0xC8.
+[[patches.hook]]
+func = "func_8009AE08"
+before_vram = 0x8009B054
+text = "tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r16);"
+
+[[patches.hook]]
+func = "func_8009B170"
+before_vram = 0x8009B1DC
+text = "tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r7);"
+
+[[patches.hook]]
+func = "func_8009B1FC"
+before_vram = 0x8009B258
+text = "tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r4);"
+
 # --- Dialogue text speed (src/gameplay/dialogue_speed.cpp) ------------------
 # gczoombox_entrypoint_4, printing state: the print timer at +0x1D4($s0) has
 # just been advanced by the frame time in $f0.

@@ -26,6 +26,7 @@
 #include "recomp.h"
 #include "funcs.h"
 #include "tooie_debug.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_music_player.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
@@ -181,7 +182,8 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     if (env_next < env_requests.size()) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        static const bool game_clock = std::getenv("TOOIE_SCREENSHOT_GAME") != nullptr;   // QA: times in game time
+        auto elapsed = game_clock ? (long long)tooie::game_frame_rate::game_ms() : (long long)std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - started).count();
         if (elapsed >= env_requests[env_next].delay_ms) {
             const Request& r = env_requests[env_next].request;

@@ -42,6 +42,7 @@ Build the exe first, then copy it into the run folder each time you rebuild.
 
 - `TOOIE_ASSET_DUMP=1`: dumps every asset whatever General > Dump assets says (to `TOOIE_ASSET_DUMP_DIR` if set). `TOOIE_ASSET_MODS_DIR=<dir>` reads replacements from there instead of `mods/assets`, and `TOOIE_ASSET_LOG=1` logs every asset the game loads by id with its kind (`[assets] load 0x08C1 (..., kind 0)`; kind 0 is a model). Code: `src/game/asset_mods.cpp`. Spiral Mountain loads 37 models; replacing 0x065E with 0x08C1 showed water in place of the ground, and replacing 0x062A with a static model crashed.
 
+- `TOOIE_SCREENSHOT_GAME=1`: `TOOIE_SCREENSHOT_AT`, `TOOIE_WARP`, `TOOIE_REPLAY` and `TOOIE_PHOTO` count game time (what the game's frames add up to) instead of real time, so runs at different frame rates (the container reaches 30 to 60 game fps, a stepped 175 runs at about x0.35) line up at the same game moments. Use it with `TOOIE_PAD_GAME_TIME=1` to compare 30 FPS against 60, 120, 175 or `TOOIE_UNCAPPED_FPS` runs. `TOOIE_TELEPORT` holds 30 frames, not 30 game ms, so its camera settles differently per rate; avoid it for comparisons.
 - `TOOIE_SCREENSHOT_AT=ms[,ms...]`: takes an F12 screenshot at those times
   after the game started; files land in `screenshots/` in the run folder and
   `[screenshot] saved ...` is logged. Code: `src/game/screenshot.cpp`.

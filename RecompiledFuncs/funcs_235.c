@@ -4866,6 +4866,7 @@ L_8009B1CC:
     // 0x8009B1D8: lw          $a3, 0x18($sp)
     ctx->r7 = MEM_W(ctx->r29, 0X18);
     // 0x8009B1DC: lw          $v0, 0xC8($a3)
+    tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r7);
     ctx->r2 = MEM_W(ctx->r7, 0XC8);
     // 0x8009B1E0: addiu       $a0, $v0, 0x4
     ctx->r4 = ADD32(ctx->r2, 0X4);

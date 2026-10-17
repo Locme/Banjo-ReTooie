@@ -87,6 +87,7 @@
 #include "tooie_game.h"
 #include "tooie_hide_hud.h"
 #include "tooie_photo_mode.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_picture_filters.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
@@ -929,7 +930,9 @@ void tooie::photo_mode::tick(uint8_t* rdram, recomp_context* ctx) {
         if (test.begin == Clock::time_point{}) {
             test.begin = Clock::now();
         }
-        long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - test.begin).count();
+        static const bool game_clock = std::getenv("TOOIE_SCREENSHOT_GAME") != nullptr;   // QA: times in game time
+        long ms = game_clock ? (long)tooie::game_frame_rate::game_ms()
+                             : (long)std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - test.begin).count();
         if (!test.did_on && ms >= test.on && tooie::debug::can_warp()) {
             test.did_on = true;
             toggle_requested = true;

@@ -884,6 +884,7 @@ L_8009B038:
     ctx->r5 = ADD32(ctx->r2, 0X10);
     after_21:
     // 0x8009B054: lw          $v0, 0xC8($s0)
+    tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r16);
     ctx->r2 = MEM_W(ctx->r16, 0XC8);
     // 0x8009B058: addiu       $a0, $v0, 0x4
     ctx->r4 = ADD32(ctx->r2, 0X4);

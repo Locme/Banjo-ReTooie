@@ -4084,6 +4084,7 @@ L_8009B250:
     // 0x8009B254: swc1        $f16, 0x2C($v0)
     MEM_W(0X2C, ctx->r2) = ctx->f16.u32l;
     // 0x8009B258: lw          $v0, 0xC8($a0)
+    tooie_gravity_bias(rdram, ctx, (uint32_t)ctx->r4);
     ctx->r2 = MEM_W(ctx->r4, 0XC8);
     // 0x8009B25C: lwc1        $f18, 0x8($v0)
     ctx->f18.u32l = MEM_W(ctx->r2, 0X8);

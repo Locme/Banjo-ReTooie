@@ -41,6 +41,7 @@
 
 #include "librecomp/game.hpp"
 
+#include "tooie_game_frame_rate.h"
 #include "tooie_hotkeys.h"
 #include "tooie_photo_mode.h"
 #include "tooie_screenshot.h"
@@ -301,7 +302,10 @@ namespace {
             was_down = down;
 
             if (next_test < test_times.size()) {
-                long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
+                // TOOIE_SCREENSHOT_GAME=1: the times count game time (QA, to line shots up between frame rates).
+                static const bool game_clock = std::getenv("TOOIE_SCREENSHOT_GAME") != nullptr;
+                long ms = game_clock ? (long)tooie::game_frame_rate::game_ms()
+                                     : (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
                 if (ms >= test_times[next_test]) {
                     next_test++;
                     tooie::screenshot::take();
