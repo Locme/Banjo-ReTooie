@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T352 Photo mode: open the Album from photo mode
+- Asked: 2026-10-17 05:54 UTC
+- Build: main @ 042eefc
+- Steps:
+  1. Enter photo mode and take a photo with A
+  2. Press D-pad up once to reach the Album row at the bottom of the list, then press A
+  3. Look at your photos, then close the menu
+- Look for: The menu opens on the Album tab with the new photo first; closing it puts you back in photo mode with the list showing; scrolling the list down now also shows Crop, Border and Grid, which were cut off before
+- Status: waiting for L
+
 ## T351 GPU device lost in Terrydactyland with Interpolation on Display
 - Asked: 2026-10-17 01:09 UTC
 - Build: main (pull and build)
