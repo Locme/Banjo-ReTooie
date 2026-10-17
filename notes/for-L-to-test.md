@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T371 Freeze for comparing interpolation blend modes
+- Asked: 2026-10-17 09:47 UTC
+- Build: main
+- Steps:
+  1. Set Interpolation above Original (60 or your display rate)
+  2. Turn on General > DEV tab, then bind a key to Freeze under Interpolation Debug in the Controls tab (or use the Freeze tick box in the DEV tab, just above Interpolation blend mode)
+  3. In a level, walk or turn the camera and press Freeze
+  4. While frozen, change Interpolation blend mode in the DEV tab (or press your Blend Mode key) a few times
+  5. Press Freeze again; also try Save State then Load State a few times afterwards
+- Look for: The picture holds on one moment and rocks a little between two frames, sound goes quiet, and switching the blend mode changes how that held moment looks. Pressing Freeze again carries on normally, and the game never hangs while frozen or after Load State.
+- Status: waiting for L
+
 ## T370 Free camera: ease back and smooth walls
 - Asked: 2026-10-17 10:10 UTC (L: "Add 1 and 2 as optional")
 - Build: main (next Windows build)

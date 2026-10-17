@@ -17,6 +17,14 @@ namespace tooie::save_state {
 
     // Once per frame on the game thread (tooie_warp_tick): takes or restores the snapshot.
     void tick(uint8_t* rdram, recomp_context* ctx);
+
+    // Freeze (the Freeze key or the DEV tab's Freeze, src/debug/interp_check.cpp): holds the game on
+    // two game frames, put back every two frames, so the blend mode can be switched on a still scene.
+    // In a level only; a map change or Load State ends it (freeze_on() then reads false).
+    void set_freeze(bool on);
+    bool freeze_on();
+    // True while the game is actually being held (sound is muted).
+    bool frozen();
 }
 
 #endif

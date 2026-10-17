@@ -63,7 +63,7 @@ index 35703bd..7095517 100644
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
 diff --git a/librecomp/src/dp.cpp b/librecomp/src/dp.cpp
-index 97dbd8e..f4b4e13 100644
+index 97dbd8e..232a054 100644
 --- a/librecomp/src/dp.cpp
 +++ b/librecomp/src/dp.cpp
 @@ -1,4 +1,5 @@
@@ -72,10 +72,30 @@ index 97dbd8e..f4b4e13 100644
  
  enum class RDPStatusBit {
      XbusDmem = 0,
-@@ -39,6 +40,11 @@ extern "C" void osDpGetStatus_recomp(uint8_t* rdram, recomp_context* ctx) {
+@@ -33,12 +34,31 @@ extern "C" void osDpSetNextBuffer_recomp(uint8_t* rdram, recomp_context* ctx) {
+     assert(false);
+ }
+ 
++// The Freeze bit follows ultramodern's hold state, which a save state load puts back (set_dp_hold_state):
++// kept here as well, a load could leave the two disagreeing, and the game's next unfreeze was then
++// never passed on, so the held completions never arrived and the game hung (Freeze, T371).
++static void sync_freeze_bit() {
++    if (ultramodern::get_dp_hold_state().first) {
++        rdp_state |= 1U << (int)RDPStatusBit::Freeze;
++    }
++    else {
++        rdp_state &= ~(1U << (int)RDPStatusBit::Freeze);
++    }
++}
++
+ extern "C" void osDpGetStatus_recomp(uint8_t* rdram, recomp_context* ctx) {
++    sync_freeze_bit();
+     ctx->r2 = rdp_state;
+ }
  
  extern "C" void osDpSetStatus_recomp(uint8_t* rdram, recomp_context* ctx) {
      update_bit(rdp_state, ctx->r4, RDPStatusBit::XbusDmem);
++    sync_freeze_bit();
 +    bool was_frozen = (rdp_state & (1U << (int)RDPStatusBit::Freeze)) != 0;
      update_bit(rdp_state, ctx->r4, RDPStatusBit::Freeze);
 +    bool frozen = (rdp_state & (1U << (int)RDPStatusBit::Freeze)) != 0;

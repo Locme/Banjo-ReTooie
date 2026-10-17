@@ -38,7 +38,8 @@ namespace {
     // More than the ring can hold plus the one playing, so a copy is never reused while in use.
     constexpr uint32_t copy_slots = 32;
     // Extended RDRAM no one else uses: between the sample DMA list (src/gameplay/mix_rate.cpp, ends at
-    // 0x80EE0E10) and the Totals checklist's strings (0x80EF0000). Save states keep it.
+    // 0x80EE0E10) and the Totals checklist's strings (0x80EF0000). Save states keep it
+    // (save_state.cpp's request_copies_start and request_copies_size: keep them in step).
     constexpr gpr copies = (int32_t)0x80EE8000;
     static_assert(0x80EE8000u + copy_slots * request_size <= 0x80EF0000u, "sound request copies run into the Totals strings");
 

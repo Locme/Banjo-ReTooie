@@ -54,6 +54,8 @@ namespace {
     // The game-state block: +0x12 is set while a map change is pending.
     constexpr gpr game_state_addr = (int32_t)0x80127630;
 
+    constexpr uint32_t request_copies_start = 0xEE8000;
+    constexpr uint32_t request_copies_size = 32 * 0x18;
     std::atomic<bool> save_requested{false};
     std::atomic<bool> load_requested{false};
 
@@ -62,6 +64,10 @@ namespace {
         std::vector<uint8_t> rdram;
         // Sound memory above 8 MB while Sound > Mix rate is High (src/gameplay/mix_rate.cpp).
         std::vector<uint8_t> audio_rdram;
+        // The sound requests the scheduler's ring points at (src/game/audio_task_check.cpp keeps them above
+        // the mix rate's memory). Left out, a load could hand the sound microcode a request that had been
+        // reused since the save ("Unhandled jump target" in n_aspMain, seen headless with Freeze).
+        std::vector<uint8_t> request_copies;
         recomp_context ctx;
         recomp::overlays::OverlayState overlays;
         std::unordered_map<uint32_t, int32_t> mapped_overlays;
@@ -73,6 +79,14 @@ namespace {
         uint16_t map = 0;
         uint8_t exit = 0;
     } snapshot;
+
+    // Freeze (interpolation debugging): its own slot, so the Save State slot is kept.
+    Snapshot freeze_snapshot;
+    std::atomic<bool> freeze_wanted{false};
+    std::atomic<bool> frozen{false};
+    // Game frames drawn since the freeze snapshot was taken or last put back.
+    int freeze_frames = 0;
+    int freeze_tries = 0;
 
     std::once_flag started;
 
@@ -198,7 +212,7 @@ namespace {
         return true;
     }
 
-    Result save(uint8_t* rdram, recomp_context* ctx) {
+    Result save(uint8_t* rdram, recomp_context* ctx, Snapshot& snapshot = ::snapshot, bool quiet = false) {
         auto threads = ultramodern::get_game_thread_states(rdram);
         if (!wait_for_tasks()) {
             return Result::retry;
@@ -207,6 +221,7 @@ namespace {
         std::memcpy(snapshot.rdram.data(), rdram, rdram_size);
         snapshot.audio_rdram.assign(rdram + tooie::mix_rate::extra_region_start(),
             rdram + tooie::mix_rate::extra_region_start() + tooie::mix_rate::extra_region_size());
+        snapshot.request_copies.assign(rdram + request_copies_start, rdram + request_copies_start + request_copies_size);
         snapshot.ctx = *ctx;
         snapshot.threads = std::move(threads);
         snapshot.dp_hold = ultramodern::get_dp_hold_state();
@@ -218,6 +233,9 @@ namespace {
         snapshot.map = tooie::debug::current_map(rdram);
         snapshot.exit = MEM_B(0x13, game_state_addr);
         snapshot.valid = true;
+        if (quiet) {
+            return Result::done;
+        }
         log_threads(rdram);
         tooie::toast::show("State saved");
         fprintf(stderr, "[savestate] saved (map 0x%X, %zu threads, try %d)\n", snapshot.map, snapshot.threads.size(), save_tries + 1);
@@ -230,7 +248,7 @@ namespace {
     bool warping = false;
     int settle = 0;
 
-    Result load(uint8_t* rdram, recomp_context* ctx) {
+    Result load(uint8_t* rdram, recomp_context* ctx, Snapshot& snapshot = ::snapshot, bool quiet = false) {
         if (!snapshot.valid) {
             tooie::toast::show("No saved state yet");
             fprintf(stderr, "[savestate] load: nothing saved\n");
@@ -271,6 +289,9 @@ namespace {
         if (!snapshot.audio_rdram.empty()) {
             std::memcpy(rdram + tooie::mix_rate::extra_region_start(), snapshot.audio_rdram.data(), snapshot.audio_rdram.size());
         }
+        if (!snapshot.request_copies.empty()) {
+            std::memcpy(rdram + request_copies_start, snapshot.request_copies.data(), snapshot.request_copies.size());
+        }
         *ctx = snapshot.ctx;
         recomp::overlays::load_overlay_state(snapshot.overlays);
         tooie::set_mapped_overlays(snapshot.mapped_overlays);
@@ -278,6 +299,9 @@ namespace {
         ultramodern::set_vi_framebuffers(snapshot.vi_framebuffers);
         ultramodern::set_external_messages(snapshot.external_messages);
         ultramodern::set_running_queue_head(snapshot.running_queue);
+        if (quiet) {
+            return Result::done;
+        }
         log_threads(rdram);
         tooie::toast::show("State loaded");
         fprintf(stderr, "[savestate] loaded (map 0x%X, try %d)\n", snapshot.map, load_tries + 1);
@@ -285,6 +309,83 @@ namespace {
     }
 
 
+}
+
+namespace {
+    // Freeze: puts the game back two game frames every two game frames, so the picture rocks between
+    // the same two frames and the in-between frames are drawn again each time with the blend mode in
+    // force (model_tagging.cpp tags each frame as the game draws it). Sound is muted meanwhile (main.cpp).
+    // Frames a freeze waits for its snapshot to fit again before it takes a new one.
+    constexpr int retake_tries = 10;
+
+    void freeze_tick(uint8_t* rdram, recomp_context* ctx) {
+        auto stop = [](const char* why) {
+            frozen = false;
+            freeze_snapshot.valid = false;
+            freeze_snapshot.rdram = {};
+            freeze_snapshot.audio_rdram = {};
+            if (why != nullptr) {
+                freeze_wanted = false;
+                tooie::toast::show(why);
+                fprintf(stderr, "[freeze] stopped: %s\n", why);
+            }
+        };
+        if (!freeze_wanted.load()) {
+            if (frozen.load()) {
+                stop(nullptr);
+                tooie::toast::show("Unfrozen");
+                fprintf(stderr, "[freeze] off\n");
+            }
+            return;
+        }
+        // A map change, a Load State or leaving the level ends it.
+        if (MEM_B(0x12, game_state_addr) != 0 || load_requested.load() || !tooie::debug::can_warp()) {
+            stop(frozen.load() ? "Unfrozen" : "Freeze works in a level");
+            return;
+        }
+        if (!frozen.load()) {
+            const Result r = save(rdram, ctx, freeze_snapshot, true);
+            if (r == Result::done) {
+                frozen = true;
+                freeze_frames = 0;
+                freeze_tries = 0;
+                tooie::toast::show("Frozen: change the blend mode to compare");
+                fprintf(stderr, "[freeze] on (map 0x%X)\n", freeze_snapshot.map);
+            }
+            else if (++freeze_tries >= max_tries) {
+                stop("Couldn't freeze here");
+            }
+            return;
+        }
+        if (++freeze_frames < 2) {
+            return;
+        }
+        if (freeze_snapshot.map != tooie::debug::current_map(rdram)) {
+            stop("Unfrozen");
+            return;
+        }
+        const Result r = load(rdram, ctx, freeze_snapshot, true);
+        if (r == Result::done) {
+            freeze_frames = 0;
+            freeze_tries = 0;
+            static int held = 0;
+            if (++held % 60 == 0) {
+                fprintf(stderr, "[freeze] put back %d times\n", held);
+            }
+            return;
+        }
+        // The game moved on from where it was at the snapshot: freeze this moment instead.
+        if (++freeze_tries % retake_tries == 0) {
+            fprintf(stderr, "[freeze] snapshot can't be put back (%s), taking a new one\n", last_refusal);
+            if (save(rdram, ctx, freeze_snapshot, true) == Result::done) {
+                freeze_frames = 0;
+                freeze_tries = 0;
+            }
+        }
+        if (freeze_tries >= max_tries) {
+            stop("Couldn't hold the freeze here");
+        }
+    }
 }
 
 void tooie::save_state::register_input() {
@@ -317,9 +418,22 @@ void tooie::save_state::start() {
     });
 }
 
+bool tooie::save_state::freeze_on() {
+    return freeze_wanted.load();
+}
+
+void tooie::save_state::set_freeze(bool on) {
+    freeze_wanted = on;
+}
+
+bool tooie::save_state::frozen() {
+    return ::frozen.load(std::memory_order_relaxed);
+}
+
 void tooie::save_state::tick(uint8_t* rdram, recomp_context* ctx) {
     test_tick();
     ram_dump_tick(rdram);
+    freeze_tick(rdram, ctx);
     if (!save_requested.load() && !load_requested.load()) {
         return;
     }

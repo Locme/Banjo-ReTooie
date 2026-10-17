@@ -42,6 +42,8 @@ void tooie::hotkeys::register_inputs() {
         "Switches the interpolation check on and off. It tints a model red when its blend between game frames looks wrong.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::BLEND_MODE, "Blend Mode",
         "Steps through the interpolation blend modes, for finding what blends wrong. Graphics > Debug picks one from a list.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
+    add(GameInput::FREEZE, "Freeze",
+        "Freezes the game on two of its frames, again and again, so you can change the blend mode and compare the frames blended between them. Press again to carry on.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::WARP_AGAIN, "Warp Again",
         "Warps to the last place picked in the Warp tab. Works while the Warp tab is on in the Cheats tab.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::PICK_MODEL, "Pick Model",

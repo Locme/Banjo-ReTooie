@@ -10,7 +10,12 @@
 //     frame's, so those parts move at the game's own rate.
 // Only frame rates above Original blend, so it shows nothing at Original.
 //
-// Headless test hooks: TOOIE_INTERP_CHECK=1 starts with it on; TOOIE_BLEND_MODE=<0-5> picks the blend mode.
+// Freeze (the Freeze key, or Freeze under the blend mode option) holds the game on two game frames
+// (src/gameplay/save_state.cpp) so the blend mode can be switched while the same in-between frames
+// are drawn again and again.
+//
+// Headless test hooks: TOOIE_INTERP_CHECK=1 starts with it on; TOOIE_BLEND_MODE=<0-5> picks the blend mode;
+// TOOIE_FREEZE=<on ms>[:<off ms>] freezes and unfreezes at those times after the game started.
 
 #include <atomic>
 #include <chrono>
@@ -32,6 +37,7 @@
 #include "tooie_game.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_check.h"
+#include "tooie_save_state.h"
 #include "tooie_toast.h"
 
 namespace {
@@ -73,11 +79,54 @@ namespace {
         mode = m;
     }
 
+    // Through the option when it exists, so the menu follows the key and the freeze ending by itself.
+    void show_freeze(bool v) {
+        if (created) {
+            try {
+                graphics_config().update_option_value(tooie::interp_check::freeze_option, v);
+                return;
+            } catch (...) {
+            }
+        }
+        tooie::save_state::set_freeze(v);
+    }
+
     void worker() {
         bool was_down = false;
         bool mode_was_down = false;
+        bool freeze_was_down = false;
+        bool freeze_shown = false;
+        long freeze_on_ms = -1, freeze_off_ms = -1;
+        if (const char* v = std::getenv("TOOIE_FREEZE"); v != nullptr) {
+            char* end;
+            freeze_on_ms = std::strtol(v, &end, 10);
+            if (*end == ':') {
+                freeze_off_ms = std::strtol(end + 1, nullptr, 10);
+            }
+        }
+        const auto begin = std::chrono::steady_clock::now();
         for (;;) {
             std::this_thread::sleep_for(10ms);
+            const long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
+            bool freeze_down = tooie::hotkeys::down(recompinput::GameInput::FREEZE);
+            if (freeze_down && !freeze_was_down) {
+                show_freeze(!tooie::save_state::freeze_on());
+            }
+            freeze_was_down = freeze_down;
+            if (freeze_on_ms >= 0 && ms >= freeze_on_ms) {
+                freeze_on_ms = -1;
+                show_freeze(true);
+            }
+            else if (freeze_on_ms < 0 && freeze_off_ms >= 0 && ms >= freeze_off_ms) {
+                freeze_off_ms = -1;
+                show_freeze(false);
+            }
+            // The freeze ends by itself on a map change: untick it in the menu.
+            const bool freeze_now = tooie::save_state::freeze_on();
+            if (freeze_shown && !freeze_now) {
+                show_freeze(false);
+            }
+            freeze_shown = freeze_now;
             bool down = tooie::hotkeys::down(recompinput::GameInput::INTERP_CHECK);
             if (down && !was_down) {
                 bool now = !on.load();
@@ -115,6 +164,23 @@ void tooie::interp_check::add_options(recomp::config::Config& graphics) {
             on = (v != nullptr) && *v;
         });
 
+    graphics.add_bool_option(
+        freeze_option,
+        "Freeze",
+        "For testing the blend modes. Holds the game on two of its frames, put back again and again, so the frames blended between them "
+        "are drawn over and over while you change the blend mode below (the picture rocks a little between the two frames). Sound is muted meanwhile. "
+        "In a level only; a map change or Load State ends it. The Freeze key (bind one in the Interpolation Debug section of the Controls tab) does the same. Starts Off each launch.",
+        false);
+    graphics.add_option_change_callback(freeze_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                graphics_config().save_config();
+                return;
+            }
+            const auto* v = std::get_if<bool>(&value);
+            tooie::save_state::set_freeze((v != nullptr) && *v);
+        });
+
     std::vector<recomp::config::ConfigOptionEnumOption> options;
     for (uint32_t i = 0; i < (uint32_t)mode_count; i++) {
         options.emplace_back(i, blend_mode_name((int)i), blend_mode_name((int)i));
@@ -149,6 +215,7 @@ void tooie::interp_check::start() {
         // Left on last time, they start on their defaults again.
         set_on(on.load());
         set_mode(mode.load());
+        show_freeze(false);
         std::thread(worker).detach();
     });
 }

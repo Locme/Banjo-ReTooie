@@ -12,7 +12,9 @@
 namespace tooie::interp_check {
     inline const std::string check_option = "interp_check";
     inline const std::string blend_option = "interp_blend_mode";
-    // Adds the Interpolation check and Interpolation blend mode options to the Graphics tab (Debug heading).
+    // Freeze, for switching blend modes on a held scene (tooie_save_state.h).
+    inline const std::string freeze_option = "interp_freeze";
+    // Adds the Interpolation check, Freeze and Interpolation blend mode options to the DEV tab.
     void add_options(recomp::config::Config& graphics);
 
     // Starts watching the key (once).

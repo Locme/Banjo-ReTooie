@@ -48,6 +48,7 @@
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
 #include "tooie_picture_filters.h"
+#include "tooie_save_state.h"
 #include "tooie_shader_progress.h"
 #include "tooie_session_log.h"
 #include "tooie_watchdog.h"
@@ -300,6 +301,10 @@ void queue_samples(int16_t* audio_data, size_t sample_count) {
     float cur_main_volume = static_cast<float>(recompui::config::sound::get_main_volume()) / 100.0f; // Get the current main volume, normalized to 0.0-1.0.
     // Muted while a cutscene skip fast-forwards, so it is not heard sped up (L).
     if (tooie::cutscene_skip_active()) {
+        cur_main_volume = 0.0f;
+    }
+    // Muted while Freeze replays the same two frames (it would buzz).
+    if (tooie::save_state::frozen()) {
         cur_main_volume = 0.0f;
     }
     for (size_t i = 0; i < sample_count; i += input_channels) {
