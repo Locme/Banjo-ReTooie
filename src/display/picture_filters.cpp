@@ -4049,7 +4049,22 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
     static const auto parallax_lists = [] {
         std::pair<std::vector<uint64_t>, std::vector<uint8_t>> lists;
+        // TOOIE_PARALLAX_SKIP=<hex hash>,... leaves those out (headless, to tell which listed texture is which).
+        std::vector<uint64_t> skip;
+        if (const char* text = std::getenv("TOOIE_PARALLAX_SKIP")) {
+            for (const char* p = text; *p != '\0';) {
+                char* end = nullptr;
+                skip.push_back(std::strtoull(p, &end, 16));
+                p = (*end == ',') ? end + 1 : end;
+                if (end == p) {
+                    break;
+                }
+            }
+        }
         for (const ParallaxTexture& texture : parallax_textures) {
+            if (std::find(skip.begin(), skip.end(), texture.hash) != skip.end()) {
+                continue;
+            }
             lists.first.push_back(texture.hash);
             lists.second.push_back(texture.darkest);
             lists.second.push_back(texture.lightest);

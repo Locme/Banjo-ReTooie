@@ -439,6 +439,9 @@ extern "C" void tooie_shadow_render_mode(uint8_t* /*rdram*/, recomp_context* ctx
 }
 
 extern "C" void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx) {
+    if (!in_shadow_pass) {
+        tooie::gfx_budget::note_model_kind(rdram, (uint32_t)MEM_W(0x10C, ctx->r29));
+    }
     if (!in_shadow_pass && draw_callbacks.size() == 1) {
         drawn_model = MEM_W(0x10C, ctx->r29);
     }
@@ -454,8 +457,12 @@ extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) 
 // Deep snow: where each model drawn stands (picture_filters.cpp), at the entry of the model draw
 // func_800DE498(gfx, position, rotation, scale, ...). Every model goes through it, not only the actors
 // func_80101808 draws: attacks such as Chilly Willy's ice balls are drawn straight from their own code.
+// Also counts each model draw for the drawing memory report (gfx_budget.cpp).
 // The position's address tells one model from another from frame to frame.
 extern "C" void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx) {
+    if (!in_shadow_pass) {
+        tooie::gfx_budget::note_model(rdram, ctx);
+    }
     const uint32_t position = (uint32_t)ctx->r5;
     if (in_shadow_pass || (position < 0x80000000u) || (position >= 0x80800000u) || ((position & 3) != 0)) {
         return;

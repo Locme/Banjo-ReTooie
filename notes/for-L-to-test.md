@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T402 Swimming under water above 60 FPS
+## T404 Swimming under water above 60 FPS
 - Asked: 2026-10-17 20:46 UTC
 - Build: main (pull and build)
 - Steps:
@@ -9,6 +9,25 @@
   3. Hold the stick left or right to turn, then let go; try small taps too
   4. Compare with 60 FPS
 - Look for: Turning under water feels the same as at 60: Banjo turns at the same speed and stops soon after you let go, instead of spinning on. Headless at 240 FPS a held turn went 246 degrees a second (60 FPS: 247) and ran on 31 degrees after letting go (60 FPS: 29); before the fix it ran on 161 degrees. Banjo alone uses the same steering. Surface paddling was already fine.
+- Status: waiting for L
+
+## T403 Intro: Klungo and the castle keep their shape (replaces T225)
+- Asked: 2026-10-17 20:50 UTC
+- Build: next build from main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave
+- Look for: The opening cloud shot fills the width with no panel ends (it is zoomed in, so the top and bottom of that one shot are cut), and every shot after it, Klungo's "No good, missstress" close-up included, has normal proportions instead of looking stretched sideways. Checked headless at 3440x1417 shape and 16:9: screens/intro-stretch/before-after.png
+- Status: waiting for L
+
+## T402 Split-Up pads: no lines across the pictures (DEV Blend texture seams, on)
+- Asked: 2026-10-17 20:44 UTC
+- Build: main
+- Steps:
+  1. Go to Hailfire Peaks, Icy Side, by the Split-Up pads near the start
+  2. Look down at both pads' pictures up close
+  3. Optional: turn DEV > Blend texture seams off and on to compare
+- Look for: Are the thin lines and smears across Banjo's and Kazooie's faces gone, with nothing new on the pad rims or the title logo?
 - Status: waiting for L
 
 ## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
@@ -1556,6 +1575,7 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Watch the intro ("Two years have passed..") from the start
 - Look for: The opening cloud shots fill the whole width with no panel ends or black at the sides. The castle, the rock, Grunty's grave and the text keep their normal shape (not stretched).
+- Status: replaced by T403
 
 ## T224 Refresh Mods in game
 - Asked: 2026-10-16 08:15 UTC

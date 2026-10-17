@@ -7040,6 +7040,7 @@ L_800DF304:
     // 0x800DF30C: lw          $v0, 0x10C($sp)
     ctx->r2 = MEM_W(ctx->r29, 0X10C);
 L_800DF310:
+    tooie_gfx_model_done(rdram, ctx);
     // 0x800DF310: lw          $ra, 0x3C($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X3C);
     // 0x800DF314: lw          $s0, 0x38($sp)
