@@ -670,8 +670,6 @@ void on_launcher_init(recompui::LauncherMenu *menu) {
     }
 }
 
-#define REGISTER_FUNC(name) recomp::overlays::register_base_export(#name, name)
-
 int main(int argc, char** argv) {
 #ifdef __ANDROID__
     tooie::android::setup_paths();

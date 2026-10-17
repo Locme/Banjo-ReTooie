@@ -115,7 +115,6 @@ namespace {
     std::mutex mutex;
     bool active = false;
     float sun[3] = { 0.0f, 1.0f, 0.0f };
-    float current_time = 0.0f;
 
     // The running clock, from morning when the game starts. Test aid: TOOIE_TIME_OF_DAY=<0 to 1> starts there.
     double day_clock = std::getenv("TOOIE_TIME_OF_DAY") ? std::atof(std::getenv("TOOIE_TIME_OF_DAY")) : morning_time;
@@ -497,7 +496,6 @@ void tooie::day_night::tick(uint8_t* rdram) {
         std::lock_guard lock{mutex};
         active = (amount >= 1.0f);
         std::copy(std::begin(direction), std::end(direction), sun);
-        current_time = t;
     }
 
     if (std::getenv("TOOIE_DAY_NIGHT_LOG")) {
@@ -517,15 +515,6 @@ bool tooie::day_night::sun_direction(float out[3]) {
         return false;
     }
     std::copy(std::begin(sun), std::end(sun), out);
-    return true;
-}
-
-bool tooie::day_night::time_of_day(float& out) {
-    std::lock_guard lock{mutex};
-    if (!active) {
-        return false;
-    }
-    out = current_time;
     return true;
 }
 

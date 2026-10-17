@@ -46,8 +46,6 @@ namespace tooie::day_night {
     // The light in world space, a unit vector towards the sun (the moon at night), always well above the
     // horizon. False while the cycle is off or the map is not one that cycles: keep your own light then.
     bool sun_direction(float out[3]);
-    // The time of day, 0 to 1 from midnight (0.5 is noon). False as for sun_direction.
-    bool time_of_day(float& out);
 }
 
 namespace tooie::night_sounds {

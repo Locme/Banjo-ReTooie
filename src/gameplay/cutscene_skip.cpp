@@ -50,31 +50,6 @@ namespace {
     constexpr uint16_t title_map = 0x18B;
     constexpr uint16_t file_select_map = 0x158;
 
-    // Maps with a boss whose intro the game will not skip (names from src/game/map_names.inc).
-    // Weldar's map is inferred from the decomp's map names, not seen headless.
-    constexpr uint16_t boss_maps[] = {
-        0x17A, // Targitzan's Really Sacred Chamber
-        0x0D1, // Inside Chuffy's Boiler (Old King Coal)
-        0x0F9, // Mr. Patch
-        0x0FC, // Lord Woo Fak Fak
-        0x113, // Terry's Nest
-        0x110, // GI Repair Depot (Weldar)
-        0x12B, // Chilli Billi
-        0x12C, // Chilly Willy
-        0x13F, // Mingy Jongo's Skull
-        0x15F, // Tower of Tragedy
-        0x19A, // HAG 1
-    };
-
-    bool boss_map(uint16_t map) {
-        for (uint16_t m : boss_maps) {
-            if (m == map) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     std::atomic<bool> scene_on{false};      // game thread -> input thread
     std::atomic<bool> skip_requested{false}; // input thread -> game thread
     std::atomic<bool> stop_requested{false}; // input thread -> game thread
@@ -103,7 +78,6 @@ namespace {
 void tooie::cutscene_skip_tick(uint8_t* rdram) {
     const bool scene = tooie::in_letterboxed_scene();
     const uint16_t map = (uint16_t)MEM_HU(0, current_map_addr);
-    const bool boss = boss_map(map);
     const bool menu = map == title_map || map == file_select_map;
     static const bool log = std::getenv("TOOIE_CUTSCENE_LOG") != nullptr;
     if (log && scene != scene_on.load()) {
