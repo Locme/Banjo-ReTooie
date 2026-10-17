@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T365 Title screen Play preset starts on Vanilla
+- Asked: 2026-10-17 09:32 UTC
+- Build: main @ 3bffac4
+- Steps:
+  1. Rename graphics.json in the game folder (or use a fresh install) so the game makes a new one
+  2. Start the game and look at the Play row on the title screen
+- Look for: Does it read < Vanilla > instead of < Custom >? Pick another preset, press Play, restart: does your pick stay?
+- Status: waiting for L
+
 ## T364 Banjo's shadow no longer shakes on 3D grass
 - Asked: 2026-10-17 09:23 UTC
 - Build: main @ next push
