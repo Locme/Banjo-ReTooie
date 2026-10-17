@@ -1761,7 +1761,7 @@
   5. Do the same for Glitter Gulch Mine: second race and both Cloud Cuckooland races
   6. Open the pause menu Totals: your Jiggies and Cheato pages have not changed
 - Look for: Each of the four races starts and can be raced to the end without a crash. Winning gives no Jiggy or Cheato page (practice run), and if your file has not met Mary yet she is still caged afterwards. Checked headless from Spiral Mountain with no progress: all four start, and a scripted A mash won the GGM first race.
-- Status: waiting for L
+- Status: passed (L, 2026-10-17: "Works"); section renamed Race Warps (Replay Race), f210f7f
 
 ## T186 Texture sweep: video memory, freezes and the cutscene crash
 - Asked: 2026-10-15 UTC
