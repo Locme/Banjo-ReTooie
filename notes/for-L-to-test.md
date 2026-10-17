@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T381 3D grass off Mayahem Temple's stone floors
+- Asked: 2026-10-17 11:42 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass
+  2. Enter Mayahem Temple and stand by the egg nest on the stone floor near the entrance
+  3. Walk Spiral Mountain's yellow path too
+- Look for: No blades on the stone slabs (moss in the cracks is fine); grass still grows on the grass around them; the yellow path still clear
+- Status: waiting for L
+
 ## T380 Esc menu keeps responding during a transition (Level warp)
 - Asked: 2026-10-17 11:36 UTC
 - Build: main @ 375b6b2

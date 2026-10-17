@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..c70edfd 100644
+index 9fae0d4..7e6f248 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1921,7 +1921,7 @@ index 9fae0d4..c70edfd 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +132,208 @@ namespace RT64 {
+@@ -125,6 +132,266 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2016,68 +2016,126 @@ index 9fae0d4..c70edfd 100644
 +    // they fade a little into the grass round them, which still reads as road.
 +    static constexpr float GrassMaskAlpha = 0.2f;
 +
-+    // Banjo-Tooie: marks the cells a decal laid over the ground covers (its triangles facing up, where their vertices'
-+    // alpha is at least GrassMaskAlpha), so no blades grow under a road. Level ground has no model transform, so its positions are in the world.
-+    static void markGrassMask(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, std::vector<uint32_t> &mask, int (&marked)[4]) {
++    // Banjo-Tooie: the coarser grid of where the frame's grass ground lies (same corner as grassMask, 4 of its cells
++    // across): the height of the grass drawn there, so other ground laid on it (a stone floor, a road) is told
++    // from ground elsewhere (a bridge high above a meadow).
++    static constexpr uint32_t GrassGroundScale = 4;
++    static constexpr uint32_t GrassGroundCells = GrassMaskCells / GrassGroundScale;
++    static constexpr float GrassGroundNone = -1e30f;
++    // How close in height ground drawn over the grass has to be to it to keep blades off it.
++    static constexpr float GrassGroundReach = 40.0f;
++
++    // Banjo-Tooie: calls visit(cx, cz, height) for each cell of a grid (corner, cell size, cells along a side) whose
++    // centre a triangle of a draw facing up covers (its edges widened by edge cells), where its vertices' alpha is at
++    // least alphaMin.
++    template <typename Visit>
++    static void visitGroundCells(const DrawData &drawData, const GameCall &call, float originX, float originZ, float cell, int cells,
++        float alphaMin, float edge, Visit &&visit)
++    {
 +        const uint32_t start = call.meshDesc.faceIndicesStart;
 +        const uint32_t end = start + call.callDesc.triangleCount * 3;
-+        const int cells = int(frameParams.grassMask.w);
-+        if ((end > drawData.faceIndices.size()) || (cells <= 0) || (mask.size() < size_t(cells) * size_t(cells) / 32)) {
++        if ((end > drawData.faceIndices.size()) || (cells <= 0)) {
 +            return;
 +        }
-+        const float cell = frameParams.grassMask.z;
 +        for (uint32_t i = start; i < end; i += 3) {
 +            float x[3], y[3], z[3], a[3];
 +            bool valid = true;
 +            for (uint32_t k = 0; k < 3; k++) {
 +                const uint32_t v = drawData.faceIndices[i + k];
-+                if (((v * 3 + 2) >= drawData.posFloats.size()) || ((v * 4 + 3) >= drawData.normColBytes.size())) {
++                if (((v * 3 + 2) >= drawData.posFloats.size()) || ((v * 4 + 3) >= drawData.normColBytes.size()) ||
++                    (v >= drawData.worldIndices.size()) || (drawData.worldIndices[v] >= drawData.worldTransforms.size()))
++                {
 +                    valid = false;
 +                    break;
 +                }
-+                x[k] = (drawData.posFloats[v * 3 + 0] - frameParams.grassMask.x) / cell;
-+                y[k] = drawData.posFloats[v * 3 + 1];
-+                z[k] = (drawData.posFloats[v * 3 + 2] - frameParams.grassMask.y) / cell;
++                const float (&m)[4][4] = drawData.worldTransforms[drawData.worldIndices[v]].m;
++                const float px = drawData.posFloats[v * 3 + 0], py = drawData.posFloats[v * 3 + 1], pz = drawData.posFloats[v * 3 + 2];
++                x[k] = (px * m[0][0] + py * m[1][0] + pz * m[2][0] + m[3][0] - originX) / cell;
++                y[k] = px * m[0][1] + py * m[1][1] + pz * m[2][1] + m[3][1];
++                z[k] = (px * m[0][2] + py * m[1][2] + pz * m[2][2] + m[3][2] - originZ) / cell;
 +                a[k] = drawData.normColBytes[v * 4 + 3] / 255.0f;
 +            }
-+            if (!valid || ((a[0] < GrassMaskAlpha) && (a[1] < GrassMaskAlpha) && (a[2] < GrassMaskAlpha))) {
++            if (!valid || ((a[0] < alphaMin) && (a[1] < alphaMin) && (a[2] < alphaMin))) {
 +                continue;
 +            }
 +            // Facing up (or down: the game's winding varies), as the ground blades grow on.
 +            const float e1x = x[1] - x[0], e1y = y[1] - y[0], e1z = z[1] - z[0];
 +            const float e2x = x[2] - x[0], e2y = y[2] - y[0], e2z = z[2] - z[0];
-+            const float nx = (e1y * e2z - e1z * e2y) * cell, ny = e1z * e2x - e1x * e2z, nz = (e1x * e2y - e1y * e2x) * cell;
-+            const float nLength = std::sqrt(nx * nx + ny * ny * cell * cell + nz * nz);
++            // (In the world: x and z are in cells, y in world units.)
++            const float nx = (e1y * e2z - e1z * e2y) * cell, ny = (e1z * e2x - e1x * e2z) * cell * cell, nz = (e1x * e2y - e1y * e2x) * cell;
++            const float nLength = std::sqrt(nx * nx + ny * ny + nz * nz);
 +            const float area = e1x * e2z - e1z * e2x;
-+            if ((nLength <= 1e-6f) || (std::abs(ny * cell) < 0.6f * nLength) || (std::abs(area) < 1e-6f)) {
++            if ((nLength <= 1e-6f) || (std::abs(ny) < 0.6f * nLength) || (std::abs(area) < 1e-6f)) {
 +                continue;
 +            }
-+            const int x0 = std::max(int(std::floor(std::min({ x[0], x[1], x[2] }))), 0);
-+            const int x1 = std::min(int(std::ceil(std::max({ x[0], x[1], x[2] }))), cells - 1);
-+            const int z0 = std::max(int(std::floor(std::min({ z[0], z[1], z[2] }))), 0);
-+            const int z1 = std::min(int(std::ceil(std::max({ z[0], z[1], z[2] }))), cells - 1);
++            const int x0 = std::max(int(std::floor(std::min({ x[0], x[1], x[2] }) - std::max(-edge, 0.0f))), 0);
++            const int x1 = std::min(int(std::ceil(std::max({ x[0], x[1], x[2] }) + std::max(-edge, 0.0f))), cells - 1);
++            const int z0 = std::max(int(std::floor(std::min({ z[0], z[1], z[2] }) - std::max(-edge, 0.0f))), 0);
++            const int z1 = std::min(int(std::ceil(std::max({ z[0], z[1], z[2] }) + std::max(-edge, 0.0f))), cells - 1);
++            // How far past an edge a point may lie, in each barycentric weight (edge cells along the triangle's sides).
++            const float sideX[3] = { x[2] - x[1], x[0] - x[2], x[1] - x[0] };
++            const float sideZ[3] = { z[2] - z[1], z[0] - z[2], z[1] - z[0] };
++            float slack[3];
++            for (int k = 0; k < 3; k++) {
++                const float sideLength = std::sqrt(sideX[k] * sideX[k] + sideZ[k] * sideZ[k]);
++                slack[k] = edge * sideLength / std::abs(area);
++            }
 +            for (int cz = z0; cz <= z1; cz++) {
 +                for (int cx = x0; cx <= x1; cx++) {
-+                    // The cell's centre, in the triangle (a little past its edges, so its seams leave no gaps).
 +                    const float px = cx + 0.5f, pz = cz + 0.5f;
 +                    const float b1 = ((px - x[0]) * e2z - (pz - z[0]) * e2x) / area;
 +                    const float b2 = ((pz - z[0]) * e1x - (px - x[0]) * e1z) / area;
 +                    const float b0 = 1.0f - b1 - b2;
-+                    const float edge = -0.02f;
-+                    if ((b0 < edge) || (b1 < edge) || (b2 < edge)) {
++                    if ((b0 < slack[0]) || (b1 < slack[1]) || (b2 < slack[2])) {
 +                        continue;
 +                    }
-+                    if ((b0 * a[0] + b1 * a[1] + b2 * a[2]) >= GrassMaskAlpha) {
-+                        const uint32_t bit = uint32_t(cz) * uint32_t(cells) + uint32_t(cx);
-+                        mask[bit >> 5] |= 1u << (bit & 31);
-+                        marked[0] = std::min(marked[0], cx);
-+                        marked[1] = std::min(marked[1], cz);
-+                        marked[2] = std::max(marked[2], cx);
-+                        marked[3] = std::max(marked[3], cz);
++                    const float w0 = std::clamp(b0, 0.0f, 1.0f), w1 = std::clamp(b1, 0.0f, 1.0f), w2 = std::clamp(b2, 0.0f, 1.0f);
++                    const float wSum = std::max(w0 + w1 + w2, 1e-6f);
++                    if (((w0 * a[0] + w1 * a[1] + w2 * a[2]) / wSum) < alphaMin) {
++                        continue;
 +                    }
++                    visit(cx, cz, (w0 * y[0] + w1 * y[1] + w2 * y[2]) / wSum);
 +                }
 +            }
 +        }
++    }
++
++    // Banjo-Tooie: notes where a grass ground draw lies (GrassGroundCells), for markGrassMask.
++    static void markGrassGround(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, std::vector<float> &ground) {
++        const float cell = frameParams.grassMask.z * GrassGroundScale;
++        visitGroundCells(drawData, call, frameParams.grassMask.x, frameParams.grassMask.y, cell, int(GrassGroundCells), -1.0f, -0.75f,
++            [&](int cx, int cz, float height) {
++                ground[size_t(cz) * GrassGroundCells + size_t(cx)] = height;
++            });
++    }
++
++    // Banjo-Tooie: marks (or with set false, clears) the cells of grassMask that ground at the height of the frame's
++    // grass covers (a stone floor on it, or a road laid over it as a decal, where its vertices' alpha is at least
++    // alphaMin), so no blades grow there.
++    static void markGrassMask(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, const std::vector<float> &ground,
++        float alphaMin, bool set, std::vector<uint32_t> &mask, int (&marked)[4])
++    {
++        const int cells = int(frameParams.grassMask.w);
++        if ((cells != int(GrassMaskCells)) || (mask.size() < size_t(cells) * size_t(cells) / 32) || (ground.size() < size_t(GrassGroundCells) * GrassGroundCells)) {
++            return;
++        }
++        visitGroundCells(drawData, call, frameParams.grassMask.x, frameParams.grassMask.y, frameParams.grassMask.z, cells, alphaMin, -0.1f,
++            [&](int cx, int cz, float height) {
++                const float grassHeight = ground[size_t(cz / GrassGroundScale) * GrassGroundCells + size_t(cx / GrassGroundScale)];
++                if (std::abs(grassHeight - height) > GrassGroundReach) {
++                    return;
++                }
++                const uint32_t bit = uint32_t(cz) * uint32_t(cells) + uint32_t(cx);
++                if (!set) {
++                    mask[bit >> 5] &= ~(1u << (bit & 31));
++                    return;
++                }
++                mask[bit >> 5] |= 1u << (bit & 31);
++                marked[0] = std::min(marked[0], cx);
++                marked[1] = std::min(marked[1], cz);
++                marked[2] = std::max(marked[2], cx);
++                marked[3] = std::max(marked[3], cz);
++            });
 +    }
 +
 +    // Banjo-Tooie: whether a draw is part of the level itself (one world matrix, the identity), not a model.
@@ -2130,7 +2188,7 @@ index 9fae0d4..c70edfd 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +378,26 @@ namespace RT64 {
+@@ -169,6 +436,26 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2157,7 +2215,7 @@ index 9fae0d4..c70edfd 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -219,6 +448,7 @@ namespace RT64 {
+@@ -219,6 +506,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2165,7 +2223,7 @@ index 9fae0d4..c70edfd 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +480,7 @@ namespace RT64 {
+@@ -250,6 +538,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2173,7 +2231,7 @@ index 9fae0d4..c70edfd 100644
                  }
              }
              else {
-@@ -272,6 +503,9 @@ namespace RT64 {
+@@ -272,6 +561,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2183,7 +2241,7 @@ index 9fae0d4..c70edfd 100644
              }
          }
      }
-@@ -373,6 +607,9 @@ namespace RT64 {
+@@ -373,6 +665,9 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2193,7 +2251,7 @@ index 9fae0d4..c70edfd 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +680,14 @@ namespace RT64 {
+@@ -443,6 +738,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2208,7 +2266,7 @@ index 9fae0d4..c70edfd 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +710,61 @@ namespace RT64 {
+@@ -465,12 +768,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2272,7 +2330,7 @@ index 9fae0d4..c70edfd 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +808,17 @@ namespace RT64 {
+@@ -514,6 +866,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2290,7 +2348,7 @@ index 9fae0d4..c70edfd 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +879,95 @@ namespace RT64 {
+@@ -574,10 +937,95 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2386,7 +2444,7 @@ index 9fae0d4..c70edfd 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1640,67 @@ namespace RT64 {
+@@ -1250,6 +1698,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2454,7 +2512,7 @@ index 9fae0d4..c70edfd 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1747,84 @@ namespace RT64 {
+@@ -1296,9 +1805,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2540,7 +2598,7 @@ index 9fae0d4..c70edfd 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1876,30 @@ namespace RT64 {
+@@ -1350,10 +1934,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2571,7 +2629,7 @@ index 9fae0d4..c70edfd 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1954,61 @@ namespace RT64 {
+@@ -1408,6 +2012,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2633,7 +2691,7 @@ index 9fae0d4..c70edfd 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2032,22 @@ namespace RT64 {
+@@ -1431,6 +2090,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2656,7 +2714,7 @@ index 9fae0d4..c70edfd 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2073,110 @@ namespace RT64 {
+@@ -1456,6 +2131,111 @@ namespace RT64 {
                  continue;
              }
  
@@ -2689,6 +2747,7 @@ index 9fae0d4..c70edfd 100644
 +                                    if (grassMaskVector.size() != (GrassMaskCells * GrassMaskCells / 32)) {
 +                                        grassMaskVector.assign(GrassMaskCells * GrassMaskCells / 32, 0u);
 +                                    }
++                                    grassGroundDraws.clear();
 +                                    grassMaskMarked[0] = grassMaskMarked[1] = INT32_MAX;
 +                                    grassMaskMarked[2] = grassMaskMarked[3] = -1;
 +                                }
@@ -2767,7 +2826,7 @@ index 9fae0d4..c70edfd 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2327,7 @@ namespace RT64 {
+@@ -1606,6 +2386,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2775,7 +2834,7 @@ index 9fae0d4..c70edfd 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2404,20 @@ namespace RT64 {
+@@ -1682,6 +2463,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2796,7 +2855,7 @@ index 9fae0d4..c70edfd 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2483,309 @@ namespace RT64 {
+@@ -1747,7 +2542,322 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2898,15 +2957,29 @@ index 9fae0d4..c70edfd 100644
 +                        grassTexture = std::max(grassTexture, SceneGrassTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID));
 +                    }
 +                    grassEdges = grass && (grassTexture == 2);
-+                    // A road, path or dirt laid over the ground as a blended decal, with a texture that isn't grass:
-+                    // no blades grow under it where it shows.
-+                    if (grass && grassDecal && (grassTexture == 0) && grassMaskStarted) {
-+                        markGrassMask(drawData, call, frameParams, grassMaskVector, grassMaskMarked);
++                    // Ground with a texture that isn't grass at the grass's height (a stone floor drawn on it, or a road,
++                    // path or dirt laid over it as a blended decal) keeps blades off where it shows (endFramebuffers).
++                    if (grass && (off < 1e-3f) && grassMaskStarted) {
++                        const uint8_t kind = (grassTexture != 0) ? (grassDecal ? GrassGroundDecal : GrassGroundGrass) : (grassDecal ? GrassGroundOverDecal : GrassGroundOver);
++                        grassGroundDraws.push_back({ &drawData, &call, kind });
++                    }
++                    // Or laid over it blended without being a decal (Mayahem Temple's stone floor over the grass), by its own
++                    // textures.
++                    else if (!grass && (off < 1e-3f) && grassMaskStarted && gm.zCmp() && (gm.zMode() != ZMODE_DEC) && interop::Blender::usesAlphaBlend(gm) &&
++                        (gm.cycleType() != G_CYC_COPY))
++                    {
++                        uint32_t overTexture = 0;
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (overTexture == 0); t++) {
++                            overTexture = SceneGrassTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        }
++                        if (overTexture == 0) {
++                            grassGroundDraws.push_back({ &drawData, &call, GrassGroundOverDecal });
++                        }
 +                    }
 +                    grass = grass && (grassTexture != 0);
 +                    {
 +                        static const bool decalLog = (getenv("TOOIE_GRASS_LOG") != nullptr) && (getenv("TOOIE_GRASS_LOG")[0] == '3');
-+                        if (decalLog && (off < 1e-3f) && (gm.zMode() == ZMODE_DEC)) {
++                        if (decalLog && (off < 1e-3f) && ((gm.zMode() == ZMODE_DEC) || interop::Blender::usesAlphaBlend(gm))) {
 +                            static std::unordered_set<uint64_t> seenDecals;
 +                            uint64_t key = interop::Blender::usesAlphaBlend(gm) ? 1 : 0;
 +                            for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
@@ -2921,7 +2994,7 @@ index 9fae0d4..c70edfd 100644
 +                                        alphaHigh = std::max<uint32_t>(alphaHigh, drawData.normColBytes[v * 4 + 3]);
 +                                    }
 +                                }
-+                                fprintf(stderr, "[grass-decal] blend %d grass %u tris %u alpha %u-%u tiles", interop::Blender::usesAlphaBlend(gm) ? 1 : 0, grassTexture, call.callDesc.triangleCount, alphaLow, alphaHigh);
++                                fprintf(stderr, "[grass-decal] zmode %u zupd %d blend %d grass %u tris %u alpha %u-%u tiles", uint32_t(gm.zMode()), gm.zUpd() ? 1 : 0, interop::Blender::usesAlphaBlend(gm) ? 1 : 0, grassTexture, call.callDesc.triangleCount, alphaLow, alphaHigh);
 +                                for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
 +                                    fprintf(stderr, " %016llx", (unsigned long long)drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                                }
@@ -3051,8 +3124,8 @@ index 9fae0d4..c70edfd 100644
 +                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : featherKind);
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
-                 }
- 
++                }
++
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
 +                if (!nightLightsChecked) {
 +                    nightLightsChecked = true;
@@ -3098,15 +3171,14 @@ index 9fae0d4..c70edfd 100644
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
-+                }
+                 }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-             }
-@@ -1758,13 +2795,213 @@ namespace RT64 {
+@@ -1758,13 +2868,263 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3275,6 +3347,56 @@ index 9fae0d4..c70edfd 100644
 +        }
 +        // Banjo-Tooie: only the box of cells a road or path marked goes to the GPU (none without one: no lookups
 +        // either), and the full grid is cleared again behind it for the next frame.
++        if (grassMaskStarted && !grassGroundDraws.empty()) {
++            // Where the grass lies, then the other ground at its height (a stone floor whichever was drawn first, as the
++            // game draws them level), less where grass is laid over that as a decal, then roads laid over the grass.
++            grassGroundVector.assign(size_t(GrassGroundCells) * GrassGroundCells, GrassGroundNone);
++            for (const GrassGroundDraw &g : grassGroundDraws) {
++                if ((g.kind == GrassGroundGrass) || (g.kind == GrassGroundDecal)) {
++                    markGrassGround(*g.drawData, *g.call, frameParams, grassGroundVector);
++                }
++            }
++            const uint8_t order[3] = { GrassGroundOver, GrassGroundDecal, GrassGroundOverDecal };
++            for (uint8_t kind : order) {
++                for (const GrassGroundDraw &g : grassGroundDraws) {
++                    if (g.kind == kind) {
++                        markGrassMask(*g.drawData, *g.call, frameParams, grassGroundVector, (kind == GrassGroundOver) ? -1.0f : GrassMaskAlpha,
++                            kind != GrassGroundDecal, grassMaskVector, grassMaskMarked);
++                    }
++                }
++            }
++        }
++        {
++            // TOOIE_GRASS_LOG=4: every 5 s, the ground draws behind grassMask, and the grid as grass-mask.pgm (marked
++            // white) and grass-ground.pgm (grass ground grey) in the working folder.
++            static const bool groundLog = (getenv("TOOIE_GRASS_LOG") != nullptr) && (getenv("TOOIE_GRASS_LOG")[0] == '4');
++            static auto lastGroundLog = std::chrono::steady_clock::now();
++            if (groundLog && grassMaskStarted && (std::chrono::steady_clock::now() - lastGroundLog > std::chrono::seconds(5))) {
++                lastGroundLog = std::chrono::steady_clock::now();
++                for (const GrassGroundDraw &g : grassGroundDraws) {
++                    fprintf(stderr, "[grass-ground] kind %u tris %u tiles", g.kind, g.call->callDesc.triangleCount);
++                    for (uint32_t t = 0; t < g.call->callDesc.tileCount; t++) {
++                        fprintf(stderr, " %016llx", (unsigned long long)g.drawData->callTiles[g.call->callDesc.tileIndex + t].tmemHashOrID);
++                    }
++                    fprintf(stderr, "\n");
++                }
++                FILE *f = fopen("grass-mask.pgm", "wb");
++                if (f != nullptr) {
++                    fprintf(f, "P5 %u %u 255\n", GrassMaskCells, GrassMaskCells);
++                    for (uint32_t i = 0; i < GrassMaskCells * GrassMaskCells; i++) {
++                        const bool bit = (grassMaskVector.size() > (i >> 5)) && ((grassMaskVector[i >> 5] >> (i & 31)) & 1);
++                        const float g = grassGroundVector.empty() ? GrassGroundNone : grassGroundVector[((i / GrassMaskCells) / GrassGroundScale) * GrassGroundCells + (i % GrassMaskCells) / GrassGroundScale];
++                        const int px = int(i % GrassMaskCells), pz = int(i / GrassMaskCells);
++                        const int bx = int((frameParams.grassPlayer.x - frameParams.grassMask.x) / GrassMaskCell), bz = int((frameParams.grassPlayer.z - frameParams.grassMask.y) / GrassMaskCell);
++                        const bool player = (std::abs(px - bx) <= 3) && (std::abs(pz - bz) <= 3);
++                        fputc(player ? 180 : (bit ? 255 : ((g > GrassGroundNone) ? 100 : 0)), f);
++                    }
++                    fclose(f);
++                }
++                fprintf(stderr, "[grass-ground] camera %.0f %.0f %.0f grid corner %.0f %.0f\n", frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w, frameParams.grassMask.x, frameParams.grassMask.y);
++            }
++        }
++        grassGroundDraws.clear();
 +        grassMaskUpload.clear();
 +        frameParams.grassMask.w = 0.0f;
 +        frameParams.grassLook.y = 0.0f;
@@ -3322,7 +3444,7 @@ index 9fae0d4..c70edfd 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..e52a8c2 100644
+index 3add9c3..d315ffa 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,7 @@
@@ -3371,7 +3493,7 @@ index 3add9c3..e52a8c2 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +94,63 @@ namespace RT64 {
+@@ -62,11 +94,73 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -3402,6 +3524,16 @@ index 3add9c3..e52a8c2 100644
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
 +        std::vector<uint32_t> grassMaskVector;
 +        std::vector<uint32_t> grassMaskUpload;
++        std::vector<float> grassGroundVector;
++        // The frame's level ground draws for grassMask: grass, grass laid over as a decal, other ground, other ground laid
++        // over blended.
++        enum : uint8_t { GrassGroundGrass, GrassGroundDecal, GrassGroundOver, GrassGroundOverDecal };
++        struct GrassGroundDraw {
++            const DrawData *drawData;
++            const GameCall *call;
++            uint8_t kind;
++        };
++        std::vector<GrassGroundDraw> grassGroundDraws;
 +        int grassMaskMarked[4] = { INT32_MAX, INT32_MAX, -1, -1 };
 +        BufferPair grassMaskBuffer;
 +        bool grassMaskStarted = false;
@@ -3435,7 +3567,7 @@ index 3add9c3..e52a8c2 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +171,8 @@ namespace RT64 {
+@@ -87,6 +181,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -3444,7 +3576,7 @@ index 3add9c3..e52a8c2 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +186,7 @@ namespace RT64 {
+@@ -100,6 +196,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -3452,7 +3584,7 @@ index 3add9c3..e52a8c2 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +210,10 @@ namespace RT64 {
+@@ -123,6 +220,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -3463,7 +3595,7 @@ index 3add9c3..e52a8c2 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +255,15 @@ namespace RT64 {
+@@ -164,7 +265,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
