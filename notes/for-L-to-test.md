@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T374 Save select: game's Wide-screen Mode hidden (DEV toggle)
+- Asked: 2026-10-17 10:53 UTC
+- Build: main @ next push
+- Steps:
+  1. On the save select screen, pick the TV (global settings)
+  2. Look at the list, then change Speaker Mode and open Screen Alignment
+  3. Esc > DEV: turn off Hide Vanilla Widescreen Entry in the Game Menu, close and reopen the TV
+- Look for: With the toggle on (default) the TV lists Screen Alignment and Speaker Mode only, and Speaker Mode changes and keeps its setting. With it off, Wide-screen Mode is back between them as before.
+- Status: waiting for L
+
 ## T373 3D grass: no growing as you walk up, yellow path clear, pixelated under 1
 - Asked: 2026-10-17 10:31 UTC
 - Build: main

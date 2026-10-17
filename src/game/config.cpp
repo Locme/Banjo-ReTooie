@@ -683,6 +683,12 @@ void tooie::init_config() {
         "Discord Status (Non-functional ATM)",
         "Shows the level you are playing in your Discord status while Discord is running.",
         true);
+    // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
+    wip.add_bool_option(
+        tooie::hide_vanilla_widescreen_option,
+        "Hide Vanilla Widescreen Entry in the Game Menu",
+        "Hides Wide-screen Mode in the global settings on the save select screen (the TV), leaving Screen Alignment and Speaker Mode. The game's own widescreen mode squashes the picture for a stretched TV; this port's widescreen is Aspect Ratio in the Graphics tab. Shows the next time the menu opens.",
+        true);
     tooie::game_frame_rate::add_dev_options(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);

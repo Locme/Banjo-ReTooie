@@ -2193,6 +2193,7 @@ RECOMP_FUNC void func_808049E8_chgameselect(uint8_t* rdram, recomp_context* ctx)
     ctx->r6 = ADD32(ctx->r14, ctx->r15);
     // 0x80804A18: addiu       $a2, $a2, 0xA
     ctx->r6 = ADD32(ctx->r6, 0XA);
+    tooie_vanilla_widescreen_text(rdram, ctx);
     // 0x80804A1C: sll         $t8, $a2, 16
     ctx->r24 = S32(ctx->r6 << 16);
     // 0x80804A20: jal         0x80087CF8

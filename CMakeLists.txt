@@ -316,6 +316,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/preempt.cpp
     ${CMAKE_SOURCE_DIR}/src/game/sound_events.cpp
     ${CMAKE_SOURCE_DIR}/src/game/quick_start.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/hide_vanilla_widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/mod_zips.cpp
     ${CMAKE_SOURCE_DIR}/src/game/timer_save.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/dialogue_speed.cpp

@@ -112,6 +112,7 @@ L_80804788:
     // 0x808047A0: sw          $v0, 0x20($sp)
     MEM_W(0X20, ctx->r29) = ctx->r2;
     after_2:
+    tooie_vanilla_widescreen_row_stack(rdram, ctx);
     // 0x808047A4: lw          $a0, 0x30($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X30);
     // 0x808047A8: jal         0x8080499C
@@ -196,6 +197,7 @@ L_808047F0:
     // 0x80804800: sw          $a3, 0x28($sp)
     MEM_W(0X28, ctx->r29) = ctx->r7;
     after_5:
+    tooie_vanilla_widescreen_row_stack(rdram, ctx);
     // 0x80804804: lw          $v1, 0x30($sp)
     ctx->r3 = MEM_W(ctx->r29, 0X30);
     // 0x80804808: lw          $a3, 0x28($sp)

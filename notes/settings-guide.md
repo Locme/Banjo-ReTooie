@@ -62,6 +62,12 @@ on a controller.
 
 - **Developer Mode** (Developer): shows the DEV tab. Default: off.
 
+- **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
+  Mode in the game's global settings on the save select screen (the TV), so it
+  lists Screen Alignment and Speaker Mode only. The game's own widescreen mode
+  squashes the picture for a stretched TV; this port's widescreen is Aspect
+  Ratio in the Graphics tab. Shows the next time the menu opens. Default: on.
+
 The DEV tab's **Additional Tabs** section shows or hides tabs:
 
 - **Achievements tab**: the settings menu's Achievements tab (the twelve XBLA

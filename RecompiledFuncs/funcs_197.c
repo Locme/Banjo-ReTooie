@@ -2010,6 +2010,7 @@ RECOMP_FUNC void func_808046D0_chgameselect(uint8_t* rdram, recomp_context* ctx)
     // 0x808046FC: addiu       $s3, $zero, 0x3
     ctx->r19 = ADD32(0, 0X3);
 L_80804700:
+    tooie_vanilla_widescreen_loop(rdram, ctx);
     // 0x80804700: jal         0x80804948
     // 0x80804704: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
@@ -2034,6 +2035,7 @@ L_80804700:
     ctx->r4 = ctx->r18 | 0;
     // 0x8080471C: or          $a1, $s0, $zero
     ctx->r5 = ctx->r16 | 0;
+    tooie_vanilla_widescreen_title(rdram, ctx);
     // 0x80804720: jal         0x80087D90
     // 0x80804724: lh          $a2, 0x0($s1)
     ctx->r6 = MEM_H(ctx->r17, 0X0);

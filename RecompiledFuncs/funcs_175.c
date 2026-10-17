@@ -2763,6 +2763,7 @@ L_80800148:
 RECOMP_FUNC void func_80804948_chgameselect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_vanilla_widescreen_row_a0(rdram, ctx);
     // 0x80804948: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x8080494C: addiu       $at, $zero, 0x1

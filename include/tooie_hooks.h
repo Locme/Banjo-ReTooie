@@ -143,6 +143,15 @@ void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
 // animation caches (hand edits in the generated code, banjotooie.us.toml).
 int tooie_more_memory(void);
 
+// DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp): the save
+// select's global settings menu without its Wide-screen Mode row.
+void tooie_vanilla_widescreen_rows(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_loop(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_title(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_row_a0(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_text(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_row_stack(uint8_t* rdram, recomp_context* ctx);
+
 #ifdef __cplusplus
 }
 #endif

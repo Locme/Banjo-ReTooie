@@ -84,6 +84,8 @@ namespace tooie {
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";
     inline const std::string cheats_tab_option = "cheats_tab";
+    // DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp).
+    inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
     // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.

@@ -6709,6 +6709,7 @@ RECOMP_FUNC void func_80805310_chgameselect(uint8_t* rdram, recomp_context* ctx)
     MEM_W(0X10, ctx->r29) = 0;
     // 0x80805340: addiu       $a2, $zero, 0x3
     ctx->r6 = ADD32(0, 0X3);
+    tooie_vanilla_widescreen_rows(rdram, ctx);
     // 0x80805344: jal         0x80802AD4
     // 0x80805348: addiu       $a3, $zero, 0x1
     ctx->r7 = ADD32(0, 0X1);
