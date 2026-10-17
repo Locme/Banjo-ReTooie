@@ -1364,6 +1364,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         struct Span {
             uint32_t from, to;
         };
+        static const bool fur_skip_set = std::getenv("TOOIE_FUR_SKIP") != nullptr;
         static const std::vector<Span> skip = [] {
             std::vector<Span> spans;
             if (const char* text = std::getenv("TOOIE_FUR_SKIP")) {
@@ -1393,13 +1394,14 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             set_flag(cursor, slot, g_ex_fur_shells_v1, kind);
         };
         uint32_t base = blocks[best].first_phys;
-        static std::vector<Span> model_skip;
         const KazooieLists& kazooie = lists_of(best);
-        if (std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found) {
+        const Span model_skip[1] = { { kazooie.from, kazooie.to } };
+        const bool use_model_skip = !fur_skip_set && kazooie.found;
+        if (use_model_skip) {
             base = 0; // the spans below are physical addresses
-            model_skip = { { kazooie.from, kazooie.to } };
         }
-        const std::vector<Span>& spans = std::getenv("TOOIE_FUR_SKIP") == nullptr && kazooie.found ? model_skip : skip;
+        const Span* spans_begin = use_model_skip ? model_skip : skip.data();
+        const Span* spans_end = use_model_skip ? model_skip + 1 : skip.data() + skip.size();
         // TOOIE_KAZOOIE_LIST_CYCLE=<from ms>:<every ms>[:<calls>] feathers only one of Kazooie's calls at a time, the next every
         // so often, logged with its list's address, to tell which call draws which part (headless aid).
         static const struct KazooieCycle { bool on = false; long from = 0, every = 1000, count = 64; } kazooie_cycle = [] {
@@ -1432,11 +1434,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             }
             const uint32_t offset = (commands[i].w1 & 0x1FFFFFFF) - base;
             bool banjo = true;
-            for (const Span& span : spans) {
-                banjo = banjo && (offset < span.from || offset > span.to);
+            for (const Span* span = spans_begin; span != spans_end; span++) {
+                banjo = banjo && (offset < span->from || offset > span->to);
             }
             uint32_t want = banjo ? 1 : (kazooie.found ? 2 : 0);
-            if (kazooie.found && std::getenv("TOOIE_FUR_SKIP") == nullptr &&
+            if (use_model_skip &&
                 std::binary_search(kazooie.bare.begin(), kazooie.bare.end(), commands[i].w1 & 0x1FFFFFFF)) {
                 want = 0;
             }
