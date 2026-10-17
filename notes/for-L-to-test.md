@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T372 Snout jiggle fixes, Nose jiggle, Kazooie jiggle sliders
+- Asked: 2026-10-17 10:20 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on: close up in Photo Mode, the brow stays on the eyes and the lips on the jaw
+  2. Run, stop and land: the snout wobble is smooth, no stutter (interpolation on and off)
+  3. General > Nose jiggle on (with and without Snout jiggle): the black nose wobbles on its own; try its sliders
+  4. General > Kazooie jiggle: four sliders now show under it; open Photo Mode mid-wobble and the feathers hold still
+- Look for: No broken head in close-ups, a smooth wobble at any frame rate, and the new sliders change the wobble
+- Status: waiting for L
+
 ## T371 Freeze for comparing interpolation blend modes
 - Asked: 2026-10-17 09:47 UTC
 - Build: main

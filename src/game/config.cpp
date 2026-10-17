@@ -324,9 +324,44 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::nose_option, "Nose jiggle",
+        "Banjo's black nose wobbles on its own spring, on top of Snout jiggle or without it. It stays mid-wobble in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(nose_strength_option, "Nose jiggle: wobble",
+            "How far the nose swings when Banjo moves.", 0, 400, 10, 0, true, 100);
+        general.add_number_option(nose_bounce_option, "Nose jiggle: bounce",
+            "How long it keeps wobbling. 0 settles at once, 100 wobbles for seconds.", 0, 100, 5, 0, false, 65);
+        general.add_number_option(nose_speed_option, "Nose jiggle: speed",
+            "Wobbles per second.", 0.5, 12, 0.5, 1, false, 5);
+        general.add_number_option(nose_exaggeration_option, "Nose jiggle: exaggeration",
+            "How far the nose may bend: 100% is 30 degrees, 250% is 75.", 25, 250, 25, 0, true, 100);
+        general.add_number_option(nose_size_option, "Nose jiggle: nose size",
+            "Makes Banjo's nose bigger or smaller.", 50, 300, 10, 0, true, 100);
+        for (const std::string* id : { &nose_strength_option, &nose_bounce_option, &nose_speed_option,
+                                       &nose_exaggeration_option, &nose_size_option }) {
+            general.add_option_hidden_dependency(*id, nose_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(kazooie_strength_option, "Kazooie jiggle: wobble",
+            "How far her crest and tail feathers swing when she moves.", 0, 400, 10, 0, true, 100);
+        general.add_number_option(kazooie_bounce_option, "Kazooie jiggle: bounce",
+            "How long they keep wobbling. 0 settles at once, 100 wobbles for seconds.", 0, 100, 5, 0, false, 60);
+        general.add_number_option(kazooie_speed_option, "Kazooie jiggle: speed",
+            "Wobbles per second.", 0.5, 12, 0.5, 1, false, 2.5);
+        general.add_number_option(kazooie_exaggeration_option, "Kazooie jiggle: exaggeration",
+            "How far each feather may bend: 100% is 32 degrees per bone, 250% is 80.", 25, 250, 25, 0, true, 100);
+        for (const std::string* id : { &kazooie_strength_option, &kazooie_bounce_option, &kazooie_speed_option,
+                                       &kazooie_exaggeration_option }) {
+            general.add_option_hidden_dependency(*id, kazooie_option, false);
+        }
+    }
     general.add_bool_option(
         tooie::damage::double_damage_option,
         "Enemies do double damage",

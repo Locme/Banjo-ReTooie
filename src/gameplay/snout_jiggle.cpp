@@ -26,6 +26,12 @@
 // with many vertices (mods such as Smash Banjo, which have their own muzzle on bone 10). The
 // eyes (selectors) and the other bones' vertices are left alone.
 //
+// General > Nose jiggle (L, 2026-10-17, its own toggle): the black nose, which is part of the snout
+// bone's mesh, turns on its own faster spring about its base, by rewriting those vertices each frame
+// (as the muzzle). On the game's models the nose is the snout bone's black vertices (and the white
+// highlights at the same places); on mods without them (Smash Banjo) it is the front of the snout
+// bone's mesh, blended in.
+//
 // General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
 // hang on springs the same way. Each feather bone gets its own spring on the end of the bone, from
 // the root of the chain out, and each bone's turn carries the bones after it, so the tail whips.
@@ -37,6 +43,7 @@
 // it. Headless: TOOIE_SNOUT_LOG=1 logs the springs.
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -178,7 +185,10 @@ namespace {
 
     // The model being drawn, and where the snout's root and tip are in its bind pose.
     struct ModelInfo { bool player = false; Vec root{}, tip{}; uint32_t vtx = 0; int vertices = 0; };
+    // The player's model (physical start and end of its asset) while its vertices are rewritten.
+    std::atomic<uint32_t> bent_from{ 0 }, bent_to{ 0 };
     bool drawing_player = false;
+    bool snout_on = false, nose_on = false;
     uint32_t current_model = 0;
     ModelInfo current;
     Vec model_pos{};
@@ -285,6 +295,14 @@ namespace {
         return !muzzle.index.empty();
     }
 
+    float smooth(float t) {
+        t = std::clamp(t, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
+    // The game's head (bone 9's bind space, 062A and 0838): the eyes reach forward to z 27 and down to
+    // y 106; the lower lip over the jaw is below y 93.
+    constexpr float eye_front = 27.0f, eye_bottom = 106.0f, jaw_top = 93.0f;
+
     // Bend the muzzle: each head vertex in front of root.z - reach takes the snout's transform Qb (the
     // head's bind space, about the root), blended in by how far forward it is.
     void bend_muzzle(uint8_t* rdram, const Mat& Qb) {
@@ -294,8 +312,11 @@ namespace {
             Vec v{ (float)muzzle.original[3 * k], (float)muzzle.original[3 * k + 1], (float)muzzle.original[3 * k + 2] };
             float w = 0.0f;
             if (settings.reach > 0.01f) {
-                const float t = std::clamp((v.z - back) / (front - back), 0.0f, 1.0f);
-                w = t * t * (3.0f - 2.0f * t);
+                w = smooth((v.z - back) / (front - back));
+                // Leave the brow round the eyes (the eyes are selectors and don't move) and the lips over
+                // the jaw (bone 11) alone, or they come apart (L's photo, 2026-10-17).
+                w *= 1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f);
+                w *= smooth((v.y - jaw_top) / 6.0f);
             }
             if (w > 0.0f) {
                 const Vec moved = current.root + apply(v - current.root, Qb);
@@ -334,9 +355,15 @@ namespace {
         bool started = false;
         Vec point{}, velocity{};
         std::chrono::steady_clock::time_point last;
-        Vec lag{};   // point - target after the last update, world space
+        Vec lag{};      // point - target after the last update, world space
+        Vec target{};   // the target at the last update
+        float period = 1.0f / 30.0f;   // the game's frame time, smoothed
     } spring;
 
+    // One step of the spring per game frame. The game moves the target by the same amount each frame
+    // whatever the wall clock says, so the spring steps by the game's frame time, smoothed over about
+    // half a second, not by the time since the last draw: frames that arrive unevenly (2 close
+    // together, then a gap) made the wobble stutter (L, 2026-10-17).
     void update_spring(Spring& spring, Vec target, float frequency, float damping) {
         const auto now = std::chrono::steady_clock::now();
         if (tooie::photo_mode::active()) {
@@ -344,23 +371,25 @@ namespace {
             spring.last = now;
             return;
         }
+        const float since = std::chrono::duration<float>(now - spring.last).count();
         // Not drawn for a while (Kazooie hides in the pack between moves): start again where it is.
-        const bool stale = std::chrono::duration<float>(now - spring.last).count() > 0.25f;
-        if (!spring.started || stale || length(target - spring.point) > teleport) {
+        if (!spring.started || since > 0.5f || length(target - spring.point) > teleport) {
             spring.started = true;
             spring.point = target;
             spring.velocity = {};
             spring.last = now;
             spring.lag = {};
+            spring.target = target;
             return;
         }
-        float dt = std::chrono::duration<float>(now - spring.last).count();
-        // The shadow pass draws the model again in the same frame: one update per frame.
-        if (dt < 0.008f) {
+        // The shadow pass draws the model again in the same frame, at the same place: one step per frame.
+        if (since < 0.008f && length(target - spring.target) < 1e-4f) {
             return;
         }
         spring.last = now;
-        dt = std::min(dt, 0.1f);
+        spring.target = target;
+        spring.period += (std::clamp(since, 1.0f / 240.0f, 0.1f) - spring.period) * 0.1f;
+        const float dt = spring.period;
         const float w = 2.0f * pi * frequency;
         const float k = w * w, c = 2.0f * damping * w;
         for (float t = 0.0f; t < dt; t += step) {
@@ -391,6 +420,175 @@ namespace {
         return rotation(axis * (1.0f / sin_t), angle);
     }
 
+    // ---- the nose (see the top) ----
+    struct NoseSettings { float frequency = 5.0f, damping = 0.135f, follow = 1.0f, max_angle = 30.0f, size = 1.0f; } nose_settings;
+    void read_nose_settings() {
+        using namespace tooie::snout_jiggle;
+        nose_settings.follow = (float)option_number(nose_strength_option, 100.0) / 100.0f;
+        nose_settings.damping = 0.03f + 0.30f * (1.0f - std::clamp((float)option_number(nose_bounce_option, 65.0), 0.0f, 100.0f) / 100.0f);
+        nose_settings.frequency = std::clamp((float)option_number(nose_speed_option, 5.0), 0.5f, 20.0f);
+        nose_settings.max_angle = std::min(30.0f * (float)option_number(nose_exaggeration_option, 100.0) / 100.0f, 85.0f);
+        nose_settings.size = std::clamp((float)option_number(nose_size_option, 100.0) / 100.0f, 0.25f, 4.0f);
+    }
+    constexpr float nose_arm = 10.0f;   // the nose turns as if it stuck out this far
+
+    struct Nose {
+        uint32_t model = 0;
+        std::vector<int> index;
+        std::vector<float> weight;
+        std::vector<int16_t> original, written;
+        Vec pivot{}, tip{};          // vertex space
+        Spring spring;
+    } nose;
+
+    bool nose_intact(uint8_t* rdram) {
+        const std::vector<int16_t>& expect = nose.written.empty() ? nose.original : nose.written;
+        for (size_t k = 0; k < nose.index.size(); k++)
+            for (int c = 0; c < 3; c++)
+                if (read_half(rdram, current.vtx + 0x18 + 16 * nose.index[k] + 2 * c) != expect[3 * k + c]) return false;
+        return true;
+    }
+
+    void restore_nose(uint8_t* rdram) {
+        if (nose.model != 0 && !nose.written.empty() && nose.model == current_model && nose_intact(rdram)) {
+            for (size_t k = 0; k < nose.index.size(); k++)
+                for (int c = 0; c < 3; c++) write_half(rdram, current.vtx + 0x18 + 16 * nose.index[k] + 2 * c, nose.original[3 * k + c]);
+        }
+        const Spring keep = nose.spring;
+        nose = {};
+        nose.spring = keep;
+    }
+
+    // The snout bone's own vertices (draw nodes on bone 10, outside selectors).
+    void collect_snout(uint8_t* rdram, uint32_t node, int bone, bool in_selector, int depth, std::vector<int>& out) {
+        for (int guard = 0; guard < 4096 && depth < 32; guard++) {
+            const uint32_t cmd = read_word(rdram, node), size = read_word(rdram, node + 4);
+            if (cmd == 2) {
+                collect_snout(rdram, node + read_byte(rdram, node + 8), read_byte(rdram, node + 9), in_selector, depth + 1, out);
+            } else if (cmd == 0x0C) {
+                const int options = (uint16_t)read_half(rdram, node + 8);
+                for (int i = 0; i < options && i < 64; i++)
+                    collect_snout(rdram, node + read_word(rdram, node + 12 + 4 * i), bone, true, depth + 1, out);
+            } else if (cmd == 0x11 && bone == snout_bone && !in_selector) {
+                const int v0 = (uint16_t)read_half(rdram, node + 10), nv = (uint16_t)read_half(rdram, node + 12);
+                for (int i = v0; i < v0 + nv; i++) out.push_back(i);
+            }
+            if (size == 0 || size > 0x100000) return;
+            node += size;
+        }
+    }
+
+    bool prepare_nose(uint8_t* rdram) {
+        if (current.vertices <= 0) {
+            return false;
+        }
+        if (nose.model == current_model && !nose.index.empty() && nose_intact(rdram)) {
+            return true;
+        }
+        const Spring keep = nose.spring;
+        nose = {};
+        nose.spring = keep;
+        nose.model = current_model;
+        std::vector<int> all;
+        collect_snout(rdram, current_model + read_word(rdram, current_model + 4), -1, false, 0, all);
+        std::sort(all.begin(), all.end());
+        all.erase(std::unique(all.begin(), all.end()), all.end());
+        struct V { int i; Vec p; bool black, white; };
+        std::vector<V> verts;
+        for (int i : all) {
+            if (i < 0 || i >= current.vertices) continue;
+            const uint32_t a = current.vtx + 0x18 + 16 * i;
+            const Vec p{ (float)read_half(rdram, a), (float)read_half(rdram, a + 2), (float)read_half(rdram, a + 4) };
+            const bool black = read_byte(rdram, a + 12) == 0 && read_byte(rdram, a + 13) == 0 && read_byte(rdram, a + 14) == 0;
+            const bool white = read_byte(rdram, a + 12) == 0xFF && read_byte(rdram, a + 13) == 0xFF && read_byte(rdram, a + 14) == 0xFF;
+            verts.push_back({ i, p, black, white });
+        }
+        if (verts.empty()) {
+            return false;
+        }
+        std::vector<Vec> black;
+        for (const V& v : verts) if (v.black) black.push_back(v.p);
+        auto add = [&](const V& v, float w) {
+            nose.index.push_back(v.i);
+            nose.weight.push_back(w);
+            nose.original.push_back((int16_t)v.p.x); nose.original.push_back((int16_t)v.p.y); nose.original.push_back((int16_t)v.p.z);
+        };
+        Vec sum{ 0, 0, 0 };
+        float total = 0.0f, zmin = 1e9f, zmax = -1e9f;
+        if (black.size() >= 4) {
+            // The game's nose: the black vertices, and the white highlight drawn over them (inside their box).
+            Vec lo = black[0], hi = black[0];
+            for (const Vec& b : black) {
+                lo = { std::min(lo.x, b.x), std::min(lo.y, b.y), std::min(lo.z, b.z) };
+                hi = { std::max(hi.x, b.x), std::max(hi.y, b.y), std::max(hi.z, b.z) };
+            }
+            for (const V& v : verts) {
+                const float m = 3.0f;   // 062A's black vertices are not symmetric: one highlight is 2 outside
+                const bool on_nose = v.black || (v.white && v.p.x >= lo.x - m && v.p.x <= hi.x + m && v.p.y >= lo.y - m &&
+                                                 v.p.y <= hi.y + m && v.p.z >= lo.z - m && v.p.z <= hi.z + m);
+                if (on_nose) {
+                    add(v, 1.0f);
+                    sum = sum + v.p; total += 1.0f;
+                    zmin = std::min(zmin, v.p.z); zmax = std::max(zmax, v.p.z);
+                }
+            }
+            const Vec c = sum * (1.0f / total);
+            nose.pivot = { c.x, c.y, zmin };
+            nose.tip = { c.x, c.y, zmax };
+        } else {
+            // No black vertices (mods): the front third of the snout's mesh, blended in.
+            for (const V& v : verts) { zmin = std::min(zmin, v.p.z); zmax = std::max(zmax, v.p.z); }
+            const float span = std::max(zmax - zmin, 1.0f), z0 = zmax - 0.3f * span;
+            for (const V& v : verts) {
+                const float w = smooth((v.p.z - z0) / (0.15f * span));
+                if (w <= 0.0f) continue;
+                add(v, w);
+                sum = sum + v.p * w; total += w;
+            }
+            if (total <= 0.0f) {
+                return false;
+            }
+            const Vec c = sum * (1.0f / total);
+            nose.pivot = { c.x, c.y, z0 };
+            nose.tip = { c.x, c.y, zmax };
+        }
+        return !nose.index.empty();
+    }
+
+    // Turn the nose: m is the snout bone's matrix as drawn (after the snout's own jiggle).
+    float jiggle_nose(uint8_t* rdram, const float m[16]) {
+        const Vec pivot = transform(m, nose.pivot), tip = transform(m, nose.tip);
+        update_spring(nose.spring, to_world(tip), nose_settings.frequency, nose_settings.damping);
+        const Vec arm = tip - pivot;
+        const float la = length(arm);
+        float angle = 0.0f;
+        Mat N = rotation({ 1, 0, 0 }, 0.0f);
+        if (la > 1e-3f) {
+            N = aim(arm * (nose_arm / la), to_model_dir(nose.spring.lag) * nose_settings.follow, nose_settings.max_angle, angle);
+        }
+        for (int i = 0; i < 9; i++) N.m[i] *= nose_settings.size;
+        // In the vertex space: Nb = A N A^-1.
+        const Mat A = upper(m);
+        Mat Ai;
+        if (!inverse(A, Ai)) {
+            return 0.0f;
+        }
+        const Mat Nb = mul(mul(A, N), Ai);
+        std::vector<int16_t> out(nose.original.size());
+        for (size_t k = 0; k < nose.index.size(); k++) {
+            Vec v{ (float)nose.original[3 * k], (float)nose.original[3 * k + 1], (float)nose.original[3 * k + 2] };
+            const Vec moved = nose.pivot + apply(v - nose.pivot, Nb);
+            v = v + (moved - v) * nose.weight[k];
+            out[3 * k] = (int16_t)std::lround(std::clamp(v.x, -32768.0f, 32767.0f));
+            out[3 * k + 1] = (int16_t)std::lround(std::clamp(v.y, -32768.0f, 32767.0f));
+            out[3 * k + 2] = (int16_t)std::lround(std::clamp(v.z, -32768.0f, 32767.0f));
+        }
+        for (size_t k = 0; k < nose.index.size(); k++)
+            for (int c = 0; c < 3; c++) write_half(rdram, current.vtx + 0x18 + 16 * nose.index[k] + 2 * c, out[3 * k + c]);
+        nose.written = std::move(out);
+        return angle;
+    }
+
     // ---- Kazooie's feathers ----
     // Chains of bones, root first: bone indices and the ids that confirm them.
     struct Chain { int count; int bone[4]; int16_t id[4]; };
@@ -409,9 +607,17 @@ namespace {
         { 4, { 52, 53, 54, 55 }, { 65, 66, 67, 68 } },
         { 2, { 56, 57 }, { 91, 93 } },
     };
-    // Lighter than the snout: slower, longer wobbles and a wider swing per bone.
-    constexpr float feather_frequency = 2.6f, feather_damping = 0.14f, feather_follow = 1.2f;
-    constexpr float feather_angle = 32.0f;   // degrees per bone
+    // Lighter than the snout: slower, longer wobbles and a wider swing per bone. The Kazooie jiggle
+    // sliders scale these (defaults: 2.5 a second, damping 0.15, follow 1.2, 32 degrees per bone).
+    struct FeatherSettings { float frequency = 2.5f, damping = 0.15f, follow = 1.2f, max_angle = 32.0f; } feather_settings;
+    void read_feather_settings() {
+        using namespace tooie::snout_jiggle;
+        feather_settings.follow = 1.2f * (float)option_number(kazooie_strength_option, 100.0) / 100.0f;
+        // Bounce 0..100 as the snout's: damping 0.33 .. 0.03; 60 is 0.15.
+        feather_settings.damping = 0.03f + 0.30f * (1.0f - std::clamp((float)option_number(kazooie_bounce_option, 60.0), 0.0f, 100.0f) / 100.0f);
+        feather_settings.frequency = std::clamp((float)option_number(kazooie_speed_option, 2.5), 0.5f, 20.0f);
+        feather_settings.max_angle = std::min(32.0f * (float)option_number(kazooie_exaggeration_option, 100.0) / 100.0f, 85.0f);
+    }
     constexpr float feather_arm = 12.0f;     // every bone turns as if it were this long
     constexpr int max_feather_bones = 20, max_bones = 64;
 
@@ -521,12 +727,12 @@ namespace {
                 const Vec pivot = transform(m1, feathers.pivot[slot]);
                 const Vec end = transform(m1, feathers.tip[slot]);
                 Spring& s = feathers.spring[slot];
-                update_spring(s, to_world(end), feather_frequency, feather_damping);
+                update_spring(s, to_world(end), feather_settings.frequency, feather_settings.damping);
                 const Vec arm = end - pivot;
                 const float la = length(arm);
                 if (la > 1e-3f) {
                     float angle;
-                    const Mat R = aim(arm * (feather_arm / la), to_model_dir(s.lag) * feather_follow, feather_angle, angle);
+                    const Mat R = aim(arm * (feather_arm / la), to_model_dir(s.lag) * feather_settings.follow, feather_settings.max_angle, angle);
                     feathers.max_angle = std::max(feathers.max_angle, angle);
                     C = then(C, Affine{ R, pivot - apply(pivot, R) });
                 }
@@ -552,22 +758,35 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     }
     const bool on = option_bool(tooie::snout_jiggle::option);
     const bool feathers_on = option_bool(tooie::snout_jiggle::kazooie_option);
-    if (!on && !feathers_on && muzzle.model == 0) {
+    snout_on = on;
+    nose_on = option_bool(tooie::snout_jiggle::nose_option);
+    if (!on && !nose_on && !feathers_on && muzzle.model == 0 && nose.model == 0) {
         return;
     }
     const ModelInfo info = info_for(rdram, model);
     if (feathers_on) {
         pick_feathers(rdram, model, info.player);
+        if (feathers.chains != 0) {
+            read_feather_settings();
+        }
     }
     if (info.player) {
         current_model = model;
         current = info;
-        if (on) {
+        if (on || nose_on) {
             drawing_player = true;
             read_settings();
-        } else {
+            if (nose_on) read_nose_settings();
+        }
+        if (!on) {
             restore_muzzle(rdram);
         }
+        if (!nose_on) {
+            restore_nose(rdram);
+        }
+        const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_on;
+        bent_from = bending ? (model & 0x1FFFFFFF) : 0;
+        bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
     if (!drawing_player && feathers.chains == 0) {
         return;
@@ -632,6 +851,19 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
         have_head = true;
         return;
     }
+    if (!snout_on) {
+        if (nose_on && prepare_nose(rdram)) {
+            const float a = jiggle_nose(rdram, m);
+            if (logging()) {
+                static int n = 0;
+                if (++n % 15 == 0) {
+                    printf("[nose] angle %.1f verts %zu%s\n", a * 180.0f / pi, nose.index.size(), tooie::photo_mode::active() ? " (photo)" : "");
+                    fflush(stdout);
+                }
+            }
+        }
+        return;
+    }
     const Vec root = transform(m, current.root);
     const Vec tip = transform(m, current.tip);
     update_spring(spring, to_world(tip), settings.frequency, settings.damping);
@@ -688,13 +920,30 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
             bend_muzzle(rdram, mul(mul(A, Q), Ai));
         }
     }
+    float nose_angle = 0.0f;
+    if (nose_on && prepare_nose(rdram)) {
+        nose_angle = jiggle_nose(rdram, out);
+    }
     if (logging()) {
         static int n = 0;
         if (++n % 15 == 0) {
-            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f scale %.2f lag %.1f,%.1f,%.1f angle %.1f stretch %.2f muzzle %zu%s\n",
+            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f scale %.2f lag %.1f,%.1f,%.1f angle %.1f stretch %.2f muzzle %zu nose %.1f/%zu%s\n",
                    model_pos.x, model_pos.y, model_pos.z, model_yaw, model_scale, spring.lag.x, spring.lag.y, spring.lag.z,
-                   angle * 180.0f / pi, f, muzzle.index.size(), tooie::photo_mode::active() ? " (photo)" : "");
+                   angle * 180.0f / pi, f, muzzle.index.size(), nose_angle * 180.0f / pi, nose.index.size(), tooie::photo_mode::active() ? " (photo)" : "");
             fflush(stdout);
         }
     }
+}
+
+bool tooie::snout_jiggle::blend_vertices(uint32_t first_list_phys) {
+    const uint32_t from = bent_from, to = bent_to;
+    const bool hit = from != 0 && first_list_phys >= from && first_list_phys < to;
+    if (from != 0 && logging()) {
+        static int n = 0;
+        if (++n % 200 == 0) {
+            printf("[snout] blend check %08X in %08X-%08X: %d\n", first_list_phys, from, to, hit);
+            fflush(stdout);
+        }
+    }
+    return hit;
 }
