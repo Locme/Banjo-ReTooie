@@ -3981,6 +3981,7 @@ RECOMP_FUNC void baswim_entrypoint_11(uint8_t* rdram, recomp_context* ctx) {
     ctx->f8.u32l = MEM_W(ctx->r29, 0X34);
     // 0x8080037C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
+    tooie_swim_turn(rdram, ctx);
     // 0x80800380: mul.s       $f10, $f8, $f0
     CHECK_FR(ctx, 10);
     CHECK_FR(ctx, 8);

@@ -872,6 +872,14 @@ func = "func_808005F4_chbanjocurrent"
 before_vram = 0x80800758
 text = "tooie_current_push(rdram, ctx);"
 
+# baswim_entrypoint_11 adds the stick's turn to Banjo's target heading once per game frame
+# under water; above 60 FPS the turn ($f8) is scaled to the frame's time
+# (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "baswim_entrypoint_11"
+before_vram = 0x80800380
+text = "tooie_swim_turn(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).
