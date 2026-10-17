@@ -418,7 +418,7 @@ index c20fb51..d9e9256 100644
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
-index 20c0d4d..ff978bd 100644
+index 20c0d4d..2649a28 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
 +++ b/src/gbi/rt64_gbi_extended.cpp
 @@ -331,6 +331,15 @@ namespace RT64 {
@@ -431,7 +431,7 @@ index 20c0d4d..ff978bd 100644
 +        }
 +
 +        void setFurShellsV1(State *state, DisplayList **dl) {
-+            state->rdp->setFurShells((*dl)->p1(0, 2));
++            state->rdp->setFurShells((*dl)->p1(0, 3));
 +        }
 +
          void noOpHook(State *state, DisplayList **dl) {
@@ -460,7 +460,7 @@ index 08f83e5..2bfdba4 100755
  #   elif defined(__linux__) || defined(__APPLE__)
          if (SDL_VideoInit(nullptr) != 0) {
 diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
-index 0e62be1..103584a 100644
+index 0e62be1..eff6759 100644
 --- a/src/hle/rt64_draw_call.h
 +++ b/src/hle/rt64_draw_call.h
 @@ -65,6 +65,11 @@ namespace RT64 {
@@ -469,9 +469,9 @@ index 0e62be1..103584a 100644
          uint32_t forceScaleLOD : 1;
 +        // Banjo-Tooie: drawn after the scene effects instead of under them (see FramebufferRenderer).
 +        uint32_t sceneEffectsExclude : 1;
-+        // Banjo-Tooie: 1 fur shells are drawn over these (Banjo's model), 2 feathers grow on them (Kazooie's), see
-+        // FramebufferRenderer.
-+        uint32_t furShells : 2;
++        // Banjo-Tooie: 1 fur shells are drawn over these (Banjo's model), 2 feathers grow on them (Kazooie's), 3 white
++        // fur (a furry enemy's), 4 feathers in their own colours (a feathered NPC's), see FramebufferRenderer.
++        uint32_t furShells : 3;
      };
  
      struct DrawCall {
@@ -1186,7 +1186,7 @@ index e08b02c..cad0222 100644
          ProfilingTimer presentProfiler = ProfilingTimer(120);
          Timestamp presentTimestamp;
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
-index a10c11a..d896e1e 100644
+index a10c11a..3071d72 100644
 --- a/src/hle/rt64_rdp.cpp
 +++ b/src/hle/rt64_rdp.cpp
 @@ -1076,6 +1076,16 @@ namespace RT64 {
@@ -1199,7 +1199,7 @@ index a10c11a..d896e1e 100644
 +    }
 +
 +    void RDP::setFurShells(uint32_t kind) {
-+        extended.drawExtendedFlags.furShells = kind & 0x3;
++        extended.drawExtendedFlags.furShells = kind & 0x7;
 +        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
 +    }
 +
@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a7dd499 100644
+index 9fae0d4..cc26d69 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2110,7 +2110,7 @@ index 9fae0d4..a7dd499 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +876,93 @@ namespace RT64 {
+@@ -574,10 +876,95 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2187,10 +2187,12 @@ index 9fae0d4..a7dd499 100644
 +                }
 +
 +                // Banjo-Tooie: Kazooie's feathers, grown over the same triangles by the grass blades' geometry shader.
-+                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && ((instanceFurVector[i] == 2) || (instanceFurVector[i] == 3))) {
++                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] >= 2) && (instanceFurVector[i] <= 6) && (instanceFurVector[i] != 4)) {
 +                    worker->commandList->setPipeline(grassBladePipeline);
 +                    previousPipeline = grassBladePipeline;
-+                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS | ((instanceFurVector[i] == 3) ? RASTER_GRASS_EDGES : 0);
++                    const uint32_t featherKind = instanceFurVector[i];
++                    rasterParams.grassShells = FeatherCardPasses | RASTER_GRASS_BLADES | RASTER_FEATHER_CARDS | (((featherKind == 3) || (featherKind == 6)) ? RASTER_GRASS_EDGES : 0) |
++                        ((featherKind >= 5) ? RASTER_FEATHER_NPC : 0);
 +                    for (uint32_t pass = 1; pass <= FeatherCardPasses; pass++) {
 +                        rasterParams.grassShell = pass;
 +                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
@@ -2204,7 +2206,7 @@ index 9fae0d4..a7dd499 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1635,67 @@ namespace RT64 {
+@@ -1250,6 +1637,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2272,7 +2274,7 @@ index 9fae0d4..a7dd499 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1742,84 @@ namespace RT64 {
+@@ -1296,9 +1744,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2358,7 +2360,7 @@ index 9fae0d4..a7dd499 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1871,30 @@ namespace RT64 {
+@@ -1350,10 +1873,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2389,7 +2391,7 @@ index 9fae0d4..a7dd499 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1949,61 @@ namespace RT64 {
+@@ -1408,6 +1951,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2451,7 +2453,7 @@ index 9fae0d4..a7dd499 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2027,22 @@ namespace RT64 {
+@@ -1431,6 +2029,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2474,7 +2476,7 @@ index 9fae0d4..a7dd499 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2068,110 @@ namespace RT64 {
+@@ -1456,6 +2070,110 @@ namespace RT64 {
                  continue;
              }
  
@@ -2585,7 +2587,7 @@ index 9fae0d4..a7dd499 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2322,7 @@ namespace RT64 {
+@@ -1606,6 +2324,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2593,7 +2595,7 @@ index 9fae0d4..a7dd499 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2399,20 @@ namespace RT64 {
+@@ -1682,6 +2401,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2614,7 +2616,7 @@ index 9fae0d4..a7dd499 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2478,297 @@ namespace RT64 {
+@@ -1747,8 +2480,300 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2842,7 +2844,9 @@ index 9fae0d4..a7dd499 100644
 +                }
 +                // Banjo-Tooie: Kazooie's feathers grow on her opaque draws the same way (the game marks them 2).
 +                bool feathers = false;
-+                if (!fur && featherCards && (call.callDesc.extendedFlags.furShells == 2) && !excluded && worldOpen && fbPair.depthWrite &&
++                // (4: a feathered NPC's, Canary Mary.)
++                const bool npcFeathers = (call.callDesc.extendedFlags.furShells == 4);
++                if (!fur && featherCards && ((call.callDesc.extendedFlags.furShells == 2) || npcFeathers) && !excluded && worldOpen && fbPair.depthWrite &&
 +                    (proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                    !instanceDrawCall.triangles.vertexTestZ)
 +                {
@@ -2853,8 +2857,9 @@ index 9fae0d4..a7dd499 100644
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
 +                // (3: a part cut out by its texture, seen from both sides, RASTER_GRASS_EDGES in GrassGS.hlsl; 4: a furry
-+                // enemy's white fur.)
-+                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : (feathers ? (interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) : 0));
++                // enemy's white fur; 5 and 6: as 2 and 3 on a feathered NPC.)
++                const uint32_t featherKind = feathers ? ((interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) + (npcFeathers ? 3 : 0)) : 0;
++                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : featherKind);
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
                  }
@@ -2912,7 +2917,7 @@ index 9fae0d4..a7dd499 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2778,213 @@ namespace RT64 {
+@@ -1758,13 +2783,213 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -8433,10 +8438,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..0141e96
+index 0000000..40e9879
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,120 @@
+@@ -0,0 +1,127 @@
 +//
 +// RT64
 +//
@@ -8532,7 +8537,7 @@ index 0000000..0141e96
 +// 1 tip), then its own shade. Only on her feathers (reds and oranges), not her beak or legs. Cut to a feather's
 +// shape, narrow at the root and round at the tip, darker towards the root where the one above lies over it, with a
 +// faint shaft down its middle.
-+bool FeatherCard(float3 anchor, float3 baseColor, inout float3 color) {
++bool FeatherCard(float3 anchor, float3 baseColor, bool npc, inout float3 color) {
 +    const float high = max(baseColor.r, max(baseColor.g, baseColor.b));
 +    const float low = min(baseColor.r, min(baseColor.g, baseColor.b));
 +    if ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
@@ -8540,9 +8545,16 @@ index 0000000..0141e96
 +    }
 +    // Red to orange; up to a deep orange only where it is fully saturated (the top of her head, no blue at all), as
 +    // her beak's orange base keeps a little blue (saturation 0.91-0.95; its feathers showed as flecks, L).
++    // A feathered NPC (Canary Mary) has them on her strong orange-yellow (hue 37-47, saturation 0.85 and up), not on
++    // her tan skin (saturation about 0.6) or her paler lemon beak (hue 54).
 +    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
 +    const float saturation = (high - low) / high;
-+    if ((hue < -20.0f) || (hue > ((saturation >= 0.98f) ? 30.0f : 18.0f))) {
++    if (npc) {
++        if ((hue < 30.0f) || (hue > 50.0f) || (saturation < 0.78f)) {
++            return false;
++        }
++    }
++    else if ((hue < -20.0f) || (hue > ((saturation >= 0.98f) ? 30.0f : 18.0f))) {
 +        return false;
 +    }
 +
@@ -10068,7 +10080,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..8199e3e 100644
+index e7895c3..df747bf 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -10213,7 +10225,7 @@ index e7895c3..8199e3e 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +351,108 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +351,111 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -10249,7 +10261,10 @@ index e7895c3..8199e3e 100644
 +                underHue = 60.0f * (4.0f + (under.r - under.g) / underChroma);
 +            }
 +        }
-+        const bool beak = (underHue >= 30.0f) && (underHue <= 70.0f) && (underSaturation < 0.88f) && (underHigh > 0.25f);
++        // (A feathered NPC's, Canary Mary's: her lemon beak and her tan skin.)
++        const bool npcFeathers = (gConstants.grassShells & RASTER_FEATHER_NPC) != 0;
++        const bool beak = npcFeathers ? (((underHue > 51.0f) && (underHue <= 70.0f) && (underHigh > 0.25f)) || ((underSaturation < 0.72f) && (underHigh > 0.25f))) :
++            ((underHue >= 30.0f) && (underHue <= 70.0f) && (underSaturation < 0.88f) && (underHigh > 0.25f));
 +        const bool eye = ((underHigh > 0.55f) && (underSaturation < 0.25f)) || ((underHue > 70.0f) && (underHue < 180.0f) && (underSaturation > 0.3f));
 +        if (beak || eye || (underHigh < 0.08f)) {
 +            return false;
@@ -10257,7 +10272,7 @@ index e7895c3..8199e3e 100644
 +        if ((underHigh < 0.22f) || (underSaturation < 0.4f)) {
 +            resultColor.rgb = featherRootColor.rgb;
 +        }
-+        if (!FeatherCard(vertexFurAnchor, featherRootColor.rgb, resultColor.rgb)) {
++        if (!FeatherCard(vertexFurAnchor, featherRootColor.rgb, npcFeathers, resultColor.rgb)) {
 +            return false;
 +        }
 +        // See-through feathers: a share of their pixels left out in a fine even pattern.
@@ -10322,7 +10337,7 @@ index e7895c3..8199e3e 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +460,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +463,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -10346,7 +10361,7 @@ index e7895c3..8199e3e 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +503,7 @@ void PSMain(
+@@ -287,6 +506,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -10354,7 +10369,7 @@ index e7895c3..8199e3e 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +520,7 @@ void PSMain(
+@@ -303,7 +523,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -13535,10 +13550,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..3e9f1a8 100644
+index 0a5c332..710ee86 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,46 @@
+@@ -9,11 +9,49 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -13554,6 +13569,9 @@ index 0a5c332..3e9f1a8 100644
 +    // Banjo-Tooie: with RASTER_GRASS_BLADES, the geometry shader grows Kazooie's feathers on the draw instead of grass
 +    // (GrassGS.hlsl, FeatherCard in Fur.hlsli); RASTER_GRASS_EDGES then marks a thin part seen from both sides.
 +#define RASTER_FEATHER_CARDS 0x10000000u
++    // Banjo-Tooie: with RASTER_FEATHER_CARDS, a feathered NPC's (Canary Mary): feathers wherever her colour is strong,
++    // not only on Kazooie's reds (FeatherCard in Fur.hlsli).
++#define RASTER_FEATHER_NPC 0x08000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
 +    // the shell count.

@@ -774,7 +774,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
     const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
     const bool enemy_fur = tooie::picture_filters::enemy_fur_on();
-    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || enemy_fur);
+    const bool npc_feathers = tooie::picture_filters::npc_feathers_on();
+    const bool fur = !overlay && end > start && (banjo_fur || kazooie_feathers || enemy_fur || npc_feathers);
     if (!interpolating && !excluding && !fur) {
         if (!overlay) {
             stat_models = 0;
@@ -876,8 +877,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Manual tags (tooie_interp_tags.h): each model's print, and its tag.
     // The tags only count in the custom blend mode (normal plus the tags).
     const bool custom = blend_mode == tooie::interp_check::blend_custom;
+    // (Furry enemies and feathered NPCs are known by their prints too.)
     const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids ||
-        excluding);
+        excluding || (end > start && (enemy_fur || npc_feathers)));
     if (tags_wanted) {
         for (Block& block : blocks) {
             // Particles (fire, say) have a print too: their lists are built
@@ -1158,16 +1160,45 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 std::fprintf(stderr, "\n");
             }
         }
-        // Furry enemies get white fur all over (RT64's kind 3): Hailfire Peaks' yetis (L). Known by their model's
-        // print (Block::print), the same in every run.
-        if (enemy_fur) {
-            static constexpr uint32_t furry_enemies[] = {
-                0xE23CADDF, // the yeti on Hailfire Peaks' Icy Side
+        // Furry enemies get white fur all over (RT64's kind 3): Hailfire Peaks' yetis (L). Feathered NPCs get feathers
+        // like Kazooie's in their own colours (kind 4): Canary Mary (L). Known by their model's print (Block::print),
+        // the same in every run, and where another model prints the same (Mary's race cart does), by how many
+        // matrices it has (0: any). TOOIE_FEATHER_PRINTS=<hex>,... adds feathered ones (headless aid).
+        struct Covered {
+            uint32_t print;
+            uint32_t kind;
+            uint32_t matrices;
+        };
+        static const std::vector<Covered> covered = [] {
+            std::vector<Covered> out = {
+                { 0xE23CADDF, 3, 0 }, // the yeti on Hailfire Peaks' Icy Side
+                { 0x765B856B, 4, 41 }, // Canary Mary (her Glitter Gulch Mine race)
             };
+            if (const char* text = std::getenv("TOOIE_FEATHER_PRINTS")) {
+                char* p = const_cast<char*>(text);
+                while (*p != 0) {
+                    out.push_back({ (uint32_t)std::strtoul(p, &p, 16), 4, 0 });
+                    if (*p != ',') {
+                        break;
+                    }
+                    p++;
+                }
+            }
+            return out;
+        }();
+        if (enemy_fur || npc_feathers) {
             for (size_t b = 0; b < blocks.size(); b++) {
                 const Block& block = blocks[b];
-                if (block.shadow || block.vertex_command == SIZE_MAX ||
-                    std::find(std::begin(furry_enemies), std::end(furry_enemies), block.print) == std::end(furry_enemies)) {
+                if (block.shadow || block.vertex_command == SIZE_MAX) {
+                    continue;
+                }
+                uint32_t kind = 0;
+                for (const Covered& c : covered) {
+                    if (c.print == block.print && (c.matrices == 0 || c.matrices == block.matrices) && ((c.kind == 3) ? enemy_fur : npc_feathers)) {
+                        kind = c.kind;
+                    }
+                }
+                if (kind == 0) {
                     continue;
                 }
                 size_t first = SIZE_MAX;
@@ -1182,10 +1213,16 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                     }
                 }
                 const size_t on_slot = first == SIZE_MAX ? SIZE_MAX : flag_slot(first);
+                if (log_fur) {
+                    static uint32_t logged_covered = 0;
+                    if ((logged_covered++ % 120) == 0) {
+                        std::fprintf(stderr, "[fur] model %08X gets kind %u (%s)\n", block.print, kind, on_slot == SIZE_MAX ? "no slot" : "marked");
+                    }
+                }
                 if (on_slot == SIZE_MAX || cursor + 64 > limit) {
                     continue;
                 }
-                set_flag(cursor, on_slot, g_ex_fur_shells_v1, 3);
+                set_flag(cursor, on_slot, g_ex_fur_shells_v1, kind);
                 const size_t off_slot = flag_slot(last + 1);
                 if (off_slot != SIZE_MAX) {
                     set_flag(cursor, off_slot, g_ex_fur_shells_v1, 0);

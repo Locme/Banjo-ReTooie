@@ -114,6 +114,7 @@ namespace {
     std::atomic<bool> sun_shadows{false};
     std::atomic<bool> kazooie_feathers{false};
     std::atomic<bool> enemy_fur{false};
+    std::atomic<bool> npc_feathers{false};
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
     std::atomic<float> snow_height{1.0f};
@@ -2971,6 +2972,7 @@ namespace {
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
         { &tooie::picture_filters::kazooie_feathers_option, 0.0 },
         { &tooie::picture_filters::enemy_fur_option, false },
+        { &tooie::picture_filters::npc_feathers_option, false },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
@@ -3120,6 +3122,16 @@ void tooie::picture_filters::apply() {
         feathers = std::atof(forced);
     }
     kazooie_feathers = feathers > 0.0;
+    // Feathered NPCs (Canary Mary); TOOIE_NPC_FEATHERS=1 turns them on instead (headless). Theirs are Kazooie's at full
+    // amount when hers are off.
+    bool npcs = value<bool>(npc_feathers_option, false);
+    if (const char* forced = std::getenv("TOOIE_NPC_FEATHERS")) {
+        npcs = std::atoi(forced) != 0;
+    }
+    npc_feathers = npcs;
+    if (!kazooie_feathers && npcs) {
+        feathers = 100.0;
+    }
     // TOOIE_FEATHER_TRANSPARENCY=<0-100> sets their transparency instead (headless).
     double feather_transparency = value<double>(kazooie_feather_transparency_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_FEATHER_TRANSPARENCY")) {
@@ -3233,6 +3245,10 @@ bool tooie::picture_filters::kazooie_feathers_on() {
 
 bool tooie::picture_filters::enemy_fur_on() {
     return enemy_fur;
+}
+
+bool tooie::picture_filters::npc_feathers_on() {
+    return npc_feathers;
 }
 
 float tooie::picture_filters::underwater() {
@@ -3704,6 +3720,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Enemy fur",
         "Furry enemies grow white fur like Banjo's: the yetis on Hailfire Peaks' Icy Side. It is as long and thick as Banjo's fur is set to.",
         false);
+    graphics.add_bool_option(
+        npc_feathers_option,
+        "NPC feathers",
+        "Feathered characters grow feathers like Kazooie's: Canary Mary. They are as long and thick as Kazooie's feathers are set to.",
+        false);
     graphics.add_number_option(
         heat_haze_option,
         "Heat haze",
@@ -3867,7 +3888,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option, &npc_feathers_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -3921,7 +3942,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
-    for (const std::string* option : { &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option }) {
+    for (const std::string* option : { &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option, &npc_feathers_option }) {
         graphics.add_option_hidden_dependency(*option, character_section_option, false);
     }
     graphics.add_option_hidden_dependency(heat_haze_option, lighting_section_option, false);

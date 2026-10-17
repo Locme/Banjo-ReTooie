@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T362 Canary Mary feathers (NPC feathers toggle)
+- Asked: 2026-10-17 08:54 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn on NPC feathers
+  2. Race Canary Mary (Glitter Gulch Mine or Cloud Cuckooland; Race Warps work)
+  3. Watch her at the start and when she talks to you after the race
+- Look for: Her dress, wings and crest grow little feathers in her own yellow-orange. Her face, neck, arms and beak stay smooth. With NPC feathers off she looks as before. Their length and density follow the Kazooie feather sliders. Mary seen outside a race (her cage in Canary Cave) may not have them yet.
+- Status: waiting for L
+
 ## T361 Cheats round 2: Replays, Beat Hag 1, size cheats, one-hit enemies, double damage
 - Asked: 2026-10-17 08:07 UTC
 - Build: main @ cb3cebc

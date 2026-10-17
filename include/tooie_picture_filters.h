@@ -103,6 +103,7 @@ namespace tooie::picture_filters {
     inline const std::string kazooie_feather_transparency_option = "kazooie_feather_transparency";
     // Furry enemies' white fur (the yetis), on or off (L).
     inline const std::string enemy_fur_option = "enemy_fur";
+    inline const std::string npc_feathers_option = "npc_feathers";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
@@ -111,6 +112,7 @@ namespace tooie::picture_filters {
     bool kazooie_feathers_on();
     // Whether furry enemies' fur is on, for the model tagging to mark them.
     bool enemy_fur_on();
+    bool npc_feathers_on();
     // How far under water the view is, 0 above to 1 under (easing between), for the day and night cycle's rain.
     float underwater();
 
