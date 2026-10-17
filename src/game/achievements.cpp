@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <deque>
 #include <atomic>
 #include <cmath>
 #include <filesystem>
@@ -375,8 +376,14 @@ namespace {
         return !cheats_seen && loaded && tooie::debug::can_warp();
     }
 
+    int portrait_of(const std::string& id);
+
+    std::mutex popup_mutex;
+    std::deque<tooie::achievements::Popup> popups;
+
     void unlock_message(const Achievement& a) {
-        tooie::toast::show(std::string("Achievement unlocked: ") + a.name + " (" + std::to_string(a.points) + " G)");
+        std::lock_guard lock{popup_mutex};
+        popups.push_back({a.name, a.points, portrait_of(a.id)});
     }
 
     // Adds one to a counted achievement, unlocking it at its goal. Pass a key to count each thing once
@@ -425,6 +432,55 @@ namespace {
     }
 }
 
+namespace {
+    // Each achievement's icon, as close to its XBLA picture as the game's own art goes: a talking-head
+    // portrait id (gczoomboxdata's table, the set the pause menu's option icons come from). The game
+    // draws them from the ROM, so a texture pack that replaces a portrait replaces its icon too.
+    // TOOIE_ACH_PORTRAITS="id=hex,..." overrides them, to look at others headless.
+    const std::vector<std::pair<const char*, int>> portraits = {
+        {"merry_old_soul", 0x96},
+        {"after_the_storm", 0x14},
+        {"all_beaten_up", 0x10},
+        {"calamari_bonanza", 0x05},
+        {"hatch_the_future", 0x0C},
+        {"it_lives", 0xAA},
+        {"knocked_out_klungo", 0xAB},
+        {"my_nemesis", 0x7D},
+        {"points_make_prizes", 0x3A},
+        {"shoot_em_up", 0x07},
+        {"all_over", 0x33},
+        {"treasure_hunt", 0x01},
+    };
+
+    int portrait_of(const std::string& id) {
+        if (const char* env = std::getenv("TOOIE_ACH_PORTRAITS")) {
+            const std::string list = env;
+            const std::string key = id + "=";
+            for (size_t at = 0; (at = list.find(key, at)) != std::string::npos; at += key.size()) {
+                if (at == 0 || list[at - 1] == ',') {
+                    return (int)std::strtol(list.c_str() + at + key.size(), nullptr, 16);
+                }
+            }
+        }
+        for (const auto& [name, portrait] : portraits) {
+            if (id == name) {
+                return portrait;
+            }
+        }
+        return -1;
+    }
+}
+
+bool tooie::achievements::take_popup(Popup& out) {
+    std::lock_guard lock{popup_mutex};
+    if (popups.empty()) {
+        return false;
+    }
+    out = std::move(popups.front());
+    popups.pop_front();
+    return true;
+}
+
 std::vector<tooie::achievements::PauseEntry> tooie::achievements::pause_entries() {
     nlohmann::json done;
     {
@@ -437,6 +493,7 @@ std::vector<tooie::achievements::PauseEntry> tooie::achievements::pause_entries(
         e.name = a.name;
         e.description = a.description;
         e.points = a.points;
+        e.portrait = portrait_of(a.id);
         e.unlocked = done.contains(a.id);
         if (e.unlocked && done[a.id].is_string()) {
             e.unlocked_at = done[a.id].get<std::string>();
