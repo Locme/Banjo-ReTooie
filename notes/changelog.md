@@ -199,6 +199,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Audio
 
+- Fixed: the intro's black screens between scenes were silent. The game holds each scene until the music reaches its cue, and that wait never let the sound run, so the music stopped and the scenes slowly fell out of step with it. The music now plays through the black screens (L). Untested on PC (T406).
 - Sound no longer drops out at Uncapped and other high frame rates, or in cutscene skips ("Unhandled jump target ... n_aspMain" in the log). Untested on PC (T339).
 - Sound > Mix rate now switches at once, without restarting the game. Untested on PC (T335).
 

@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T406 Intro: the music keeps playing between scenes
+- Asked: 2026-10-17 21:21 UTC
+- Build: next build from main
+- Steps:
+  1. Start a new game and watch the intro from the start
+  2. Listen through the black screens between scenes (after Klungo, after the poker game, and so on)
+- Look for: The intro music keeps playing through each black screen between scenes, and the scenes stay in step with the music. The black screens themselves are the original game's timing (2 to 7 s each); they're just no longer silent. Checked headless: before, about 11 s of music went missing over the first three scene changes; now none
+- Status: waiting for L
+
 ## T405 Banjo's shadow holds still in 16:9 and Fill
 - Asked: 2026-10-17 21:09 UTC
 - Build: main

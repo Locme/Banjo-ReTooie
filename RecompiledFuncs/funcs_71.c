@@ -2796,6 +2796,7 @@ L_808002BC:
     // 0x808002C0: lw          $a0, 0x0($s1)
     ctx->r4 = MEM_W(ctx->r17, 0X0);
     after_1:
+    tooie_preempt_point(rdram, ctx);
     // 0x808002C4: sltu        $at, $v0, $s0
     ctx->r1 = ctx->r2 < ctx->r16 ? 1 : 0;
     // 0x808002C8: bne         $at, $zero, L_808002BC
