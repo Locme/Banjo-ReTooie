@@ -85,7 +85,7 @@
   2. Turn the camera around Banjo, then walk and stand still
   3. Try Game Frame Rate Original, 60 and 175
 - Look for: The shadow under Banjo keeps its shape and doesn't flicker or jump while the camera turns; it doesn't show on rocks or walls in front of him
-- Status: waiting for L
+- Status: failed (L, 2026-10-17: "It still shakes"; with HD Shadows the shadow showed through Banjo). Change reverted.
 
 ## T386 Deep snow: trail, no stripes or colour bands, Chilly Willy marks
 - Asked: 2026-10-17 12:44 UTC
