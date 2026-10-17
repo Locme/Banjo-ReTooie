@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T410 No parallax on Terrydactyland's cracked stone floor
+- Asked: 2026-10-17 21:46 UTC
+- Build: main
+- Steps:
+  1. Turn Graphics > Parallax up (Parallax on original textures on)
+  2. Go to Terrydactyland, by the rock pillars where you took the screenshot (Banjo at about -1380, -43, -7155)
+  3. Look at the cracked flagstone floor
+- Look for: Is the floor flat like the original now, with parallax still on the rock pillars and other stone?
+- Status: waiting for L
+
 ## T409 Fur and feathers the same in every light; fur length up to 1500
 - Asked: 2026-10-17 21:43 UTC
 - Build: main @ d1b6c3f

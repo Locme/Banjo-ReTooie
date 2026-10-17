@@ -1995,7 +1995,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..f18a1ce 100644
+index 9fae0d4..7e7b537 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -3046,7 +3046,7 @@ index 9fae0d4..f18a1ce 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2622,898 @@ namespace RT64 {
+@@ -1747,24 +2622,901 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3399,8 +3399,11 @@ index 9fae0d4..f18a1ce 100644
 +                    }
 +                    // TOOIE_PARALLAX_LOG: each texture of the 3D world once, with or without parallax mapping, to find
 +                    // stone the list misses.
-+                    static const bool parallaxLog = (getenv("TOOIE_PARALLAX_LOG") != nullptr);
-+                    if (parallaxLog) {
++                    // (TOOIE_PARALLAX_LOG=<ms> starts that long after the first frame, to list one place's textures.)
++                    static const char *parallaxLogText = getenv("TOOIE_PARALLAX_LOG");
++                    static const bool parallaxLog = (parallaxLogText != nullptr);
++                    static const auto parallaxLogStart = std::chrono::steady_clock::now() + std::chrono::milliseconds(parallaxLog ? atol(parallaxLogText) : 0);
++                    if (parallaxLog && (std::chrono::steady_clock::now() >= parallaxLogStart)) {
 +                        static std::unordered_set<uint64_t> parallaxLogged;
 +                        for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
 +                            const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
