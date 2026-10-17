@@ -19,15 +19,17 @@
 //   (it leaned right before, L 2026-10-17). It steps by the game's own clock, so it behaves the same
 //   at any frame rate and never snaps back to rest after a hitch.
 // - The sliders under the option set the rest (tooie_snout_jiggle.h); Floppiness takes the spring
-//   away and lets it hang and flop like a shaken hot dog (L, 2026-10-17).
+//   away and lets it hang and flop like a shaken hot dog; Heaviness gives it more weight (slower,
+//   bigger swings from starts and stops, more droop) (L, 2026-10-17).
 // - In Photo Mode the swing stops, so the snout stays mid-wobble (L, 2026-10-16).
 //
 // On the game's own models only the front of the snout is bone 10; the rest of the muzzle is the
 // head's (bone 9). So that the muzzle bends too (L: "the snout part in the vanilla model could go
 // further back"), the head's vertices in front of the snout's root minus the Reach slider take the
 // snout's turn, blended in towards the front (as skinning does), written into the model's own
-// vertex list each frame; the originals are put back when the option is turned off. The jaw (bone
-// 11) bends the same way, so the mouth stays shut. Not on models with many vertices (mods such as
+// vertex list each frame; the originals are put back when the option is turned off. The mouth stays
+// out of it (L): the lips and the corners of the mouth don't bend, and the lips on the snout bone are
+// turned back, so only the snout above the mouth swings. Not on models with many vertices (mods such as
 // Smash Banjo, which have their own muzzle on bone 10). The eyes (selectors) and the other bones'
 // vertices are left alone. (Nose jiggle, the black nose on its own spring, was taken out: L
 // 2026-10-17, "its not doing anything".)
@@ -148,20 +150,24 @@ namespace {
     // The sliders, read once per draw of the player's model.
     struct Settings {
         float follow = base_follow, damping = 0.18f, frequency = 3.5f, max_angle = base_angle;
-        float stretch = 0.0f, size = 1.0f, reach = 20.0f, floppiness = 0.25f;
+        float stretch = 0.5f, size = 0.9f, reach = 6.0f, floppiness = 0.8f, heaviness = 1.0f;
     } settings;
 
     void read_settings() {
         using namespace tooie::snout_jiggle;
-        settings.follow = base_follow * (float)option_number(strength_option, 100.0) / 100.0f;
+        settings.follow = base_follow * (float)option_number(strength_option, 30.0) / 100.0f;
         // Bounce 0..100: damping from 0.33 (settles at once) to 0.03 (wobbles for seconds); 50 is 0.18.
-        settings.damping = 0.03f + 0.30f * (1.0f - std::clamp((float)option_number(bounce_option, 50.0), 0.0f, 100.0f) / 100.0f);
-        settings.frequency = std::clamp((float)option_number(speed_option, 3.5), 0.5f, 20.0f);
-        settings.max_angle = std::min(base_angle * (float)option_number(exaggeration_option, 100.0) / 100.0f, 85.0f);
-        settings.stretch = (float)option_number(stretch_option, 0.0) / 100.0f;
-        settings.size = std::clamp((float)option_number(size_option, 100.0) / 100.0f, 0.25f, 4.0f);
-        settings.reach = std::max((float)option_number(reach_option, 20.0), 0.0f);
-        settings.floppiness = std::clamp((float)option_number(floppiness_option, 25.0), 0.0f, 100.0f) / 100.0f;
+        // Above 100 (up to 150) it falls on to almost nothing: wobbles that hardly die out.
+        const float bounce = std::clamp((float)option_number(bounce_option, 75.0), 0.0f, 150.0f);
+        settings.damping = bounce <= 100.0f ? 0.03f + 0.30f * (1.0f - bounce / 100.0f)
+                                            : 0.03f * (1.0f - 0.85f * (bounce - 100.0f) / 50.0f);
+        settings.frequency = std::clamp((float)option_number(speed_option, 3.0), 0.5f, 20.0f);
+        settings.max_angle = std::min(base_angle * (float)option_number(exaggeration_option, 150.0) / 100.0f, 126.0f);
+        settings.stretch = (float)option_number(stretch_option, 50.0) / 100.0f;
+        settings.size = std::clamp((float)option_number(size_option, 90.0) / 100.0f, 0.25f, 4.0f);
+        settings.reach = std::max((float)option_number(reach_option, 6.0), 0.0f);
+        settings.floppiness = std::clamp((float)option_number(floppiness_option, 80.0), 0.0f, 150.0f) / 100.0f;
+        settings.heaviness = std::clamp((float)option_number(heaviness_option, 100.0), 10.0f, 300.0f) / 100.0f;
     }
 
     bool logging() {
@@ -210,8 +216,8 @@ namespace {
     // ---- the muzzle on the game's own models (see the top) ----
     struct Muzzle {
         uint32_t model = 0;
-        std::vector<int> index;            // the head's (and jaw's) vertices that can bend
-        std::vector<char> on_jaw;          // drawn with the jaw's matrix
+        std::vector<int> index;            // the head's vertices that can bend, and the snout bone's own
+        std::vector<char> on_snout;        // drawn with the snout bone's (turned) matrix
         std::vector<int16_t> original;     // their bind positions, 3 per vertex
         std::vector<int16_t> written;      // what was last written, 3 per vertex (empty: nothing yet)
     } muzzle;
@@ -238,11 +244,11 @@ namespace {
         muzzle = {};
     }
 
-    // The head's own vertices: draw nodes on bone 9 outside selectors, and the head side of the snout's
-    // skin node (on bone 10, its second half). With a jaw (bone 11) also the jaw's vertices and the head
-    // side of its skin: the corners of the mouth are one point in the snout's skin, the head's mesh and
-    // the jaw's skin, so if one of them bends without the others the mouth tears open there (L's
-    // close-up, 2026-10-17). Second of each pair: true for the jaw's own vertices.
+    // The head's own vertices: draw nodes on bone 9 outside selectors, the head side of the snout's
+    // skin node (on bone 10, its second half) and of the jaw's (bone 11): the corners of the mouth are
+    // one point in all three, so they must move alike or the mouth tears open there (L's close-up,
+    // 2026-10-17). And the snout bone's own vertices (its draw nodes and its side of its skin), so the
+    // lips on it can be held back with the mouth. Second of each pair: true for the snout bone's.
     void collect(uint8_t* rdram, uint32_t node, int bone, bool in_selector, int depth, std::vector<std::pair<int, bool>>& out) {
         const bool jaw = current.jaw;
         for (int guard = 0; guard < 4096 && depth < 32; guard++) {
@@ -253,13 +259,13 @@ namespace {
                 const int options = (uint16_t)read_half(rdram, node + 8);
                 for (int i = 0; i < options && i < 64; i++)
                     collect(rdram, node + read_word(rdram, node + 12 + 4 * i), bone, true, depth + 1, out);
-            } else if (cmd == 0x11 && !in_selector && (bone == head_bone || (jaw && bone == jaw_bone))) {
+            } else if (cmd == 0x11 && !in_selector && (bone == head_bone || bone == snout_bone)) {
                 const int v0 = (uint16_t)read_half(rdram, node + 10), nv = (uint16_t)read_half(rdram, node + 12);
-                for (int i = v0; i < v0 + nv; i++) out.push_back({ i, bone == jaw_bone });
+                for (int i = v0; i < v0 + nv; i++) out.push_back({ i, bone == snout_bone });
             } else if (cmd == 0x18 && !in_selector && (bone == snout_bone || (jaw && bone == jaw_bone))) {
                 const int n_parent = (uint16_t)read_half(rdram, node + 20), n_child = (uint16_t)read_half(rdram, node + 32);
                 const int v0 = (uint16_t)read_half(rdram, node + 44);
-                if (bone == jaw_bone)
+                if (bone == snout_bone)
                     for (int i = v0; i < v0 + n_child; i++) out.push_back({ i, true });
                 for (int i = v0 + n_child; i < v0 + n_child + n_parent; i++) out.push_back({ i, false });
             }
@@ -282,10 +288,10 @@ namespace {
         collect(rdram, geo, -1, false, 0, all);
         std::sort(all.begin(), all.end());
         all.erase(std::unique(all.begin(), all.end(), [](auto& a, auto& b) { return a.first == b.first; }), all.end());
-        for (const auto& [i, jaw] : all) {
+        for (const auto& [i, on_snout] : all) {
             if (i < 0 || i >= current.vertices) continue;
             muzzle.index.push_back(i);
-            muzzle.on_jaw.push_back(jaw);
+            muzzle.on_snout.push_back(on_snout);
             for (int c = 0; c < 3; c++) muzzle.original.push_back(read_half(rdram, vertex_addr(i) + 2 * c));
         }
         return !muzzle.index.empty();
@@ -295,8 +301,9 @@ namespace {
         t = std::clamp(t, 0.0f, 1.0f);
         return t * t * (3.0f - 2.0f * t);
     }
-    // The game's head (bind space, 062A and 0838): the eyes reach forward to z 27 and down to y 106.
-    constexpr float eye_front = 27.0f, eye_bottom = 106.0f;
+    // The game's head (bind space, 062A and 0838): the eyes reach forward to z 27 and down to y 106;
+    // the mouth (the lips on the snout and head, its corners at y 98, and the jaw) is below about y 99.
+    constexpr float eye_front = 27.0f, eye_bottom = 106.0f, mouth_top = 96.0f, mouth_band = 6.0f;
 
     // Row vectors, as the game's matrices: p' = p * M.
     Vec transform(const float m[16], Vec p) {
@@ -305,32 +312,48 @@ namespace {
                  p.x * m[2] + p.y * m[6] + p.z * m[10] + m[14] };
     }
 
-    // Bend the muzzle: each vertex in front of root.z - reach takes the snout's turn Q about its root
-    // (root_posed, where the snout bone puts it), blended in by how far forward it is. Vertices are in
-    // the bind pose; the head's (or jaw's) matrix poses them, so the turn is done posed and taken back.
-    void bend_muzzle(uint8_t* rdram, const Mat& Q, Vec root_posed, const float head[16], const float* jaw) {
+    // How much of the mouth a bind position is: 1 at the lips and below, 0 from mouth_top + mouth_band.
+    // The snout swings, the mouth stays put (L, 2026-10-17: "it should affect his snout not his mouth").
+    float mouth(Vec v) {
+        return 1.0f - smooth((v.y - mouth_top) / mouth_band);
+    }
+
+    // Bend the muzzle: each head vertex in front of root.z - reach takes the snout's turn Q about its
+    // root (root_posed, where the snout bone puts it), blended in by how far forward it is; the snout
+    // bone's own lips are turned back by the mouth's share. Vertices are in the bind pose: head is the
+    // head's matrix, snout and turned the snout bone's before and after the turn.
+    void bend_muzzle(uint8_t* rdram, const Mat& Q, Vec root_posed, const float head[16], const float snout[16],
+                     const float turned[16]) {
         const float front = current.root.z, back = current.root.z - settings.reach;
-        Mat inv_head, inv_jaw;
-        if (!inverse(upper(head), inv_head)) return;
-        if (jaw != nullptr && !inverse(upper(jaw), inv_jaw)) jaw = nullptr;
+        Mat inv_head, inv_turned;
+        if (!inverse(upper(head), inv_head) || !inverse(upper(turned), inv_turned)) return;
         std::vector<int16_t> out(muzzle.original.size());
         for (size_t k = 0; k < muzzle.index.size(); k++) {
             Vec v{ (float)muzzle.original[3 * k], (float)muzzle.original[3 * k + 1], (float)muzzle.original[3 * k + 2] };
-            float w = 0.0f;
-            if (settings.reach > 0.01f && (!muzzle.on_jaw[k] || jaw != nullptr)) {
-                w = smooth((v.z - back) / (front - back));
-                // Leave the brow round the eyes alone (the eyes are selectors and don't move), or they
-                // come apart (L's photo, 2026-10-17). Weights depend only on the bind position, so
-                // points shared by the head, the snout's skin and the jaw's skin move together.
-                w *= 1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f);
-            }
-            if (w > 0.0f) {
-                const float* m = muzzle.on_jaw[k] ? jaw : head;
-                const Mat& inv = muzzle.on_jaw[k] ? inv_jaw : inv_head;
-                const Vec posed = transform(m, v);
-                const Vec turned = root_posed + apply(posed - root_posed, Q);
-                const Vec moved = apply(turned - Vec{ m[12], m[13], m[14] }, inv);
-                v = v + (moved - v) * w;
+            // Weights depend only on the bind position, so points shared by the head, the snout's skin
+            // and the jaw's skin move together.
+            if (muzzle.on_snout[k]) {
+                const float hold = mouth(v);
+                if (hold > 0.0f) {
+                    const Vec was = transform(snout, v), now = transform(turned, v);
+                    const Vec want = now + (was - now) * hold;
+                    v = apply(want - Vec{ turned[12], turned[13], turned[14] }, inv_turned);
+                }
+            } else {
+                float w = 0.0f;
+                if (settings.reach > 0.01f) {
+                    w = smooth((v.z - back) / (front - back));
+                    // Leave the brow round the eyes alone (the eyes are selectors and don't move), or
+                    // they come apart (L's photo, 2026-10-17), and the mouth.
+                    w *= 1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f);
+                    w *= 1.0f - mouth(v);
+                }
+                if (w > 0.0f) {
+                    const Vec posed = transform(head, v);
+                    const Vec bent = root_posed + apply(posed - root_posed, Q);
+                    const Vec moved = apply(bent - Vec{ head[12], head[13], head[14] }, inv_head);
+                    v = v + (moved - v) * w;
+                }
             }
             out[3 * k] = (int16_t)std::lround(std::clamp(v.x, -32768.0f, 32767.0f));
             out[3 * k + 1] = (int16_t)std::lround(std::clamp(v.y, -32768.0f, 32767.0f));
@@ -435,7 +458,7 @@ namespace {
     constexpr float buckle_up = 0.3f;     // of a push back along the snout, how much folds it up
     constexpr float side_stiffness = 1.6f;
     constexpr float limp_stiffness = 0.02f;   // spring left at Floppiness 100
-    constexpr float limp_gravity = 40.0f;     // rad/s^2 of droop at Floppiness 100
+    constexpr float limp_gravity = 40.0f;     // rad/s^2 of droop at Floppiness 100 and Heaviness 100
 
     struct Flop {
         bool started = false;
@@ -482,12 +505,17 @@ namespace {
         flop.prev_vel = v;
         flop.have_vel = true;
 
-        const float limp = settings.floppiness;
-        const Vec push = to_model_dir((v * air + a * weight) * (-settings.follow / base_follow)) * model_scale;
-        const Vec gravity = to_model_dir(Vec{ 0.0f, -limp_gravity * limp, 0.0f }) * model_scale;
-        const float w = 2.0f * pi * settings.frequency;
-        const float k = w * w * (1.0f + (limp_stiffness - 1.0f) * limp);
-        const float c = 2.0f * settings.damping * (1.0f - 0.7f * limp) * std::sqrt(k);
+        // Heaviness: a heavier snout swings slower and further from its own weight and droops more;
+        // the air pushes it the same.
+        const float limp = settings.floppiness, heavy = settings.heaviness;
+        const Vec push = to_model_dir((v * air + a * (weight * heavy)) * (-settings.follow / base_follow)) * model_scale;
+        const Vec gravity = to_model_dir(Vec{ 0.0f, -limp_gravity * limp * heavy, 0.0f }) * model_scale;
+        const float w = 2.0f * pi * settings.frequency / std::sqrt(heavy);
+        // Floppiness 0..100 takes the spring down to limp_stiffness; 100..150 nearly to nothing.
+        const float stiff = limp <= 1.0f ? 1.0f + (limp_stiffness - 1.0f) * limp
+                                         : limp_stiffness * (1.0f - 0.9f * (limp - 1.0f) / 0.5f);
+        const float k = w * w * stiff;
+        const float c = 2.0f * settings.damping * std::max(0.05f, 1.0f - 0.7f * limp) * std::sqrt(k);
         const float max_a = settings.max_angle * pi / 180.0f;
         for (float t = 0.0f; t < dt; t += step) {
             const float h = std::min(step, dt - t);
@@ -842,15 +870,9 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     }
     ctx->r2 = (gpr)(int32_t)matrix_copy;
 
-    // The muzzle (and jaw) on the game's own models. The matrix list is one block (func_800ADE2C), so
-    // the jaw's matrix is already there, after the snout's.
+    // The muzzle and the mouth on the game's own models.
     if (have_head && prepare_muzzle(rdram)) {
-        float jaw[16];
-        const bool have_jaw = current.jaw && valid_ptr(src + 64 * (jaw_bone - snout_bone));
-        if (have_jaw) {
-            for (int i = 0; i < 16; i++) jaw[i] = read_float(rdram, src + 64 * (jaw_bone - snout_bone) + 4 * i);
-        }
-        bend_muzzle(rdram, Q, root, head_matrix, have_jaw ? jaw : nullptr);
+        bend_muzzle(rdram, Q, root, head_matrix, m, out);
     }
     if (logging()) {
         static int n = 0;

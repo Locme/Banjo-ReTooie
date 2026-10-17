@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Snout jiggle: new Heaviness slider; only the snout swings now, the mouth (lips, corners, jaw) stays put; L's settings are the defaults (wobble 30%, bounce 75, speed 3.0, exaggeration 150%, stretch 50%, size 90%, reach 6, floppiness 80%) and every slider goes 50% further (L). Untested on PC (T408).
 - Ice reflections: Banjo is reflected once instead of as a stack of faded copies, and looking down on the ice no longer smears him or the walls down it. The see-through ice blocks round notes reflect too. Stomping Plains' floor by the gate no longer reflects (it shares a texture with Icy Side's ice; ice textures now count only in Hailfire's icy maps) (L). Untested on PC (T401).
 - Settings menu: the option you point at or select is marked with an orange band across the whole row, a gold edge on the left and its name in gold (L). Untested on PC (T400).
 - Snout jiggle: no more gap at the corner of the mouth when the snout bends (the jaw now bends with it), the snout sits straight at rest instead of leaning right, and it no longer snaps back to rest. New physics: it trails behind the way Banjo moves and folds back towards his eyes in a fall or dive, and the new Floppiness slider makes it hang and flop like a shaken hot dog. Nose jiggle is gone (L). Untested on PC (T399).
