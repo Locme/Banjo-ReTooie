@@ -53,6 +53,7 @@ namespace tooie::picture_filters {
     inline const std::string heat_haze_option = "heat_haze";
     inline const std::string underwater_distortion_option = "underwater_distortion";
     inline const std::string water_reflections_option = "water_reflections";
+    inline const std::string ice_reflections_option = "ice_reflections";
     inline const std::string bounce_light_option = "bounce_light";
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";

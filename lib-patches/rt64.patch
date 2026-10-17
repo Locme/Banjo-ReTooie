@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..adceeb6 100644
+index 9fae0d4..0840358 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2861,7 +2861,7 @@ index 9fae0d4..adceeb6 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2543,322 @@ namespace RT64 {
+@@ -1747,8 +2543,351 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2880,7 +2880,35 @@ index 9fae0d4..adceeb6 100644
 +                    const bool iceLike = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() == ZMODE_DEC) && (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
-+                    if (iceLike && SceneIceReflections() && levelGeometry(drawData, call) && flatInWorld(drawData, call)) {
++                    // And anything drawn with an ice texture (floors, walls, the blocks round notes), see-through or not.
++                    bool iceTextured = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
++                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                        om.zCmp() && (om.cycleType() != G_CYC_COPY) && (call.callDesc.tileCount > 0);
++                    if (iceTextured) {
++                        bool found = false;
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !found; t++) {
++                            found = SceneIceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        }
++                        iceTextured = found;
++                    }
++                    // TOOIE_ICE_LOG: once for each 3D world texture combination, its tiles' hashes and how it is drawn, to find ice.
++                    static const bool iceLog = (getenv("TOOIE_ICE_LOG") != nullptr);
++                    if (iceLog && (proj.type == Projection::Type::Perspective) && worldOpen) {
++                        static std::unordered_set<uint64_t> iceLogged;
++                        uint64_t key = (uint64_t(om.zUpd()) << 1) | uint64_t(interop::Blender::usesAlphaBlend(om)) | (uint64_t(om.zMode() == ZMODE_DEC) << 2) | (uint64_t(levelGeometry(drawData, call)) << 3);
++                        for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                            key = key * 1099511628211ULL ^ drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                        }
++                        if (iceLogged.insert(key).second) {
++                            fprintf(stderr, "[ice-tex] ice %d blend %d zupd %d decal %d level %d tris %u tiles", (iceTextured || iceLike) ? 1 : 0, interop::Blender::usesAlphaBlend(om) ? 1 : 0, om.zUpd() ? 1 : 0,
++                                (om.zMode() == ZMODE_DEC) ? 1 : 0, levelGeometry(drawData, call) ? 1 : 0, call.callDesc.triangleCount);
++                            for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                                fprintf(stderr, " %016llx", (unsigned long long)drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                            }
++                            fprintf(stderr, "\n");
++                        }
++                    }
++                    if (iceTextured || (iceLike && SceneIcyLevel() && levelGeometry(drawData, call) && flatInWorld(drawData, call))) {
 +                        targetDrawCall.iceInstances.push_back(instanceIndex);
 +                    }
 +                    else if (waterLike && flatInWorld(drawData, call)) {
@@ -3093,8 +3121,8 @@ index 9fae0d4..adceeb6 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -3177,14 +3205,15 @@ index 9fae0d4..adceeb6 100644
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
-                 }
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2869,263 @@ namespace RT64 {
+             }
+@@ -1758,13 +2897,263 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -5040,10 +5069,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..37c7fb3
+index 0000000..7b55e12
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2019 @@
+@@ -0,0 +1,2042 @@
 +//
 +// RT64
 +//
@@ -5339,14 +5368,19 @@ index 0000000..37c7fb3
 +        effectsSettings.waterReflections = strength;
 +    }
 +
-+    static std::atomic<bool> sceneIceReflections{ false };
++    static std::atomic<bool> sceneIcyLevel{ false };
 +
-+    void SetSceneIceReflections(bool enabled) {
-+        sceneIceReflections = enabled;
++    void SetSceneIcyLevel(bool enabled) {
++        sceneIcyLevel = enabled;
 +    }
 +
-+    bool SceneIceReflections() {
-+        return sceneIceReflections.load(std::memory_order_relaxed);
++    bool SceneIcyLevel() {
++        return sceneIcyLevel.load(std::memory_order_relaxed);
++    }
++
++    void SetSceneIceReflections(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.iceReflections = strength;
 +    }
 +
 +    void SetSceneShoreFoam(bool enabled) {
@@ -5538,6 +5572,21 @@ index 0000000..37c7fb3
 +            return 1;
 +        }
 +        return (grassEdgeTextures.count(hash) != 0) ? 2 : 0;
++    }
++
++    // Ice textures: read on the render thread like the grass ones.
++    static std::mutex iceTextureMutex;
++    static std::unordered_set<uint64_t> iceTextures;
++
++    void SetSceneIceTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(iceTextureMutex);
++        iceTextures.swap(textures);
++    }
++
++    bool SceneIceTexture(uint64_t hash) {
++        const std::scoped_lock lock(iceTextureMutex);
++        return iceTextures.count(hash) != 0;
 +    }
 +
 +    static std::mutex nightLightMutex;
@@ -6338,7 +6387,7 @@ index 0000000..37c7fb3
 +
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
-+        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
 +            // The day and night cycle's mist gathers round water.
 +            // and the rain rings on water need it too.
 +            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
@@ -6404,7 +6453,7 @@ index 0000000..37c7fb3
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -6616,7 +6665,7 @@ index 0000000..37c7fb3
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || settings.timeOfDay) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -6906,7 +6955,10 @@ index 0000000..37c7fb3
 +        RenderTexture *waterColor = res.waterColorTexture.get();
 +        // water.y 3: Modern water with no water drawn this frame (its caustics under the water still show).
 +        const bool modernOn = settings.modernWater;
-+        constants.water = { (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? settings.waterReflections : 0.0f, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
++        // water.x: Water reflections plus twice Ice reflections' hundredths (see WaterReflectionStrength in SceneEffectsPS).
++        const float waterReflect = (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? std::min(settings.waterReflections, 1.0f) : 0.0f;
++        const float iceReflect = waterDrawn ? std::round(std::clamp(settings.iceReflections, 0.0f, 1.0f) * 100.0f) : 0.0f;
++        constants.water = { waterReflect + 2.0f * iceReflect, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
 +            modernOn ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
 +        if (modernOn) {
 +            // Modern water reads the ripple grid instead of the rings: its corner in world x and z, its cell size,
@@ -7065,10 +7117,10 @@ index 0000000..37c7fb3
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..b318fc9
+index 0000000..1c1e5e2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,312 @@
 +//
 +// RT64
 +//
@@ -7116,6 +7168,7 @@ index 0000000..b318fc9
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
 +        float waterReflections = 0.0f;
++        float iceReflections = 0.0f;
 +        bool shoreFoam = false; // Original water: Modern's shore foam on the game's water.
 +        float bounceLight = 0.0f;
 +        float waterWaves = 0.0f;
@@ -7218,6 +7271,9 @@ index 0000000..b318fc9
 +    // Water reflections (0 off, 1 strongest) on the game's water surfaces, which the framebuffer renderer
 +    // redraws into a mask (BeginSceneWaterMask) before the pass.
 +    void SetSceneWaterReflections(float strength);
++    // Ice reflections (0 off, 1 strongest) on ice: Icy Side's frozen decals and anything drawn with an ice texture
++    // (SetSceneIceTextures), which go into the same mask.
++    void SetSceneIceReflections(float strength);
 +    // Bounce light (0 off, 1 strongest): nearby surfaces' colour lights what faces them.
 +    void SetSceneBounceLight(float strength);
 +    // Banjo-Tooie: water waves on the water mask's surfaces (0 off, 1 strongest), moving at speed (1 normal).
@@ -7230,8 +7286,8 @@ index 0000000..b318fc9
 +    bool SceneModernWater();
 +    // Banjo-Tooie: whether flat see-through level decals are ice that reflects (Icy Side only; elsewhere the same kind
 +    // of decal is dirt, grass or paths blended onto the ground).
-+    void SetSceneIceReflections(bool enabled);
-+    bool SceneIceReflections();
++    void SetSceneIcyLevel(bool enabled);
++    bool SceneIcyLevel();
 +    // Modern water's caustics while under water: how far under (0 to 1), the surface's height, a whole level under water.
 +    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
 +    // Banjo-Tooie: light shafts from the sun through gaps against the sky (0 off, 1 strongest).
@@ -7331,6 +7387,9 @@ index 0000000..b318fc9
 +    void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
 +    // 1 for a grass texture, 2 for one with a grassy edge, 0 for neither.
 +    uint32_t SceneGrassTexture(uint64_t hash);
++    // Banjo-Tooie: the ice textures (RT64 hashes): floors, walls and blocks drawn with them reflect with Ice reflections.
++    void SetSceneIceTextures(const uint64_t *hashes, size_t count);
++    bool SceneIceTexture(uint64_t hash);
 +    // Fills the frame's night light terms. False when nothing lights up this frame (day, or the cycle is off).
 +    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
 +    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
@@ -10747,7 +10806,7 @@ index e7895c3..acb38aa 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..f97ab5c 100644
+index 74b1fa0..6f5a9a5 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,14 +11,39 @@
@@ -10791,7 +10850,20 @@ index 74b1fa0..f97ab5c 100644
      }
      
      // Apply screen scale and offset.
-@@ -53,17 +78,19 @@ void VSMain(
+@@ -33,6 +58,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+         ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
+     }
+ 
++    // Banjo-Tooie: ice redrawn into the water mask (waterMask 4) a hair nearer, so a solid ice floor or wall passes
++    // the depth test (less than) against its own depth from the main pass; what is in front still hides it.
++    if (gConstants.waterMask == 4) {
++        ndcPos.z -= 1e-6f * ndcPos.w;
++    }
++
+     oPosition = ndcPos;
+     oUV = iUV;
+     oSmoothColor = iColor;
+@@ -53,17 +84,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -10835,10 +10907,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..22488c9
+index 0000000..432f9da
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2286 @@
+@@ -0,0 +1,2360 @@
 +//
 +// RT64
 +//
@@ -11396,9 +11468,49 @@ index 0000000..22488c9
 +    if (!LoadIce(pixel, depth)) {
 +        return false;
 +    }
++    // On the surface, or in front of it: see-through ice (a block round a note) lies over what is behind it.
 +    const float iceDistance = -ViewPosition(pixel, depth).z;
 +    const float sceneDistance = -ViewPosition(pixel, sceneDepth).z;
-+    return abs(iceDistance - sceneDistance) < (2.0f + sceneDistance * 0.01f);
++    return (iceDistance - sceneDistance) < (2.0f + sceneDistance * 0.01f);
++}
++
++// Water reflections' strength (0 off, 1 strongest) and Ice reflections' (in steps of 0.01): water.x carries the
++// first plus twice the second's hundredths, as the push constants have no room left.
++float WaterReflectionStrength() {
++    return gConstants.water.x - 2.0f * floor(gConstants.water.x * 0.5f);
++}
++
++float IceReflectionStrength() {
++    return floor(gConstants.water.x * 0.5f) / 100.0f;
++}
++
++// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
++// neighbour on each side that is nearest in distance, so an edge doesn't bend it. Level when there is no neighbour.
++float3 IceNormal(int2 pixel, float3 surface) {
++    float3 along[2];
++    [unroll] for (int axis = 0; axis < 2; axis++) {
++        const int2 step = (axis == 0) ? int2(1, 0) : int2(0, 1);
++        float dA, dB;
++        const bool a = LoadIce(pixel + step, dA);
++        const bool b = LoadIce(pixel - step, dB);
++        const float3 pA = ViewPosition(pixel + step, dA) - surface;
++        const float3 pB = surface - ViewPosition(pixel - step, dB);
++        const float reach = 2.0f + -surface.z * 0.02f;
++        const bool useA = a && (abs(pA.z) < reach) && (!b || (abs(pA.z) <= abs(pB.z)) || (abs(pB.z) >= reach));
++        const bool useB = b && (abs(pB.z) < reach);
++        along[axis] = useA ? pA : (useB ? pB : float3(0.0f, 0.0f, 0.0f));
++    }
++    const float3 level = normalize(gConstants.worldY.xyz);
++    if ((dot(along[0], along[0]) <= 0.0f) || (dot(along[1], along[1]) <= 0.0f)) {
++        return level;
++    }
++    float3 n = cross(along[1], along[0]);
++    if (dot(n, n) < 1e-12f) {
++        return level;
++    }
++    n = normalize(n);
++    // Facing the camera.
++    return (dot(n, -surface) < 0.0f) ? -n : n;
 +}
 +
 +// Modern water's steep draws (waterfalls, and the light beams the renderer can't tell from them): their depth,
@@ -11612,7 +11724,17 @@ index 0000000..22488c9
 +
 +// The reflection off a water pixel: a ray marched across the screen against the scene's depth. What it
 +// hits is reflected; a ray leaving through the sky reflects the sky; anything else fades out.
++float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack);
++float4 WaterReflectionMarch(float3 surface, float3 r);
++
 +float4 WaterReflection(float3 surface, float3 normal) {
++    return WaterReflectionRay(surface, normal, false);
++}
++
++// bendBack (ice): a ray heading back past the camera (any view looking down steeper than about 45 degrees, or at a
++// wall face on) is bent to run into the picture instead, so ice seen from above still reflects the scenery beyond
++// rather than nothing; a little fainter, as it is made up.
++float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
 +    // Ripples: the normal wobbles with the surface's position and time (the waves bring their own).
 +    float3 n = normal;
 +    if (gConstants.water.w <= 0.0f) {
@@ -11622,12 +11744,32 @@ index 0000000..22488c9
 +        n = normalize(normal + float3(ripple.x, 0.0f, ripple.y));
 +    }
 +    const float3 v = normalize(surface);
-+    const float3 r = reflect(v, n);
++    float3 r = reflect(v, n);
++    float made = 1.0f;
++    if (bendBack && (r.z > -0.3f)) {
++        // Along the picture the way the ray was going (or up the picture, the way level ground runs away, when it
++        // came almost straight back), and a fixed way into it.
++        float2 across = r.xy;
++        if (dot(across, across) < 0.01f) {
++            across = gConstants.worldY.xy;
++            if (dot(across, across) < 1e-4f) {
++                across = float2(0.0f, 1.0f);
++            }
++        }
++        r = normalize(float3(normalize(across), -0.3f));
++        made = 0.75f;
++    }
 +    if (r.z > 0.0f && surface.z + r.z * 1e4f > -1.0f) {
 +        // Heading back past the camera.
 +        return 0.0f;
 +    }
++    float4 reflection = WaterReflectionMarch(surface, r);
++    reflection.a *= made;
++    return reflection;
++}
 +
++// The reflection along a ray from a surface (view space): see WaterReflection.
++float4 WaterReflectionMarch(float3 surface, float3 r) {
 +    const float2 size = gConstants.projection.zw;
 +    const float stepLength = max(-surface.z * 0.03f, 4.0f);
 +    float travelled = 0.0f;
@@ -13054,7 +13196,7 @@ index 0000000..22488c9
 +                scene *= 1.0f + 0.6f * gConstants.rippleZ.z * CausticsAt(pixel, view, below);
 +            }
 +        }
-+        else if ((gConstants.water.x > 0.0f) || (gConstants.water.w > 0.0f) || OriginalShoreFoamOn()) {
++        else if ((WaterReflectionStrength() > 0.0f) || (gConstants.water.w > 0.0f) || OriginalShoreFoamOn()) {
 +            float3 surface, normal;
 +            const float amount = WaterAmount(pixel, depth, surface, normal);
 +            if ((amount > 0.0f) && (gConstants.water.w > 0.0f)) {
@@ -13077,10 +13219,10 @@ index 0000000..22488c9
 +                scene = lerp(scene, float3(0.92f, 0.95f, 0.97f), foam * 0.45f * amount);
 +                normal = waved;
 +            }
-+            if ((amount > 0.0f) && (gConstants.water.x > 0.0f)) {
++            if ((amount > 0.0f) && (WaterReflectionStrength() > 0.0f)) {
 +                const float4 reflection = WaterReflection(surface, normal);
 +                const float fresnel = 0.25f + 0.75f * pow(1.0f - saturate(dot(-normalize(surface), normal)), 3.0f);
-+                scene = lerp(scene, reflection.rgb, saturate(gConstants.water.x * amount * fresnel * reflection.a));
++                scene = lerp(scene, reflection.rgb, saturate(WaterReflectionStrength() * amount * fresnel * reflection.a));
 +            }
 +            float shoreDepth;
 +            // Not weighted by how much water there is: the shore is exactly where that runs out.
@@ -13088,17 +13230,21 @@ index 0000000..22488c9
 +                scene = lerp(scene, float3(0.93f, 0.96f, 0.98f), OriginalShoreFoam(pixel, shoreDepth, depth) * 0.55f);
 +            }
 +        }
-+        // Ice reflects like the water (Water reflections; in Modern, which makes its own, a fixed amount), lying
-+        // level, with a soft wobble so it doesn't read as a mirror.
++        // Ice reflects (Ice reflections): floors, walls and blocks of ice, each the way it faces (from the mask's
++        // depths), with a soft wobble so it doesn't read as a mirror. Seen from above, the rays are bent into the
++        // picture, so it reflects at every camera height.
 +        float iceDepth;
-+        const float iceStrength = (gConstants.water.y > 1.5f) ? 0.6f : gConstants.water.x;
++        const float iceStrength = IceReflectionStrength();
 +        if ((iceStrength > 0.0f) && IceAt(pixel, depth, iceDepth)) {
 +            const float3 iceSurface = ViewPosition(pixel, iceDepth);
 +            const float3 iceWorld = WorldPosition(iceSurface);
-+            const float2 wobble = float2(WaterNoise(iceWorld.xz / 40.0f), WaterNoise(iceWorld.xz / 40.0f + 17.0f)) - 0.5f;
-+            const float3 iceNormal = normalize(normalize(gConstants.worldY.xyz) + (normalize(gConstants.worldX.xyz) * wobble.x + normalize(gConstants.worldZ.xyz) * wobble.y) * 0.06f);
-+            const float4 iceReflection = WaterReflection(iceSurface, iceNormal);
-+            const float iceFresnel = 0.25f + 0.75f * pow(1.0f - saturate(dot(-normalize(iceSurface), iceNormal)), 3.0f);
++            const float3 iceFacing = IceNormal(pixel, iceSurface);
++            const float2 wobbleAt = (iceWorld.xz + float2(iceWorld.y, -iceWorld.y)) / 40.0f;
++            const float2 wobble = float2(WaterNoise(wobbleAt), WaterNoise(wobbleAt + 17.0f)) - 0.5f;
++            const float3 side = normalize(cross(iceFacing, (abs(iceFacing.x) < 0.9f) ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f)));
++            const float3 iceNormal = normalize(iceFacing + (side * wobble.x + cross(iceFacing, side) * wobble.y) * 0.06f);
++            const float4 iceReflection = WaterReflectionRay(iceSurface, iceNormal, true);
++            const float iceFresnel = 0.4f + 0.6f * pow(1.0f - saturate(dot(-normalize(iceSurface), iceNormal)), 3.0f);
 +            scene = lerp(scene, iceReflection.rgb, saturate(iceStrength * iceFresnel * iceReflection.a));
 +        }
 +        if (daytime) {

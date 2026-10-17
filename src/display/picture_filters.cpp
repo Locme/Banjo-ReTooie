@@ -57,11 +57,13 @@ namespace RT64 {
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength);
     void SetSceneWaterReflections(float strength);
+    void SetSceneIceReflections(float strength);
+    void SetSceneIceTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
     void SetSceneModernWater(bool enabled);
-    void SetSceneIceReflections(bool enabled);
+    void SetSceneIcyLevel(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
@@ -320,6 +322,24 @@ namespace {
         float camera = 0.0f;
         return in_water && camera_height(rdram, camera) && (camera < water_surface);
     }
+
+    // Ice textures (RT64 hashes, picked by eye from a texture dump of Hailfire Peaks' icy maps on 2026-10-17): floors,
+    // walls, frozen water and blocks drawn with them reflect with Ice reflections (TOOIE_ICE_TEXTURES=<hex>,... adds more).
+    constexpr uint64_t ice_textures[] = {
+        // Floors: the cobbled and cracked ice.
+        0xae436b1f52b9b6e6, 0xcea4f61a7e7130be, 0xbfc40d7b3dece6b7, 0xe9613c7dbc78b866,
+        // Icy Side's frozen lake.
+        0xd3e61b579c35618c, 0xedd50d1a56daa493,
+        // Glassy ice walls and pillars.
+        0x1d045b70e33827c3, 0x34f050082c5115e6, 0x35454ef2c5d88795, 0x5506dfde3b791931,
+        0x7f3d8973e3b1ccad, 0x94db90a8d01cd37c, 0xc720731faa60507b, 0xcd3125fb97b26599,
+        0xeef03afb17bf6360,
+        // Icicle Grotto's floor.
+        0xa9f95d7e99c45ea7,
+        // The mottled ice of walls, platform sides and the see-through blocks round notes (drawn solid and see-through).
+        0x23fb73341a90acee, 0x27a85a283bfcca1b, 0x6714212997654fa0, 0x78d3311792ce28ef,
+        0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
+    };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
     // The grass textures of the levels' ground (their RT64 texture hashes, picked by eye from a texture dump of 22
@@ -3791,6 +3811,7 @@ namespace {
         { &tooie::picture_filters::heat_haze_option, 0.0 },
         { &tooie::picture_filters::underwater_distortion_option, 0.0 },
         { &tooie::picture_filters::water_reflections_option, 0.0 },
+        { &tooie::picture_filters::ice_reflections_option, 0.0 },
         { &tooie::picture_filters::bounce_light_option, 0.0 },
         { &tooie::picture_filters::water_waves_option, 0.0 },
         { &tooie::picture_filters::light_shafts_option, 0.0 },
@@ -3832,6 +3853,7 @@ namespace {
             graphics.update_option_value(heat_haze_option, 50.0);
             graphics.update_option_value(underwater_distortion_option, 30.0);
             graphics.update_option_value(water_reflections_option, 60.0);
+            graphics.update_option_value(ice_reflections_option, 60.0);
             graphics.update_option_value(texture_upscale_option, (uint32_t)TextureUpscale::Double);
             graphics.update_option_value(water_waves_option, 50.0);
             graphics.update_option_value(light_shafts_option, 40.0);
@@ -3928,6 +3950,22 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(grass_chunk_size_option, 200.0) / 100.0), value<bool>(grass_pixelated_option, false),
         (float)value<double>(grass_pixel_size_option, 1.0), (float)(value<double>(grass_blend_option, 50.0) / 100.0));
     RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
+    static const std::vector<uint64_t> ice_list = [] {
+        std::vector<uint64_t> list(std::begin(ice_textures), std::end(ice_textures));
+        if (const char* extra = std::getenv("TOOIE_ICE_TEXTURES")) {
+            for (const char* p = extra; *p != '\0';) {
+                char* end = nullptr;
+                const unsigned long long h = std::strtoull(p, &end, 16);
+                if (end == p) {
+                    break;
+                }
+                list.push_back((uint64_t)h);
+                p = (*end == ',') ? end + 1 : end;
+            }
+        }
+        return list;
+    }();
+    RT64::SetSceneIceTextures(ice_list.data(), ice_list.size());
     RT64::SetSceneGrassEdgeTextures(grass_edge_textures, value<bool>(grass_edges_option, true) ? std::size(grass_edge_textures) : 0);
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
@@ -4018,6 +4056,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
     RT64::SetSceneWaterReflections(water_reflections_set.load());
+    RT64::SetSceneIceReflections((float)(shader(value<double>(ice_reflections_option, 0.0)) / 100.0));
     water_settings_changed = true;
     RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
@@ -4254,22 +4293,24 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetSceneWaterRipples(x, z, age);
     }
 
-    // Icy Side keeps the game's icy water with Modern water on (L's pick, 2026-10-17): the game's own water there,
-    // reflecting at least as much as the ice does in Modern.
+    // Icy Side keeps the game's icy water with Modern water on (L's pick, 2026-10-17): the game's own water there. Its
+    // frozen lake is drawn with an ice texture, so it reflects with Ice reflections.
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
         const bool icy = modern_water && (map == 0x128);
-        // Only Icy Side's flat see-through decals are ice; elsewhere they are dirt and grass blended onto the ground.
+        // Only the icy maps' flat see-through decals are ice (Icy Side, the Ice Train Station, Chilly Willy, Boggy's Igloo,
+        // Icicle Grotto, the parade); elsewhere they are dirt and grass blended onto the ground.
+        const bool icy_level = (map == 0x128) || (map == 0x12A) || (map == 0x12C) || (map == 0x131) || (map == 0x132) || (map == 0x168);
         static int ice_sent = -1;
-        if (int(map == 0x128) != ice_sent) {
-            ice_sent = int(map == 0x128);
-            RT64::SetSceneIceReflections(map == 0x128);
+        if (int(icy_level) != ice_sent) {
+            ice_sent = int(icy_level);
+            RT64::SetSceneIcyLevel(icy_level);
         }
         static bool icy_sent = false;
         if ((icy != icy_sent) || water_settings_changed.exchange(false)) {
             icy_sent = icy;
             RT64::SetSceneModernWater(modern_water && !icy);
-            RT64::SetSceneWaterReflections(icy ? std::max(water_reflections_set.load(), 0.6f) : water_reflections_set.load());
+            RT64::SetSceneWaterReflections(water_reflections_set.load());
         }
     }
 
@@ -4465,6 +4506,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         water_reflections_option,
         "Water reflections",
         "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ice_reflections_option,
+        "Ice reflections",
+        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         water_waves_option,
@@ -4738,7 +4784,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option, &npc_feathers_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &enemy_fur_option, &npc_feathers_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -4770,6 +4816,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_reflections_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(ice_reflections_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);

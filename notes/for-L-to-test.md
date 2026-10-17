@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T384 Ice reflections slider: all ice reflects, from any camera height
+- Asked: 2026-10-17 11:40 UTC
+- Build: main (pull)
+- Steps:
+  1. Graphics: set the new Ice reflections slider (under Water reflections) to 60 or more
+  2. Hailfire Peaks Icy Side: stand on the ice by the entrance, look with the camera close, then raise it high above Banjo
+  3. Go to the two ice platforms with the note in a block of ice, and the blue ice floor by the ice walls (your screenshots)
+  4. Visit Icicle Grotto
+  5. Set Ice reflections to 0, then move Water reflections up and down
+- Look for: Does the ice reflect with the camera close AND from above? Do the platforms, their mottled ice sides, the ice walls and the block round the note reflect now? Does Ice reflections 0 turn all ice reflections off, with Water reflections no longer changing the ice? Mayahem Temple dirt should still not reflect (T376).
+- Status: waiting for L
+
 ## T383 Blend texture seams (DEV, on): lines on the title logo
 - Asked: 2026-10-17 11:51 UTC
 - Build: main (pull and build)
