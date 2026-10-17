@@ -8,6 +8,7 @@
 // skeleton (Smash Banjo). The sliders under it shape the wobble.
 namespace tooie::snout_jiggle {
     inline const std::string option = "snout_jiggle";
+    inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string strength_option = "snout_jiggle_strength";       // % of the default swing
     inline const std::string bounce_option = "snout_jiggle_bounce";           // 0 stiff .. 100 wobbles for ages
     inline const std::string speed_option = "snout_jiggle_speed";             // wobbles a second

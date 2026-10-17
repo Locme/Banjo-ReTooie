@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T355 Kazooie jiggle (crest and tail feathers)
+- Asked: 2026-10-17 06:37 UTC
+- Build: main
+- Steps:
+  1. Settings > General: turn on Kazooie jiggle (Snout jiggle can stay off)
+  2. Do moves that bring Kazooie out of the pack (flutter, Breegull Blaster, beak barge) and watch her crest and tail
+  3. Split Up and run, turn and stop as Kazooie alone
+  4. Open Photo Mode mid-wobble
+- Look for: Her crest and tail feathers swing and settle after she moves, nothing tears or flies off, and Photo Mode holds the pose
+- Status: waiting for L
+
 ## T354 Parallax: deeper, shadows, original-textures switch, texture pack height maps
 - Asked: 2026-10-17 06:38 UTC
 - Build: main (pull and build)

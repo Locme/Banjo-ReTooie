@@ -322,6 +322,9 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
+        "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
+        false);
     general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",

@@ -26,9 +26,15 @@
 // with many vertices (mods such as Smash Banjo, which have their own muzzle on bone 10). The
 // eyes (selectors) and the other bones' vertices are left alone.
 //
-// The snout's copied matrix lives in extended RDRAM no one else uses (after the pause menu's
-// strings at 0x80EF1200, src/gameplay/pause_settings.cpp). Headless: TOOIE_SNOUT_LOG=1 logs the
-// spring.
+// General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
+// hang on springs the same way. Each feather bone gets its own spring on the end of the bone, from
+// the root of the chain out, and each bone's turn carries the bones after it, so the tail whips.
+// Her bones are found by index and id: 062A and 0838 (in the backpack; Smash Banjo keeps them) and
+// 061C (alone after Split Up). The snout's sliders don't apply to her.
+//
+// The copied matrices live in extended RDRAM no one else uses (after the pause menu's strings at
+// 0x80EF1200, src/gameplay/pause_settings.cpp): the snout's at 0x80EF8000, Kazooie's feathers' after
+// it. Headless: TOOIE_SNOUT_LOG=1 logs the springs.
 
 #include <algorithm>
 #include <chrono>
@@ -45,6 +51,7 @@
 
 namespace {
     constexpr uint32_t matrix_copy = 0x80EF8000;
+    constexpr uint32_t feather_copies = 0x80EF8040;   // 64 bytes per feather bone
     constexpr int head_bone = 9, snout_bone = 10;
     constexpr int16_t head_id = 18, snout_id = 42;
     // Snout tip from the snout bone's root in the bind pose (vanilla 062A: root 0,100,35, nose 39-56).
@@ -321,7 +328,7 @@ namespace {
         return { c * d.x - s * d.z, d.y, s * d.x + c * d.z };
     }
 
-    // The spring: a point that follows the snout tip's place in the world.
+    // A spring: a point that follows a place in the world (the snout's tip, a feather's end).
     struct Spring {
         bool started = false;
         Vec point{}, velocity{};
@@ -329,14 +336,16 @@ namespace {
         Vec lag{};   // point - target after the last update, world space
     } spring;
 
-    void update_spring(Vec target) {
+    void update_spring(Spring& spring, Vec target, float frequency, float damping) {
         const auto now = std::chrono::steady_clock::now();
         if (tooie::photo_mode::active()) {
-            // Photo Mode: the snout stays as it was when the photo was framed.
+            // Photo Mode: it stays as it was when the photo was framed.
             spring.last = now;
             return;
         }
-        if (!spring.started || length(target - spring.point) > teleport) {
+        // Not drawn for a while (Kazooie hides in the pack between moves): start again where it is.
+        const bool stale = std::chrono::duration<float>(now - spring.last).count() > 0.25f;
+        if (!spring.started || stale || length(target - spring.point) > teleport) {
             spring.started = true;
             spring.point = target;
             spring.velocity = {};
@@ -351,8 +360,8 @@ namespace {
         }
         spring.last = now;
         dt = std::min(dt, 0.1f);
-        const float w = 2.0f * pi * settings.frequency;
-        const float k = w * w, c = 2.0f * settings.damping * w;
+        const float w = 2.0f * pi * frequency;
+        const float k = w * w, c = 2.0f * damping * w;
         for (float t = 0.0f; t < dt; t += step) {
             const float h = std::min(step, dt - t);
             Vec accel = (target - spring.point) * k - spring.velocity * c;
@@ -361,6 +370,171 @@ namespace {
         }
         spring.lag = spring.point - target;
     }
+
+    // Turn that points arm (from a pivot) at arm + lag, at most max_deg; the angle in radians.
+    Mat aim(Vec arm, Vec lag, float max_deg, float& angle) {
+        angle = 0.0f;
+        const float la = length(arm);
+        const Vec want = arm + lag;
+        const float lw = length(want);
+        if (la < 1e-3f || lw < 1e-3f) {
+            return rotation({ 1, 0, 0 }, 0.0f);
+        }
+        const Vec a = arm * (1.0f / la), b = want * (1.0f / lw);
+        const Vec axis = cross(a, b);
+        const float sin_t = length(axis);
+        if (sin_t < 1e-5f) {
+            return rotation({ 1, 0, 0 }, 0.0f);
+        }
+        angle = std::min(std::atan2(sin_t, dot(a, b)), max_deg * pi / 180.0f);
+        return rotation(axis * (1.0f / sin_t), angle);
+    }
+
+    // ---- Kazooie's feathers ----
+    // Chains of bones, root first: bone indices and the ids that confirm them.
+    struct Chain { int count; int bone[4]; int16_t id[4]; };
+    // 062A and 0838 (Banjo with Kazooie in the pack). 0838 (Dragon Kazooie) has no crest.
+    constexpr Chain pack_chains[] = {
+        { 2, { 21, 22 }, { 47, 48 } },                 // crest, on her head (bone 20)
+        { 3, { 51, 52, 53 }, { 50, 51, 52 } },         // three tail feathers, on bone 50
+        { 3, { 54, 55, 56 }, { 53, 54, 55 } },
+        { 3, { 57, 58, 59 }, { 56, 57, 58 } },
+    };
+    // 061C (Kazooie alone after Split Up): head bone 7 (id 108), crest 8 (id 42) on it.
+    constexpr Chain solo_chains[] = {
+        { 3, { 8, 9, 10 }, { 42, 43, 44 } },
+        { 4, { 44, 45, 46, 47 }, { 57, 58, 59, 60 } },
+        { 4, { 48, 49, 50, 51 }, { 61, 62, 63, 64 } },
+        { 4, { 52, 53, 54, 55 }, { 65, 66, 67, 68 } },
+        { 2, { 56, 57 }, { 91, 93 } },
+    };
+    // Lighter than the snout: slower, longer wobbles and a wider swing per bone.
+    constexpr float feather_frequency = 2.6f, feather_damping = 0.14f, feather_follow = 1.2f;
+    constexpr float feather_angle = 32.0f;   // degrees per bone
+    constexpr float feather_arm = 12.0f;     // every bone turns as if it were this long
+    constexpr int max_feather_bones = 20, max_bones = 64;
+
+    struct Feathers {
+        int kind = 0;                        // 0 none, 1 pack, 2 solo: springs start again on a change
+        int chains = 0;
+        int chain_start[6]{}, chain_count[6]{};
+        int bone[max_feather_bones]{};
+        Vec pivot[max_feather_bones]{}, tip[max_feather_bones]{};   // bind pose
+        int8_t slot_of[max_bones];
+        bool done = false;                   // matrices worked out for this draw
+        Spring spring[max_feather_bones];
+        float max_angle = 0.0f;              // for the log
+    } feathers;
+
+    // Which of Kazooie's chains this model has (per draw: the heap reuses memory).
+    void pick_feathers(uint8_t* rdram, uint32_t model, bool player) {
+        std::memset(feathers.slot_of, -1, sizeof(feathers.slot_of));
+        feathers.chains = 0;
+        feathers.done = false;
+        const uint32_t bones_off = read_word(rdram, model + 0x18);
+        if (bones_off == 0 || bones_off >= 0x200000) {
+            return;
+        }
+        const uint32_t bones = model + bones_off;
+        const int count = (uint16_t)read_half(rdram, bones + 4);
+        auto bone = [&](int i) { return bones + 8 + 16 * i; };
+        auto id = [&](int i) { return read_half(rdram, bone(i) + 12); };
+        auto parent = [&](int i) { return (int)read_half(rdram, bone(i) + 14); };
+        auto pos = [&](int i) { return Vec{ read_float(rdram, bone(i)), read_float(rdram, bone(i) + 4), read_float(rdram, bone(i) + 8) }; };
+        const Chain* list = nullptr;
+        int n = 0, kind = 0;
+        if (player) {
+            list = pack_chains; n = (int)std::size(pack_chains); kind = 1;
+        } else if (count > 57 && count <= max_bones && id(7) == 108 && id(8) == 42 && parent(8) == 7) {
+            list = solo_chains; n = (int)std::size(solo_chains); kind = 2;
+        } else {
+            return;
+        }
+        if (kind != feathers.kind) {
+            for (Spring& s : feathers.spring) s = {};
+            feathers.kind = kind;
+        }
+        int slot = 0;
+        for (int c = 0; c < n; c++) {
+            const Chain& chain = list[c];
+            bool ok = slot + chain.count <= max_feather_bones;
+            for (int j = 0; ok && j < chain.count; j++) {
+                const int b = chain.bone[j];
+                ok = b < count && b < max_bones && id(b) == chain.id[j] && (j == 0 || parent(b) == chain.bone[j - 1]);
+            }
+            // Keep each chain on the same springs whichever chains are missing.
+            const int first = c * 4;
+            if (!ok || first + chain.count > max_feather_bones) {
+                continue;
+            }
+            slot = first;
+            feathers.chain_start[feathers.chains] = slot;
+            feathers.chain_count[feathers.chains] = chain.count;
+            feathers.chains++;
+            for (int j = 0; j < chain.count; j++, slot++) {
+                const int b = chain.bone[j];
+                feathers.bone[slot] = b;
+                feathers.slot_of[b] = (int8_t)slot;
+                feathers.pivot[slot] = pos(b);
+                // The end of the bone: the next one's pivot, or for the last one as far again along the
+                // one before it.
+                if (j + 1 < chain.count) {
+                    feathers.tip[slot] = pos(chain.bone[j + 1]);
+                } else {
+                    const Vec from = pos(parent(b) >= 0 && parent(b) < count ? parent(b) : b);
+                    Vec d = feathers.pivot[slot] - from;
+                    const float l = length(d);
+                    d = l > 1e-3f ? d * (std::max(l, 6.0f) / l) : Vec{ 0, 6, 0 };
+                    feathers.tip[slot] = feathers.pivot[slot] + d;
+                }
+            }
+        }
+    }
+
+    // An affine map p' = p * L + t (row vectors).
+    struct Affine { Mat L; Vec t; };
+    Affine then(const Affine& a, const Affine& b) { return { mul(a.L, b.L), apply(a.t, b.L) + b.t }; }
+    void apply_affine(const float m[16], const Affine& a, float out[16]) {
+        for (int row = 0; row < 3; row++) {
+            const Vec r = apply({ m[row * 4], m[row * 4 + 1], m[row * 4 + 2] }, a.L);
+            out[row * 4] = r.x; out[row * 4 + 1] = r.y; out[row * 4 + 2] = r.z;
+            out[row * 4 + 3] = m[row * 4 + 3];
+        }
+        const Vec moved = apply(Vec{ m[12], m[13], m[14] }, a.L) + a.t;
+        out[12] = moved.x; out[13] = moved.y; out[14] = moved.z;
+        out[15] = m[15];
+    }
+
+    // Every feather bone's turned matrix, into its copy. list = the matrix list (bone 0's matrix).
+    void work_out_feathers(uint8_t* rdram, uint32_t list) {
+        feathers.done = true;
+        feathers.max_angle = 0.0f;
+        for (int c = 0; c < feathers.chains; c++) {
+            Affine C{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
+            for (int j = 0; j < feathers.chain_count[c]; j++) {
+                const int slot = feathers.chain_start[c] + j;
+                float m[16], m1[16];
+                for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * feathers.bone[slot] + 4 * i);
+                // Where the bone is once the bones before it in the chain have turned.
+                apply_affine(m, C, m1);
+                const Vec pivot = transform(m1, feathers.pivot[slot]);
+                const Vec end = transform(m1, feathers.tip[slot]);
+                Spring& s = feathers.spring[slot];
+                update_spring(s, to_world(end), feather_frequency, feather_damping);
+                const Vec arm = end - pivot;
+                const float la = length(arm);
+                if (la > 1e-3f) {
+                    float angle;
+                    const Mat R = aim(arm * (feather_arm / la), to_model_dir(s.lag) * feather_follow, feather_angle, angle);
+                    feathers.max_angle = std::max(feathers.max_angle, angle);
+                    C = then(C, Affine{ R, pivot - apply(pivot, R) });
+                }
+                float out[16];
+                apply_affine(m, C, out);
+                for (int i = 0; i < 16; i++) write_float(rdram, feather_copies + 64 * slot + 4 * i, out[i]);
+            }
+        }
+    }
 }
 
 // func_800DE498 once it has settled on the model it draws (0x10C($sp), with the shadow hook):
@@ -368,27 +542,34 @@ namespace {
 extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     drawing_player = false;
     have_head = false;
+    feathers.chains = 0;
     const uint32_t sp = (uint32_t)ctx->r29;
     const uint32_t model = read_word(rdram, sp + 0x10C);
     if (!valid_ptr(model)) {
         return;
     }
     const bool on = option_bool(tooie::snout_jiggle::option);
-    if (!on && muzzle.model == 0) {
+    const bool feathers_on = option_bool(tooie::snout_jiggle::kazooie_option);
+    if (!on && !feathers_on && muzzle.model == 0) {
         return;
     }
     const ModelInfo info = info_for(rdram, model);
-    if (!info.player) {
+    if (feathers_on) {
+        pick_feathers(rdram, model, info.player);
+    }
+    if (info.player) {
+        current_model = model;
+        current = info;
+        if (on) {
+            drawing_player = true;
+            read_settings();
+        } else {
+            restore_muzzle(rdram);
+        }
+    }
+    if (!drawing_player && feathers.chains == 0) {
         return;
     }
-    current_model = model;
-    current = info;
-    if (!on) {
-        restore_muzzle(rdram);
-        return;
-    }
-    drawing_player = true;
-    read_settings();
     model_pos = { read_float(rdram, sp + 0xE0), read_float(rdram, sp + 0xE4), read_float(rdram, sp + 0xE8) };
     const uint32_t rot = read_word(rdram, sp + 0x100);
     model_yaw = valid_ptr(rot) ? read_float(rdram, rot + 4) : 0.0f;
@@ -399,7 +580,7 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
 // func_800DCF48 (a bone node) after func_800ADE2C returned the bone's matrix in $v0, before
 // func_80019AA0 pushes it ($a1 = $v0 in the delay slot).
 extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
-    if (!drawing_player) {
+    if (!drawing_player && feathers.chains == 0) {
         return;
     }
     const uint32_t node = read_word(rdram, (uint32_t)ctx->r29 + 0x24);
@@ -408,7 +589,26 @@ extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
     }
     const int bone = read_byte(rdram, node + 9);
     const uint32_t src = (uint32_t)ctx->r2;
-    if ((bone != snout_bone && bone != head_bone) || !valid_ptr(src)) {
+    if (!valid_ptr(src)) {
+        return;
+    }
+    // Kazooie's feathers: the matrix list holds every bone's matrix, 64 bytes each (func_800ADE2C).
+    if (feathers.chains != 0 && bone < max_bones && feathers.slot_of[bone] >= 0) {
+        if (!feathers.done) {
+            work_out_feathers(rdram, src - 64 * bone);
+            if (logging()) {
+                static int n = 0;
+                if (++n % 15 == 0) {
+                    printf("[kazooie] kind %d chains %d max angle %.1f%s\n", feathers.kind, feathers.chains,
+                           feathers.max_angle * 180.0f / pi, tooie::photo_mode::active() ? " (photo)" : "");
+                    fflush(stdout);
+                }
+            }
+        }
+        ctx->r2 = (gpr)(int32_t)(feather_copies + 64 * feathers.slot_of[bone]);
+        return;
+    }
+    if (!drawing_player || (bone != snout_bone && bone != head_bone)) {
         return;
     }
     float m[16];
@@ -422,7 +622,7 @@ extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
     }
     const Vec root = transform(m, current.root);
     const Vec tip = transform(m, current.tip);
-    update_spring(to_world(tip));
+    update_spring(spring, to_world(tip), settings.frequency, settings.damping);
 
     // Turn the snout about its root so its tip points at the spring's point.
     const Vec arm = tip - root;
