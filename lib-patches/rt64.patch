@@ -8962,7 +8962,7 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..44cffe5
+index 0000000..345e835
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
 @@ -0,0 +1,592 @@
@@ -9300,9 +9300,9 @@ index 0000000..44cffe5
 +        const float featherLength = params.x * size;
 +        const float halfWidth = 0.5f * params.y * size;
 +        const float lift = params.w * featherLength;
-+        // On a wing a feather starts a third of its length behind its root, so the wing's top edge, which no
-+        // feather grows over, is covered too (L: they did not go all the way up).
-+        const float back = twoSided ? 0.35f * featherLength : 0.0f;
++        // A feather starts a third of its length behind its root, so the top edges no feather grows over are
++        // covered too: her wings' and the top of her head (L: not all the way up, bald on top).
++        const float back = 0.35f * featherLength;
 +        const float3 rootOffset = -normal * (0.1f * featherLength) - along * back;
 +        const float3 tipOffset = along * (featherLength - back) + normal * (lift * 0.5f);
 +        const float shade = lerp(1.0f - 0.36f * noisiness, 1.0f + 0.2f * noisiness, FeatherRandom(seed, 5u));
@@ -9560,10 +9560,10 @@ index 0000000..44cffe5
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..7a348a6
+index 0000000..22bc7fc
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,160 @@
 +//
 +// RT64
 +//
@@ -9605,18 +9605,15 @@ index 0000000..7a348a6
 +
 +// How deep the texture's surface lies at a place on it, 0 (the top) to 1 (the deepest): from a texture pack's height map
 +// (white high, black deep), or else from the texture's brightness within its own range (x its darkest, y its lightest):
-+// its darkest gaps at the bottom, its faces flat on top.
++// its darkest gaps at the bottom, its lightest faces on top.
 +float ParallaxDepthAt(OtherMode otherMode, RenderFlags renderFlags, float2 uv, float2 ddxUV, float2 ddyUV, RDPTile rdpTile, GPUTile gpuTile, float2 range, bool heightMap) {
 +    const float4 c = sampleTexture(otherMode, renderFlags, uv, ddxUV, ddyUV, rdpTile, gpuTile, false);
 +    if (heightMap) {
 +        return saturate(1.0f - c.r);
 +    }
 +
-+    // The speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest
-+    // parts (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
 +    const float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
-+    const float darkness = saturate((range.y - luma) / max(range.y - range.x, 0.05f));
-+    return smoothstep(0.65f, 0.95f, darkness);
++    return saturate((range.y - luma) / max(range.y - range.x, 0.05f));
 +}
 +
 +// How far to move the texture coordinates at this pixel so the textures show the place the view ray meets the height
@@ -10056,7 +10053,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..fc8cdbb 100644
+index e7895c3..8199e3e 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -10175,8 +10172,8 @@ index e7895c3..fc8cdbb 100644
 +        const float2 anchorDy = ddy(vertexFurAnchor.xy);
 +        const float anchorDet = anchorDx.x * anchorDy.y - anchorDy.x * anchorDx.y;
 +        if (abs(anchorDet) > 1e-12f) {
-+            // A wing's feathers start a third of their length behind the root (GrassGS FeatherCards).
-+            const float2 fromRoot = vertexFurAnchor.xy - float2(0.0f, ((gConstants.grassShells & RASTER_GRASS_EDGES) != 0) ? 0.35f : 0.0f);
++            // A feather starts a third of its length behind its root (GrassGS FeatherCards).
++            const float2 fromRoot = vertexFurAnchor.xy - float2(0.0f, 0.35f);
 +            const float2 toRoot = float2(anchorDy.y * fromRoot.x - anchorDy.x * fromRoot.y,
 +                anchorDx.x * fromRoot.y - anchorDx.y * fromRoot.x) / anchorDet;
 +            const float2 rootUV = vertexUV - ddxVertexUV * toRoot.x - ddyVertexUV * toRoot.y;

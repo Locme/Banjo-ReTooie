@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T359 Kazooie: feathers cover the top of her head
+- Asked: 2026-10-17 07:18 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Kazooie feathers at 100
+  2. Look at the top of her head up close (the poker game in Jolly's works)
+- Look for: No bare smooth band on the very top of her head; feathers reach its outline. Her beak stays clean.
+- Status: waiting for L
+
 ## T358 Icy Side stays icy with Modern water
 - Asked: 2026-10-17 07:20 UTC
 - Build: main

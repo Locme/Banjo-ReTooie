@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Kazooie feathers: the very top of her head is feathered too, no bare band (L). Untested on PC (T359).
 - Kazooie feathers: no more orange flecks on the top of her beak, and her wing feathers reach all the way up the wing (L). Untested on PC (T357).
 - Kazooie feathers: none on her beak, eyes or mouth any more, fuller wings, and new Kazooie feather length, density, noisiness and transparency sliders in Character Shaders (L). Untested on PC (T347).
 - Settings menu: General > DEV tab is now called Developer Mode. The DEV tab has a new Additional Tabs section with Achievements tab (off by default), Cheats tab (moved from General) and Warp tab (moved from Cheats > Tabs; it no longer needs Enable cheats). Saved Cheats tab and Warp tab values carry over (L). Untested on PC (T344).
