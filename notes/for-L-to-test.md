@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T402 Split-Up pads: no lines across the pictures (DEV Blend texture seams, on)
+- Asked: 2026-10-17 20:44 UTC
+- Build: main
+- Steps:
+  1. Go to Hailfire Peaks, Icy Side, by the Split-Up pads near the start
+  2. Look down at both pads' pictures up close
+  3. Optional: turn DEV > Blend texture seams off and on to compare
+- Look for: Are the thin lines and smears across Banjo's and Kazooie's faces gone, with nothing new on the pad rims or the title logo?
+- Status: waiting for L
+
 ## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
 - Asked: 2026-10-17 20:40 UTC
 - Build: main
