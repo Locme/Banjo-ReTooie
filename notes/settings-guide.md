@@ -9,7 +9,7 @@ on a controller.
 
 - **Back up saves**: copies your save file into the `save_backups` folder
   whenever it changes. Default: on.
-- **Discord status**: shows the level you are playing in your Discord status
+- **Discord Status (Non-functional ATM)**: shows the level you are playing in your Discord status
   while Discord is running. Default: on.
 - **Back-Port: Old Banjo sounds**: Banjo-Kazooie's jump sounds instead of
   Banjo-Tooie's. Default: off.

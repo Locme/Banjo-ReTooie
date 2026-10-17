@@ -627,7 +627,7 @@ void tooie::init_config() {
         false);
     wip.add_bool_option(
         tooie::discord::presence_option,
-        "Discord status",
+        "Discord Status (Non-functional ATM)",
         "Shows the level you are playing in your Discord status while Discord is running.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
