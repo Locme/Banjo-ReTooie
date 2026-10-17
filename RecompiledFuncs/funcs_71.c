@@ -2768,6 +2768,7 @@ L_8080029C:
     // 0x808002A4: nop
 
 L_808002A8:
+    if (tooie_intro_sync_skip(rdram, ctx)) { ctx->r16 = 0; }
     // 0x808002A8: jal         0x808000BC
     // 0x808002AC: lw          $a0, 0x0($s1)
     ctx->r4 = MEM_W(ctx->r17, 0X0);

@@ -59,6 +59,8 @@ namespace {
     // Halfword holding the map that is loaded now (found by warping to two maps
     // and comparing RDRAM; ScriptHawk's bt.lua uses the same address).
     constexpr gpr current_map_addr = (int32_t)0x80132DC2;
+    // Halfword: id of the actor Banjo rides (0 when not riding), func_8009EA64 reads it.
+    constexpr gpr ride_actor_addr = (int32_t)0x8012707C;
     // The game-state block holding map change requests.
     constexpr gpr game_state_addr = (int32_t)0x80127630;
     // Maps where no save file is being played (map_names.inc).
@@ -206,6 +208,17 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     fprintf(stderr, "[warp] map 0x%X exit %u (from map 0x%X)\n", request->map, request->exit, from);
+
+    // Banjo riding a cart (Canary Mary's in a race): the halfword at 0x8012707C holds the ridden
+    // actor's id (set on mounting, func_80099B54, cleared on getting off, func_808000F0_bsride).
+    // Entering a map with it set puts Banjo back in the ride state, and bsride looks the cart up in
+    // the new map; with no such cart there it read address 0 (L's crash of 2026-10-17 09:53:56,
+    // a race warp from inside a race). The game only changes maps on a cart where both maps have
+    // it, so a warp takes him off.
+    if (MEM_H(0, ride_actor_addr) != 0) {
+        fprintf(stderr, "[warp] Banjo was riding actor id 0x%X, taken off for the warp\n", (unsigned)MEM_HU(0, ride_actor_addr));
+        MEM_H(0, ride_actor_addr) = 0;
+    }
 
     // Call the map change as if from here, then put the registers back for
     // func_800A7D84, which has not started yet.

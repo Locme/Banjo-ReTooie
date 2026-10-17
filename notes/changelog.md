@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Fixed: the texture sweep sweeps Banjo's house is destroyed, All Jinjos Happy Again and Tower of Tragedy again instead of crashing there (or skipping them), and the intro cutscenes no longer stand still for about 45 s each during a sweep. A warp (Race Warps included) while Banjo rides Mary's cart takes him off it instead of crashing in the next map. Untested on PC (T363).
 - Canary Mary gets feathers like Kazooie's in her own yellow-orange, with the new NPC feathers toggle in Character Shaders (L). Her skin and beak stay smooth. Untested on PC (T362).
 - Cheats > Replays: Race (moved here from the Warp tab), Boss, Minigame and Cutscene drop-downs start any race or the game's own boss, minigame and cutscene replays from anywhere; the file is saved first (L). Untested on PC (T361).
 - New cheats: Beat Hag 1 (shows only once your file is 100%), Big head, Small head, Big body, Tiny body and One-hit enemies (bosses keep their hits) (L). Untested on PC (T361).

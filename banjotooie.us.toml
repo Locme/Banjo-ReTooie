@@ -624,6 +624,27 @@ func = "func_8001C0A0"
 before_vram = 0x8001C0A0
 text = "tooie_heap_guard(rdram, ctx);"
 
+# chanim_entrypoint_6 frees an actor's animation; the intro characters of 0xAC and 0x199 call it
+# with none when the cutscene is entered straight from another map (src/game/cutscene_guards.cpp).
+[[patches.hook]]
+func = "chanim_entrypoint_6"
+before_vram = 0x808001C4
+text = "if (tooie_chanim_missing(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }"
+
+# The intro cutscenes wait here for the intro music's cue; skipped while a texture sweep runs.
+[[patches.hook]]
+func = "glintrosyncDll_entrypoint_1"
+before_vram = 0x808002A8
+text = "if (tooie_intro_sync_skip(rdram, ctx)) { ctx->r16 = 0; }"
+
+# Tower of Tragedy's quiz looks up the player it is about to set up (func_800A9478, -1 when not
+# found) and hands that index to func_800F5EF8, which read address 0 with -1 (L's sweep crash of
+# 2026-10-16 15:55:17). With no player found it is left alone.
+[[patches.hook]]
+func = "func_80800F34_chquiz"
+before_vram = 0x80800F50
+text = "if (tooie_quiz_no_player(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }"
+
 # --- Anti-tamper boot words (func_8001DE64) ---------------------------------
 # The CIC thread reads two words the IPL3 leaves in RDRAM through uncached
 # addresses (0xA02FB1F4, 0xA02FE1C0) and flags tampering unless they are

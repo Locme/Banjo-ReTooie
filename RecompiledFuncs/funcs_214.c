@@ -1882,6 +1882,7 @@ RECOMP_FUNC void chanim_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     // 0x808001C0: or          $a1, $zero, $zero
     ctx->r5 = 0 | 0;
     after_0:
+    if (tooie_chanim_missing(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }
     // 0x808001C4: lh          $t6, 0x0($v0)
     ctx->r14 = MEM_H(ctx->r2, 0X0);
     // 0x808001C8: or          $v1, $v0, $zero

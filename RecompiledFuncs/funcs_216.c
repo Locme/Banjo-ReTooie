@@ -4678,6 +4678,7 @@ RECOMP_FUNC void func_80800F34_chquiz(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800F4C: or          $a0, $v0, $zero
     ctx->r4 = ctx->r2 | 0;
     after_1:
+    if (tooie_quiz_no_player(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }
     // 0x80800F50: jal         0x800F5EF8
     // 0x80800F54: or          $a0, $v0, $zero
     ctx->r4 = ctx->r2 | 0;

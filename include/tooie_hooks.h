@@ -21,6 +21,10 @@ int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
 void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
+// Cutscene guards (src/game/cutscene_guards.cpp): a missing animation in chanim_entrypoint_6, and the intro scenes' music wait during a texture sweep.
+int tooie_chanim_missing(uint8_t* rdram, recomp_context* ctx);
+int tooie_intro_sync_skip(uint8_t* rdram, recomp_context* ctx);
+int tooie_quiz_no_player(uint8_t* rdram, recomp_context* ctx);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.

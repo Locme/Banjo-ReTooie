@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T363 Texture sweep: Banjo's house, All Jinjos and Tower of Tragedy swept; race warp from inside a race
+- Asked: 2026-10-17 08:58 UTC
+- Build: main
+- Steps:
+  1. Developer Mode: Sweep all maps (texture sweep) and let it run through the cutscenes
+  2. Watch the intro cutscenes (Two Years have passed, Hag 1 Arrives and on) during the sweep
+  3. Warp tab > Race Warps: start a Cloud Cuckooland race, then while racing pick a Glitter Gulch Mine race
+- Look for: The sweep passes Banjo's house is destroyed, All Jinjos Happy Again and Tower of Tragedy without crashing, and the intro scenes no longer sit still for about 45 s. The race warp lands you in Glitter Gulch Mine on foot instead of crashing.
+- Status: waiting for L
+
 ## T362 Canary Mary feathers (NPC feathers toggle)
 - Asked: 2026-10-17 08:54 UTC
 - Build: main
