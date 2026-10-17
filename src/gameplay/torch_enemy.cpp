@@ -770,21 +770,62 @@ namespace {
     constexpr float boing_near = 150.0f;
     constexpr float boing_far = 1800.0f;
 
-    void play_boing(uint8_t* rdram, recomp_context* ctx, const float pos[3], float volume) {
+    uint32_t play_sound(uint8_t* rdram, recomp_context* ctx, uint32_t sound, const float pos[3], float pitch, float volume, float near, float far) {
         GameCall call(rdram, ctx);
         call.vec(0, pos);
         const uint32_t sp = call.scratch - 0x80u;
-        write_float(rdram, sp + 0x10, boing_near);
-        write_float(rdram, sp + 0x14, boing_far);
+        write_float(rdram, sp + 0x10, near);
+        write_float(rdram, sp + 0x14, far);
         write_word(rdram, sp + 0x18, 2);
-        const float pitch = 0.95f + 0.15f * (float)(std::rand() % 100) / 100.0f;
         uint32_t pitch_bits;
         std::memcpy(&pitch_bits, &pitch, 4);
-        const uint32_t handle = (uint32_t)call(func_800C401C, boing_sound, pitch_bits, (uint32_t)(0x7FFF * std::clamp(volume, 0.0f, 1.0f)), call.scratch);
+        return (uint32_t)call(func_800C401C, sound, pitch_bits, (uint32_t)(0x7FFF * std::clamp(volume, 0.0f, 1.0f)), call.scratch);
+    }
+
+    void play_boing(uint8_t* rdram, recomp_context* ctx, const float pos[3], float volume) {
+        const float pitch = 0.95f + 0.15f * (float)(std::rand() % 100) / 100.0f;
+        const uint32_t handle = play_sound(rdram, ctx, boing_sound, pos, pitch, volume, boing_near, boing_far);
         if (log_on) {
             printf("[torch] boing (sound handle %u)\n", handle);
             fflush(stdout);
         }
+    }
+
+    // DEV > Sound test: plays the game's sound (0x4000 | number) at Banjo whenever the number changes, to find
+    // one by ear. It plays like func_800C401C but keeps the voice, so the last one is stopped (func_800C3CE8)
+    // before the next starts; looping sounds would otherwise pile up.
+    std::atomic<int> sound_test_pending{ -1 };
+    uint32_t sound_test_voice = 0;
+
+    void sound_test_tick(uint8_t* rdram, recomp_context* ctx) {
+        const int number = sound_test_pending.exchange(-1);
+        float at[3];
+        if (number < 0 || !banjo_position(rdram, at)) {
+            return;
+        }
+        GameCall call(rdram, ctx);
+        if (sound_test_voice != 0) {
+            call(func_800C3CE8, sound_test_voice);
+        }
+        sound_test_voice = (uint32_t)call(func_800C2E04) & 0xFF;
+        if (sound_test_voice == 0) {
+            return;
+        }
+        const float values[3] = { 1.0f, 5000.0f, 10000.0f };
+        uint32_t bits[3];
+        std::memcpy(bits, values, sizeof(bits));
+        call(func_800C3418, sound_test_voice, 2);
+        call(func_800C301C, sound_test_voice, 0x4000u | (uint32_t)number);
+        call(func_800C3058, sound_test_voice, 0x7FFF);
+        call(func_800C31DC, sound_test_voice, bits[0]);
+        call(func_800C3584, sound_test_voice, bits[1], bits[2]);
+        call.vec(0, at);
+        call(func_800C35E8, sound_test_voice, call.scratch);
+        call(func_800C330C, sound_test_voice, 1);
+        call(func_800C33DC, sound_test_voice, 1);
+        call(func_800C36F4, sound_test_voice, 0);
+        printf("[sound test] 0x%04X\n", 0x4000 | number);
+        fflush(stdout);
     }
 
     void burn_banjo(uint8_t* rdram, recomp_context* ctx, const float torch_pos[3]) {
@@ -1108,6 +1149,20 @@ void tooie::torch_enemy::add_option(recomp::config::Config& general) {
         false);
 }
 
+void tooie::torch_enemy::add_sound_test_option(recomp::config::Config& dev) {
+    dev.add_number_option(sound_test_option, "Sound test",
+        "Plays one of the game's sound effects at Banjo each time the number changes, to find a sound by ear "
+        "(step through with the arrows). Tell Claude the number. Only while playing in a level.",
+        0, 2047, 1, 0, false, 0);
+    dev.add_option_change_callback(sound_test_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            const auto* number = std::get_if<double>(&value);
+            if (context != recomp::config::OptionChangeContext::Load && number != nullptr) {
+                sound_test_pending = (int)*number;
+            }
+        });
+}
+
 void tooie::torch_enemy::tick(uint8_t* rdram, recomp_context* ctx) {
     read_env();
     const uint32_t now = tooie::game_frame_rate::game_ms();
@@ -1122,6 +1177,7 @@ void tooie::torch_enemy::tick(uint8_t* rdram, recomp_context* ctx) {
         frames_in_map = 0;
         return;
     }
+    sound_test_tick(rdram, ctx);
 
     dump_map_files(rdram, ctx);
     const bool on = option_on();

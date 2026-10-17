@@ -72,6 +72,11 @@ on a controller.
 
 - **Developer Mode** (Developer): shows the DEV tab. Default: off.
 
+- **Sound test** (DEV): plays one of the game's sound effects at Banjo each
+  time the number changes (0 to 2047, sound 0x4000 + the number), to find a
+  sound by ear, for example a voice for the torch enemy. Only while playing in
+  a level. Default: 0 (nothing plays until it changes).
+
 - **Blend texture seams** (DEV): smooths the lines where the pieces of a
   texture drawn in parts meet: the title screen's logo, the pads the player
   stands on, wall panels and the like. The game clamps each piece at its edge,

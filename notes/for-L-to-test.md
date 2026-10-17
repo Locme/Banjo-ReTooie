@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T417 DEV Sound test (find the torch enemy's grunt)
+- Asked: 2026-10-17 23:32 UTC
+- Build: main
+- Steps:
+  1. Settings > DEV: find Sound test
+  2. Load a file and stand anywhere in a level
+  3. Change the number with the arrows: each change plays that sound at Banjo (close the menu if you hear nothing while it is open)
+  4. Note the numbers of any 'hurr' grunts that would suit the torch
+- Look for: Does each number play a sound (some are silent), and does the previous one stop when the next plays? Which number(s) sound like the grunt you want?
+- Status: waiting for L
+
 ## T416 Ice: reflection stays at every camera height; ice looks like ice up close
 - Asked: 2026-10-17 23:27 UTC
 - Build: main

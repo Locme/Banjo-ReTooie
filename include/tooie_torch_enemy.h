@@ -18,6 +18,10 @@ namespace tooie::torch_enemy {
 
     void add_option(recomp::config::Config& general);
 
+    // DEV > Sound test: plays game sound 0x4000 | n at Banjo when the number changes.
+    inline const std::string sound_test_option = "dev_sound_test";
+    void add_sound_test_option(recomp::config::Config& dev);
+
     // Once per frame on the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram, recomp_context* ctx);
 }
