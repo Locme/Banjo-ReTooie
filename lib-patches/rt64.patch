@@ -13168,10 +13168,10 @@ index 1ceb2ce..e6f0ef3 100644
              RDPMipLevels[0] = min(floor(mip), maxMip);
 diff --git a/src/shaders/TextureUpscaleCS.hlsl b/src/shaders/TextureUpscaleCS.hlsl
 new file mode 100644
-index 0000000..b9cdf8b
+index 0000000..63b1ede
 --- /dev/null
 +++ b/src/shaders/TextureUpscaleCS.hlsl
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,68 @@
 +//
 +// RT64
 +//
@@ -13179,9 +13179,7 @@ index 0000000..b9cdf8b
 +// the published description of Hyllian's xBR (level 1): for each corner of a source pixel, the edge
 +// across that corner is compared with the one along it, using the pixels around them, and where the
 +// corner sits on an edge it takes the colour of the nearer side, half blended. Run twice for 4x.
-+// Its edges clamp: many textures don't repeat (the title logo's strips, rock tiles laid side by side), and
-+// wrapping blended their edge pixels with the opposite edge, drawing a line where two tiles meet (L). On a
-+// texture that does repeat, the edge pixel then simply stays as it was.
++// Textures wrap, as most of the game's tile.
 +
 +#define GROUP_SIZE 8
 +
@@ -13196,7 +13194,7 @@ index 0000000..b9cdf8b
 +
 +float4 Fetch(int2 base, int2 offset, int2 mirror) {
 +    const int2 size = int2(gConstants.inputSize);
-+    const int2 p = clamp(base + offset * mirror, int2(0, 0), size - 1);
++    const int2 p = ((base + offset * mirror) % size + size) % size;
 +    return gInput.Load(int3(p, 0));
 +}
 +
