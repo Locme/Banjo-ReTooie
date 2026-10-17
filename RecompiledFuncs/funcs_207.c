@@ -330,6 +330,7 @@ L_80092384:
     ctx->f20.u64 = LD(ctx->r29, 0X18);
     // 0x80092390: addiu       $sp, $sp, 0x38
     ctx->r29 = ADD32(ctx->r29, 0X38);
+    ctx->r10 = (gpr)tooie_free_camera_player_alpha((int)ctx->r10);
     // 0x80092394: jr          $ra
     // 0x80092398: or          $v0, $t2, $zero
     ctx->r2 = ctx->r10 | 0;

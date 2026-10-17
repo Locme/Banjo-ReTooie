@@ -17,6 +17,18 @@
 // where this file turns the camera's offset from Banjo about Banjo. The
 // dynamic camera keeps its own position (+0x74) and rotation (+0x80), so the
 // game's camera logic is left as it was and only the picture moves.
+//
+// Ease back (QOL > Free camera: ease back, off by default): a second after the stick is let go while
+// Banjo flies (Flying only) or flies or moves (Always), the held yaw, elevation, aim and zoom ease
+// towards the game's own camera, which keeps chasing the spot behind Banjo underneath; once they
+// meet, the game's camera takes over again.
+//
+// Smooth walls (QOL > Free camera: smooth walls, off by default): the wall pull-in eases instead of
+// snapping. The camera's distance is held as a fraction of the wanted one; it falls quickly when a
+// wall comes between, but never further behind the hit point than most of the line test's radius,
+// so the camera stays in front of the surface, and it rises slowly once the way is clear. Banjo
+// fades out as the camera comes close to him (func_80092258 gives a player's draw alpha; its hook
+// scales the result, and the players' draw puts a faded player in its see-through pass).
 
 #include <algorithm>
 #include <atomic>
@@ -41,6 +53,14 @@ namespace {
     // (func_8009C128 copies it out).
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t player_transform = 0xE4;
+    // PlayerState +0x120 points at the state block, whose +0x04 is the current state id.
+    constexpr uint32_t player_state_block = 0x120;
+    constexpr uint32_t state_current = 0x04;
+    // Flying states: Banjo-Kazooie's take-off and flight, the bee's flight pad launch and flight
+    // (as src/gameplay/player_cheats.cpp).
+    constexpr uint32_t flying_states[] = { 35, 36, 0x8B, 0x8C };
+    // The game's delta time for this frame in seconds (func_800D8FF8 returns it; see photo_mode.cpp).
+    constexpr uint32_t game_delta_time = 0x8012C760;
 
     // Camera controller (func_8010FC38's argument).
     constexpr uint32_t ctl_camera = 0x00;
@@ -84,6 +104,21 @@ namespace {
     constexpr uint32_t sweep_flags = 0x820020;
     constexpr float sweep_radius = 45.0f;
 
+    // Ease back: seconds after the stick is let go, the rate (per second) of the ease, the speed
+    // (units per second) Banjo counts as moving at, and how close counts as caught up.
+    constexpr float ease_delay = 1.0f;
+    constexpr float ease_rate = 2.0f;
+    constexpr float moving_speed = 100.0f;
+    constexpr float ease_done_degrees = 1.0f;
+    // Smooth walls: rates (per second) of the pull-in and of the move back out, and how much of the
+    // line test's radius the camera may lag behind the hit point while pulling in.
+    constexpr float wall_in_rate = 18.0f;
+    constexpr float wall_out_rate = 3.0f;
+    constexpr float wall_lag = 0.75f * sweep_radius;
+    // Banjo's alpha: whole with the camera this far from the pivot or further, gone this close.
+    constexpr float fade_far = 110.0f;
+    constexpr float fade_near = 45.0f;
+
     constexpr float deg = 3.14159265358979f / 180.0f;
 
     struct State {
@@ -92,6 +127,10 @@ namespace {
         float elevation = 0.0f; // held height of the camera above the pivot, in degrees
         float aim = 0.0f;       // view pitch plus elevation: how far above the pivot the camera looks
         float zoom = 1.0f;     // times the game's distance
+        float idle = 0.0f;      // seconds since the stick was last used
+        float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
+        float banjo[3] = { 0, 0, 0 }; // Banjo's position last step, for his speed
+        bool has_banjo = false;
         uint16_t map = 0xFFFF;
         std::chrono::steady_clock::time_point last;
         bool has_last = false;
@@ -197,6 +236,14 @@ namespace {
         float d = wrap_degrees(to - from);
         return d > 180.0f ? d - 360.0f : d;
     }
+
+    // 1 - e^(-rate * dt): the share of the way an ease at `rate` per second covers in dt.
+    float ease(float rate, float dt) {
+        return 1.0f - std::exp(-rate * dt);
+    }
+
+    // Scales the players' draw alpha (tooie_free_camera_player_alpha), 1 for whole.
+    std::atomic<float> player_fade{1.0f};
 }
 
 bool tooie::free_camera::enabled() {
@@ -231,6 +278,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t camera = read_word(rdram, ctl + ctl_camera);
     if (valid_ptr(camera) && tooie::photo_mode::place_camera(rdram, ctx, camera)) {
         state.active = false;
+        player_fade = 1.0f;
         return;
     }
     const uint32_t dynamic = read_word(rdram, ctl + ctl_dynamic);
@@ -255,6 +303,21 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     const uint32_t submode = valid_ptr(dynamic) ? read_word(rdram, dynamic + dynamic_submode) : 0xFFFFFFFFu;
+    const uint32_t state_block = valid_ptr(player) ? read_word(rdram, player + player_state_block) : 0;
+    const uint32_t player_state = valid_ptr(state_block) ? read_word(rdram, state_block + state_current) : 0;
+
+    // Banjo's speed along the ground since the last step, in game time so a slow frame doesn't lower it.
+    float speed = 0.0f;
+    if (valid_ptr(transform)) {
+        const float game_dt = read_float(rdram, game_delta_time);
+        if (state.has_banjo && game_dt > 0.0f) {
+            const float dx = banjo[0] - state.banjo[0];
+            const float dz = banjo[2] - state.banjo[2];
+            speed = std::sqrt(dx * dx + dz * dz) / game_dt;
+        }
+        std::memcpy(state.banjo, banjo, sizeof(banjo));
+    }
+    state.has_banjo = valid_ptr(transform);
 
     // Right stick, up and right positive (SDL's y grows downwards).
     float stick_x = 0.0f;
@@ -280,13 +343,42 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
     }
 
     bool blocked = false;
+    bool easing = false;
+    float fade = 1.0f;
     if (on && gameplay && !paused) {
-        if (!state.active && (stick_x != 0.0f || stick_y != 0.0f)) {
+        const bool stick = stick_x != 0.0f || stick_y != 0.0f;
+        if (!state.active && stick) {
             state.active = true;
             state.yaw = rot[1];
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
             state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
+            state.wall = 1.0f;
+        }
+        state.idle = stick ? 0.0f : state.idle + dt;
+
+        // Ease back towards the game's camera, which is behind Banjo while he moves.
+        const auto ease_back = option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Off);
+        const bool flying = std::find(std::begin(flying_states), std::end(flying_states), player_state) != std::end(flying_states);
+        easing = state.active && state.idle >= ease_delay &&
+            ((ease_back == (uint32_t)tooie::FreeCameraEaseBack::Flying && flying) ||
+             (ease_back == (uint32_t)tooie::FreeCameraEaseBack::Always && (flying || speed >= moving_speed)));
+        if (easing) {
+            const float k = ease(ease_rate, dt);
+            const float elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
+            const float aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
+            state.yaw = wrap_degrees(state.yaw + angle_delta(rot[1], state.yaw) * k);
+            state.elevation += (elevation - state.elevation) * k;
+            state.aim += (aim - state.aim) * k;
+            state.zoom += (1.0f - state.zoom) * k;
+            state.wall += (1.0f - state.wall) * k;
+            if (std::fabs(angle_delta(rot[1], state.yaw)) < ease_done_degrees &&
+                std::fabs(elevation - state.elevation) < ease_done_degrees &&
+                std::fabs(aim - state.aim) < ease_done_degrees &&
+                std::fabs(1.0f - state.zoom) < 0.01f && state.wall > 0.99f) {
+                // Caught up: the game's camera is back in charge.
+                state.active = false;
+            }
         }
         if (state.active) {
             const auto speed = std::min<uint32_t>(option<uint32_t>(tooie::free_camera_speed_option, 1), 2);
@@ -348,7 +440,31 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
 
             // Pull the camera in front of any wall between Banjo and it, with the game's own camera
             // line test (func_800FAB50(from, to_inout, normal_out, flags, radius), as func_80113640 uses it).
-            blocked = sweep(rdram, ctx, pivot, want);
+            float hit[3] = { want[0], want[1], want[2] };
+            blocked = sweep(rdram, ctx, pivot, hit);
+            const float full = std::sqrt((want[0] - pivot[0]) * (want[0] - pivot[0]) +
+                (want[1] - pivot[1]) * (want[1] - pivot[1]) + (want[2] - pivot[2]) * (want[2] - pivot[2]));
+            if (option<bool>(tooie::free_camera_smooth_walls_option, false) && full > 1.0f) {
+                const float reach = std::sqrt((hit[0] - pivot[0]) * (hit[0] - pivot[0]) +
+                    (hit[1] - pivot[1]) * (hit[1] - pivot[1]) + (hit[2] - pivot[2]) * (hit[2] - pivot[2]));
+                const float target = blocked ? std::clamp(reach / full, 0.0f, 1.0f) : 1.0f;
+                if (target < state.wall) {
+                    state.wall += (target - state.wall) * ease(wall_in_rate, dt);
+                    state.wall = std::min(state.wall, target + wall_lag / full);
+                }
+                else {
+                    state.wall += (target - state.wall) * ease(wall_out_rate, dt);
+                }
+                for (int i = 0; i < 3; i++) {
+                    want[i] = pivot[i] + (want[i] - pivot[i]) * state.wall;
+                }
+                const float close = full * state.wall;
+                fade = std::clamp((close - fade_near) / (fade_far - fade_near), 0.0f, 1.0f);
+            }
+            else {
+                std::memcpy(want, hit, sizeof(want));
+                state.wall = 1.0f;
+            }
 
             write_float(rdram, camera + cam_pos + 0, want[0]);
             write_float(rdram, camera + cam_pos + 4, want[1]);
@@ -357,16 +473,28 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             write_float(rdram, camera + cam_rot + 4, state.yaw);
         }
     }
+    // TOOIE_FREECAM_FADE=<0..1> caps Banjo's fade while the free camera is held, to check the faded look headless.
+    static const float forced_fade = std::getenv("TOOIE_FREECAM_FADE") ? std::strtof(std::getenv("TOOIE_FREECAM_FADE"), nullptr) : 1.0f;
+    if (state.active) {
+        fade = std::min(fade, forced_fade);
+    }
+    player_fade = fade;
 
     if (log && now - last_log >= std::chrono::milliseconds(250)) {
         last_log = now;
-        std::printf("[freecam] map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f elev %.1f view %.1f zoom %.2f wall %d\n",
+        std::printf("[freecam] map %03X mode %d upd %d paused %d sub %u cam %.0f %.0f %.0f rot %.1f %.1f %.1f banjo %.0f %.0f %.0f stick %.2f %.2f active %d yaw %.1f elev %.1f view %.1f zoom %.2f wall %d state %u speed %.0f easing %d fraction %.2f fade %.2f\n",
             map, mode, updating, paused, submode, pos[0], pos[1], pos[2], rot[0], rot[1], rot[2],
-            banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked);
+            banjo[0], banjo[1], banjo[2], stick_x, stick_y, state.active, state.yaw, state.elevation, state.aim - state.elevation, state.zoom, blocked,
+            player_state, speed, easing, state.wall, fade);
         std::fflush(stdout);
     }
 }
 
 bool tooie::free_camera::sweep_line(uint8_t* rdram, recomp_context* ctx, const float from[3], float to[3], float normal[3]) {
     return sweep(rdram, ctx, from, to, normal);
+}
+
+extern "C" int tooie_free_camera_player_alpha(int alpha) {
+    const float fade = player_fade.load();
+    return fade >= 1.0f ? alpha : (int)((float)alpha * fade);
 }

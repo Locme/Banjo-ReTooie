@@ -127,6 +127,13 @@ framework, not from this port's code, so it is not described here.
   a cutscene or another area. Default: on.
   - **Free camera speed**: Slow, Normal or Fast. Default: Normal.
   - **Free camera: invert left/right** and **invert up/down**. Default: off.
+  - **Free camera: ease back**: a second after you let go of the right stick,
+    the camera drifts back behind Banjo. Flying only does it while flying,
+    Always also while running or swimming; standing still leaves the camera
+    where you turned it. Default: Off.
+  - **Free camera: smooth walls**: the camera glides in when a wall gets
+    between it and Banjo and glides back out afterwards, instead of jumping,
+    and Banjo fades out when the camera comes very close to him. Default: off.
 
 ## Controls: Movement
 

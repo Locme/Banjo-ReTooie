@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Free camera: two new optional settings in QOL (L). **Ease back** (Off, Flying only, Always) lets the camera drift back behind Banjo a second after you let go of the right stick while he flies or moves. **Smooth walls** makes the camera glide in and out around walls instead of jumping, and fades Banjo out when the camera gets very close. Both are off by default. Untested on PC (T370).
 - Benchmark key no longer on F4 by default (saved controls lose F4 once); bind it under Hotkeys if wanted. Transform defaults to LT + Y on the controller, also given once to saved controls with nothing on it (L). Untested on PC (T367).
 - The texture sweep now also sweeps the seven multiplayer arenas (they have textures of their own); before, it skipped them because the game stopped on a missing piece of code there. Untested on PC (T363).
 - Fixed: the texture sweep sweeps Banjo's house is destroyed, All Jinjos Happy Again and Tower of Tragedy again instead of crashing there (or skipping them), and the intro cutscenes no longer stand still for about 45 s each during a sweep. A warp (Race Warps included) while Banjo rides Mary's cart takes him off it instead of crashing in the next map. Untested on PC (T363).

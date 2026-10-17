@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T370 Free camera: ease back and smooth walls
+- Asked: 2026-10-17 10:10 UTC (L: "Add 1 and 2 as optional")
+- Build: main (next Windows build)
+- Steps:
+  1. Settings > QOL > Camera: Free camera on, Free camera: ease back = Always
+  2. In Spiral Mountain, turn the camera to the side with the right stick, let go, then run with the left stick for a few seconds
+  3. Set ease back to Flying only and do the same while flying (a flight pad, or Cheats > Fly anywhere); then run on the ground and check it stays put
+  4. Set ease back to Off, Free camera: smooth walls on, and spin the camera slowly near cliffs and walls; walk into a corner so the camera gets pushed in close to Banjo
+- Look for: Step 2, about a second after letting go the camera swings round behind Banjo smoothly and then follows him the game's usual way, with no jump when it hands back. Standing still, it never moves on its own. Step 3, it only eases back while flying. Step 4, the camera glides in when a wall comes between it and Banjo and glides back out (about a second) instead of snapping; when it gets very close Banjo turns see-through rather than filling the screen. Does the see-through Banjo look right (no missing parts or wrong colours)? Checked headless in Spiral Mountain: ease back handed over within 1 degree of the game's camera, the wall pull-in eased in and out, and a forced fade drew Banjo see-through.
+- Status: waiting for L
+
 ## T369 Texture sweep: every entrance of each map
 - Asked: 2026-10-17 UTC (was a second T363)
 - Build: latest Windows build from main

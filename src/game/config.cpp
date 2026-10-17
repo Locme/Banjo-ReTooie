@@ -408,6 +408,21 @@ void tooie::init_config() {
         "Free camera: invert up/down",
         "Reverses which way the right stick tilts the free camera.",
         false);
+    qol.add_enum_option(
+        tooie::free_camera_ease_back_option,
+        "Free camera: ease back",
+        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it.",
+        {
+            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
+            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
+            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
+        },
+        tooie::FreeCameraEaseBack::Off);
+    qol.add_bool_option(
+        tooie::free_camera_smooth_walls_option,
+        "Free camera: smooth walls",
+        "The camera glides in when a wall gets between it and Banjo and glides back out afterwards, instead of jumping. Banjo fades out when the camera gets very close to him.",
+        false);
     qol.add_bool_option(
         tooie::photo_mode_collision_option,
         "Photo mode camera collision",
@@ -415,7 +430,8 @@ void tooie::init_config() {
         true);
     tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
-                                   &tooie::free_camera_invert_y_option }) {
+                                   &tooie::free_camera_invert_y_option, &tooie::free_camera_ease_back_option,
+                                   &tooie::free_camera_smooth_walls_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
     qol.add_enum_option(

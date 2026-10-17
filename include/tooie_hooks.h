@@ -126,6 +126,8 @@ void tooie_pause_settings_log_text(uint8_t* rdram, recomp_context* ctx);
 int tooie_hud_hidden(void);
 // Whether photo mode has the players hidden (src/gameplay/photo_mode.cpp).
 int tooie_players_hidden(void);
+// A player's draw alpha, faded while the free camera is pulled in close (src/gameplay/free_camera.cpp).
+int tooie_free_camera_player_alpha(int alpha);
 // Whether photo mode has everything else (enemies, NPCs, items) hidden.
 int tooie_others_hidden(void);
 

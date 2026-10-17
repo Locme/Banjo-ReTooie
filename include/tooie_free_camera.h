@@ -12,8 +12,11 @@ namespace tooie {
     inline const std::string free_camera_invert_x_option = "free_camera_invert_x";
     inline const std::string free_camera_invert_y_option = "free_camera_invert_y";
     inline const std::string free_camera_speed_option = "free_camera_speed";
+    inline const std::string free_camera_ease_back_option = "free_camera_ease_back";
+    inline const std::string free_camera_smooth_walls_option = "free_camera_smooth_walls";
     inline const std::string photo_mode_collision_option = "photo_mode_collision";
     enum class FreeCameraSpeed : uint32_t { Slow, Normal, Fast };
+    enum class FreeCameraEaseBack : uint32_t { Off, Flying, Always };
 }
 
 namespace tooie::free_camera {
