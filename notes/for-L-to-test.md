@@ -87,7 +87,7 @@
 - Steps:
   1. Graphics > Shaders on, set Parallax to 100
   2. Load a file, warp to Mayahem Temple and walk along the stone walls, the paved path and the carved gold doorway, turning the camera
-  3. Also try Spiral Mountain's rock and Glitter Gulch Mine's rocky walls
+  3. Also try other levels: it is on 438 stone, brick and rock textures from every level (Grunty Industries' flagstones and walls, Glitter Gulch Mine's rock, Jolly Roger's bricks)
   4. Set Parallax to 0 and back while looking at a wall
 - Look for: the stones and cobbles look raised, with the dark gaps and cracks sunk in, and the stones shift against each other as the camera moves instead of looking painted on. Grass, wood, characters and the sky look as before. Tell me if anything looks smeared or swims (most likely on a wall seen almost edge on), which textures should have it and don't, and whether the frame rate drops. Checked headless in Mayahem Temple: the path and doorway stand out; screenshot screens/parallax/mayahem-temple-off-on-headless.png in project files (left off, right on).
 
