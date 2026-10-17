@@ -844,8 +844,7 @@ text = "tooie_current_push(rdram, ctx);"
 
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
-# game time has gone by for that box (src/game/game_frame_rate.cpp); with DEV >
-# Talking heads at 20 FPS, until 1/20 s at any frame rate.
+# game time has gone by for that box (src/game/game_frame_rate.cpp).
 [[patches.hook]]
 func = "func_8080156C_gczoombox"
 before_vram = 0x8080156C

@@ -17,8 +17,6 @@ namespace tooie::game_frame_rate {
     inline const std::string force_scene_interpolation_option = "force_scene_interpolation";
     // DEV tab: Force Interpolation in the gameplay demo (off by default, L 2026-10-16).
     inline const std::string force_demo_interpolation_option = "force_demo_interpolation";
-    // DEV tab: Talking heads at 20 FPS (off by default, L 2026-10-16).
-    inline const std::string talking_heads_20_option = "talking_heads_20fps";
 
     // Adds the option to the Graphics tab. It applies from the next game frame.
     void add_option(recomp::config::Config& graphics);

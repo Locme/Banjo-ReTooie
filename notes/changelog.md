@@ -53,7 +53,6 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
-- New DEV option, Talking heads at 20 FPS (off by default): the talking heads in conversations move their mouths and blink 20 times a second at every Game Frame Rate, Original included. Applies at once (L). Untested on PC (T350).
 - Saved shaders compile faster at start: every compile thread works through the saved shader list while the game needs nothing new (was half), so the save select's shaders are ready sooner and the first Jiggy wipe into it doesn't stutter (L). Untested on PC (T342).
 - New Parallax setting (Graphics, under Shaders, 0 to 100, off by default): stone walls, paving and rock get depth, with the stones standing out and the gaps and cracks sunk in, shifting as the camera moves. The N64 textures have no depth of their own, so it comes from how dark each part of the texture is. On 1,215 stone, brick, rock and cliff textures picked by eye from a dump of every level (L). Untested on PC (T341).
 - Fixed: above 30 FPS Klungo's fades ran at the wrong speed, and at 150 FPS and up he never faded back in behind his shield, so some phials started from his middle instead of his raised hand. Untested on PC (T331).

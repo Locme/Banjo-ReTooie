@@ -21,15 +21,8 @@
 - Look for: The game keeps running (no frozen or black window), and the console log has no 'failed with error code 0xFFFFFFFC' lines. The cause found: the screen effects' settings had grown to 272 bytes when the cloud sliders were added, over the 256 bytes NVIDIA allows, so the driver could lose the GPU. They are back to 256. Checked headless: the Vulkan validation error is gone and the clouds look the same; the software GPU never lost the device, so only your PC can confirm the fix.
 - Status: waiting for L
 
-## T350 DEV: Talking heads at 20 FPS
-- Asked: 2026-10-17 00:52 UTC
-- Build: main
-- Steps:
-  1. Settings > DEV: turn on Talking heads at 20 FPS (off by default)
-  2. Talk to anyone with a talking head (Bottles, Humba, Jamjars) at 60 FPS or above, then at Original
-  3. Turn the option off and on while the box is open
-- Look for: The talking heads' mouths and blinks move at 20 steps a second at every Game Frame Rate, a little choppier than before; turning it off goes back to 30 a second at once. Checked headless with Humba's head at 60 FPS: 20 steps a second on, 30 off.
-- Status: waiting for L
+## T350 DEV: Talking heads at 20 FPS (withdrawn)
+- Removed 2026-10-17 at L's request: the heads stay capped at 30 FPS, the speed the game made them for. Nothing to test.
 
 ## T349 Snout jiggle sliders and Photo Mode freeze
 - Asked: 2026-10-17 00:40 UTC
