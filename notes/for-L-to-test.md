@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T416 Deep snow: trail everywhere on Icy Side, no prints from jumps, smooth trench walls; Graphics API in the menu
+## T417 Deep snow: trail everywhere on Icy Side, no prints from jumps, smooth trench walls; Graphics API in the menu
 - Asked: 2026-10-17 23:32 UTC
 - Build: main (this commit)
 - Steps:
@@ -9,6 +9,16 @@
   3. Look back along a long trail and at its walls
   4. Check Settings > Graphics: Graphics API is there (changing it restarts the game)
 - Look for: The trail shows there too and Banjo carves a trench instead of being buried. Jumps leave no marks until he lands. The trench walls are smooth, with no spikes. The trail reaches about twice as far behind him as before.
+- Status: waiting for L
+
+## T416 Ice: reflection stays at every camera height; ice looks like ice up close
+- Asked: 2026-10-17 23:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: Ice reflections at your usual setting
+  2. Icy Side: stand in the shallow ice water by the igloo (where your screenshot was), camera low across the ice
+  3. Raise the camera slowly until you look down on Banjo, then lower it again
+- Look for: Banjo's reflection stays under him the whole way up instead of cutting out past about 45 degrees (it gets shorter as you look down, as a real one would). Low across the ice it still reflects, but you see the ice's own surface through it and it no longer ripples like water. Headless before/after: screens/ice-reflections/t416-reflection-stays.png and t416-low-angle-look.png
 - Status: waiting for L
 
 ## T415 Smash Banjo fur

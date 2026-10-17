@@ -12087,10 +12087,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2b2643e
+index 0000000..bbfa1cd
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2367 @@
+@@ -0,0 +1,2409 @@
 +//
 +// RT64
 +//
@@ -12905,7 +12905,7 @@ index 0000000..2b2643e
 +// The reflection off a water pixel: a ray marched across the screen against the scene's depth. What it
 +// hits is reflected; a ray leaving through the sky reflects the sky; anything else fades out.
 +float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack);
-+float4 WaterReflectionMarch(float3 surface, float3 r, float nearest);
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest, out bool hit);
 +
 +float4 WaterReflection(float3 surface, float3 normal) {
 +    return WaterReflectionRay(surface, normal, false);
@@ -12915,9 +12915,10 @@ index 0000000..2b2643e
 +// wall face on) is bent to run into the picture instead, so ice seen from above still reflects the scenery beyond
 +// rather than nothing; a little fainter, as it is made up.
 +float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
-+    // Ripples: the normal wobbles with the surface's position and time (the waves bring their own).
++    // Ripples: the normal wobbles with the surface's position and time (the waves bring their own). Not on ice
++    // (bendBack), which keeps still: moving ripples made it read as water.
 +    float3 n = normal;
-+    if (gConstants.water.w <= 0.0f) {
++    if ((gConstants.water.w <= 0.0f) && !bendBack) {
 +        const float t = gConstants.view.z;
 +        const float2 ripple = float2(sin(surface.x * 0.05f + t * 1.7f) + sin(surface.z * 0.08f - t * 2.3f),
 +            sin(surface.z * 0.06f + t * 1.3f) + sin(surface.x * 0.07f + t * 2.9f)) * 0.012f;
@@ -12926,7 +12927,14 @@ index 0000000..2b2643e
 +    const float3 v = normalize(surface);
 +    float3 r = reflect(v, n);
 +    float made = 1.0f;
++    bool hit;
 +    if (bendBack && (r.z > -0.3f)) {
++        // The true ray first: one heading back towards the camera still meets what stands on the ice (Banjo's front),
++        // so he keeps one real reflection under him at every camera height instead of it cutting out past 45 degrees.
++        const float4 real = WaterReflectionMarch(surface, r, 0.0f, hit);
++        if (hit) {
++            return real;
++        }
 +        // Along the picture the way the ray was going (or up the picture, the way level ground runs away, when it
 +        // came almost straight back), and a fixed way into it.
 +        float2 across = r.xy;
@@ -12946,18 +12954,20 @@ index 0000000..2b2643e
 +    // A bent ray is made up, so it only picks up what lies well beyond the ice: closer things (Banjo, the walls round
 +    // the ice) would be copied down the picture under themselves, a fresh copy wherever a ray met them again.
 +    const float nearest = (made < 1.0f) ? max(-surface.z * 2.0f, -surface.z + 800.0f) : 0.0f;
-+    float4 reflection = WaterReflectionMarch(surface, r, nearest);
++    float4 reflection = WaterReflectionMarch(surface, r, nearest, hit);
 +    reflection.a *= made;
 +    return reflection;
 +}
 +
 +// The reflection along a ray from a surface (view space): see WaterReflection. Things nearer the camera than
 +// nearest are passed over.
-+float4 WaterReflectionMarch(float3 surface, float3 r, float nearest) {
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest, out bool hit) {
++    hit = false;
 +    const float2 size = gConstants.projection.zw;
 +    const float stepLength = max(-surface.z * 0.03f, 4.0f);
 +    float travelled = 0.0f;
 +    [loop] for (int i = 1; i <= 32; i++) {
++        const float before = travelled;
 +        travelled += stepLength * (1.0f + float(i) * 0.15f);
 +        const float3 p = surface + r * travelled;
 +        if (p.z > -1.0f) {
@@ -12984,7 +12994,35 @@ index 0000000..2b2643e
 +        // in front (Banjo on the ice), and goes on. Giving it that thing faintly instead put a fresh faded copy of
 +        // it under itself at each step the rays from further down the surface passed behind it.
 +        if ((behind > 0.0f) && (behind < stepLength * (2.0f + float(i) * 0.3f)) && (sceneZ >= nearest)) {
-+            return float4(gColor.Load(int3(at, 0)).rgb, edge);
++            // Narrowed down to where the ray meets it between this step and the last: picked up at the step itself,
++            // rays from neighbouring pixels all landed on the same few points, a stepped copy of it for each.
++            float near = before;
++            float far = travelled;
++            int2 found = at;
++            float foundBehind = behind;
++            [unroll] for (int k = 0; k < 6; k++) {
++                const float mid = (near + far) * 0.5f;
++                const float3 q = surface + r * mid;
++                const float2 qScreen = float2(q.x * gConstants.projection.x / -q.z * 0.5f + 0.5f, 0.5f - q.y * gConstants.projection.y / -q.z * 0.5f) * size;
++                const int2 qAt = clamp(int2(qScreen), int2(0, 0), int2(size) - 1);
++                const float qd = LoadDepth(qAt);
++                const float qBehind = -q.z + ViewPosition(qAt, qd).z;
++                if ((qd < 0.99999f) && (qBehind > 0.0f)) {
++                    far = mid;
++                    found = qAt;
++                    foundBehind = qBehind;
++                }
++                else {
++                    near = mid;
++                }
++            }
++            // Where it first gets behind something, the ray should be at its surface: well behind there, it slipped
++            // past the edge of a thing in front (Banjo seen from above) rather than meeting it, and goes on.
++            if (foundBehind > stepLength * 0.75f) {
++                continue;
++            }
++            hit = true;
++            return float4(gColor.Load(int3(found, 0)).rgb, edge);
 +        }
 +    }
 +    // Left the screen: reflect the sky if that's where the ray went.
@@ -14419,7 +14457,9 @@ index 0000000..2b2643e
 +        }
 +        // Ice reflects (Ice reflections): floors, walls and blocks of ice, each the way it faces (from the mask's
 +        // depths), with a soft wobble so it doesn't read as a mirror. Seen from above, the rays are bent into the
-+        // picture, so it reflects at every camera height.
++        // picture, so it reflects at every camera height. Seen low across it, the wobble is gentler (a small tilt
++        // moves a grazing reflection a long way, which looked like waves) and the ice's own picture always shows
++        // through, so it stays ice rather than turning into a water mirror.
 +        float iceDepth;
 +        const float iceStrength = IceReflectionStrength();
 +        if ((iceStrength > 0.0f) && IceAt(pixel, depth, iceDepth)) {
@@ -14429,10 +14469,12 @@ index 0000000..2b2643e
 +            const float2 wobbleAt = (iceWorld.xz + float2(iceWorld.y, -iceWorld.y)) / 40.0f;
 +            const float2 wobble = float2(WaterNoise(wobbleAt), WaterNoise(wobbleAt + 17.0f)) - 0.5f;
 +            const float3 side = normalize(cross(iceFacing, (abs(iceFacing.x) < 0.9f) ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f)));
-+            const float3 iceNormal = normalize(iceFacing + (side * wobble.x + cross(iceFacing, side) * wobble.y) * 0.06f);
++            const float iceFacingView = saturate(dot(-normalize(iceSurface), iceFacing));
++            const float wobbleAmount = 0.06f * lerp(0.25f, 1.0f, saturate(iceFacingView * 2.0f));
++            const float3 iceNormal = normalize(iceFacing + (side * wobble.x + cross(iceFacing, side) * wobble.y) * wobbleAmount);
 +            const float4 iceReflection = WaterReflectionRay(iceSurface, iceNormal, true);
 +            const float iceFresnel = 0.4f + 0.6f * pow(1.0f - saturate(dot(-normalize(iceSurface), iceNormal)), 3.0f);
-+            scene = lerp(scene, iceReflection.rgb, saturate(iceStrength * iceFresnel * iceReflection.a));
++            scene = lerp(scene, iceReflection.rgb, min(saturate(iceStrength * iceFresnel * iceReflection.a), 0.6f));
 +        }
 +        if (daytime) {
 +            scene = DayWet(scene, pixel, depth);
