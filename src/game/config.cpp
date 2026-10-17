@@ -127,26 +127,6 @@ namespace {
         }
     }
 
-    // Discord status moved from General to DEV: carry a saved value over once.
-    void move_saved_discord_option() {
-        const std::filesystem::path dir = recomp::get_config_path();
-        if (std::filesystem::exists(dir / (tooie::wip_tab_id + ".json"))) {
-            return;
-        }
-        std::ifstream general_file(dir / "general.json");
-        if (!general_file) {
-            return;
-        }
-        nlohmann::json general_json = nlohmann::json::parse(general_file, nullptr, false);
-        if (!general_json.is_object() || !general_json.contains(tooie::discord::presence_option) ||
-            !general_json[tooie::discord::presence_option].is_boolean()) {
-            return;
-        }
-        recomp::config::Config& wip = recompui::config::get_config(tooie::wip_tab_id);
-        wip.set_option_value(tooie::discord::presence_option, general_json[tooie::discord::presence_option].get<bool>());
-        wip.save_config();
-    }
-
     // Skip boss intros and Skip other cutscenes became one option (L, 2026-10-16), saved under the boss
     // option's key: someone who had other cutscenes on keeps fast-forwarding them.
     void move_saved_cutscene_skip() {
@@ -368,6 +348,12 @@ void tooie::init_config() {
         "Enemies do double damage",
         "Every hit from an enemy or hazard takes twice the honeycombs. Falls hurt as they always do.",
         false);
+    // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
+    general.add_bool_option(
+        tooie::discord::presence_option,
+        "Discord Status",
+        "Shows the world and area you are in, and how long you have been playing, in your Discord status while Discord is running on this PC.",
+        false);
     general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",
@@ -383,6 +369,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
+    recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
@@ -685,11 +672,6 @@ void tooie::init_config() {
         "Dump assets",
         "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
         false);
-    wip.add_bool_option(
-        tooie::discord::presence_option,
-        "Discord Status (Non-functional ATM)",
-        "Shows the level you are playing in your Discord status while Discord is running.",
-        true);
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
     wip.add_bool_option(
         tooie::hide_vanilla_widescreen_option,
@@ -728,7 +710,6 @@ void tooie::init_config() {
     recompui::config::finalize();
     move_saved_options_to_graphics();
     show_wip_tab();
-    move_saved_discord_option();
     move_saved_tab_options();
     show_cheats_tab();
     show_achievements_tab();

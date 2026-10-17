@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..b8ecba2 100644
+index 9fae0d4..e9bdbb5 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2789,7 +2789,7 @@ index 9fae0d4..b8ecba2 100644
 +                                featherCards = (grassBladePipeline != nullptr) && SceneKazooieFeathers();
 +                                // Banjo-Tooie: deep snow, from the same camera.
 +                                if ((snowShells == 0) && ComputeSceneSnow(drawData.modProjTransforms[proj.transformsIndex], drawData.modViewProjTransforms[proj.transformsIndex],
-+                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrailVector))
++                                    grassViewport.scale, grassViewport.translate, fbParams.resolution, p.submissionFrame, frameParams, snowTrail))
 +                                {
 +                                    snowShells = SceneSnowShells();
 +                                }
@@ -2890,7 +2890,7 @@ index 9fae0d4..b8ecba2 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2566,738 @@ namespace RT64 {
+@@ -1747,24 +2566,746 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3144,7 +3144,8 @@ index 9fae0d4..b8ecba2 100644
 +                    snowDesc.otherMode.L |= Z_UPD;
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(snowDesc, RENDER_FEATURE_SHELLS);
 +                }
-+                if ((snowValue != 0) && (std::getenv("TOOIE_SNOW_LOG") != nullptr)) {
++                static const bool snowDrawLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr);
++                if ((snowValue != 0) && snowDrawLog) {
 +                    static auto snowDrawLogged = std::chrono::steady_clock::now();
 +                    static uint32_t snowDraws = 0, snowShellDraws = 0;
 +                    snowDraws++;
@@ -3155,8 +3156,8 @@ index 9fae0d4..b8ecba2 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -3239,7 +3240,7 @@ index 9fae0d4..b8ecba2 100644
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
-+                }
+                 }
 +                // Banjo-Tooie: a flat, upright piece of a 2D picture with a clamped, filtered texture that fills it exactly
 +                // (texel 0 at one edge and the tile's last at the other), for Blend texture seams.
 +                if (seamsOn && (proj.type != Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
@@ -3311,7 +3312,7 @@ index 9fae0d4..b8ecba2 100644
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0) |
 +                    (shadowDecal ? RASTER_SHADOW_DECAL : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -3528,10 +3529,17 @@ index 9fae0d4..b8ecba2 100644
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
          bool shaderViewRtEnabled = false;
 +        finishFurNormals();
-+        // Banjo-Tooie: deep snow's trail grid (a cell or two of nothing without it).
-+        if ((snowShells == 0) || snowTrailVector.empty()) {
-+            snowTrailVector.assign(2, 0u);
++        // Banjo-Tooie: deep snow's trail grid (a cell of nothing until there is one), only the rows changed since the
++        // last upload: the buffer keeps the rest.
++        std::pair<size_t, size_t> snowTrailRange = { 0, 0 };
++        if (snowTrail.cells.empty()) {
++            snowTrail.cells.assign(2, 0u);
++            snowTrailRange = { 0, 2 };
 +        }
++        else if (snowTrail.rowEnd > snowTrail.rowFirst) {
++            snowTrailRange = { size_t(snowTrail.rowFirst) * SceneSnowTrailRowSize(), size_t(snowTrail.rowEnd) * SceneSnowTrailRowSize() };
++        }
++        snowTrail.rowFirst = snowTrail.rowEnd = 0;
 +        // Banjo-Tooie: only the box of cells a road or path marked goes to the GPU (none without one: no lookups
 +        // either), and the full grid is cleared again behind it for the next frame.
 +        if (grassMaskStarted && !grassGroundDraws.empty()) {
@@ -3625,13 +3633,13 @@ index 9fae0d4..b8ecba2 100644
 -            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer}
 +            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer},
 +            { furShaderVector.data(), { 0, furShaderVector.size() }, sizeof(interop::float4), RenderBufferFlag::STORAGE, { }, &furNormalsBuffer},
-+            { snowTrailVector.data(), { 0, snowTrailVector.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &snowTrailBuffer},
++            { snowTrail.cells.data(), snowTrailRange, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &snowTrailBuffer},
 +            { grassMaskUpload.data(), { 0, grassMaskUpload.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &grassMaskBuffer}
          };
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..bf5b861 100644
+index 3add9c3..ed08b6f 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,7 @@
@@ -3642,7 +3650,15 @@ index 3add9c3..bf5b861 100644
  
  #include "common/rt64_emulator_configuration.h"
  #include "common/rt64_user_configuration.h"
-@@ -48,6 +49,37 @@ namespace RT64 {
+@@ -22,6 +23,7 @@
+ #include "rt64_raster_shader_cache.h"
+ #include "rt64_render_target.h"
+ #include "rt64_rsp_processor.h"
++#include "rt64_scene_effects.h"
+ #include "rt64_vertex_processor.h"
+ 
+ #if RT_ENABLED
+@@ -48,6 +50,37 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -3680,7 +3696,7 @@ index 3add9c3..bf5b861 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +94,76 @@ namespace RT64 {
+@@ -62,11 +95,76 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -3705,7 +3721,7 @@ index 3add9c3..bf5b861 100644
 +        std::vector<uint8_t> instanceSnowVector;
 +        // Banjo-Tooie: the most shells of deep snow (0 when there is none this frame), and its trail grid.
 +        uint32_t snowShells = 0;
-+        std::vector<uint32_t> snowTrailVector;
++        SceneSnowTrailCopy snowTrail;
 +        BufferPair snowTrailBuffer;
 +        // Banjo-Tooie: where 3D grass doesn't grow (a road or dirt laid over grass ground as a decal): one bit a cell
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
@@ -3757,7 +3773,7 @@ index 3add9c3..bf5b861 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +184,8 @@ namespace RT64 {
+@@ -87,6 +185,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -3766,7 +3782,7 @@ index 3add9c3..bf5b861 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +199,7 @@ namespace RT64 {
+@@ -100,6 +200,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -3774,7 +3790,7 @@ index 3add9c3..bf5b861 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +223,10 @@ namespace RT64 {
+@@ -123,6 +224,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -3785,7 +3801,7 @@ index 3add9c3..bf5b861 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +268,15 @@ namespace RT64 {
+@@ -164,7 +269,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -5224,10 +5240,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..16c2e15
+index 0000000..e0b36fb
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2052 @@
+@@ -0,0 +1,2082 @@
 +//
 +// RT64
 +//
@@ -6274,6 +6290,10 @@ index 0000000..16c2e15
 +            float stillSeconds = 0.0f;
 +            bool stoodPrinted = false;
 +            uint32_t sweepRow = 0;
++            // The frame each row was last pressed on (the sweep below doesn't count: renderers copy its rows in full now
++            // and then, as the times it clears only matter once they wrap round, after 54 minutes).
++            std::vector<uint64_t> rowPressed = std::vector<uint64_t>(SnowGridSize, 0);
++            uint64_t frame = 0;
 +            std::chrono::steady_clock::time_point lastTime{};
 +            double seconds = 0.0;
 +        };
@@ -6327,6 +6347,7 @@ index 0000000..16c2e15
 +        a = uint32_t(std::lround(newDepth * 255.0f)) | (uint32_t(std::lround(newBank * 255.0f)) << 8) | (uint32_t(uint16_t(int16_t(y))) << 16);
 +        // A time of 0 with tag 0 would read as an empty cell.
 +        b = (now & 0xFFFFu) | (tagX << 16) | (tagZ << 24);
++        trail.rowPressed[slotZ] = trail.frame;
 +        if (b == 0) {
 +            b = 1;
 +        }
@@ -6383,9 +6404,13 @@ index 0000000..16c2e15
 +        return std::max(uint32_t(std::lround(float(most) * (1.0f - 0.6f * t))), std::min(most, 4u));
 +    }
 +
++    uint32_t SceneSnowTrailRowSize() {
++        return SnowGridSize * 2;
++    }
++
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
-+        std::vector<uint32_t> &trailCells)
++        SceneSnowTrailCopy &trailCopy)
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        frameParams.snowGrid.w = 0.0f;
@@ -6421,6 +6446,7 @@ index 0000000..16c2e15
 +        const float recover = SnowRecoverSeconds / (1.0f + 1.5f * snowfall);
 +
 +        SnowTrail &trail = snowTrail;
++        trail.frame++;
 +        const auto nowTime = std::chrono::steady_clock::now();
 +        const float dt = trail.started ? std::clamp(std::chrono::duration<float>(nowTime - trail.lastTime).count(), 0.0f, 0.25f) : 0.0f;
 +        trail.lastTime = nowTime;
@@ -6435,6 +6461,7 @@ index 0000000..16c2e15
 +            if (!trail.started || (moved > 400.0f) || (std::abs(y - trail.last[1]) > 400.0f)) {
 +                // A new map or a warp: the old trail is somewhere else.
 +                std::fill(trail.cells.begin(), trail.cells.end(), 0u);
++                std::fill(trail.rowPressed.begin(), trail.rowPressed.end(), trail.frame);
 +                trail.started = true;
 +                trail.last[0] = x;
 +                trail.last[1] = y;
@@ -6515,7 +6542,26 @@ index 0000000..16c2e15
 +            }
 +        }
 +        trail.sweepRow = (trail.sweepRow + sweepRows) % SnowGridSize;
-+        trailCells = trail.cells;
++        // The renderer's copy: the whole grid the first time and every few minutes (for the sweep's rows), otherwise
++        // only the rows pressed since it last looked (a few, where Banjo and the others walk).
++        const uint32_t rowSize = SnowGridSize * 2;
++        const uint64_t refreshFrames = 60 * 60 * 5;
++        if ((trailCopy.cells.size() != trail.cells.size()) || (trailCopy.seen == 0) || (trail.frame - trailCopy.fullAt > refreshFrames)) {
++            trailCopy.cells = trail.cells;
++            trailCopy.fullAt = trail.frame;
++            trailCopy.rowFirst = 0;
++            trailCopy.rowEnd = SnowGridSize;
++        }
++        else {
++            for (uint32_t r = 0; r < SnowGridSize; r++) {
++                if (trail.rowPressed[r] > trailCopy.seen) {
++                    std::copy_n(&trail.cells[r * rowSize], rowSize, &trailCopy.cells[r * rowSize]);
++                    trailCopy.rowFirst = (trailCopy.rowEnd > trailCopy.rowFirst) ? std::min(trailCopy.rowFirst, r) : r;
++                    trailCopy.rowEnd = std::max(trailCopy.rowEnd, r + 1);
++                }
++            }
++        }
++        trailCopy.seen = trail.frame;
 +
 +        // The light on the snow: the day and night cycle's sun when it is up, otherwise one from high to one side.
 +        float light[3] = { 0.42f, 0.8f, 0.43f };
@@ -7282,10 +7328,10 @@ index 0000000..16c2e15
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..50c415b
+index 0000000..dee5af3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,317 @@
+@@ -0,0 +1,328 @@
 +//
 +// RT64
 +//
@@ -7543,11 +7589,22 @@ index 0000000..50c415b
 +    static constexpr float SceneSnowNearBanjo = 600.0f;
 +    // How many shells a draw nearest the camera at distanceToCamera gets (0 beyond the snow's reach).
 +    uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams);
-+    // Fills the frame's snow terms (as ComputeSceneGrass, which must have filled the camera's terms first) and its
-+    // trail grid (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
++    // A renderer's copy of the snow trail grid: only the rows pressed since its last copy are copied, and rowFirst to
++    // rowEnd are the rows changed since its last upload (the renderer empties them after uploading).
++    struct SceneSnowTrailCopy {
++        std::vector<uint32_t> cells;
++        uint64_t seen = 0;
++        uint64_t fullAt = 0;
++        uint32_t rowFirst = 0;
++        uint32_t rowEnd = 0;
++    };
++    // Fills the frame's snow terms (as ComputeSceneGrass, which must have filled the camera's terms first) and brings
++    // the renderer's trail grid up to date (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
-+        std::vector<uint32_t> &trail);
++        SceneSnowTrailCopy &trail);
++    // How many uints a row of the snow trail grid is.
++    uint32_t SceneSnowTrailRowSize();
 +    // Banjo-Tooie: the textures (RT64 hashes) of windows and lamps that light up at night with the day and night cycle.
 +    void SetSceneNightLights(const uint64_t *hashes, size_t count);
 +    // Banjo-Tooie: the textures 3D grass grows on (RT64 texture hashes); with none set, any green ground.

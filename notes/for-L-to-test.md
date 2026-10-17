@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T390 Discord Status (General, off by default)
+- Asked: 2026-10-17 13:41 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Have the Discord app open on the same PC
+  2. Settings > General > Discord: turn Discord Status on
+  3. Load a save, then go to a few worlds and areas
+  4. Look at your profile in Discord (or ask a friend to)
+- Look for: Does Discord show 'Playing Banjo-Tooie' with the world and area you are in, and does it change when you move? Turn it off again: does the status go away? Checked headless with a stand-in for Discord: the game sends 'Spiral Mountain' after a warp.
+- Status: waiting for L
+
 ## T389 Title logo seams blend fully (DEV Blend texture seams, on)
 - Asked: 2026-10-17 13:23 UTC
 - Build: main (pull and build)

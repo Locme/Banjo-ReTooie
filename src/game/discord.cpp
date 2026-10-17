@@ -29,9 +29,9 @@
 namespace {
     using namespace std::chrono_literals;
 
-    // L must create a Discord application (https://discord.com/developers/applications) and put its
-    // application id here. While it is empty the presence stays off.
-    constexpr const char* discord_client_id = "";
+    // The "Banjo-Tooie" Discord application L made (https://discord.com/developers/applications,
+    // 2026-10-17); its name is what Discord shows as "Playing ...". The id is public, not a secret.
+    constexpr const char* discord_client_id = "1561009623530741832";
 
     constexpr auto poll_interval = 1s;      // how often the map is looked at
     constexpr auto min_update_gap = 4s;     // Discord rate-limits activity updates
@@ -120,9 +120,9 @@ namespace {
 
     bool presence_enabled() {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(tooie::discord::presence_option));
+            return std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::discord::presence_option));
         } catch (...) {
-            return true;
+            return false;
         }
     }
 
