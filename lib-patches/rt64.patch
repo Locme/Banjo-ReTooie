@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..6218dfb 100644
+index 79dfc38..8642662 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -49,8 +49,12 @@ index 79dfc38..6218dfb 100644
      set(PLUME_SDL_VULKAN_ENABLED TRUE)
  elseif (APPLE)
      set(PLUME_APPLE_RETINA_ENABLED OFF)
-@@ -113,13 +137,17 @@ set (DXC_CS_OPTS "${DXC_COMMON_OPTS}" "-E" "CSMain" "-T cs_6_3")
+@@ -111,15 +135,21 @@ set (DXC_PS_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_3")
+ set (DXC_VS_OPTS "${DXC_COMMON_OPTS}" "-E" "VSMain" "-T vs_6_3" "-fvk-invert-y")
+ set (DXC_CS_OPTS "${DXC_COMMON_OPTS}" "-E" "CSMain" "-T cs_6_3")
  set (DXC_GS_OPTS "${DXC_COMMON_OPTS}" "-E" "GSMain" "-T gs_6_3")
++set (DXC_HS_OPTS "${DXC_COMMON_OPTS}" "-E" "HSMain" "-T hs_6_3")
++set (DXC_DS_OPTS "${DXC_COMMON_OPTS}" "-E" "DSMain" "-T ds_6_3")
  set (DXC_RT_OPTS "${DXC_COMMON_OPTS}" "-D" "RT_SHADER" "-T" "lib_6_3" "-fspv-target-env=vulkan1.1spirv1.4" "-fspv-extension=SPV_KHR_ray_tracing" "-fspv-extension=SPV_EXT_descriptor_indexing")
  
 +# Banjo-Tooie: shaders are rebuilt when a file they include changes, not only their own file, so a change
@@ -70,7 +74,7 @@ index 79dfc38..6218dfb 100644
          BYPRODUCTS ${OUTNAME}.spirv.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.spirv.c)
  endfunction()
-@@ -127,10 +155,10 @@ endfunction()
+@@ -127,10 +157,10 @@ endfunction()
  function(build_shader_dxil_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
      add_custom_command(OUTPUT ${OUTNAME}.dxil
          COMMAND ${DXC} ${DXC_DXIL_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.dxil
@@ -84,7 +88,7 @@ index 79dfc38..6218dfb 100644
          BYPRODUCTS ${OUTNAME}.dxil.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.dxil.c)
  endfunction()
-@@ -138,7 +166,7 @@ endfunction()
+@@ -138,7 +168,7 @@ endfunction()
  function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
      add_custom_command(OUTPUT ${OUTNAME}.spv
              COMMAND ${DXC} ${DXC_SPV_OPTS} ${ARGN} ${FILENAME} /Fo ${OUTNAME}.spv
@@ -93,7 +97,7 @@ index 79dfc38..6218dfb 100644
      add_custom_command(OUTPUT ${OUTNAME}.metal
              COMMAND spirv_cross_msl ${OUTNAME}.spv ${OUTNAME}.metal
              DEPENDS ${OUTNAME}.spv spirv_cross_msl)
-@@ -149,8 +177,8 @@ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
+@@ -149,8 +179,8 @@ function(build_shader_msl_impl TARGETOBJ FILENAME TARGET_NAME OUTNAME)
              COMMAND xcrun -sdk macosx metallib ${OUTNAME}.ir -o ${OUTNAME}.metallib
              DEPENDS ${OUTNAME}.ir)
      add_custom_command(OUTPUT ${OUTNAME}.metal.c
@@ -104,7 +108,7 @@ index 79dfc38..6218dfb 100644
              BYPRODUCTS ${OUTNAME}.metal.h)
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.metal.c)
  endfunction()
-@@ -243,8 +271,8 @@ function(preprocess_shader TARGETOBJ SHADERNAME)
+@@ -243,8 +273,8 @@ function(preprocess_shader TARGETOBJ SHADERNAME)
      cmake_path(GET OUTNAME PARENT_PATH OUTPUT_DIR)
      preprocess(${FILENAME} ${OUTNAME}.rw ${DXC_COMMON_OPTS})
      add_custom_command(OUTPUT ${OUTNAME}.rw.c
@@ -115,7 +119,7 @@ index 79dfc38..6218dfb 100644
          BYPRODUCTS ${OUTNAME}.rw.h)
      file(MAKE_DIRECTORY ${OUTPUT_DIR})
      target_sources(${TARGETOBJ} PRIVATE ${OUTNAME}.rw.c)
-@@ -276,6 +304,14 @@ function(build_vertex_shader_spec_constants TARGETOBJ SHADERNAME)
+@@ -276,6 +306,24 @@ function(build_vertex_shader_spec_constants TARGETOBJ SHADERNAME)
      endif()
  endfunction()
  
@@ -127,10 +131,20 @@ index 79dfc38..6218dfb 100644
 +    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_GS_OPTS}" ${ARGN})
 +endfunction()
 +
++# Banjo-Tooie: hull and domain shaders (HSMain and DSMain of one file), for D3D12 and Vulkan only.
++function(build_tessellation_shaders TARGETOBJ SHADERNAME HSNAME DSNAME)
++    if (WIN32)
++        build_shader_dxil(${TARGETOBJ} ${SHADERNAME} "${DXC_HS_OPTS}" ${HSNAME})
++        build_shader_dxil(${TARGETOBJ} ${SHADERNAME} "${DXC_DS_OPTS}" ${DSNAME})
++    endif()
++    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_HS_OPTS}" ${HSNAME})
++    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_DS_OPTS}" ${DSNAME})
++endfunction()
++
  function(build_compute_shader TARGETOBJ SHADERNAME)
      build_shader(${TARGETOBJ} ${SHADERNAME} "${DXC_CS_OPTS}" ${ARGN})
  endfunction()
-@@ -289,6 +325,8 @@ if (WIN32)
+@@ -289,6 +337,8 @@ if (WIN32)
      set(SDL2_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/include")
      set(SDL2_LIBRARIES "SDL2" "SDL2main")
      link_directories("${PROJECT_SOURCE_DIR}/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3/lib/x64")
@@ -139,7 +153,7 @@ index 79dfc38..6218dfb 100644
  else()
      find_package(SDL2 REQUIRED)
  endif()
-@@ -301,7 +339,7 @@ add_compile_definitions(
+@@ -301,7 +351,7 @@ add_compile_definitions(
      IMGUI_IMPL_VULKAN_NO_PROTOTYPES
  )
  
@@ -148,7 +162,7 @@ index 79dfc38..6218dfb 100644
      add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
      add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
  endif()
-@@ -389,6 +427,11 @@ set (SOURCES
+@@ -389,6 +439,11 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
@@ -160,7 +174,7 @@ index 79dfc38..6218dfb 100644
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -445,9 +488,11 @@ target_link_libraries(rt64 nfd)
+@@ -445,9 +500,11 @@ target_link_libraries(rt64 nfd)
  target_link_libraries(rt64 libzstd_static)
  target_link_libraries(rt64 plume)
  
@@ -175,16 +189,18 @@ index 79dfc38..6218dfb 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -505,6 +550,8 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
+@@ -505,6 +562,10 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlatMS.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR" "-D MULTISAMPLING")
  build_vertex_shader( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSDynamic.hlsl" "-D DYNAMIC_RENDER_PARAMS")
 +# Banjo-Tooie: 3D grass blades.
 +build_geometry_shader(rt64 "src/shaders/GrassGS.hlsl")
++# Banjo-Tooie: deep snow as a tessellated surface.
++build_tessellation_shaders(rt64 "src/shaders/SnowTess.hlsl" "src/shaders/SnowTessHS.hlsl" "src/shaders/SnowTessDS.hlsl")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +590,48 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +604,48 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -1525,10 +1541,47 @@ index 3708220..f2206f7 100644
          void uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash);
          uint64_t uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut);
 diff --git a/src/hle/rt64_rsp.cpp b/src/hle/rt64_rsp.cpp
-index ee2030b..83943f8 100644
+index ee2030b..12dd68d 100644
 --- a/src/hle/rt64_rsp.cpp
 +++ b/src/hle/rt64_rsp.cpp
-@@ -1150,6 +1150,16 @@ namespace RT64 {
+@@ -14,6 +14,7 @@
+ 
+ #include "rt64_interpreter.h"
+ #include "rt64_state.h"
++#include "render/rt64_scene_effects.h"
+ 
+ //#define LOG_SPECIAL_MATRIX_OPERATIONS
+ 
+@@ -706,6 +707,16 @@ namespace RT64 {
+         readExtendedVertexSegment<3, vertexSize>(rdramAddress, dstIndex, dstMax, globalIndex, G_EX_VERTEX_POSITION, posFloats);
+         readExtendedVertexSegment<3, vertexSize>(rdramAddress, dstIndex, dstMax, globalIndex, G_EX_VERTEX_VELOCITY, velFloats);
+ 
++        // Banjo-Tooie: the vertices' fur marks (SetFurVertexFlags).
++        {
++            auto &furFlags = workload.drawData.furVertexFlags;
++            const uint32_t count = dstMax - dstIndex;
++            if (furFlags.size() < globalIndex + count) {
++                furFlags.resize(globalIndex + count, uint8_t(FUR_VERTEX_UNKNOWN));
++            }
++            FurVertexFlags(rdramAddress, vertexSize, count, furFlags.data() + globalIndex);
++        }
++
+         uint32_t floatIndex = globalIndex * 3;
+         for (uint32_t i = dstIndex; i < dstMax; i++) {
+             const hlslpp::float4 tfPos = hlslpp::mul(hlslpp::float4(posFloats[floatIndex + 0], posFloats[floatIndex + 1], posFloats[floatIndex + 2], 1.0f), mvp);
+@@ -782,6 +793,11 @@ namespace RT64 {
+             lookAtIndices.emplace_back(lookAtIndices[globalIndex]);
+             posTransformed.emplace_back(posTransformed[globalIndex]);
+             posScreen.emplace_back(posScreen[globalIndex]);
++            auto &furFlags = workload.drawData.furVertexFlags;
++            if (globalIndex < furFlags.size()) {
++                furFlags.resize(newIndex + 1, uint8_t(FUR_VERTEX_UNKNOWN));
++                furFlags[newIndex] = furFlags[globalIndex];
++            }
+             indices[dstIndex] = newIndex;
+             used[dstIndex] = false;
+             globalIndex = indices[dstIndex];
+@@ -1150,6 +1166,16 @@ namespace RT64 {
                  drawRect.lry = std::max(drawRect.lry, int32_t(hlslpp::ceil(v.y).x * 4.0f));
              }
  
@@ -1699,6 +1752,31 @@ index 5b70e01..d52c622 100644
 +    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs);
  };
 \ No newline at end of file
+diff --git a/src/hle/rt64_workload.cpp b/src/hle/rt64_workload.cpp
+index b4c85f5..1b20d37 100644
+--- a/src/hle/rt64_workload.cpp
++++ b/src/hle/rt64_workload.cpp
+@@ -48,6 +48,7 @@ namespace RT64 {
+         drawData.tcFloats.clear();
+         drawData.tcVelFloats.clear();
+         drawData.normColBytes.clear();
++        drawData.furVertexFlags.clear();
+         drawData.viewProjIndices.clear();
+         drawData.worldIndices.clear();
+         drawData.fogIndices.clear();
+diff --git a/src/hle/rt64_workload.h b/src/hle/rt64_workload.h
+index 8ea27d5..50ebf26 100644
+--- a/src/hle/rt64_workload.h
++++ b/src/hle/rt64_workload.h
+@@ -29,6 +29,8 @@ namespace RT64 {
+         std::vector<float> tcFloats;
+         std::vector<float> tcVelFloats;
+         std::vector<uint8_t> normColBytes;
++        // Banjo-Tooie: each vertex's fur mark (SetFurVertexFlags), by its index; shorter when the last ones have none.
++        std::vector<uint8_t> furVertexFlags;
+         std::vector<uint16_t> viewProjIndices;
+         std::vector<uint16_t> worldIndices;
+         std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
 index 5a331aa..438ea9b 100644
 --- a/src/hle/rt64_workload_queue.cpp
@@ -1933,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..16ae208 100644
+index 9fae0d4..57ef50d 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -2236,7 +2314,7 @@ index 9fae0d4..16ae208 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +446,46 @@ namespace RT64 {
+@@ -169,11 +446,54 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2267,6 +2345,14 @@ index 9fae0d4..16ae208 100644
 +            furShaderFirst = std::min(furShaderFirst, size_t(v) * 2);
 +            furShaderEnd = std::max(furShaderEnd, size_t(v) * 2 + 2);
 +        }
++        for (uint32_t v : furMarkVector) {
++            if ((v * 2 + 1) < furShaderVector.size()) {
++                furShaderVector[v * 2 + 1].w = 0.0f;
++                furShaderFirst = std::min(furShaderFirst, size_t(v) * 2);
++                furShaderEnd = std::max(furShaderEnd, size_t(v) * 2 + 2);
++            }
++        }
++        furMarkVector.clear();
 +        furVertexVector.clear();
 +        furVertexCallVector.clear();
 +        furCallCount = 0;
@@ -2283,7 +2369,7 @@ index 9fae0d4..16ae208 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +531,7 @@ namespace RT64 {
+@@ -219,6 +539,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2291,7 +2377,7 @@ index 9fae0d4..16ae208 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +563,7 @@ namespace RT64 {
+@@ -250,6 +571,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2299,7 +2385,7 @@ index 9fae0d4..16ae208 100644
                  }
              }
              else {
-@@ -272,6 +586,9 @@ namespace RT64 {
+@@ -272,6 +594,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2309,7 +2395,7 @@ index 9fae0d4..16ae208 100644
              }
          }
      }
-@@ -373,6 +690,10 @@ namespace RT64 {
+@@ -373,6 +698,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2320,7 +2406,7 @@ index 9fae0d4..16ae208 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +764,14 @@ namespace RT64 {
+@@ -443,6 +772,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2335,7 +2421,7 @@ index 9fae0d4..16ae208 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +794,61 @@ namespace RT64 {
+@@ -465,12 +802,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2399,7 +2485,7 @@ index 9fae0d4..16ae208 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +892,17 @@ namespace RT64 {
+@@ -514,6 +900,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2417,7 +2503,7 @@ index 9fae0d4..16ae208 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +963,96 @@ namespace RT64 {
+@@ -574,10 +971,109 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2456,8 +2542,21 @@ index 9fae0d4..16ae208 100644
 +                    rasterParams.grassShells = 0;
 +                }
 +
-+                // Banjo-Tooie: deep snow, the same triangles again as shells further up each time.
-+                if ((snowShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0) && (triangles.shellPipeline != nullptr)) {
++                // Banjo-Tooie: deep snow, the same triangles again as one surface, cut finer and raised to the snow's height
++                // by the tessellation shaders, where the device has them.
++                if ((snowShells > 0) && (snowTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0)) {
++                    worker->commandList->setPipeline(snowTessPipeline);
++                    previousPipeline = snowTessPipeline;
++                    rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS;
++                    rasterParams.grassShell = 1;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                    drawCallTriangles(drawCall);
++                    rasterParams.grassShell = 0;
++                    rasterParams.grassShells = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
++                // Otherwise the same triangles again as shells further up each time.
++                else if ((snowShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0) && (triangles.shellPipeline != nullptr)) {
 +                    const uint32_t shells = instanceSnowVector[i];
 +                    // (The material's shell shader, not the draw's own or the grass blades' one.)
 +                    if (previousPipeline != triangles.shellPipeline) {
@@ -2514,7 +2613,7 @@ index 9fae0d4..16ae208 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1725,67 @@ namespace RT64 {
+@@ -1250,6 +1746,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2582,7 +2681,7 @@ index 9fae0d4..16ae208 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1832,84 @@ namespace RT64 {
+@@ -1296,9 +1853,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2668,7 +2767,7 @@ index 9fae0d4..16ae208 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1961,30 @@ namespace RT64 {
+@@ -1350,10 +1982,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2696,10 +2795,13 @@ index 9fae0d4..16ae208 100644
          postBlendDitherNoiseSubPipeline = rasterShaderUber->postBlendDitherNoiseSubPipeline.get();
          postBlendDitherNoiseSubNegativePipeline = rasterShaderUber->postBlendDitherNoiseSubNegativePipeline.get();
 +        grassBladePipeline = rasterShaderUber->grassBladePipeline.get();
++        // (Test aid: TOOIE_SNOW_SHELLS draws the deep snow as shells even where it could be tessellated.)
++        static const bool snowShellsForced = (std::getenv("TOOIE_SNOW_SHELLS") != nullptr);
++        snowTessPipeline = snowShellsForced ? nullptr : rasterShaderUber->snowTessPipeline.get();
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2039,61 @@ namespace RT64 {
+@@ -1408,6 +2063,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2761,7 +2863,7 @@ index 9fae0d4..16ae208 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2117,22 @@ namespace RT64 {
+@@ -1431,6 +2141,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2784,7 +2886,7 @@ index 9fae0d4..16ae208 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2152,162 @@ namespace RT64 {
+@@ -1450,12 +2176,162 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -2947,7 +3049,7 @@ index 9fae0d4..16ae208 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2458,7 @@ namespace RT64 {
+@@ -1606,6 +2482,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2955,7 +3057,7 @@ index 9fae0d4..16ae208 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2535,20 @@ namespace RT64 {
+@@ -1682,6 +2559,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2976,7 +3078,7 @@ index 9fae0d4..16ae208 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2614,851 @@ namespace RT64 {
+@@ -1747,24 +2638,901 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3238,7 +3340,7 @@ index 9fae0d4..16ae208 100644
 +                }
 +                instanceSnowVector.resize(instanceIndex, 0);
 +                instanceSnowVector.push_back(snowValue);
-+                if ((snowValue != 0) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
++                if ((snowValue != 0) && (snowTessPipeline == nullptr) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    // The shells write depth whatever the ground does, so the ones further up hide those below.
 +                    ShaderDescription snowDesc = call.shaderDesc;
 +                    snowDesc.otherMode.L |= Z_UPD;
@@ -3285,6 +3387,10 @@ index 9fae0d4..16ae208 100644
 +                    // (Her wings and crest are cut out by their textures' alpha and blended: the feathers grow on their
 +                    // solid parts, drawn solid, RasterPS.hlsl.)
 +                    feathers = fm.zCmp() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY);
++                    if (feathers && !npcFeathers && ((furDrawData == nullptr) || (furDrawData == &drawData))) {
++                        furDrawData = &drawData;
++                        addFeatherMarks(drawData, call.meshDesc.faceIndicesStart, call.callDesc.triangleCount);
++                    }
 +                }
 +                instanceFurVector.resize(instanceIndex, 0);
 +                // (3: a part cut out by its texture, seen from both sides, RASTER_GRASS_EDGES in GrassGS.hlsl; 4: a furry
@@ -3325,8 +3431,11 @@ index 9fae0d4..16ae208 100644
 +                    }
 +                    // TOOIE_PARALLAX_LOG: each texture of the 3D world once, with or without parallax mapping, to find
 +                    // stone the list misses.
-+                    static const bool parallaxLog = (getenv("TOOIE_PARALLAX_LOG") != nullptr);
-+                    if (parallaxLog) {
++                    // (TOOIE_PARALLAX_LOG=<ms> starts that long after the first frame, to list one place's textures.)
++                    static const char *parallaxLogText = getenv("TOOIE_PARALLAX_LOG");
++                    static const bool parallaxLog = (parallaxLogText != nullptr);
++                    static const auto parallaxLogStart = std::chrono::steady_clock::now() + std::chrono::milliseconds(parallaxLog ? atol(parallaxLogText) : 0);
++                    if (parallaxLog && (std::chrono::steady_clock::now() >= parallaxLogStart)) {
 +                        static std::unordered_set<uint64_t> parallaxLogged;
 +                        for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
 +                            const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
@@ -3340,7 +3449,7 @@ index 9fae0d4..16ae208 100644
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
-                 }
++                }
 +                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
 +                // within a texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend
 +                // texture seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
@@ -3398,7 +3507,7 @@ index 9fae0d4..16ae208 100644
 +                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
-+                }
+                 }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
@@ -3580,6 +3689,23 @@ index 9fae0d4..16ae208 100644
 +        }
 +    }
 +
++    // Banjo-Tooie: a vertex's fur mark (SetFurVertexFlags) as the w of its fur anchor, for RasterPS.hlsl: 1 bare, 2 unmarked
++    // (told by its colour as lit), 3 fur, 4 her feathers. Blended across a triangle, fur and bare meet through unmarked
++    // (the colour test), never unmarked and bare through fur (a backpack's textured top and its bare blue sides grew fur
++    // along their seam).
++    static float FurMarkW(uint8_t flag) {
++        switch (flag) {
++        case FUR_VERTEX_BARE:
++            return 1.0f;
++        case FUR_VERTEX_COVERED:
++            return 3.0f;
++        case FUR_VERTEX_FEATHERS:
++            return 4.0f;
++        default:
++            return 2.0f;
++        }
++    }
++
 +    // Banjo-Tooie: Banjo's fur. Adds each triangle's normal (by its area) to its three vertices, in world space.
 +    void FramebufferRenderer::addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount) {
 +        const uint32_t end = faceIndexStart + triangleCount * 3;
@@ -3625,11 +3751,37 @@ index 9fae0d4..16ae208 100644
 +                    if (furShaderVector.size() < furNormalVector.size() * 2) {
 +                        furShaderVector.resize(furNormalVector.size() * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +                    }
-+                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0], drawData.posFloats[v[k] * 3 + 1], drawData.posFloats[v[k] * 3 + 2], 1.0f };
++                    const float mark = FurMarkW((v[k] < drawData.furVertexFlags.size()) ? drawData.furVertexFlags[v[k]] : 0);
++                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0], drawData.posFloats[v[k] * 3 + 1], drawData.posFloats[v[k] * 3 + 2], mark };
 +                    furShaderFirst = std::min(furShaderFirst, size_t(v[k]) * 2);
 +                    furShaderEnd = std::max(furShaderEnd, size_t(v[k]) * 2 + 2);
 +                }
 +            }
++        }
++    }
++
++    // Banjo-Tooie: Kazooie's feathers. Her vertices' fur marks (SetFurVertexFlags) go in the w of their fur anchors, for
++    // GrassGS.hlsl to pass to her feathers.
++    void FramebufferRenderer::addFeatherMarks(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount) {
++        const uint32_t end = faceIndexStart + triangleCount * 3;
++        if (end > drawData.faceIndices.size()) {
++            return;
++        }
++        for (uint32_t i = faceIndexStart; i < end; i++) {
++            const uint32_t v = drawData.faceIndices[i];
++            // (Every vertex of hers is in the buffer, so the vertex shader never reads past it.)
++            if (furShaderVector.size() < (size_t(v) + 1) * 2) {
++                furShaderVector.resize((size_t(v) + 1) * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
++            }
++            if ((v >= drawData.furVertexFlags.size()) || (drawData.furVertexFlags[v] == 0)) {
++                continue;
++            }
++            if (furShaderVector[v * 2 + 1].w == 0.0f) {
++                furMarkVector.push_back(v);
++            }
++            furShaderVector[v * 2 + 1].w = FurMarkW(drawData.furVertexFlags[v]);
++            furShaderFirst = std::min(furShaderFirst, size_t(v) * 2);
++            furShaderEnd = std::max(furShaderEnd, size_t(v) * 2 + 2);
 +        }
 +    }
 +
@@ -3830,7 +3982,7 @@ index 9fae0d4..16ae208 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..91ba9ce 100644
+index 3add9c3..ef4d1bf 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,8 @@
@@ -3888,7 +4040,7 @@ index 3add9c3..91ba9ce 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +96,92 @@ namespace RT64 {
+@@ -62,11 +96,94 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -3960,6 +4112,7 @@ index 3add9c3..91ba9ce 100644
 +        std::vector<uint32_t> furVertexVector;
 +        std::vector<uint32_t> furVertexCallVector; // the addFurNormals call each of furVertexVector came from
 +        uint32_t furCallCount = 0;
++        std::vector<uint32_t> furMarkVector; // vertices addFeatherMarks marked, to clear next frame
 +        // What the shader reads, two for each vertex: its fur normal, then where it is on the model (the game's
 +        // own vertex position, before the bones move it) for the strands to stand still on.
 +        std::vector<interop::float4> furShaderVector;
@@ -3978,19 +4131,22 @@ index 3add9c3..91ba9ce 100644
 +        BufferPair furNormalsBuffer;
 +        void addFurNormals(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount);
 +        void finishFurNormals();
++        void addFeatherMarks(const DrawData &drawData, uint32_t faceIndexStart, uint32_t triangleCount);
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +202,8 @@ namespace RT64 {
+@@ -87,6 +204,10 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
 +        // Banjo-Tooie: 3D grass as real blades (null without geometry shaders: shells instead).
 +        RenderPipeline *grassBladePipeline = nullptr;
++        // Banjo-Tooie: deep snow as a tessellated surface (SnowTess.hlsl), or null for shells.
++        RenderPipeline *snowTessPipeline = nullptr;
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +217,7 @@ namespace RT64 {
+@@ -100,6 +221,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -3998,7 +4154,7 @@ index 3add9c3..91ba9ce 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +241,10 @@ namespace RT64 {
+@@ -123,6 +245,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4009,7 +4165,7 @@ index 3add9c3..91ba9ce 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +286,15 @@ namespace RT64 {
+@@ -164,7 +290,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -4839,7 +4995,7 @@ index 5bc3a2a..c5c88cc 100644
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..b3f7dc1 100644
+index 721a01e..a50ec98 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -4850,17 +5006,21 @@ index 721a01e..b3f7dc1 100644
  
  #include "shaders/RenderParams.hlsli.rw.h"
  #include "shaders/RasterPSDynamic.hlsl.spirv.h"
-@@ -19,7 +20,9 @@
+@@ -19,7 +20,13 @@
  #include "shaders/PostBlendDitherNoiseAddPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubNegativePS.hlsl.spirv.h"
 +#include "shaders/GrassGS.hlsl.spirv.h"
++#include "shaders/SnowTessHS.hlsl.spirv.h"
++#include "shaders/SnowTessDS.hlsl.spirv.h"
  #ifdef _WIN32
 +#   include "shaders/GrassGS.hlsl.dxil.h"
++#   include "shaders/SnowTessHS.hlsl.dxil.h"
++#   include "shaders/SnowTessDS.hlsl.dxil.h"
  #   include "shaders/RasterPSLibrary.hlsl.dxil.h"
  #   include "shaders/RasterPSLibraryMS.hlsl.dxil.h"
  #   include "shaders/RasterVSLibrary.hlsl.dxil.h"
-@@ -117,7 +120,7 @@ namespace RT64 {
+@@ -117,7 +124,7 @@ namespace RT64 {
              thread_local std::vector<uint8_t> optimizedVS;
              thread_local std::vector<uint8_t> optimizedPS;
              if (!specConstantsSetup) {
@@ -4869,7 +5029,7 @@ index 721a01e..b3f7dc1 100644
                      specConstants.push_back(respv::SpecConstant(i, { 0 }));
                  }
  
-@@ -129,6 +132,7 @@ namespace RT64 {
+@@ -129,6 +136,7 @@ namespace RT64 {
              specConstants[2].values[0] = desc.colorCombiner.L;
              specConstants[3].values[0] = desc.colorCombiner.H;
              specConstants[4].values[0] = desc.flags.value;
@@ -4877,7 +5037,7 @@ index 721a01e..b3f7dc1 100644
              
              bool vsRun = respv::Optimizer::run(*VS, specConstants.data(), uint32_t(specConstants.size()), optimizedVS);
              bool psRun = respv::Optimizer::run(*PS, specConstants.data(), uint32_t(specConstants.size()), optimizedPS);
-@@ -172,6 +176,7 @@ namespace RT64 {
+@@ -172,6 +180,7 @@ namespace RT64 {
              specConstants.emplace_back(2, desc.colorCombiner.L);
              specConstants.emplace_back(3, desc.colorCombiner.H);
              specConstants.emplace_back(4, desc.flags.value);
@@ -4885,7 +5045,7 @@ index 721a01e..b3f7dc1 100644
  #       else
              assert(false && "This platform does not support METAL shaders.");
  #       endif
-@@ -180,39 +185,57 @@ namespace RT64 {
+@@ -180,39 +189,57 @@ namespace RT64 {
  #       if defined(_WIN32)
              RasterShaderText shaderText = generateShaderText(desc, useMSAA);
  
@@ -4975,7 +5135,7 @@ index 721a01e..b3f7dc1 100644
  #       else
              assert(false && "This platform does not support runtime shader compilation.");
  #       endif
-@@ -249,25 +272,26 @@ namespace RT64 {
+@@ -249,25 +276,26 @@ namespace RT64 {
          vss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          vss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          vss <<
@@ -4993,11 +5153,11 @@ index 721a01e..b3f7dc1 100644
  
          if (!desc.flags.smoothShade) {
 -            vss << ", out float4 oFlatColor : COLOR1) {";
-+            vss << ", out float4 oFlatColor : COLOR1, out float3 oFurAnchor : TEXCOORD1) {";
++            vss << ", out float4 oFlatColor : COLOR1, out float4 oFurAnchor : TEXCOORD1) {";
          }
          else {
 -            vss << ") { float4 oFlatColor;";
-+            vss << ", out float3 oFurAnchor : TEXCOORD1) { float4 oFlatColor;";
++            vss << ", out float4 oFurAnchor : TEXCOORD1) { float4 oFlatColor;";
          }
  
          vss <<
@@ -5006,7 +5166,7 @@ index 721a01e..b3f7dc1 100644
              "}";
  
          // Generate pixel shader.
-@@ -275,7 +299,7 @@ namespace RT64 {
+@@ -275,7 +303,7 @@ namespace RT64 {
          pss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          pss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          pss <<
@@ -5015,16 +5175,16 @@ index 721a01e..b3f7dc1 100644
              "[shader(\"pixel\")]"
              "void PSMain("
              "  in float4 vertexPosition : SV_POSITION"
-@@ -286,6 +310,8 @@ namespace RT64 {
+@@ -286,6 +314,8 @@ namespace RT64 {
              pss << ", nointerpolation in float4 vertexFlatColor : COLOR1";
          }
  
-+        pss << ", in float3 vertexFurAnchor : TEXCOORD1";
++        pss << ", in float4 vertexFurAnchor : TEXCOORD1";
 +
          pss <<
              ", out float4 pixelColor : SV_TARGET0"
              ", out float4 pixelAlpha : SV_TARGET1"
-@@ -298,7 +324,7 @@ namespace RT64 {
+@@ -298,7 +328,7 @@ namespace RT64 {
          pss <<
              "   float4 resultColor;"
              "   float4 resultAlpha;"
@@ -5033,26 +5193,35 @@ index 721a01e..b3f7dc1 100644
              "   pixelColor = resultColor;"
              "   pixelAlpha = resultAlpha;"
              "}";
-@@ -326,6 +352,7 @@ namespace RT64 {
-         pipelineDesc.primitiveTopology = RenderPrimitiveTopology::TRIANGLE_LIST;
+@@ -323,9 +353,12 @@ namespace RT64 {
+         pipelineDesc.inputElements = RasterInputElements;
+         pipelineDesc.inputElementsCount = uint32_t(std::size(RasterInputElements));
+         pipelineDesc.pipelineLayout = c.pipelineLayout;
+-        pipelineDesc.primitiveTopology = RenderPrimitiveTopology::TRIANGLE_LIST;
++        pipelineDesc.primitiveTopology = (c.hullShader != nullptr) ? RenderPrimitiveTopology::PATCH_LIST_3 : RenderPrimitiveTopology::TRIANGLE_LIST;
          pipelineDesc.vertexShader = c.vertexShader;
          pipelineDesc.pixelShader = c.pixelShader;
 +        pipelineDesc.geometryShader = c.geometryShader;
++        pipelineDesc.hullShader = c.hullShader;
++        pipelineDesc.domainShader = c.domainShader;
          pipelineDesc.specConstants = c.specConstants.data();
          pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
  
-@@ -449,7 +476,9 @@ namespace RT64 {
+@@ -449,7 +482,12 @@ namespace RT64 {
          FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
          RenderPipelineLayoutBuilder layoutBuilder;
          layoutBuilder.begin(false, true);
 -        layoutBuilder.addPushConstant(0, 0, sizeof(interop::RasterParams), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL);
 +        // Banjo-Tooie: the 3D grass blades' geometry shader reads the push constants too.
 +        const bool grassBlades = device->getCapabilities().geometryShader && ((shaderFormat == RenderShaderFormat::SPIRV) || (shaderFormat == RenderShaderFormat::DXIL));
-+        layoutBuilder.addPushConstant(0, 0, sizeof(interop::RasterParams), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL | (grassBlades ? RenderShaderStageFlag::GEOMETRY : RenderShaderStageFlag::NONE));
++        // Banjo-Tooie: and the tessellated deep snow's hull and domain shaders.
++        const bool snowTess = device->getCapabilities().tessellation && ((shaderFormat == RenderShaderFormat::SPIRV) || (shaderFormat == RenderShaderFormat::DXIL));
++        layoutBuilder.addPushConstant(0, 0, sizeof(interop::RasterParams), RenderShaderStageFlag::VERTEX | RenderShaderStageFlag::PIXEL | (grassBlades ? RenderShaderStageFlag::GEOMETRY : RenderShaderStageFlag::NONE) |
++            (snowTess ? (RenderShaderStageFlag::TESSELLATION_CONTROL | RenderShaderStageFlag::TESSELLATION_EVALUATION) : RenderShaderStageFlag::NONE));
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +512,31 @@ namespace RT64 {
+@@ -483,6 +521,59 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -5081,23 +5250,54 @@ index 721a01e..b3f7dc1 100644
 +            }
 +        }
 +
++        // Banjo-Tooie: the tessellated deep snow: depth tested and written, drawn solid over the ground.
++        if (snowTess) {
++            switch (shaderFormat) {
++#   ifdef _WIN32
++            case RenderShaderFormat::DXIL:
++                snowHullShader = device->createShader(SnowTessHSBlobDXIL, std::size(SnowTessHSBlobDXIL), "HSMain", shaderFormat);
++                snowDomainShader = device->createShader(SnowTessDSBlobDXIL, std::size(SnowTessDSBlobDXIL), "DSMain", shaderFormat);
++                break;
++#   endif
++            case RenderShaderFormat::SPIRV:
++                snowHullShader = device->createShader(SnowTessHSBlobSPIRV, std::size(SnowTessHSBlobSPIRV), "HSMain", shaderFormat);
++                snowDomainShader = device->createShader(SnowTessDSBlobSPIRV, std::size(SnowTessDSBlobSPIRV), "DSMain", shaderFormat);
++                break;
++            default:
++                break;
++            }
++
++            if ((snowHullShader != nullptr) && (snowDomainShader != nullptr)) {
++                PipelineCreation snowCreation = creation;
++                snowCreation.hullShader = snowHullShader.get();
++                snowCreation.domainShader = snowDomainShader.get();
++                snowCreation.zCmp = true;
++                snowCreation.zUpd = true;
++                snowCreation.cvgAdd = false;
++                snowTessPipeline = RasterShader::createPipeline(snowCreation);
++            }
++        }
++
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..6a469af 100644
+index 3b991ff..055757d 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
-@@ -44,6 +44,8 @@ namespace RT64 {
+@@ -44,6 +44,11 @@ namespace RT64 {
          const RenderPipelineLayout *pipelineLayout;
          const RenderShader *vertexShader;
          const RenderShader *pixelShader;
 +        // Banjo-Tooie: the 3D grass blades' geometry shader, or none.
 +        const RenderShader *geometryShader = nullptr;
++        // Banjo-Tooie: the tessellated deep snow's hull and domain shaders, or none (drawn as patches of 3).
++        const RenderShader *hullShader = nullptr;
++        const RenderShader *domainShader = nullptr;
          bool alphaBlend;
          bool culling;
          bool NoN;
-@@ -90,6 +92,10 @@ namespace RT64 {
+@@ -90,6 +95,15 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -5105,6 +5305,11 @@ index 3b991ff..6a469af 100644
 +        // device has no geometry shaders; the grass then falls back to shells).
 +        std::unique_ptr<RenderShader> grassGeometryShader;
 +        std::unique_ptr<RenderPipeline> grassBladePipeline;
++        // Banjo-Tooie: deep snow as one tessellated surface (SnowTess.hlsl; null when the device has no tessellation,
++        // the snow then falls back to shells).
++        std::unique_ptr<RenderShader> snowHullShader;
++        std::unique_ptr<RenderShader> snowDomainShader;
++        std::unique_ptr<RenderPipeline> snowTessPipeline;
  
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
@@ -5548,10 +5753,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3248fb9
+index 0000000..a4cf297
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2127 @@
+@@ -0,0 +1,2174 @@
 +//
 +// RT64
 +//
@@ -6272,6 +6477,53 @@ index 0000000..3248fb9
 +        effectsSettings.furLength = length;
 +        effectsSettings.furDensity = std::clamp(density, 0.1f, 4.0f);
 +        effectsSettings.furNoisiness = std::clamp(noisiness, 0.0f, 1.0f);
++    }
++
++    namespace {
++        struct FurVertexBlock {
++            uint32_t address;
++            std::vector<uint8_t> flags;
++        };
++        std::mutex furVertexMutex;
++        std::vector<FurVertexBlock> furVertexBlocks;
++    }
++
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags) {
++        const std::scoped_lock lock(furVertexMutex);
++        auto found = std::find_if(furVertexBlocks.begin(), furVertexBlocks.end(), [&](const FurVertexBlock &b) { return b.address == address; });
++        if (flags.empty()) {
++            if (found != furVertexBlocks.end()) {
++                furVertexBlocks.erase(found);
++            }
++        }
++        else if (found != furVertexBlocks.end()) {
++            found->flags = flags;
++        }
++        else {
++            // (A few models at most; the oldest goes when another is loaded in its place.)
++            if (furVertexBlocks.size() >= 8) {
++                furVertexBlocks.erase(furVertexBlocks.begin());
++            }
++            furVertexBlocks.push_back({ address, flags });
++        }
++    }
++
++    void FurVertexFlags(uint32_t address, uint32_t stride, uint32_t count, uint8_t *out) {
++        std::fill(out, out + count, uint8_t(FUR_VERTEX_UNKNOWN));
++        const std::scoped_lock lock(furVertexMutex);
++        for (const FurVertexBlock &b : furVertexBlocks) {
++            const uint64_t end = uint64_t(b.address) + uint64_t(b.flags.size()) * 16;
++            if ((address < b.address) || (address >= end)) {
++                continue;
++            }
++            for (uint32_t i = 0; i < count; i++) {
++                const uint64_t at = uint64_t(address) + uint64_t(i) * stride;
++                if ((at < end) && (((at - b.address) % 16) == 0)) {
++                    out[i] = b.flags[(at - b.address) / 16];
++                }
++            }
++            return;
++        }
 +    }
 +
 +    void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency) {
@@ -7681,10 +7933,10 @@ index 0000000..3248fb9
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..fcfa754
+index 0000000..128d3fa
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,347 @@
+@@ -0,0 +1,355 @@
 +//
 +// RT64
 +//
@@ -7931,6 +8183,14 @@ index 0000000..fcfa754
 +    void SetSceneFur(float amount, float length, float density, float noisiness);
 +    // The shells drawn over each of Banjo's draws: 0 when the fur is off.
 +    uint32_t SceneFurShells();
++    // Banjo-Tooie: which of a model's vertices get fur or feathers, told by their own colours before the game
++    // lights them (its lighting changes their colours every frame, so colour alone gave different coats in different
++    // places, L). One byte per vertex of the block at RDRAM address `address` (16 bytes each): 0 to tell by the lit
++    // colour as before, FUR_VERTEX_COVERED, FUR_VERTEX_BARE or FUR_VERTEX_FEATHERS. An empty list forgets the block.
++    enum : uint8_t { FUR_VERTEX_UNKNOWN = 0, FUR_VERTEX_COVERED = 1, FUR_VERTEX_BARE = 2, FUR_VERTEX_FEATHERS = 3 };
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags);
++    // The marks for `count` vertices of `stride` bytes from `address` (all 0 where no block covers them).
++    void FurVertexFlags(uint32_t address, uint32_t stride, uint32_t count, uint8_t *out);
 +    // Fills the frame's fur terms from the 3D world's projection and view-projection and viewport (as the RSP
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
@@ -9461,10 +9721,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..4839cd6
+index 0000000..3f007c2
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,142 @@
 +//
 +// RT64
 +//
@@ -9534,9 +9794,17 @@ index 0000000..4839cd6
 +
 +// Whether a shell's pixel at height share (0 to 1) is part of a strand; if so, shades it from root to tip.
 +// anchor is the place on the model (its own units), baseColor the surface's own colour there; white picks a furry
-+// enemy's white fur instead of Banjo's brown.
-+bool FurShell(float3 anchor, float3 baseColor, float share, bool white, inout float3 color) {
-+    if (white ? !WhiteFurColor(baseColor) : !FurColor(baseColor)) {
++// enemy's white fur instead of Banjo's brown. mark is the vertex's fur mark (FurMarkW in rt64_framebuffer_renderer.cpp),
++// blended across the triangle: 3 fur, 1 or 4 bare (his model tells them by their own colours, so the light on them
++// doesn't change the coat, L); 2 (unmarked) tells it by the colour as lit here.
++bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
++    if ((mark < 1.5f) || (mark >= 3.5f)) {
++        return false;
++    }
++    else if (mark >= 2.5f) {
++        // (Fur, told by his model.)
++    }
++    else if (white ? !WhiteFurColor(baseColor) : !FurColor(baseColor)) {
 +        return false;
 +    }
 +
@@ -9561,20 +9829,24 @@ index 0000000..4839cd6
 +// Banjo-Tooie: one of Kazooie's feathers (GrassGS.hlsl): anchor is its place across (-1 to 1) and along it (0 root,
 +// 1 tip), then its own shade. Only on her feathers (reds and oranges), not her beak or legs. Cut to a feather's
 +// shape, narrow at the root and round at the tip, darker towards the root where the one above lies over it, with a
-+// faint shaft down its middle.
-+bool FeatherCard(float3 anchor, float3 baseColor, bool npc, bool wing, inout float3 color) {
++// faint shaft down its middle. known: her model marks it a feather by its own colour (SetFurVertexFlags), so its
++// colour as lit here (dark underneath, say) is not tested.
++bool FeatherCard(float3 anchor, float3 baseColor, bool npc, bool wing, bool known, inout float3 color) {
 +    const float high = max(baseColor.r, max(baseColor.g, baseColor.b));
 +    const float low = min(baseColor.r, min(baseColor.g, baseColor.b));
-+    if ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
++    if (!known && ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f))) {
 +        return false;
 +    }
 +    // Red to orange; up to a deep orange only where it is fully saturated (the top of her head, no blue at all), as
 +    // her beak's orange base keeps a little blue (saturation 0.91-0.95; its feathers showed as flecks, L).
 +    // A feathered NPC (Canary Mary) has them on her strong orange-yellow (hue 37-47, saturation 0.85 and up), not on
 +    // her tan skin (saturation about 0.6) or her paler lemon beak (hue 54).
-+    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
-+    const float saturation = (high - low) / high;
-+    if (npc) {
++    const float hue = 60.0f * (baseColor.g - baseColor.b) / max(high - low, 1e-4f);
++    const float saturation = (high - low) / max(high, 1e-4f);
++    if (known) {
++        // (Told by her model.)
++    }
++    else if (npc) {
 +        if ((hue < 30.0f) || (hue > 50.0f) || (saturation < 0.78f)) {
 +            return false;
 +        }
@@ -10000,10 +10272,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..b96e35f
+index 0000000..730ec60
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,602 @@
+@@ -0,0 +1,603 @@
 +//
 +// RT64
 +//
@@ -10037,7 +10309,7 @@ index 0000000..b96e35f
 +    float4 smoothColor : COLOR0;
 +    nointerpolation float4 flatColor : COLOR1;
 +    // Banjo's fur's place on his model (RasterVS.hlsl); unused here, but the shaders on both sides have it.
-+    float3 furAnchor : TEXCOORD1;
++    float4 furAnchor : TEXCOORD1;
 +};
 +
 +float GrassHash1(float3 p) {
@@ -10190,7 +10462,7 @@ index 0000000..b96e35f
 +    if (grow.x > 0.0f) {
 +        s *= grow.x;
 +        t = 0.5f + (t - 0.5f) * grow.y;
-+        v.furAnchor = float3(s, t, 1.0f);
++        v.furAnchor = float4(s, t, 1.0f, 0.0f);
 +    }
 +
 +    v.position = GrassRescale(rootClip + GrassDirToClip(GrassBladePoint(s, t, chunky, side, middle, tip)));
@@ -10222,7 +10494,7 @@ index 0000000..b96e35f
 +void FeatherEmit(inout TriangleStream<GrassVertex> stream, GrassVertex v, float4 rootClip, float3 offset, float2 uvOffset, float s, float t, float shade) {
 +    v.position = GrassRescale(rootClip + GrassDirToClip(offset));
 +    v.uv += uvOffset;
-+    v.furAnchor = float3(s, t, shade);
++    v.furAnchor.xyz = float3(s, t, shade);
 +    stream.Append(v);
 +}
 +
@@ -10357,7 +10629,8 @@ index 0000000..b96e35f
 +        v.uv = input[0].uv * w0 + input[1].uv * w1 + input[2].uv * w2;
 +        v.smoothColor = input[0].smoothColor * w0 + input[1].smoothColor * w1 + input[2].smoothColor * w2;
 +        v.flatColor = input[0].flatColor;
-+        v.furAnchor = 0.0f;
++        // (w: her fur mark at its root, RasterVS.hlsl.)
++        v.furAnchor = float4(0.0f, 0.0f, 0.0f, input[0].furAnchor.w * w0 + input[1].furAnchor.w * w1 + input[2].furAnchor.w * w2);
 +        const float3 corners[4] = {
 +            rootOffset - side * halfWidth, rootOffset + side * halfWidth, tipOffset - side * halfWidth, tipOffset + side * halfWidth
 +        };
@@ -11116,7 +11389,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..6544c41 100644
+index e7895c3..5a2fd4b 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11131,12 +11404,12 @@ index e7895c3..6544c41 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,55 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,64 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
 -    bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
-+    float3 vertexFurAnchor, bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
++    float4 vertexFurAnchor, bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
  {
 +    // Banjo-Tooie: the shell redraws' code is only in a shader built with it (RenderParams.features): an ordinary
 +    // draw's specialised shader folds all of it away, so it stays lean.
@@ -11154,7 +11427,7 @@ index e7895c3..6544c41 100644
 +    float3 grassDy = 0.0f;
 +    if ((grassShell != 0) && !featherCard) {
 +        // (Deep snow has its own from the vertices, RasterVS.hlsl.)
-+        grassWorld = ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0) ? vertexFurAnchor : GrassWorldPosition(vertexPosition);
++        grassWorld = ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0) ? vertexFurAnchor.xyz : GrassWorldPosition(vertexPosition);
 +        if ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0) {
 +            grassDx = ddx(grassWorld);
 +            grassDy = ddy(grassWorld);
@@ -11177,8 +11450,17 @@ index e7895c3..6544c41 100644
 +    // Banjo-Tooie: a shell of deep snow throws away its pixels above the snow before the draw's colours are worked out.
 +    SnowSample snowSample = (SnowSample)0;
 +    const bool snowShell = (grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0);
-+    const float snowShare = snowShell ? float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK) : 0.0f;
-+    if (snowShell && !SnowShellShape(grassWorld, grassDx, grassDy, snowShare, snowSample)) {
++    float snowShare = snowShell ? float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK) : 0.0f;
++    if (snowShell && ((gConstants.grassShells & RASTER_SNOW_TESS) != 0)) {
++        // The tessellated snow (SnowTess.hlsl): its anchor is the ground under the pixel, so its slopes are the ground's.
++        // Where the snow is less than a hair deep (where it thins out by its reach), the ground shows instead.
++        if (!SnowTessShape(grassWorld, cross(grassDx, grassDy), snowSample) || (snowSample.height < SnowTessLeast)) {
++            return false;
++        }
++        snowShare = snowSample.height / max(FrParams.snowParams.y, 1e-3f);
++        grassWorld.y += snowSample.height;
++    }
++    else if (snowShell && !SnowShellShape(grassWorld, grassDx, grassDy, snowShare, snowSample)) {
 +        return false;
 +    }
 +
@@ -11189,7 +11471,7 @@ index e7895c3..6544c41 100644
          return false;
      }
  #endif
-@@ -88,7 +136,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +145,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -11200,7 +11482,7 @@ index e7895c3..6544c41 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +163,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +172,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -11225,7 +11507,7 @@ index e7895c3..6544c41 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +211,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +220,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -11234,7 +11516,7 @@ index e7895c3..6544c41 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +229,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +238,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -11243,7 +11525,7 @@ index e7895c3..6544c41 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +254,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +263,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -11282,7 +11564,7 @@ index e7895c3..6544c41 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +358,113 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +367,116 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -11324,13 +11606,16 @@ index e7895c3..6544c41 100644
 +        const bool beak = wingFeathers ? false : npcFeathers ? (((underHue > 51.0f) && (underHue <= 70.0f) && (underHigh > 0.25f)) || ((underSaturation < 0.72f) && (underHigh > 0.25f))) :
 +            ((underHue >= 30.0f) && (underHue <= 70.0f) && (underSaturation < 0.88f) && (underHigh > 0.25f));
 +        const bool eye = ((underHigh > 0.55f) && (underSaturation < 0.25f)) || ((underHue > 70.0f) && (underHue < 180.0f) && (underSaturation > 0.3f));
-+        if (beak || eye || (underHigh < 0.08f)) {
++        // (Not where her model marks a feather by its own colour, SetFurVertexFlags: lit from behind or below, her
++        // underside is too dark for these, L.)
++        const bool knownFeather = vertexFurAnchor.w > 3.5f;
++        if (!knownFeather && (beak || eye || (underHigh < 0.08f))) {
 +            return false;
 +        }
 +        if ((underHigh < 0.22f) || (underSaturation < 0.4f)) {
 +            resultColor.rgb = featherRootColor.rgb;
 +        }
-+        if (!FeatherCard(vertexFurAnchor, featherRootColor.rgb, npcFeathers, wingFeathers && !npcFeathers, resultColor.rgb)) {
++        if (!FeatherCard(vertexFurAnchor.xyz, featherRootColor.rgb, npcFeathers, wingFeathers && !npcFeathers, knownFeather, resultColor.rgb)) {
 +            return false;
 +        }
 +        // See-through feathers: a share of their pixels left out in a fine even pattern.
@@ -11374,8 +11659,8 @@ index e7895c3..6544c41 100644
 +    if (furShell != 0) {
 +        const bool whiteFur = (gConstants.furShells & RASTER_FUR_WHITE) != 0;
 +        const float3 furBase = (whiteFur && renderFlagUsesTexture0(rp.flags)) ? texVal0.rgb : combinerColor.rgb;
-+        if (!FurShell(vertexFurAnchor, furBase, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
-+            whiteFur, resultColor.rgb))
++        if (!FurShell(vertexFurAnchor.xyz, furBase, float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK),
++            whiteFur, vertexFurAnchor.w, resultColor.rgb))
 +        {
 +            return false;
 +        }
@@ -11396,7 +11681,7 @@ index e7895c3..6544c41 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +472,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +484,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -11420,15 +11705,15 @@ index e7895c3..6544c41 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +515,7 @@ void PSMain(
+@@ -287,6 +527,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
-+    , in float3 vertexFurAnchor : TEXCOORD1
++    , in float4 vertexFurAnchor : TEXCOORD1
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +532,7 @@ void PSMain(
+@@ -303,7 +544,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -11438,15 +11723,15 @@ index e7895c3..6544c41 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..005ca15 100644
+index 74b1fa0..3d25169 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,14 +11,43 @@
+@@ -11,14 +11,53 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
 -LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in float2 iUV, in float4 iColor, out float4 oPosition, out float2 oUV, out float4 oSmoothColor, out float4 oFlatColor) {
-+LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in float2 iUV, in float4 iColor, in uint iVertexId, out float4 oPosition, out float2 oUV, out float4 oSmoothColor, out float4 oFlatColor, out float3 oFurAnchor) {
++LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in float2 iUV, in float4 iColor, in uint iVertexId, out float4 oPosition, out float2 oUV, out float4 oSmoothColor, out float4 oFlatColor, out float4 oFurAnchor) {
 +    oFurAnchor = 0.0f;
      float4 ndcPos = iPosition;
 +    // Banjo-Tooie: the shell redraws' code only in a shader built with it (RenderParams.features, RasterPS.hlsl).
@@ -11463,11 +11748,12 @@ index 74b1fa0..005ca15 100644
 +        // Banjo-Tooie: a 3D grass shell, moved straight up in the world by its share of the blade height.
 +        // Banjo-Tooie: a shell of deep snow, the same way by its share of the snow's full height.
 +        if ((grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0)) {
-+            const float snowShare = float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK);
++            // (The tessellated snow is raised by its domain shader, SnowTess.hlsl: here it stays on the ground.)
++            const float snowShare = ((gConstants.grassShells & RASTER_SNOW_TESS) != 0) ? 0.0f : float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK);
 +            ndcPos += FrParams.snowClipUp * snowShare;
 +            // Its place in the world, for Snow.hlsli (the level's ground has no model transform, and its depth can't
 +            // be read back with the frame's camera where the game draws the ground near it with a nearer near plane).
-+            oFurAnchor = float3(snowPositions[iVertexId * 3], snowPositions[iVertexId * 3 + 1] + FrParams.snowParams.y * snowShare, snowPositions[iVertexId * 3 + 2]);
++            oFurAnchor.xyz = float3(snowPositions[iVertexId * 3], snowPositions[iVertexId * 3 + 1] + FrParams.snowParams.y * snowShare, snowPositions[iVertexId * 3 + 2]);
 +        }
 +        else if ((grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0)) {
 +            ndcPos += FrParams.grassClipUp * (float(grassShell) / float(gConstants.grassShells));
@@ -11475,9 +11761,18 @@ index 74b1fa0..005ca15 100644
 +
 +        // Banjo-Tooie: a shell of Banjo's fur, pushed out along the vertex's normal by its share of the fur's
 +        // length, the tips drooping a little (by the cube of the height, as in Sorumi's UnityFurShader).
++        // Banjo-Tooie: one of Kazooie's feathers takes her vertices' fur marks (GrassGS.hlsl).
++        if ((grassShell != 0) && ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0)) {
++            uint furCount, furStride;
++            furNormals.GetDimensions(furCount, furStride);
++            if ((iVertexId * 2 + 1) < furCount) {
++                oFurAnchor.w = furNormals[iVertexId * 2 + 1].w;
++            }
++        }
 +        if (furShell != 0) {
 +            const float3 normal = furNormals[iVertexId * 2].xyz;
-+            oFurAnchor = furNormals[iVertexId * 2 + 1].xyz;
++            // (w: 1 plus the vertex's fur mark, SetFurVertexFlags; RasterPS.hlsl.)
++            oFurAnchor = furNormals[iVertexId * 2 + 1];
 +            const float share = float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = ((gConstants.furShells & RASTER_FUR_WHITE) != 0) ? FrParams.npcFurParams : FrParams.furParams;
 +            const float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
@@ -11486,7 +11781,7 @@ index 74b1fa0..005ca15 100644
      }
      
      // Apply screen scale and offset.
-@@ -33,6 +62,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +72,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -11499,7 +11794,7 @@ index 74b1fa0..005ca15 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +88,19 @@ void VSMain(
+@@ -53,17 +98,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -11510,7 +11805,7 @@ index 74b1fa0..005ca15 100644
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , out float4 oFlatColor : COLOR1
  #endif
-+    , out float3 oFurAnchor : TEXCOORD1
++    , out float4 oFurAnchor : TEXCOORD1
  )
  {
  #if !defined(DYNAMIC_RENDER_PARAMS) && !defined(VERTEX_FLAT_COLOR)
@@ -13973,10 +14268,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..61e1ef5
+index 0000000..1c1a389
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,253 @@
 +//
 +// RT64
 +//
@@ -14053,6 +14348,21 @@ index 0000000..61e1ef5
 +    return surface * (1.0f - 0.97f * trail.x) + bank;
 +}
 +
++// How much of the snow's depth lies at a world position (1 near, thinning to 0 by the snow's reach, so it ends without
++// an edge), and its distance from the camera.
++float SnowThin(float3 world, out float cameraDistance) {
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    cameraDistance = distance(world, camera);
++    // (As far as the snow's reach goes, a camera zoomed in brings it nearer, SceneSnowZoom, and the snow round Banjo is
++    // never far, SceneSnowNearBanjo: Chilly Willy's fight watches him from far back.)
++    float reachDistance = cameraDistance * clamp(2.2f / max(FrParams.grassProjection.y, 1e-3f), 0.2f, 1.0f);
++    if (FrParams.snowPlayer.w > 0.0f) {
++        reachDistance = min(reachDistance, distance(world, float3(FrParams.snowPlayer.x, FrParams.snowPlayer.z, FrParams.snowPlayer.y)) + 600.0f);
++    }
++    const float reach = FrParams.snowParams.z;
++    return saturate(1.0f - (reachDistance - reach * 0.55f) / (reach * 0.45f));
++}
++
 +// What SnowShellShape found out about a shell's pixel, for SnowShellShade.
 +struct SnowSample {
 +    float surface;
@@ -14089,15 +14399,7 @@ index 0000000..61e1ef5
 +
 +    // Thinner far away, gone by the snow's reach, so it ends without an edge.
 +    const float4 params = FrParams.snowParams;
-+    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    s.cameraDistance = distance(world, camera);
-+    // (As far as the snow's reach goes, a camera zoomed in brings it nearer, SceneSnowZoom, and the snow round Banjo is
-+    // never far, SceneSnowNearBanjo: Chilly Willy's fight watches him from far back.)
-+    float reachDistance = s.cameraDistance * clamp(2.2f / max(FrParams.grassProjection.y, 1e-3f), 0.2f, 1.0f);
-+    if (FrParams.snowPlayer.w > 0.0f) {
-+        reachDistance = min(reachDistance, distance(world, float3(FrParams.snowPlayer.x, FrParams.snowPlayer.z, FrParams.snowPlayer.y)) + 600.0f);
-+    }
-+    const float thin = saturate(1.0f - (reachDistance - params.z * 0.55f) / (params.z * 0.45f));
++    const float thin = SnowThin(world, s.cameraDistance);
 +    if (thin <= 0.02f) {
 +        s.trail.x = 2.0f;
 +        return why && (share >= 0.999f);
@@ -14124,6 +14426,49 @@ index 0000000..61e1ef5
 +    s.trail = s.nearTrail ? SnowTrailAt(world.xz, world.y - s.shellY) : 0.0f;
 +    s.height = SnowHeight(s.surface, s.trail);
 +    return s.shellY <= s.height;
++}
++
++// The tessellated snow is never drawn less than this far above the ground (world units), so the two don't fight over
++// the same depth; thinner than that (where it thins out by its reach), the ground shows instead.
++static const float SnowTessLeast = 0.35f;
++
++// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with the
++// ground's normal there, any length) in s.height, s.shellY the same (the pixel is on the snow's surface). False where
++// no snow lies: a wall, or past the snow's reach. Both the domain shader (where to raise the surface to) and the pixel
++// shader (how to shade it) ask, so the two agree.
++bool SnowTessShape(float3 ground, float3 normal, out SnowSample s) {
++    s = (SnowSample)0;
++    const bool why = FrParams.snowGrid.w > 3.5f;
++    const float4 params = FrParams.snowParams;
++    const float normalLength = length(normal);
++    if ((normalLength <= 0.0f) || (abs(normal.y) < 0.12f * normalLength)) {
++        s.trail.x = 1.0f;
++        s.height = s.shellY = params.x;
++        return why;
++    }
++
++    const float thin = SnowThin(ground, s.cameraDistance);
++    if (thin <= 0.02f) {
++        s.trail.x = 2.0f;
++        s.height = s.shellY = params.x;
++        return why;
++    }
++
++    s.surface = params.x * thin;
++    const bool steep = abs(normal.y) < 0.6f * normalLength;
++    if (why) {
++        s.trail.x = steep ? 3.0f : 4.0f;
++        s.height = s.shellY = params.x;
++        return true;
++    }
++
++    // Banjo's trail, near him only, on ground facing up (a steep bank keeps its snow as it is).
++    const float4 player = FrParams.snowPlayer;
++    s.nearTrail = !steep && (player.w > 0.0f) && all(abs(ground.xz - player.xy) < player.w);
++    s.trail = s.nearTrail ? SnowTrailAt(ground.xz, ground.y) : 0.0f;
++    s.height = SnowHeight(s.surface, s.trail);
++    s.shellY = s.height;
++    return true;
 +}
 +
 +// Shades a shell's pixel inside the snow; false when the ground under it isn't snowy (baseColor, the draw's colour).
@@ -14179,6 +14524,126 @@ index 0000000..61e1ef5
 +
 +    color = shade;
 +    return true;
++}
+diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
+new file mode 100644
+index 0000000..45e8342
+--- /dev/null
++++ b/src/shaders/SnowTess.hlsl
+@@ -0,0 +1,114 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: deep snow as one tessellated surface, where the device has hull and domain shaders (D3D12, and Vulkan
++// with tessellationShader). The level's snowy ground draws are drawn again through these: the hull shader cuts each
++// triangle finer near Banjo's trail (and a little finer near the camera), and the domain shader raises every new
++// vertex straight up to the snow's height over the ground there, pressed down where Banjo walked and banked up beside
++// it (SnowTessShape in Snow.hlsli), so the trail is a real dent in the snow's surface rather than a stack of shells.
++// The vertex shader leaves the ground where it is (RASTER_SNOW_TESS, RasterVS.hlsl); the pixel shader asks the same
++// height again to shade the snow, and throws away pixels where no snow lies (RasterPS.hlsl).
++//
++// Built twice from this file: HSMain (hull) and DSMain (domain). Both use the ubershader's vertex and pixel shaders,
++// whose outputs and inputs SnowVertex matches.
++
++#include "shared/rt64_raster_params.h"
++
++#include "FbRendererCommon.hlsli"
++#include "Snow.hlsli"
++
++[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
++
++struct SnowVertex {
++    float4 position : SV_POSITION;
++    float2 uv : TEXCOORD;
++    float4 smoothColor : COLOR0;
++    nointerpolation float4 flatColor : COLOR1;
++    // The ground's place in the world (RasterVS.hlsl).
++    float3 furAnchor : TEXCOORD1;
++};
++
++struct SnowPatch {
++    float edges[3] : SV_TessFactor;
++    float inside : SV_InsideTessFactor;
++    // The ground's normal, for SnowTessShape (any length).
++    float3 normal : NORMAL;
++};
++
++// The trail's cells are SnowCell (2.5) units across: near it the surface is cut about that fine, further from the camera
++// coarser, and away from the trail only as much as the snow's thinning toward its reach needs.
++static const float SnowTessMaxFactor = 64.0f;
++
++float SnowEdgeFactor(float3 a, float3 b) {
++    const float edgeLength = distance(a, b);
++    const float3 middle = (a + b) * 0.5f;
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    const float cameraDistance = distance(middle, camera);
++    const float4 player = FrParams.snowPlayer;
++    const bool nearTrail = (player.w > 0.0f) && all(abs(middle.xz - player.xy) < player.w + edgeLength * 0.5f);
++    const float segment = nearTrail ? max(FrParams.snowGrid.x * 0.8f, cameraDistance * 0.012f) : max(60.0f, cameraDistance * 0.15f);
++    return clamp(edgeLength / segment, 1.0f, SnowTessMaxFactor);
++}
++
++SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
++    SnowPatch p;
++    const float3 a = patch[0].furAnchor;
++    const float3 b = patch[1].furAnchor;
++    const float3 c = patch[2].furAnchor;
++    p.normal = cross(b - a, c - a);
++
++    // None at all on a wall, or where all of the triangle is past the snow's reach.
++    const float normalLength = length(p.normal);
++    float distanceA, distanceB, distanceC;
++    const bool wall = (normalLength <= 0.0f) || (abs(p.normal.y) < 0.12f * normalLength);
++    const bool beyond = (SnowThin(a, distanceA) <= 0.02f) && (SnowThin(b, distanceB) <= 0.02f) && (SnowThin(c, distanceC) <= 0.02f);
++    if ((wall || beyond) && (FrParams.snowGrid.w <= 3.5f)) {
++        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
++        p.inside = 0.0f;
++        return p;
++    }
++
++    // (Edge 0 is the one across from vertex 0. An edge's factor depends on the edge only, so the triangles either side
++    // of it cut it the same way and no cracks open between them.)
++    p.edges[0] = SnowEdgeFactor(b, c);
++    p.edges[1] = SnowEdgeFactor(c, a);
++    p.edges[2] = SnowEdgeFactor(a, b);
++    p.inside = max(p.edges[0], max(p.edges[1], p.edges[2]));
++    return p;
++}
++
++[domain("tri")]
++[partitioning("fractional_odd")]
++[outputtopology("triangle_cw")]
++[outputcontrolpoints(3)]
++[patchconstantfunc("SnowPatchConstants")]
++[maxtessfactor(64.0f)]
++SnowVertex HSMain(InputPatch<SnowVertex, 3> patch, uint i : SV_OutputControlPointID) {
++    return patch[i];
++}
++
++[domain("tri")]
++SnowVertex DSMain(SnowPatch p, float3 w : SV_DomainLocation, const OutputPatch<SnowVertex, 3> patch) {
++    SnowVertex v;
++    v.position = patch[0].position * w.x + patch[1].position * w.y + patch[2].position * w.z;
++    v.uv = patch[0].uv * w.x + patch[1].uv * w.y + patch[2].uv * w.z;
++    v.smoothColor = patch[0].smoothColor * w.x + patch[1].smoothColor * w.y + patch[2].smoothColor * w.z;
++    v.flatColor = patch[0].flatColor;
++    v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
++
++    // Up to the snow's height there, as RasterVS raises a shell (snowClipUp is the snow's full height straight up),
++    // then through the draw's screen scale and offset as the position already went.
++    SnowSample s;
++    float height = SnowTessLeast;
++    if (SnowTessShape(v.furAnchor, p.normal, s)) {
++        height = max(s.height, SnowTessLeast);
++    }
++    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
++    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
++#ifdef __spirv__
++    up.y = -up.y;
++#endif
++    v.position += up;
++    return v;
 +}
 diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
 new file mode 100644
@@ -14849,10 +15314,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..d62faab 100644
+index 0a5c332..0077443 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,56 @@
+@@ -9,11 +9,59 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -14871,6 +15336,9 @@ index 0a5c332..d62faab 100644
 +    // Banjo-Tooie: with RASTER_FEATHER_CARDS, a feathered NPC's (Canary Mary): feathers wherever her colour is strong,
 +    // not only on Kazooie's reds (FeatherCard in Fur.hlsli).
 +#define RASTER_FEATHER_NPC 0x08000000u
++    // Banjo-Tooie: with RASTER_SNOW_SHELLS, the redraw is the deep snow as one tessellated surface, raised to the snow's
++    // height and dented by the trail where it lies (SnowTess.hlsl), instead of a stack of shells.
++#define RASTER_SNOW_TESS 0x04000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
 +    // the shell count.
