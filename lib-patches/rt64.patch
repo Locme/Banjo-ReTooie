@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..7e6f248 100644
+index 9fae0d4..adceeb6 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2188,7 +2188,7 @@ index 9fae0d4..7e6f248 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +436,26 @@ namespace RT64 {
+@@ -169,11 +436,32 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2215,7 +2215,13 @@ index 9fae0d4..7e6f248 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -219,6 +506,7 @@ namespace RT64 {
+         frameParams.viewUbershaders = ubershadersVisible;
+         frameParams.ditherNoiseStrength = ditherNoiseStrength;
++        frameParams.textureSeams = { SceneTextureSeams() ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+         framebufferCount = 0;
+ 
+         // Create dummy color target if it hasn't been created yet.
+@@ -219,6 +507,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2223,7 +2229,7 @@ index 9fae0d4..7e6f248 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +538,7 @@ namespace RT64 {
+@@ -250,6 +539,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2231,7 +2237,7 @@ index 9fae0d4..7e6f248 100644
                  }
              }
              else {
-@@ -272,6 +561,9 @@ namespace RT64 {
+@@ -272,6 +562,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2241,7 +2247,7 @@ index 9fae0d4..7e6f248 100644
              }
          }
      }
-@@ -373,6 +665,9 @@ namespace RT64 {
+@@ -373,6 +666,9 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2251,7 +2257,7 @@ index 9fae0d4..7e6f248 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +738,14 @@ namespace RT64 {
+@@ -443,6 +739,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2266,7 +2272,7 @@ index 9fae0d4..7e6f248 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +768,61 @@ namespace RT64 {
+@@ -465,12 +769,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2330,7 +2336,7 @@ index 9fae0d4..7e6f248 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +866,17 @@ namespace RT64 {
+@@ -514,6 +867,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2348,7 +2354,7 @@ index 9fae0d4..7e6f248 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +937,95 @@ namespace RT64 {
+@@ -574,10 +938,95 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2444,7 +2450,7 @@ index 9fae0d4..7e6f248 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1698,67 @@ namespace RT64 {
+@@ -1250,6 +1699,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2512,7 +2518,7 @@ index 9fae0d4..7e6f248 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1805,84 @@ namespace RT64 {
+@@ -1296,9 +1806,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2598,7 +2604,7 @@ index 9fae0d4..7e6f248 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1934,30 @@ namespace RT64 {
+@@ -1350,10 +1935,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2629,7 +2635,7 @@ index 9fae0d4..7e6f248 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2012,61 @@ namespace RT64 {
+@@ -1408,6 +2013,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2691,7 +2697,7 @@ index 9fae0d4..7e6f248 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2090,22 @@ namespace RT64 {
+@@ -1431,6 +2091,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2714,7 +2720,7 @@ index 9fae0d4..7e6f248 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2131,111 @@ namespace RT64 {
+@@ -1456,6 +2132,111 @@ namespace RT64 {
                  continue;
              }
  
@@ -2826,7 +2832,7 @@ index 9fae0d4..7e6f248 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2386,7 @@ namespace RT64 {
+@@ -1606,6 +2387,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2834,7 +2840,7 @@ index 9fae0d4..7e6f248 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2463,20 @@ namespace RT64 {
+@@ -1682,6 +2464,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2855,7 +2861,7 @@ index 9fae0d4..7e6f248 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2542,322 @@ namespace RT64 {
+@@ -1747,7 +2543,322 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3178,7 +3184,7 @@ index 9fae0d4..7e6f248 100644
  
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2868,263 @@ namespace RT64 {
+@@ -1758,13 +2869,263 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -5034,10 +5040,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..323f1ed
+index 0000000..37c7fb3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2009 @@
+@@ -0,0 +1,2019 @@
 +//
 +// RT64
 +//
@@ -5576,6 +5582,16 @@ index 0000000..323f1ed
 +        effectsSettings.parallax = std::clamp(depth, 0.0f, 1.0f);
 +        effectsSettings.parallaxOriginal = original;
 +        effectsSettings.parallaxAll = all;
++    }
++
++    static std::atomic<bool> textureSeamsBlend = true;
++
++    void SetSceneTextureSeams(bool blend) {
++        textureSeamsBlend = blend;
++    }
++
++    bool SceneTextureSeams() {
++        return textureSeamsBlend;
 +    }
 +
 +    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count) {
@@ -7049,10 +7065,10 @@ index 0000000..323f1ed
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..799e245
+index 0000000..b318fc9
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,301 @@
+@@ -0,0 +1,305 @@
 +//
 +// RT64
 +//
@@ -7323,6 +7339,10 @@ index 0000000..799e245
 +    // original on, the game's own textures listed (RT64 hashes), by their brightness; all lets it on every textured
 +    // draw of the 3D world instead, to look for textures that suit it.
 +    void SetSceneParallax(float depth, bool original, bool all);
++    // Banjo-Tooie: blends the seams of clamped textures, such as the lines between the pieces of the title's logo (DEV
++    // option, on by default).
++    void SetSceneTextureSeams(bool blend);
++    bool SceneTextureSeams();
 +    // ranges: each texture's darkest and lightest brightness (0 to 255, two a texture), its deepest and highest parts.
 +    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
 +    // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
@@ -13461,10 +13481,74 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..e6f0ef3 100644
+index 1ceb2ce..764b4bd 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
-@@ -278,7 +278,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -139,6 +139,16 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
+     }
+ }
+ 
++// Banjo-Tooie: one texel for blending a clamped texture's seam (sampleTextureLevel), by either way of sampling.
++float4 seamTexel(const RDPTile rdpTile, const GPUTile gpuTile, float2 tcScale, int2 texelInt, uint tlut, bool gpuTileUsesTMEM, uint mipLevel) {
++    if ((rdpTile.nativeSampler == NATIVE_SAMPLER_NONE) || gpuTileUsesTMEM) {
++        return clampWrapMirrorSample(rdpTile, gpuTile, tcScale, texelInt, tlut, gpuTileUsesTMEM, mipLevel);
++    }
++    else {
++        return sampleTextureNative(gTextures[NonUniformResourceIndex(gpuTile.textureIndex)], rdpTile.nativeSampler, texelInt, gpuTile.textureDimensions.xy);
++    }
++}
++
+ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool filterBilerp, bool filterAverage, bool linearFiltering, float2 uvCoord, uint tlut, bool canDecodeTMEM, uint mipLevel, bool usesHDR) {
+     float2 tcScale = gpuTile.tcScale;
+     float mipScale = float(1U << mipLevel);
+@@ -186,6 +196,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
+ #endif
+     }
+     
++    // Banjo-Tooie: blends the seams of clamped textures (DEV option, on by default). A picture drawn in pieces, like the
++    // title's logo, is clamped at each piece's edge, so the last texel is held flat for a whole texel and then steps to
++    // the next piece: a line at high resolutions, where the N64's own is a fraction of a pixel. Past the edge the
++    // filter carries on the edge's slope from its last two texels instead, so the pieces meet in a smooth blend.
++    if (filtering && (FrParams.textureSeams.x > 0.5f) && ((rdpTile.cms | rdpTile.cmt) & G_TX_CLAMP)) {
++        const int edgeX = int((round(tcScale.x * rdpTile.lrs) / 4) - (round(tcScale.x * rdpTile.uls) / 4) + round(tcScale.x - 1.0f));
++        const int edgeY = int((round(tcScale.y * rdpTile.lrt) / 4) - (round(tcScale.y * rdpTile.ult) / 4) + round(tcScale.y - 1.0f));
++        bool seam = false;
++        if ((rdpTile.cms & G_TX_CLAMP) && (edgeX > 0)) {
++            if (texelBaseInt.x == edgeX) {
++                samples[2] = 2.0f * samples[0] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(-1, 0), tlut, gpuTileUsesTMEM, mipLevel);
++                samples[3] = 2.0f * samples[1] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(-1, 1), tlut, gpuTileUsesTMEM, mipLevel);
++                seam = true;
++            }
++            else if (texelBaseInt.x == -1) {
++                samples[0] = 2.0f * samples[2] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(2, 0), tlut, gpuTileUsesTMEM, mipLevel);
++                samples[1] = 2.0f * samples[3] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(2, 1), tlut, gpuTileUsesTMEM, mipLevel);
++                seam = true;
++            }
++        }
++        if ((rdpTile.cmt & G_TX_CLAMP) && (edgeY > 0)) {
++            if (texelBaseInt.y == edgeY) {
++                samples[1] = 2.0f * samples[0] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(0, -1), tlut, gpuTileUsesTMEM, mipLevel);
++                samples[3] = 2.0f * samples[2] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(1, -1), tlut, gpuTileUsesTMEM, mipLevel);
++                seam = true;
++            }
++            else if (texelBaseInt.y == -1) {
++                samples[0] = 2.0f * samples[1] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(0, 2), tlut, gpuTileUsesTMEM, mipLevel);
++                samples[2] = 2.0f * samples[3] - seamTexel(rdpTile, gpuTile, tcScale, texelBaseInt + int2(1, 2), tlut, gpuTileUsesTMEM, mipLevel);
++                seam = true;
++            }
++        }
++        if (seam) {
++            [unroll]
++            for (int i = 0; i < 4; i++) {
++                samples[i] = usesHDR ? max(samples[i], 0.0f) : saturate(samples[i]);
++            }
++        }
++    }
++
+     float4 sample00 = samples[0];
+     if (filtering) {
+         float2 fracPart = uvCoord - texelBaseInt;
+@@ -278,7 +328,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
              float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
              float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
              float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
@@ -13697,10 +13781,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..63bfc41 100644
+index 2e62aaf..f55b3ee 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,87 @@ namespace interop {
+@@ -13,6 +13,89 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -13785,6 +13869,8 @@ index 2e62aaf..63bfc41 100644
 +        float4 parallaxParams;
 +        // Banjo-Tooie: parallax mapping's shading: how much darker the deepest parts are, and the shadows the stones cast.
 +        float4 parallaxShading;
++        // Banjo-Tooie: 1 to blend the seams of clamped textures (TextureSampler.hlsli), the DEV option.
++        float4 textureSeams;
      };
  #ifdef HLSL_CPU
  };

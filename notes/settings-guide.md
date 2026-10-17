@@ -62,6 +62,13 @@ on a controller.
 
 - **Developer Mode** (Developer): shows the DEV tab. Default: off.
 
+- **Blend texture seams** (DEV): smooths the lines where the pieces of a
+  picture drawn in parts meet, such as the title screen's logo. The game clamps
+  each piece at its edge, which on the N64 is a fraction of a pixel but shows
+  as a line at high resolutions; this carries each piece's shading on to its
+  edge instead. `TOOIE_TEXTURE_SEAMS=0` or `1` sets it for a headless run.
+  Default: on.
+
 - **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
   Mode in the game's global settings on the save select screen (the TV), so it
   lists Screen Alignment and Speaker Mode only, and keeps the game's own
@@ -208,7 +215,7 @@ F12 screenshots are taken before these filters, so they don't show them.
   as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
   about 150 tall). Fades out on walls seen edge on and in the distance.
   Default: 0 (off).
-- **Parallax on original textures**: the game's own textures (1,690 of them,
+- **Parallax on original textures**: the game's own textures (3,386 of them,
   picked by eye), whose depth is worked out from how dark each part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.

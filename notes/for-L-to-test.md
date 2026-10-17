@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T383 Blend texture seams (DEV, on): lines on the title logo
+- Asked: 2026-10-17 11:51 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Start the game and wait for the title screen's BANJO-TOOIE logo
+  2. Look where the logo's pieces meet (faint straight lines across the letters)
+  3. Settings > DEV > Blend texture seams: turn it Off, then On again, and compare
+- Look for: Are the lines across the logo gone or much fainter with it On (On is the default)? Anything else look wrong with it On, such as odd edges on HUD pictures or textures?
+- Status: waiting for L
+
 ## T382 Icy Side crash after a warp: drawing list guard
 - Asked: 2026-10-17 11:44 UTC
 - Build: main (pull and build)

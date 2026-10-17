@@ -673,6 +673,12 @@ void tooie::init_config() {
         "More game memory",
         "Gives the game a bigger memory heap, bigger buffers for drawing and animations, and 48 sound voices instead of 24, so scenes crowded with characters do not crash and fewer sounds cut out. Takes effect the next time the game starts.",
         true);
+    // L, 2026-10-17: a vanilla issue, so a blending option, on by default.
+    wip.add_bool_option(
+        tooie::picture_filters::texture_seams_option,
+        "Blend texture seams",
+        "Smooths the lines where the pieces of a picture drawn in parts meet, such as the title screen's logo. The game clamps each piece at its edge, which on the N64 is a fraction of a pixel but shows as a line at high resolutions; this carries each piece's shading on to its edge so the pieces blend.",
+        true);
     wip.add_bool_option(
         tooie::asset_dump_option,
         "Dump assets",

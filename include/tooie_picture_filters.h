@@ -104,6 +104,9 @@ namespace tooie::picture_filters {
     // Furry enemies' white fur (the yetis), on or off (L).
     inline const std::string enemy_fur_option = "enemy_fur";
     inline const std::string npc_feathers_option = "npc_feathers";
+    // DEV tab, on by default (L, 2026-10-17): blends the seams of clamped textures, such as the lines between the
+    // pieces of the title's logo (a vanilla issue that shows at high resolutions).
+    inline const std::string texture_seams_option = "blend_texture_seams";
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.

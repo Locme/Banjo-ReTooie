@@ -74,6 +74,7 @@ namespace RT64 {
     void SetSceneSnow(bool on, float height, bool strictColor);
     void SetSceneSnowStamps(const float *stamps, uint32_t count);
     void SetSceneParallax(float depth, bool original, bool all);
+    void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
@@ -4109,6 +4110,19 @@ void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, f
 
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    // DEV > Blend texture seams; TOOIE_TEXTURE_SEAMS=0 or 1 sets it instead (headless A/B).
+    {
+        bool seams = true;
+        try {
+            seams = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(texture_seams_option));
+        } catch (...) {
+        }
+        static const char* forced_seams = std::getenv("TOOIE_TEXTURE_SEAMS");
+        if (forced_seams != nullptr) {
+            seams = std::atoi(forced_seams) != 0;
+        }
+        RT64::SetSceneTextureSeams(seams);
+    }
     // Test aid: TOOIE_PRESET_TEST=<preset number> picks that effects preset on the first frame and logs
     // the effect settings it gave, then changes Sharpening by hand and logs the preset again.
     static bool preset_tested = false;
