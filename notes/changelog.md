@@ -209,6 +209,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Treasure Hunt, one of each collectible (df684cf). Untested on PC (T83).
 - Shoot Em Up!, 20 targets in the shooting games (009573c). Untested on PC (T83).
 - All Beaten Up and Calamari Bonanza counters (965eb06). Untested on PC (T83).
+- Icons: every achievement shows a portrait matched to its XBLA icon, small before its name and large beside the picked one, and the unlock pop-up is now drawn by the game at the top of the screen with the icon. The game draws them itself, so HD texture packs replace them too. The pause menu's Achievements row shows King Jingaling (it showed Sabreman). Untested on PC (T391).
 
 ### Stability
 

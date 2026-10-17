@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T391 Achievement icons and in-game unlock pop-up
+- Asked: 2026-10-17 14:31 UTC
+- Build: main from this commit
+- Steps:
+  1. Pull main and build
+  2. Load a save, press Start, pick ACHIEVEMENTS (its icon is now King Jingaling)
+  3. Scroll through all 12 achievements
+  4. Unlock any achievement (or use a save just before one, e.g. scrub Old King Coal)
+  5. Optional: load an HD texture pack that replaces portraits and look again
+- Look for: Each row has a small portrait before its name and the picked one shows a large portrait on the right, with no box behind it. The unlock pop-up appears at the top of the game screen (portrait, ACHIEVEMENT UNLOCKED, name and G) instead of the menu-style toast. With a texture pack, the icons use the pack's portraits. Icons: Klungo, Kazooie, washing machine, Old King Coal, Banjo, dark creature, Sabreman, Jinjo, skeleton Grunty, Mr. Patch, grey rhino, Stony.
+- Status: waiting for L
+
 ## T390 Discord Status (General, off by default)
 - Asked: 2026-10-17 13:41 UTC
 - Build: main (pull and build)
