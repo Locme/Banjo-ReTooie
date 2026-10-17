@@ -3486,7 +3486,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
             {Preset::Enhanced, "Enhanced", "Enhanced"},
             {Preset::Retro, "Retro", "Retro"},
         },
-        Preset::Custom);
+        // A first launch or a fresh graphics.json starts on Vanilla (L, 2026-10-17).
+        Preset::Original);
     graphics.add_option_change_callback(preset_option,
         [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
             if (context != recomp::config::OptionChangeContext::Temporary) {
