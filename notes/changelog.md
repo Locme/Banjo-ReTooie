@@ -71,6 +71,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Fixed: Banjo's own shadow shook and never quite matched him, at every frame rate. The game poses the shadow before it animates Banjo, so the shadow showed last frame's pose in this frame's place. It now gets this frame's pose. HD Shadows draws its shadow another way and is unchanged. Untested on PC (T397).
 - Bottles' ghost (Bottles' Revenge) no longer cuts a box out of the screen effects: his glow is a see-through square that wrote depth over its whole box, so sun shadows, ambient occlusion and fog stopped at its edges. His see-through parts now leave the depth alone, and his shimmer is drawn under the effects again. Untested on PC (T396).
 - Banjo fur length now goes up to 500 (was 300), for fun (L). The default stays 100.
 - New Graphics > Ice reflections slider (L): all ice now reflects, not only Icy Side's frozen decals: ice floors and platforms, the mottled ice of walls and platform sides, the see-through blocks round notes, the frozen lake and Icicle Grotto's floor. Ice now reflects from any camera height (before, it stopped once the camera looked down more than about 45 degrees). Ice no longer follows Water reflections. Untested on PC (T384).

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T397 Banjo's shadow follows his pose (no more shaking)
+- Asked: 2026-10-17 20:12 UTC
+- Build: main
+- Steps:
+  1. Turn HD Shadows off (the game's own shadow)
+  2. Stand, walk and turn the camera around Banjo on grass in Spiral Mountain
+  3. Try Game Frame Rate Original, 60 and 175
+- Look for: The shadow moves with Banjo instead of shaking or showing a slightly wrong shape
+- Status: waiting for L
+
 ## T396 Bottles' ghost: no box cut out of the effects
 - Asked: 2026-10-17 19:59 UTC
 - Build: main

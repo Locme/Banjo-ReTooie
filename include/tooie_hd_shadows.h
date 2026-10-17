@@ -16,4 +16,6 @@ namespace tooie::hd_shadows {
     // Call with the 3D scene's display list once it is complete (physical start and end): moves
     // the player's shadow paste to where a wide window shows the shadow.
     void fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end);
+    // The same list: poses the player's shadow with this frame's bones instead of last frame's.
+    void fix_shadow_pose(uint8_t* rdram, uint32_t start, uint32_t end);
 }
