@@ -5753,10 +5753,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a4cf297
+index 0000000..71d84c7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2174 @@
+@@ -0,0 +1,2191 @@
 +//
 +// RT64
 +//
@@ -6864,6 +6864,9 @@ index 0000000..a4cf297
 +    // How long a print stays as it was, then how long it takes to fill back in (less while it snows).
 +    static constexpr float SnowHoldSeconds = 6.0f;
 +    static constexpr float SnowRecoverSeconds = 45.0f;
++    // The blocks of the grid FrameParams.snowBlocksLow and High mark (SnowTess.hlsl): SnowBlocks x SnowBlocks of them.
++    static constexpr uint32_t SnowBlocks = 16;
++    static constexpr uint32_t SnowBlockCells = SnowGridSize / SnowBlocks;
 +    // The snow thins out to nothing by this far from the camera.
 +    static constexpr float SnowReach = 2600.0f;
 +    // A camera zoomed in further than the game's usual one (Chilly Willy's fight watches from far back) brings the snow's
@@ -6884,6 +6887,8 @@ index 0000000..a4cf297
 +            // The frame each row was last pressed on (the sweep below doesn't count: renderers copy its rows in full now
 +            // and then, as the times it clears only matter once they wrap round, after 54 minutes).
 +            std::vector<uint64_t> rowPressed = std::vector<uint64_t>(SnowGridSize, 0);
++            // When something was last pressed into each block of the grid (seconds, as `seconds`).
++            std::vector<double> blockPressed = std::vector<double>(SnowBlocks * SnowBlocks, -1e9);
 +            uint64_t frame = 0;
 +            std::chrono::steady_clock::time_point lastTime{};
 +            double seconds = 0.0;
@@ -6939,6 +6944,7 @@ index 0000000..a4cf297
 +        // A time of 0 with tag 0 would read as an empty cell.
 +        b = (now & 0xFFFFu) | (tagX << 16) | (tagZ << 24);
 +        trail.rowPressed[slotZ] = trail.frame;
++        trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
 +        if (b == 0) {
 +            b = 1;
 +        }
@@ -7053,6 +7059,7 @@ index 0000000..a4cf297
 +                // A new map or a warp: the old trail is somewhere else.
 +                std::fill(trail.cells.begin(), trail.cells.end(), 0u);
 +                std::fill(trail.rowPressed.begin(), trail.rowPressed.end(), trail.frame);
++                std::fill(trail.blockPressed.begin(), trail.blockPressed.end(), -1e9);
 +                trail.started = true;
 +                trail.last[0] = x;
 +                trail.last[1] = y;
@@ -7184,6 +7191,16 @@ index 0000000..a4cf297
 +        // (w: how light it must be. The arena's bluer snow is very light, its ice's pale glints not quite.)
 +        frameParams.snowColor = settings.snowStrictColor ? interop::float4{ 0.06f, 0.25f, 0.3f, 0.45f } : interop::float4{ 0.2f, 0.45f, 0.45f, 0.72f };
 +        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * SnowCell * 0.45f : 0.0f };
++        // The blocks with a trail still filling back in (for as long as a print can take to).
++        uint32_t blocks[8] = {};
++        const double lasts = SnowHoldSeconds + SnowRecoverSeconds + 2.0;
++        for (uint32_t k = 0; k < SnowBlocks * SnowBlocks; k++) {
++            if (trail.seconds - trail.blockPressed[k] < lasts) {
++                blocks[k / 32] |= 1u << (k % 32);
++            }
++        }
++        frameParams.snowBlocksLow = { blocks[0], blocks[1], blocks[2], blocks[3] };
++        frameParams.snowBlocksHigh = { blocks[4], blocks[5], blocks[6], blocks[7] };
 +        return true;
 +    }
 +
@@ -14527,10 +14544,10 @@ index 0000000..1c1a389
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..45e8342
+index 0000000..48dfb71
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,156 @@
 +//
 +// RT64
 +//
@@ -14569,19 +14586,61 @@ index 0000000..45e8342
 +    float3 normal : NORMAL;
 +};
 +
-+// The trail's cells are SnowCell (2.5) units across: near it the surface is cut about that fine, further from the camera
-+// coarser, and away from the trail only as much as the snow's thinning toward its reach needs.
++// The trail's cells are SnowCell (2.5) units across: over the trail the surface is cut about that fine (coarser further
++// from the camera), elsewhere only as much as the snow's thinning toward its reach needs.
 +static const float SnowTessMaxFactor = 64.0f;
++// How far apart the points are that look for the trail along an edge or over a triangle (half a block's width).
++static const float SnowTessProbe = 25.0f;
++
++// Whether a block of the trail grid holding this world position has a trail in it (FrameParams.snowBlocksLow and High).
++bool SnowBlockActive(float2 xz) {
++    const int n = int(FrParams.snowGrid.z);
++    const int2 cell = int2(floor(xz * FrParams.snowGrid.y));
++    const uint2 slot = uint2(((cell % n) + n) % n);
++    const uint2 block = min(slot / uint(n / 16), 15u);
++    const uint k = block.y * 16u + block.x;
++    const uint4 words = (k < 128u) ? FrParams.snowBlocksLow : FrParams.snowBlocksHigh;
++    const uint i = (k / 32u) & 3u;
++    const uint word = (i == 0u) ? words.x : (i == 1u) ? words.y : (i == 2u) ? words.z : words.w;
++    return ((word >> (k % 32u)) & 1u) != 0u;
++}
++
++// Whether the trail can show here: Banjo's trail is only looked up near him (as SnowTessShape).
++bool SnowTrailNear(float2 xz) {
++    const float4 player = FrParams.snowPlayer;
++    return (player.w > 0.0f) && all(abs(xz - player.xy) < player.w) && SnowBlockActive(xz);
++}
++
++float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
++    const float segment = trail ? max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f) : max(60.0f, cameraDistance * 0.15f);
++    return clamp(edgeLength / segment, 1.0f, SnowTessMaxFactor);
++}
 +
 +float SnowEdgeFactor(float3 a, float3 b) {
 +    const float edgeLength = distance(a, b);
-+    const float3 middle = (a + b) * 0.5f;
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    const float cameraDistance = distance(middle, camera);
-+    const float4 player = FrParams.snowPlayer;
-+    const bool nearTrail = (player.w > 0.0f) && all(abs(middle.xz - player.xy) < player.w + edgeLength * 0.5f);
-+    const float segment = nearTrail ? max(FrParams.snowGrid.x * 0.8f, cameraDistance * 0.012f) : max(60.0f, cameraDistance * 0.15f);
-+    return clamp(edgeLength / segment, 1.0f, SnowTessMaxFactor);
++    const float cameraDistance = distance((a + b) * 0.5f, camera);
++    const uint probes = uint(clamp(ceil(edgeLength / SnowTessProbe), 1.0f, 32.0f));
++    bool trail = false;
++    for (uint i = 0; (i <= probes) && !trail; i++) {
++        trail = SnowTrailNear(lerp(a.xz, b.xz, float(i) / float(probes)));
++    }
++    return SnowSegmentFactor(edgeLength, cameraDistance, trail);
++}
++
++// The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
++float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
++    const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
++    const uint steps = uint(clamp(ceil(longest / SnowTessProbe), 1.0f, 8.0f));
++    bool trail = false;
++    for (uint i = 0; (i <= steps) && !trail; i++) {
++        for (uint j = 0; (j <= steps - i) && !trail; j++) {
++            const float2 w = float2(i, j) / float(steps);
++            trail = SnowTrailNear(a.xz * (1.0f - w.x - w.y) + b.xz * w.x + c.xz * w.y);
++        }
++    }
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    return max(edgeFactor, SnowSegmentFactor(longest, distance((a + b + c) / 3.0f, camera), trail));
 +}
 +
 +SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
@@ -14607,7 +14666,7 @@ index 0000000..45e8342
 +    p.edges[0] = SnowEdgeFactor(b, c);
 +    p.edges[1] = SnowEdgeFactor(c, a);
 +    p.edges[2] = SnowEdgeFactor(a, b);
-+    p.inside = max(p.edges[0], max(p.edges[1], p.edges[2]));
++    p.inside = SnowInsideFactor(a, b, c, max(p.edges[0], max(p.edges[1], p.edges[2])));
 +    return p;
 +}
 +
@@ -15116,10 +15175,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..3301faf 100644
+index 2e62aaf..f6fe696 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,94 @@ namespace interop {
+@@ -13,6 +13,99 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -15202,6 +15261,11 @@ index 2e62aaf..3301faf 100644
 +        float4 snowPlayer;
 +        // Which colours count as snow: the most green and blue may go over red, and the most saturation (Snow.hlsli).
 +        float4 snowColor;
++        // Where the trail lies: the grid split into 16 x 16 blocks of 20 x 20 cells (by their place in the grid, as
++        // snowTrail), a bit each (block z * 16 + x, low 128 then high 128), set while anything pressed in it is still
++        // filling back in. The tessellated snow (SnowTess.hlsl) is cut finely only over those.
++        uint4 snowBlocksLow;
++        uint4 snowBlocksHigh;
 +        // Banjo-Tooie: parallax mapping on the stone textures (Parallax.hlsli, RasterPS.hlsl): how deep the deepest
 +        // part of a texture lies under its surface in world units, the distance it starts to flatten out from and
 +        // the distance it is flat by, then the most steps the depth is searched in.

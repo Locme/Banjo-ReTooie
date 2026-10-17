@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T411 Deep snow as a real dented surface (tessellation)
+- Asked: 2026-10-17 21:52 UTC
+- Build: main (deep snow tessellation commit)
+- Steps:
+  1. Turn on Deep snow in Shaders and go to Icy Side (warping is fine)
+  2. Walk, roll and slide through the snow, then look back at the trail
+  3. Check the snow's edges and slopes for steps or coloured bands
+  4. Optional A/B: set TOOIE_SNOW_SHELLS=1 to see the old shells
+- Look for: The trail is a smooth dent with snow banked up either side and footprints in its floor, not a stack of layers. No ugly bands or steps. Frame rate about the same as before. Say if the trail is still missing on D3D12 (then try Vulkan, as in T406).
+- Status: waiting for L
+
 ## T410 No parallax on Terrydactyland's cracked stone floor
 - Asked: 2026-10-17 21:46 UTC
 - Build: main
