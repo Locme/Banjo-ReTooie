@@ -3534,7 +3534,7 @@
   1. Put "Viva Mumbo Jumbo v4.zip" in the mods folder as it is and turn on "Viva Mumbo Jumbo"
   2. Play as Mumbo, open photo mode and zoom in on his face and body; then talk to him in Mayahem Temple's skull
 - Look for: the face texture sits exactly on the shape, as in L's reference picture: the line over the top of his head runs smoothly, the striped rings hug the eye sockets all the way round, and the tan patch outlines the nose holes. The pink skin on his arms, body and legs has the faint scale pattern from the reference; the chest rainbow and the soles stay plain. Cause: every texture was drawn shifted by a small step (a texture-pack setting meant for upscaled N64 textures), and the scale pattern came in the upload but was not used. Checked headless with the zip: photo-mode close-up playing as Mumbo and talking in the skull ([v4.png](screens/viva-mumbo/v4.png)).
-- Status: waiting for L
+- Status: replaced by T353 (v5)
 
 ## T305 Run on the B button by default
 - Asked: 2026-10-16 20:30 UTC
@@ -3585,3 +3585,11 @@
 - Look for: Banjo swims forward normally and the water only nudges him gently, as at 30 FPS. The cause: the lagoon's current pushes Banjo a fixed step every game frame, so at 240 FPS it pushed 8 times as hard (headless: he drifted about 240 units a second while floating, against about 10 at 30 FPS). The push now follows the frame's time; headless at 240 FPS he drifts about 7 units a second.
 - Status: waiting for L
 
+## T353 Viva Mumbo Jumbo v5: eyes more open, blinking
+- Asked: 2026-10-17 06:40 UTC
+- Build: main, plus mods/Viva Mumbo Jumbo v5.zip from project files (delete the older Viva zips and their unpacked folders first)
+- Steps:
+  1. Put "Viva Mumbo Jumbo v5.zip" in the mods folder as it is and turn on "Viva Mumbo Jumbo"
+  2. Play as Mumbo and stand still for a while, watching his eyes; then visit Mumbo in Mayahem Temple's skull
+- Look for: his eyelids sit higher, so the whole of each iris shows, and every few seconds he blinks: the lids come down in three steps to shut and back up, with the same timing as the original Mumbo. In his skull he sits with his eyes shut until you talk to him, as the original does. Checked headless with the zip: the eyes open in a close-up ([v5.png](screens/viva-mumbo/v5.png)), each blink step drawn offline, and the game's blink values (1 open, 2-4 closing) read while playing as Mumbo. A blink itself was not caught on screen.
+- Status: waiting for L
