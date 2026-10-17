@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T356 3D grass road check, cheaper
+- Asked: 2026-10-17 06:50 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass
+  2. Walk Spiral Mountain's cobbled road and look at the paths in a couple of other worlds
+- Look for: Roads and paths still have no blades and grass looks the same as T323; frame rate the same or a little better
+- Status: waiting for L
+
 ## T355 Kazooie jiggle (crest and tail feathers)
 - Asked: 2026-10-17 06:37 UTC
 - Build: main

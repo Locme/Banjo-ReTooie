@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..ce67112 100644
+index 9fae0d4..a7dd499 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -1744,7 +1744,7 @@ index 9fae0d4..ce67112 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +132,201 @@ namespace RT64 {
+@@ -125,6 +132,205 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -1838,7 +1838,7 @@ index 9fae0d4..ce67112 100644
 +
 +    // Banjo-Tooie: marks the cells a decal laid over the ground covers (its triangles facing up, where their vertices'
 +    // alpha is at least a half), so no blades grow under a road. Level ground has no model transform, so its positions are in the world.
-+    static void markGrassMask(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, std::vector<uint32_t> &mask) {
++    static void markGrassMask(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, std::vector<uint32_t> &mask, int (&marked)[4]) {
 +        const uint32_t start = call.meshDesc.faceIndicesStart;
 +        const uint32_t end = start + call.callDesc.triangleCount * 3;
 +        const int cells = int(frameParams.grassMask.w);
@@ -1890,6 +1890,10 @@ index 9fae0d4..ce67112 100644
 +                    if ((b0 * a[0] + b1 * a[1] + b2 * a[2]) >= 0.5f) {
 +                        const uint32_t bit = uint32_t(cz) * uint32_t(cells) + uint32_t(cx);
 +                        mask[bit >> 5] |= 1u << (bit & 31);
++                        marked[0] = std::min(marked[0], cx);
++                        marked[1] = std::min(marked[1], cz);
++                        marked[2] = std::max(marked[2], cx);
++                        marked[3] = std::max(marked[3], cz);
 +                    }
 +                }
 +            }
@@ -1946,7 +1950,7 @@ index 9fae0d4..ce67112 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,6 +371,26 @@ namespace RT64 {
+@@ -169,6 +375,26 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -1973,7 +1977,7 @@ index 9fae0d4..ce67112 100644
          hitGroupVector.clear();
          renderIndicesVector.clear();
          rspSmoothNormalVector.clear();
-@@ -219,6 +441,7 @@ namespace RT64 {
+@@ -219,6 +445,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -1981,7 +1985,7 @@ index 9fae0d4..ce67112 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +473,7 @@ namespace RT64 {
+@@ -250,6 +477,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -1989,7 +1993,7 @@ index 9fae0d4..ce67112 100644
                  }
              }
              else {
-@@ -272,6 +496,9 @@ namespace RT64 {
+@@ -272,6 +500,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -1999,7 +2003,7 @@ index 9fae0d4..ce67112 100644
              }
          }
      }
-@@ -373,6 +600,9 @@ namespace RT64 {
+@@ -373,6 +604,9 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2009,7 +2013,7 @@ index 9fae0d4..ce67112 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +673,14 @@ namespace RT64 {
+@@ -443,6 +677,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2024,7 +2028,7 @@ index 9fae0d4..ce67112 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +703,61 @@ namespace RT64 {
+@@ -465,12 +707,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2088,7 +2092,7 @@ index 9fae0d4..ce67112 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +801,17 @@ namespace RT64 {
+@@ -514,6 +805,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2106,7 +2110,7 @@ index 9fae0d4..ce67112 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +872,93 @@ namespace RT64 {
+@@ -574,10 +876,93 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2200,7 +2204,7 @@ index 9fae0d4..ce67112 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1631,67 @@ namespace RT64 {
+@@ -1250,6 +1635,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2268,7 +2272,7 @@ index 9fae0d4..ce67112 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1738,84 @@ namespace RT64 {
+@@ -1296,9 +1742,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2354,7 +2358,7 @@ index 9fae0d4..ce67112 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1867,30 @@ namespace RT64 {
+@@ -1350,10 +1871,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2385,7 +2389,7 @@ index 9fae0d4..ce67112 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +1945,61 @@ namespace RT64 {
+@@ -1408,6 +1949,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2447,7 +2451,7 @@ index 9fae0d4..ce67112 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2023,22 @@ namespace RT64 {
+@@ -1431,6 +2027,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2470,7 +2474,7 @@ index 9fae0d4..ce67112 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1456,6 +2064,105 @@ namespace RT64 {
+@@ -1456,6 +2068,110 @@ namespace RT64 {
                  continue;
              }
  
@@ -2499,7 +2503,12 @@ index 9fae0d4..ce67112 100644
 +                                    const float cells = float(GrassMaskCells);
 +                                    frameParams.grassMask = { std::floor(frameParams.grassWorldX.w / GrassMaskCell) * GrassMaskCell - cells * GrassMaskCell * 0.5f,
 +                                        std::floor(frameParams.grassWorldZ.w / GrassMaskCell) * GrassMaskCell - cells * GrassMaskCell * 0.5f, GrassMaskCell, cells };
-+                                    grassMaskVector.assign(GrassMaskCells * GrassMaskCells / 32, 0u);
++                                    // Kept clear between frames (endFramebuffers clears only what was marked).
++                                    if (grassMaskVector.size() != (GrassMaskCells * GrassMaskCells / 32)) {
++                                        grassMaskVector.assign(GrassMaskCells * GrassMaskCells / 32, 0u);
++                                    }
++                                    grassMaskMarked[0] = grassMaskMarked[1] = INT32_MAX;
++                                    grassMaskMarked[2] = grassMaskMarked[3] = -1;
 +                                }
 +                                featherCards = (grassBladePipeline != nullptr) && SceneKazooieFeathers();
 +                                // Banjo-Tooie: deep snow, from the same camera.
@@ -2576,7 +2585,7 @@ index 9fae0d4..ce67112 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2313,7 @@ namespace RT64 {
+@@ -1606,6 +2322,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2584,7 +2593,7 @@ index 9fae0d4..ce67112 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2390,20 @@ namespace RT64 {
+@@ -1682,6 +2399,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2605,7 +2614,7 @@ index 9fae0d4..ce67112 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,7 +2469,296 @@ namespace RT64 {
+@@ -1747,8 +2478,297 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2709,7 +2718,7 @@ index 9fae0d4..ce67112 100644
 +                    // A road, path or dirt laid over the ground as a blended decal, with a texture that isn't grass:
 +                    // no blades grow under it where it shows.
 +                    if (grass && grassDecal && (grassTexture == 0) && grassMaskStarted) {
-+                        markGrassMask(drawData, call, frameParams, grassMaskVector);
++                        markGrassMask(drawData, call, frameParams, grassMaskVector, grassMaskMarked);
 +                    }
 +                    grass = grass && (grassTexture != 0);
 +                    {
@@ -2848,13 +2857,13 @@ index 9fae0d4..ce67112 100644
 +                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : (feathers ? (interop::Blender::usesAlphaBlend(call.shaderDesc.otherMode) ? 3 : 2) : 0));
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
 +                if (!nightLightsChecked) {
 +                    nightLightsChecked = true;
 +                    nightLights = ComputeSceneNightLights(frameParams);
-                 }
++                }
 +                bool nightLight = false;
 +                if (nightLights && (proj.type == Projection::Type::Perspective)) {
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !nightLight; t++) {
@@ -2899,10 +2908,11 @@ index 9fae0d4..ce67112 100644
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
-@@ -1758,13 +2769,179 @@ namespace RT64 {
+             }
+@@ -1758,13 +2778,213 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -3069,9 +3079,43 @@ index 9fae0d4..ce67112 100644
 +        if ((snowShells == 0) || snowTrailVector.empty()) {
 +            snowTrailVector.assign(2, 0u);
 +        }
-+        if (!grassMaskStarted || grassMaskVector.empty()) {
-+            grassMaskVector.assign(1, 0u);
-+            frameParams.grassMask.w = 0.0f;
++        // Banjo-Tooie: only the box of cells a road or path marked goes to the GPU (none without one: no lookups
++        // either), and the full grid is cleared again behind it for the next frame.
++        grassMaskUpload.clear();
++        frameParams.grassMask.w = 0.0f;
++        frameParams.grassLook.y = 0.0f;
++        if (grassMaskStarted && (grassMaskMarked[2] >= grassMaskMarked[0]) && (grassMaskVector.size() == (GrassMaskCells * GrassMaskCells / 32))) {
++            const uint32_t x0 = uint32_t(grassMaskMarked[0]) & ~31u;
++            const uint32_t x1 = uint32_t(grassMaskMarked[2]) | 31u;
++            const uint32_t z0 = uint32_t(grassMaskMarked[1]);
++            const uint32_t z1 = uint32_t(grassMaskMarked[3]);
++            const uint32_t words = (x1 - x0 + 1) / 32;
++            const uint32_t rowWords = GrassMaskCells / 32;
++            grassMaskUpload.reserve(size_t(words) * (z1 - z0 + 1));
++            for (uint32_t z = z0; z <= z1; z++) {
++                uint32_t *row = &grassMaskVector[size_t(z) * rowWords + x0 / 32];
++                grassMaskUpload.insert(grassMaskUpload.end(), row, row + words);
++                std::fill(row, row + words, 0u);
++            }
++            frameParams.grassMask.x += float(x0) * GrassMaskCell;
++            frameParams.grassMask.y += float(z0) * GrassMaskCell;
++            frameParams.grassMask.w = float(words * 32);
++            frameParams.grassLook.y = float(z1 - z0 + 1);
++            grassMaskStarted = false;
++            grassMaskMarked[0] = grassMaskMarked[1] = INT32_MAX;
++            grassMaskMarked[2] = grassMaskMarked[3] = -1;
++        }
++        if (grassMaskUpload.empty()) {
++            grassMaskUpload.assign(1, 0u);
++        }
++        // TOOIE_GRASS_LOG: twice a second, the road grid's box and how much of it went to the GPU.
++        static const bool grassMaskLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
++        if (grassMaskLog) {
++            static auto lastMaskLog = std::chrono::steady_clock::now();
++            if (std::chrono::steady_clock::now() - lastMaskLog > std::chrono::milliseconds(500)) {
++                lastMaskLog = std::chrono::steady_clock::now();
++                fprintf(stderr, "[grass-mask] box %.0f x %.0f cells, %zu bytes\n", frameParams.grassMask.w, frameParams.grassLook.y, grassMaskUpload.size() * sizeof(uint32_t));
++            }
 +        }
          std::vector<BufferUploader::Upload> shaderUploads = {
              { renderIndicesVector.data(), { 0, renderIndicesVector.size() }, sizeof(interop::RenderIndices), RenderBufferFlag::STORAGE, { }, &renderIndicesBuffer},
@@ -3079,12 +3123,12 @@ index 9fae0d4..ce67112 100644
 +            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer},
 +            { furShaderVector.data(), { 0, furShaderVector.size() }, sizeof(interop::float4), RenderBufferFlag::STORAGE, { }, &furNormalsBuffer},
 +            { snowTrailVector.data(), { 0, snowTrailVector.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &snowTrailBuffer},
-+            { grassMaskVector.data(), { 0, grassMaskVector.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &grassMaskBuffer}
++            { grassMaskUpload.data(), { 0, grassMaskUpload.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &grassMaskBuffer}
          };
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..03e2bb3 100644
+index 3add9c3..e52a8c2 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,7 @@
@@ -3133,7 +3177,7 @@ index 3add9c3..03e2bb3 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +94,61 @@ namespace RT64 {
+@@ -62,11 +94,63 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -3163,6 +3207,8 @@ index 3add9c3..03e2bb3 100644
 +        // Banjo-Tooie: where 3D grass doesn't grow (a road or dirt laid over grass ground as a decal): one bit a cell
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
 +        std::vector<uint32_t> grassMaskVector;
++        std::vector<uint32_t> grassMaskUpload;
++        int grassMaskMarked[4] = { INT32_MAX, INT32_MAX, -1, -1 };
 +        BufferPair grassMaskBuffer;
 +        bool grassMaskStarted = false;
 +        // Banjo-Tooie: Banjo's fur. 1 for each instance draw call that gets fur shells over it (marked by the game).
@@ -3195,7 +3241,7 @@ index 3add9c3..03e2bb3 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +169,8 @@ namespace RT64 {
+@@ -87,6 +171,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -3204,7 +3250,7 @@ index 3add9c3..03e2bb3 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +184,7 @@ namespace RT64 {
+@@ -100,6 +186,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -3212,7 +3258,7 @@ index 3add9c3..03e2bb3 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +208,10 @@ namespace RT64 {
+@@ -123,6 +210,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -3223,7 +3269,7 @@ index 3add9c3..03e2bb3 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +253,15 @@ namespace RT64 {
+@@ -164,7 +255,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -8916,10 +8962,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..1cc68ed
+index 0000000..70b522e
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,582 @@
+@@ -0,0 +1,589 @@
 +//
 +// RT64
 +//
@@ -9343,6 +9389,13 @@ index 0000000..1cc68ed
 +        return;
 +    }
 +
++    // Whether the triangle reaches into the box of cells roads and paths marked (grassMask): most don't, and skip the lookups.
++    const float2 maskLow = FrParams.grassMask.xy;
++    const float2 maskHigh = maskLow + float2(FrParams.grassMask.w, FrParams.grassLook.y) * FrParams.grassMask.z;
++    const float2 worldLow = min(min(world[0].xz, world[1].xz), world[2].xz);
++    const float2 worldHigh = max(max(world[0].xz, world[1].xz), world[2].xz);
++    const bool masked = (FrParams.grassMask.w > 0.0f) && all(worldHigh >= maskLow) && all(worldLow <= maskHigh);
++
 +    const float4 wind = FrParams.grassWind;
 +    const float2 windDir = normalize(wind.xy);
 +    const float time = wind.z;
@@ -9398,11 +9451,11 @@ index 0000000..1cc68ed
 +
 +        // Only in patches; toward a patch's edge the blades thin out and get shorter.
 +        // None under a road or dirt the game lays over the ground (grassMask, marked from those decals' triangles).
-+        if (FrParams.grassMask.w > 0.0f) {
++        if (masked) {
 +            const int2 maskCell = int2(floor((root.xz - FrParams.grassMask.xy) / FrParams.grassMask.z));
-+            const int maskCells = int(FrParams.grassMask.w);
++            const int2 maskCells = int2(FrParams.grassMask.w, FrParams.grassLook.y);
 +            if (all(maskCell >= 0) && all(maskCell < maskCells)) {
-+                const uint bit = uint(maskCell.y * maskCells + maskCell.x);
++                const uint bit = uint(maskCell.y * maskCells.x + maskCell.x);
 +                if ((grassMask[bit >> 5] >> (bit & 31)) & 1) {
 +                    continue;
 +                }
@@ -13271,7 +13324,7 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..30e14e7 100644
+index 2e62aaf..63bfc41 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
 @@ -13,6 +13,87 @@ namespace interop {
@@ -13315,10 +13368,10 @@ index 2e62aaf..30e14e7 100644
 +        // blades (y 1: drawn in whole blocks of pixels), then how many times further apart and wider chunky blades
 +        // are, and a pixelated block's size in N64 pixels.
 +        float4 grassStyle;
-+        // Banjo-Tooie: how much the blades take on the ground's colour (0 to 1).
++        // Banjo-Tooie: how much the blades take on the ground's colour (0 to 1), then the rows of grassMask.
 +        float4 grassLook;
-+        // Banjo-Tooie: the grid of where blades don't grow (grassMask, one bit a cell): its low corner (world x and z),
-+        // a cell's size, then the cells along each side (0 with no grid this frame).
++        // Banjo-Tooie: the box of cells where blades don't grow (grassMask, one bit a cell, row by row): its low corner
++        // (world x and z), a cell's size, then the cells along a row (0 with nothing marked this frame).
 +        float4 grassMask;
 +        // Banjo-Tooie: Banjo's fur (Fur.hlsli, RasterVS.hlsl). A world vector's clip-space offset (as RasterVS's
 +        // positions) per world unit along x, y and z.
