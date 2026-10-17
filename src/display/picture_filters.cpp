@@ -352,6 +352,8 @@ namespace {
         // The mottled ice of walls, platform sides and the see-through blocks round notes (drawn solid and see-through).
         0x23fb73341a90acee, 0x27a85a283bfcca1b, 0x6714212997654fa0, 0x78d3311792ce28ef,
         0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
+        // The see-through blocks round notes themselves (a pale blue texture, 60 triangles, seen in Icy Side 2026-10-17).
+        0xe3890f274d878db4,
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).

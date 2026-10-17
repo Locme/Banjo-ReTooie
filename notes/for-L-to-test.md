@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
+- Asked: 2026-10-17 20:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: Ice reflections at 60 or more
+  2. Hailfire Peaks Icy Side: stand on the ice by the warp pads; look with the camera low behind Banjo, then raise it to look down on him
+  3. Go to an ice block with a note inside and look at its faces
+  4. Terrydactyland Stomping Plains: the floor in front of the gate by the Jiggy pad (where you saw the reflection)
+- Look for: Low camera: one upside-down Banjo under him, no stack of faded copies. From above: no copies at all, and no ghost of the walls running down the ice. The note blocks shine with a reflection now. Stomping Plains' floor by the gate no longer mirrors the gate and pad. Headless before/after: screens/ice-reflections/t401-banjo-once.png, t401-stomping-plains.png, t401-ice-block.png
+- Status: waiting for L
+
 ## T399 Snout jiggle: no mouth gap, centred at rest, floppy physics
 - Asked: 2026-10-17 20:27 UTC
 - Build: main

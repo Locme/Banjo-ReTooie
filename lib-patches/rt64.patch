@@ -1930,7 +1930,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6ce878a 100644
+index 9fae0d4..5891308 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -2967,7 +2967,7 @@ index 9fae0d4..6ce878a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2608,822 @@ namespace RT64 {
+@@ -1747,24 +2608,824 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2986,8 +2986,10 @@ index 9fae0d4..6ce878a 100644
 +                    const bool iceLike = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() == ZMODE_DEC) && (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
-+                    // And anything drawn with an ice texture (floors, walls, the blocks round notes), see-through or not.
-+                    bool iceTextured = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
++                    // And anything drawn with an ice texture (floors, walls, the blocks round notes), see-through or not,
++                    // also only in the icy maps: other levels use some of the same textures (Stomping Plains' floor by
++                    // the Jiggy pad has the cobbled ice floor's).
++                    bool iceTextured = SceneIcyLevel() && (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && (om.cycleType() != G_CYC_COPY) && (call.callDesc.tileCount > 0);
 +                    if (iceTextured) {
@@ -11418,10 +11420,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..4d88c4f
+index 0000000..2b2643e
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2361 @@
+@@ -0,0 +1,2367 @@
 +//
 +// RT64
 +//
@@ -12236,7 +12238,7 @@ index 0000000..4d88c4f
 +// The reflection off a water pixel: a ray marched across the screen against the scene's depth. What it
 +// hits is reflected; a ray leaving through the sky reflects the sky; anything else fades out.
 +float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack);
-+float4 WaterReflectionMarch(float3 surface, float3 r);
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest);
 +
 +float4 WaterReflection(float3 surface, float3 normal) {
 +    return WaterReflectionRay(surface, normal, false);
@@ -12274,13 +12276,17 @@ index 0000000..4d88c4f
 +        // Heading back past the camera.
 +        return 0.0f;
 +    }
-+    float4 reflection = WaterReflectionMarch(surface, r);
++    // A bent ray is made up, so it only picks up what lies well beyond the ice: closer things (Banjo, the walls round
++    // the ice) would be copied down the picture under themselves, a fresh copy wherever a ray met them again.
++    const float nearest = (made < 1.0f) ? max(-surface.z * 2.0f, -surface.z + 800.0f) : 0.0f;
++    float4 reflection = WaterReflectionMarch(surface, r, nearest);
 +    reflection.a *= made;
 +    return reflection;
 +}
 +
-+// The reflection along a ray from a surface (view space): see WaterReflection.
-+float4 WaterReflectionMarch(float3 surface, float3 r) {
++// The reflection along a ray from a surface (view space): see WaterReflection. Things nearer the camera than
++// nearest are passed over.
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest) {
 +    const float2 size = gConstants.projection.zw;
 +    const float stepLength = max(-surface.z * 0.03f, 4.0f);
 +    float travelled = 0.0f;
@@ -12307,9 +12313,11 @@ index 0000000..4d88c4f
 +        }
 +        const float sceneZ = -ViewPosition(at, d).z;
 +        const float behind = -p.z - sceneZ;
-+        if (behind > 0.0f) {
-+            // Hit something, as long as the ray didn't pass far behind it.
-+            return float4(gColor.Load(int3(at, 0)).rgb, (behind < stepLength * (2.0f + float(i) * 0.3f)) ? edge : 0.3f * edge);
++        // Hit something, as long as the ray didn't pass far behind it: one that did went behind a thing standing
++        // in front (Banjo on the ice), and goes on. Giving it that thing faintly instead put a fresh faded copy of
++        // it under itself at each step the rays from further down the surface passed behind it.
++        if ((behind > 0.0f) && (behind < stepLength * (2.0f + float(i) * 0.3f)) && (sceneZ >= nearest)) {
++            return float4(gColor.Load(int3(at, 0)).rgb, edge);
 +        }
 +    }
 +    // Left the screen: reflect the sky if that's where the ray went.
