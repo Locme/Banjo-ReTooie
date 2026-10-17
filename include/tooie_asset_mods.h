@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <functional>
 #include <string>
+#include <vector>
 
 // Asset dump and replacement by id (src/game/asset_mods.cpp, handoff 4.88/4.89): General >
 // the DEV tab > Dump assets, and asset_<id>.bin files loaded in place of the game's, from mods/assets
@@ -24,6 +25,10 @@ namespace tooie::asset_mods {
     void enable_mod(const std::string& mod_id, const std::filesystem::path& root, size_t order);
     void disable_mod(const std::string& mod_id);
     void reorder(const std::function<size_t(const std::string&)>& order_of);
+
+    // Asset `id` as the game loads it now: an asset mod's file when one replaces it, else decompressed from the
+    // ROM. Empty when it can't be read.
+    std::vector<uint8_t> asset_bytes(uint32_t id);
 }
 
 #endif

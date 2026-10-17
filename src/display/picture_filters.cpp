@@ -4585,8 +4585,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         banjo_fur_length_option,
         "Banjo fur length",
-        "How long Banjo's fur is, in percent. 100 is short and fluffy; 500 is very long, for fun.",
-        25, 500, 5, 0, false, 100);
+        "How long Banjo's fur is, in percent. 100 is short and fluffy; 1500 is very long, for fun.",
+        25, 1500, 5, 0, false, 100);
     graphics.add_number_option(
         banjo_fur_density_option,
         "Banjo fur density",
