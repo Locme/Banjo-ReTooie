@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T380 Esc menu keeps responding during a transition (Level warp)
+- Asked: 2026-10-17 11:36 UTC
+- Build: main @ 375b6b2
+- Steps:
+  1. Load a save file and turn on DEV > Warp tab
+  2. Press Esc, open the Warp tab and pick a place
+  3. Straight away press Esc again, while the screen is black
+  4. Click tabs and switches with the mouse until the new area shows
+  5. Also try it with the keyboard or controller
+- Look for: Does every click and press land straight away, with nothing ignored during the black screen?
+- Status: waiting for L
+
 ## T379 Wet grass and dirt no longer reflect
 - Asked: 2026-10-17 11:35 UTC
 - Build: main
