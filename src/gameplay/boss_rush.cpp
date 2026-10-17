@@ -5,8 +5,8 @@
 // select screen): gcfrontend_entrypoint_7(replay number, 1) sets the game mode byte (0x8012B3F2) to 2,
 // "replay", runs the replay's set-up list (the moves and items the fight needs; the game puts the file's own
 // back afterwards) and changes map to the boss's arena. Replay numbers 0x20..0x2C are the bosses (found by
-// calling it for every number headless and reading the map it asked for): 0x40.. are the minigames, 0x60..
-// the cutscenes, 0x80.. the multiplayer games.
+// calling it for every number headless and reading the map it asked for): 0x40.. are the multiplayer games,
+// 0x60.. the minigames, 0x80.. the cutscenes (src/gameplay/replays.cpp).
 //
 // When a replayed fight ends the boss calls gcfrontend_entrypoint_10, which goes back to the game select
 // screen (map 0x158). That is the same call after a win and after a loss (when the player answers "No" to

@@ -3997,6 +3997,7 @@ RECOMP_FUNC void bssplat_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     ctx->r5 = MEM_W(ctx->r29, 0X24);
     // 0x8080001C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
+    tooie_fall_damage_begin(rdram, ctx);
     // 0x80800020: jal         0x800A17A8
     // 0x80800024: negu        $a1, $a1
     ctx->r5 = SUB32(0, ctx->r5);
@@ -4005,6 +4006,7 @@ RECOMP_FUNC void bssplat_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800024: negu        $a1, $a1
     ctx->r5 = SUB32(0, ctx->r5);
     after_1:
+    tooie_fall_damage_end(rdram, ctx);
     // 0x80800028: jal         0x80096694
     // 0x8080002C: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;

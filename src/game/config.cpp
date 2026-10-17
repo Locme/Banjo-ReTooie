@@ -52,6 +52,7 @@
 #include "tooie_texture_slide.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_asset_mods.h"
+#include "tooie_damage.h"
 
 namespace {
     void show_cheats_tab() {
@@ -326,6 +327,11 @@ void tooie::init_config() {
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         false);
     general.add_bool_option(
+        tooie::damage::double_damage_option,
+        "Enemies do double damage",
+        "Every hit from an enemy or hazard takes twice the honeycombs. Falls hurt as they always do.",
+        false);
+    general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",
         "Shows the DEV tab, with features for developers and features that are still being worked on, and the switches for the Achievements, Cheats and Warp tabs.",
@@ -339,6 +345,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
+    recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);

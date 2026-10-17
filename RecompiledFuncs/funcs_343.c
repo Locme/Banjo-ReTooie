@@ -630,6 +630,7 @@ L_808003A8:
 L_808003C0:
     // 0x808003C0: addu        $t0, $t8, $t9
     ctx->r8 = ADD32(ctx->r24, ctx->r25);
+    tooie_enemy_hit_damage(rdram, ctx, 2);
     // 0x808003C4: lbu         $t1, 0x5C($t0)
     ctx->r9 = MEM_BU(ctx->r8, 0X5C);
     // 0x808003C8: or          $a0, $zero, $zero

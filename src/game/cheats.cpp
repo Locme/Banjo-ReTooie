@@ -9,8 +9,11 @@
 #include <variant>
 
 #include "recompui/config.h"
+#include "recompui/recompui.h"
 
 #include "tooie_cheats.h"
+#include "tooie_progress_cheats.h"
+#include "tooie_replays.h"
 #include "tooie_speedup.h"
 #include "tooie_transform_picker.h"
 
@@ -61,12 +64,24 @@ namespace {
         { "cheato_honeyking", "Cheato: HONEYKING", "You take no damage from enemies and hazards, so your health never drops.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_nestking", "Cheato: NESTKING", "Your eggs and feathers never run out, so you can fire eggs and fly without limit.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_homing", "Cheato: HOMING", "Eggs you fire steer towards the nearest enemy instead of flying straight.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_one_hit", "One-hit enemies",
+          "Enemies go down with one hit of any attack. Bosses take their usual number of hits.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_big_head", "Big head",
+          "Banjo's and Kazooie's heads are two and a half times as big. Only how they look: they still fit wherever they did. If Small head is on too, Big head wins.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_small_head", "Small head",
+          "Banjo's and Kazooie's heads are half their size. Only how they look.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_big_body", "Big body",
+          "Banjo and Kazooie look 1.6 times as big. Only how they look: they still fit through the same gaps, and the camera and shadow stay as they are. If Tiny body is on too, Big body wins.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_tiny_body", "Tiny body",
+          "Banjo and Kazooie look half their size. Only how they look: they reach and jump as far as ever.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_stop_n_swop", "Stop 'n' Swop items",
           "Marks the Stop 'n' Swop mystery eggs (blue and pink) as collected from the Banjo-Kazooie link, without a Banjo-Kazooie save.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_unlock_everything", "Unlock everything",
           "Learns every move and opens every world, warp pad, silo, train station, Isle o' Hags path and Cheato code, and the doors and shortcuts that have a switch of their own. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_complete", "100% complete",
           "Everything done except the last boss: all 90 Jiggies, 900 notes, Jinjos, honeycombs, Cheato pages, Glowbos, doubloons and moves, every world and Jiggywiggy challenge, and every boss but Hag 1 beaten. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheat_beat_hag", "Beat Hag 1",
+          "Shows once your file is 100%. Counts Hag 1 as beaten without the fight, and unlocks her replay and the ending cutscenes in Replays. The area reloads once. Saving keeps it, and switching this off doesn't undo it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_dragon_kazooie", "Dragon Kazooie",
           "On: Kazooie is Dragon Kazooie, as after Humba's pool on Isle o' Hags. Off: she is Kazooie again. The area reloads when you change it, and saving keeps it.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_all_moves", "Unlock all moves", "Every move counts as learned. Your save file is not changed.", { -1, -1, -1, -1, -1, -1 } },
@@ -77,6 +92,23 @@ namespace {
     constexpr size_t item_count = 20;
 
     std::once_flag start_once;
+
+    // Shown only while cheats are on and the file being played is 100% (see apply_loop).
+    constexpr const char* beat_hag_option = "cheat_beat_hag";
+
+    void show_beat_hag(bool show) {
+        auto lifetime = recompui::lock_context_lifetime();
+        if (!recompui::contexts_alive()) {
+            return;
+        }
+        try {
+            recompui::ContextId context = recompui::config::get_config_context_id();
+            context.open();
+            recompui::config::get_config(tab_id).update_option_hidden(beat_hag_option, !show);
+            context.close();
+        } catch (...) {
+        }
+    }
 
     // Whether each cheat is on right now (master switch included), published by the apply loop so the
     // game thread can read it every frame without touching the config.
@@ -113,6 +145,12 @@ namespace {
                 continue;
             }
             const bool master = tooie::cheats::enabled();
+            static bool beat_hag_shown = false;
+            const bool show = master && tooie::progress_cheats::complete_reached();
+            if (show != beat_hag_shown) {
+                show_beat_hag(show);
+                beat_hag_shown = show;
+            }
 
             for (size_t c = 0; c < cheat_count; c++) {
                 const bool on = master && option_on(cheat_list[c].option);
@@ -151,14 +189,22 @@ void tooie::cheats::create_tab() {
     tooie::transform_picker::add_options(config, enabled_option);
     for (const Cheat& cheat : cheat_list) {
         config.add_bool_option(cheat.option, cheat.name, cheat.description, false);
-        // The rows only show while the master switch is on.
-        config.add_option_hidden_dependency(cheat.option, enabled_option, false);
+        // The rows only show while the master switch is on. Beat Hag 1 also needs a 100% file, so the
+        // apply loop shows and hides it instead.
+        if (std::string_view(cheat.option) != beat_hag_option) {
+            config.add_option_hidden_dependency(cheat.option, enabled_option, false);
+        }
     }
+    config.update_option_hidden(beat_hag_option, true);
+
+    tooie::replays::add_options(config, enabled_option);
 
     // Section headings (they hide with their rows while the master switch is off).
     recompui::config::set_option_group("infinite_eggs", "Infinite items");
     recompui::config::set_option_group("cheat_infinite_jumps", "Moves");
     recompui::config::set_option_group("cheato_feathers", "Cheato codes");
+    recompui::config::set_option_group("cheat_one_hit", "Enemies");
+    recompui::config::set_option_group("cheat_big_head", "Size");
     recompui::config::set_option_group("cheat_stop_n_swop", "Unlocks");
 
     // Turning the master switch off (or loading it off) resets every cheat.
@@ -170,6 +216,7 @@ void tooie::cheats::create_tab() {
                     cfg.update_option_value(cheat.option, false);
                 }
                 tooie::transform_picker::reset(cfg);
+                tooie::replays::reset(cfg);
             }
         });
 }

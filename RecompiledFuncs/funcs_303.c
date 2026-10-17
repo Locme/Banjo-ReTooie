@@ -3839,6 +3839,7 @@ L_80109048:
     ctx->r4 = ADD32(ctx->r14, ctx->r25);
     // 0x80109050: lbu         $t0, 0x5C($a0)
     ctx->r8 = MEM_BU(ctx->r4, 0X5C);
+    tooie_enemy_hit_damage(rdram, ctx, 2);
     // 0x80109054: subu        $v1, $t0, $v0
     ctx->r3 = SUB32(ctx->r8, ctx->r2);
     // 0x80109058: bgez        $v1, L_80109068

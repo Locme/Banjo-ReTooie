@@ -1,4 +1,5 @@
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -76,6 +77,13 @@ namespace {
     // and Honey B's health upgrades (5 = all).
 #include "complete_flags.inc"
     constexpr int32_t jiggywiggy_count_flag = 0x35C;
+
+    // Beat Hag 1: what the game sets when she is beaten (0x043), Bottles' energy restored in the ending
+    // (0x578), and the Hag 1 and ending replays (global flags, shared by all three files).
+    constexpr int32_t beat_hag_flags[] = { 0x043, 0x578, 0xBD4, 0xBFC, 0xBFD, 0xBFE, 0xBFF };
+    // Whether the file being played has everything complete_check_ranges lists (checked about once a
+    // second on the game thread, read by the Cheats tab to show Beat Hag 1).
+    std::atomic<bool> file_complete{false};
     constexpr int32_t honey_b_count_flag = 0x4EA;
 
     // Dragon Kazooie is a learned "ability" flag, not a form (ScriptHawk's toggle flips the same flag):
@@ -253,6 +261,40 @@ void tooie::progress_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         complete_was_on = false;
     }
 
+    // Is the file 100% (for Beat Hag 1 to show)? Checked every sixth check, about once a second.
+    static int complete_check_counter = 0;
+    if (++complete_check_counter >= 6) {
+        complete_check_counter = 0;
+        bool all = tooie::debug::can_warp();
+        for (const auto& range : complete_check_ranges) {
+            for (int32_t f = range[0]; all && f <= range[1]; f++) {
+                all = flag_get(rdram, ctx, f);
+            }
+        }
+        if (all != file_complete.load()) {
+            std::printf("[complete] file is %s100%%\n", all ? "" : "not ");
+            std::fflush(stdout);
+        }
+        file_complete = all;
+    }
+
+    // Beat Hag 1, once each time the option is switched on (only shown once the file is 100%).
+    static bool beat_hag_was_on = false;
+    const bool beat_hag_on = tooie::cheats::is_on("cheat_beat_hag");
+    if (beat_hag_on && !beat_hag_was_on && in_level(rdram) && file_complete) {
+        int count = 0;
+        for (int32_t f : beat_hag_flags) {
+            if (!flag_get(rdram, ctx, f)) {
+                flag_set(rdram, ctx, f, true);
+                count++;
+            }
+        }
+        reload_area(rdram, ctx, "beat-hag", count);
+        beat_hag_was_on = true;
+    } else if (!beat_hag_on) {
+        beat_hag_was_on = false;
+    }
+
     // Dragon Kazooie: while on, Kazooie is the dragon (in every save played); switching it off makes her
     // Kazooie again. Left off and untouched, the save's own state (Humba's pool) stands. The area reloads
     // so her model changes.
@@ -326,4 +368,8 @@ extern "C" void tooie_flag_get_leave(uint8_t* rdram, recomp_context* ctx) {
     if (pending_flag >= first_move_flag && pending_flag <= last_move_flag && tooie::cheats::is_on("cheat_all_moves")) {
         ctx->r2 = 1;
     }
+}
+
+bool tooie::progress_cheats::complete_reached() {
+    return file_complete.load();
 }

@@ -1409,6 +1409,7 @@ L_80801208:
 L_80801220:
     // 0x80801220: sw          $a2, 0x28($sp)
     MEM_W(0X28, ctx->r29) = ctx->r6;
+    tooie_enemy_hit_damage(rdram, ctx, 24);
     // 0x80801224: jal         0x800F0E28
     // 0x80801228: subu        $a1, $t5, $t8
     ctx->r5 = SUB32(ctx->r13, ctx->r24);

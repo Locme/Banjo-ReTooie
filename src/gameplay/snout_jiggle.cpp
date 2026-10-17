@@ -45,6 +45,7 @@
 #include <vector>
 
 #include "recomp.h"
+#include "tooie_size_cheats.h"
 #include "recompui/config.h"
 #include "tooie_photo_mode.h"
 #include "tooie_snout_jiggle.h"
@@ -545,6 +546,7 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     feathers.chains = 0;
     const uint32_t sp = (uint32_t)ctx->r29;
     const uint32_t model = read_word(rdram, sp + 0x10C);
+    tooie::size_cheats::model(rdram, model);
     if (!valid_ptr(model)) {
         return;
     }
@@ -577,9 +579,19 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     model_scale = (scale > 0.01f && scale < 100.0f) ? scale : 1.0f;
 }
 
+static void snout_bone_node(uint8_t* rdram, recomp_context* ctx);
+
 // func_800DCF48 (a bone node) after func_800ADE2C returned the bone's matrix in $v0, before
-// func_80019AA0 pushes it ($a1 = $v0 in the delay slot).
+// func_80019AA0 pushes it ($a1 = $v0 in the delay slot). The size cheats scale what Snout jiggle leaves.
 extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
+    snout_bone_node(rdram, ctx);
+    const uint32_t node = read_word(rdram, (uint32_t)ctx->r29 + 0x24);
+    if (valid_ptr(node)) {
+        tooie::size_cheats::bone(rdram, ctx, read_byte(rdram, node + 9));
+    }
+}
+
+static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     if (!drawing_player && feathers.chains == 0) {
         return;
     }

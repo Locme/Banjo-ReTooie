@@ -347,6 +347,9 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/jiggy_dance.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/test_room.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/race_warp.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/replays.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/size_cheats.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/damage_mods.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/boss_rush.cpp
     ${CMAKE_SOURCE_DIR}/src/game/recomp_api.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hud_edges.cpp

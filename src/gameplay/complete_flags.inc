@@ -24,3 +24,10 @@ constexpr int32_t complete_ranges[][2] = {
     { 0x57C, 0x581 }, { 0x589, 0x589 }, { 0x58E, 0x58E }, { 0x59C, 0x59C }, { 0xBC8, 0xBD3 },
     { 0xBE3, 0xBFB },
 };
+
+// What counts as 100% for Beat Hag 1 to show: every Jiggy, note nest and Treble Clef, Jinjo, Empty
+// Honeycomb, Cheato page and Glowbo (the Mega Glowbo too) and every Jamjars move.
+constexpr int32_t complete_check_ranges[][2] = {
+    { 0x056, 0x056 }, { 0x101, 0x103 }, { 0x106, 0x11F }, { 0x1F4, 0x220 },
+    { 0x222, 0x23A }, { 0x23F, 0x2A9 }, { 0x2DB, 0x2F3 }, { 0x44F, 0x4E7 },
+};

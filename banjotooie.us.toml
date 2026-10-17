@@ -1100,6 +1100,39 @@ func = "func_800DCF48"
 before_vram = 0x800DCF78
 text = "tooie_snout_bone(rdram, ctx);"
 
+# Damage (src/gameplay/damage_mods.cpp). General > Gameplay > Enemies do double damage doubles the health
+# change func_800A17A8 gets ($a1), except falls (bssplat_entrypoint_0's call is marked) and instant deaths.
+[[patches.hook]]
+func = "func_800A17A8"
+before_vram = 0x800A17A8
+text = "tooie_player_health_change(rdram, ctx);"
+
+[[patches.hook]]
+func = "bssplat_entrypoint_0"
+before_vram = 0x80800020
+text = "tooie_fall_damage_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "bssplat_entrypoint_0"
+before_vram = 0x80800028
+text = "tooie_fall_damage_end(rdram, ctx);"
+
+# Cheats > One-hit enemies: the damage an enemy hit handler takes from the enemy's health byte becomes 255.
+[[patches.hook]]
+func = "func_80108F08"
+before_vram = 0x80109054
+text = "tooie_enemy_hit_damage(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "func_80800294_sucoasterhit"
+before_vram = 0x808003C4
+text = "tooie_enemy_hit_damage(rdram, ctx, 2);"
+
+[[patches.hook]]
+func = "func_80801108_sucoasterfly"
+before_vram = 0x80801224
+text = "tooie_enemy_hit_damage(rdram, ctx, 24);"
+
 # --- Distance probe, debug (src/debug/distance_probe.cpp) -------------------
 # Counts callers of the distance helpers when TOOIE_DISTANCE_PROBE is set.
 [[patches.hook]]
