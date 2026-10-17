@@ -2161,7 +2161,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             // and models whose vertex set changes with the view (the sky
             // dome's parts) then tear for a game frame (L, 2026-10-14, F8
             // bisect). Blend mode 2 turns it back on for comparison.
-            // Snout and Nose jiggle rewrite Banjo's muzzle and nose vertices each game frame: blend them too.
+            // Snout jiggle rewrites Banjo's muzzle and jaw vertices each game frame: blend them too.
             const bool jiggle = model && b >= 0 && tooie::snout_jiggle::blend_vertices(blocks[b].first_phys);
             uint32_t vertices = model_snap || (blend_mode != 2 && tag_mode != tooie::interp_tags::mode_vertex && !jiggle) ?
                 component_skip : component_interpolate;

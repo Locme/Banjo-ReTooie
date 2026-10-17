@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T399 Snout jiggle: no mouth gap, centred at rest, floppy physics
+- Asked: 2026-10-17 20:27 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on (Nose jiggle is gone). Stand still: the snout sits straight, no lean to the right
+  2. Close up in Photo Mode mid-wobble: the snout and mouth stay in one piece, no dark gap at the corner of the mouth; the lower jaw bends with the snout
+  3. Run, stop, jump, fall off a ledge and dive with Kazooie: the snout trails behind the way he moves and folds back towards his eyes in a fall or dive
+  4. Put every Snout jiggle slider at the top (Floppiness is new): the snout flops about like a shaken hot dog even standing still. Then turn them down to taste
+- Look for: No gap in the model, no right lean, no snapping back to rest, and the wobble reacts to how he moves. Checked headless in Spiral Mountain: before/after close-up at screens/snout-jiggle/mouth-gap-before-after.png (left: the old corner tear, right: fixed)
+- Status: waiting for L
+
 ## T398 Sun shadow distance; sun shadows no longer come and go
 - Asked: 2026-10-17 20:15 UTC
 - Build: main (pull and build)

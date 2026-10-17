@@ -902,6 +902,10 @@ uint32_t tooie::game_frame_rate::game_ms() {
     return (uint32_t)(game_seconds_total.load() * 1000.0);
 }
 
+double tooie::game_frame_rate::game_seconds() {
+    return game_seconds_total.load();
+}
+
 bool tooie::game_frame_rate::pad_on_game_time() {
     static const bool on = std::getenv("TOOIE_PAD_GAME_TIME") != nullptr;
     return on;

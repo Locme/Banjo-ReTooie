@@ -10,17 +10,11 @@
 
 namespace tooie::snout_jiggle {
     // Whether the model whose first display list is at this physical address has vertices this file
-    // rewrites each frame (the muzzle and nose), so frame interpolation should blend them too
+    // rewrites each frame (the muzzle and jaw), so frame interpolation should blend them too
     // (src/game/model_tagging.cpp); otherwise they move only at the game's frame rate and stutter.
     bool blend_vertices(uint32_t first_list_phys);
 
     inline const std::string option = "snout_jiggle";
-    inline const std::string nose_option = "nose_jiggle";                     // the black nose, on its own spring
-    inline const std::string nose_strength_option = "nose_jiggle_strength";
-    inline const std::string nose_bounce_option = "nose_jiggle_bounce";
-    inline const std::string nose_speed_option = "nose_jiggle_speed";
-    inline const std::string nose_exaggeration_option = "nose_jiggle_exaggeration";
-    inline const std::string nose_size_option = "nose_jiggle_size";
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string kazooie_strength_option = "kazooie_jiggle_strength";
     inline const std::string kazooie_bounce_option = "kazooie_jiggle_bounce";
@@ -33,6 +27,7 @@ namespace tooie::snout_jiggle {
     inline const std::string stretch_option = "snout_jiggle_stretch";         // % squash and stretch
     inline const std::string size_option = "snout_jiggle_size";               // % snout size
     inline const std::string reach_option = "snout_jiggle_reach";             // vanilla model: how far back it bends
+    inline const std::string floppiness_option = "snout_jiggle_floppiness";   // 0 springy .. 100 limp, flops like a hot dog
 }
 
 #endif
