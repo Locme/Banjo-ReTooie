@@ -10,7 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
-- New Freeze (DEV tab, above Interpolation blend mode, and a Freeze key under Interpolation Debug in the Controls tab, no default): holds the game on two of its frames so you can switch the blend mode and compare the frames blended between them; sound is muted while frozen (L). Fixed with it: a Load State could leave the game hung for good when it landed while the game had paused its graphics output. Untested on PC (T371).
+- New Freeze key (under Interpolation Debug in the Controls tab, no default; no menu switch, L): holds the game on two of its frames so you can switch the blend mode and compare the frames blended between them; sound is muted while frozen (L). Fixed with it: a Load State could leave the game hung for good when it landed while the game had paused its graphics output. Untested on PC (T371).
 - Free camera: two new optional settings in QOL (L). **Ease back** (Off, Flying only, Always) lets the camera drift back behind Banjo a second after you let go of the right stick while he flies or moves. **Smooth walls** makes the camera glide in and out around walls instead of jumping, and fades Banjo out when the camera gets very close. Both are off by default. Untested on PC (T370).
 - Benchmark key no longer on F4 by default (saved controls lose F4 once); bind it under Hotkeys if wanted. Transform defaults to LT + Y on the controller, also given once to saved controls with nothing on it (L). Untested on PC (T367).
 - The texture sweep now also sweeps the seven multiplayer arenas (they have textures of their own); before, it skipped them because the game stopped on a missing piece of code there. Untested on PC (T363).

@@ -406,12 +406,6 @@ Game Frame Rate.
   `interp_tags.txt` next to the save files. Normal blends every model
   without vertex blending. Starts on custom each launch. The Blend Mode key
   steps through them.
-- **Freeze** (DEV tab, just above Interpolation blend mode): holds the game
-  on two of its frames, put back again and again, so the in-between frames
-  are drawn over and over while you switch the blend mode (the picture rocks
-  a little between the two frames). Sound is muted meanwhile. In a level only;
-  a map change or Load State ends it. The Freeze key does the same. Starts Off
-  each launch.
 
 ## Controls: Hotkeys and Debug
 

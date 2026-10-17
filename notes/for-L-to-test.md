@@ -27,9 +27,9 @@
 - Build: main
 - Steps:
   1. Set Interpolation above Original (60 or your display rate)
-  2. Turn on General > DEV tab, then bind a key to Freeze under Interpolation Debug in the Controls tab (or use the Freeze tick box in the DEV tab, just above Interpolation blend mode)
+  2. Bind a key to Freeze under Interpolation Debug in the Controls tab
   3. In a level, walk or turn the camera and press Freeze
-  4. While frozen, change Interpolation blend mode in the DEV tab (or press your Blend Mode key) a few times
+  4. While frozen, press your Blend Mode key (or change Interpolation blend mode in the DEV tab) a few times
   5. Press Freeze again; also try Save State then Load State a few times afterwards
 - Look for: The picture holds on one moment and rocks a little between two frames, sound goes quiet, and switching the blend mode changes how that held moment looks. Pressing Freeze again carries on normally, and the game never hangs while frozen or after Load State.
 - Status: waiting for L
