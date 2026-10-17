@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T398 Sun shadow distance; sun shadows no longer come and go
+- Asked: 2026-10-17 20:15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Sun shadows on (any strength), Sun shadow distance left at 3000
+  2. Go to the spot of your burst in Spiral Mountain (the path by the honeycomb cave and the stumps) and turn the camera slowly both ways
+  3. Move Sun shadow distance to 20000 while playing, then to 1500
+  4. Try Mayahem Temple's open area at 20000
+- Look for: Do the cliffs' shadows on the path stay put while the camera turns (no popping in and out)? Do far hills and buildings get shadows at 20000 and lose them at 1500, at once without Apply? Is the frame rate still fine at 20000?
+- Status: waiting for L
+
 ## T397 Banjo's shadow follows his pose (no more shaking)
 - Asked: 2026-10-17 20:12 UTC
 - Build: main

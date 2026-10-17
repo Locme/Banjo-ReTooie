@@ -3335,6 +3335,7 @@ L_800E3D8C:
     // 0x800E3DA8: or          $v1, $v0, $zero
     ctx->r3 = ctx->r2 | 0;
 L_800E3DAC:
+    tooie_sun_shadow_cull_box(rdram, ctx);
     // 0x800E3DAC: lw          $ra, 0x14($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x800E3DB0: addiu       $sp, $sp, 0x50

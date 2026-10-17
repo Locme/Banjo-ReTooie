@@ -61,6 +61,7 @@ namespace tooie::picture_filters {
     inline const std::string sun_shadows_option = "sun_shadows";
     inline const std::string sun_shadow_banjo_option = "sun_shadow_banjo";
     inline const std::string sun_shadow_softness_option = "sun_shadow_softness";
+    inline const std::string sun_shadow_distance_option = "sun_shadow_distance";
     inline const std::string wave_speed_option = "water_wave_speed";
     inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
@@ -120,6 +121,8 @@ namespace tooie::picture_filters {
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
     bool sun_shadows_on();
+    // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).
+    float sun_shadow_distance();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
     bool kazooie_feathers_on();
     // Whether furry enemies' fur is on, for the model tagging to mark them.

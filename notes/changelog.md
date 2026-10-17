@@ -71,6 +71,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- New Graphics > Sun shadow distance slider (1500 to 20000, default 3000, L): how far round the camera sun shadows reach, up to a whole level. Fixed with it: sun shadows came and went as the camera turned, because the level's pieces just off screen weren't drawn, so they cast nothing; everything within the distance now casts, on screen or not. Untested on PC (T398).
 - Fixed: Banjo's own shadow shook and never quite matched him, at every frame rate. The game poses the shadow before it animates Banjo, so the shadow showed last frame's pose in this frame's place. It now gets this frame's pose. HD Shadows draws its shadow another way and is unchanged. Untested on PC (T397).
 - Bottles' ghost (Bottles' Revenge) no longer cuts a box out of the screen effects: his glow is a see-through square that wrote depth over its whole box, so sun shadows, ambient occlusion and fog stopped at its edges. His see-through parts now leave the depth alone, and his shimmer is drawn under the effects again. Untested on PC (T396).
 - Banjo fur length now goes up to 500 (was 300), for fun (L). The default stays 100.
