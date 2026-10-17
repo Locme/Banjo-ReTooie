@@ -39,6 +39,9 @@ namespace tooie::interp_tags {
     // Models drawn without the screen effects (RT64 draws them after the effects pass).
     bool any_no_effects();
     bool no_effects_for(uint32_t model);
+    // Models drawn under the effects as usual but with their see-through draws not writing depth (built in;
+    // the Model Effects key's choice wins).
+    bool no_depth_for(uint32_t model);
     // Turns the picked model's screen effects off or on (in memory; Save Tags writes the file).
     // Returns true when they are now off.
     bool toggle_picked_effects();

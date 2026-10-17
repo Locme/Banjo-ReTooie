@@ -1091,7 +1091,12 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         std::vector<int> mark(commands.size() + 1, -1);
         for (size_t b = 0; b < blocks.size(); b++) {
             const Block& block = blocks[b];
-            if (block.print == 0 || block.shadow || block.vertex_command == SIZE_MAX || !tooie::interp_tags::no_effects_for(block.print)) {
+            if (block.print == 0 || block.shadow || block.vertex_command == SIZE_MAX) {
+                continue;
+            }
+            // 1: drawn after the effects; 2: drawn in place without writing depth.
+            const int value = tooie::interp_tags::no_effects_for(block.print) ? 1 : (tooie::interp_tags::no_depth_for(block.print) ? 2 : 0);
+            if (value == 0) {
                 continue;
             }
             size_t last = block.vertex_command;
@@ -1105,8 +1110,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             if (on == SIZE_MAX || off == SIZE_MAX || on >= off) {
                 continue;
             }
-            mark[on] = 1;
-            if (mark[off] != 1) {
+            mark[on] = value;
+            if (mark[off] <= 0) {
                 mark[off] = 0;
             }
         }
@@ -1116,8 +1121,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             if (mark[i] < 0 || mark[i] == state) {
                 continue;
             }
-            if (cursor + (mark[i] == 1 ? 64 : 32) > limit) {
-                if (mark[i] == 1) {
+            if (cursor + (mark[i] > 0 ? 64 : 32) > limit) {
+                if (mark[i] > 0) {
                     break;
                 }
                 continue;

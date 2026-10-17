@@ -418,7 +418,7 @@ index c20fb51..d9e9256 100644
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
-index 20c0d4d..2649a28 100644
+index 20c0d4d..c1f4899 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
 +++ b/src/gbi/rt64_gbi_extended.cpp
 @@ -331,6 +331,15 @@ namespace RT64 {
@@ -426,8 +426,8 @@ index 20c0d4d..2649a28 100644
          }
  
 +        void setSceneEffectsExcludeV1(State *state, DisplayList **dl) {
-+            const bool exclude = (*dl)->p1(0, 1);
-+            state->rdp->setSceneEffectsExclude(exclude);
++            // 1: drawn after the effects; 2: drawn in place without writing depth; 0: neither.
++            state->rdp->setSceneEffectsExclude((*dl)->p1(0, 2));
 +        }
 +
 +        void setFurShellsV1(State *state, DisplayList **dl) {
@@ -460,15 +460,17 @@ index 08f83e5..2bfdba4 100755
  #   elif defined(__linux__) || defined(__APPLE__)
          if (SDL_VideoInit(nullptr) != 0) {
 diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
-index 0e62be1..eff6759 100644
+index 0e62be1..5e09e0c 100644
 --- a/src/hle/rt64_draw_call.h
 +++ b/src/hle/rt64_draw_call.h
-@@ -65,6 +65,11 @@ namespace RT64 {
+@@ -65,6 +65,13 @@ namespace RT64 {
          uint32_t forceUpscale2D : 1;
          uint32_t forceTrueBilerp : 2;
          uint32_t forceScaleLOD : 1;
 +        // Banjo-Tooie: drawn after the scene effects instead of under them (see FramebufferRenderer).
 +        uint32_t sceneEffectsExclude : 1;
++        // Banjo-Tooie: drawn in place under the scene effects, its blended draws without writing depth (see State::loadDrawState).
++        uint32_t sceneEffectsNoDepth : 1;
 +        // Banjo-Tooie: 1 fur shells are drawn over these (Banjo's model), 2 feathers grow on them (Kazooie's), 3 white
 +        // fur (a furry enemy's), 4 feathers in their own colours (a feathered NPC's), see FramebufferRenderer.
 +        uint32_t furShells : 3;
@@ -1363,15 +1365,16 @@ index e08b02c..e722ecc 100644
          void notifyPresentId(const Present &present);
          void threadAdvanceBarrier();
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
-index a10c11a..3071d72 100644
+index a10c11a..be2da39 100644
 --- a/src/hle/rt64_rdp.cpp
 +++ b/src/hle/rt64_rdp.cpp
-@@ -1076,6 +1076,16 @@ namespace RT64 {
+@@ -1076,6 +1076,17 @@ namespace RT64 {
          state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
      }
  
-+    void RDP::setSceneEffectsExclude(bool exclude) {
-+        extended.drawExtendedFlags.sceneEffectsExclude = exclude;
++    void RDP::setSceneEffectsExclude(uint32_t mode) {
++        extended.drawExtendedFlags.sceneEffectsExclude = (mode == 1);
++        extended.drawExtendedFlags.sceneEffectsNoDepth = (mode == 2);
 +        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
 +    }
 +
@@ -1384,14 +1387,14 @@ index a10c11a..3071d72 100644
          extended.scissorLeftOriginStack[0] = G_EX_ORIGIN_NONE;
          extended.scissorRightOriginStack[0] = G_EX_ORIGIN_NONE;
 diff --git a/src/hle/rt64_rdp.h b/src/hle/rt64_rdp.h
-index 84f4e7c..6508918 100644
+index 84f4e7c..d6ef175 100644
 --- a/src/hle/rt64_rdp.h
 +++ b/src/hle/rt64_rdp.h
 @@ -199,6 +199,8 @@ namespace RT64 {
          void forceUpscale2D(bool force);
          void forceTrueBilerp(uint8_t mode);
          void forceScaleLOD(bool force);
-+        void setSceneEffectsExclude(bool exclude);
++        void setSceneEffectsExclude(uint32_t mode);
 +        void setFurShells(uint32_t kind);
          void clearExtended();
  
@@ -1543,7 +1546,7 @@ index ee2030b..83943f8 100644
              if (!drawRect.isNull()) {
                  fbPair.drawColorRect.merge(drawRect);
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
-index 2970e71..0d12358 100644
+index 2970e71..fb30a2a 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
 @@ -4,6 +4,8 @@
@@ -1555,7 +1558,24 @@ index 2970e71..0d12358 100644
  #include <cassert>
  #include <cinttypes>
  
-@@ -818,9 +820,9 @@ namespace RT64 {
+@@ -455,6 +457,16 @@ namespace RT64 {
+             drawCall.extendedFlags = rdp->extended.drawExtendedFlags;
+         }
+ 
++        // Banjo-Tooie: a model marked to keep its see-through draws' depth out of the picture draws them as if their
++        // render mode had no Z_UPD (Bottles' ghost: his glow is a blended square that wrote a near depth over its
++        // whole box, which the scene effects took for a wall). Its solid draws keep their depth.
++        if (drawStatus.isChanged(DrawAttribute::OtherMode) || drawStatus.isChanged(DrawAttribute::ExtendedFlags)) {
++            drawCall.otherMode = rdp->otherMode;
++            if (drawCall.extendedFlags.sceneEffectsNoDepth && interop::Blender::usesAlphaBlend(drawCall.otherMode)) {
++                drawCall.otherMode.L &= ~Z_UPD;
++            }
++        }
++
+         drawStatus.clearChanges();
+     }
+ 
+@@ -818,9 +830,9 @@ namespace RT64 {
  
          // Validate all tile copies to be used during the rendering.
          const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
@@ -1567,7 +1587,7 @@ index 2970e71..0d12358 100644
          const size_t callTileCount = workload.drawData.callTiles.size();
          for (size_t t = 0; t < callTileCount; t++) {
              DrawCallTile &callTile = workload.drawData.callTiles[t];
-@@ -976,6 +978,7 @@ namespace RT64 {
+@@ -976,6 +988,7 @@ namespace RT64 {
                      shaderDesc.colorCombiner = callDesc.colorCombiner;
                      shaderDesc.otherMode = callDesc.otherMode;
                      shaderDesc.flags = {};
@@ -1575,7 +1595,7 @@ index 2970e71..0d12358 100644
  
                      // Check if the blender uses a standard fog cycle. We override it and indicate it on
                      // the material for the RT path to use its own fog handling.
-@@ -1113,6 +1116,8 @@ namespace RT64 {
+@@ -1113,6 +1126,8 @@ namespace RT64 {
                      renderParams.omL = shaderDesc.otherMode.L;
                      renderParams.omH = shaderDesc.otherMode.H;
                      renderParams.flags = shaderDesc.flags;
@@ -1584,7 +1604,7 @@ index 2970e71..0d12358 100644
  
                      workload.drawData.rdpParams.emplace_back(gameCall.callDesc.rdpParams);
                      workload.drawData.renderParams.emplace_back(renderParams);
-@@ -1822,6 +1827,9 @@ namespace RT64 {
+@@ -1822,6 +1837,9 @@ namespace RT64 {
          // Reset the next workload.
          workloadCursor = ext.workloadQueue->writeCursor;
          Workload &nextWorkload = ext.workloadQueue->workloads[workloadCursor];
@@ -1594,7 +1614,7 @@ index 2970e71..0d12358 100644
          nextWorkload.begin(workloadCounter++);
  
          // Indicate on the framebuffer manager that all tile copies are free to be used again.
-@@ -2666,6 +2674,7 @@ namespace RT64 {
+@@ -2666,6 +2684,7 @@ namespace RT64 {
          present.presentId = ++presentId;
          present.workloadId = workloadId;
          present.paused = paused;
