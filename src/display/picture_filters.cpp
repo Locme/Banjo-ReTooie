@@ -390,7 +390,7 @@ namespace {
     // Textures with parallax mapping: stone walls, paving, brick, rock, cliff and rocky ground, and (from a second sweep)
     // plank walls and crates, roof tiles, scales and carved or embossed panels, and (a third) riveted and grated metal
     // panels, pipes, machinery and rough ground, whose brightness reads as their shape (dark gaps, grooves and cracks
-    // between lighter faces), picked by eye from a texture dump of every level (3,386 of its 7,259 textures). Grass, smooth metal and painted or lettered textures are left out: their dark parts aren't
+    // between lighter faces), picked by eye from a texture dump of every level (3,385 of its 7,259 textures). Grass, smooth metal and painted or lettered textures are left out: their dark parts aren't
     // deeper. With each, its darkest and lightest brightness (0 to 255,
     // leaving out the darkest and lightest twentieth of its texels) from the same dump: its deepest and highest parts.
     struct ParallaxTexture {
@@ -1579,7 +1579,6 @@ namespace {
         { 0x5a23394829fdbaba, 41, 133 },
         { 0x5a2c1493b3396e7d, 24, 218 },
         { 0x5a307c438d58f54d, 15, 154 },
-        { 0x5a357885d055dd7b, 33, 165 },
         { 0x5a6c88f1d0681623, 98, 203 },
         { 0x5a6d35dcdd798e6f, 22, 165 },
         { 0x5a7e6e5d10e621d1, 53, 126 },
