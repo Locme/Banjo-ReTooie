@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T377 Jumps and falls at 120/175/Uncapped match 30 FPS
+- Asked: 2026-10-17 11:11 UTC
+- Build: main @ a3ea02f
+- Steps:
+  1. Graphics: set Game Frame Rate to 30 FPS
+  2. In Jinjo Village jump on the spot, tap A and hold A, note how high Banjo goes
+  3. Switch Game Frame Rate to 175 FPS (or Uncapped) and jump the same way
+- Look for: Is the jump height the same at 30 and 175? Headless it was +139 units at 30 and +139 at 175 (before: +148). Also check long falls and swimming still feel normal.
+- Status: waiting for L
+
 ## T376 No reflections on dirt
 - Asked: 2026-10-17 11:10 UTC
 - Build: main
