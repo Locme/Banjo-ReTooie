@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T412 Fast Forward Scene wording
+- Asked: 2026-10-17 22:35 UTC
+- Build: main (Fast Forward Scene wording commit)
+- Steps:
+  1. QOL: Fast Forward Cutscenes on
+  2. Talk to any NPC or start a boss intro and press Start, then press Start again
+- Look for: The first Start shows "Fast Forward Scene" and the scene speeds through silently; the second shows "Fast Forward stopped" and the scene plays on at normal speed
+- Status: waiting for L
+
 ## T411 Deep snow as a real dented surface (tessellation)
 - Asked: 2026-10-17 21:52 UTC
 - Build: main (deep snow tessellation commit)

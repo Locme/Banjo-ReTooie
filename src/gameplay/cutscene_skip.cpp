@@ -25,7 +25,7 @@
 // TOOIE_CUTSCENE_LOG=1 logs scene and gameplay changes.
 //
 // The game has no skip prompt for these scenes on N64, so nothing is drawn; a
-// toast says "Skipping cutscene".
+// toast says "Fast Forward Scene" ("Fast Forward stopped" when Start stops it).
 
 #include <atomic>
 #include <chrono>
@@ -89,7 +89,7 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
     if (skipping) {
         if (stop_requested.exchange(false)) {
             stop("Start pressed");
-            tooie::toast::show("Skip stopped");
+            tooie::toast::show("Fast Forward stopped");
         } else if (!scene || menu) {
             stop(menu ? "menu" : "scene over");
         } else if (std::chrono::steady_clock::now() - skip_started > skip_limit) {
@@ -103,7 +103,7 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
         ultramodern::set_speed_multiplier(skip_speed);
         skip_started = std::chrono::steady_clock::now();
         skipping = true;
-        tooie::toast::show("Skipping cutscene");
+        tooie::toast::show("Fast Forward Scene");
         printf("[cutscene] skip started\n");
         fflush(stdout);
     }
