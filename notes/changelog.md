@@ -77,7 +77,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Graphics
 - Banjo fur length now goes up to 1500 (was 300), for fun (L). The default stays 100.
-- Banjo's fur and Kazooie's feathers now grow on the same parts everywhere: they are picked by his model's own colours instead of the colours as each level lights them, so his coat no longer goes bald in dark or tinted places (the Flooded Caves, Stomping Plains), no fur grows on his skin or shorts in Witchyworld's red light, and Kazooie keeps her feathers underneath where she is lit from behind (L). His cutscene double and model mods other than ones replacing the player model keep the old colour test. Untested on PC.
+- Banjo's fur and Kazooie's feathers now grow on the same parts everywhere: they are picked by his model's own colours instead of the colours as each level lights them, so his coat no longer goes bald in dark or tinted places (the Flooded Caves, Stomping Plains), no fur grows on his skin or shorts in Witchyworld's red light, and Kazooie keeps her feathers underneath where she is lit from behind (L). His cutscene double and model mods other than ones replacing the player model keep the old colour test. Untested on PC (T409).
 - Fixed: the intro is no longer stretched sideways in a wide window. Only the opening cloud shot is changed now: it is zoomed in to fill the width (its cloud backdrop ends at the 4:3 edges), and from the first camera cut on, Klungo, the castle and everyone else keep their shape (L). Untested on PC (T403).
 - New Graphics > Sun shadow distance slider (1500 to 20000, default 3000, L): how far round the camera sun shadows reach, up to a whole level. Fixed with it: sun shadows came and went as the camera turned, because the level's pieces just off screen weren't drawn, so they cast nothing; everything within the distance now casts, on screen or not. Untested on PC (T398).
 - Fixed: Banjo's own shadow shook and never quite matched him, at every frame rate. The game poses the shadow before it animates Banjo, so the shadow showed last frame's pose in this frame's place. It now gets this frame's pose. HD Shadows draws its shadow another way and is unchanged. Untested on PC (T397).
@@ -116,7 +116,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Day and Night: clouds show again by day; with Fireflies on, a rounding step in the shader dropped the clouds flag (T302).
 - Day and Night: Wet Ground (shiny, drying after rain), rain rings on water and Raindrops on Screen (T249, T250, T251).
 - Day and Night: five more times of day (Dawn, Noon, Afternoon, Golden Hour, Dusk), and Mist and Mist Time settings; the mist lies in patches and gathers round water (T242, T243).
-- Day and Night: fireflies reworked after Ocarina of Time's forest at night: more of them, warm soft glows floating at all heights and fading in and out (T232). Rain now splashes on the ground (T233). Untested on PC.
+- Day and Night: fireflies reworked after Ocarina of Time's forest at night: more of them, warm soft glows floating at all heights and fading in and out (T232). Rain now splashes on the ground (T233). Untested on PC (T409).
 - Day and Night: morning mist lying low over the ground until mid-morning. Untested on PC (T216).
 - Day and Night: golden hour (warm light with richer colours for a while after sunrise and before sunset) and morning dew glinting on the grass. Untested on PC (T215).
 - Day and Night: northern lights over Hailfire Peaks' Icy Side at night (Graphics > Northern Lights, on). Untested on PC (T214).
@@ -185,7 +185,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - HD Shadows for the player (aa2351d). Untested on PC (T87).
 - Always High-Detail Models keeps Banjo's close-up necklace model (b2f41b9). Untested on PC (T77).
 - Graphics API: Vulkan is the default and Auto is removed (3516154). Untested on PC (T89).
-- Glittering honeycombs sparkle on the comb (e482297). Untested on PC.
+- Glittering honeycombs sparkle on the comb (e482297). Untested on PC (T409).
 
 ### Controls
 
@@ -207,8 +207,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Sound no longer breaks up with Game Frame Rate at 40 FPS (and the other rates the port paces itself). Untested on PC (T325).
 
 - Music player in the Sound tab (098bb74). Untested on PC (T57).
-- Back-Port: Get Jiggy animation, off by default (0c63fd2). Untested on PC.
-- Old Banjo sounds (4.64 marked done, da43b51). Untested on PC.
+- Back-Port: Get Jiggy animation, off by default (0c63fd2). Untested on PC (T409).
+- Old Banjo sounds (4.64 marked done, da43b51). Untested on PC (T409).
 
 ### Cheats
 
@@ -239,9 +239,9 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Tools and build
 
 - Two Windows builds: Any 64-bit PC (2008 and up) and Optimized for newer CPUs (2013 and up), with three update scripts (e49f23c, 3a25fe3). Untested on PC (T78).
-- Turn ThinLTO on for optimised builds (5eac701). Untested on PC.
-- Warp tab: Down goes down and Right goes right (b5550b0). Untested on PC.
-- F7 skips first moves in the interpolation check (e075788). Untested on PC.
+- Turn ThinLTO on for optimised builds (5eac701). Untested on PC (T409).
+- Warp tab: Down goes down and Right goes right (b5550b0). Untested on PC (T409).
+- F7 skips first moves in the interpolation check (e075788). Untested on PC (T409).
 - Headless TOOIE_SET script changes Graphics options live (5fd696e). For testing only.
 
 ## 2026-10-14

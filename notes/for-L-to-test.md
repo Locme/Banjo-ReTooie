@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T409 Fur and feathers the same in every light; fur length up to 1500
+- Asked: 2026-10-17 21:43 UTC
+- Build: main @ d1b6c3f
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur 100, Kazooie feathers 100
+  2. Compare Spiral Mountain, the Flooded Caves (torch cave), Stomping Plains at the bald spot, and Witchyworld
+  3. Get Kazooie out (talon trot, flying) and look under her wings and body
+  4. Set Banjo fur length to 1500
+- Look for: Is Banjo's coat the same everywhere, with no bald patches and no fur on his skin or shorts, and does Kazooie keep her feathers underneath?
+- Status: waiting for L
+
 ## T408 Snout jiggle: heaviness slider, mouth stays put, your defaults
 - Asked: 2026-10-17 21:40 UTC
 - Build: main
