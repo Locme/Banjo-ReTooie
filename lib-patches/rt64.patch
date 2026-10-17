@@ -1680,7 +1680,7 @@ index 5b70e01..d52c622 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..8bb8f1a 100644
+index 5a331aa..438ea9b 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
 @@ -4,9 +4,12 @@
@@ -1720,23 +1720,38 @@ index 5a331aa..8bb8f1a 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -701,6 +710,7 @@ namespace RT64 {
+@@ -701,6 +710,8 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
 +            WorkloadGpuSections().begin(ext.device, ext.workloadGraphicsWorker->commandList.get());
++            GpuCheckpoint(ext.workloadGraphicsWorker->commandList.get(), "game frame: start");
              framebufferRenderer->endFramebuffers(ext.workloadGraphicsWorker, &workload.drawBuffers, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
-@@ -838,6 +848,7 @@ namespace RT64 {
+@@ -789,6 +800,11 @@ namespace RT64 {
+                         }
+                     }
+                     
++                    // Banjo-Tooie: which of the frame's framebuffers the GPU was drawing, for a lost device.
++                    static const char *framebufferMarkers[] = { "game frame: framebuffer 1", "game frame: framebuffer 2",
++                        "game frame: framebuffer 3", "game frame: framebuffer 4", "game frame: framebuffer 5", "game frame: framebuffer 6",
++                        "game frame: framebuffer 7", "game frame: framebuffer 8", "game frame: framebuffer 9 or later" };
++                    GpuCheckpoint(ext.workloadGraphicsWorker->commandList.get(), framebufferMarkers[std::min<size_t>(framebufferIndex, std::size(framebufferMarkers) - 1)]);
+                     framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
+ 
+                     // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
+@@ -837,7 +853,9 @@ namespace RT64 {
+                     fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
++            GpuCheckpoint(ext.workloadGraphicsWorker->commandList.get(), "game frame: end");
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 1);
 +            WorkloadGpuSections().finish();
              ext.workloadGraphicsWorker->commandList->end();
              framebufferRenderer->waitForUploaders();
              ext.workloadGraphicsWorker->execute();
-@@ -848,6 +859,8 @@ namespace RT64 {
+@@ -848,6 +866,8 @@ namespace RT64 {
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -1745,7 +1760,7 @@ index 5a331aa..8bb8f1a 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -867,6 +880,7 @@ namespace RT64 {
+@@ -867,6 +887,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -4250,16 +4265,17 @@ index 0000000..c9187db
 +};
 diff --git a/src/render/rt64_gpu_sections.h b/src/render/rt64_gpu_sections.h
 new file mode 100644
-index 0000000..cfc6d4b
+index 0000000..3a996b9
 --- /dev/null
 +++ b/src/render/rt64_gpu_sections.h
-@@ -0,0 +1,128 @@
+@@ -0,0 +1,155 @@
 +//
 +// RT64
 +//
 +
 +#pragma once
 +
++#include <iterator>
 +#include <memory>
 +#include <utility>
 +#include <vector>
@@ -4373,13 +4389,39 @@ index 0000000..cfc6d4b
 +    // The timer for the workload command list (the game's frame and the scene effects).
 +    GpuSectionTimer &WorkloadGpuSections();
 +
-+    // Starts a span on construction and ends it on destruction.
++    // Banjo-Tooie: marks a point in a command list that the driver follows on the GPU, so a lost device
++    // (the GPU stopped answering) reports the last pass the GPU started and finished (plume::DeviceLostReport).
++    // Always on, timed or not. The marker must be a string literal.
++    inline void GpuCheckpoint(const RenderCommandList *list, const char *marker) {
++        if (list != nullptr) {
++            const_cast<RenderCommandList *>(list)->setCheckpoint(marker);
++        }
++    }
++
++    inline const char *GpuSectionMarker(GpuSection section, bool end) {
++        static const char *starts[] = { "water mask: start", "eye adaptation: start", "bloom: start", "scene effects: start",
++            "SMAA: start", "FXAA: start", "photo filters: start", "FSR: start", "output: start", "interface: start" };
++        static const char *ends[] = { "water mask: end", "eye adaptation: end", "bloom: end", "scene effects: end",
++            "SMAA: end", "FXAA: end", "photo filters: end", "FSR: end", "output: end", "interface: end" };
++        static_assert(std::size(starts) == size_t(GpuSection::Count), "one marker per section");
++        return end ? ends[uint32_t(section)] : starts[uint32_t(section)];
++    }
++
++    // Starts a span on construction and ends it on destruction, with a checkpoint at each end.
 +    struct GpuSectionScope {
 +        GpuSectionTimer &timer;
 +        int span;
-+        GpuSectionScope(GpuSectionTimer &timer, GpuSection section, const RenderCommandList *list) : timer(timer), span(timer.start(section, list)) { }
++        const RenderCommandList *list;
++        GpuSection section;
++        GpuSectionScope(GpuSectionTimer &timer, GpuSection section, const RenderCommandList *list) : timer(timer), list(list), section(section) {
++            GpuCheckpoint(list, GpuSectionMarker(section, false));
++            span = timer.start(section, list);
++        }
 +        void drop() { timer.drop(span); }
-+        ~GpuSectionScope() { timer.end(span); }
++        ~GpuSectionScope() {
++            timer.end(span);
++            GpuCheckpoint(list, GpuSectionMarker(section, true));
++        }
 +    };
 +};
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
@@ -5371,10 +5413,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c30732c
+index 0000000..1e9c0a8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2107 @@
+@@ -0,0 +1,2111 @@
 +//
 +// RT64
 +//
@@ -7373,6 +7415,7 @@ index 0000000..c30732c
 +        static const char *sunMapOffAfter = getenv("TOOIE_SUN_MAP_OFF_AFTER");
 +        const bool sunMapOffNow = sunMapOff || ((sunMapOffAfter != nullptr) && (std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count() > float(atof(sunMapOffAfter))));
 +        if (drawSunCasters && !sunMapOffNow && (constants.shadows.x > 0.0f)) {
++            GpuCheckpoint(commandList, "sun shadow map: start");
 +            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
 +            commandList->setFramebuffer(res.sunMapFramebuffer.get());
@@ -7391,6 +7434,7 @@ index 0000000..c30732c
 +            }
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
 +            WorkloadGpuSections().end(sunMapSpan);
++            GpuCheckpoint(commandList, "sun shadow map: end");
 +            // Headless test hook: TOOIE_SUN_MAP_VIEW shows only what the map shades (grey outside it).
 +            static const bool sunMapView = (getenv("TOOIE_SUN_MAP_VIEW") != nullptr);
 +            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? 100000.0f : 0.0f);
@@ -7426,6 +7470,7 @@ index 0000000..c30732c
 +            res.sceneSetHalf = res.halfTexture.get();
 +        }
 +
++        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, false));
 +        const int effectsSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +
 +        colorTarget->setupColorFramebuffer(worker);
@@ -7473,6 +7518,7 @@ index 0000000..c30732c
 +        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +        commandList->drawInstanced(3, 1, 0, 0);
 +        WorkloadGpuSections().end(effectsSpan);
++        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, true));
 +
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {
 +            RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE)

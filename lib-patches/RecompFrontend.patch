@@ -67,7 +67,7 @@ index 1961e29..75cdb79 100644
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..ba1ba29 100644
+index f5ed6c0..d6f62f6 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
 @@ -37,10 +37,39 @@ namespace recompinput {
@@ -121,7 +121,7 @@ index f5ed6c0..ba1ba29 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +121,33 @@ namespace recompinput {
+@@ -90,15 +122,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -155,7 +155,7 @@ index f5ed6c0..ba1ba29 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +176,10 @@ namespace recompinput {
+@@ -127,6 +177,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -2026,10 +2026,22 @@ index 4fdf81f..5e0e414 100644
          }
      }
 diff --git a/recompui/src/core/ui_context.cpp b/recompui/src/core/ui_context.cpp
-index e99229a..b9e9fbd 100644
+index e99229a..8276d4f 100644
 --- a/recompui/src/core/ui_context.cpp
 +++ b/recompui/src/core/ui_context.cpp
-@@ -324,7 +324,20 @@ void recompui::destroy_context(ContextId id) {
+@@ -59,6 +59,11 @@ static struct {
+ } context_state;
+ 
+ thread_local recompui::Context* opened_context = nullptr;
++// Held by the menu's draw (draw_hook in ui_state.cpp) while it updates and renders every shown document.
++// An open context holds it too: element changes (styles apply at once) from other threads, such as the
++// port's overlays, would otherwise land in the middle of an RmlUi update and leave it reading freed
++// elements (a crash in Rml::Element::Project from UpdateHoverChain, 2026-10-17).
++extern std::recursive_mutex ui_state_mutex;
+ thread_local recompui::ContextId opened_context_id = recompui::ContextId::null();
+ 
+ enum class ContextErrorType {
+@@ -324,7 +329,20 @@ void recompui::destroy_context(ContextId id) {
      }
  }
  
@@ -2050,6 +2062,24 @@ index e99229a..b9e9fbd 100644
      recompui::hide_all_contexts();
  
      std::lock_guard lock{ context_state.all_contexts_lock };
+@@ -376,7 +394,8 @@ void recompui::ContextId::open() {
+         context_error(*this, ContextErrorType::OpenInvalidContext);
+     }
+ 
+-    // Take ownership of the target context.
++    // Take ownership of the target context, after the UI as a whole (the order draw_hook takes them in).
++    ui_state_mutex.lock();
+     ctx->context_lock.lock();
+     opened_context = ctx;
+     opened_context_id = *this;
+@@ -404,6 +423,7 @@ void recompui::ContextId::close() {
+ 
+     // Release ownership of the target context.
+     opened_context->context_lock.unlock();
++    ui_state_mutex.unlock();
+     opened_context = nullptr;
+     opened_context_id = ContextId::null();
+ 
 diff --git a/recompui/src/elements/ui_button.cpp b/recompui/src/elements/ui_button.cpp
 index cf2a311..486e08d 100644
 --- a/recompui/src/elements/ui_button.cpp

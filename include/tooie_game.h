@@ -124,6 +124,9 @@ namespace tooie {
     std::string write_hang_dump(const std::string& report_text, const uint8_t* rdram, size_t rdram_size);
     // Appends one line to logs/crashes.log (the pass-over guard's MAJOR lines, memory_guard.cpp).
     void crash_log_line(const char* line);
+    // Writes a fatal error that is not a crash (text, one or more lines) to logs/crashes.log with the build
+    // and settings, and removes logs/running.marker, since the game is about to close on purpose.
+    void log_fatal_error(const std::string& text);
 }
 
 #endif
