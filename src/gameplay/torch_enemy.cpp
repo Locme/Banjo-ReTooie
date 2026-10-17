@@ -13,12 +13,17 @@
 // table patched into the torch's ActorData first (+0x08; entries are { f32 duration, u16 animation,
 // u16 playback }, index = actor state), so func_80101FDC(actor, state) switches its animation as it does
 // for any actor. The behaviour runs here, once a frame:
-//   - Idle: it sways on its spot, glowing. Each torch carries one of the game's point lights (the ones
+//   - Idle: the disguise. It stands on its spot like any lit mine torch, its eyes shut and tucked into the
+//     wood (eye_write moves the model's 11 eye vertices), not moving or turning. It is the lure: when Banjo
+//     walks right up to it, it wakes, its eyes open like eyelids over half a second as it turns to him, and it
+//     springs. Banjo-Kazooie's Flotsam does the same (it rests in its bind pose and its move animation brings
+//     its eyes out); this torch's eyes share the head bone, so the vertices are moved instead.
+//   - Light: it glows the whole time. Each torch carries one of the game's point lights (the ones
 //     Glowbos light dark rooms with: func_800C8A98 makes one, func_800C8E54 sets its inner and outer
 //     radius, func_800C8CB8 moves it, func_800C8FB0 colours it, func_800C8B84 frees it), warm and
 //     flickering, so the cave lights up around it.
-//   - Chase: when Banjo comes within range it turns and goes after him, never further than a leash from
-//     its spot; when he gets away it goes back. It keeps to the ground (the camera's line test cast down,
+//   - Chase: after the first lunge it goes after him, never further than a leash from its spot; when he
+//     gets away it walks back, faces the way it stood and goes still again, eyes closing. It keeps to the ground (the camera's line test cast down,
 //     tooie::free_camera::sweep_line): it takes stairs and slopes but never steps off a ledge or into water.
 //   - Lunge: close up it lunges, and a lunge that reaches Banjo burns him for one honeycomb through the
 //     game's own health change (func_800A17A8, as every enemy hit does) and knocks him back the way any
@@ -90,13 +95,18 @@ namespace {
     };
 
     // Actor states, which index the animation table below.
-    enum State : uint8_t { state_none = 0, state_idle = 1, state_chase = 2, state_lunge = 3, state_beaten = 4, state_count };
-    // Animations (asset ids) for those states: the two unused ones that move the torch's five bones.
-    uint16_t anims[state_count] = { 0, 0x78, 0x79, 0x79, 0x78 };
-    constexpr float anim_durations[state_count] = { 0.0f, 1.6f, 0.7f, 0.45f, 0.6f };
+    // Idle is the disguise: it stands on its spot like any lit mine torch. Return is the walk back to it.
+    enum State : uint8_t { state_none = 0, state_idle = 1, state_chase = 2, state_lunge = 3, state_beaten = 4, state_return = 5, state_wake = 6, state_count };
+    // Animations (asset ids) for those states: the two unused ones that move the torch's five bones. Idle's runs
+    // so slowly that the torch holds still on its first frame.
+    uint16_t anims[state_count] = { 0, 0x78, 0x79, 0x79, 0x78, 0x79, 0x78 };
+    constexpr float anim_durations[state_count] = { 0.0f, 1000.0f, 0.7f, 0.45f, 0.6f, 0.9f, 0.5f };
 
     // Behaviour (game units and seconds).
-    constexpr float notice_range = 700.0f;      // Banjo this close: it starts the chase
+    constexpr float ambush_range = 230.0f;      // Banjo this close to a still torch: it wakes and springs at him
+    constexpr float wake_time = 0.5f;           // eyes opening before it springs
+    constexpr float eye_speed = 2.2f;           // how fast the eyes open or close (whole way per second)
+    constexpr float notice_range = 500.0f;      // walking back home, Banjo this close: it chases again
     constexpr float give_up_range = 1100.0f;    // Banjo this far: it goes back
     constexpr float leash = 1200.0f;            // furthest it goes from its spot
     constexpr float lunge_range = 170.0f;       // starts a lunge
@@ -355,6 +365,110 @@ namespace {
     }
 
     // The object whose +0 is this marker, or 0 when it is gone. The object array moves as objects come and go.
+    // The torch's model (asset 0x674) as the game loaded it, found by its header: { 0xB, geometry 0x3A70,
+    // textures 0x50, type 2, display list 0x25A8 }. The display list's commands start 8 bytes in, the vertices
+    // 0x18 bytes into the vertex block at 0x2F08.
+    constexpr uint32_t model_header[4] = { 0x0000000B, 0x00003A70, 0x00500002, 0x000025A8 };
+    constexpr uint32_t model_dl = 0x25A8 + 8;
+    constexpr uint32_t model_vertices = 0x2F08 + 0x18;
+    constexpr uint32_t model_size = 0x3A70;
+    uint32_t model_addr = 0;
+
+    bool is_model(uint8_t* rdram, uint32_t addr) {
+        for (int i = 0; i < 4; i++) {
+            if (read_word(rdram, addr + 4 * i) != model_header[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    uint32_t find_model(uint8_t* rdram) {
+        if (model_addr != 0 && is_model(rdram, model_addr)) {
+            return model_addr;
+        }
+        model_addr = 0;
+        // The game loads it when a torch is first drawn; until then look only now and then.
+        static int wait = 0;
+        if (wait > 0) {
+            wait--;
+            return 0;
+        }
+        wait = 30;
+        for (uint32_t addr = 0x80000000; addr < 0x80800000 - model_size; addr += 4) {
+            if (read_word(rdram, addr) == model_header[0] && is_model(rdram, addr)) {
+                model_addr = addr;
+                if (log_on) {
+                    printf("[torch] model at 0x%08X\n", addr);
+                    fflush(stdout);
+                }
+                break;
+            }
+        }
+        return model_addr;
+    }
+
+    // The eyes: their own 11 vertices (0x710 into the vertices; the display list draws them with the 16x16 eye
+    // texture), two little discs on the front of the head, left at x < 0 and right at x > 0, centred at
+    // height 71. While a torch waits they are shut: flattened to a line and tucked into the wood. As it wakes
+    // they open like eyelids. The model is shared, so the eyes follow the torch nearest Banjo (the torches
+    // are thousands of units apart, never in view together).
+    constexpr uint32_t eye_vertices = 0x710;
+    constexpr int eye_vertex_count = 11;
+    constexpr float eye_centre_y = 71.0f;
+    constexpr float eye_centre_x = 9.0f;
+    constexpr float eye_tuck = 7.0f;            // how far into the head a shut eye goes
+    struct EyeVertex {
+        int16_t x, y, z;
+    };
+    EyeVertex eye_original[eye_vertex_count];
+    uint32_t eye_model = 0;                     // the model eye_original was read from
+    float eye_open = 0.0f;
+    float eye_written = -1.0f;
+
+    void eye_write(uint8_t* rdram, float open) {
+        if (find_model(rdram) == 0) {
+            eye_model = 0;
+            return;
+        }
+        const uint32_t base = model_addr + model_vertices + eye_vertices;
+        if (eye_model != model_addr) {
+            for (int i = 0; i < eye_vertex_count; i++) {
+                const uint32_t w0 = read_word(rdram, base + 16 * i);
+                const uint32_t w1 = read_word(rdram, base + 16 * i + 4);
+                eye_original[i] = { (int16_t)(w0 >> 16), (int16_t)(w0 & 0xFFFF), (int16_t)(w1 >> 16) };
+            }
+            eye_model = model_addr;
+            eye_written = -1.0f;
+        }
+        if (open == eye_written) {
+            return;
+        }
+        eye_written = open;
+        // Eased so they start opening slowly and widen quickly, like an eyelid.
+        const float f = open * open * (3.0f - 2.0f * open);
+        for (int i = 0; i < eye_vertex_count; i++) {
+            const EyeVertex& v = eye_original[i];
+            const float cx = v.x < 0 ? -eye_centre_x : v.x > 0 ? eye_centre_x : 0.0f;
+            const float x = cx + (v.x - cx) * (0.4f + 0.6f * f);
+            const float y = eye_centre_y + (v.y - eye_centre_y) * f;
+            const float z = v.z - (1.0f - f) * eye_tuck;
+            const uint32_t w0 = ((uint32_t)(uint16_t)(int16_t)std::lround(x) << 16) | (uint16_t)(int16_t)std::lround(y);
+            const uint32_t w1 = read_word(rdram, base + 16 * i + 4);
+            write_word(rdram, base + 16 * i, w0);
+            write_word(rdram, base + 16 * i + 4, ((uint32_t)(uint16_t)(int16_t)std::lround(z) << 16) | (w1 & 0xFFFF));
+        }
+    }
+
+    // Puts the eyes back as the model has them (the option turned off with the model still loaded).
+    void eye_restore(uint8_t* rdram) {
+        if (eye_model != 0 && eye_model == model_addr && is_model(rdram, model_addr)) {
+            eye_write(rdram, 1.0f);
+        }
+        eye_model = 0;
+        eye_open = 0.0f;
+    }
+
     uint32_t find_object(uint8_t* rdram, uint32_t marker) {
         uint32_t found = 0;
         for_each_object(rdram, [&](uint32_t object) {
@@ -392,6 +506,8 @@ namespace {
             case state_chase: return "chase";
             case state_lunge: return "lunge";
             case state_beaten: return "beaten";
+            case state_return: return "return";
+            case state_wake: return "wake";
             default: return "?";
         }
     }
@@ -529,6 +645,9 @@ namespace {
             }
         }
         torches.clear();
+        if (objects_live) {
+            eye_restore(rdram);
+        }
     }
 
     // Moves the torch: the object's position and its head (where the flame is drawn) by the same amount.
@@ -716,11 +835,33 @@ namespace {
         switch (t.state) {
             case state_idle:
             default:
+                // Plays an ordinary torch: no movement, no turning, until Banjo walks right up to it. Then it
+                // springs straight at him.
+                if (have_banjo && to_banjo < ambush_range && std::fabs(banjo[1] - t.pos[1]) < 150.0f) {
+                    set_state(rdram, ctx, t, object, state_wake);
+                    if (shots_on) {
+                        shot_frames = { 4, 8, 12 };
+                    }
+                }
+                break;
+            case state_wake:
+                // Its eyes open (eye_update) as it turns to him; then it springs.
+                if (have_banjo) {
+                    t.yaw = turn_towards(t.yaw, yaw_towards(t.pos, banjo), turn_speed * 1.5f * dt);
+                }
+                if (t.timer >= wake_time) {
+                    if (have_banjo) {
+                        t.yaw = yaw_towards(t.pos, banjo);
+                    }
+                    t.hit_this_lunge = false;
+                    set_state(rdram, ctx, t, object, state_lunge);
+                }
+                break;
+            case state_return:
                 if (have_banjo && to_banjo < notice_range && banjo_from_home < leash) {
                     set_state(rdram, ctx, t, object, state_chase);
                     break;
                 }
-                // Back home if it is not there.
                 if (from_home > 5.0f) {
                     const float step = std::min(from_home, return_speed * dt);
                     t.yaw = turn_towards(t.yaw, yaw_towards(t.pos, t.home), turn_speed * dt);
@@ -728,12 +869,17 @@ namespace {
                     to[2] += (t.home[2] - t.pos[2]) / from_home * step;
                 }
                 else {
-                    t.yaw = turn_towards(t.yaw, t.home_yaw, turn_speed * 0.25f * dt);
+                    // Home: faces the way it stood and goes still again.
+                    t.yaw = turn_towards(t.yaw, t.home_yaw, turn_speed * dt);
+                    if (std::fabs(std::remainder(t.yaw - t.home_yaw, 360.0f)) < 1.0f) {
+                        t.yaw = t.home_yaw;
+                        set_state(rdram, ctx, t, object, state_idle);
+                    }
                 }
                 break;
             case state_chase: {
                 if (!have_banjo || to_banjo > give_up_range || banjo_from_home > leash + 200.0f) {
-                    set_state(rdram, ctx, t, object, state_idle);
+                    set_state(rdram, ctx, t, object, state_return);
                     break;
                 }
                 const float want = yaw_towards(t.pos, banjo);
@@ -883,8 +1029,9 @@ namespace {
 
 void tooie::torch_enemy::add_option(recomp::config::Config& general) {
     general.add_bool_option(option, "Cut Content: Torch enemy",
-        "Level: Glitter Gulch Mine. The angry torch cut from the game, back where it was meant to be. It lights "
-        "up the dark around it, chases Banjo when he comes near and lunges to burn him. Attacks and eggs put it out.",
+        "Level: Glitter Gulch Mine. The angry torch cut from the game, back where it was meant to be. It stands "
+        "still like an ordinary lit torch until Banjo walks up to it, then opens its eyes and springs at him to "
+        "burn him, and chases him. Attacks and eggs put it out.",
         false);
 }
 
@@ -959,6 +1106,27 @@ void tooie::torch_enemy::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     if (torches.empty() || tooie::in_letterboxed_scene()) {
         return;
+    }
+
+    // Eyes: open while the torch nearest Banjo is awake, shut while it waits.
+    {
+        const Torch* nearest = nullptr;
+        float best = 1e9f;
+        float banjo_now[3];
+        const bool banjo_known = banjo_position(rdram, banjo_now);
+        for (const Torch& t : torches) {
+            const float d = banjo_known ? distance(t.pos, banjo_now) : 0.0f;
+            if (!t.gone && d < best) {
+                best = d;
+                nearest = &t;
+            }
+        }
+        const float target = nearest != nullptr && nearest->state != state_idle ? 1.0f : 0.0f;
+        const float step = eye_speed * dt;
+        eye_open = std::clamp(target > eye_open ? std::min(target, eye_open + step) : std::max(target, eye_open - step), 0.0f, 1.0f);
+        if (nearest != nullptr) {
+            eye_write(rdram, eye_open);
+        }
     }
 
     // TOOIE_TORCH_EGG_AT (see the top): a blue egg put down on the first torch, to test that eggs put it out.
