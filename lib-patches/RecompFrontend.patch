@@ -1249,10 +1249,16 @@ index 6c84c05..3cc43e9 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..5aceb1b 100644
+index 86428c9..be03db4 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
-@@ -87,14 +87,47 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -1,4 +1,5 @@
+ #include "ui_config_option.h"
++#include "elements/ui_sidebar_style.h"
+ 
+ namespace recompui {
+ 
+@@ -87,14 +88,60 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1263,6 +1269,11 @@ index 86428c9..5aceb1b 100644
 +    set_padding_top(compact ? 6.0f : config_option_element_margin_vertical);
 +    set_padding_bottom(compact ? 6.0f : config_option_element_margin_vertical);
 +    set_gap(compact ? 16.0f : 0.0f);
++    // Room for the hover band's gold edge (set_highlighted), taken from the left padding.
++    set_border_left_width(compact ? 4.0f : 0.0f);
++    set_border_left_color(Color{ 0, 0, 0, 0 });
++    set_padding_left(compact ? 8.0f : 12.0f);
++    set_border_radius(compact ? 4.0f : 0.0f);
 +    if (compact) {
 +        name_label->set_margin_bottom(0.0f);
 +        name_label->set_width(38.0f, Unit::Percent);
@@ -1285,6 +1296,14 @@ index 86428c9..5aceb1b 100644
 +    }
 +}
 +
++void ConfigOptionElement::set_highlighted(bool highlighted) {
++    // An orange band with a gold edge on the left, and the name in gold, like the picked tab.
++    // Only colours change here: a layout change relays the whole page (slow on long pages).
++    set_background_color(highlighted ? Color{ 238, 122, 20, 96 } : Color{ 0, 0, 0, 0 });
++    set_border_left_color(highlighted ? sidebar_style::gold : Color{ 0, 0, 0, 0 });
++    name_label->set_color(highlighted ? sidebar_style::gold : sidebar_style::cream);
++}
++
  void ConfigOptionElement::update_hidden() {
 -    if (config->is_config_option_hidden(option_index)) {
 +    const bool hidden = config->is_config_option_hidden(option_index);
@@ -1301,7 +1320,7 @@ index 86428c9..5aceb1b 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +143,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +157,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1309,7 +1328,7 @@ index 86428c9..5aceb1b 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +154,42 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +168,42 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1369,7 +1388,7 @@ index 86428c9..5aceb1b 100644
      }
  
      update_value();
-@@ -153,12 +204,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +218,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1390,7 +1409,7 @@ index 86428c9..5aceb1b 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +233,10 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -176,6 +247,10 @@ void ConfigOptionEnum::update_enum_details() {
  
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
@@ -1401,7 +1420,7 @@ index 86428c9..5aceb1b 100644
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
-@@ -199,6 +260,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +274,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1409,7 +1428,7 @@ index 86428c9..5aceb1b 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -245,6 +307,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +321,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1417,7 +1436,7 @@ index 86428c9..5aceb1b 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,6 +347,8 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,6 +361,8 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -1427,7 +1446,7 @@ index 86428c9..5aceb1b 100644
      update_value();
      toggle->add_checked_callback([this](bool checked){
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..e6b3cb7 100644
+index 0561657..2984d8b 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -1448,7 +1467,7 @@ index 0561657..e6b3cb7 100644
  
          recomp::config::ConfigValueVariant get_value();
          bool get_disabled();
-@@ -42,12 +46,18 @@ namespace recompui {
+@@ -42,12 +46,20 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
@@ -1457,6 +1476,8 @@ index 0561657..e6b3cb7 100644
          const std::string &get_option_id() { return option_id; }
 +        // Sidebar layout: the name on the left and the control on the right, on one line.
 +        void set_compact(bool compact);
++        // Sidebar layout: marks the option the pointer or the controller is on with a warm band.
++        void set_highlighted(bool highlighted);
      };
  
  class ConfigOptionEnum : public ConfigOptionElement {
@@ -1467,7 +1488,7 @@ index 0561657..e6b3cb7 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -127,6 +137,7 @@ public:
+@@ -127,6 +139,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -1519,7 +1540,7 @@ index f379a6f..388d5a2 100644
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..881a3e8 100644
+index 6ba64e2..7db41dd 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -1696,7 +1717,7 @@ index 6ba64e2..881a3e8 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,6 +273,17 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,7 +273,19 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -1712,21 +1733,23 @@ index 6ba64e2..881a3e8 100644
 +        page_title->set_padding_left(8.0f);
 +
          config_option_elements.clear();
++        highlighted_option = nullptr;
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
-@@ -181,8 +292,37 @@ void ConfigPageOptionsMenu::render_config_options() {
+         };
+@@ -181,8 +293,37 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
 +        // Display order: the schema's, with options moved by set_option_display_before.
 +        std::vector<size_t> order;
-+        for (size_t i = 0; i < schema.options.size(); i++) {
+         for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *page = recompui::config::get_option_page(schema.options[i].id);
 +            if ((page == nullptr) == page_id.empty() && (page == nullptr || *page == page_id)) {
 +                order.push_back(i);
 +            }
 +        }
-         for (size_t i = 0; i < schema.options.size(); i++) {
++        for (size_t i = 0; i < schema.options.size(); i++) {
 +            const std::string *before = recompui::config::get_option_display_before(schema.options[i].id);
 +            if (before == nullptr || !schema.options_by_id.contains(*before)) {
 +                continue;
@@ -1752,7 +1775,7 @@ index 6ba64e2..881a3e8 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +373,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +374,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -1760,8 +1783,27 @@ index 6ba64e2..881a3e8 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
+@@ -241,6 +383,18 @@ void ConfigPageOptionsMenu::render_config_options() {
+ }
+ 
+ void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {
++    if (description_strip) {
++        ConfigOptionElement *element = get_element_from_option_id(option_id);
++        if (element != highlighted_option) {
++            if (highlighted_option != nullptr) {
++                highlighted_option->set_highlighted(false);
++            }
++            if (element != nullptr) {
++                element->set_highlighted(true);
++            }
++            highlighted_option = element;
++        }
++    }
+     if (description_container) {
+         description_option_id = option_id;
+         set_description_text(config->get_option(option_id).description);
 diff --git a/recompui/src/config/ui_config_page_options_menu.h b/recompui/src/config/ui_config_page_options_menu.h
-index 49e05db..6b65555 100644
+index 49e05db..a9dce3a 100644
 --- a/recompui/src/config/ui_config_page_options_menu.h
 +++ b/recompui/src/config/ui_config_page_options_menu.h
 @@ -1,5 +1,7 @@
@@ -1772,7 +1814,7 @@ index 49e05db..6b65555 100644
  #include "config/ui_config_option.h"
  #include "elements/ui_config_page.h"
  #include "elements/ui_modal.h"
-@@ -12,11 +14,21 @@ namespace recompui {
+@@ -12,11 +14,23 @@ namespace recompui {
      protected:
          recomp::config::Config *config;
          bool is_internal = false;
@@ -1791,10 +1833,12 @@ index 49e05db..6b65555 100644
          Button *apply_button = nullptr;
 +        bool description_strip = false;
 +        Element *page_title = nullptr;
++        // The option marked with the hover band (sidebar layout).
++        ConfigOptionElement *highlighted_option = nullptr;
  
          virtual void process_event(const Event &e) override;
          std::string_view get_type_name() override { return "ConfigPageOptionsMenu"; }
-@@ -31,12 +43,16 @@ namespace recompui {
+@@ -31,12 +45,16 @@ namespace recompui {
          ConfigOptionElement* get_element_from_option_id(const std::string &option_id);
          void perform_option_render_updates();
          void set_description_text(const std::string &text);
@@ -1813,7 +1857,7 @@ index 49e05db..6b65555 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..5e0e414 100644
+index 4fdf81f..8098009 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -2680,40 +2724,6 @@ index 0000000..e5b6a0c
 +    // Luckiest Guy (Apache 2.0, assets/LuckiestGuy-LICENSE.txt), registered by the game.
 +    inline constexpr const char *font = "Luckiest Guy";
 +}
-diff --git a/recompui/src/elements/ui_slider.cpp b/recompui/src/elements/ui_slider.cpp
-index 7a50da4..2ff4201 100644
---- a/recompui/src/elements/ui_slider.cpp
-+++ b/recompui/src/elements/ui_slider.cpp
-@@ -89,15 +89,20 @@ namespace recompui {
-         case EventType::Update:
-             if (is_enabled()) {
-                 if (circle_element->is_style_enabled(focus_state)) {
--                    circle_element->set_background_color(recompui::get_pulse_color(750));
-+                    // Hovered or selected: the whole bar pulses with the dot.
-+                    recompui::Color pulse_color = recompui::get_pulse_color(750);
-+                    circle_element->set_background_color(pulse_color);
-+                    bar_element->set_background_color(pulse_color);
-                     queue_update();
-                 }
-                 else {
-                     circle_element->set_background_color(theme::color::TextDim);
-+                    bar_element->set_background_color(theme::color::WhiteA20);
-                 }
-             }
-             else {
-                 circle_element->set_background_color(theme::color::BW25);
-+                bar_element->set_background_color(theme::color::WhiteA20);
-             }
-             break;
-         case EventType::Navigate:
-@@ -125,6 +130,7 @@ namespace recompui {
-                     set_cursor(Cursor::None);
-                     set_focusable(false);
-                     circle_element->set_background_color(theme::color::BW25);
-+                    bar_element->set_background_color(theme::color::WhiteA20);
-                 }
-             }
-             break;
 diff --git a/recompui/src/elements/ui_tab_set.cpp b/recompui/src/elements/ui_tab_set.cpp
 index 2c5dc52..396c645 100644
 --- a/recompui/src/elements/ui_tab_set.cpp
