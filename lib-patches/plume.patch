@@ -74,7 +74,7 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..39e7f5c 100644
+index f1dd503..68fa03b 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
 @@ -11,8 +11,12 @@
@@ -784,11 +784,11 @@ index f1dd503..39e7f5c 100644
          VkResult res = vkWaitForFences(device->vk, 1, &interfaceFence->vk, VK_TRUE, UINT64_MAX);
 +
 +        // Banjo-Tooie: headless test hook. TOOIE_TEST_DEVICE_LOST=<seconds> reports a lost device that many
-+        // seconds after the first wait (the driver itself carries on).
++        // seconds after the first wait. Only the report is faked: the driver and this wait carry on as normal.
 +        static const char *testDeviceLost = getenv("TOOIE_TEST_DEVICE_LOST");
 +        static const auto firstWait = std::chrono::steady_clock::now();
 +        if ((testDeviceLost != nullptr) && (std::chrono::duration<double>(std::chrono::steady_clock::now() - firstWait).count() > atof(testDeviceLost))) {
-+            res = VK_ERROR_DEVICE_LOST;
++            NoteDeviceLost(device, "vkWaitForFences (TOOIE_TEST_DEVICE_LOST)");
 +        }
 +
          if (res != VK_SUCCESS) {
