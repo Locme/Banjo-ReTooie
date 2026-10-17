@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T415 Smash Banjo fur
+- Asked: 2026-10-17 23:20 UTC
+- Build: main (Smash Banjo fur commit)
+- Steps:
+  1. Turn on the Smash Banjo model mod and Banjo's fur
+  2. Walk around Spiral Mountain, then turn the mod off again
+- Look for: Does Smash Banjo grow fur on his coat at about the same strand size as the normal Banjo, with none on his skin, shorts or backpack? Does normal Banjo look the same as before?
+- Status: waiting for L
+
 ## T414 Smash Banjo v14: blink, arm clipping, shoulder spot
 - Asked: 2026-10-17 22:59 UTC
 - Build: main 488dfb2 (mod-only change, any recent build)

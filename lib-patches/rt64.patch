@@ -2011,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6523746 100644
+index 9fae0d4..64a325f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3087,7 +3087,7 @@ index 9fae0d4..6523746 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2647,965 @@ namespace RT64 {
+@@ -1747,24 +2647,968 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3767,7 +3767,7 @@ index 9fae0d4..6523746 100644
 +    // (the colour test), never unmarked and bare through fur (a backpack's textured top and its bare blue sides grew fur
 +    // along their seam).
 +    static float FurMarkW(uint8_t flag) {
-+        switch (flag) {
++        switch (flag & FUR_VERTEX_MARK_MASK) {
 +        case FUR_VERTEX_BARE:
 +            return 1.0f;
 +        case FUR_VERTEX_COVERED:
@@ -3785,6 +3785,7 @@ index 9fae0d4..6523746 100644
 +        if (end > drawData.faceIndices.size()) {
 +            return;
 +        }
++        const float anchorScale = FurVertexAnchorScale();
 +        const uint32_t call = furCallCount++;
 +        if (furNormalVector.size() < drawData.vertexCount()) {
 +            furNormalVector.resize(drawData.vertexCount(), interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
@@ -3824,8 +3825,10 @@ index 9fae0d4..6523746 100644
 +                    if (furShaderVector.size() < furNormalVector.size() * 2) {
 +                        furShaderVector.resize(furNormalVector.size() * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +                    }
-+                    const float mark = FurMarkW((v[k] < drawData.furVertexFlags.size()) ? drawData.furVertexFlags[v[k]] : 0);
-+                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0], drawData.posFloats[v[k] * 3 + 1], drawData.posFloats[v[k] * 3 + 2], mark };
++                    const uint8_t flag = (v[k] < drawData.furVertexFlags.size()) ? drawData.furVertexFlags[v[k]] : 0;
++                    const float scale = ((flag & FUR_VERTEX_IN_BLOCK) != 0) ? anchorScale : 1.0f;
++                    furShaderVector[v[k] * 2 + 1] = { drawData.posFloats[v[k] * 3 + 0] * scale, drawData.posFloats[v[k] * 3 + 1] * scale,
++                        drawData.posFloats[v[k] * 3 + 2] * scale, FurMarkW(flag) };
 +                    furShaderFirst = std::min(furShaderFirst, size_t(v[k]) * 2);
 +                    furShaderEnd = std::max(furShaderEnd, size_t(v[k]) * 2 + 2);
 +                }
@@ -3846,7 +3849,7 @@ index 9fae0d4..6523746 100644
 +            if (furShaderVector.size() < (size_t(v) + 1) * 2) {
 +                furShaderVector.resize((size_t(v) + 1) * 2, interop::float4{ 0.0f, 0.0f, 0.0f, 0.0f });
 +            }
-+            if ((v >= drawData.furVertexFlags.size()) || (drawData.furVertexFlags[v] == 0)) {
++            if ((v >= drawData.furVertexFlags.size()) || ((drawData.furVertexFlags[v] & FUR_VERTEX_MARK_MASK) == 0)) {
 +                continue;
 +            }
 +            if (furShaderVector[v * 2 + 1].w == 0.0f) {
@@ -5826,10 +5829,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..4a80397
+index 0000000..d46a94f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2262 @@
+@@ -0,0 +1,2269 @@
 +//
 +// RT64
 +//
@@ -6627,12 +6630,13 @@ index 0000000..4a80397
 +        struct FurVertexBlock {
 +            uint32_t address;
 +            std::vector<uint8_t> flags;
++            float anchorScale;
 +        };
 +        std::mutex furVertexMutex;
 +        std::vector<FurVertexBlock> furVertexBlocks;
 +    }
 +
-+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags) {
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale) {
 +        const std::scoped_lock lock(furVertexMutex);
 +        auto found = std::find_if(furVertexBlocks.begin(), furVertexBlocks.end(), [&](const FurVertexBlock &b) { return b.address == address; });
 +        if (flags.empty()) {
@@ -6642,13 +6646,14 @@ index 0000000..4a80397
 +        }
 +        else if (found != furVertexBlocks.end()) {
 +            found->flags = flags;
++            found->anchorScale = anchorScale;
 +        }
 +        else {
 +            // (A few models at most; the oldest goes when another is loaded in its place.)
 +            if (furVertexBlocks.size() >= 8) {
 +                furVertexBlocks.erase(furVertexBlocks.begin());
 +            }
-+            furVertexBlocks.push_back({ address, flags });
++            furVertexBlocks.push_back({ address, flags, anchorScale });
 +        }
 +    }
 +
@@ -6663,11 +6668,16 @@ index 0000000..4a80397
 +            for (uint32_t i = 0; i < count; i++) {
 +                const uint64_t at = uint64_t(address) + uint64_t(i) * stride;
 +                if ((at < end) && (((at - b.address) % 16) == 0)) {
-+                    out[i] = b.flags[(at - b.address) / 16];
++                    out[i] = b.flags[(at - b.address) / 16] | FUR_VERTEX_IN_BLOCK;
 +                }
 +            }
 +            return;
 +        }
++    }
++
++    float FurVertexAnchorScale() {
++        const std::scoped_lock lock(furVertexMutex);
++        return furVertexBlocks.empty() ? 1.0f : furVertexBlocks.back().anchorScale;
 +    }
 +
 +    void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency) {
@@ -8094,10 +8104,10 @@ index 0000000..4a80397
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..6fd9828
+index 0000000..3529265
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,369 @@
+@@ -0,0 +1,375 @@
 +//
 +// RT64
 +//
@@ -8348,10 +8358,16 @@ index 0000000..6fd9828
 +    // lights them (its lighting changes their colours every frame, so colour alone gave different coats in different
 +    // places, L). One byte per vertex of the block at RDRAM address `address` (16 bytes each): 0 to tell by the lit
 +    // colour as before, FUR_VERTEX_COVERED, FUR_VERTEX_BARE or FUR_VERTEX_FEATHERS. An empty list forgets the block.
-+    enum : uint8_t { FUR_VERTEX_UNKNOWN = 0, FUR_VERTEX_COVERED = 1, FUR_VERTEX_BARE = 2, FUR_VERTEX_FEATHERS = 3 };
-+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags);
-+    // The marks for `count` vertices of `stride` bytes from `address` (all 0 where no block covers them).
++    // anchorScale turns the block's vertex positions into the fur's units (a model mod stored bigger, Smash Banjo's 8
++    // times, would otherwise get strands that much finer).
++    enum : uint8_t { FUR_VERTEX_UNKNOWN = 0, FUR_VERTEX_COVERED = 1, FUR_VERTEX_BARE = 2, FUR_VERTEX_FEATHERS = 3, FUR_VERTEX_MARK_MASK = 0x7F,
++        FUR_VERTEX_IN_BLOCK = 0x80 };
++    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags, float anchorScale = 1.0f);
++    // The marks for `count` vertices of `stride` bytes from `address`, with FUR_VERTEX_IN_BLOCK on those a block covers
++    // (all 0 elsewhere).
 +    void FurVertexFlags(uint32_t address, uint32_t stride, uint32_t count, uint8_t *out);
++    // The anchor scale of the block set last (1 when there is none).
++    float FurVertexAnchorScale();
 +    // Fills the frame's fur terms from the 3D world's projection and view-projection and viewport (as the RSP
 +    // used them) and the framebuffer's resolution in game pixels. False when there is no fur this frame.
 +    bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,

@@ -323,6 +323,10 @@ std::vector<uint8_t> tooie::asset_mods::asset_bytes(uint32_t id) {
         std::ifstream in(path, std::ios::binary);
         return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
+    return rom_asset_bytes(id);
+}
+
+std::vector<uint8_t> tooie::asset_mods::rom_asset_bytes(uint32_t id) {
     std::span<const uint8_t> rom = recomp::get_rom();
     return rom_asset(rom, read_table(rom), id);
 }
