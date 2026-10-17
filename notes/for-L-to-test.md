@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T413 Parallax pick mode
+- Asked: 2026-10-17 22:38 UTC
+- Build: main (parallax pick mode)
+- Steps:
+  1. Set Parallax above 0 and bind Parallax Pick Mode (Controls, Debug)
+  2. Press it in a level: the cursor turns into a crosshair and the texture under it pulses blue with a label beside it
+  3. Left click steps the shape (Stone, Bumpy, Inverted, Cracks, Terraced, Rounded, then Off); right click steps the depth (100, 150, 200, 300, 25, 50%); middle click turns its shadows off or on
+  4. Shift + left click puts it back to the built-in choice; the wheel picks the surface behind it
+  5. Press the key again to get the normal mouse back
+- Look for: Does the highlight land on the surface under the cursor, and does each click change it at once? Is parallax_tags.txt next to the save files with your picks, and still applied after a restart?
+- Status: waiting for L
+
 ## T412 Fast Forward Scene wording
 - Asked: 2026-10-17 22:35 UTC
 - Build: main (Fast Forward Scene wording commit)

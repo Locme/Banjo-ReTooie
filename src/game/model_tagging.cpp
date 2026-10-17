@@ -59,6 +59,7 @@
 #include "tooie_hooks.h"
 #include "tooie_interp_check.h"
 #include "tooie_interp_tags.h"
+#include "tooie_parallax_pick.h"
 #include "tooie_model_tagging.h"
 #include "tooie_picture_filters.h"
 #include "tooie_snout_jiggle.h"
@@ -2503,6 +2504,7 @@ uint32_t tooie::model_tagging::tag_scene(uint8_t* rdram, uint32_t start, uint32_
     tooie::frame_overlay::note_scene_done();
     tooie::interp_check::start();
     tooie::interp_tags::start();
+    tooie::parallax_pick::start();
     if (tooie::interp_check::enabled()) {
         static bool filled = false;
         if (!filled) {

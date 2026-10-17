@@ -39,6 +39,7 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_parallax_pick.h"
 
 namespace RT64 {
     // lib/rt64/src/render/rt64_vi_renderer.h (from lib-patches/rt64.patch).
@@ -80,7 +81,7 @@ namespace RT64 {
     void SetSceneSnowStamps(const float *stamps, uint32_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
-    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count);
+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z);
     bool GetSceneCameraHeight(float *height);
@@ -3887,6 +3888,63 @@ namespace {
             return fallback;
         }
     }
+
+    // The parallax list sent to RT64: the built-in one (parallax_textures[]), with pick mode's picks over it.
+    std::atomic<uint32_t> parallax_sent_version{0};
+    void send_parallax_textures() {
+        // TOOIE_PARALLAX_SKIP=<hex hash>,... leaves those out (headless, to tell which listed texture is which).
+        static const std::vector<uint64_t> skip = [] {
+            std::vector<uint64_t> hashes;
+            if (const char* text = std::getenv("TOOIE_PARALLAX_SKIP")) {
+                for (const char* p = text; *p != '\0';) {
+                    char* end = nullptr;
+                    hashes.push_back(std::strtoull(p, &end, 16));
+                    p = (*end == ',') ? end + 1 : end;
+                    if (end == p) {
+                        break;
+                    }
+                }
+            }
+            return hashes;
+        }();
+        const uint32_t version = tooie::parallax_pick::version();
+        std::unordered_map<uint64_t, tooie::parallax_pick::Pick> picks;
+        tooie::parallax_pick::for_each([&](uint64_t hash, const tooie::parallax_pick::Pick& pick) {
+            picks[hash] = pick;
+        });
+        std::vector<uint64_t> hashes;
+        std::vector<uint8_t> ranges;
+        std::vector<uint8_t> styles;
+        hashes.reserve(std::size(parallax_textures) + picks.size());
+        auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest) {
+            const auto pick = picks.find(hash);
+            if (pick != picks.end()) {
+                const bool off = pick->second.off;
+                const uint8_t style = pick->second.style();
+                picks.erase(pick);
+                if (off) {
+                    return;
+                }
+                styles.push_back(style);
+            } else {
+                styles.push_back(0);
+            }
+            hashes.push_back(hash);
+            ranges.push_back(darkest);
+            ranges.push_back(lightest);
+        };
+        for (const ParallaxTexture& texture : parallax_textures) {
+            if (std::find(skip.begin(), skip.end(), texture.hash) == skip.end()) {
+                add(texture.hash, texture.darkest, texture.lightest);
+            }
+        }
+        // Textures picked that the built-in list leaves out, with a middling range.
+        for (const auto& [hash, pick] : std::unordered_map<uint64_t, tooie::parallax_pick::Pick>(picks)) {
+            add(hash, 40, 190);
+        }
+        RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data());
+        parallax_sent_version = version;
+    }
 }
 
 void tooie::picture_filters::apply() {
@@ -4046,31 +4104,7 @@ void tooie::picture_filters::apply() {
     }
     const char* parallax_all = std::getenv("TOOIE_PARALLAX_ALL");
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
-    static const auto parallax_lists = [] {
-        std::pair<std::vector<uint64_t>, std::vector<uint8_t>> lists;
-        // TOOIE_PARALLAX_SKIP=<hex hash>,... leaves those out (headless, to tell which listed texture is which).
-        std::vector<uint64_t> skip;
-        if (const char* text = std::getenv("TOOIE_PARALLAX_SKIP")) {
-            for (const char* p = text; *p != '\0';) {
-                char* end = nullptr;
-                skip.push_back(std::strtoull(p, &end, 16));
-                p = (*end == ',') ? end + 1 : end;
-                if (end == p) {
-                    break;
-                }
-            }
-        }
-        for (const ParallaxTexture& texture : parallax_textures) {
-            if (std::find(skip.begin(), skip.end(), texture.hash) != skip.end()) {
-                continue;
-            }
-            lists.first.push_back(texture.hash);
-            lists.second.push_back(texture.darkest);
-            lists.second.push_back(texture.lightest);
-        }
-        return lists;
-    }();
-    RT64::SetSceneParallaxTextures(parallax_lists.first.data(), parallax_lists.second.data(), parallax_lists.first.size());
+    send_parallax_textures();
     modern_water = shaders && value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
@@ -4190,6 +4224,10 @@ void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, f
 
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    // A pick made in parallax pick mode shows at once.
+    if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
+        send_parallax_textures();
+    }
     // DEV > Blend texture seams; TOOIE_TEXTURE_SEAMS=0 or 1 sets it instead (headless A/B).
     {
         bool seams = true;
