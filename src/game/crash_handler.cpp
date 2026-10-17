@@ -483,6 +483,33 @@ void tooie::crash_log_line(const char* line) {
     }
 }
 
+void tooie::log_fatal_error(const std::string& text) {
+    if (crash_log_path[0] == '\0') {
+        return;
+    }
+    char ts[32];
+    timestamp(ts, sizeof(ts));
+    std::string first = std::string(ts) + " " + text;
+    // One line per line of the text, the first with the time, then the build and settings.
+    size_t pos = 0;
+    bool first_line = true;
+    while (pos < first.size()) {
+        size_t end = first.find('\n', pos);
+        if (end == std::string::npos) {
+            end = first.size();
+        }
+        std::string line = first.substr(pos, end - pos);
+        if (!line.empty()) {
+            append_log_line(((first_line ? "" : "    ") + line).c_str());
+            first_line = false;
+        }
+        pos = end + 1;
+    }
+    append_context();
+    // Logged, so the next start need not report a silent death.
+    remove_marker();
+}
+
 void tooie::set_crash_context(const std::string& text) {
     int next = 1 - context_index.load();
     std::snprintf(context[next], sizeof(context[next]), "%s", text.c_str());

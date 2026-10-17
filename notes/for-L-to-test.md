@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T395 Warp tab: Flooded Caves (Torch enemy)
+- Asked: 2026-10-17 19:20 UTC
+- Build: main
+- Steps:
+  1. Load a file
+  2. Open the Warp tab, Glitter Gulch Mine group
+  3. Pick Flooded Caves (Torch enemy)
+- Look for: Do you land at the Flooded Caves entrance, with the torch on the ledge ahead when Cut Content: Torch enemy is on?
+- Status: waiting for L
+
 ## T394 Cut Content: Torch enemy in the Flooded Caves
 - Asked: 2026-10-17 15:32 UTC
 - Build: main
@@ -85,7 +95,7 @@
   2. Turn the camera around Banjo, then walk and stand still
   3. Try Game Frame Rate Original, 60 and 175
 - Look for: The shadow under Banjo keeps its shape and doesn't flicker or jump while the camera turns; it doesn't show on rocks or walls in front of him
-- Status: waiting for L
+- Status: failed (L, 2026-10-17: "It still shakes"; with HD Shadows the shadow showed through Banjo). Change reverted.
 
 ## T386 Deep snow: trail, no stripes or colour bands, Chilly Willy marks
 - Asked: 2026-10-17 12:44 UTC

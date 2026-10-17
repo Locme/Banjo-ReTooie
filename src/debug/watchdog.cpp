@@ -17,6 +17,7 @@
 #endif
 
 #include "librecomp/game.hpp"
+#include "recompui/recompui.h"
 
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
@@ -31,6 +32,16 @@
 //  - the window: the main thread's event loop (input, menus, the window itself).
 // When one stops moving, hangs.log gets a line saying which, the stacks of the program's threads
 // (Windows), and, if it lasts, a minidump.
+//
+// It also watches for a lost graphics device (Vulkan): the GPU stopped answering, Windows reset the driver
+// (a TDR, nvlddmkm event 153), and nothing can be drawn again. The game says so and closes instead of
+// carrying on with a frozen window.
+namespace plume {
+    // lib/rt64/src/contrib/plume/plume_vulkan.h (from lib-patches/plume.patch).
+    bool DeviceLost();
+    std::string DeviceLostReport();
+}
+
 namespace {
     using namespace std::chrono_literals;
     using clock_type = std::chrono::steady_clock;
@@ -274,6 +285,22 @@ namespace {
         }
     }
 
+    // The device is gone for good: log what plume saw, tell the player, and close.
+    void handle_device_lost() {
+        const std::string report = plume::DeviceLostReport();
+        const std::string text = "graphics device lost: " + report;
+        log_text(wall_time() + " " + text);
+        tooie::log_fatal_error(text);
+        std::printf("[watchdog] %s", text.c_str());
+        std::fflush(stdout);
+        recompui::message_box(
+            "The graphics card stopped responding and its driver was restarted, so the game can no longer draw "
+            "anything and has to close.\n\n"
+            "Details, including the last graphics pass that was running, are in logs/crashes.log.");
+        std::fflush(stdout);
+        std::_Exit(3);
+    }
+
     void watch() {
         int reports = 0;
         int dumps = 0;
@@ -285,6 +312,10 @@ namespace {
         for (;;) {
             std::this_thread::sleep_for(poll_interval);
             auto now = clock_type::now();
+
+            if (plume::DeviceLost()) {
+                handle_device_lost();
+            }
 
             std::string started;
             for (Part* part : parts) {

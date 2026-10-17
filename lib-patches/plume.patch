@@ -36,6 +36,21 @@ index 2cdcf18..82c1b03 100644
      }
  
      void D3D12CommandList::copyBuffer(const RenderBuffer *dstBuffer, const RenderBuffer *srcBuffer) {
+diff --git a/plume_render_interface.h b/plume_render_interface.h
+index 2048557..b3adc79 100644
+--- a/plume_render_interface.h
++++ b/plume_render_interface.h
+@@ -150,6 +150,10 @@ namespace plume {
+         virtual void discardTexture(const RenderTexture* texture) = 0; // D3D12 only.
+         virtual void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) = 0;
+         virtual void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) = 0;
++        // Banjo-Tooie: a mark the driver follows through the GPU, so after a lost device the last marks the GPU
++        // started and finished can be reported (plume::DeviceLostReport). The marker must outlive the device
++        // (a string literal). Vulkan with VK_NV_device_diagnostic_checkpoints only; does nothing elsewhere.
++        virtual void setCheckpoint(const char *marker) { (void)(marker); }
+ 
+         // Concrete implementation shortcuts.
+         inline void barriers(RenderBarrierStages stages, const RenderBufferBarrier &barrier) {
 diff --git a/plume_render_interface_types.h b/plume_render_interface_types.h
 index 9dcfedf..1f863f3 100644
 --- a/plume_render_interface_types.h
@@ -59,13 +74,14 @@ index 9dcfedf..1f863f3 100644
  #elif defined(PLUME_SDL_VULKAN_ENABLED)
      typedef SDL_Window *RenderWindow;
 diff --git a/plume_vulkan.cpp b/plume_vulkan.cpp
-index f1dd503..b392fd6 100644
+index f1dd503..68fa03b 100644
 --- a/plume_vulkan.cpp
 +++ b/plume_vulkan.cpp
-@@ -11,8 +11,11 @@
+@@ -11,8 +11,12 @@
  #include "plume_vulkan.h"
  
  #include <algorithm>
++#include <chrono>
 +#include <atomic>
  #include <cmath>
  #include <climits>
@@ -74,12 +90,14 @@ index f1dd503..b392fd6 100644
  #include <unordered_map>
  
  #if DLSS_ENABLED
-@@ -87,10 +90,223 @@ namespace plume {
+@@ -87,10 +91,225 @@ namespace plume {
          VK_KHR_PRESENT_ID_EXTENSION_NAME,
          VK_KHR_PRESENT_WAIT_EXTENSION_NAME,
          VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME,
 +        // Banjo-Tooie: real video memory use and budget for the [vram] log.
 +        VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
++        // Banjo-Tooie: marks the GPU passes, so a lost device can say which one it was in (DeviceLostReport).
++        VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME,
          // Vulkan spec requires this to be enabled if supported by the driver.
          VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
      };
@@ -298,7 +316,79 @@ index f1dd503..b392fd6 100644
      // Common functions.
  
      static uint32_t roundUp(uint32_t value, uint32_t powerOf2Alignment) {
-@@ -813,6 +1029,7 @@ namespace plume {
+@@ -101,6 +320,71 @@ namespace plume {
+         return (value + powerOf2Alignment - 1) & ~(powerOf2Alignment - 1);
+     }
+ 
++    // Banjo-Tooie: a lost device (VK_ERROR_DEVICE_LOST). Every call fails from then on, so only the first
++    // one is printed, and the report is kept for DeviceLost / DeviceLostReport.
++    static std::atomic<bool> DeviceLostFlag = false;
++    static std::mutex DeviceLostMutex;
++    static std::string DeviceLostText;
++
++    static void NoteDeviceLost(VulkanDevice *device, const char *call) {
++        if (DeviceLostFlag.exchange(true)) {
++            return;
++        }
++
++        std::string text = std::string(call) + " returned VK_ERROR_DEVICE_LOST: the GPU stopped answering and the driver was reset, or it crashed.\n";
++        if ((device != nullptr) && device->checkpointsSupported && (vkGetQueueCheckpointDataNV != nullptr)) {
++            // For each queue, the last mark the GPU reached at each pipeline stage. A mark that reached the
++            // top of the pipe but not the bottom was still running.
++            for (size_t f = 0; f < device->queueFamilies.size(); f++) {
++                for (size_t q = 0; q < device->queueFamilies[f].queues.size(); q++) {
++                    VkQueue queue = device->queueFamilies[f].queues[q].vk;
++                    uint32_t count = 0;
++                    vkGetQueueCheckpointDataNV(queue, &count, nullptr);
++                    if (count == 0) {
++                        continue;
++                    }
++
++                    std::vector<VkCheckpointDataNV> data(count, { VK_STRUCTURE_TYPE_CHECKPOINT_DATA_NV });
++                    vkGetQueueCheckpointDataNV(queue, &count, data.data());
++                    for (uint32_t i = 0; i < count; i++) {
++                        const char *stage = (data[i].stage == VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) ? "started" :
++                            (data[i].stage == VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) ? "finished" : "reached";
++                        const char *marker = (data[i].pCheckpointMarker != nullptr) ? static_cast<const char *>(data[i].pCheckpointMarker) : "(none)";
++                        char line[256];
++                        snprintf(line, sizeof(line), "    queue %zu.%zu: last pass %s: %s\n", f, q, stage, marker);
++                        text += line;
++                    }
++                }
++            }
++        }
++        else {
++            text += "    (this driver keeps no checkpoints, so the pass it was in is not known)\n";
++        }
++
++        fprintf(stderr, "[gpu] %s", text.c_str());
++        std::scoped_lock lock(DeviceLostMutex);
++        DeviceLostText = text;
++    }
++
++    // Logs a failed call: the first device lost gets the report, later ones are not printed.
++    static void LogFailedCall(VulkanDevice *device, const char *call, VkResult res) {
++        if (res == VK_ERROR_DEVICE_LOST) {
++            NoteDeviceLost(device, call);
++        }
++        else if (!DeviceLostFlag.load()) {
++            fprintf(stderr, "%s failed with error code 0x%X.\n", call, res);
++        }
++    }
++
++    bool DeviceLost() {
++        return DeviceLostFlag.load();
++    }
++
++    std::string DeviceLostReport() {
++        std::scoped_lock lock(DeviceLostMutex);
++        return DeviceLostText;
++    }
++
+     VkFormat toVk(RenderFormat format) {
+         switch (format) {
+         case RenderFormat::UNKNOWN:
+@@ -813,6 +1097,7 @@ namespace plume {
      // VulkanBuffer
  
      VulkanBuffer::VulkanBuffer(VulkanDevice *device, VulkanPool *pool, const RenderBufferDesc &desc) {
@@ -306,7 +396,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -893,9 +1110,14 @@ namespace plume {
+@@ -893,9 +1178,14 @@ namespace plume {
              fprintf(stderr, "vmaCreateBuffer failed with error code 0x%X.\n", res);
              return;
          }
@@ -321,7 +411,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vmaDestroyBuffer(device->allocator, vk, allocation);
          }
-@@ -922,6 +1144,7 @@ namespace plume {
+@@ -922,6 +1212,7 @@ namespace plume {
  
      void VulkanBuffer::setName(const std::string &name) {
          setObjectName(device->vk, VK_OBJECT_TYPE_BUFFER, uint64_t(vk), name);
@@ -329,7 +419,7 @@ index f1dd503..b392fd6 100644
      }
  
      uint64_t VulkanBuffer::getDeviceAddress() const {
-@@ -936,6 +1159,7 @@ namespace plume {
+@@ -936,6 +1227,7 @@ namespace plume {
      // VulkanBufferFormattedView
  
      VulkanBufferFormattedView::VulkanBufferFormattedView(VulkanBuffer *buffer, RenderFormat format) {
@@ -337,7 +427,7 @@ index f1dd503..b392fd6 100644
          assert(buffer != nullptr);
          assert((buffer->desc.flags & RenderBufferFlag::FORMATTED) && "Buffer must allow formatted views.");
  
-@@ -956,6 +1180,7 @@ namespace plume {
+@@ -956,6 +1248,7 @@ namespace plume {
      }
  
      VulkanBufferFormattedView::~VulkanBufferFormattedView() {
@@ -345,7 +435,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyBufferView(buffer->device->vk, vk, nullptr);
          }
-@@ -964,6 +1189,7 @@ namespace plume {
+@@ -964,6 +1257,7 @@ namespace plume {
      // VulkanTexture
  
      VulkanTexture::VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc) {
@@ -353,7 +443,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1014,10 +1240,14 @@ namespace plume {
+@@ -1014,10 +1308,14 @@ namespace plume {
              return;
          }
  
@@ -368,7 +458,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
          assert(image != VK_NULL_HANDLE);
  
-@@ -1026,6 +1256,8 @@ namespace plume {
+@@ -1026,6 +1324,8 @@ namespace plume {
      }
  
      VulkanTexture::~VulkanTexture() {
@@ -377,7 +467,7 @@ index f1dd503..b392fd6 100644
          if (imageView != VK_NULL_HANDLE) {
              vkDestroyImageView(device->vk, imageView, nullptr);
          }
-@@ -1061,6 +1293,7 @@ namespace plume {
+@@ -1061,6 +1361,7 @@ namespace plume {
  
      void VulkanTexture::setName(const std::string &name) {
          setObjectName(device->vk, VK_OBJECT_TYPE_IMAGE, uint64_t(vk), name);
@@ -385,7 +475,7 @@ index f1dd503..b392fd6 100644
      }
  
      void VulkanTexture::fillSubresourceRange() {
-@@ -1074,6 +1307,7 @@ namespace plume {
+@@ -1074,6 +1375,7 @@ namespace plume {
      // VulkanTextureView
  
      VulkanTextureView::VulkanTextureView(const VulkanTexture *texture, const RenderTextureViewDesc &desc) {
@@ -393,7 +483,7 @@ index f1dd503..b392fd6 100644
          assert(texture != nullptr);
          assert(desc.mipSlice < texture->desc.mipLevels);
          assert(desc.arrayIndex < texture->desc.arraySize);
-@@ -1107,6 +1341,7 @@ namespace plume {
+@@ -1107,6 +1409,7 @@ namespace plume {
      }
  
      VulkanTextureView::~VulkanTextureView() {
@@ -401,7 +491,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyImageView(texture->device->vk, vk, nullptr);
          }
-@@ -1145,6 +1380,7 @@ namespace plume {
+@@ -1145,6 +1448,7 @@ namespace plume {
      // VulkanDescriptorSetLayout
  
      VulkanDescriptorSetLayout::VulkanDescriptorSetLayout(VulkanDevice *device, const RenderDescriptorSetDesc &descriptorSetDesc) {
@@ -409,7 +499,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1216,6 +1452,7 @@ namespace plume {
+@@ -1216,6 +1520,7 @@ namespace plume {
      }
  
      VulkanDescriptorSetLayout::~VulkanDescriptorSetLayout() {
@@ -417,7 +507,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyDescriptorSetLayout(device->vk, vk, nullptr);
          }
-@@ -1224,6 +1461,7 @@ namespace plume {
+@@ -1224,6 +1529,7 @@ namespace plume {
      // VulkanPipelineLayout
  
      VulkanPipelineLayout::VulkanPipelineLayout(VulkanDevice *device, const RenderPipelineLayoutDesc &desc) {
@@ -425,7 +515,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1271,6 +1509,7 @@ namespace plume {
+@@ -1271,6 +1577,7 @@ namespace plume {
      }
  
      VulkanPipelineLayout::~VulkanPipelineLayout() {
@@ -433,7 +523,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipelineLayout(device->vk, vk, nullptr);
          }
-@@ -1283,6 +1522,7 @@ namespace plume {
+@@ -1283,6 +1590,7 @@ namespace plume {
      // VulkanShader
  
      VulkanShader::VulkanShader(VulkanDevice *device, const void *data, uint64_t size, const char *entryPointName, RenderShaderFormat format) {
@@ -441,7 +531,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
          assert(data != nullptr);
          assert(size > 0);
-@@ -1305,6 +1545,7 @@ namespace plume {
+@@ -1305,6 +1613,7 @@ namespace plume {
      }
  
      VulkanShader::~VulkanShader() {
@@ -449,7 +539,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyShaderModule(device->vk, vk, nullptr);
          }
-@@ -1317,6 +1558,7 @@ namespace plume {
+@@ -1317,6 +1626,7 @@ namespace plume {
      // VulkanSampler
  
      VulkanSampler::VulkanSampler(VulkanDevice *device, const RenderSamplerDesc &desc) {
@@ -457,7 +547,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1347,6 +1589,7 @@ namespace plume {
+@@ -1347,6 +1657,7 @@ namespace plume {
      }
  
      VulkanSampler::~VulkanSampler() {
@@ -465,7 +555,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroySampler(device->vk, vk, nullptr);
          }
-@@ -1367,6 +1610,7 @@ namespace plume {
+@@ -1367,6 +1678,7 @@ namespace plume {
      // VulkanComputePipeline
  
      VulkanComputePipeline::VulkanComputePipeline(VulkanDevice *device, const RenderComputePipelineDesc &desc) : VulkanPipeline(device, Type::Compute) {
@@ -473,7 +563,7 @@ index f1dd503..b392fd6 100644
          assert(desc.computeShader != nullptr);
          assert(desc.pipelineLayout != nullptr);
          assert((desc.threadGroupSizeX > 0) && (desc.threadGroupSizeY > 0) && (desc.threadGroupSizeZ > 0));
-@@ -1398,6 +1642,7 @@ namespace plume {
+@@ -1398,6 +1710,7 @@ namespace plume {
      }
  
      VulkanComputePipeline::~VulkanComputePipeline() {
@@ -481,7 +571,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipeline(device->vk, vk, nullptr);
          }
-@@ -1415,6 +1660,7 @@ namespace plume {
+@@ -1415,6 +1728,7 @@ namespace plume {
      // VulkanGraphicsPipeline
  
      VulkanGraphicsPipeline::VulkanGraphicsPipeline(VulkanDevice *device, const RenderGraphicsPipelineDesc &desc) : VulkanPipeline(device, Type::Graphics) {
@@ -489,7 +579,7 @@ index f1dd503..b392fd6 100644
          assert(desc.pipelineLayout != nullptr);
  
          thread_local std::vector<VkPipelineShaderStageCreateInfo> stages;
-@@ -1657,6 +1903,7 @@ namespace plume {
+@@ -1657,6 +1971,7 @@ namespace plume {
      }
  
      VulkanGraphicsPipeline::~VulkanGraphicsPipeline() {
@@ -497,7 +587,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyPipeline(device->vk, vk, nullptr);
          }
-@@ -1883,6 +2130,7 @@ namespace plume {
+@@ -1883,6 +2198,7 @@ namespace plume {
      // VulkanDescriptorSet
  
      VulkanDescriptorSet::VulkanDescriptorSet(VulkanDevice *device, const RenderDescriptorSetDesc &desc) {
@@ -505,7 +595,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -1937,6 +2185,7 @@ namespace plume {
+@@ -1937,6 +2253,7 @@ namespace plume {
      }
  
      VulkanDescriptorSet::~VulkanDescriptorSet() {
@@ -513,7 +603,7 @@ index f1dd503..b392fd6 100644
          if (descriptorPool != VK_NULL_HANDLE) {
              vkDestroyDescriptorPool(device->vk, descriptorPool, nullptr);
          }
-@@ -2074,6 +2323,7 @@ namespace plume {
+@@ -2074,6 +2391,7 @@ namespace plume {
      // VulkanSwapChain
  
      VulkanSwapChain::VulkanSwapChain(VulkanCommandQueue *commandQueue, const RenderSwapChainDesc &desc) {
@@ -521,7 +611,7 @@ index f1dd503..b392fd6 100644
          assert(commandQueue != nullptr);
          assert(desc.textureCount > 0);
  
-@@ -2241,6 +2491,7 @@ namespace plume {
+@@ -2241,6 +2559,7 @@ namespace plume {
      }
  
      VulkanSwapChain::~VulkanSwapChain() {
@@ -529,28 +619,28 @@ index f1dd503..b392fd6 100644
          releaseImageViews();
          releaseSwapChain();
  
-@@ -2294,6 +2545,10 @@ namespace plume {
+@@ -2294,6 +2613,10 @@ namespace plume {
  #else
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
  #endif
 +            // Banjo-Tooie: out of date is normal on a resize; anything else (device lost, out of memory) is logged.
 +            if (res != VK_ERROR_OUT_OF_DATE_KHR) {
-+                fprintf(stderr, "vkQueuePresentKHR failed with error code 0x%X.\n", res);
++                LogFailedCall(commandQueue->device, "vkQueuePresentKHR", res);
 +            }
              return false;
          }
  
-@@ -2488,6 +2743,9 @@ namespace plume {
+@@ -2488,6 +2811,9 @@ namespace plume {
          VulkanCommandSemaphore *interfaceSemaphore = static_cast<VulkanCommandSemaphore *>(signalSemaphore);
          VkResult res = vkAcquireNextImageKHR(commandQueue->device->vk, vk, UINT64_MAX, interfaceSemaphore->vk, VK_NULL_HANDLE, textureIndex);
          if ((res != VK_SUCCESS) && (res != VK_SUBOPTIMAL_KHR)) {
 +            if (res != VK_ERROR_OUT_OF_DATE_KHR) {
-+                fprintf(stderr, "vkAcquireNextImageKHR failed with error code 0x%X.\n", res);
++                LogFailedCall(commandQueue->device, "vkAcquireNextImageKHR", res);
 +            }
              return false;
          }
  
-@@ -2513,6 +2771,7 @@ namespace plume {
+@@ -2513,6 +2839,7 @@ namespace plume {
      // VulkanFramebuffer
      
      VulkanFramebuffer::VulkanFramebuffer(VulkanDevice *device, const RenderFramebufferDesc &desc) {
@@ -558,7 +648,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -2648,6 +2907,7 @@ namespace plume {
+@@ -2648,6 +2975,7 @@ namespace plume {
      }
  
      VulkanFramebuffer::~VulkanFramebuffer() {
@@ -566,7 +656,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFramebuffer(device->vk, vk, nullptr);
          }
-@@ -2680,6 +2940,7 @@ namespace plume {
+@@ -2680,6 +3008,7 @@ namespace plume {
      // VulkanQueryPool
  
      VulkanQueryPool::VulkanQueryPool(VulkanDevice *device, uint32_t queryCount) {
@@ -574,7 +664,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
          assert(queryCount > 0);
  
-@@ -2700,6 +2961,7 @@ namespace plume {
+@@ -2700,13 +3029,14 @@ namespace plume {
      }
  
      VulkanQueryPool::~VulkanQueryPool() {
@@ -582,7 +672,15 @@ index f1dd503..b392fd6 100644
          vkDestroyQueryPool(device->vk, vk, nullptr);
      }
  
-@@ -2754,6 +3016,7 @@ namespace plume {
+     void VulkanQueryPool::queryResults() {
+ 	    VkResult res = vkGetQueryPoolResults(device->vk, vk, 0, uint32_t(results.size()), sizeof(uint64_t) * results.size(), results.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+         if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkGetQueryPoolResults failed with error code 0x%X.\n", res);
++            LogFailedCall(device, "vkGetQueryPoolResults", res);
+             return;
+         }
+ 
+@@ -2754,6 +3084,7 @@ namespace plume {
      // VulkanCommandList
  
      VulkanCommandList::VulkanCommandList(VulkanCommandQueue *queue) {
@@ -590,7 +688,7 @@ index f1dd503..b392fd6 100644
          assert(queue != nullptr);
  
          this->queue = queue;
-@@ -2783,6 +3046,7 @@ namespace plume {
+@@ -2783,6 +3114,7 @@ namespace plume {
      }
  
      VulkanCommandList::~VulkanCommandList() {
@@ -598,7 +696,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkFreeCommandBuffers(queue->device->vk, commandPool, 1, &vk);
          }
-@@ -3229,6 +3493,27 @@ namespace plume {
+@@ -3229,6 +3561,27 @@ namespace plume {
              imageCopy.imageExtent.depth = srcLocation.placedFootprint.depth;
              vkCmdCopyBufferToImage(vk, srcBuffer->vk, dstTexture->vk, toImageLayout(dstTexture->textureLayout), 1, &imageCopy);
          }
@@ -626,7 +724,20 @@ index f1dd503..b392fd6 100644
          else {
              VkImageCopy imageCopy = {};
              imageCopy.srcSubresource.aspectMask = toAspectFlags(srcTexture->desc.format, srcTexture->desc.flags);
-@@ -3500,6 +3785,7 @@ namespace plume {
+@@ -3459,6 +3812,12 @@ namespace plume {
+         vkCmdResetQueryPool(vk, interfaceQueryPool->vk, queryFirstIndex, queryCount);
+     }
+ 
++    void VulkanCommandList::setCheckpoint(const char *marker) {
++        if (queue->device->checkpointsSupported) {
++            vkCmdSetCheckpointNV(vk, marker);
++        }
++    }
++
+     void VulkanCommandList::writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) {
+         assert(queryPool != nullptr);
+ 
+@@ -3500,6 +3859,7 @@ namespace plume {
      // VulkanCommandFence
  
      VulkanCommandFence::VulkanCommandFence(VulkanDevice *device) {
@@ -634,7 +745,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3515,6 +3801,7 @@ namespace plume {
+@@ -3515,6 +3875,7 @@ namespace plume {
      }
  
      VulkanCommandFence::~VulkanCommandFence() {
@@ -642,7 +753,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroyFence(device->vk, vk, nullptr);
          }
-@@ -3523,6 +3810,7 @@ namespace plume {
+@@ -3523,6 +3884,7 @@ namespace plume {
      // VulkanCommandSemaphore
  
      VulkanCommandSemaphore::VulkanCommandSemaphore(VulkanDevice *device) {
@@ -650,7 +761,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3538,6 +3826,7 @@ namespace plume {
+@@ -3538,6 +3900,7 @@ namespace plume {
      }
  
      VulkanCommandSemaphore::~VulkanCommandSemaphore() {
@@ -658,7 +769,35 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vkDestroySemaphore(device->vk, vk, nullptr);
          }
-@@ -3647,6 +3936,7 @@ namespace plume {
+@@ -3626,7 +3989,7 @@ namespace plume {
+         }
+ 
+         if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkQueueSubmit failed with error code 0x%X.\n", res);
++            LogFailedCall(device, "vkQueueSubmit", res);
+             return;
+         }
+     }
+@@ -3636,8 +3999,17 @@ namespace plume {
+ 
+         VulkanCommandFence *interfaceFence = static_cast<VulkanCommandFence *>(fence);
+         VkResult res = vkWaitForFences(device->vk, 1, &interfaceFence->vk, VK_TRUE, UINT64_MAX);
++
++        // Banjo-Tooie: headless test hook. TOOIE_TEST_DEVICE_LOST=<seconds> reports a lost device that many
++        // seconds after the first wait. Only the report is faked: the driver and this wait carry on as normal.
++        static const char *testDeviceLost = getenv("TOOIE_TEST_DEVICE_LOST");
++        static const auto firstWait = std::chrono::steady_clock::now();
++        if ((testDeviceLost != nullptr) && (std::chrono::duration<double>(std::chrono::steady_clock::now() - firstWait).count() > atof(testDeviceLost))) {
++            NoteDeviceLost(device, "vkWaitForFences (TOOIE_TEST_DEVICE_LOST)");
++        }
++
+         if (res != VK_SUCCESS) {
+-            fprintf(stderr, "vkWaitForFences failed with error code 0x%X.\n", res);
++            LogFailedCall(device, "vkWaitForFences", res);
+             return;
+         }
+ 
+@@ -3647,6 +4019,7 @@ namespace plume {
      // VulkanPool
  
      VulkanPool::VulkanPool(VulkanDevice *device, const RenderPoolDesc &desc) {
@@ -666,7 +805,7 @@ index f1dd503..b392fd6 100644
          assert(device != nullptr);
  
          this->device = device;
-@@ -3688,6 +3978,7 @@ namespace plume {
+@@ -3688,6 +4061,7 @@ namespace plume {
      }
  
      VulkanPool::~VulkanPool() {
@@ -674,7 +813,7 @@ index f1dd503..b392fd6 100644
          if (vk != VK_NULL_HANDLE) {
              vmaDestroyPool(device->allocator, vk);
          }
-@@ -4084,6 +4375,7 @@ namespace plume {
+@@ -4084,6 +4458,7 @@ namespace plume {
  
          VmaAllocatorCreateInfo allocatorInfo = {};
          allocatorInfo.flags |= bufferDeviceAddressSupported ? VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT : 0;
@@ -682,7 +821,7 @@ index f1dd503..b392fd6 100644
          allocatorInfo.physicalDevice = physicalDevice;
          allocatorInfo.device = vk;
          allocatorInfo.pVulkanFunctions = &vmaFunctions;
-@@ -4097,6 +4389,8 @@ namespace plume {
+@@ -4097,6 +4472,8 @@ namespace plume {
              return;
          }
  
@@ -691,7 +830,15 @@ index f1dd503..b392fd6 100644
          // Find the biggest device local memory available on the device.
          VkDeviceSize memoryHeapSize = 0;
          const VkPhysicalDeviceMemoryProperties *memoryProps = nullptr;
-@@ -4433,6 +4727,8 @@ namespace plume {
+@@ -4132,6 +4509,7 @@ namespace plume {
+         capabilities.samplerMirrorClampToEdge = supportedOptionalExtensions.find(VK_KHR_SAMPLER_MIRROR_CLAMP_TO_EDGE_EXTENSION_NAME) != supportedOptionalExtensions.end();
+         capabilities.presentWait = presentWaitSupported;
+         capabilities.displayTiming = supportedOptionalExtensions.find(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME) != supportedOptionalExtensions.end();
++        checkpointsSupported = (supportedOptionalExtensions.find(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) != supportedOptionalExtensions.end()) && (vkCmdSetCheckpointNV != nullptr);
+         capabilities.maxTextureSize = physicalDeviceProperties.limits.maxImageDimension2D;
+         capabilities.preferHDR = memoryHeapSize > (512 * 1024 * 1024);
+         capabilities.dynamicDepthBias = true;
+@@ -4433,6 +4811,8 @@ namespace plume {
          nullBuffer = nullptr; // force destruction before destroying allocator
  
          if (allocator != VK_NULL_HANDLE) {
@@ -701,10 +848,10 @@ index f1dd503..b392fd6 100644
              allocator = VK_NULL_HANDLE;
          }
 diff --git a/plume_vulkan.h b/plume_vulkan.h
-index 0a1edbe..066fe81 100644
+index 0a1edbe..3387757 100644
 --- a/plume_vulkan.h
 +++ b/plume_vulkan.h
-@@ -42,6 +42,21 @@
+@@ -42,6 +42,26 @@
  #endif
  
  namespace plume {
@@ -722,11 +869,16 @@ index 0a1edbe..066fe81 100644
 +        int64_t bytes = 0;
 +    };
 +    std::vector<VideoMemoryGroup> GetVideoMemoryGroups();
++    // Banjo-Tooie: whether a Vulkan call has returned VK_ERROR_DEVICE_LOST (the GPU stopped answering and the
++    // driver was reset, or it crashed). Nothing drawn after that reaches the screen. The report says which call
++    // saw it first and, where the driver keeps checkpoints (setCheckpoint), the last marks the GPU reached.
++    bool DeviceLost();
++    std::string DeviceLostReport();
 +
      struct VulkanCommandQueue;
      struct VulkanDevice;
      struct VulkanInterface;
-@@ -56,6 +71,8 @@ namespace plume {
+@@ -56,6 +76,8 @@ namespace plume {
          VmaAllocationInfo allocationInfo = {};
          RenderBufferDesc desc;
          RenderBarrierStages barrierStages = RenderBarrierStage::NONE;
@@ -735,7 +887,7 @@ index 0a1edbe..066fe81 100644
  
          VulkanBuffer() = default;
          VulkanBuffer(VulkanDevice *device, VulkanPool *pool, const RenderBufferDesc &desc);
-@@ -88,6 +105,8 @@ namespace plume {
+@@ -88,6 +110,8 @@ namespace plume {
          RenderBarrierStages barrierStages = RenderBarrierStage::NONE;
          bool ownership = false;
          RenderTextureDesc desc;
@@ -744,3 +896,20 @@ index 0a1edbe..066fe81 100644
  
          VulkanTexture() = default;
          VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc);
+@@ -342,6 +366,7 @@ namespace plume {
+         void discardTexture(const RenderTexture* texture) override;
+         void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) override;
+         void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) override;
++        void setCheckpoint(const char *marker) override;
+         void checkActiveRenderPass();
+         void endActiveRenderPass();
+         void setDescriptorSet(VkPipelineBindPoint bindPoint, const VulkanPipelineLayout *pipelineLayout, const RenderDescriptorSet *descriptorSet, uint32_t setIndex);
+@@ -417,6 +442,8 @@ namespace plume {
+         std::unique_ptr<RenderBuffer> nullBuffer;
+         bool loadStoreOpNoneSupported = false;
+         bool nullDescriptorSupported = false;
++        // Banjo-Tooie: VK_NV_device_diagnostic_checkpoints is enabled (setCheckpoint).
++        bool checkpointsSupported = false;
+ 
+         VulkanDevice(VulkanInterface *renderInterface, const std::string &preferredDeviceName);
+         ~VulkanDevice() override;

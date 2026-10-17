@@ -66,11 +66,11 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Gameplay
 
+- Warp tab: new Glitter Gulch Mine place, Flooded Caves (Torch enemy), which lands at the cave entrance by the first torch (L). Untested on PC (T395).
 - New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves, three of them. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him; they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
-- Fixed: Banjo's shadow flickered while the camera turned, at every frame rate. Bits of it failed the check against the ground's depth on uneven ground, and which bits failed changed every frame. The shadow now gets more room on that check, so it keeps its shape. Untested on PC (T387).
 - New Graphics > Ice reflections slider (L): all ice now reflects, not only Icy Side's frozen decals: ice floors and platforms, the mottled ice of walls and platform sides, the see-through blocks round notes, the frozen lake and Icicle Grotto's floor. Ice now reflects from any camera height (before, it stopped once the camera looked down more than about 45 degrees). Ice no longer follows Water reflections. Untested on PC (T384).
 - Blend texture seams now finds every texture drawn in clamped pieces by itself, in 2D and in the 3D world: the pads the player stands on, Grunty Industries' wall panels and Mayahem Temple's carvings blend the same way the title logo does. Palette textures are included. Edges with no matching neighbour, or with a sharp colour change in the 3D world (a pad's rim against its picture), stay vanilla (L: "Look for all textures since there are too many"). Untested on PC (T393).
 - Blend texture seams now joins the title logo's pieces fully: each piece blends into the texels of the piece drawn beside it, so the level lines are gone too, not only the upright ones. Pieces in the 3D world still get the softer blend. The shader is also smaller again, so the first black screen at start is no longer longer than before (L: "can it be better?"). Untested on PC (T389).
