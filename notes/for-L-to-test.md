@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T373 3D grass: no growing as you walk up, yellow path clear, pixelated under 1
+- Asked: 2026-10-17 10:31 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass
+  2. Walk toward a field of grass in Spiral Mountain
+  3. Walk the yellow path by the egg nests and the dirt pit
+  4. Turn on Pixelated grass, Pixel size 0.5, and stand still in the grass
+- Look for: Blades stay the same height as Banjo walks up (distant ones thin out instead of shrinking); no blades on the yellow path, including where it fades into the grass; pixelated grass under 1 no longer shimmers
+- Status: waiting for L
+
 ## T372 Snout jiggle fixes, Nose jiggle, Kazooie jiggle sliders
 - Asked: 2026-10-17 10:20 UTC
 - Build: main
