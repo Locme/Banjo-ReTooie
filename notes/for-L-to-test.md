@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T361 Cheats round 2: Replays, Beat Hag 1, size cheats, one-hit enemies, double damage
+- Asked: 2026-10-17 08:07 UTC
+- Build: main @ cb3cebc
+- Steps:
+  1. Cheats > Replays: pick a race, then a boss (e.g. Targitzan), a minigame and a cutscene from inside a level
+  2. Warp tab: Race Warps are gone from there
+  3. Load the 100% save: Cheats > Beat Hag 1 appears; switch it on
+  4. Cheats > Size: try Big head, Small head, Big body, Tiny body, also with Dragon Kazooie and after Split Up
+  5. Cheats > Enemies > One-hit enemies: hit a tough enemy once
+  6. General > Gameplay > Enemies do double damage: get hit by an enemy, then fall from a high ledge
+- Look for: Do replays start and return to the game select? Does Beat Hag 1 only show on a 100% file? Do the sizes look right? Do enemies drop in one hit, and do hits take 2 honeycombs while falls take the usual amount?
+- Status: waiting for L
+
 ## T360 Esc menu: mouse clicks land where you point with Mouse Sensitivity on
 - Asked: 2026-10-17 07:45 UTC
 - Build: main

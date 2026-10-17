@@ -10,6 +10,9 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Cheats > Replays: Race (moved here from the Warp tab), Boss, Minigame and Cutscene drop-downs start any race or the game's own boss, minigame and cutscene replays from anywhere; the file is saved first (L). Untested on PC (T361).
+- New cheats: Beat Hag 1 (shows only once your file is 100%), Big head, Small head, Big body, Tiny body and One-hit enemies (bosses keep their hits) (L). Untested on PC (T361).
+- General > Gameplay > Enemies do double damage (off by default): enemy and hazard hits take twice the honeycombs; falls hurt as usual (L). Untested on PC (T361).
 - Esc menu: with Mouse Sensitivity above 0%, mouse clicks land where you point again (they hit an old spot before), and the cursor starts in the middle of the window. Untested on PC (T360).
 - Kazooie feathers: the very top of her head is feathered too, no bare band (L). Untested on PC (T359).
 - Kazooie feathers: no more orange flecks on the top of her beak, and her wing feathers reach all the way up the wing (L). Untested on PC (T357).
