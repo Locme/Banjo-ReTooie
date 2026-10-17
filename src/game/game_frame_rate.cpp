@@ -725,10 +725,15 @@ namespace {
 
     class StepGate {
     public:
+        // rate: steps a second (30), or 0 to leave the object alone at 30 FPS and below.
+        explicit StepGate(float (*rate)() = nullptr) : rate_now(rate) {}
+
         // True when the object at this address should skip its step this frame.
         bool skip(uint8_t* rdram, uint32_t address) {
             std::lock_guard lock{ mutex };
-            if (!above_30()) {
+            const float forced = rate_now != nullptr ? rate_now() : 0.0f;
+            const float step = forced > 0.0f ? 1.0f / forced : 1.0f / 30.0f;
+            if (forced <= 0.0f && !above_30()) {
                 gates.clear();
                 return false;
             }
@@ -755,12 +760,18 @@ namespace {
         }
 
     private:
-        static constexpr float step = 1.0f / 30.0f;
+        float (*rate_now)();
         std::mutex mutex;
         std::unordered_map<uint32_t, Gate> gates;
     };
 
-    StepGate portrait_gate;
+    // DEV > Talking heads at 20 FPS (off by default, L 2026-10-16): the portraits' mouths and
+    // blinks step 20 times a second at any Game Frame Rate, Original included. Read each time, so it applies live.
+    float portrait_rate() {
+        return bool_option_on(tooie::game_frame_rate::talking_heads_20_option, "TOOIE_TALKING_HEADS_20") ? 20.0f : 0.0f;
+    }
+
+    StepGate portrait_gate{ portrait_rate };
     StepGate blink_gate;
 }
 
@@ -868,6 +879,12 @@ void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
         "Force Interpolation in the gameplay demo",
         "The same for the gameplay demo that plays when you don't press Start (and the other recorded scenes): "
         "Interpolation blends it up to its rate. The demo keeps its own speed either way.",
+        false);
+    dev.add_bool_option(
+        talking_heads_20_option,
+        "Talking heads at 20 FPS",
+        "The talking heads in conversations move their mouths and blink 20 times a second, whatever the Game Frame Rate. "
+        "Off, they step 30 times a second above 30 FPS and with every game frame otherwise.",
         false);
 }
 

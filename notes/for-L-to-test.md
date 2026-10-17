@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T350 DEV: Talking heads at 20 FPS
+- Asked: 2026-10-17 00:52 UTC
+- Build: main
+- Steps:
+  1. Settings > DEV: turn on Talking heads at 20 FPS (off by default)
+  2. Talk to anyone with a talking head (Bottles, Humba, Jamjars) at 60 FPS or above, then at Original
+  3. Turn the option off and on while the box is open
+- Look for: The talking heads' mouths and blinks move at 20 steps a second at every Game Frame Rate, a little choppier than before; turning it off goes back to 30 a second at once. Checked headless with Humba's head at 60 FPS: 20 steps a second on, 30 off.
+- Status: waiting for L
+
 ## T349 Snout jiggle sliders and Photo Mode freeze
 - Asked: 2026-10-17 00:40 UTC
 - Build: main
