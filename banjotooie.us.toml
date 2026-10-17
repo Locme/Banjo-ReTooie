@@ -1136,6 +1136,12 @@ func = "func_800DE498"
 before_vram = 0x800DE498
 text = "tooie_snow_model_drawn(rdram, ctx);"
 
+# Drawing memory report (src/display/gfx_budget.cpp): the model draw's one exit, $sp still its own.
+[[patches.hook]]
+func = "func_800DE498"
+before_vram = 0x800DF310
+text = "tooie_gfx_model_done(rdram, ctx);"
+
 # The generic actor draw func_80101808(actor, draw callback): its entry, and
 # just after func_800DE448 has drawn the actor ($s0 still holds it).
 [[patches.hook]]

@@ -78,6 +78,7 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         tooie::hd_shadows::fix_pastes(rdram, tooie::model_tagging::scene_start(), end & 0x1FFFFFFF);
         tooie::hd_shadows::fix_shadow_pose(rdram, tooie::model_tagging::scene_start(), end & 0x1FFFFFFF);
         uint32_t added = tooie::model_tagging::tag_scene(rdram, tooie::model_tagging::scene_start(), end & 0x1FFFFFFF);
+        tooie::gfx_budget::note_tags(0, added);
         MEM_W(0, gfx_ctx) = (int32_t)(end + added);
         tooie::dl_dump::scene_end(rdram, end + added);
     }
@@ -88,6 +89,7 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         // the projection (model_tagging.cpp).
         uint32_t end = (uint32_t)MEM_W(0, gfx_ctx);
         uint32_t added = tooie::model_tagging::tag_2d(rdram, marks[0] & 0x1FFFFFFF, end & 0x1FFFFFFF);
+        tooie::gfx_budget::note_tags(1, added);
         MEM_W(0, gfx_ctx) = (int32_t)(end + added);
         tooie::dl_dump::frame_end(rdram, marks[0], end + added);
         tooie::gfx_budget::frame_end(rdram);

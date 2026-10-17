@@ -80,6 +80,7 @@ void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
 void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx);
+void tooie_gfx_model_done(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_render_mode(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_snout_model(uint8_t* rdram, recomp_context* ctx);
