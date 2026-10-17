@@ -67,7 +67,7 @@
   1. On the save select screen, pick the TV (global settings)
   2. Look at the list, then change Speaker Mode and open Screen Alignment
   3. Esc > DEV: turn off Hide Vanilla Widescreen Entry in the Game Menu, close and reopen the TV
-- Look for: With the toggle on (default) the TV lists Screen Alignment and Speaker Mode only, and Speaker Mode changes and keeps its setting. With it off, Wide-screen Mode is back between them as before.
+- Look for: With the toggle on (default) the TV lists Screen Alignment and Speaker Mode only, and Speaker Mode changes and keeps its setting. With it off, Wide-screen Mode is back between them as before. If a save had the game's Wide-screen Mode on, the picture is no longer squashed with the toggle on.
 - Status: waiting for L
 
 ## T373 3D grass: no growing as you walk up, yellow path clear, pixelated under 1

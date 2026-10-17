@@ -86,6 +86,8 @@ namespace tooie {
     inline const std::string cheats_tab_option = "cheats_tab";
     // DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
+    // Once a frame: keeps the game's own widescreen mode off while that switch is on.
+    void vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx);
     // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.
