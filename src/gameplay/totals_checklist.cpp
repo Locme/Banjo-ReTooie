@@ -967,7 +967,8 @@ namespace {
         }
         const gpr coords = string_area + (string_area_size - 8);   // Coords2D, in quarter pixels
         MEM_W(0, coords) = x * 4;
-        MEM_W(4, coords) = (y + rise) * 4;
+        // Portraits come out 12 pixels lower than asked at any size (measured headless), so ask higher.
+        MEM_W(4, coords) = (y - 12 + rise) * 4;
         // func_800E2568 sets the drawn size in quarter pixels.
         call(rdram, ctx, func_800E2568, (uint32_t)(width * size * 4 / height), (uint32_t)(size * 4));
         call(rdram, ctx, func_800E30E0, gfx, image, 0, (uint32_t)coords);

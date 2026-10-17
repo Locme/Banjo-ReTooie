@@ -438,18 +438,18 @@ namespace {
     // draws them from the ROM, so a texture pack that replaces a portrait replaces its icon too.
     // TOOIE_ACH_PORTRAITS="id=hex,..." overrides them, to look at others headless.
     const std::vector<std::pair<const char*, int>> portraits = {
-        {"merry_old_soul", 0x96},
+        {"merry_old_soul", 0x42},
         {"after_the_storm", 0x14},
-        {"all_beaten_up", 0x10},
-        {"calamari_bonanza", 0x05},
-        {"hatch_the_future", 0x0C},
+        {"all_beaten_up", 0x04},
+        {"calamari_bonanza", 0x50},
+        {"hatch_the_future", 0x0D},
         {"it_lives", 0xAA},
         {"knocked_out_klungo", 0xAB},
-        {"my_nemesis", 0x7D},
+        {"my_nemesis", 0x80},
         {"points_make_prizes", 0x3A},
-        {"shoot_em_up", 0x07},
+        {"shoot_em_up", 0x96},
         {"all_over", 0x33},
-        {"treasure_hunt", 0x01},
+        {"treasure_hunt", 0x0C},
     };
 
     int portrait_of(const std::string& id) {

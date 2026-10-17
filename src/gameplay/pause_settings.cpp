@@ -57,8 +57,8 @@ namespace {
     // so 0x7E is never one of the game's; Totals sub pages go up to 0xD).
     constexpr uint8_t settings_text = 0x7E;
     constexpr uint8_t settings_sub_page = tooie::achievements::pause_sub_page;
-    // The entry's icon, a gczoomboxdata portrait id: 0xAA is King Jingaling.
-    constexpr uint16_t achievements_icon = 0xAA;
+    // The entry's icon, a gczoomboxdata portrait id: 0xAE is King Jingaling (0xAA, used before, is Sabreman).
+    constexpr uint16_t achievements_icon = 0xAE;
 
     // The variants that get the entry: 0..3, the normal pause menu (+1 with items, +2 with Jinjos).
     // 4..6 are the menus of special modes (decomp func_80800534 case 1), left as they are.
