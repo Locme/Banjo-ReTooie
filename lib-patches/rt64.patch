@@ -8433,7 +8433,7 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..caf3f5a
+index 0000000..0141e96
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
 @@ -0,0 +1,120 @@
@@ -8538,11 +8538,11 @@ index 0000000..caf3f5a
 +    if ((high < 0.22f) || (baseColor.r < high) || (((high - low) / high) < 0.5f)) {
 +        return false;
 +    }
-+    // Red to orange; up to a deep orange only where it is fully saturated (the top of her head), as her beak's
-+    // yellow-orange is paler.
++    // Red to orange; up to a deep orange only where it is fully saturated (the top of her head, no blue at all), as
++    // her beak's orange base keeps a little blue (saturation 0.91-0.95; its feathers showed as flecks, L).
 +    const float hue = 60.0f * (baseColor.g - baseColor.b) / (high - low);
 +    const float saturation = (high - low) / high;
-+    if ((hue < -20.0f) || (hue > ((saturation >= 0.9f) ? 30.0f : 18.0f))) {
++    if ((hue < -20.0f) || (hue > ((saturation >= 0.98f) ? 30.0f : 18.0f))) {
 +        return false;
 +    }
 +
@@ -8962,10 +8962,10 @@ index 0000000..5f2f131
 +}
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..70b522e
+index 0000000..44cffe5
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,589 @@
+@@ -0,0 +1,592 @@
 +//
 +// RT64
 +//
@@ -9300,8 +9300,11 @@ index 0000000..70b522e
 +        const float featherLength = params.x * size;
 +        const float halfWidth = 0.5f * params.y * size;
 +        const float lift = params.w * featherLength;
-+        const float3 rootOffset = -normal * (0.1f * featherLength);
-+        const float3 tipOffset = along * featherLength + normal * (lift * 0.5f);
++        // On a wing a feather starts a third of its length behind its root, so the wing's top edge, which no
++        // feather grows over, is covered too (L: they did not go all the way up).
++        const float back = twoSided ? 0.35f * featherLength : 0.0f;
++        const float3 rootOffset = -normal * (0.1f * featherLength) - along * back;
++        const float3 tipOffset = along * (featherLength - back) + normal * (lift * 0.5f);
 +        const float shade = lerp(1.0f - 0.36f * noisiness, 1.0f + 0.2f * noisiness, FeatherRandom(seed, 5u));
 +
 +        GrassVertex v;
@@ -10053,7 +10056,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..c5b5802 100644
+index e7895c3..fc8cdbb 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -10159,7 +10162,7 @@ index e7895c3..c5b5802 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -182,6 +247,36 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +247,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -10172,8 +10175,10 @@ index e7895c3..c5b5802 100644
 +        const float2 anchorDy = ddy(vertexFurAnchor.xy);
 +        const float anchorDet = anchorDx.x * anchorDy.y - anchorDy.x * anchorDx.y;
 +        if (abs(anchorDet) > 1e-12f) {
-+            const float2 toRoot = float2(anchorDy.y * vertexFurAnchor.x - anchorDy.x * vertexFurAnchor.y,
-+                anchorDx.x * vertexFurAnchor.y - anchorDx.y * vertexFurAnchor.x) / anchorDet;
++            // A wing's feathers start a third of their length behind the root (GrassGS FeatherCards).
++            const float2 fromRoot = vertexFurAnchor.xy - float2(0.0f, ((gConstants.grassShells & RASTER_GRASS_EDGES) != 0) ? 0.35f : 0.0f);
++            const float2 toRoot = float2(anchorDy.y * fromRoot.x - anchorDy.x * fromRoot.y,
++                anchorDx.x * fromRoot.y - anchorDx.y * fromRoot.x) / anchorDet;
 +            const float2 rootUV = vertexUV - ddxVertexUV * toRoot.x - ddyVertexUV * toRoot.y;
 +            ColorCombiner::Inputs rootInputs = ccInputs;
 +            if (renderFlagUsesTexture0(rp.flags)) {
@@ -10196,7 +10201,7 @@ index e7895c3..c5b5802 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +349,108 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +351,108 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -10305,7 +10310,7 @@ index e7895c3..c5b5802 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +458,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +460,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -10329,7 +10334,7 @@ index e7895c3..c5b5802 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +501,7 @@ void PSMain(
+@@ -287,6 +503,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -10337,7 +10342,7 @@ index e7895c3..c5b5802 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +518,7 @@ void PSMain(
+@@ -303,7 +520,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;

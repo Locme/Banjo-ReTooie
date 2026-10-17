@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T357 Kazooie: no flecks on her beak; wing feathers reach the top
+- Asked: 2026-10-17 07:07 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Kazooie feathers at 100
+  2. Look at her beak and wings up close (the poker game in Jolly's works)
+- Look for: No small orange flecks on the top of her beak near the eyes; her head is still feathered. Her wing feathers now reach all the way up to where the wing meets her body.
+- Status: waiting for L
+
 ## T356 3D grass road check, cheaper
 - Asked: 2026-10-17 06:50 UTC
 - Build: main
