@@ -1842,8 +1842,8 @@ index 4fdf81f..5e0e414 100644
 -            {ultramodern::renderer::AspectRatio::Original, "Original"},
 -            {ultramodern::renderer::AspectRatio::Expand, "Expand"},
 -            // {ultramodern::renderer::AspectRatio::Manual, "Manual"},
-+            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
 +            {ultramodern::renderer::AspectRatio::Expand, "Expand", "Fill"},
++            {ultramodern::renderer::AspectRatio::Original, "Original", "4:3"},
 +            {ultramodern::renderer::AspectRatio::Manual, "Manual", "16:9"},
          };
  
