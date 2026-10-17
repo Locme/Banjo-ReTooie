@@ -34,7 +34,7 @@
 #include "tooie_rdram.h"
 
 namespace RT64 {
-    void SetStretchPerspective(bool stretch);
+    void SetIntroFillWidth(bool fill);
 }
 
 namespace {
@@ -67,14 +67,15 @@ namespace {
     }
 }
 
-// The intro ("Two years have passed..", map 0xA1) films a backdrop of cloud
-// panels built for a 4:3 view: widened, the picture shows the panels' ends
-// and black past them. On that map the cloud shots, which have a camera of
-// their own, are stretched to the window instead (RT64 skips its aspect
-// adjustment for them); the castle and characters keep their shape.
+// The intro ("Two years have passed..", map 0xA1) opens with a shot through a
+// backdrop of cloud panels built for a 4:3 view: widened, the picture shows the
+// panels' ends. RT64 zooms that one shot to fill the window (the game's width,
+// the top and bottom cut away, nothing changes shape) and goes back to
+// the normal wide view at the shot's first camera cut. Until 2026-10-17 every
+// shot of the map was stretched instead, Klungo at the grave included (L).
 void tooie::widescreen_tick(uint8_t* rdram) {
     constexpr uint16_t intro_map = 0xA1;
-    RT64::SetStretchPerspective(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
+    RT64::SetIntroFillWidth(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
 }
 
 // How much wider than 4:3 RT64 draws the picture.

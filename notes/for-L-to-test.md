@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T402 Intro: Klungo and the castle keep their shape (replaces T225)
+- Asked: 2026-10-17 20:50 UTC
+- Build: next build from main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave
+- Look for: The opening cloud shot fills the width with no panel ends (it is zoomed in, so the top and bottom of that one shot are cut), and every shot after it, Klungo's "No good, missstress" close-up included, has normal proportions instead of looking stretched sideways. Checked headless at 3440x1417 shape and 16:9: screens/intro-stretch/before-after.png
+- Status: waiting for L
+
 ## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
 - Asked: 2026-10-17 20:40 UTC
 - Build: main
@@ -1545,6 +1554,7 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Watch the intro ("Two years have passed..") from the start
 - Look for: The opening cloud shots fill the whole width with no panel ends or black at the sides. The castle, the rock, Grunty's grave and the text keep their normal shape (not stretched).
+- Status: replaced by T402
 
 ## T224 Refresh Mods in game
 - Asked: 2026-10-16 08:15 UTC
