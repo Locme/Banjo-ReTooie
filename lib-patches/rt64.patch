@@ -4700,7 +4700,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..15314e5
+index 0000000..52712bd
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,1999 @@
@@ -5257,9 +5257,9 @@ index 0000000..15314e5
 +        // At the full setting, 16 world units deep (Banjo is about 150 tall, a stone block about 60 to 120 across);
 +        // flat by 2800 units away, where a few texels cover a pixel and it can't be seen. Up to 24 steps down the ray.
 +        frameParams.parallaxParams = { 16.0f * depth, 1300.0f, 2800.0f, 24.0f };
-+        // The deepest parts a third darker, and the shadows the stones cast half as dark, less at a lower setting.
++        // The deepest parts and the shadows the stones cast about a third darker, less at a lower setting.
 +        const float shade = std::min(1.0f, 0.4f + depth * 0.6f);
-+        frameParams.parallaxShading = { 0.35f * shade, 0.5f * shade, 0.0f, 0.0f };
++        frameParams.parallaxShading = { 0.3f * shade, 0.3f * shade, 0.0f, 0.0f };
 +        // On whenever it is set, as a texture pack's height maps need nothing else.
 +        return depth > 0.0f;
 +    }
@@ -9560,10 +9560,10 @@ index 0000000..345e835
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..22bc7fc
+index 0000000..c555512
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,160 @@
+@@ -0,0 +1,172 @@
 +//
 +// RT64
 +//
@@ -9639,7 +9639,7 @@ index 0000000..22bc7fc
 +        n = -n;
 +    }
 +    const float vn = dot(n, v);
-+    const float fade = saturate((vn - 0.12f) / 0.33f) * (1.0f - smoothstep(params.y, params.z, distance));
++    const float fade = saturate((vn - 0.2f) / 0.35f) * (1.0f - smoothstep(params.y, params.z, distance));
 +    if (fade <= 0.0f) {
 +        return float3(0.0f, 0.0f, 1.0f);
 +    }
@@ -9664,7 +9664,15 @@ index 0000000..22bc7fc
 +
 +    // Going down the view ray to the deepest part, the place on the surface it passes under moves this far.
 +    const float3 lateral = (n - v / max(vn, 0.3f)) * depthScale;
-+    const float2 uvFull = float2(dot(gu, lateral), dot(gv, lateral));
++    float2 uvFull = float2(dot(gu, lateral), dot(gv, lateral));
++
++    // No more than a few texels across, however slanted the view: further, a wall seen at a slant smears the stones
++    // sideways into streaks (L: walls looked worse than without it).
++    const float maxTexels = params.x * 0.3f;
++    const float uvLength = length(uvFull);
++    if (uvLength > maxTexels) {
++        uvFull *= maxTexels / uvLength;
++    }
 +
 +    // Down the ray in even steps (more of them seen at a slant) until it goes under the surface, then halving the
 +    // last step to find where the two cross.
@@ -9710,14 +9718,18 @@ index 0000000..22bc7fc
 +    const float nl = dot(n, l);
 +    if ((shading.y > 0.0f) && (nl > 0.05f) && (hit > 0.02f)) {
 +        const float3 lateralLight = (l - n * nl) / max(nl, 0.25f) * depthScale;
-+        const float2 uvLight = float2(dot(gu, lateralLight), dot(gv, lateralLight));
++        float2 uvLight = float2(dot(gu, lateralLight), dot(gv, lateralLight));
++        const float uvLightLength = length(uvLight);
++        if (uvLightLength > maxTexels) {
++            uvLight *= maxTexels / uvLightLength;
++        }
 +        float shadow = 0.0f;
 +        [loop]
 +        for (uint k = 1; k <= 6; k++) {
 +            const float rise = hit * (float(k) / 6.0f);
 +            const float rayLayer = hit - rise;
 +            const float s = ParallaxDepthAt(otherMode, renderFlags, hitUV + uvLight * rise, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap);
-+            shadow = max(shadow, saturate((rayLayer - s) * 6.0f) * (1.0f - float(k - 1) / 6.0f));
++            shadow = max(shadow, saturate((rayLayer - s) * 3.0f) * (1.0f - float(k - 1) / 6.0f));
 +        }
 +        lit *= 1.0f - shading.y * shadow;
 +    }
