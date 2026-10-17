@@ -1895,7 +1895,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..1a06137 100644
+index 9fae0d4..57fc728 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -2198,7 +2198,7 @@ index 9fae0d4..1a06137 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +446,41 @@ namespace RT64 {
+@@ -169,11 +446,43 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2236,11 +2236,13 @@ index 9fae0d4..1a06137 100644
          rspSmoothNormalVector.clear();
          frameParams.viewUbershaders = ubershadersVisible;
          frameParams.ditherNoiseStrength = ditherNoiseStrength;
-+        frameParams.textureSeams = { SceneTextureSeams() ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
++        // TOOIE_SEAM_SHOW=1: the blended edges in magenta (headless checks).
++        static const bool seamShow = (getenv("TOOIE_SEAM_SHOW") != nullptr);
++        frameParams.textureSeams = { SceneTextureSeams() ? 1.0f : 0.0f, seamShow ? 1.0f : 0.0f, 0.0f, 0.0f };
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +526,7 @@ namespace RT64 {
+@@ -219,6 +528,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2248,7 +2250,7 @@ index 9fae0d4..1a06137 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +558,7 @@ namespace RT64 {
+@@ -250,6 +560,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2256,7 +2258,7 @@ index 9fae0d4..1a06137 100644
                  }
              }
              else {
-@@ -272,6 +581,9 @@ namespace RT64 {
+@@ -272,6 +583,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2266,7 +2268,7 @@ index 9fae0d4..1a06137 100644
              }
          }
      }
-@@ -373,6 +685,9 @@ namespace RT64 {
+@@ -373,6 +687,9 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2276,7 +2278,7 @@ index 9fae0d4..1a06137 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +758,14 @@ namespace RT64 {
+@@ -443,6 +760,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2291,7 +2293,7 @@ index 9fae0d4..1a06137 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +788,61 @@ namespace RT64 {
+@@ -465,12 +790,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2355,7 +2357,7 @@ index 9fae0d4..1a06137 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +886,17 @@ namespace RT64 {
+@@ -514,6 +888,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2373,7 +2375,7 @@ index 9fae0d4..1a06137 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +957,96 @@ namespace RT64 {
+@@ -574,10 +959,96 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2470,7 +2472,7 @@ index 9fae0d4..1a06137 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1719,67 @@ namespace RT64 {
+@@ -1250,6 +1721,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2538,7 +2540,7 @@ index 9fae0d4..1a06137 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1826,84 @@ namespace RT64 {
+@@ -1296,9 +1828,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2624,7 +2626,7 @@ index 9fae0d4..1a06137 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1955,30 @@ namespace RT64 {
+@@ -1350,10 +1957,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2655,7 +2657,7 @@ index 9fae0d4..1a06137 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2033,61 @@ namespace RT64 {
+@@ -1408,6 +2035,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2717,7 +2719,7 @@ index 9fae0d4..1a06137 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2111,22 @@ namespace RT64 {
+@@ -1431,6 +2113,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2740,22 +2742,31 @@ index 9fae0d4..1a06137 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2146,151 @@ namespace RT64 {
+@@ -1450,12 +2148,160 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
-+        // Banjo-Tooie: Blend texture seams, the flat pieces of a picture drawn in clamped tiles (the title's logo): where
-+        // each sits on the screen, to find the pieces beside it after this framebuffer's draws.
++        // Banjo-Tooie: Blend texture seams, the pieces of a picture drawn in clamped tiles (the title's logo, the flight
++        // pads, cliff faces): the points on each texel edge of the piece (x and y on the screen and w, in clip space, with
++        // the texel along the edge), to find the pieces sharing an edge with it after this framebuffer's draws.
++        struct SeamPoint {
++            interop::float3 position;
++            // Which edges of the piece's texels it is on (bits: 1 s low, 2 s high, 4 t low, 8 t high), and its texel.
++            uint32_t edges;
++            float u, t;
++        };
 +        struct SeamPiece {
 +            uint32_t instance;
 +            uint32_t tile;
-+            float x0, y0, x1, y1;
 +            uint32_t width, height;
-+            // The texel at the left edge and at the t 0 edge, and whether t 0 is at the high y.
-+            float uStart, tStart;
-+            bool tUp;
++            uint32_t pointStart, pointCount;
++            // The texture's format and size, the same for the pieces of one picture.
++            uint32_t format;
++            // In the 3D world: the shader then also checks the colours meet (TextureSampler.hlsli).
++            bool world;
 +        };
 +        std::vector<SeamPiece> seamPieces;
++        std::vector<SeamPoint> seamPoints;
 +        const bool seamsOn = SceneTextureSeams();
          for (uint32_t pr = 0; (pr < fbPair.projectionCount) && (globalCallIndex < p.maxGameCall); pr++) {
              const Projection &proj = fbPair.projections[pr];
@@ -2892,7 +2903,7 @@ index 9fae0d4..1a06137 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2441,7 @@ namespace RT64 {
+@@ -1606,6 +2452,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2900,7 +2911,7 @@ index 9fae0d4..1a06137 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2518,20 @@ namespace RT64 {
+@@ -1682,6 +2529,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -2921,7 +2932,7 @@ index 9fae0d4..1a06137 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2597,772 @@ namespace RT64 {
+@@ -1747,24 +2608,825 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3009,8 +3020,8 @@ index 9fae0d4..1a06137 100644
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -3271,17 +3282,20 @@ index 9fae0d4..1a06137 100644
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
-+                }
-+                // Banjo-Tooie: a flat, upright piece of a 2D picture with a clamped, filtered texture that fills it exactly
-+                // (texel 0 at one edge and the tile's last at the other), for Blend texture seams.
-+                if (seamsOn && (proj.type != Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
-+                    (call.callDesc.tileCount > 0) && (call.callDesc.triangleCount == 2) && (seamPieces.size() < 1024))
+                 }
++                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers once along s and t (from within a
++                // texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend texture
++                // seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
++                // diagonally).
++                if (seamsOn && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0) &&
++                    (call.callDesc.triangleCount > 0) && (call.callDesc.triangleCount <= 16) && (seamPieces.size() < 2048))
 +                {
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
 +                    const auto &st = drawData.callTiles[call.callDesc.tileIndex].loadTile;
 +                    const uint32_t start = call.meshDesc.faceIndicesStart;
++                    const uint32_t indexCount = call.callDesc.triangleCount * 3;
 +                    if ((sm.textFilt() != G_TF_POINT) && (sm.cycleType() != G_CYC_COPY) && (sm.cycleType() != G_CYC_FILL) &&
-+                        ((st.cms & G_TX_CLAMP) || (st.cmt & G_TX_CLAMP)) && ((start + 6) <= drawData.faceIndices.size()))
++                        ((st.cms & G_TX_CLAMP) || (st.cmt & G_TX_CLAMP)) && ((start + indexCount) <= drawData.faceIndices.size()))
 +                    {
 +                        auto shiftScale = [](uint32_t shift) {
 +                            return (shift == 0) ? 1.0f : ((shift <= 10) ? (1.0f / float(1u << shift)) : float(1u << (16 - shift)));
@@ -3289,51 +3303,40 @@ index 9fae0d4..1a06137 100644
 +                        const float ss = shiftScale(st.shifts), ts = shiftScale(st.shiftt);
 +                        const uint32_t width = uint32_t((st.lrs >> 2) - (st.uls >> 2)) + 1;
 +                        const uint32_t height = uint32_t((st.lrt >> 2) - (st.ult >> 2)) + 1;
-+                        float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
-+                        for (uint32_t k = 0; k < 6; k++) {
++                        bool fits = (width > 1) && (height > 1) && (width <= 256) && (height <= 256);
++                        float uMin = 1e9f, uMax = -1e9f, tMin = 1e9f, tMax = -1e9f;
++                        for (uint32_t k = 0; fits && (k < indexCount); k++) {
 +                            const uint32_t v = drawData.faceIndices[start + k];
-+                            if (v >= drawData.posScreen.size()) {
-+                                x0 = 1e9f;
-+                                break;
++                            fits = (v < drawData.posTransformed.size()) && ((v * 2 + 1) < drawData.tcFloats.size());
++                            if (fits) {
++                                const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
++                                const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
++                                uMin = std::min(uMin, u);
++                                uMax = std::max(uMax, u);
++                                tMin = std::min(tMin, t);
++                                tMax = std::max(tMax, t);
 +                            }
-+                            x0 = std::min(x0, drawData.posScreen[v][0]);
-+                            x1 = std::max(x1, drawData.posScreen[v][0]);
-+                            y0 = std::min(y0, drawData.posScreen[v][1]);
-+                            y1 = std::max(y1, drawData.posScreen[v][1]);
 +                        }
-+                        // The texture must span the piece exactly once, without turning: the tile's width from the left edge to the
-+                        // right and its height from one edge to the other (the logo puts t 0 at the bottom, as the screen's y goes
-+                        // up), starting within a texel of 0 (the game sets half a texel off).
-+                        bool fits = (x1 > x0) && (y1 > y0) && (width > 1) && (height > 1) && (width <= 256) && (height <= 256);
-+                        const float ex = (x1 - x0) * 0.01f, ey = (y1 - y0) * 0.01f;
-+                        float uLeft = 0.0f, uRight = 0.0f, tLow = 0.0f, tHigh = 0.0f;
-+                        for (uint32_t k = 0; fits && (k < 6); k++) {
-+                            const uint32_t v = drawData.faceIndices[start + k];
-+                            const float px = drawData.posScreen[v][0], py = drawData.posScreen[v][1];
-+                            const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
-+                            const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
-+                            const bool left = std::abs(px - x0) < ex, right = std::abs(px - x1) < ex;
-+                            const bool low = std::abs(py - y0) < ey, high = std::abs(py - y1) < ey;
-+                            fits = (left || right) && (low || high);
-+                            float &uSide = left ? uLeft : uRight;
-+                            float &tSide = low ? tLow : tHigh;
-+                            uSide = u;
-+                            tSide = t;
-+                        }
-+                        // Then every corner's texel must be its sides' (a quad has a vertex on each side).
-+                        for (uint32_t k = 0; fits && (k < 6); k++) {
-+                            const uint32_t v = drawData.faceIndices[start + k];
-+                            const float px = drawData.posScreen[v][0], py = drawData.posScreen[v][1];
-+                            const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
-+                            const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
-+                            fits = (std::abs(u - ((std::abs(px - x0) < ex) ? uLeft : uRight)) < 0.05f) && (std::abs(t - ((std::abs(py - y0) < ey) ? tLow : tHigh)) < 0.05f);
-+                        }
-+                        const bool tUp = (tLow > tHigh);
-+                        const float tStart = tUp ? tHigh : tLow;
-+                        fits = fits && (std::abs((uRight - uLeft) - float(width)) < 0.05f) && (std::abs(std::abs(tHigh - tLow) - float(height)) < 0.05f) &&
-+                            (std::abs(uLeft) <= 1.0f) && (std::abs(tStart) <= 1.0f);
++                        // (Cliff faces stop a little short of their tile's last texel, 62.9 of 64.)
++                        fits = fits && (std::abs(uMin) <= 1.0f) && (std::abs(tMin) <= 1.0f) &&
++                            (std::abs(uMax - float(width)) <= 1.0f) && (std::abs(tMax - float(height)) <= 1.0f);
 +                        if (fits) {
-+                            seamPieces.push_back({ instanceIndex, call.callDesc.tileIndex, x0, y0, x1, y1, width, height, uLeft, tStart, tUp });
++                            const uint32_t pointStart = uint32_t(seamPoints.size());
++                            for (uint32_t k = 0; k < indexCount; k++) {
++                                const uint32_t v = drawData.faceIndices[start + k];
++                                const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
++                                const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
++                                const uint32_t edges = ((std::abs(u - uMin) < 0.05f) ? 1u : 0u) | ((std::abs(u - uMax) < 0.05f) ? 2u : 0u) |
++                                    ((std::abs(t - tMin) < 0.05f) ? 4u : 0u) | ((std::abs(t - tMax) < 0.05f) ? 8u : 0u);
++                                const hlslpp::float4 &cp = drawData.posTransformed[v];
++                                const float w = float(cp.w);
++                                if ((edges == 0) || (w <= 1e-6f)) {
++                                    continue;
++                                }
++                                seamPoints.push_back({ { float(cp.x) / w, float(cp.y) / w, w }, edges, u, t });
++                            }
++                            seamPieces.push_back({ instanceIndex, call.callDesc.tileIndex, width, height, pointStart, uint32_t(seamPoints.size()) - pointStart, (uint32_t(st.fmt) << 8) | uint32_t(st.siz),
++                                proj.type == Projection::Type::Perspective });
 +                        }
 +                    }
 +                }
@@ -3343,44 +3346,105 @@ index 9fae0d4..1a06137 100644
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0) |
 +                    (shadowDecal ? RASTER_SHADOW_DECAL : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
          }
  
-+        // Banjo-Tooie: Blend texture seams: a piece's neighbour shares a whole edge with it, at the same size per texel.
++        // Banjo-Tooie: Blend texture seams: a piece's neighbour along an edge has at least two points of its opposite edge in
++        // the same places as this one's (on the screen and at the same depth), at the same texels along the edge.
 +        if (seamPieces.size() > 1) {
 +            instanceSeamVector.resize(instanceDrawCallVector.size(), interop::uint4(RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE));
-+            for (const SeamPiece &a : seamPieces) {
-+                const float tx = (a.x1 - a.x0) / float(a.width), ty = (a.y1 - a.y0) / float(a.height);
-+                const float ex = tx * 0.05f, ey = ty * 0.05f;
-+                for (const SeamPiece &b : seamPieces) {
-+                    if (&a == &b) {
++            auto cellOf = [](float x, float y) {
++                return (uint64_t(uint32_t(int32_t(std::floor(x * 2048.0f)))) << 32) | uint64_t(uint32_t(int32_t(std::floor(y * 2048.0f))));
++            };
++            auto same = [](const interop::float3 &a, const interop::float3 &b) {
++                return (std::abs(a.x - b.x) < 2e-4f) && (std::abs(a.y - b.y) < 2e-4f) && (std::abs(a.z - b.z) <= (std::max(std::abs(a.z), std::abs(b.z)) * 2e-3f + 1e-4f));
++            };
++            // Each edge point by its cell, with its piece.
++            std::unordered_multimap<uint64_t, uint32_t> pointsByCell;
++            std::vector<uint32_t> pointPiece(seamPoints.size());
++            for (uint32_t i = 0; i < seamPieces.size(); i++) {
++                for (uint32_t k = 0; k < seamPieces[i].pointCount; k++) {
++                    const uint32_t pi = seamPieces[i].pointStart + k;
++                    pointPiece[pi] = i;
++                    pointsByCell.emplace(cellOf(seamPoints[pi].position.x, seamPoints[pi].position.y), pi);
++                }
++            }
++            // The piece whose edge (other) meets a's edge (edge) at two or more points.
++            auto find = [&](uint32_t ai, uint32_t edge, uint32_t other) -> uint32_t {
++                const SeamPiece &a = seamPieces[ai];
++                const bool alongT = (edge & 3u) != 0;
++                uint32_t best = RASTER_SEAM_NONE, bestCount = 0;
++                uint32_t candidates[8] = {};
++                uint32_t counts[8] = {};
++                uint32_t candidateCount = 0;
++                for (uint32_t k = 0; k < a.pointCount; k++) {
++                    const SeamPoint &pa = seamPoints[a.pointStart + k];
++                    if ((pa.edges & edge) == 0) {
 +                        continue;
 +                    }
-+                    const bool sameTexel = (std::abs((b.x1 - b.x0) / float(b.width) - tx) < ex) && (std::abs((b.y1 - b.y0) / float(b.height) - ty) < ey) &&
-+                        (std::abs(b.uStart - a.uStart) < 0.05f) && (std::abs(b.tStart - a.tStart) < 0.05f) && (b.tUp == a.tUp);
-+                    if (!sameTexel) {
-+                        continue;
-+                    }
-+                    const bool sameRows = (std::abs(b.y0 - a.y0) < ey) && (std::abs(b.y1 - a.y1) < ey);
-+                    const bool sameColumns = (std::abs(b.x0 - a.x0) < ex) && (std::abs(b.x1 - a.x1) < ex);
-+                    interop::uint4 &n = instanceSeamVector[a.instance];
-+                    if (sameRows && (std::abs(b.x0 - a.x1) < ex)) {
-+                        n.x = b.tile;
-+                    }
-+                    else if (sameRows && (std::abs(b.x1 - a.x0) < ex)) {
-+                        n.z = b.tile;
-+                    }
-+                    // Along t: the next piece is above when t goes up the screen.
-+                    else if (sameColumns && (std::abs((a.tUp ? (a.y0 - b.y1) : (b.y0 - a.y1))) < ey)) {
-+                        n.y = b.tile;
-+                    }
-+                    else if (sameColumns && (std::abs((a.tUp ? (b.y0 - a.y1) : (a.y0 - b.y1))) < ey)) {
-+                        n.w = b.tile;
++                    const int64_t cx = int64_t(std::floor(pa.position.x * 2048.0f)), cy = int64_t(std::floor(pa.position.y * 2048.0f));
++                    uint32_t matchedHere[8] = {};
++                    uint32_t matchedHereCount = 0;
++                    for (int64_t dx = -1; dx <= 1; dx++) {
++                        for (int64_t dy = -1; dy <= 1; dy++) {
++                            auto range = pointsByCell.equal_range((uint64_t(uint32_t(int32_t(cx + dx))) << 32) | uint64_t(uint32_t(int32_t(cy + dy))));
++                            for (auto it = range.first; it != range.second; it++) {
++                                const SeamPoint &pb = seamPoints[it->second];
++                                const uint32_t bi = pointPiece[it->second];
++                                if ((bi == ai) || ((pb.edges & other) == 0) || !same(pa.position, pb.position)) {
++                                    continue;
++                                }
++                                const SeamPiece &b = seamPieces[bi];
++                                if (b.format != a.format) {
++                                    continue;
++                                }
++                                if (alongT ? ((b.height != a.height) || (std::abs(pb.t - pa.t) > 0.1f)) : ((b.width != a.width) || (std::abs(pb.u - pa.u) > 0.1f))) {
++                                    continue;
++                                }
++                                // Count each piece once for this point.
++                                bool already = false;
++                                for (uint32_t m = 0; m < matchedHereCount; m++) {
++                                    already = already || (matchedHere[m] == bi);
++                                }
++                                if (already || (matchedHereCount == 8)) {
++                                    continue;
++                                }
++                                matchedHere[matchedHereCount++] = bi;
++                                uint32_t c = 0;
++                                while ((c < candidateCount) && (candidates[c] != bi)) {
++                                    c++;
++                                }
++                                if (c == candidateCount) {
++                                    if (candidateCount == 8) {
++                                        continue;
++                                    }
++                                    candidates[candidateCount] = bi;
++                                    counts[candidateCount] = 0;
++                                    candidateCount++;
++                                }
++                                counts[c]++;
++                            }
++                        }
 +                    }
 +                }
++                for (uint32_t c = 0; c < candidateCount; c++) {
++                    if ((counts[c] >= 2) && (counts[c] > bestCount)) {
++                        bestCount = counts[c];
++                        best = seamPieces[candidates[c]].tile | (a.world ? 0x80000000u : 0u);
++                    }
++                }
++                return best;
++            };
++            for (uint32_t ai = 0; ai < seamPieces.size(); ai++) {
++                interop::uint4 &n = instanceSeamVector[seamPieces[ai].instance];
++                // Right (s high meets the other's s low), below (t on), left and above.
++                n.x = find(ai, 2u, 1u);
++                n.y = find(ai, 8u, 4u);
++                n.z = find(ai, 1u, 2u);
++                n.w = find(ai, 4u, 8u);
 +            }
 +            static const bool seamLog = (getenv("TOOIE_SEAM_LOG") != nullptr);
 +            if (seamLog) {
@@ -14028,7 +14092,7 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..fa214a5 100644
+index 1ceb2ce..a3bcc09 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
 @@ -139,7 +139,18 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
@@ -14055,53 +14119,53 @@ index 1ceb2ce..fa214a5 100644
  #endif
      }
      
-+    // Banjo-Tooie: blends the seams of clamped textures (DEV option, on by default). A picture drawn in pieces, like the
-+    // title's logo, is clamped at each piece's edge, so the edge texel is held flat past it and then steps to the next
-+    // piece: a line at high resolutions, where the N64's own is a fraction of a pixel. Past the edge the filter takes the
-+    // texels of the piece drawn beside it when there is one (gSeamTiles), so the two blend as one picture; otherwise it
-+    // carries on the edge's slope from its last two texels. Along each axis two texels are replaced at most.
-+    // (Only on textures without mipmaps, where the pieces of a 2D picture are.)
-+    if (seams && filtering && (mipLevel == 0) && !gpuTileUsesTMEM && (FrParams.textureSeams.x > 0.5f) && ((rdpTile.cms | rdpTile.cmt) & G_TX_CLAMP)) {
++    // Banjo-Tooie: blends the seams of clamped textures (DEV option, on by default). A picture drawn in pieces (the title's
++    // logo, the flight pads, cliff faces) is clamped at each piece's edge, so the edge texel is held flat past it and then
++    // steps to the next piece: a line at high resolutions, where the N64's own is a fraction of a pixel. Past the edge the
++    // filter takes the texels of the piece drawn beside it (gSeamTiles), so the two blend as one picture. Edges with no
++    // piece beside them stay as they are. Only on textures without mipmaps (sampleTexture).
++    if (seams && filtering && (mipLevel == 0) && (FrParams.textureSeams.x > 0.5f) && ((rdpTile.cms | rdpTile.cmt) & G_TX_CLAMP)) {
 +        const int2 edge = seamEdge(rdpTile, tcScale);
-+        bool seam = false;
-+        [unroll]
++        // (Loops, not unrolled: the texel fetch decodes TMEM for palette textures, which is a lot of code to repeat.)
++        [loop]
 +        for (int axis = 0; axis < 2; axis++) {
 +            const bool clamped = (((axis == 0) ? rdpTile.cms : rdpTile.cmt) & G_TX_CLAMP) != 0;
 +            const int base = texelBaseInt[axis];
 +            const bool high = clamped && (edge[axis] > 0) && (base == edge[axis]);
 +            const bool low = clamped && (edge[axis] > 0) && (base == -1);
-+            if (high || low) {
-+                // The two samples past the edge (indices into samples[]) and the two inside it.
-+                const int2 outside = (axis == 0) ? (high ? int2(2, 3) : int2(0, 1)) : (high ? int2(1, 3) : int2(0, 2));
-+                const int2 inside = (axis == 0) ? (high ? int2(0, 1) : int2(2, 3)) : (high ? int2(0, 2) : int2(1, 3));
-+                const uint neighbour = (axis == 0) ? (high ? gSeamTiles.x : gSeamTiles.z) : (high ? gSeamTiles.y : gSeamTiles.w);
-+                RDPTile srcRdp = rdpTile;
-+                GPUTile srcGpu = gpuTile;
-+                bool fromNeighbour = false;
-+                if (neighbour != 0xFFFFFFFFu) {
-+                    const GPUTile nGpu = GPUTiles[neighbour];
-+                    if (all(abs(nGpu.tcScale - tcScale) < 0.001f) && !(canDecodeTMEM && gpuTileFlagRawTMEM(nGpu.flags))) {
-+                        srcRdp = RDPTiles[neighbour];
-+                        srcGpu = nGpu;
-+                        fromNeighbour = true;
++            const uint neighbour = (axis == 0) ? (high ? gSeamTiles.x : gSeamTiles.z) : (high ? gSeamTiles.y : gSeamTiles.w);
++            if ((high || low) && (neighbour != 0xFFFFFFFFu)) {
++                // The top bit asks for the colour check below (pieces of the 3D world).
++                const bool checkColour = (neighbour & 0x80000000u) != 0;
++                const uint neighbourTile = neighbour & 0x7FFFFFFFu;
++                const GPUTile nGpu = GPUTiles[neighbourTile];
++                if (all(abs(nGpu.tcScale - tcScale) < 0.001f)) {
++                    const RDPTile nRdp = RDPTiles[neighbourTile];
++                    // The two samples past the edge (indices into samples[]), from the neighbour's first (or last) row or
++                    // column.
++                    const int2 outside = (axis == 0) ? (high ? int2(2, 3) : int2(0, 1)) : (high ? int2(1, 3) : int2(0, 2));
++                    const int along = high ? 0 : seamEdge(nRdp, tcScale)[axis];
++                    const bool nUsesTMEM = canDecodeTMEM && gpuTileFlagRawTMEM(nGpu.flags);
++                    // The texels inside the edge, next to the two past it.
++                    const int2 inside = (axis == 0) ? (high ? int2(0, 1) : int2(2, 3)) : (high ? int2(0, 2) : int2(1, 3));
++                    float4 found[2];
++                    bool alike = true;
++                    [loop]
++                    for (int k = 0; k < 2; k++) {
++                        int2 texel = texelBaseInt + ((axis == 0) ? int2(0, k) : int2(k, 0));
++                        texel[axis] = along;
++                        found[k] = clampWrapMirrorSample(nRdp, nGpu, tcScale, texel, tlut, nUsesTMEM, 0);
++                        // In the 3D world, a piece of another surface that only happens to meet this one (a pad's rim and
++                        // its picture) is told apart by its colour jumping at the edge: those edges stay as they are. (Not
++                        // on 2D pictures, whose pieces are always one picture: the title logo's failed this check.)
++                        const float4 jump = abs(found[k] - samples[inside[k]]);
++                        alike = alike && (!checkColour || (max(max(jump.r, jump.g), max(jump.b, jump.a)) < 0.3f));
++                    }
++                    if (alike) {
++                        samples[outside[0]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[0];
++                        samples[outside[1]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[1];
 +                    }
 +                }
-+                // The neighbour's first (or last) row or column, else this tile's second to last (or second).
-+                const int along = fromNeighbour ? (high ? 0 : seamEdge(srcRdp, tcScale)[axis]) : (high ? (base - 1) : (base + 2));
-+                [unroll]
-+                for (int k = 0; k < 2; k++) {
-+                    int2 texel = texelBaseInt + ((axis == 0) ? int2(0, k) : int2(k, 0));
-+                    texel[axis] = along;
-+                    const float4 value = clampWrapMirrorSample(srcRdp, srcGpu, tcScale, texel, tlut, false, 0);
-+                    samples[outside[k]] = fromNeighbour ? value : (2.0f * samples[inside[k]] - value);
-+                }
-+                seam = true;
-+            }
-+        }
-+        if (seam) {
-+            [unroll]
-+            for (int i = 0; i < 4; i++) {
-+                samples[i] = usesHDR ? max(samples[i], 0.0f) : saturate(samples[i]);
 +            }
 +        }
 +    }
@@ -14359,10 +14423,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..dabb446 100644
+index 2e62aaf..3301faf 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,93 @@ namespace interop {
+@@ -13,6 +13,94 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -14451,7 +14515,8 @@ index 2e62aaf..dabb446 100644
 +        float4 parallaxParams;
 +        // Banjo-Tooie: parallax mapping's shading: how much darker the deepest parts are, and the shadows the stones cast.
 +        float4 parallaxShading;
-+        // Banjo-Tooie: 1 to blend the seams of clamped textures (TextureSampler.hlsli), the DEV option.
++        // Banjo-Tooie: 1 to blend the seams of clamped textures (TextureSampler.hlsli), the DEV option; then 1 to show the
++        // blended edges in magenta (TOOIE_SEAM_SHOW).
 +        float4 textureSeams;
      };
  #ifdef HLSL_CPU
@@ -14556,7 +14621,7 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..1c52b69 100644
+index 0a5c332..9d318d6 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
 @@ -9,11 +9,58 @@
@@ -14614,7 +14679,7 @@ index 0a5c332..1c52b69 100644
 +        uint seamPadding;
 +        // Banjo-Tooie: Blend texture seams: the tiles (global indices) of the pieces of the same picture drawn right of,
 +        // below, left of and above this one, which its texture blends into at its edges (TextureSampler.hlsli), or
-+        // RASTER_SEAM_NONE.
++        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world, whose colours must also meet.
 +        uint4 seamTiles;
      };
  #ifdef HLSL_CPU

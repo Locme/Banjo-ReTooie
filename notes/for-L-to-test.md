@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T393 Texture seams blend everywhere (DEV Blend texture seams, on)
+- Asked: 2026-10-17 15:02 UTC
+- Build: main
+- Steps:
+  1. Watch the title screen logo
+  2. Stand on a flight pad and a Split-Up pad (Isle o' Hags, any world)
+  3. Look at the wall panels in Grunty Industries and the carvings in Mayahem Temple
+  4. Optional: turn DEV > Blend texture seams off and back on to compare
+- Look for: Are the thin lines between texture pieces gone on the logo, pads and walls, with no new specks or bright lines (pad rims, cliffs)?
+- Status: waiting for L
+
 ## T392 NPC fur and NPC feathers sliders; Kazooie's crest, wings; Banjo on ice; yeti face; Mary's head
 - Asked: 2026-10-17 14:40 UTC
 - Build: main (pull and build)

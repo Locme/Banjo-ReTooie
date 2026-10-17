@@ -63,10 +63,13 @@ on a controller.
 - **Developer Mode** (Developer): shows the DEV tab. Default: off.
 
 - **Blend texture seams** (DEV): smooths the lines where the pieces of a
-  picture drawn in parts meet, such as the title screen's logo. The game clamps
-  each piece at its edge, which on the N64 is a fraction of a pixel but shows
-  as a line at high resolutions; this carries each piece's shading on to its
-  edge instead. `TOOIE_TEXTURE_SEAMS=0` or `1` sets it for a headless run.
+  texture drawn in parts meet: the title screen's logo, the pads the player
+  stands on, wall panels and the like. The game clamps each piece at its edge,
+  which on the N64 is a fraction of a pixel but shows as a line at high
+  resolutions; this blends each piece into the piece drawn beside it. Every
+  such texture is found while drawing, so there is no list; an edge with no
+  matching neighbour, or (in the 3D world) a sharp colour change at it, stays
+  as it was. `TOOIE_TEXTURE_SEAMS=0` or `1` sets it for a headless run.
   Default: on.
 
 - **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
