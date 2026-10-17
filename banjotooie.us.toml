@@ -638,6 +638,14 @@ func = "glintrosyncDll_entrypoint_1"
 before_vram = 0x808002A8
 text = "if (tooie_intro_sync_skip(rdram, ctx)) { ctx->r16 = 0; }"
 
+# The wait itself spins on osGetCount, which never lets another thread run, so the music (audio
+# thread) stopped and the screen stayed black in silence between intro scenes (L, 2026-10-17). On
+# the console the audio interrupts preempt it; this preemption point does the same on each pass.
+[[patches.hook]]
+func = "glintrosyncDll_entrypoint_1"
+before_vram = 0x808002C4
+text = "tooie_preempt_point(rdram, ctx);"
+
 # Tower of Tragedy's quiz looks up the player it is about to set up (func_800A9478, -1 when not
 # found) and hands that index to func_800F5EF8, which read address 0 with -1 (L's sweep crash of
 # 2026-10-16 15:55:17). With no player found it is left alone.

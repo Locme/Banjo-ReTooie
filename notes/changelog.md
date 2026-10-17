@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Snout jiggle: new Heaviness slider; only the snout swings now, the mouth (lips, corners, jaw) stays put; L's settings are the defaults (wobble 30%, bounce 75, speed 3.0, exaggeration 150%, stretch 50%, size 90%, reach 6, floppiness 80%) and every slider goes 50% further (L). Untested on PC (T408).
 - Ice reflections: Banjo is reflected once instead of as a stack of faded copies, and looking down on the ice no longer smears him or the walls down it. The see-through ice blocks round notes reflect too. Stomping Plains' floor by the gate no longer reflects (it shares a texture with Icy Side's ice; ice textures now count only in Hailfire's icy maps) (L). Untested on PC (T401).
 - Settings menu: the option you point at or select is marked with an orange band across the whole row, a gold edge on the left and its name in gold (L). Untested on PC (T400).
 - Snout jiggle: no more gap at the corner of the mouth when the snout bends (the jaw now bends with it), the snout sits straight at rest instead of leaning right, and it no longer snaps back to rest. New physics: it trails behind the way Banjo moves and folds back towards his eyes in a fall or dive, and the new Floppiness slider makes it hang and flop like a shaken hot dog. Nose jiggle is gone (L). Untested on PC (T399).
@@ -75,14 +76,15 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
-
+- Banjo fur length now goes up to 1500 (was 300), for fun (L). The default stays 100.
+- Banjo's fur and Kazooie's feathers now grow on the same parts everywhere: they are picked by his model's own colours instead of the colours as each level lights them, so his coat no longer goes bald in dark or tinted places (the Flooded Caves, Stomping Plains), no fur grows on his skin or shorts in Witchyworld's red light, and Kazooie keeps her feathers underneath where she is lit from behind (L). His cutscene double and model mods other than ones replacing the player model keep the old colour test. Untested on PC (T409).
 - Fixed: the intro is no longer stretched sideways in a wide window. Only the opening cloud shot is changed now: it is zoomed in to fill the width (its cloud backdrop ends at the 4:3 edges), and from the first camera cut on, Klungo, the castle and everyone else keep their shape (L). Untested on PC (T403).
 - New Graphics > Sun shadow distance slider (1500 to 20000, default 3000, L): how far round the camera sun shadows reach, up to a whole level. Fixed with it: sun shadows came and went as the camera turned, because the level's pieces just off screen weren't drawn, so they cast nothing; everything within the distance now casts, on screen or not. Untested on PC (T398).
 - Fixed: Banjo's own shadow shook and never quite matched him, at every frame rate. The game poses the shadow before it animates Banjo, so the shadow showed last frame's pose in this frame's place. It now gets this frame's pose. HD Shadows draws its shadow another way and is unchanged. Untested on PC (T397).
 - Fixed: in 16:9 and Fill, Banjo's shadow jumped sideways by up to a pixel with every step and camera turn. The widescreen placement of the shadow now moves it by whole pixels. Untested on PC (T405).
 - Bottles' ghost (Bottles' Revenge) no longer cuts a box out of the screen effects: his glow is a see-through square that wrote depth over its whole box, so sun shadows, ambient occlusion and fog stopped at its edges. His see-through parts now leave the depth alone, and his shimmer is drawn under the effects again. Untested on PC (T396).
-- Banjo fur length now goes up to 500 (was 300), for fun (L). The default stays 100.
 - New Graphics > Ice reflections slider (L): all ice now reflects, not only Icy Side's frozen decals: ice floors and platforms, the mottled ice of walls and platform sides, the see-through blocks round notes, the frozen lake and Icicle Grotto's floor. Ice now reflects from any camera height (before, it stopped once the camera looked down more than about 45 degrees). Ice no longer follows Water reflections. Untested on PC (T384).
+- Parallax on original textures leaves out Terrydactyland's cracked flagstone floor (L: "no parallax on these stones"). Untested on PC (T410).
 - Blend texture seams no longer draws thin wrong-coloured lines across the Split-Up pads' pictures (Hailfire Peaks). Each picture is drawn twice in layers, and a piece could join a piece of the other layer. Pieces now join only within the same material, and pieces that cover part of their tile count too. The colour check at 3D edges is gone, as it left blends half done (L's Split-Up pads screenshot). Untested on PC (T402).
 - Blend texture seams now finds every texture drawn in clamped pieces by itself, in 2D and in the 3D world: the pads the player stands on, Grunty Industries' wall panels and Mayahem Temple's carvings blend the same way the title logo does. Palette textures are included. Edges with no matching neighbour, or with a sharp colour change in the 3D world (a pad's rim against its picture), stay vanilla (L: "Look for all textures since there are too many"). Untested on PC (T393).
 - Blend texture seams now joins the title logo's pieces fully: each piece blends into the texels of the piece drawn beside it, so the level lines are gone too, not only the upright ones. Pieces in the 3D world still get the softer blend. The shader is also smaller again, so the first black screen at start is no longer longer than before (L: "can it be better?"). Untested on PC (T389).
@@ -199,6 +201,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Audio
 
+- Fixed: the intro's black screens between scenes were silent. The game holds each scene until the music reaches its cue, and that wait never let the sound run, so the music stopped and the scenes slowly fell out of step with it. The music now plays through the black screens (L). Untested on PC (T407).
 - Sound no longer drops out at Uncapped and other high frame rates, or in cutscene skips ("Unhandled jump target ... n_aspMain" in the log). Untested on PC (T339).
 - Sound > Mix rate now switches at once, without restarting the game. Untested on PC (T335).
 

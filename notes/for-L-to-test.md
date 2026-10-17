@@ -1,5 +1,46 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T410 No parallax on Terrydactyland's cracked stone floor
+- Asked: 2026-10-17 21:46 UTC
+- Build: main
+- Steps:
+  1. Turn Graphics > Parallax up (Parallax on original textures on)
+  2. Go to Terrydactyland, by the rock pillars where you took the screenshot (Banjo at about -1380, -43, -7155)
+  3. Look at the cracked flagstone floor
+- Look for: Is the floor flat like the original now, with parallax still on the rock pillars and other stone?
+- Status: waiting for L
+
+## T409 Fur and feathers the same in every light; fur length up to 1500
+- Asked: 2026-10-17 21:43 UTC
+- Build: main @ d1b6c3f
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur 100, Kazooie feathers 100
+  2. Compare Spiral Mountain, the Flooded Caves (torch cave), Stomping Plains at the bald spot, and Witchyworld
+  3. Get Kazooie out (talon trot, flying) and look under her wings and body
+  4. Set Banjo fur length to 1500
+- Look for: Is Banjo's coat the same everywhere, with no bald patches and no fur on his skin or shorts, and does Kazooie keep her feathers underneath?
+- Status: waiting for L
+
+## T408 Snout jiggle: heaviness slider, mouth stays put, your defaults
+- Asked: 2026-10-17 21:40 UTC
+- Build: main
+- Steps:
+  1. Settings > General > Snout jiggle: the sliders start at your settings (wobble 30%, bounce 75, speed 3.0, exaggeration 150%, stretch 50%, size 90%, reach 6, floppiness 80%) if you never saved them; the new Heaviness slider is at the bottom
+  2. Each slider now goes 50% further than before
+  3. Move Heaviness up and down while running, stopping and landing
+  4. Close up in Photo Mode mid-wobble
+- Look for: Only the snout swings: the lips, mouth corners and jaw stay where they are, with no gap. Heavier makes slower, bigger swings and more droop. Not checked headless (L asked to skip it); it boots and the swing runs.
+- Status: waiting for L
+
+## T407 Intro: the music keeps playing between scenes
+- Asked: 2026-10-17 21:21 UTC
+- Build: next build from main
+- Steps:
+  1. Start a new game and watch the intro from the start
+  2. Listen through the black screens between scenes (after Klungo, after the poker game, and so on)
+- Look for: The intro music keeps playing through each black screen between scenes, and the scenes stay in step with the music. The black screens themselves are the original game's timing (2 to 7 s each); they're just no longer silent. Checked headless: before, about 11 s of music went missing over the first three scene changes; now none
+- Status: waiting for L
+
 ## T406 Deep snow: trail after a warp, no snow on the ice, Vulkan check
 - Asked: 2026-10-17 21:20 UTC
 - Build: main (next push)

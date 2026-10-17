@@ -53,6 +53,7 @@
 
 #include "recomp.h"
 #include "ultramodern/config.hpp"
+#include "tooie_asset_mods.h"
 #include "tooie_debug.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_hooks.h"
@@ -62,6 +63,10 @@
 #include "tooie_picture_filters.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_toast.h"
+
+namespace RT64 {
+    void SetFurVertexFlags(uint32_t address, const std::vector<uint8_t> &flags);
+}
 
 namespace {
     // When the program started, for the headless list cycles below.
@@ -174,6 +179,47 @@ namespace {
         MEM_W(0, kseg0(phys)) = (int32_t)w0;
         MEM_W(4, kseg0(phys)) = (int32_t)w1;
     }
+
+    // Which of Banjo's model's vertices get his fur or her feathers, told by their own colours in the model as loaded
+    // (the game lights the vertices in place every frame, so their colours as drawn change with each level's light,
+    // and with them the coat: bald in the Flooded Caves and Stomping Plains, fur on his skin in Witchyworld, no
+    // feathers under her wings, L). For RT64's SetFurVertexFlags; the marks' values are RT64's FUR_VERTEX_*.
+    // His fur: the browns the fur grew on under Spiral Mountain's light (hue 19-34, saturation 0.58 and up), not his
+    // skin (hue 9-15, saturation about 0.5) or shorts (hue 39 and up). Her feathers: her reds. White and grey (his eyes,
+    // her textured wings) are left to the colour as lit; anything else stays bare.
+    enum : uint8_t { mark_unknown = 0, mark_covered = 1, mark_bare = 2, mark_feathers = 3 };
+    uint8_t fur_vertex_mark(uint8_t r8, uint8_t g8, uint8_t b8) {
+        const float r = r8 / 255.0f, g = g8 / 255.0f, b = b8 / 255.0f;
+        const float high = std::max(r, std::max(g, b));
+        const float chroma = high - std::min(r, std::min(g, b));
+        const float saturation = high > 0.0f ? chroma / high : 0.0f;
+        if (saturation < 0.15f) {
+            return mark_unknown;
+        }
+        float hue = 0.0f;
+        if (high == r) {
+            hue = 60.0f * (g - b) / chroma;
+        }
+        else if (high == g) {
+            hue = 60.0f * (2.0f + (b - r) / chroma);
+        }
+        else {
+            hue = 60.0f * (4.0f + (r - g) / chroma);
+        }
+        if (hue < 0.0f) {
+            hue += 360.0f;
+        }
+        if (hue >= 19.0f && hue <= 34.0f && saturation >= 0.58f && high >= 0.1f) {
+            return mark_covered;
+        }
+        if ((hue <= 10.0f || hue >= 345.0f) && saturation >= 0.85f && high >= 0.15f) {
+            return mark_feathers;
+        }
+        return mark_bare;
+    }
+
+    // The player's model (asset 0x062A, or the model mod that replaces it).
+    constexpr uint32_t player_model_asset = 0x062A;
 
     // Kazooie's lists in a player model, found from the model's own geo tree rather than fixed offsets, so a
     // model mod (Smash Banjo, Banjo X) keeps fur off Kazooie too. The model is found back from its vertices
@@ -1361,6 +1407,42 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
         if (best < 0) {
             return;
+        }
+        // His vertices' marks, from the player's model as loaded (once each time it is loaded); none for another model
+        // (his cutscene double), which keeps the colour test. TOOIE_FUR_MARKS=0 leaves them all to it (headless aid).
+        {
+            static const bool marks_off = [] { const char* text = std::getenv("TOOIE_FUR_MARKS"); return text != nullptr && *text == '0'; }();
+            static uint32_t sent_block = 0;
+            static uint32_t sent_header[3] = {};
+            const KazooieLists& model = lists_of(best);
+            const uint32_t block = skeleton && model.model != 0 && !marks_off ? model.model + model.header[2] + 0x18 : 0;
+            if (block != sent_block || (block != 0 && std::memcmp(sent_header, model.header, sizeof(sent_header)) != 0)) {
+                if (sent_block != 0) {
+                    RT64::SetFurVertexFlags(sent_block, {});
+                }
+                sent_block = block;
+                std::memcpy(sent_header, model.header, sizeof(sent_header));
+                if (block != 0) {
+                    const std::vector<uint8_t> asset = tooie::asset_mods::asset_bytes(player_model_asset);
+                    auto rd32 = [&](size_t o) { return o + 4 <= asset.size() ? (uint32_t(asset[o]) << 24) | (uint32_t(asset[o + 1]) << 16) | (uint32_t(asset[o + 2]) << 8) | asset[o + 3] : 0u; };
+                    std::vector<uint8_t> marks;
+                    if (rd32(0x04) == model.header[0] && rd32(0x0C) == model.header[1] && rd32(0x10) == model.header[2]) {
+                        const size_t vertices = model.header[2] + 0x18;
+                        const size_t count = (rd32(model.header[2] + 0x14) & 0xFFFF) / 2;
+                        if (vertices + count * 16 <= asset.size()) {
+                            marks.resize(count);
+                            for (size_t v = 0; v < count; v++) {
+                                const size_t at = vertices + v * 16 + 12;
+                                marks[v] = fur_vertex_mark(asset[at], asset[at + 1], asset[at + 2]);
+                            }
+                        }
+                    }
+                    RT64::SetFurVertexFlags(block, marks);
+                    if (log_fur) {
+                        std::fprintf(stderr, "[fur] vertex marks at %X: %zu vertices%s\n", block, marks.size(), marks.empty() ? " (not the player's model)" : "");
+                    }
+                }
+            }
         }
         // Fur goes on Banjo's own parts only, not Kazooie's: RT64's fur flag is turned off round the model's
         // calls to Kazooie's parts and on again after. A part is known by where its list is in the model, from the

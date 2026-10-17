@@ -27,7 +27,8 @@ namespace tooie::snout_jiggle {
     inline const std::string stretch_option = "snout_jiggle_stretch";         // % squash and stretch
     inline const std::string size_option = "snout_jiggle_size";               // % snout size
     inline const std::string reach_option = "snout_jiggle_reach";             // vanilla model: how far back it bends
-    inline const std::string floppiness_option = "snout_jiggle_floppiness";   // 0 springy .. 100 limp, flops like a hot dog
+    inline const std::string floppiness_option = "snout_jiggle_floppiness";   // 0 springy .. 150 limp, flops like a hot dog
+    inline const std::string heaviness_option = "snout_jiggle_heaviness";     // % of its weight: slower, bigger swings, more droop
 }
 
 #endif

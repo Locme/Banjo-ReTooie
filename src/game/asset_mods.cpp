@@ -309,6 +309,24 @@ void tooie::asset_mods::tick(uint8_t* rdram) {
     dump_requested_before = want;
 }
 
+std::vector<uint8_t> tooie::asset_mods::asset_bytes(uint32_t id) {
+    fs::path path;
+    {
+        std::lock_guard lock{mods_mutex};
+        rescan_if_due();
+        auto found = replaced_ids.find(id);
+        if (found != replaced_ids.end()) {
+            path = found->second;
+        }
+    }
+    if (!path.empty()) {
+        std::ifstream in(path, std::ios::binary);
+        return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    std::span<const uint8_t> rom = recomp::get_rom();
+    return rom_asset(rom, read_table(rom), id);
+}
+
 // Hooked in func_800D5B34 (load asset by id) before it fetches the asset. Returns 1 when a
 // replacement was loaded: $a3 then holds its address and the game carries on as if it loaded it.
 extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
