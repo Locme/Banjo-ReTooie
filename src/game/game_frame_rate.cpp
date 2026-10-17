@@ -811,6 +811,33 @@ extern "C" void tooie_current_push(uint8_t* rdram, recomp_context* ctx) {
     ctx->f12.fl = 8.0f * std::clamp(dt * 30.0f, 0.0f, 2.0f);
 }
 
+// baswim_entrypoint_11, steering under water (Banjo and Kazooie, and Banjo alone): it turns
+// the stick's left/right into a turn and adds it to Banjo's target heading once per game frame,
+// with no delta time. The heading then follows the target at up to 250 degrees a second, so
+// above 60 FPS the target ran ahead of him while the stick was held and he kept turning after
+// it was let go (L: swimming over 60 FPS hard to control, 2026-10-17). $f8 holds the turn, just
+// before it is scaled by the first-person zoom. Above 60 FPS it is scaled to the frame's time,
+// so the turn per second is the same as at 60. 60 FPS and below are unchanged.
+extern "C" void tooie_swim_turn(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_SWIM_TURN_FIX") != nullptr;   // A/B for tests
+    const float dt = read_float(rdram, delta_time_addr);
+    const float turn = ctx->f8.fl;
+    if (!off && mode() != Mode::Original && dt > 0.0f && dt < 1.0f / 60.0f) {
+        ctx->f8.fl *= dt * 60.0f;
+    }
+    // TOOIE_SWIM_LOG=1: each frame, game time, the step, the turn before and after, and
+    // Banjo's heading and target heading (PlayerState $s0, +0xF8 points at the yaw block).
+    static const bool log = std::getenv("TOOIE_SWIM_LOG") != nullptr;
+    if (log) {
+        const uint32_t yaw = (uint32_t)MEM_W(0xF8, ctx->r16);
+        const float value = yaw >= 0x80000000u ? read_float(rdram, (int32_t)yaw) : 0.0f;
+        const float ideal = yaw >= 0x80000000u ? read_float(rdram, (int32_t)(yaw + 4)) : 0.0f;
+        std::printf("[swim] t %.3f dt %.4f turn %.3f -> %.3f yaw %.2f ideal %.2f\n",
+            game_seconds_total.load(), dt, turn, ctx->f8.fl, value, ideal);
+        std::fflush(stdout);
+    }
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the
@@ -900,6 +927,10 @@ void tooie::game_frame_rate::add_dev_options(recomp::config::Config& dev) {
 
 uint32_t tooie::game_frame_rate::game_ms() {
     return (uint32_t)(game_seconds_total.load() * 1000.0);
+}
+
+double tooie::game_frame_rate::game_seconds() {
+    return game_seconds_total.load();
 }
 
 bool tooie::game_frame_rate::pad_on_game_time() {

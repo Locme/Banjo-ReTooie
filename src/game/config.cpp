@@ -284,7 +284,7 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
-        "Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
+        "Banjo's snout wobbles as he runs, turns, jumps, falls and lands, like Mario's nose in Super Mario Odyssey: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         false);
     {
         using namespace tooie::snout_jiggle;
@@ -302,29 +302,11 @@ void tooie::init_config() {
             "Makes Banjo's snout bigger or smaller.", 50, 250, 10, 0, true, 100);
         general.add_number_option(reach_option, "Snout jiggle: reach",
             "On Banjo's own model, how far back from the nose the snout bends (0: the nose only). Model mods with their own snout ignore it.", 0, 40, 2, 0, false, 20);
+        general.add_number_option(floppiness_option, "Snout jiggle: floppiness",
+            "How limp the snout is. 0 is springy; 100 has almost no spring, so it droops and flops about like a shaken hot dog even while Banjo stands still. Put every slider at the top for the wildest flop, then turn them down.", 0, 100, 5, 0, true, 25);
         for (const std::string* id : { &strength_option, &bounce_option, &speed_option, &exaggeration_option,
-                                       &stretch_option, &size_option, &reach_option }) {
+                                       &stretch_option, &size_option, &reach_option, &floppiness_option }) {
             general.add_option_hidden_dependency(*id, option, false);
-        }
-    }
-    general.add_bool_option(tooie::snout_jiggle::nose_option, "Nose jiggle",
-        "Banjo's black nose wobbles on its own spring, on top of Snout jiggle or without it. It stays mid-wobble in Photo Mode.",
-        false);
-    {
-        using namespace tooie::snout_jiggle;
-        general.add_number_option(nose_strength_option, "Nose jiggle: wobble",
-            "How far the nose swings when Banjo moves.", 0, 400, 10, 0, true, 100);
-        general.add_number_option(nose_bounce_option, "Nose jiggle: bounce",
-            "How long it keeps wobbling. 0 settles at once, 100 wobbles for seconds.", 0, 100, 5, 0, false, 65);
-        general.add_number_option(nose_speed_option, "Nose jiggle: speed",
-            "Wobbles per second.", 0.5, 12, 0.5, 1, false, 5);
-        general.add_number_option(nose_exaggeration_option, "Nose jiggle: exaggeration",
-            "How far the nose may bend: 100% is 30 degrees, 250% is 75.", 25, 250, 25, 0, true, 100);
-        general.add_number_option(nose_size_option, "Nose jiggle: nose size",
-            "Makes Banjo's nose bigger or smaller.", 50, 300, 10, 0, true, 100);
-        for (const std::string* id : { &nose_strength_option, &nose_bounce_option, &nose_speed_option,
-                                       &nose_exaggeration_option, &nose_size_option }) {
-            general.add_option_hidden_dependency(*id, nose_option, false);
         }
     }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",

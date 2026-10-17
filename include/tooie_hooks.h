@@ -21,6 +21,10 @@ int tooie_sound_handle_wait(uint8_t* rdram, recomp_context* ctx);
 int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx);
 // Heap guard (src/game/heap_guard.cpp): repairs a broken heap block link before func_8001C0A0 walks the list.
 void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
+// Sun shadows: func_800E3E8C's and func_800E3D0C's cull answers, kept visible within the Sun shadow distance
+// (src/game/widescreen.cpp).
+void tooie_sun_shadow_cull(uint8_t* rdram, recomp_context* ctx);
+void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx);
 // Cutscene guards (src/game/cutscene_guards.cpp): a missing animation in chanim_entrypoint_6, and the intro scenes' music wait during a texture sweep.
 int tooie_chanim_missing(uint8_t* rdram, recomp_context* ctx);
 int tooie_intro_sync_skip(uint8_t* rdram, recomp_context* ctx);
@@ -43,6 +47,7 @@ int tooie_scheduler_vi_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_gravity_bias(uint8_t* rdram, recomp_context* ctx, uint32_t physics_owner);
 void tooie_current_push(uint8_t* rdram, recomp_context* ctx);
+void tooie_swim_turn(uint8_t* rdram, recomp_context* ctx);
 void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx);
 int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_klungo_fade(uint8_t* rdram, recomp_context* ctx, int fade_in);
@@ -76,6 +81,7 @@ void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);
 void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx);
+void tooie_gfx_model_done(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_render_mode(uint8_t* rdram, recomp_context* ctx);
 void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx);
 void tooie_snout_model(uint8_t* rdram, recomp_context* ctx);

@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <variant>
@@ -438,6 +439,9 @@ extern "C" void tooie_shadow_render_mode(uint8_t* /*rdram*/, recomp_context* ctx
 }
 
 extern "C" void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx) {
+    if (!in_shadow_pass) {
+        tooie::gfx_budget::note_model_kind(rdram, (uint32_t)MEM_W(0x10C, ctx->r29));
+    }
     if (!in_shadow_pass && draw_callbacks.size() == 1) {
         drawn_model = MEM_W(0x10C, ctx->r29);
     }
@@ -453,8 +457,12 @@ extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) 
 // Deep snow: where each model drawn stands (picture_filters.cpp), at the entry of the model draw
 // func_800DE498(gfx, position, rotation, scale, ...). Every model goes through it, not only the actors
 // func_80101808 draws: attacks such as Chilly Willy's ice balls are drawn straight from their own code.
+// Also counts each model draw for the drawing memory report (gfx_budget.cpp).
 // The position's address tells one model from another from frame to frame.
 extern "C" void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx) {
+    if (!in_shadow_pass) {
+        tooie::gfx_budget::note_model(rdram, ctx);
+    }
     const uint32_t position = (uint32_t)ctx->r5;
     if (in_shadow_pass || (position < 0x80000000u) || (position >= 0x80800000u) || ((position & 3) != 0)) {
         return;
@@ -531,8 +539,11 @@ void tooie::hd_shadows::fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end)
             if (op == 0xE4 && !have_dx) {
                 const int lrx = (word(last) >> 12) & 0xFFF, ulx = (word(last + 4) >> 12) & 0xFFF;
                 const float middle = (ulx + lrx) / 8.0f;
-                dx = (int)std::lround((paste_x(middle) - middle) * 4.0f);
-                dx = std::clamp(dx, -ulx, std::max(-ulx, 304 * 4 - lrx));
+                // Whole pixels only: moved by a fraction, RT64 samples the buffer up to a pixel to the
+                // side, and as the fraction changed with each step Banjo or the camera took, the
+                // shadow shook sideways (L, 2026-10-17: gone at 4:3).
+                dx = (int)std::lround(paste_x(middle) - middle) * 4;
+                dx = std::clamp(dx, -(ulx & ~3), std::max(-(ulx & ~3), (304 * 4 - lrx) & ~3));
                 have_dx = true;
             }
             if (op != 0xF5 && op != 0xE6 && op != 0xE7 && op != 0xE8 && op != 0xF4 && op != 0xF2 && op != 0xE4 && op != 0xE1 && op != 0xF1) {
@@ -559,3 +570,233 @@ void tooie::hd_shadows::fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end)
     }
 }
 
+
+// The game poses the player's shadow before it animates the player, so the shadow's bones are the
+// pose of the frame before, while its place and turn (the flattening matrix in the projection)
+// are this frame's (checked headless 2026-10-17: every shadow bone equals, to 1e-4, one of last
+// frame's on-screen bones relative to the model's root, and none of this frame's). On screen the
+// shadow then never quite matches Banjo and wobbles as he moves. Once the scene's list is complete
+// this frame's bones are known: each shadow bone is matched to the on-screen bone it copied last
+// frame and replaced with that bone now.
+namespace {
+    using Mat = std::array<std::array<double, 4>, 4>;
+
+    Mat read_mtx(uint8_t* rdram, uint32_t phys) {
+        Mat m{};
+        const gpr p = (gpr)(int32_t)(phys | 0x80000000);
+        for (int i = 0; i < 16; i++) {
+            const uint16_t hi = (uint16_t)MEM_H(2 * i, p), lo = (uint16_t)MEM_H(32 + 2 * i, p);
+            m[i / 4][i % 4] = (int32_t)(((uint32_t)hi << 16) | lo) / 65536.0;
+        }
+        return m;
+    }
+
+    void write_mtx(uint8_t* rdram, uint32_t phys, const Mat& m) {
+        const gpr p = (gpr)(int32_t)(phys | 0x80000000);
+        for (int i = 0; i < 16; i++) {
+            const double scaled = std::clamp(m[i / 4][i % 4] * 65536.0, -2147483648.0, 2147483520.0);
+            const int32_t value = (int32_t)std::llround(scaled);
+            MEM_H(2 * i, p) = (int16_t)(value >> 16);
+            MEM_H(32 + 2 * i, p) = (int16_t)(value & 0xFFFF);
+        }
+    }
+
+    Mat mul(const Mat& a, const Mat& b) {
+        Mat r{};
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                for (int k = 0; k < 4; k++) {
+                    r[i][j] += a[i][k] * b[k][j];
+                }
+            }
+        }
+        return r;
+    }
+
+    // Inverse of a row-vector affine matrix (rotation and scale in the 3x3, place in row 3).
+    bool invert_affine(const Mat& m, Mat& out) {
+        const double a = m[0][0], b = m[0][1], c = m[0][2], d = m[1][0], e = m[1][1], f = m[1][2], g = m[2][0], h = m[2][1], i = m[2][2];
+        const double det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+        if (std::fabs(det) < 1e-9) {
+            return false;
+        }
+        const double inv[3][3] = {
+            {(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det},
+            {(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det},
+            {(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det},
+        };
+        out = Mat{};
+        for (int r = 0; r < 3; r++) {
+            for (int k = 0; k < 3; k++) {
+                out[r][k] = inv[r][k];
+            }
+        }
+        for (int k = 0; k < 3; k++) {
+            out[3][k] = -(m[3][0] * inv[0][k] + m[3][1] * inv[1][k] + m[3][2] * inv[2][k]);
+        }
+        out[3][3] = 1.0;
+        return true;
+    }
+
+    double rotation_error(const Mat& a, const Mat& b) {
+        double e = 0.0;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                e = std::max(e, std::fabs(a[i][j] - b[i][j]));
+            }
+        }
+        return e;
+    }
+
+    // Last frame's on-screen bones relative to the root, for each shadow in list order.
+    std::vector<std::vector<Mat>> last_pose;
+
+    // The segment 5 offsets the shadow's lists load bones from (as ShadowScan in model_tagging.cpp).
+    void shadow_bones(uint8_t* rdram, uint32_t phys, uint32_t segments[16], int depth, int& budget, std::vector<uint32_t>& offsets) {
+        auto word = [&](uint32_t a) { return (uint32_t)MEM_W(0, (gpr)(int32_t)(a | 0x80000000)); };
+        for (; budget > 0 && phys + 8 <= 0x800000; budget--, phys += 8) {
+            const uint32_t w0 = word(phys), w1 = word(phys + 4), op = w0 >> 24;
+            if (op == 0xDA) {
+                if ((w1 >> 24) == 5 && (w1 & 0x3F) == 0 && std::find(offsets.begin(), offsets.end(), w1 & 0xFFFFFF) == offsets.end()) {
+                    offsets.push_back(w1 & 0xFFFFFF);
+                }
+            } else if (op == 0xDB && ((w0 >> 16) & 0xFF) == 0x06) {
+                segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
+            } else if (op == 0xDE) {
+                const uint32_t target = (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) :
+                    ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+                if (target != 0 && depth < 8) {
+                    shadow_bones(rdram, target, segments, depth + 1, budget, offsets);
+                }
+                if (((w0 >> 16) & 0xFF) != 0) {
+                    return;
+                }
+            } else if (op == 0xDF) {
+                return;
+            }
+        }
+    }
+}
+
+void tooie::hd_shadows::fix_shadow_pose(uint8_t* rdram, uint32_t start, uint32_t end) {
+    static const bool off = std::getenv("TOOIE_SHADOW_OLD_POSE") != nullptr;
+    // TOOIE_SHADOW_POSE_LOG=1: how many of each shadow's bones were posed with this frame's.
+    static const bool log = std::getenv("TOOIE_SHADOW_POSE_LOG") != nullptr;
+    if (off || start >= end || end > 0x800000) {
+        return;
+    }
+    auto word = [&](uint32_t phys) { return (uint32_t)MEM_W(0, (gpr)(int32_t)(phys | 0x80000000)); };
+    auto address = [&](uint32_t w1, const uint32_t segments[16]) {
+        return (w1 & 0x80000000) != 0 ? (w1 & 0x1FFFFFFF) : ((segments[(w1 >> 24) & 0xF] + (w1 & 0xFFFFFF)) & 0x1FFFFFFF);
+    };
+    uint32_t segments[16] = {};
+    std::vector<std::vector<Mat>> pose_now;
+    for (uint32_t cmd = start; cmd + 8 <= end; cmd += 8) {
+        const uint32_t w0 = word(cmd), w1 = word(cmd + 4), op = w0 >> 24;
+        if (op == 0xDB && ((w0 >> 16) & 0xFF) == 0x06) {
+            segments[((w0 & 0xFFFF) / 4) & 0xF] = w1 & 0x1FFFFFFF;
+            continue;
+        }
+        // A projection multiply (G_MTX params, inverted push bit: 4 projection, 2 load).
+        if (op != 0xDA || (((w0 & 0xFF) ^ 1) & 0x06) != 0x04) {
+            continue;
+        }
+        const Mat flatten = read_mtx(rdram, address(w1, segments));
+        // The shadow's lists up to the projection being put back, then the on-screen model: the run of
+        // modelview loads whose first (the root) stands where the flattening matrix puts the shadow.
+        uint32_t local[16];
+        std::copy(segments, segments + 16, local);
+        std::vector<uint32_t> offsets;
+        int budget = 8192;
+        uint32_t c = cmd + 8;
+        for (; c + 8 <= end; c += 8) {
+            const uint32_t v0 = word(c), v1 = word(c + 4), vop = v0 >> 24;
+            if (vop == 0xDA && (((v0 & 0xFF) ^ 1) & 0x04) != 0) {
+                break;
+            }
+            if (vop == 0xDB && ((v0 >> 16) & 0xFF) == 0x06) {
+                local[((v0 & 0xFFFF) / 4) & 0xF] = v1 & 0x1FFFFFFF;
+            } else if (vop == 0xDE) {
+                const uint32_t target = address(v1, local);
+                if (target != 0) {
+                    uint32_t walk[16];
+                    std::copy(local, local + 16, walk);
+                    shadow_bones(rdram, target, walk, 1, budget, offsets);
+                }
+            }
+        }
+        const uint32_t seg5 = local[5];
+        std::vector<Mat> bones;
+        for (; c + 8 <= end && bones.empty(); c += 8) {
+            const uint32_t v0 = word(c), v1 = word(c + 4);
+            if ((v0 >> 24) != 0xDA || (((v0 & 0xFF) ^ 1) & 0x06) != 0x02) {
+                if ((v0 >> 24) == 0xDA && (((v0 & 0xFF) ^ 1) & 0x04) != 0 && (((v0 & 0xFF) ^ 1) & 0x02) == 0) {
+                    break;  // the next shadow
+                }
+                continue;
+            }
+            const Mat root = read_mtx(rdram, address(v1, segments));
+            if (std::fabs(root[3][0] - flatten[3][0]) > 0.01 || std::fabs(root[3][1] - flatten[3][1]) > 0.01 || std::fabs(root[3][2] - flatten[3][2]) > 0.01) {
+                continue;
+            }
+            Mat inv;
+            if (!invert_affine(root, inv)) {
+                break;
+            }
+            // The model's bones, loaded between its other commands, up to a projection change or a
+            // matrix placed away from the model (the next model).
+            uint32_t walk[16];
+            std::copy(segments, segments + 16, walk);
+            for (uint32_t b = c; b + 8 <= end && bones.size() < 128; b += 8) {
+                const uint32_t b0 = word(b), b1 = word(b + 4);
+                if ((b0 >> 24) == 0xDB && ((b0 >> 16) & 0xFF) == 0x06) {
+                    walk[((b0 & 0xFFFF) / 4) & 0xF] = b1 & 0x1FFFFFFF;
+                    continue;
+                }
+                if ((b0 >> 24) != 0xDA) {
+                    continue;
+                }
+                if ((((b0 & 0xFF) ^ 1) & 0x04) != 0) {
+                    break;
+                }
+                if ((((b0 & 0xFF) ^ 1) & 0x02) == 0) {
+                    continue;
+                }
+                const Mat bone = read_mtx(rdram, address(b1, walk));
+                if (std::fabs(bone[3][0] - root[3][0]) + std::fabs(bone[3][1] - root[3][1]) + std::fabs(bone[3][2] - root[3][2]) > 400.0) {
+                    break;
+                }
+                bones.push_back(mul(bone, inv));
+            }
+        }
+        const size_t index = pose_now.size();
+        pose_now.push_back(bones);
+        if (bones.empty() || seg5 == 0 || index >= last_pose.size() || last_pose[index].size() != bones.size()) {
+            continue;
+        }
+        const std::vector<Mat>& last = last_pose[index];
+        int replaced = 0;
+        for (uint32_t offset : offsets) {
+            const Mat shadow = read_mtx(rdram, seg5 + offset);
+            size_t best = 0;
+            double best_error = 1e9;
+            for (size_t j = 0; j < last.size(); j++) {
+                const double e = rotation_error(shadow, last[j]) + std::fabs(shadow[3][0] - last[j][3][0]) / 64.0 +
+                    std::fabs(shadow[3][1] - last[j][3][1]) / 64.0 + std::fabs(shadow[3][2] - last[j][3][2]) / 64.0;
+                if (e < best_error) {
+                    best_error = e;
+                    best = j;
+                }
+            }
+            if (best_error < 2e-3) {
+                write_mtx(rdram, seg5 + offset, bones[best]);
+                replaced++;
+            }
+        }
+        if (log) {
+            std::printf("[shadow-pose] shadow %zu: %zu bones on screen, %zu in the shadow, %d posed now\n", index, bones.size(), offsets.size(), replaced);
+            std::fflush(stdout);
+        }
+    }
+    last_pose = std::move(pose_now);
+}

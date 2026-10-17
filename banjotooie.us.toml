@@ -872,6 +872,14 @@ func = "func_808005F4_chbanjocurrent"
 before_vram = 0x80800758
 text = "tooie_current_push(rdram, ctx);"
 
+# baswim_entrypoint_11 adds the stick's turn to Banjo's target heading once per game frame
+# under water; above 60 FPS the turn ($f8) is scaled to the frame's time
+# (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "baswim_entrypoint_11"
+before_vram = 0x80800380
+text = "tooie_swim_turn(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).
@@ -1136,6 +1144,12 @@ func = "func_800DE498"
 before_vram = 0x800DE498
 text = "tooie_snow_model_drawn(rdram, ctx);"
 
+# Drawing memory report (src/display/gfx_budget.cpp): the model draw's one exit, $sp still its own.
+[[patches.hook]]
+func = "func_800DE498"
+before_vram = 0x800DF310
+text = "tooie_gfx_model_done(rdram, ctx);"
+
 # The generic actor draw func_80101808(actor, draw callback): its entry, and
 # just after func_800DE448 has drawn the actor ($s0 still holds it).
 [[patches.hook]]
@@ -1153,6 +1167,20 @@ text = "tooie_actor_shadow(rdram, ctx);"
 func = "func_800DF830"
 before_vram = 0x800DF830
 text = "tooie_shadow_render_mode(rdram, ctx);"
+
+# Sun shadows (src/game/widescreen.cpp): func_800E3E8C(position, radius) is the game's "is this sphere in view"
+# test for models and effects. Its answer ($v1) is turned to visible for what lies within the Sun
+# shadow distance, so things off screen still cast their shadows into the picture.
+[[patches.hook]]
+func = "func_800E3E8C"
+before_vram = 0x800E3EE8
+text = "tooie_sun_shadow_cull(rdram, ctx);"
+
+# The same for func_800E3D0C(min, max), the box test the level's own geometry is culled with.
+[[patches.hook]]
+func = "func_800E3D0C"
+before_vram = 0x800E3DAC
+text = "tooie_sun_shadow_cull_box(rdram, ctx);"
 
 # The model func_800DE498 settled on (0x10C($sp)), kept so an actor's shadow redraws that model
 # instead of fetching it a second time this frame (which unbalanced the model cache).

@@ -1,13 +1,118 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T395 Warp tab: Flooded Caves (Torch enemy)
+## T406 Deep snow: trail after a warp, no snow on the ice, Vulkan check
+- Asked: 2026-10-17 21:20 UTC
+- Build: main (next push)
+- Steps:
+  1. Settings > Graphics: Deep snow on
+  2. Warp to Hailfire Peaks Icy Side and slide down the snow slope by the warp-in spot
+  3. Walk across the ice and look down at it
+  4. If there is still no trail: Settings > Graphics > Graphics API: Vulkan (the game restarts), then slide down the same slope
+- Look for: Does the slide leave a trail? Is the ice free of snow blobs? If the trail only shows with Vulkan, say so (it means a D3D12-only bug).
+- Status: waiting for L
+
+## T405 Banjo's shadow holds still in 16:9 and Fill
+- Asked: 2026-10-17 21:09 UTC
+- Build: main
+- Steps:
+  1. Aspect ratio 16:9 or Fill, HD Shadows off
+  2. Walk Banjo around on flat grass and turn the camera
+  3. Switch to 4:3 and compare
+- Look for: The shadow stays under Banjo's feet without jumping sideways, the same as at 4:3
+- Status: waiting for L
+
+## T404 Swimming under water above 60 FPS
+- Asked: 2026-10-17 20:46 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Game Frame Rate 120, 175, 240 or Uncapped
+  2. Spiral Mountain: dive into the moat (B) and swim around under water
+  3. Hold the stick left or right to turn, then let go; try small taps too
+  4. Compare with 60 FPS
+- Look for: Turning under water feels the same as at 60: Banjo turns at the same speed and stops soon after you let go, instead of spinning on. Headless at 240 FPS a held turn went 246 degrees a second (60 FPS: 247) and ran on 31 degrees after letting go (60 FPS: 29); before the fix it ran on 161 degrees. Banjo alone uses the same steering. Surface paddling was already fine.
+- Status: waiting for L
+
+## T403 Intro: Klungo and the castle keep their shape (replaces T225)
+- Asked: 2026-10-17 20:50 UTC
+- Build: next build from main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave
+- Look for: The opening cloud shot fills the width with no panel ends (it is zoomed in, so the top and bottom of that one shot are cut), and every shot after it, Klungo's "No good, missstress" close-up included, has normal proportions instead of looking stretched sideways. Checked headless at 3440x1417 shape and 16:9: screens/intro-stretch/before-after.png
+- Status: waiting for L
+
+## T402 Split-Up pads: no lines across the pictures (DEV Blend texture seams, on)
+- Asked: 2026-10-17 20:44 UTC
+- Build: main
+- Steps:
+  1. Go to Hailfire Peaks, Icy Side, by the Split-Up pads near the start
+  2. Look down at both pads' pictures up close
+  3. Optional: turn DEV > Blend texture seams off and on to compare
+- Look for: Are the thin lines and smears across Banjo's and Kazooie's faces gone, with nothing new on the pad rims or the title logo?
+- Status: waiting for L
+
+## T401 Ice reflections: Banjo once, ice blocks reflect, Stomping Plains floor plain
+- Asked: 2026-10-17 20:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: Ice reflections at 60 or more
+  2. Hailfire Peaks Icy Side: stand on the ice by the warp pads; look with the camera low behind Banjo, then raise it to look down on him
+  3. Go to an ice block with a note inside and look at its faces
+  4. Terrydactyland Stomping Plains: the floor in front of the gate by the Jiggy pad (where you saw the reflection)
+- Look for: Low camera: one upside-down Banjo under him, no stack of faded copies. From above: no copies at all, and no ghost of the walls running down the ice. The note blocks shine with a reflection now. Stomping Plains' floor by the gate no longer mirrors the gate and pad. Headless before/after: screens/ice-reflections/t401-banjo-once.png, t401-stomping-plains.png, t401-ice-block.png
+- Status: waiting for L
+
+## T399 Snout jiggle: no mouth gap, centred at rest, floppy physics
+- Asked: 2026-10-17 20:27 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on (Nose jiggle is gone). Stand still: the snout sits straight, no lean to the right
+  2. Close up in Photo Mode mid-wobble: the snout and mouth stay in one piece, no dark gap at the corner of the mouth; the lower jaw bends with the snout
+  3. Run, stop, jump, fall off a ledge and dive with Kazooie: the snout trails behind the way he moves and folds back towards his eyes in a fall or dive
+  4. Put every Snout jiggle slider at the top (Floppiness is new): the snout flops about like a shaken hot dog even standing still. Then turn them down to taste
+- Look for: No gap in the model, no right lean, no snapping back to rest, and the wobble reacts to how he moves. Checked headless in Spiral Mountain: before/after close-up at screens/snout-jiggle/mouth-gap-before-after.png (left: the old corner tear, right: fixed)
+- Status: waiting for L
+
+## T398 Sun shadow distance; sun shadows no longer come and go
+- Asked: 2026-10-17 20:15 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Sun shadows on (any strength), Sun shadow distance left at 3000
+  2. Go to the spot of your burst in Spiral Mountain (the path by the honeycomb cave and the stumps) and turn the camera slowly both ways
+  3. Move Sun shadow distance to 20000 while playing, then to 1500
+  4. Try Mayahem Temple's open area at 20000
+- Look for: Do the cliffs' shadows on the path stay put while the camera turns (no popping in and out)? Do far hills and buildings get shadows at 20000 and lose them at 1500, at once without Apply? Is the frame rate still fine at 20000?
+- Status: waiting for L
+
+## T397 Banjo's shadow follows his pose (no more shaking)
+- Asked: 2026-10-17 20:12 UTC
+- Build: main
+- Steps:
+  1. Turn HD Shadows off (the game's own shadow)
+  2. Stand, walk and turn the camera around Banjo on grass in Spiral Mountain
+  3. Try Game Frame Rate Original, 60 and 175
+- Look for: The shadow moves with Banjo instead of shaking or showing a slightly wrong shape
+- Status: waiting for L
+
+## T396 Bottles' ghost: no box cut out of the effects
+- Asked: 2026-10-17 19:59 UTC
+- Build: main
+- Steps:
+  1. Turn on Sun shadows, Ambient occlusion and Fog (any strength) in Graphics
+  2. Settings > General: turn on Bottles' Revenge and start a file that has not seen its intro (or a new file) so the ghost scene plays in Spiral Mountain
+  3. Watch Bottles' ghost with his halo and glow, and walk or turn the camera around him if you can
+  4. If you reach the spot from your screenshot, look at the ground and shadows around him there too
+- Look for: Do the shadows, fog and shading carry on right up to Bottles' glow, with no rectangle or square edge around him, and does the ghost himself still look as before (glow, halo, shimmer)?
+- Status: waiting for L
+
+## T395 Warp tab: Flooded Caves
 - Asked: 2026-10-17 19:20 UTC
 - Build: main
 - Steps:
   1. Load a file
   2. Open the Warp tab, Glitter Gulch Mine group
-  3. Pick Flooded Caves (Torch enemy)
-- Look for: Do you land at the Flooded Caves entrance, with the torch on the ledge ahead when Cut Content: Torch enemy is on?
+  3. Pick Flooded Caves
+- Look for: Do you land at the Flooded Caves entrance?
 - Status: waiting for L
 
 ## T394 Cut Content: Torch enemy in the Flooded Caves
@@ -16,11 +121,11 @@
 - Steps:
   1. Settings > General > Back-Ports and cut content: turn on Cut Content: Torch enemy
   2. Go to Glitter Gulch Mine and enter the Flooded Caves
-  3. Look at the torch on the entrance ledge: it should stand still with no eyes; walk right up to it and its eyes should open smoothly before it springs
-  4. Let it burn you once, then claw swipe it or shoot an egg at it
-  5. Swim to the two dry chambers at the far end; each has one more torch
+  3. Swim to the dry chamber at the far end: two torches stand against its back wall, where you picked (2051/2649, 136, -8710)
+  4. Walk right up to one: it should stand still with no eyes, then open them smoothly and spring with a boing on each hop
+  5. Let it burn you once, then claw swipe it or shoot an egg at it
   6. Turn the option off while a torch is lit
-- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it walk back and go still again (eyes closing) when you run away? Do the far torches stand on dry floor? Does turning the option off remove them at once?
+- Look for: Does the cave light up warmly around each torch? Does a burn take one honeycomb and knock Banjo back, and does he get up normally? Do attacks and eggs put it out? Does the torch stay on the ground, do the eyes open smoothly, and does it move/animate believably (chase, lunge)? Does it boing on every hop? Does it walk back to the wall and go still again (eyes closing) when you run away? Do both stand against the wall facing into the room, and is the old one near them gone? Does turning the option off remove them at once?
 - Status: waiting for L
 
 ## T393 Texture seams blend everywhere (DEV Blend texture seams, on)
@@ -1491,6 +1596,7 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Watch the intro ("Two years have passed..") from the start
 - Look for: The opening cloud shots fill the whole width with no panel ends or black at the sides. The castle, the rock, Grunty's grave and the text keep their normal shape (not stretched).
+- Status: replaced by T403
 
 ## T224 Refresh Mods in game
 - Asked: 2026-10-16 08:15 UTC

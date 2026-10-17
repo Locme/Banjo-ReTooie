@@ -2570,6 +2570,7 @@ RECOMP_FUNC void func_800E3E8C(uint8_t* rdram, recomp_context* ctx) {
     // 0x800E3EE4: or          $v1, $v0, $zero
     ctx->r3 = ctx->r2 | 0;
 L_800E3EE8:
+    tooie_sun_shadow_cull(rdram, ctx);
     // 0x800E3EE8: lw          $ra, 0x14($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x800E3EEC: addiu       $sp, $sp, 0x28

@@ -418,7 +418,7 @@ index c20fb51..d9e9256 100644
  
      hlslpp::float4x4 matrixTranslation(const hlslpp::float3 &t) {
 diff --git a/src/gbi/rt64_gbi_extended.cpp b/src/gbi/rt64_gbi_extended.cpp
-index 20c0d4d..2649a28 100644
+index 20c0d4d..c1f4899 100644
 --- a/src/gbi/rt64_gbi_extended.cpp
 +++ b/src/gbi/rt64_gbi_extended.cpp
 @@ -331,6 +331,15 @@ namespace RT64 {
@@ -426,8 +426,8 @@ index 20c0d4d..2649a28 100644
          }
  
 +        void setSceneEffectsExcludeV1(State *state, DisplayList **dl) {
-+            const bool exclude = (*dl)->p1(0, 1);
-+            state->rdp->setSceneEffectsExclude(exclude);
++            // 1: drawn after the effects; 2: drawn in place without writing depth; 0: neither.
++            state->rdp->setSceneEffectsExclude((*dl)->p1(0, 2));
 +        }
 +
 +        void setFurShellsV1(State *state, DisplayList **dl) {
@@ -460,15 +460,17 @@ index 08f83e5..2bfdba4 100755
  #   elif defined(__linux__) || defined(__APPLE__)
          if (SDL_VideoInit(nullptr) != 0) {
 diff --git a/src/hle/rt64_draw_call.h b/src/hle/rt64_draw_call.h
-index 0e62be1..eff6759 100644
+index 0e62be1..5e09e0c 100644
 --- a/src/hle/rt64_draw_call.h
 +++ b/src/hle/rt64_draw_call.h
-@@ -65,6 +65,11 @@ namespace RT64 {
+@@ -65,6 +65,13 @@ namespace RT64 {
          uint32_t forceUpscale2D : 1;
          uint32_t forceTrueBilerp : 2;
          uint32_t forceScaleLOD : 1;
 +        // Banjo-Tooie: drawn after the scene effects instead of under them (see FramebufferRenderer).
 +        uint32_t sceneEffectsExclude : 1;
++        // Banjo-Tooie: drawn in place under the scene effects, its blended draws without writing depth (see State::loadDrawState).
++        uint32_t sceneEffectsNoDepth : 1;
 +        // Banjo-Tooie: 1 fur shells are drawn over these (Banjo's model), 2 feathers grow on them (Kazooie's), 3 white
 +        // fur (a furry enemy's), 4 feathers in their own colours (a feathered NPC's), see FramebufferRenderer.
 +        uint32_t furShells : 3;
@@ -1363,15 +1365,16 @@ index e08b02c..e722ecc 100644
          void notifyPresentId(const Present &present);
          void threadAdvanceBarrier();
 diff --git a/src/hle/rt64_rdp.cpp b/src/hle/rt64_rdp.cpp
-index a10c11a..3071d72 100644
+index a10c11a..be2da39 100644
 --- a/src/hle/rt64_rdp.cpp
 +++ b/src/hle/rt64_rdp.cpp
-@@ -1076,6 +1076,16 @@ namespace RT64 {
+@@ -1076,6 +1076,17 @@ namespace RT64 {
          state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
      }
  
-+    void RDP::setSceneEffectsExclude(bool exclude) {
-+        extended.drawExtendedFlags.sceneEffectsExclude = exclude;
++    void RDP::setSceneEffectsExclude(uint32_t mode) {
++        extended.drawExtendedFlags.sceneEffectsExclude = (mode == 1);
++        extended.drawExtendedFlags.sceneEffectsNoDepth = (mode == 2);
 +        state->updateDrawStatusAttribute(DrawAttribute::ExtendedFlags);
 +    }
 +
@@ -1384,14 +1387,14 @@ index a10c11a..3071d72 100644
          extended.scissorLeftOriginStack[0] = G_EX_ORIGIN_NONE;
          extended.scissorRightOriginStack[0] = G_EX_ORIGIN_NONE;
 diff --git a/src/hle/rt64_rdp.h b/src/hle/rt64_rdp.h
-index 84f4e7c..6508918 100644
+index 84f4e7c..d6ef175 100644
 --- a/src/hle/rt64_rdp.h
 +++ b/src/hle/rt64_rdp.h
 @@ -199,6 +199,8 @@ namespace RT64 {
          void forceUpscale2D(bool force);
          void forceTrueBilerp(uint8_t mode);
          void forceScaleLOD(bool force);
-+        void setSceneEffectsExclude(bool exclude);
++        void setSceneEffectsExclude(uint32_t mode);
 +        void setFurShells(uint32_t kind);
          void clearExtended();
  
@@ -1580,7 +1583,7 @@ index ee2030b..12dd68d 100644
              if (!drawRect.isNull()) {
                  fbPair.drawColorRect.merge(drawRect);
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
-index 2970e71..0d12358 100644
+index 2970e71..fb30a2a 100644
 --- a/src/hle/rt64_state.cpp
 +++ b/src/hle/rt64_state.cpp
 @@ -4,6 +4,8 @@
@@ -1592,7 +1595,24 @@ index 2970e71..0d12358 100644
  #include <cassert>
  #include <cinttypes>
  
-@@ -818,9 +820,9 @@ namespace RT64 {
+@@ -455,6 +457,16 @@ namespace RT64 {
+             drawCall.extendedFlags = rdp->extended.drawExtendedFlags;
+         }
+ 
++        // Banjo-Tooie: a model marked to keep its see-through draws' depth out of the picture draws them as if their
++        // render mode had no Z_UPD (Bottles' ghost: his glow is a blended square that wrote a near depth over its
++        // whole box, which the scene effects took for a wall). Its solid draws keep their depth.
++        if (drawStatus.isChanged(DrawAttribute::OtherMode) || drawStatus.isChanged(DrawAttribute::ExtendedFlags)) {
++            drawCall.otherMode = rdp->otherMode;
++            if (drawCall.extendedFlags.sceneEffectsNoDepth && interop::Blender::usesAlphaBlend(drawCall.otherMode)) {
++                drawCall.otherMode.L &= ~Z_UPD;
++            }
++        }
++
+         drawStatus.clearChanges();
+     }
+ 
+@@ -818,9 +830,9 @@ namespace RT64 {
  
          // Validate all tile copies to be used during the rendering.
          const bool extendedRenderToRAMSet = (extended.renderToRAM < UINT8_MAX);
@@ -1604,7 +1624,7 @@ index 2970e71..0d12358 100644
          const size_t callTileCount = workload.drawData.callTiles.size();
          for (size_t t = 0; t < callTileCount; t++) {
              DrawCallTile &callTile = workload.drawData.callTiles[t];
-@@ -976,6 +978,7 @@ namespace RT64 {
+@@ -976,6 +988,7 @@ namespace RT64 {
                      shaderDesc.colorCombiner = callDesc.colorCombiner;
                      shaderDesc.otherMode = callDesc.otherMode;
                      shaderDesc.flags = {};
@@ -1612,7 +1632,7 @@ index 2970e71..0d12358 100644
  
                      // Check if the blender uses a standard fog cycle. We override it and indicate it on
                      // the material for the RT path to use its own fog handling.
-@@ -1113,6 +1116,8 @@ namespace RT64 {
+@@ -1113,6 +1126,8 @@ namespace RT64 {
                      renderParams.omL = shaderDesc.otherMode.L;
                      renderParams.omH = shaderDesc.otherMode.H;
                      renderParams.flags = shaderDesc.flags;
@@ -1621,7 +1641,7 @@ index 2970e71..0d12358 100644
  
                      workload.drawData.rdpParams.emplace_back(gameCall.callDesc.rdpParams);
                      workload.drawData.renderParams.emplace_back(renderParams);
-@@ -1822,6 +1827,9 @@ namespace RT64 {
+@@ -1822,6 +1837,9 @@ namespace RT64 {
          // Reset the next workload.
          workloadCursor = ext.workloadQueue->writeCursor;
          Workload &nextWorkload = ext.workloadQueue->workloads[workloadCursor];
@@ -1631,7 +1651,7 @@ index 2970e71..0d12358 100644
          nextWorkload.begin(workloadCounter++);
  
          // Indicate on the framebuffer manager that all tile copies are free to be used again.
-@@ -2666,6 +2674,7 @@ namespace RT64 {
+@@ -2666,6 +2684,7 @@ namespace RT64 {
          present.presentId = ++presentId;
          present.workloadId = workloadId;
          present.paused = paused;
@@ -1843,20 +1863,21 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..455118c 100644
+index 69a82ac..8c28c4f 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -212,6 +212,9 @@ namespace RT64 {
+@@ -212,6 +212,10 @@ namespace RT64 {
          uint32_t gFilteredDirectLight;
          uint32_t gFilteredIndirectLight;
          uint32_t gBlueNoise;
 +        uint32_t furNormals;
 +        uint32_t snowTrail;
 +        uint32_t grassMask;
++        uint32_t snowPositions;
  
          FramebufferRendererDescriptorCommonSet(const SamplerLibrary &samplerLibrary, bool raytracing, RenderDevice *device = nullptr) {
              builder.begin();
-@@ -282,6 +285,12 @@ namespace RT64 {
+@@ -282,6 +286,14 @@ namespace RT64 {
              gFilteredDirectLight = builder.addReadWriteTexture(65);
              gFilteredIndirectLight = builder.addReadWriteTexture(66);
              gBlueNoise = builder.addTexture(67);
@@ -1866,10 +1887,12 @@ index 69a82ac..455118c 100644
 +            snowTrail = builder.addStructuredBuffer(69);
 +            // Banjo-Tooie: where 3D grass doesn't grow (GrassGS.hlsl).
 +            grassMask = builder.addStructuredBuffer(70);
++            // Banjo-Tooie: deep snow's ground vertices' world positions (RasterVS.hlsl).
++            snowPositions = builder.addStructuredBuffer(71);
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +668,101 @@ namespace RT64 {
+@@ -659,6 +671,101 @@ namespace RT64 {
          }
      };
  
@@ -1972,7 +1995,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..18c771d 100644
+index 9fae0d4..f18a1ce 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,13 @@
@@ -2275,7 +2298,7 @@ index 9fae0d4..18c771d 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +446,51 @@ namespace RT64 {
+@@ -169,11 +446,54 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2285,6 +2308,9 @@ index 9fae0d4..18c771d 100644
 +        grassMaskStarted = false;
 +        frameParams.grassMask.w = 0.0f;
 +        instanceSnowVector.clear();
++        snowVertexFirst = UINT32_MAX;
++        snowVertexEnd = 0;
++        snowPositionsData = nullptr;
 +        snowShells = 0;
 +        frameParams.snowGrid.w = 0.0f;
 +        instanceFurVector.clear();
@@ -2327,7 +2353,7 @@ index 9fae0d4..18c771d 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +536,7 @@ namespace RT64 {
+@@ -219,6 +539,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2335,7 +2361,7 @@ index 9fae0d4..18c771d 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +568,7 @@ namespace RT64 {
+@@ -250,6 +571,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2343,7 +2369,7 @@ index 9fae0d4..18c771d 100644
                  }
              }
              else {
-@@ -272,6 +591,9 @@ namespace RT64 {
+@@ -272,6 +594,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2353,17 +2379,18 @@ index 9fae0d4..18c771d 100644
              }
          }
      }
-@@ -373,6 +695,9 @@ namespace RT64 {
+@@ -373,6 +698,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
 +        descCommonSet->setBuffer(descCommonSet->furNormals, furNormalsBuffer.get(), RenderBufferStructuredView(sizeof(interop::float4)));
 +        descCommonSet->setBuffer(descCommonSet->snowTrail, snowTrailBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
 +        descCommonSet->setBuffer(descCommonSet->grassMask, grassMaskBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
++        descCommonSet->setBuffer(descCommonSet->snowPositions, snowPositionsBuffer.get(), RenderBufferStructuredView(sizeof(float)));
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +768,14 @@ namespace RT64 {
+@@ -443,6 +772,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2378,7 +2405,7 @@ index 9fae0d4..18c771d 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +798,61 @@ namespace RT64 {
+@@ -465,12 +802,61 @@ namespace RT64 {
          return true;
      }
      
@@ -2442,7 +2469,7 @@ index 9fae0d4..18c771d 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +896,17 @@ namespace RT64 {
+@@ -514,6 +900,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2460,7 +2487,7 @@ index 9fae0d4..18c771d 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +967,96 @@ namespace RT64 {
+@@ -574,10 +971,96 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2557,7 +2584,7 @@ index 9fae0d4..18c771d 100644
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
                      if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1729,67 @@ namespace RT64 {
+@@ -1250,6 +1733,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2625,7 +2652,7 @@ index 9fae0d4..18c771d 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1836,84 @@ namespace RT64 {
+@@ -1296,9 +1840,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2711,7 +2738,7 @@ index 9fae0d4..18c771d 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1965,30 @@ namespace RT64 {
+@@ -1350,10 +1969,30 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2742,7 +2769,7 @@ index 9fae0d4..18c771d 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2043,61 @@ namespace RT64 {
+@@ -1408,6 +2047,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2804,7 +2831,7 @@ index 9fae0d4..18c771d 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2121,22 @@ namespace RT64 {
+@@ -1431,6 +2125,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2827,7 +2854,7 @@ index 9fae0d4..18c771d 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2156,160 @@ namespace RT64 {
+@@ -1450,12 +2160,162 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -2847,8 +2874,10 @@ index 9fae0d4..18c771d 100644
 +            uint32_t pointStart, pointCount;
 +            // The texture's format and size, the same for the pieces of one picture.
 +            uint32_t format;
-+            // In the 3D world: the shader then also checks the colours meet (TextureSampler.hlsli).
++            // In the 3D world (the top bit of its neighbours' tile indices).
 +            bool world;
++            // The material's shader: a picture drawn twice in layers (a Split-Up pad's) pairs within each layer.
++            uint64_t shader;
 +        };
 +        std::vector<SeamPiece> seamPieces;
 +        std::vector<SeamPoint> seamPoints;
@@ -2988,7 +3017,7 @@ index 9fae0d4..18c771d 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2460,7 @@ namespace RT64 {
+@@ -1606,6 +2466,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -2996,7 +3025,7 @@ index 9fae0d4..18c771d 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2537,20 @@ namespace RT64 {
+@@ -1682,6 +2543,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3017,7 +3046,7 @@ index 9fae0d4..18c771d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2616,869 @@ namespace RT64 {
+@@ -1747,24 +2622,898 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3036,8 +3065,10 @@ index 9fae0d4..18c771d 100644
 +                    const bool iceLike = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() == ZMODE_DEC) && (om.cycleType() != G_CYC_COPY) && interop::Blender::usesAlphaBlend(om);
-+                    // And anything drawn with an ice texture (floors, walls, the blocks round notes), see-through or not.
-+                    bool iceTextured = (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
++                    // And anything drawn with an ice texture (floors, walls, the blocks round notes), see-through or not,
++                    // also only in the icy maps: other levels use some of the same textures (Stomping Plains' floor by
++                    // the Jiggy pad has the cobbled ice floor's).
++                    bool iceTextured = SceneIcyLevel() && (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        om.zCmp() && (om.cycleType() != G_CYC_COPY) && (call.callDesc.tileCount > 0);
 +                    if (iceTextured) {
@@ -3105,8 +3136,8 @@ index 9fae0d4..18c771d 100644
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -3259,8 +3290,20 @@ index 9fae0d4..18c771d 100644
 +                    // (Also ground drawn without writing depth, as the snowy platforms round Chilly Willy's arena are: its
 +                    // shells write it, below.)
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
-+                    if (sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
++                    // Not on ice (SceneIceTexture): its pale streaks pass for snow.
++                    bool iceGround = false;
++                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !iceGround; t++) {
++                        iceGround = SceneIceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                    }
++                    if (!iceGround && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
 +                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams), 255u));
++                        if (snowValue != 0) {
++                            for (uint32_t k = call.meshDesc.faceIndicesStart; k < call.meshDesc.faceIndicesStart + call.callDesc.triangleCount * 3; k++) {
++                                snowVertexFirst = std::min(snowVertexFirst, drawData.faceIndices[k]);
++                                snowVertexEnd = std::max(snowVertexEnd, drawData.faceIndices[k] + 1);
++                            }
++                            snowPositionsData = &drawData;
++                        }
 +                    }
 +                }
 +                instanceSnowVector.resize(instanceIndex, 0);
@@ -3324,8 +3367,8 @@ index 9fae0d4..18c771d 100644
 +                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : featherKind);
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
-                 }
- 
++                }
++
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
 +                if (!nightLightsChecked) {
 +                    nightLightsChecked = true;
@@ -3372,9 +3415,9 @@ index 9fae0d4..18c771d 100644
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
 +                    }
 +                }
-+                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers once along s and t (from within a
-+                // texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend texture
-+                // seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
++                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
++                // within a texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend
++                // texture seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
 +                // diagonally).
 +                if (seamsOn && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.tileCount > 0) &&
 +                    (call.callDesc.triangleCount > 0) && (call.callDesc.triangleCount <= 16) && (seamPieces.size() < 2048))
@@ -3407,16 +3450,17 @@ index 9fae0d4..18c771d 100644
 +                            }
 +                        }
 +                        // (Cliff faces stop a little short of their tile's last texel, 62.9 of 64.)
-+                        fits = fits && (std::abs(uMin) <= 1.0f) && (std::abs(tMin) <= 1.0f) &&
-+                            (std::abs(uMax - float(width)) <= 1.0f) && (std::abs(tMax - float(height)) <= 1.0f);
++                        // A piece may cover only part of its tile (each Split-Up pad picture tile is drawn in halves): its
++                        // vertices on the tile's sides are the edge points below.
++                        fits = fits && (uMin >= -1.0f) && (tMin >= -1.0f) && (uMax <= float(width) + 1.0f) && (tMax <= float(height) + 1.0f);
 +                        if (fits) {
 +                            const uint32_t pointStart = uint32_t(seamPoints.size());
 +                            for (uint32_t k = 0; k < indexCount; k++) {
 +                                const uint32_t v = drawData.faceIndices[start + k];
 +                                const float u = drawData.tcFloats[v * 2 + 0] * ss - float(st.uls >> 2);
 +                                const float t = drawData.tcFloats[v * 2 + 1] * ts - float(st.ult >> 2);
-+                                const uint32_t edges = ((std::abs(u - uMin) < 0.05f) ? 1u : 0u) | ((std::abs(u - uMax) < 0.05f) ? 2u : 0u) |
-+                                    ((std::abs(t - tMin) < 0.05f) ? 4u : 0u) | ((std::abs(t - tMax) < 0.05f) ? 8u : 0u);
++                                const uint32_t edges = ((u <= 0.05f) ? 1u : 0u) | ((u >= float(width) - 1.15f) ? 2u : 0u) |
++                                    ((t <= 0.05f) ? 4u : 0u) | ((t >= float(height) - 1.15f) ? 8u : 0u);
 +                                const hlslpp::float4 &cp = drawData.posTransformed[v];
 +                                const float w = float(cp.w);
 +                                if ((edges == 0) || (w <= 1e-6f)) {
@@ -3425,7 +3469,7 @@ index 9fae0d4..18c771d 100644
 +                                seamPoints.push_back({ { float(cp.x) / w, float(cp.y) / w, w }, edges, u, t });
 +                            }
 +                            seamPieces.push_back({ instanceIndex, call.callDesc.tileIndex, width, height, pointStart, uint32_t(seamPoints.size()) - pointStart, (uint32_t(st.fmt) << 8) | uint32_t(st.siz),
-+                                proj.type == Projection::Type::Perspective });
++                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
 +                }
@@ -3484,7 +3528,7 @@ index 9fae0d4..18c771d 100644
 +                                    continue;
 +                                }
 +                                const SeamPiece &b = seamPieces[bi];
-+                                if (b.format != a.format) {
++                                if ((b.format != a.format) || (b.shader != a.shader)) {
 +                                    continue;
 +                                }
 +                                if (alongT ? ((b.height != a.height) || (std::abs(pb.t - pa.t) > 0.1f)) : ((b.width != a.width) || (std::abs(pb.u - pa.u) > 0.1f))) {
@@ -3516,9 +3560,14 @@ index 9fae0d4..18c771d 100644
 +                        }
 +                    }
 +                }
++                // Of pieces alike at the same place, the nearest in draw order.
++                uint32_t bestGap = 0xFFFFFFFFu;
 +                for (uint32_t c = 0; c < candidateCount; c++) {
-+                    if ((counts[c] >= 2) && (counts[c] > bestCount)) {
++                    const uint32_t bInstance = seamPieces[candidates[c]].instance;
++                    const uint32_t gap = (bInstance > a.instance) ? (bInstance - a.instance) : (a.instance - bInstance);
++                    if ((counts[c] >= 2) && ((counts[c] > bestCount) || ((counts[c] == bestCount) && (gap < bestGap)))) {
 +                        bestCount = counts[c];
++                        bestGap = gap;
 +                        best = seamPieces[candidates[c]].tile | (a.world ? 0x80000000u : 0u);
 +                    }
 +                }
@@ -3869,6 +3918,14 @@ index 9fae0d4..18c771d 100644
 +        if (grassMaskUpload.empty()) {
 +            grassMaskUpload.assign(1, 0u);
 +        }
++        // Banjo-Tooie: the world positions of deep snow's ground vertices (level ground: its positions are the world's),
++        // only the span its draws use (the buffer keeps the rest). Three floats of nothing without any.
++        const float *snowPositionsSource = snowPositionsFallback;
++        std::pair<size_t, size_t> snowPositionsRange = { 0, 3 };
++        if ((snowShells > 0) && (snowPositionsData != nullptr) && (snowVertexEnd > snowVertexFirst) && (size_t(snowVertexEnd) * 3 <= snowPositionsData->posFloats.size())) {
++            snowPositionsSource = snowPositionsData->posFloats.data();
++            snowPositionsRange = { size_t(snowVertexFirst) * 3, size_t(snowVertexEnd) * 3 };
++        }
 +        // TOOIE_GRASS_LOG: twice a second, the road grid's box and how much of it went to the GPU.
 +        static const bool grassMaskLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
 +        if (grassMaskLog) {
@@ -3884,12 +3941,13 @@ index 9fae0d4..18c771d 100644
 +            { &frameParams, { 0, 1 }, sizeof(interop::FrameParams), RenderBufferFlag::CONSTANT, { }, &frameParamsBuffer},
 +            { furShaderVector.data(), { (furShaderEnd > furShaderFirst) ? furShaderFirst : 0, furShaderEnd }, sizeof(interop::float4), RenderBufferFlag::STORAGE, { }, &furNormalsBuffer},
 +            { snowTrail.cells.data(), snowTrailRange, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &snowTrailBuffer},
-+            { grassMaskUpload.data(), { 0, grassMaskUpload.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &grassMaskBuffer}
++            { grassMaskUpload.data(), { 0, grassMaskUpload.size() }, sizeof(uint32_t), RenderBufferFlag::STORAGE, { }, &grassMaskBuffer},
++            { snowPositionsSource, snowPositionsRange, sizeof(float), RenderBufferFlag::STORAGE, { }, &snowPositionsBuffer}
          };
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..740d43a 100644
+index 3add9c3..5af6c42 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,8 @@
@@ -3947,7 +4005,7 @@ index 3add9c3..740d43a 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +96,87 @@ namespace RT64 {
+@@ -62,11 +96,94 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -3974,6 +4032,13 @@ index 3add9c3..740d43a 100644
 +        uint32_t snowShells = 0;
 +        SceneSnowTrailCopy snowTrail;
 +        BufferPair snowTrailBuffer;
++        // Banjo-Tooie: the vertices deep snow's draws use this frame (from snowPositionsData's posFloats), for their
++        // world positions (RasterVS.hlsl).
++        uint32_t snowVertexFirst = UINT32_MAX;
++        uint32_t snowVertexEnd = 0;
++        const DrawData *snowPositionsData = nullptr;
++        float snowPositionsFallback[3] = {};
++        BufferPair snowPositionsBuffer;
 +        // Banjo-Tooie: where 3D grass doesn't grow (a road or dirt laid over grass ground as a decal): one bit a cell
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
 +        std::vector<uint32_t> grassMaskVector;
@@ -4035,7 +4100,7 @@ index 3add9c3..740d43a 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +197,8 @@ namespace RT64 {
+@@ -87,6 +204,8 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -4044,7 +4109,7 @@ index 3add9c3..740d43a 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +212,7 @@ namespace RT64 {
+@@ -100,6 +219,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -4052,7 +4117,7 @@ index 3add9c3..740d43a 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +236,10 @@ namespace RT64 {
+@@ -123,6 +243,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4063,7 +4128,7 @@ index 3add9c3..740d43a 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +281,15 @@ namespace RT64 {
+@@ -164,7 +288,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -4767,10 +4832,10 @@ index 0000000..2df8ab2
 +    };
 +};
 diff --git a/src/render/rt64_projection_processor.cpp b/src/render/rt64_projection_processor.cpp
-index e842dcc..9bb172a 100644
+index e842dcc..0505490 100644
 --- a/src/render/rt64_projection_processor.cpp
 +++ b/src/render/rt64_projection_processor.cpp
-@@ -7,7 +7,16 @@
+@@ -7,7 +7,37 @@
  #include "common/rt64_math.h"
  #include "hle/rt64_workload_queue.h"
  
@@ -4778,34 +4843,107 @@ index e842dcc..9bb172a 100644
 +#include <cmath>
 +
  namespace RT64 {
-+    static std::atomic<bool> stretchPerspective{ false };
++    static std::atomic<bool> introFillWidth{ false };
 +
-+    void SetStretchPerspective(bool stretch) {
-+        stretchPerspective.store(stretch, std::memory_order_relaxed);
++    void SetIntroFillWidth(bool fill) {
++        introFillWidth.store(fill, std::memory_order_relaxed);
++    }
++
++    // Whether the intro's opening shot is still on screen, worked out from the frames themselves so the
++    // switch lands exactly on the camera cut (the game's flag is set on another thread).
++    struct IntroFillState {
++        bool armed = false;
++        bool active = false;
++        uint32_t framesSinceArmed = 0;
++        bool haveLast = false;
++        float last[3] = { 0.0f, 0.0f, 0.0f };
++    };
++
++    static IntroFillState introFill;
++
++    // Scales the picture's height instead of its width: the view keeps the game's own width and loses the
++    // same share at the top and bottom, so nothing changes shape.
++    inline void zoomProjectionMatrix(interop::float4x4 &matrix, const float scale) {
++        matrix[0][1] *= scale;
++        matrix[1][1] *= scale;
++        matrix[2][1] *= scale;
++        matrix[3][1] *= scale;
 +    }
 +
      inline void adjustProjectionMatrix(interop::float4x4 &matrix, const float aspectRatioScale) {
          matrix[0][0] *= aspectRatioScale;
          matrix[1][0] *= aspectRatioScale;
-@@ -98,6 +107,16 @@ namespace RT64 {
+@@ -98,6 +128,52 @@ namespace RT64 {
                  }
              }
   
-+            // The intro's cloud shots are filmed with a camera of their own (near plane about 35, the other shots
-+            // 2.5): only those are stretched, so the castle and characters keep their shape.
-+            if (stretchPerspective.load(std::memory_order_relaxed) && (proj.type == Projection::Type::Perspective)) {
++            // The intro's opening shot flies through a backdrop of cloud panels that only covers a 4:3 view, so
++            // widened, the panels' ends show. That shot keeps the game's own width and is zoomed to fill the
++            // picture instead (proportions kept, the top and bottom cut away). Everything in the intro map
++            // is filmed with one camera (near plane 30 to 50; the rain uses 2.5), so the clouds can't be told
++            // apart from the tower and characters: the zoom covers that camera until its first cut, which is the
++            // end of the opening shot. Later shots (Klungo at the grave) are widened as usual.
++            float zoomScale = 1.0f;
++            const bool fillOn = introFillWidth.load(std::memory_order_relaxed);
++            if (!fillOn) {
++                introFill.armed = false;
++            }
++            else if (!introFill.armed) {
++                introFill = IntroFillState();
++                introFill.armed = true;
++                introFill.active = true;
++            }
++
++            if (fillOn && introFill.active && (proj.type == Projection::Type::Perspective)) {
 +                const interop::float4x4 &m = drawData.projTransforms[proj.transformsIndex];
 +                const float nearPlane = (std::abs(m.m[2][2] - 1.0f) > 1e-6f) ? (m.m[3][2] / (m.m[2][2] - 1.0f)) : 0.0f;
 +                if (nearPlane > 20.0f) {
-+                    adjustAspectRatio = false;
++                    // A camera cut: the view moves further in one frame than the shot's camera ever does
++                    // (about 15 units a frame). The first frames after arming may still be the map change.
++                    const interop::float4x4 &v = drawData.viewTransforms[proj.transformsIndex];
++                    const float dx = v.m[3][0] - introFill.last[0];
++                    const float dy = v.m[3][1] - introFill.last[1];
++                    const float dz = v.m[3][2] - introFill.last[2];
++                    const float moved = std::sqrt(dx * dx + dy * dy + dz * dz);
++                    constexpr float cutDistance = 150.0f;
++                    constexpr uint32_t settleFrames = 30;
++                    introFill.framesSinceArmed++;
++                    if (introFill.haveLast && (moved > cutDistance) && (introFill.framesSinceArmed > settleFrames)) {
++                        introFill.active = false;
++                    }
++
++                    introFill.last[0] = v.m[3][0];
++                    introFill.last[1] = v.m[3][1];
++                    introFill.last[2] = v.m[3][2];
++                    introFill.haveLast = true;
++                    if (introFill.active && adjustAspectRatio) {
++                        adjustAspectRatio = false;
++                        zoomScale = p.aspectRatioScale;
++                    }
 +                }
 +            }
 +
              float projRatioScale = adjustAspectRatio ? (1.0f / p.aspectRatioScale) : 1.0f;
              interop::float4x4 &viewMatrix = drawData.modViewTransforms[proj.transformsIndex];
              interop::float4x4 &projMatrix = drawData.modProjTransforms[proj.transformsIndex];
+@@ -113,6 +189,7 @@ namespace RT64 {
+             }
+ 
+             adjustProjectionMatrix(projMatrix, projRatioScale);
++            zoomProjectionMatrix(projMatrix, zoomScale);
+ 
+             interop::float4x4 &prevViewTransform = drawData.prevViewTransforms[proj.transformsIndex];
+             interop::float4x4 &prevProjTransform = drawData.prevProjTransforms[proj.transformsIndex];
+@@ -121,6 +198,7 @@ namespace RT64 {
+                 const interop::float4x4 curProjTransform = projMatrix;
+                 interop::float4x4 adjustedPrevProj = *prevProjMatrix;
+                 adjustProjectionMatrix(adjustedPrevProj, projRatioScale);
++                zoomProjectionMatrix(adjustedPrevProj, zoomScale);
+                 viewMatrix = rigidBody->lerp(p.curFrameWeight, *prevViewMatrix, curViewTransform, true);
+                 prevViewTransform = rigidBody->lerp(p.prevFrameWeight, *prevViewMatrix, curViewTransform, true);
+ 
 diff --git a/src/render/rt64_projection_processor.h b/src/render/rt64_projection_processor.h
-index 5bc3a2a..a327910 100644
+index 5bc3a2a..c5c88cc 100644
 --- a/src/render/rt64_projection_processor.h
 +++ b/src/render/rt64_projection_processor.h
 @@ -30,4 +30,9 @@ namespace RT64 {
@@ -4813,10 +4951,10 @@ index 5bc3a2a..a327910 100644
          void upload(const ProcessParams &p);
      };
 +
-+    // Banjo-Tooie: while on, the intro's cloud backdrop shots (perspective views with a far near plane) are
-+    // stretched across a wide picture instead of widened, since the backdrop only covers a 4:3 view. Set by
-+    // the game every frame.
-+    void SetStretchPerspective(bool stretch);
++    // Banjo-Tooie: while on (the intro map in a wide picture), the intro's opening cloud shot is zoomed to fill
++    // the width instead of widened, since its backdrop only covers a 4:3 view; it ends at that shot's first
++    // camera cut. Set by the game every frame.
++    void SetIntroFillWidth(bool fill);
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
@@ -5529,10 +5667,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..1536e3b
+index 0000000..a4cf297
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2158 @@
+@@ -0,0 +1,2174 @@
 +//
 +// RT64
 +//
@@ -5600,6 +5738,7 @@ index 0000000..1536e3b
 +            std::unique_ptr<RenderTextureView> sunMapTextureView;
 +            std::unique_ptr<RenderFramebuffer> sunMapFramebuffer;
 +            const RenderTexture *sceneSetSunMap = nullptr;
++            uint32_t sunMapSize = 0;
 +            // The fireflies' table: where each of the night's fireflies is on the screen this frame, worked out
 +            // once (FireflyTablePS) rather than in every pixel.
 +            std::unique_ptr<RenderTexture> fireflyTexture;
@@ -5989,6 +6128,11 @@ index 0000000..1536e3b
 +    void SetSceneLightShafts(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.lightShafts = strength;
++    }
++
++    void SetSceneSunShadowDistance(float distance) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.sunShadowDistance = std::clamp(distance, 500.0f, 40000.0f);
 +    }
 +
 +    void SetSceneSunShadows(float strength, bool onBanjo, float softness) {
@@ -6933,8 +7077,8 @@ index 0000000..1536e3b
 +        }
 +        const float lightLength = std::sqrt(light[0] * light[0] + light[1] * light[1] + light[2] * light[2]);
 +        frameParams.snowParams = { depth, full, SnowReach, float(SceneSnowShells()) };
-+        // Test aid: TOOIE_SNOW_DEBUG=1 tints the shells from blue at the ground to magenta at the top, =2 shows the trail
-+        // (Snow.hlsli).
++        // Test aid: TOOIE_SNOW_DEBUG=1 tints the shells from blue at the ground to magenta at the top, =2 shows the trail,
++        // =3 why the snow is left out where it is (Snow.hlsli).
 +        static const bool snowDebug = (std::getenv("TOOIE_SNOW_DEBUG") != nullptr);
 +        frameParams.snowGrid = { SnowCell, 1.0f / SnowCell, float(SnowGridSize), snowDebug ? 1.0f + float(std::max(std::atoi(std::getenv("TOOIE_SNOW_DEBUG")), 1)) : 1.0f };
 +        // Test aid: TOOIE_SNOW_LOG=1 logs Banjo's place and how much of the trail is pressed, every 2 seconds.
@@ -7152,7 +7296,8 @@ index 0000000..1536e3b
 +            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
 +            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
 +                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
-+            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain), settings.sunShadowReach, dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
++            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
++                std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
 +            if (sunLength > 1e-6f) {
 +                float shafts = settings.lightShafts * settings.dayShafts;
 +                if (settings.timeOfDay) {
@@ -7557,10 +7702,19 @@ index 0000000..1536e3b
 +            commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
 +        }
-+        // The sun shadow map, made once and cleared to nothing in the way of the sun, so the pass can always read it.
++        // The sun shadow map, made (again when the Sun shadow distance needs another size) and cleared to nothing in
++        // the way of the sun, so the pass can always read it. Its size follows from shadows.y the way the shaders
++        // work it out (SunShadowMap.hlsli).
++        const uint32_t sunMapSize = SunShadowMapSize(std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP) * SUN_SHADOW_MAP_HALF_STEP);
++        if ((res.sunMapTexture != nullptr) && (res.sunMapSize != sunMapSize)) {
++            res.retireLater(std::move(res.sunMapFramebuffer));
++            res.retireLater(std::move(res.sunMapTextureView));
++            res.retireLater(std::move(res.sunMapTexture));
++        }
 +        if (res.sunMapTexture == nullptr) {
 +            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
-+            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(SUN_SHADOW_MAP_SIZE, SUN_SHADOW_MAP_SIZE, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
++            res.sunMapSize = sunMapSize;
++            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(sunMapSize, sunMapSize, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
 +            res.sunMapTexture->setName("Scene Effects Sun Shadow Map");
 +            res.sunMapTextureView = res.sunMapTexture->createTextureView(RenderTextureViewDesc::Texture2D(RenderFormat::D32_FLOAT));
 +            const RenderTexture *noColor = nullptr;
@@ -7583,8 +7737,8 @@ index 0000000..1536e3b
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
 +            commandList->setFramebuffer(res.sunMapFramebuffer.get());
 +            commandList->clearDepth(true, 1.0f);
-+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(SUN_SHADOW_MAP_SIZE), float(SUN_SHADOW_MAP_SIZE)));
-+            commandList->setScissors(RenderRect(0, 0, SUN_SHADOW_MAP_SIZE, SUN_SHADOW_MAP_SIZE));
++            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(sunMapSize), float(sunMapSize)));
++            commandList->setScissors(RenderRect(0, 0, sunMapSize, sunMapSize));
 +            commandList->setPipeline(shaderLibrary->sunShadowMap.pipeline.get());
 +            commandList->setGraphicsPipelineLayout(shaderLibrary->sunShadowMap.pipelineLayout.get());
 +            commandList->setGraphicsPushConstants(0, &constants);
@@ -7593,14 +7747,14 @@ index 0000000..1536e3b
 +            static auto lastMapLog = std::chrono::steady_clock::now();
 +            if (mapLog && (std::chrono::steady_clock::now() - lastMapLog > std::chrono::milliseconds(1000))) {
 +                lastMapLog = std::chrono::steady_clock::now();
-+                fprintf(stderr, "[sunmap] drawn at %.1f s sun %.3f %.3f %.3f\n", std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count(), constants.sun.x, constants.sun.y, constants.sun.z);
++                fprintf(stderr, "[sunmap] drawn at %.1f s sun %.3f %.3f %.3f distance %.0f size %u\n", std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count(), constants.sun.x, constants.sun.y, constants.sun.z, settings.sunShadowDistance, sunMapSize);
 +            }
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
 +            WorkloadGpuSections().end(sunMapSpan);
 +            GpuCheckpoint(commandList, "sun shadow map: end");
 +            // Headless test hook: TOOIE_SUN_MAP_VIEW shows only what the map shades (grey outside it).
 +            static const bool sunMapView = (getenv("TOOIE_SUN_MAP_VIEW") != nullptr);
-+            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? 100000.0f : 0.0f);
++            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? SUN_SHADOW_MAP_VIEW_FLAG : 0.0f);
 +        }
 +
 +        if ((res.sceneSet == nullptr) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
@@ -7693,10 +7847,10 @@ index 0000000..1536e3b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..e534369
+index 0000000..128d3fa
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,351 @@
+@@ -0,0 +1,355 @@
 +//
 +// RT64
 +//
@@ -7758,6 +7912,8 @@ index 0000000..e534369
 +        float lightShafts = 0.0f;
 +        float sunShadows = 0.0f;
 +        float sunShadowReach = 450.0f;
++        // Banjo-Tooie: the Sun shadow distance setting, the sun shadow map's half width in world units.
++        float sunShadowDistance = 3000.0f;
 +        bool sunShadowOnBanjo = true;
 +        float sunShadowSoftness = 0.6f;
 +        bool customSun = false;
@@ -7883,6 +8039,8 @@ index 0000000..e534369
 +    // sun onto what is behind it, found in the depth buffer.
 +    // onBanjo false leaves Banjo's own sun shadow out (HD shadows can give him one instead).
 +    void SetSceneSunShadows(float strength, bool onBanjo = true, float softness = 0.6f);
++    // Banjo-Tooie: how far round the camera the sun shadow map reaches (half its square's width, world units).
++    void SetSceneSunShadowDistance(float distance);
 +    // Banjo-Tooie: the sun's world direction (towards it) for the sun shadows and light shafts; custom false
 +    // puts back the fixed sun. A sun below the horizon casts no shadows.
 +    void SetSceneSun(bool custom, float x, float y, float z);
@@ -9393,10 +9551,10 @@ index 0000000..fc9cf8f
 +    return float4(color, 1.0f);
 +}
 diff --git a/src/shaders/FbRendererCommon.hlsli b/src/shaders/FbRendererCommon.hlsli
-index bc250a2..61c20df 100644
+index bc250a2..f7bd677 100644
 --- a/src/shaders/FbRendererCommon.hlsli
 +++ b/src/shaders/FbRendererCommon.hlsli
-@@ -38,6 +38,11 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
+@@ -38,6 +38,13 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
  SamplerState gNearestClampWrapSampler : register(s22, space0);
  SamplerState gNearestClampMirrorSampler : register(s23, space0);
  SamplerState gNearestClampClampSampler : register(s24, space0);
@@ -9405,6 +9563,8 @@ index bc250a2..61c20df 100644
 +// Banjo-Tooie: deep snow's trail grid, two for each cell (Snow.hlsli, binding 69).
 +StructuredBuffer<uint> snowTrail : register(t69, space0);
 +StructuredBuffer<uint> grassMask : register(t70, space0);
++// Banjo-Tooie: deep snow's ground vertices' world positions, three floats each by vertex index (binding 71).
++StructuredBuffer<float> snowPositions : register(t71, space0);
  
  // Set 1 - RGBA32 texture cache.
  Texture2D<float4> gTextures[8192] : register(t0, space1);
@@ -11143,7 +11303,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..3385d30 100644
+index e7895c3..fa9686a 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11158,7 +11318,7 @@ index e7895c3..3385d30 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,54 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,55 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -11180,7 +11340,8 @@ index e7895c3..3385d30 100644
 +    float3 grassDx = 0.0f;
 +    float3 grassDy = 0.0f;
 +    if ((grassShell != 0) && !featherCard) {
-+        grassWorld = GrassWorldPosition(vertexPosition);
++        // (Deep snow has its own from the vertices, RasterVS.hlsl.)
++        grassWorld = ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0) ? vertexFurAnchor.xyz : GrassWorldPosition(vertexPosition);
 +        if ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0) {
 +            grassDx = ddx(grassWorld);
 +            grassDy = ddy(grassWorld);
@@ -11215,7 +11376,7 @@ index e7895c3..3385d30 100644
          return false;
      }
  #endif
-@@ -88,7 +135,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +136,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -11226,7 +11387,7 @@ index e7895c3..3385d30 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +162,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +163,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -11251,7 +11412,7 @@ index e7895c3..3385d30 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +210,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +211,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -11260,7 +11421,7 @@ index e7895c3..3385d30 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +228,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +229,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -11269,7 +11430,7 @@ index e7895c3..3385d30 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +253,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +254,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -11308,7 +11469,7 @@ index e7895c3..3385d30 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +357,116 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +358,116 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -11425,7 +11586,7 @@ index e7895c3..3385d30 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +474,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +475,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -11449,7 +11610,7 @@ index e7895c3..3385d30 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +517,7 @@ void PSMain(
+@@ -287,6 +518,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -11457,7 +11618,7 @@ index e7895c3..3385d30 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +534,7 @@ void PSMain(
+@@ -303,7 +535,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -11467,10 +11628,10 @@ index e7895c3..3385d30 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..e1e63a0 100644
+index 74b1fa0..542fe00 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,14 +11,48 @@
+@@ -11,14 +11,52 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -11492,7 +11653,11 @@ index 74b1fa0..e1e63a0 100644
 +        // Banjo-Tooie: a 3D grass shell, moved straight up in the world by its share of the blade height.
 +        // Banjo-Tooie: a shell of deep snow, the same way by its share of the snow's full height.
 +        if ((grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0)) {
-+            ndcPos += FrParams.snowClipUp * (float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK));
++            const float snowShare = float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK);
++            ndcPos += FrParams.snowClipUp * snowShare;
++            // Its place in the world, for Snow.hlsli (the level's ground has no model transform, and its depth can't
++            // be read back with the frame's camera where the game draws the ground near it with a nearer near plane).
++            oFurAnchor.xyz = float3(snowPositions[iVertexId * 3], snowPositions[iVertexId * 3 + 1] + FrParams.snowParams.y * snowShare, snowPositions[iVertexId * 3 + 2]);
 +        }
 +        else if ((grassShell != 0) && ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0)) {
 +            ndcPos += FrParams.grassClipUp * (float(grassShell) / float(gConstants.grassShells));
@@ -11520,7 +11685,7 @@ index 74b1fa0..e1e63a0 100644
      }
      
      // Apply screen scale and offset.
-@@ -33,6 +67,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +71,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -11533,7 +11698,7 @@ index 74b1fa0..e1e63a0 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +93,19 @@ void VSMain(
+@@ -53,17 +97,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -11577,10 +11742,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..432f9da
+index 0000000..2b2643e
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2360 @@
+@@ -0,0 +1,2367 @@
 +//
 +// RT64
 +//
@@ -12395,7 +12560,7 @@ index 0000000..432f9da
 +// The reflection off a water pixel: a ray marched across the screen against the scene's depth. What it
 +// hits is reflected; a ray leaving through the sky reflects the sky; anything else fades out.
 +float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack);
-+float4 WaterReflectionMarch(float3 surface, float3 r);
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest);
 +
 +float4 WaterReflection(float3 surface, float3 normal) {
 +    return WaterReflectionRay(surface, normal, false);
@@ -12433,13 +12598,17 @@ index 0000000..432f9da
 +        // Heading back past the camera.
 +        return 0.0f;
 +    }
-+    float4 reflection = WaterReflectionMarch(surface, r);
++    // A bent ray is made up, so it only picks up what lies well beyond the ice: closer things (Banjo, the walls round
++    // the ice) would be copied down the picture under themselves, a fresh copy wherever a ray met them again.
++    const float nearest = (made < 1.0f) ? max(-surface.z * 2.0f, -surface.z + 800.0f) : 0.0f;
++    float4 reflection = WaterReflectionMarch(surface, r, nearest);
 +    reflection.a *= made;
 +    return reflection;
 +}
 +
-+// The reflection along a ray from a surface (view space): see WaterReflection.
-+float4 WaterReflectionMarch(float3 surface, float3 r) {
++// The reflection along a ray from a surface (view space): see WaterReflection. Things nearer the camera than
++// nearest are passed over.
++float4 WaterReflectionMarch(float3 surface, float3 r, float nearest) {
 +    const float2 size = gConstants.projection.zw;
 +    const float stepLength = max(-surface.z * 0.03f, 4.0f);
 +    float travelled = 0.0f;
@@ -12466,9 +12635,11 @@ index 0000000..432f9da
 +        }
 +        const float sceneZ = -ViewPosition(at, d).z;
 +        const float behind = -p.z - sceneZ;
-+        if (behind > 0.0f) {
-+            // Hit something, as long as the ray didn't pass far behind it.
-+            return float4(gColor.Load(int3(at, 0)).rgb, (behind < stepLength * (2.0f + float(i) * 0.3f)) ? edge : 0.3f * edge);
++        // Hit something, as long as the ray didn't pass far behind it: one that did went behind a thing standing
++        // in front (Banjo on the ice), and goes on. Giving it that thing faintly instead put a fresh faded copy of
++        // it under itself at each step the rays from further down the surface passed behind it.
++        if ((behind > 0.0f) && (behind < stepLength * (2.0f + float(i) * 0.3f)) && (sceneZ >= nearest)) {
++            return float4(gColor.Load(int3(at, 0)).rgb, edge);
 +        }
 +    }
 +    // Left the screen: reflect the sky if that's where the ray went.
@@ -13422,8 +13593,8 @@ index 0000000..432f9da
 +    const float bias = 2.0f + distance * 0.004f;
 +    const float3 start = center + normal * bias;
 +    const float2 size = gConstants.projection.zw;
-+    const bool mapView = (gConstants.shadows.y < -50000.0f);
-+    const float reach = abs(gConstants.shadows.y) - (mapView ? 100000.0f : 0.0f);
++    const bool mapView = SunMapView(gConstants.shadows.y);
++    const float reach = SunMapReach(gConstants.shadows.y);
 +    const int Steps = 24;
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
@@ -13473,7 +13644,8 @@ index 0000000..432f9da
 +    // texels around (wider the softer the shadows), fading out towards the map's edges where the screen-space
 +    // shadows above carry on alone.
 +    if (gConstants.shadows.y < 0.0f) {
-+        const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
++        const SunMapFrame mapFrame = SUN_MAP_FRAME(gConstants);
++        const float texel = 2.0f * mapFrame.halfWidth / mapFrame.size;
 +        const float3 worldNormal = normalize(SunMapWorldDirection(SUN_MAP_FRAME(gConstants), normal));
 +        float3 across, up, towards, middle;
 +        SunMapBasis(SUN_MAP_FRAME(gConstants), across, up, towards, middle);
@@ -13489,8 +13661,8 @@ index 0000000..432f9da
 +        const float3 m = SunMapPosition(SUN_MAP_FRAME(gConstants), world);
 +        const float cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
 +        if ((cover > 0.0f) && (m.z > 0.0f) && (m.z < 1.0f)) {
-+            const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * SunMapRange);
-+            const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * float(SUN_SHADOW_MAP_SIZE);
++            const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * mapFrame.range);
++            const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * mapFrame.size;
 +            const float angle = jitter * 6.2831853f;
 +            const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
 +            const int Taps = 12;
@@ -13501,7 +13673,7 @@ index 0000000..432f9da
 +            };
 +            float blocked = 0.0f;
 +            [unroll] for (int k = 0; k < Taps; k++) {
-+                const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(SUN_SHADOW_MAP_SIZE - 1, SUN_SHADOW_MAP_SIZE - 1));
++                const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(int(mapFrame.size) - 1, int(mapFrame.size) - 1));
 +                blocked += ((m.z - depthBias) > gSunShadowMap.Load(int3(at, 0))) ? 1.0f : 0.0f;
 +            }
 +            // A surface turned from the sun gets none of its light either: as dark as a cast shadow, with a soft
@@ -14000,10 +14172,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..c4a5ec9
+index 0000000..61e1ef5
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,203 @@
 +//
 +// RT64
 +//
@@ -14094,19 +14266,24 @@ index 0000000..c4a5ec9
 +// above the snow, or not on ground facing up, so it can be thrown away before the draw's colours are worked out.
 +bool SnowShellShape(float3 world, float3 worldDx, float3 worldDy, float share, out SnowSample s) {
 +    s = (SnowSample)0;
++    // Test aid (TOOIE_SNOW_DEBUG=3): the top shell kept everywhere, coloured in SnowShellShade by why the snow would be
++    // left out there (s.trail.x: 1 no normal or a wall, 2 out of reach, 3 a steep face, 4 kept).
++    const bool why = FrParams.snowGrid.w > 3.5f;
 +
 +    // Ground facing up: the shell lies parallel to it, so its slopes give the ground's normal.
 +    const float3 normal = cross(worldDx, worldDy);
 +    const float normalLength = length(normal);
 +    if (normalLength <= 0.0f) {
-+        return false;
++        s.trail.x = 1.0f;
++        return why && (share >= 0.999f);
 +    }
 +    const bool steep = abs(normal.y) < 0.6f * normalLength;
 +    // A steep bank of snow (the drop at a snowfield's edge) is raised with it as a solid face, so the snow's side
 +    // isn't a stack of thin layers with gaps between. Not a wall standing straight up, where the raised copies would
 +    // lie on the wall itself and fight over it.
 +    if (steep && (abs(normal.y) < 0.12f * normalLength)) {
-+        return false;
++        s.trail.x = 1.0f;
++        return why && (share >= 0.999f);
 +    }
 +
 +    // Thinner far away, gone by the snow's reach, so it ends without an edge.
@@ -14121,7 +14298,8 @@ index 0000000..c4a5ec9
 +    }
 +    const float thin = saturate(1.0f - (reachDistance - params.z * 0.55f) / (params.z * 0.45f));
 +    if (thin <= 0.02f) {
-+        return false;
++        s.trail.x = 2.0f;
++        return why && (share >= 0.999f);
 +    }
 +
 +    // The same depth everywhere: where it varied, each shell's edge showed as a line across the ground, cutting its
@@ -14131,7 +14309,12 @@ index 0000000..c4a5ec9
 +    s.shellY = share * params.y;
 +    if (steep) {
 +        s.height = s.surface;
-+        return s.shellY <= s.height;
++        s.trail.x = why ? 3.0f : 0.0f;
++        return why ? (share >= 0.999f) : (s.shellY <= s.height);
++    }
++    if (why) {
++        s.trail.x = 4.0f;
++        return share >= 0.999f;
 +    }
 +
 +    // Banjo's trail, near him only.
@@ -14144,6 +14327,12 @@ index 0000000..c4a5ec9
 +
 +// Shades a shell's pixel inside the snow; false when the ground under it isn't snowy (baseColor, the draw's colour).
 +bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, inout float3 color) {
++    if (FrParams.snowGrid.w > 3.5f) {
++        const int reason = int(s.trail.x + 0.5f);
++        color = !SnowColor(baseColor) ? float3(1.0f, 0.0f, 1.0f) : (reason == 1) ? float3(1.0f, 0.0f, 0.0f) : (reason == 2) ? float3(0.0f, 1.0f, 0.0f) :
++            (reason == 3) ? float3(0.0f, 1.0f, 1.0f) : float3(1.0f, 1.0f, 1.0f);
++        return true;
++    }
 +    if (!SnowColor(baseColor)) {
 +        return false;
 +    }
@@ -14192,10 +14381,10 @@ index 0000000..c4a5ec9
 +}
 diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
 new file mode 100644
-index 0000000..925e73c
+index 0000000..3ba8443
 --- /dev/null
 +++ b/src/shaders/SunShadowMap.hlsli
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,91 @@
 +//
 +// RT64
 +//
@@ -14207,12 +14396,10 @@ index 0000000..925e73c
 +
 +#include "shared/rt64_scene_effects.h"
 +
-+// Half the width of the square the map covers, in world units.
-+static const float SunMapHalf = 3000.0f;
-+// How far ahead of the camera (along the ground) the square's middle sits.
-+static const float SunMapAhead = 1800.0f;
-+// How far towards and away from the sun the map reaches from its middle.
-+static const float SunMapRange = 8000.0f;
++// How far the map reaches is the Sun shadow distance setting: half the width of the square it covers, in world
++// units, packed into shadows.y (SunMapDecode). The square's middle sits ahead of the camera by 0.6 of that, and
++// the map reaches towards and away from the sun at least SunMapMinRange from its middle.
++static const float SunMapMinRange = 8000.0f;
 +
 +// The constants the map needs, copied out member by member. Passing the push constant buffer itself to a
 +// function makes the Windows build's DXC (1.7) load the whole buffer and emit invalid SPIR-V.
@@ -14221,18 +14408,46 @@ index 0000000..925e73c
 +    float4 worldY;
 +    float4 worldZ;
 +    float4 sun;
++    // Half the square's width, how far towards and away from the sun it reaches, its size in texels.
++    float halfWidth;
++    float range;
++    float size;
 +};
 +
-+SunMapFrame MakeSunMapFrame(float4 worldX, float4 worldY, float4 worldZ, float4 sun) {
++// shadows.y: |y| = the screen-space reach (under 1000) + 1000 * the map's half width in steps of
++// SUN_SHADOW_MAP_HALF_STEP, + SUN_SHADOW_MAP_VIEW_FLAG for the headless map view; negative when the map was drawn.
++float SunMapPacked(float y) {
++    const float a = abs(y);
++    return (a >= SUN_SHADOW_MAP_VIEW_FLAG - 0.5f) ? (a - SUN_SHADOW_MAP_VIEW_FLAG) : a;
++}
++
++bool SunMapView(float y) {
++    return abs(y) >= SUN_SHADOW_MAP_VIEW_FLAG - 0.5f;
++}
++
++float SunMapReach(float y) {
++    const float a = SunMapPacked(y);
++    return a - 1000.0f * floor(a / 1000.0f);
++}
++
++float SunMapHalfWidth(float y) {
++    const float steps = floor(SunMapPacked(y) / 1000.0f);
++    return (steps > 0.5f) ? steps * SUN_SHADOW_MAP_HALF_STEP : SUN_SHADOW_MAP_DEFAULT_HALF;
++}
++
++SunMapFrame MakeSunMapFrame(float4 worldX, float4 worldY, float4 worldZ, float4 sun, float4 shadows) {
 +    SunMapFrame f;
 +    f.worldX = worldX;
 +    f.worldY = worldY;
 +    f.worldZ = worldZ;
 +    f.sun = sun;
++    f.halfWidth = SunMapHalfWidth(shadows.y);
++    f.range = max(SunMapMinRange, 1.5f * f.halfWidth);
++    f.size = float(SunShadowMapSize(f.halfWidth));
 +    return f;
 +}
 +
-+#define SUN_MAP_FRAME(cb) MakeSunMapFrame((cb).worldX, (cb).worldY, (cb).worldZ, (cb).sun)
++#define SUN_MAP_FRAME(cb) MakeSunMapFrame((cb).worldX, (cb).worldY, (cb).worldZ, (cb).sun, (cb).shadows)
 +
 +float3 SunMapWorldDirection(SunMapFrame c, float3 d) {
 +    return float3(dot(d, c.worldX.xyz), dot(d, c.worldY.xyz), dot(d, c.worldZ.xyz));
@@ -14246,10 +14461,10 @@ index 0000000..925e73c
 +    const float3 camera = float3(c.worldX.w, c.worldY.w, c.worldZ.w);
 +    const float2 forward = -float2(c.worldX.z, c.worldZ.z);
 +    const float forwardLength = length(forward);
-+    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * SunMapAhead : float2(0.0f, 0.0f);
++    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * (0.6f * c.halfWidth) : float2(0.0f, 0.0f);
 +    middle = camera + float3(ahead.x, 0.0f, ahead.y);
 +    // Moved in whole texels across the map, so the shadows' edges don't crawl as the camera moves.
-+    const float texel = 2.0f * SunMapHalf / float(SUN_SHADOW_MAP_SIZE);
++    const float texel = 2.0f * c.halfWidth / c.size;
 +    const float a = dot(middle, across), u = dot(middle, up);
 +    middle += across * (floor(a / texel) * texel - a) + up * (floor(u / texel) * texel - u);
 +}
@@ -14259,7 +14474,7 @@ index 0000000..925e73c
 +    float3 across, up, towards, middle;
 +    SunMapBasis(c, across, up, towards, middle);
 +    const float3 q = world - middle;
-+    return float3(dot(q, across) / SunMapHalf, dot(q, up) / SunMapHalf, 0.5f - dot(q, towards) / (2.0f * SunMapRange));
++    return float3(dot(q, across) / c.halfWidth, dot(q, up) / c.halfWidth, 0.5f - dot(q, towards) / (2.0f * c.range));
 +}
 diff --git a/src/shaders/SunShadowMapPS.hlsl b/src/shaders/SunShadowMapPS.hlsl
 new file mode 100644
@@ -14315,7 +14530,7 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..a3bcc09 100644
+index 1ceb2ce..11e9af8 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
 @@ -139,7 +139,18 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
@@ -14338,7 +14553,7 @@ index 1ceb2ce..a3bcc09 100644
      float2 tcScale = gpuTile.tcScale;
      float mipScale = float(1U << mipLevel);
      uvCoord /= mipScale;
-@@ -186,6 +197,57 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
+@@ -186,6 +197,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
  #endif
      }
      
@@ -14358,8 +14573,7 @@ index 1ceb2ce..a3bcc09 100644
 +            const bool low = clamped && (edge[axis] > 0) && (base == -1);
 +            const uint neighbour = (axis == 0) ? (high ? gSeamTiles.x : gSeamTiles.z) : (high ? gSeamTiles.y : gSeamTiles.w);
 +            if ((high || low) && (neighbour != 0xFFFFFFFFu)) {
-+                // The top bit asks for the colour check below (pieces of the 3D world).
-+                const bool checkColour = (neighbour & 0x80000000u) != 0;
++                // (The top bit marks pieces of the 3D world.)
 +                const uint neighbourTile = neighbour & 0x7FFFFFFFu;
 +                const GPUTile nGpu = GPUTiles[neighbourTile];
 +                if (all(abs(nGpu.tcScale - tcScale) < 0.001f)) {
@@ -14369,25 +14583,15 @@ index 1ceb2ce..a3bcc09 100644
 +                    const int2 outside = (axis == 0) ? (high ? int2(2, 3) : int2(0, 1)) : (high ? int2(1, 3) : int2(0, 2));
 +                    const int along = high ? 0 : seamEdge(nRdp, tcScale)[axis];
 +                    const bool nUsesTMEM = canDecodeTMEM && gpuTileFlagRawTMEM(nGpu.flags);
-+                    // The texels inside the edge, next to the two past it.
-+                    const int2 inside = (axis == 0) ? (high ? int2(0, 1) : int2(2, 3)) : (high ? int2(0, 2) : int2(1, 3));
 +                    float4 found[2];
-+                    bool alike = true;
 +                    [loop]
 +                    for (int k = 0; k < 2; k++) {
 +                        int2 texel = texelBaseInt + ((axis == 0) ? int2(0, k) : int2(k, 0));
 +                        texel[axis] = along;
 +                        found[k] = clampWrapMirrorSample(nRdp, nGpu, tcScale, texel, tlut, nUsesTMEM, 0);
-+                        // In the 3D world, a piece of another surface that only happens to meet this one (a pad's rim and
-+                        // its picture) is told apart by its colour jumping at the edge: those edges stay as they are. (Not
-+                        // on 2D pictures, whose pieces are always one picture: the title logo's failed this check.)
-+                        const float4 jump = abs(found[k] - samples[inside[k]]);
-+                        alike = alike && (!checkColour || (max(max(jump.r, jump.g), max(jump.b, jump.a)) < 0.3f));
 +                    }
-+                    if (alike) {
-+                        samples[outside[0]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[0];
-+                        samples[outside[1]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[1];
-+                    }
++                    samples[outside[0]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[0];
++                    samples[outside[1]] = (FrParams.textureSeams.y > 0.5f) ? float4(1.0f, 0.0f, 1.0f, 1.0f) : found[1];
 +                }
 +            }
 +        }
@@ -14396,7 +14600,7 @@ index 1ceb2ce..a3bcc09 100644
      float4 sample00 = samples[0];
      if (filtering) {
          float2 fracPart = uvCoord - texelBaseInt;
-@@ -278,7 +340,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -278,7 +329,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
              float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
              float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
              float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
@@ -14405,7 +14609,7 @@ index 1ceb2ce..a3bcc09 100644
              mip = 0.5 * log2(ddMax) + mipBias;
              float maxMip = float(gpuTile.textureDimensions.z - 1);
              RDPMipLevels[0] = min(floor(mip), maxMip);
-@@ -326,13 +388,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -326,13 +377,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
  #if USE_FOR_LOOPS
      [unroll]
      for (uint i = 0; i < numRDPSamples; i++) {
@@ -14844,7 +15048,7 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..1a87c8c 100644
+index 0a5c332..d62faab 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
 @@ -9,11 +9,56 @@
@@ -14900,7 +15104,7 @@ index 0a5c332..1a87c8c 100644
 +        uint seamPadding;
 +        // Banjo-Tooie: Blend texture seams: the tiles (global indices) of the pieces of the same picture drawn right of,
 +        // below, left of and above this one, which its texture blends into at its edges (TextureSampler.hlsli), or
-+        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world, whose colours must also meet.
++        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world.
 +        uint4 seamTiles;
      };
  #ifdef HLSL_CPU
@@ -14944,10 +15148,10 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2b117fd
+index 0000000..df4af58
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,98 @@
 +//
 +// RT64
 +//
@@ -14956,8 +15160,23 @@ index 0000000..2b117fd
 +
 +#include "shared/rt64_hlsl.h"
 +
-+// Banjo-Tooie: the sun shadow map's size in texels (SunShadowMap.hlsli).
++// Banjo-Tooie: the sun shadow map (SunShadowMap.hlsli). Its half width in world units is the Sun shadow distance
++// setting (SUN_SHADOW_MAP_DEFAULT_HALF before there was one), packed into SceneEffectsCB.shadows.y in steps of
++// SUN_SHADOW_MAP_HALF_STEP. The size in texels keeps the default's detail (2048 over 3000) as the square grows, up
++// to SUN_SHADOW_MAP_MAX_SIZE; past that each texel covers more ground.
 +#define SUN_SHADOW_MAP_SIZE 2048
++#define SUN_SHADOW_MAP_MAX_SIZE 4096
++#define SUN_SHADOW_MAP_DEFAULT_HALF 3000.0f
++#define SUN_SHADOW_MAP_HALF_STEP 50.0f
++#define SUN_SHADOW_MAP_VIEW_FLAG 1000000.0f
++
++inline unsigned int SunShadowMapSize(float halfWidth) {
++    // Whole steps of 256 texels, rounded up (without ceil, the same on the CPU and in shaders).
++    const float steps = halfWidth / SUN_SHADOW_MAP_DEFAULT_HALF * float(SUN_SHADOW_MAP_SIZE) / 256.0f;
++    const unsigned int whole = (unsigned int)(steps);
++    const unsigned int wanted = (whole + ((float(whole) < steps) ? 1u : 0u)) * 256u;
++    return (wanted < (unsigned int)(SUN_SHADOW_MAP_SIZE)) ? (unsigned int)(SUN_SHADOW_MAP_SIZE) : ((wanted > (unsigned int)(SUN_SHADOW_MAP_MAX_SIZE)) ? (unsigned int)(SUN_SHADOW_MAP_MAX_SIZE) : wanted);
++}
 +
 +#ifdef HLSL_CPU
 +namespace interop {

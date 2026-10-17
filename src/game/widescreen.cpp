@@ -17,6 +17,9 @@
 // time the planes are rebuilt, so switching it applies without a restart.
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "recomp.h"
@@ -25,10 +28,13 @@
 #include "ultramodern/config.hpp"
 #include "tooie_debug.h"
 #include "tooie_game.h"
+#include "tooie_gfx_budget.h"
+#include "tooie_hooks.h"
 #include "tooie_picture_filters.h"
+#include "tooie_rdram.h"
 
 namespace RT64 {
-    void SetStretchPerspective(bool stretch);
+    void SetIntroFillWidth(bool fill);
 }
 
 namespace {
@@ -61,14 +67,15 @@ namespace {
     }
 }
 
-// The intro ("Two years have passed..", map 0xA1) films a backdrop of cloud
-// panels built for a 4:3 view: widened, the picture shows the panels' ends
-// and black past them. On that map the cloud shots, which have a camera of
-// their own, are stretched to the window instead (RT64 skips its aspect
-// adjustment for them); the castle and characters keep their shape.
+// The intro ("Two years have passed..", map 0xA1) opens with a shot through a
+// backdrop of cloud panels built for a 4:3 view: widened, the picture shows the
+// panels' ends. RT64 zooms that one shot to fill the window (the game's width,
+// the top and bottom cut away, nothing changes shape) and goes back to
+// the normal wide view at the shot's first camera cut. Until 2026-10-17 every
+// shot of the map was stretched instead, Klungo at the grave included (L).
 void tooie::widescreen_tick(uint8_t* rdram) {
     constexpr uint16_t intro_map = 0xA1;
-    RT64::SetStretchPerspective(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
+    RT64::SetIntroFillWidth(tooie::widescreen_scale() > 1.0f && tooie::debug::current_map(rdram) == intro_map);
 }
 
 // How much wider than 4:3 RT64 draws the picture.
@@ -193,4 +200,127 @@ extern "C" void func_800CA1B0(uint8_t* rdram, recomp_context* ctx) {
     ctx->r5 = camera + 0xF8;
     ctx->r6 = float_bits(angle);
     func_800EF934(rdram, ctx);
+}
+
+// Sun shadows: the game culls what is out of view with two tests, func_800E3E8C(position, radius) for spheres
+// (models, effects) and func_800E3D0C(min, max) for boxes (the level's own geometry, in pieces). The sun shadow map
+// only holds what the game drew, so a cliff just off screen cast its shadow while the camera faced one way and lost
+// it as the camera turned (L's burst of 2026-10-17: a cliff's shadow across Spiral Mountain's path came and went).
+// With sun shadows on, whatever lies within the Sun shadow distance of the camera counts as in view, so the map
+// holds everything round the camera that it covers, whichever way the camera faces. Both hooks run at the test's
+// end, its answer in $v1 and its arguments still on its stack. Only while the frame's drawing buffers have room
+// (gfx_budget), as for the other extras.
+namespace {
+    float sun_cull_distance(uint8_t* rdram) {
+        // Test aid: TOOIE_SUN_CULL=0 leaves the game's culling alone, to compare. TOOIE_SUN_CULL=<from>-<to>[,...]
+        // does so only between those times (ms after the first call), to compare one camera in one run.
+        static const char* cull_env = std::getenv("TOOIE_SUN_CULL");
+        if (cull_env != nullptr) {
+            static const auto first_call = std::chrono::steady_clock::now();
+            const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - first_call).count();
+            bool in_window = std::strcmp(cull_env, "0") == 0;
+            for (const char* p = cull_env; !in_window && *p != '\0';) {
+                char* end = nullptr;
+                const long long from = std::strtoll(p, &end, 10);
+                const long long to = (*end == '-') ? std::strtoll(end + 1, &end, 10) : from;
+                in_window = ms >= from && ms < to;
+                if (*end != ',') {
+                    break;
+                }
+                p = end + 1;
+            }
+            static bool was_in_window = false;
+            if (in_window != was_in_window) {
+                was_in_window = in_window;
+                printf("[sun-cull] %s at %lld ms\n", in_window ? "off" : "on", ms);
+                fflush(stdout);
+            }
+            if (in_window) {
+                return 0.0f;
+            }
+        }
+        return tooie::picture_filters::sun_shadow_distance();
+    }
+
+    // The camera's position (the culling planes are relative to it), false if there is no camera.
+    bool camera_position(uint8_t* rdram, float out[3]) {
+        const uint32_t camera = tooie::rdram::read_word(rdram, 0x8012D500u);
+        if (!tooie::rdram::valid_ptr(camera)) {
+            return false;
+        }
+        for (uint32_t axis = 0; axis < 3; axis++) {
+            out[axis] = tooie::rdram::read_float(rdram, camera + 4 * axis);
+        }
+        return true;
+    }
+
+    void keep(uint8_t* rdram, recomp_context* ctx, float distance) {
+        if (!tooie::gfx_budget::room_for_extras(rdram)) {
+            return;
+        }
+        ctx->r3 = 1;
+        // Test aid: TOOIE_SUN_CULL_LOG=1 prints how many culled spheres and boxes were kept, every 2 s.
+        static const bool log = std::getenv("TOOIE_SUN_CULL_LOG") != nullptr;
+        if (log) {
+            static uint32_t kept = 0;
+            static auto last = std::chrono::steady_clock::now();
+            kept++;
+            const auto now = std::chrono::steady_clock::now();
+            if (now - last >= std::chrono::seconds(2)) {
+                printf("[sun-cull] kept %u culled spheres and boxes within %.0f in 2 s\n", kept, distance);
+                fflush(stdout);
+                kept = 0;
+                last = now;
+            }
+        }
+    }
+}
+
+extern "C" void tooie_sun_shadow_cull(uint8_t* rdram, recomp_context* ctx) {
+    if (ctx->r3 != 0) {
+        return;
+    }
+    const float distance = sun_cull_distance(rdram);
+    float camera[3];
+    const uint32_t position = (uint32_t)MEM_W(0x28, ctx->r29);
+    if (distance <= 0.0f || !tooie::rdram::valid_ptr(position) || !camera_position(rdram, camera)) {
+        return;
+    }
+    const uint32_t radius_bits = (uint32_t)MEM_W(0x2C, ctx->r29);
+    float radius;
+    std::memcpy(&radius, &radius_bits, sizeof(radius));
+    float dist2 = 0.0f;
+    for (uint32_t axis = 0; axis < 3; axis++) {
+        const float d = tooie::rdram::read_float(rdram, position + 4 * axis) - camera[axis];
+        dist2 += d * d;
+    }
+    const float reach = distance + std::max(radius, 0.0f);
+    if (dist2 < reach * reach) {
+        keep(rdram, ctx, distance);
+    }
+}
+
+extern "C" void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx) {
+    if (ctx->r3 != 0) {
+        return;
+    }
+    const float distance = sun_cull_distance(rdram);
+    float camera[3];
+    const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
+    const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
+    if (distance <= 0.0f || !tooie::rdram::valid_ptr(box_min) || !tooie::rdram::valid_ptr(box_max) || !camera_position(rdram, camera)) {
+        return;
+    }
+    // From the camera to the nearest point of the box.
+    float dist2 = 0.0f;
+    for (uint32_t axis = 0; axis < 3; axis++) {
+        const float lo = tooie::rdram::read_float(rdram, box_min + 4 * axis);
+        const float hi = tooie::rdram::read_float(rdram, box_max + 4 * axis);
+        const float nearest = std::clamp(camera[axis], std::min(lo, hi), std::max(lo, hi));
+        const float d = nearest - camera[axis];
+        dist2 += d * d;
+    }
+    if (dist2 < distance * distance) {
+        keep(rdram, ctx, distance);
+    }
 }

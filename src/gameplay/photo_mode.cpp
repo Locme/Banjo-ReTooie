@@ -1151,6 +1151,17 @@ bool tooie::photo_mode::place_camera(uint8_t* rdram, recomp_context* ctx, uint32
                 const float len = std::max(1.0f, std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]));
                 cam.pitch = std::clamp(std::asin(std::clamp(d[1] / len, -1.0f, 1.0f)) / deg, -max_pitch, max_pitch);
                 cam.yaw = std::fmod(std::atan2(-d[0], -d[2]) / deg + 360.0f, 360.0f);
+                // Headless: TOOIE_PHOTO_ORBIT=<yaw>,<pitch>,<distance>[,<height>] puts the orbit camera
+                // there at once (degrees as the camera's; height above Banjo's feet, default 60), so
+                // close-ups frame the same whatever the frame rate.
+                static const char* fixed = std::getenv("TOOIE_PHOTO_ORBIT");
+                float fy, fp, fd, fh = orbit_height;
+                if (fixed != nullptr && std::sscanf(fixed, "%f,%f,%f,%f", &fy, &fp, &fd, &fh) >= 3) {
+                    cam.pivot[1] += fh - orbit_height;
+                    cam.yaw = std::fmod(fy + 360.0f, 360.0f);
+                    cam.pitch = std::clamp(fp, -max_pitch, max_pitch);
+                    cam.distance = std::clamp(fd, min_orbit, max_orbit);
+                }
             }
         }
         orbit_on = cam.orbit;

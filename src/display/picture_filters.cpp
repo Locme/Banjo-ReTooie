@@ -67,6 +67,7 @@ namespace RT64 {
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
+    void SetSceneSunShadowDistance(float distance);
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
     void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
@@ -118,6 +119,7 @@ namespace {
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
     std::atomic<bool> sun_shadows{false};
+    std::atomic<float> sun_shadow_reach{0.0f};
     std::atomic<bool> kazooie_feathers{false};
     std::atomic<bool> npc_fur{false};
     std::atomic<bool> npc_feathers{false};
@@ -350,6 +352,8 @@ namespace {
         // The mottled ice of walls, platform sides and the see-through blocks round notes (drawn solid and see-through).
         0x23fb73341a90acee, 0x27a85a283bfcca1b, 0x6714212997654fa0, 0x78d3311792ce28ef,
         0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
+        // The see-through blocks round notes themselves (a pale blue texture, 60 triangles, seen in Icy Side 2026-10-17).
+        0xe3890f274d878db4,
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
@@ -3953,6 +3957,9 @@ void tooie::picture_filters::apply() {
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
+    const float shadow_distance = (float)value<double>(sun_shadow_distance_option, 3000.0);
+    sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
+    RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
         (float)(value<double>(grass_patches_option, 50.0) / 100.0));
@@ -4042,7 +4049,22 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
     static const auto parallax_lists = [] {
         std::pair<std::vector<uint64_t>, std::vector<uint8_t>> lists;
+        // TOOIE_PARALLAX_SKIP=<hex hash>,... leaves those out (headless, to tell which listed texture is which).
+        std::vector<uint64_t> skip;
+        if (const char* text = std::getenv("TOOIE_PARALLAX_SKIP")) {
+            for (const char* p = text; *p != '\0';) {
+                char* end = nullptr;
+                skip.push_back(std::strtoull(p, &end, 16));
+                p = (*end == ',') ? end + 1 : end;
+                if (end == p) {
+                    break;
+                }
+            }
+        }
         for (const ParallaxTexture& texture : parallax_textures) {
+            if (std::find(skip.begin(), skip.end(), texture.hash) != skip.end()) {
+                continue;
+            }
             lists.first.push_back(texture.hash);
             lists.second.push_back(texture.darkest);
             lists.second.push_back(texture.lightest);
@@ -4114,6 +4136,10 @@ bool tooie::picture_filters::banjo_fur_on() {
 
 bool tooie::picture_filters::sun_shadows_on() {
     return sun_shadows;
+}
+
+float tooie::picture_filters::sun_shadow_distance() {
+    return sun_shadow_reach;
 }
 
 bool tooie::picture_filters::kazooie_feathers_on() {
@@ -4685,7 +4711,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         sun_shadows_option,
         "Sun shadows",
-        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. Drawn from what is on screen, so a shadow fades out when its caster leaves the picture. 0 is off.",
+        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. Everything within Sun shadow distance casts one, on screen or not. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
@@ -4697,6 +4723,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Sun shadow softness",
         "How smooth the sun shadows are. Higher blends the light across a character's body instead of shading it face by face, and gives shadow edges a softer fade. 0 is the sharpest.",
         0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        sun_shadow_distance_option,
+        "Sun shadow distance",
+        "How far from the camera sun shadows reach, in game units. Everything within it casts a shadow, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
+        1500, 20000, 500, 0, false, 3000);
     graphics.add_number_option(
         light_shafts_option,
         "Light shafts",
@@ -4840,7 +4871,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -4902,6 +4933,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(sun_shadows_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(sun_shadow_banjo_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(sun_shadow_softness_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(sun_shadow_distance_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(light_shafts_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(bloom_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(eye_adaptation_option, lighting_section_option, false);
