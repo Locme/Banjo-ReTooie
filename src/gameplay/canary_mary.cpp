@@ -34,6 +34,7 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_canary_mary.h"
+#include "tooie_rdram.h"
 
 namespace {
     struct RaceRule {
@@ -58,9 +59,7 @@ namespace {
         }
     }
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
+    using tooie::rdram::read_word;
 
     float rd_float(uint8_t* rdram, uint32_t addr) {
         return *reinterpret_cast<float*>(rdram + (addr - 0x80000000u));
@@ -96,14 +95,14 @@ extern "C" int tooie_canary_mary_rule(uint8_t* rdram, recomp_context* ctx, int r
     const uint32_t mary = (uint32_t)ctx->r4;
     const uint32_t player = (uint32_t)ctx->r5;
 
-    const float player_progress = (rd_word(rdram, player + 0x7C) & 0xFFF) != 0 ? course_progress(rdram, ctx, player) : 1.0f;
+    const float player_progress = (read_word(rdram, player + 0x7C) & 0xFFF) != 0 ? course_progress(rdram, ctx, player) : 1.0f;
     const float mary_progress = course_progress(rdram, ctx, mary);
     if (player_progress <= mary_progress - rule.lost) {
         // The race is lost: the game's rule ends it.
         return 0;
     }
 
-    const int second = (rd_word(rdram, mary + 0x64) >> 19) & 1;
+    const int second = (read_word(rdram, mary + 0x64) >> 19) & 1;
     const float pace = rule.pace[second] * (chosen == Mode::Easy ? 0.85f : 1.0f);
     const float step = rule.accel[second] * frame_time(rdram, ctx);
     float speed = rd_float(rdram, mary + 0x24);

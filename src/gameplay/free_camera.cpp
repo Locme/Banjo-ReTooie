@@ -47,6 +47,7 @@
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
+#include "tooie_rdram.h"
 
 namespace {
     // PlayerState pointers by player at 0x80135490; PlayerState +0xE4 points at Banjo's position
@@ -136,30 +137,11 @@ namespace {
         bool has_last = false;
     } state;
 
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
-
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
-    }
-
-    void write_float(uint8_t* rdram, uint32_t addr, float value) {
-        uint32_t bits;
-        std::memcpy(&bits, &value, sizeof(bits));
-        *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)) = bits;
-    }
-
-    int16_t read_half(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u));
-    }
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_half;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_float;
 
     uint8_t read_byte(uint8_t* rdram, uint32_t addr) {
         return *(rdram + ((addr ^ 3) - 0x80000000u));

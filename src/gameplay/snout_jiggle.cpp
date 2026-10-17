@@ -56,6 +56,7 @@
 #include "recompui/config.h"
 #include "tooie_photo_mode.h"
 #include "tooie_snout_jiggle.h"
+#include "tooie_rdram.h"
 
 namespace {
     constexpr uint32_t matrix_copy = 0x80EF8000;
@@ -115,36 +116,19 @@ namespace {
         } };
     }
 
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-    void write_word(uint8_t* rdram, uint32_t addr, uint32_t value) {
-        *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)) = value;
-    }
-    int16_t read_half(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u));
-    }
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_half;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_float;
+    using tooie::rdram::write_word;
+
     void write_half(uint8_t* rdram, uint32_t addr, int16_t value) {
         *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u)) = value;
     }
     uint8_t read_byte(uint8_t* rdram, uint32_t addr) {
         return *reinterpret_cast<uint8_t*>(rdram + ((addr ^ 3) - 0x80000000u));
     }
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
-    }
-    void write_float(uint8_t* rdram, uint32_t addr, float value) {
-        uint32_t bits;
-        std::memcpy(&bits, &value, sizeof(bits));
-        write_word(rdram, addr, bits);
-    }
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
-
     bool option_bool(const std::string& id) {
         try {
             return std::get<bool>(recompui::config::get_general_config().get_option_value(id));

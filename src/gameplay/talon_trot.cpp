@@ -10,6 +10,7 @@
 
 #include "tooie_game.h"
 #include "tooie_talon_trot.h"
+#include "tooie_rdram.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -60,13 +61,8 @@ namespace {
         return cached_mode;
     }
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
 
     bool latched = false;
     // Z and C-left as the player holds them, to see fresh presses.
@@ -87,9 +83,9 @@ namespace {
 
 void tooie::talon_trot::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
-    uint32_t player = rd_word(rdram, player_table);
-    uint32_t state = valid_ptr(player) ? rd_word(rdram, player + state_offset) : 0;
-    player_state = valid_ptr(state) ? rd_word(rdram, state + state_current) : 0;
+    uint32_t player = read_word(rdram, player_table);
+    uint32_t state = valid_ptr(player) ? read_word(rdram, player + state_offset) : 0;
+    player_state = valid_ptr(state) ? read_word(rdram, state + state_current) : 0;
 }
 
 void tooie::talon_trot::apply(uint16_t* buttons) {

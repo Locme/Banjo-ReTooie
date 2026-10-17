@@ -29,6 +29,7 @@
 
 #include "tooie_hooks.h"
 #include "tooie_jiggy_dance.h"
+#include "tooie_rdram.h"
 
 namespace {
     using Clock = std::chrono::steady_clock;
@@ -43,13 +44,8 @@ namespace {
     constexpr uint32_t bk_jig_anim = 0x2E;     // BK's jiggy jig (ASSET_2E_ANIM_BSJIG_JIGGY)
     constexpr uint32_t bk_jig_duration = 0x4089999A; // 4.3f, as BK's bsjig_jiggy_init sets it
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
 
     bool log_on() {
         static const bool on = std::getenv("TOOIE_JIGGY_DANCE_LOG") != nullptr;
@@ -115,17 +111,17 @@ namespace {
 void tooie::jiggy_dance::tick(uint8_t* rdram, recomp_context* ctx) {
     static const Clock::time_point started = Clock::now();
     const auto now = Clock::now();
-    const uint32_t player = rd_word(rdram, player_table);
+    const uint32_t player = read_word(rdram, player_table);
     if (!valid_ptr(player)) {
         last_state = 0;
         return;
     }
-    const uint32_t block = rd_word(rdram, player + state_offset);
+    const uint32_t block = read_word(rdram, player + state_offset);
     if (!valid_ptr(block)) {
         last_state = 0;
         return;
     }
-    const uint32_t state = rd_word(rdram, block + state_current);
+    const uint32_t state = read_word(rdram, block + state_current);
 
     static const long test_ms = [] {
         const char* v = std::getenv("TOOIE_JIGGY_DANCE_TEST");

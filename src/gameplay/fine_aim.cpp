@@ -28,6 +28,7 @@
 #include "tooie_game.h"
 #include "tooie_fine_aim.h"
 #include "tooie_hotkeys.h"
+#include "tooie_rdram.h"
 
 namespace {
     using namespace std::chrono_literals;
@@ -71,13 +72,9 @@ namespace {
         return tooie::hotkeys::down(fine_aim_input);
     }
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
 
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
 }
 
 void tooie::fine_aim::register_input() {
@@ -90,9 +87,9 @@ void tooie::fine_aim::register_input() {
 
 void tooie::fine_aim::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
-    uint32_t player = rd_word(rdram, player_table);
-    uint32_t state = valid_ptr(player) ? rd_word(rdram, player + state_offset) : 0;
-    player_state = valid_ptr(state) ? rd_word(rdram, state + state_current) : 0;
+    uint32_t player = read_word(rdram, player_table);
+    uint32_t state = valid_ptr(player) ? read_word(rdram, player + state_offset) : 0;
+    player_state = valid_ptr(state) ? read_word(rdram, state + state_current) : 0;
 }
 
 bool tooie::fine_aim::in_first_person() {

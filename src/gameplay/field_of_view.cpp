@@ -27,6 +27,7 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_photo_mode.h"
+#include "tooie_rdram.h"
 
 namespace {
     constexpr uint32_t ctl_camera = 0x00;
@@ -39,17 +40,10 @@ namespace {
         bool gameplay = false;
     } modes[max_cameras];
 
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
-
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    int16_t read_half(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u));
-    }
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_half;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
 
     int offset(const std::string& id) {
         try {
@@ -67,13 +61,6 @@ namespace {
             }
         }
         return 0;
-    }
-
-    float read_float(uint8_t* rdram, uint32_t addr) {
-        uint32_t bits = read_word(rdram, addr);
-        float value;
-        std::memcpy(&value, &bits, sizeof(value));
-        return value;
     }
 
     // Last time a gameplay camera and a letterboxed scene camera set their FOV, for in_letterboxed_scene().

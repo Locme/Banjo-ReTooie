@@ -44,6 +44,7 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_toast.h"
+#include "tooie_rdram.h"
 
 namespace {
     struct Achievement {
@@ -574,9 +575,8 @@ void tooie::achievements::tick(uint8_t* rdram, recomp_context* ctx) {
 }
 
 namespace {
-    uint32_t read_word(uint8_t* rdram, uint32_t addr) {
-        return *(uint32_t*)(rdram + (addr - 0x80000000u));
-    }
+    using tooie::rdram::read_word;
+
     uint16_t read_half(uint8_t* rdram, uint32_t addr) {
         return *(uint16_t*)(rdram + ((addr - 0x80000000u) ^ 2u));
     }

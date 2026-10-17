@@ -13,6 +13,7 @@
 #include "tooie_debug.h"
 #include "tooie_player_cheats.h"
 #include "tooie_hooks.h"
+#include "tooie_rdram.h"
 
 namespace {
     // Player 0's PlayerState pointer lives in a table of words at 0x80135490 (func_800F53D0 reads it).
@@ -59,17 +60,9 @@ namespace {
     constexpr float takeoff_speed = 665.0f;
     constexpr float falling_speed = -150.0f;
 
-    uint32_t rd_word(uint8_t* rdram, uint32_t addr) {
-        return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u));
-    }
-
-    void write_float(uint8_t* rdram, uint32_t addr, float value) {
-        std::memcpy(rdram + (addr - 0x80000000u), &value, sizeof(value));
-    }
-
-    bool valid_ptr(uint32_t p) {
-        return p >= 0x80000000u && p < 0x81000000u;
-    }
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_float;
 
     uint8_t rd_byte(uint8_t* rdram, uint32_t addr) {
         return rdram[(addr - 0x80000000u) ^ 3u];
@@ -169,19 +162,19 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_PLAYER_LOG") != nullptr;
     static auto last_log = std::chrono::steady_clock::now();
 
-    uint32_t player = rd_word(rdram, player_table);
+    uint32_t player = read_word(rdram, player_table);
     if (!valid_ptr(player)) {
         return;
     }
-    uint32_t physics = rd_word(rdram, player + physics_offset);
-    uint32_t state = rd_word(rdram, player + state_offset);
+    uint32_t physics = read_word(rdram, player + physics_offset);
+    uint32_t state = read_word(rdram, player + state_offset);
     if (!valid_ptr(physics) || !valid_ptr(state)) {
         return;
     }
-    uint32_t vy_bits = rd_word(rdram, physics + vel_y_offset);
+    uint32_t vy_bits = read_word(rdram, physics + vel_y_offset);
     float vy;
     std::memcpy(&vy, &vy_bits, sizeof(vy));
-    uint32_t cur = rd_word(rdram, state + state_current);
+    uint32_t cur = read_word(rdram, state + state_current);
 
     uint16_t buttons = 0;
     float sx = 0, sy = 0;
@@ -259,7 +252,7 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         const bool lr_pressed = lr && !was_lr;
         was_lr = lr;
         if (on && split && lr_pressed) {
-            const uint32_t now_idx = rd_word(rdram, current_player_index);
+            const uint32_t now_idx = read_word(rdram, current_player_index);
             const uint8_t want_form = (buttons & button_d_left) ? form_banjo : form_kazooie;
             if (form != want_form && now_idx < 2) {
                 const uint32_t want_idx = now_idx ^ 1;
@@ -311,7 +304,7 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
         const bool on = tooie::cheats::is_on("cheat_noclip");
         noclip_on = on;
         const uint16_t map = *reinterpret_cast<uint16_t*>(rdram + ((0x80132DC2u ^ 2u) - 0x80000000u));
-        const uint32_t pos2 = rd_word(rdram, player + pos_ptr_offset);
+        const uint32_t pos2 = read_word(rdram, player + pos_ptr_offset);
         if (!on || !valid_ptr(pos2) || map != anchor_map || form != anchor_form || noclip_paused_state(cur)) {
             // The first updates of an area put the player back where they were before it loaded, so wait.
             anchored = false;
@@ -324,12 +317,12 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
             const uint16_t raw = unhidden_buttons;
             if (!anchored) {
                 for (int k = 0; k < 3; k++) {
-                    uint32_t b = rd_word(rdram, physics + pos_offset + 4 * k);
+                    uint32_t b = read_word(rdram, physics + pos_offset + 4 * k);
                     std::memcpy(&anchor[k], &b, 4);
                 }
                 anchored = true;
             }
-            uint32_t vx_bits = rd_word(rdram, physics + vel_x_offset), vz_bits = rd_word(rdram, physics + vel_z_offset);
+            uint32_t vx_bits = read_word(rdram, physics + vel_x_offset), vz_bits = read_word(rdram, physics + vel_z_offset);
             float vx, vz;
             std::memcpy(&vx, &vx_bits, 4);
             std::memcpy(&vz, &vz_bits, 4);
@@ -349,26 +342,26 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     if (log && std::chrono::steady_clock::now() - last_log >= std::chrono::milliseconds(100)) {
-        const uint32_t p1 = rd_word(rdram, player_table + 4);
+        const uint32_t p1 = read_word(rdram, player_table + 4);
         if (valid_ptr(p1)) {
-            const uint32_t st1 = rd_word(rdram, p1 + state_offset), ph1 = rd_word(rdram, p1 + physics_offset);
+            const uint32_t st1 = read_word(rdram, p1 + state_offset), ph1 = read_word(rdram, p1 + physics_offset);
             float x1 = 0, z1 = 0;
             if (valid_ptr(ph1)) {
-                uint32_t b = rd_word(rdram, ph1 + 4); std::memcpy(&x1, &b, 4);
-                b = rd_word(rdram, ph1 + 0xC); std::memcpy(&z1, &b, 4);
+                uint32_t b = read_word(rdram, ph1 + 4); std::memcpy(&x1, &b, 4);
+                b = read_word(rdram, ph1 + 0xC); std::memcpy(&z1, &b, 4);
             }
-            std::printf("[player2] state %u pos %.1f %.1f controlled %u\n", valid_ptr(st1) ? rd_word(rdram, st1 + state_current) : 0, x1, z1, rd_word(rdram, current_player_index));
+            std::printf("[player2] state %u pos %.1f %.1f controlled %u\n", valid_ptr(st1) ? read_word(rdram, st1 + state_current) : 0, x1, z1, read_word(rdram, current_player_index));
         }
         last_log = std::chrono::steady_clock::now();
-        uint32_t hv_bits = rd_word(rdram, physics + 0x3C); // target horizontal velocity
+        uint32_t hv_bits = read_word(rdram, physics + 0x3C); // target horizontal velocity
         float hv;
         std::memcpy(&hv, &hv_bits, sizeof(hv));
-        uint32_t av_bits = rd_word(rdram, physics + 0x38); // horizontal velocity
+        uint32_t av_bits = read_word(rdram, physics + 0x38); // horizontal velocity
         float av;
         std::memcpy(&av, &av_bits, sizeof(av));
         float pos[3] = {0, 0, 0};
         for (int k = 0; k < 3; k++) {
-            uint32_t b = rd_word(rdram, physics + 4 + 4 * k);
+            uint32_t b = read_word(rdram, physics + 4 + 4 * k);
             std::memcpy(&pos[k], &b, 4);
         }
         std::printf("[player] form %u state %u vy %.1f buttons %04x hvel %.1f av %.1f pos %.1f %.1f %.1f stick %.2f %.2f\n", form, cur, vy, buttons, hv, av, pos[0], pos[1], pos[2], sx, sy);
