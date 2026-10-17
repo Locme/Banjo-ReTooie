@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T349 Snout jiggle sliders and Photo Mode freeze
+- Asked: 2026-10-17 00:40 UTC
+- Build: main
+- Steps:
+  1. Settings > General: turn on Snout jiggle; seven sliders appear under it
+  2. Run and jump with vanilla Banjo: now the whole front of his snout bends, not just the nose ball
+  3. Raise wobble, exaggeration, stretch and snout size and land from a jump
+  4. Open Photo Mode (F10) mid-wobble: the snout stays bent while the camera is out
+  5. Try Smash Banjo too (reach does nothing there)
+- Look for: The snout bends without tearing from the head on vanilla Banjo, the sliders change the wobble live, and Photo Mode holds the pose
+- Status: waiting for L
+
 ## T348 Photo mode: poses, Tooie photo borders and the Album tab
 - Asked: 2026-10-17 00:36 UTC
 - Build: main @ 19506eb

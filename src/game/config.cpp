@@ -299,8 +299,29 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
-        "Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey. Works with player model mods that keep his skeleton, such as Smash Banjo.",
+        "Banjo's snout wobbles on a spring as he runs, turns, jumps and lands, like Mario's nose in Super Mario Odyssey. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(strength_option, "Snout jiggle: wobble",
+            "How far the snout swings when Banjo moves.", 0, 400, 10, 0, true, 100);
+        general.add_number_option(bounce_option, "Snout jiggle: bounce",
+            "How long it keeps wobbling. 0 settles at once, 100 wobbles for seconds.", 0, 100, 5, 0, false, 50);
+        general.add_number_option(speed_option, "Snout jiggle: speed",
+            "Wobbles per second.", 0.5, 12, 0.5, 1, false, 3.5);
+        general.add_number_option(exaggeration_option, "Snout jiggle: exaggeration",
+            "How far the snout may bend before it stops: 100% is 28 degrees, 300% is nearly a right angle.", 25, 300, 25, 0, true, 100);
+        general.add_number_option(stretch_option, "Snout jiggle: stretch",
+            "Cartoon squash and stretch: the snout gets longer and thinner as it swings.", 0, 200, 10, 0, true, 0);
+        general.add_number_option(size_option, "Snout jiggle: snout size",
+            "Makes Banjo's snout bigger or smaller.", 50, 250, 10, 0, true, 100);
+        general.add_number_option(reach_option, "Snout jiggle: reach",
+            "On Banjo's own model, how far back from the nose the snout bends (0: the nose only). Model mods with their own snout ignore it.", 0, 40, 2, 0, false, 20);
+        for (const std::string* id : { &strength_option, &bounce_option, &speed_option, &exaggeration_option,
+                                       &stretch_option, &size_option, &reach_option }) {
+            general.add_option_hidden_dependency(*id, option, false);
+        }
+    }
     general.add_bool_option(
         tooie::wip_tab_option,
         "Developer Mode",
