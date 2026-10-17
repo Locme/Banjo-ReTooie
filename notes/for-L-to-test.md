@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T388 DEV > Heap check toggle
+- Asked: 2026-10-17 13:17 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Settings > DEV: find Heap check (under Debug), on by default
+  2. Turn it off, restart the game, check it is still off, then turn it back on
+- Look for: Does the setting stay as you left it after a restart? Nothing in the game should change either way.
+- Status: waiting for L
+
 ## T387 Banjo's shadow no longer flickers
 - Asked: 2026-10-17 13:13 UTC
 - Build: main

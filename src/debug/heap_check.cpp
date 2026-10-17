@@ -2,19 +2,23 @@
 // block list or free list link that does not match, a bad block state), with the blocks around
 // it and the map. A PC crash in the allocator (heap_alloc_sided, 120 FPS, 7e04c77) found model
 // display-list data where a free block's header should be; this says when and where that starts.
-// It is cheap (the heap has tens to hundreds of blocks) and on by default; TOOIE_HEAP_CHECK=0 turns
-// it off. Headless, a 10-level tour at 120 FPS with and without HD Shadows found no damage.
+// It is cheap (the heap has tens to hundreds of blocks) and on by default; DEV > Heap check or
+// TOOIE_HEAP_CHECK=0 turns it off. Headless, a 10-level tour at 120 FPS with and without HD Shadows found no damage.
 // Heap layout (decomp include/memory.h): blocks from the address held at 0x8007E990 to that plus
 // the size at 0x8007BF00, each with a 16-byte header (prev, next, unk8, bits: overhead 24, state 2, ...) and,
 // when free, prev_free/next_free at +0x10/+0x14. The first and last blocks are fixed dummies.
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <unordered_set>
+#include <variant>
 
 #include "recomp.h"
+#include "recompui/config.h"
+#include "tooie_game.h"
 #include "tooie_debug.h"
 #include "tooie_toast.h"
 
@@ -34,14 +38,45 @@ namespace {
     }
 }
 
-void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
-    static const bool on = [] {
+namespace {
+    std::atomic<bool> option_on{true};
+
+    bool env_off() {
         const char* v = std::getenv("TOOIE_HEAP_CHECK");
-        return v == nullptr || std::strcmp(v, "0") != 0;
-    }();
+        return v != nullptr && std::strcmp(v, "0") == 0;
+    }
+}
+
+void tooie::debug::add_heap_check_option(recomp::config::Config& wip) {
+    wip.add_bool_option(
+        heap_check_option,
+        "Heap check",
+        "For testing. Checks the game's memory once per frame and writes the first damage it finds to the log, "
+        "to help track down crashes. It costs almost nothing; turn it off only to rule it out.",
+        true);
+    wip.add_option_change_callback(heap_check_option,
+        [](recomp::config::ConfigValueVariant value, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_config(tooie::wip_tab_id).save_config();
+                return;
+            }
+            const auto* v = std::get_if<bool>(&value);
+            option_on = (v == nullptr) || *v;
+        });
+}
+
+void tooie::debug::apply_heap_check() {
+    try {
+        option_on = std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(heap_check_option));
+    } catch (...) {
+    }
+}
+
+void tooie::debug::heap_check(uint8_t* rdram, const char* where) {
+    static const bool off_for_run = env_off();
     static bool reported = false;
     static unsigned checks = 0;
-    if (!on || reported) {
+    if (off_for_run || !option_on.load(std::memory_order_relaxed) || reported) {
         return;
     }
     checks++;

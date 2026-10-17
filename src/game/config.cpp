@@ -23,6 +23,7 @@
 #include "recompinput/recompinput.h"
 #include "librecomp/game.hpp"
 #include "tooie_cheats.h"
+#include "tooie_debug.h"
 #include "tooie_discord.h"
 #include "tooie_free_camera.h"
 #include "tooie_level_warp.h"
@@ -700,6 +701,7 @@ void tooie::init_config() {
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);
     tooie::texture_slide::add_option(wip);
+    tooie::debug::add_heap_check_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,
@@ -737,6 +739,7 @@ void tooie::init_config() {
     tooie::picture_filters::apply();
     tooie::smaa::apply();
     tooie::texture_slide::apply();
+    tooie::debug::apply_heap_check();
     tooie::fxaa::apply();
     tooie::fsr::apply();
     tooie::low_latency::apply();

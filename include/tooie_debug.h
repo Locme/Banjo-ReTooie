@@ -2,10 +2,20 @@
 #define __TOOIE_DEBUG_H__
 
 #include <cstdint>
+#include <string>
+
+namespace recomp::config {
+    class Config;
+}
 
 namespace tooie::debug {
     // Walks the game heap once per frame and logs the first damage (src/debug/heap_check.cpp).
     void heap_check(uint8_t* rdram, const char* where);
+    // DEV > Heap check, on by default (L, 2026-10-17). TOOIE_HEAP_CHECK=0 turns it off for a run.
+    inline const std::string heap_check_option = "heap_check";
+    void add_heap_check_option(recomp::config::Config& wip);
+    // Reads the saved setting (after the config loads).
+    void apply_heap_check();
     // Parses a --pad-script argument (see src/debug/pad_script.cpp).
     bool parse_pad_script(const char* script);
     // Player input with any scripted input added, for the runtime's callbacks.
