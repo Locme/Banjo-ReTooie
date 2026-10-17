@@ -25,6 +25,8 @@ void tooie_heap_guard(uint8_t* rdram, recomp_context* ctx);
 int tooie_chanim_missing(uint8_t* rdram, recomp_context* ctx);
 int tooie_intro_sync_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_quiz_no_player(uint8_t* rdram, recomp_context* ctx);
+// 1 (and logs once per place) when $v0 is null where the game is about to read through it.
+int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where);
 
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.

@@ -40,15 +40,17 @@ END = "# END GENERATED manual_funcs"
 
 
 def read_extra_entries():
-    """(section name, vram) pairs from extra_entries.us.txt."""
+    """(section name, vram, size or None) from extra_entries.us.txt. A size is given for a
+    function no symbol covers (only reached through a pointer, so N64Recomp never sees it)."""
     path = os.path.join(ROOT, "extra_entries.us.txt")
     entries = []
     if os.path.exists(path):
         for line in open(path, encoding="utf-8"):
             line = line.split("#")[0].strip()
             if line:
-                section, vram = line.split()
-                entries.append((section, int(vram, 16)))
+                parts = line.split()
+                size = int(parts[2], 16) if len(parts) > 2 else None
+                entries.append((parts[0], int(parts[1], 16), size))
     return entries
 
 
@@ -154,7 +156,10 @@ def main():
     for shndx, vram, size in called_unsized(elf_path, sized):
         section = sections[shndx].name
         manual.append(("func_%08X_%s" % (vram, section.lstrip(".")), section, vram, size))
-    for section, vram in read_extra_entries():
+    for section, vram, size in read_extra_entries():
+        if size is not None:
+            manual.append(("func_%08X" % vram, section, vram, size))
+            continue
         container = [(st, e, n) for st, e, n in sized[by_name[section]] if st < vram < e]
         if not container:
             raise SystemExit("extra entry %s 0x%08X is not inside a function" % (section, vram))

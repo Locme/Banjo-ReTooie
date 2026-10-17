@@ -19,6 +19,7 @@ manual_funcs = [
     { name = "func_80800324_bsledge", section = ".bsledge", vram = 0x80800324, size = 0x10 },
     { name = "func_80800000_bsrest", section = ".bsrest", vram = 0x80800000, size = 0x3C },
     { name = "func_80013B90", section = ".core1", vram = 0x80013B90, size = 0xB8 },
+    { name = "func_8002DC78", section = ".core1", vram = 0x8002DC78, size = 0x28 },
 ]
 # END GENERATED manual_funcs
 
@@ -644,6 +645,14 @@ text = "if (tooie_intro_sync_skip(rdram, ctx)) { ctx->r16 = 0; }"
 func = "func_80800F34_chquiz"
 before_vram = 0x80800F50
 text = "if (tooie_quiz_no_player(rdram, ctx)) { ctx->r29 = ADD32(ctx->r29, 0X20); return; }"
+
+# The multiplayer quiz (0x189) entered with one player: ncpod_entrypoint_29 asks func_80110024 for an
+# object that isn't there and read through null. With none it returns 0, as its caller
+# (capod_entrypoint_17) does when it finds nothing (src/game/cutscene_guards.cpp).
+[[patches.hook]]
+func = "ncpod_entrypoint_29"
+before_vram = 0x80800F04
+text = "if (tooie_null_guard(rdram, ctx, \"ncpod_entrypoint_29\")) { ctx->r2 = 0; ctx->r29 = ADD32(ctx->r29, 0X18); return; }"
 
 # --- Anti-tamper boot words (func_8001DE64) ---------------------------------
 # The CIC thread reads two words the IPL3 leaves in RDRAM through uncached

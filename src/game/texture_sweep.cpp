@@ -10,8 +10,8 @@
 // texture_dump/png/rt64.json lists every PNG by its RT64 hash, so that folder is a
 // texture pack as it stands.
 //
-// "Sweep all maps" also warps to every map in map_names.inc (multiplayer maps, the title
-// screen and the game select left out; cutscene maps last), from each of its entrances (exit
+// "Sweep all maps" also warps to every map in map_names.inc (the title screen and the
+// game select left out; cutscene maps last), from each of its entrances (exit
 // 0, 1, 2, ... until two in a row put Banjo where an earlier one did or at 0 0 0), waits for the map to
 // load and fade in, holds C-right to turn the camera around, and moves on. Progress is written
 // to texture_dump/sweep.txt as it goes.
@@ -92,15 +92,14 @@ namespace {
 #include "map_names.inc"
     };
 
-    // Not swept: the title screen and game select (no file being played there), and the
-    // multiplayer arenas, which set up two to four players: entering 0x164 headless stopped on
-    // "Failed to find function at 0x8002DC78" (code the build doesn't have yet). The cutscenes
-    // that crashed when entered straight from another map (0xAC, 0x199: a missing animation in
-    // chanim_entrypoint_6; 0x15F: the quiz's missing player slot) are swept again with the guards
-    // in src/game/cutscene_guards.cpp.
+    // Not swept: the title screen and game select (no file being played there). The multiplayer
+    // arenas are swept since the game function they needed (0x8002DC78, sprintf's output step) was
+    // added; they have textures of their own (300 new in Clinker's Cavern). The cutscenes that
+    // crashed when entered straight from another map (0xAC, 0x199: a missing animation in
+    // chanim_entrypoint_6; 0x15F and the multiplayer quiz 0x189: missing players) are swept with the
+    // guards in src/game/cutscene_guards.cpp.
     constexpr uint16_t skipped_maps[] = {
         0x158, 0x18B,
-        0x164, 0x165, 0x166, 0x17B, 0x17C, 0x182, 0x183, 0x188, 0x189,
     };
 
     // ---- Texture decoding (lib/rt64/src/shaders/TextureDecoder.hlsli and Formats.hlsli) ----

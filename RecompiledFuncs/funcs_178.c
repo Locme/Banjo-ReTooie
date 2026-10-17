@@ -1807,6 +1807,7 @@ RECOMP_FUNC void ncpod_entrypoint_29(uint8_t* rdram, recomp_context* ctx) {
     // 0x80800F00: sw          $a1, 0x1C($sp)
     MEM_W(0X1C, ctx->r29) = ctx->r5;
     after_0:
+    if (tooie_null_guard(rdram, ctx, "ncpod_entrypoint_29")) { ctx->r2 = 0; ctx->r29 = ADD32(ctx->r29, 0X18); return; }
     // 0x80800F04: jal         0x80089638
     // 0x80800F08: lh          $a0, 0x2($v0)
     ctx->r4 = MEM_H(ctx->r2, 0X2);

@@ -23,6 +23,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <set>
+#include <string>
 
 #include "recomp.h"
 #include "tooie_hooks.h"
@@ -67,5 +69,17 @@ extern "C" int tooie_quiz_no_player(uint8_t* rdram, recomp_context* ctx) {
         return 0;
     }
     std::fprintf(stderr, "[guard] quiz: no player slot found for its contestant, setup skipped\n");
+    return 1;
+}
+
+extern "C" int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where) {
+    (void)rdram;
+    if (ctx->r2 != 0 || !guards_on()) {
+        return 0;
+    }
+    static std::set<std::string> logged;
+    if (logged.insert(where).second) {
+        std::fprintf(stderr, "[guard] %s: the game got no object and would have read through null, skipped\n", where);
+    }
     return 1;
 }

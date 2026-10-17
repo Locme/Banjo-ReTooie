@@ -14911,6 +14911,7 @@ void func_80104544(uint8_t* rdram, recomp_context* ctx);
 void chwandglow_entrypoint_0(uint8_t* rdram, recomp_context* ctx);
 void func_800C883C(uint8_t* rdram, recomp_context* ctx);
 void sprintf_recomp(uint8_t* rdram, recomp_context* ctx);
+void func_8002DC78(uint8_t* rdram, recomp_context* ctx);
 void func_80801924_chdragonbrothers(uint8_t* rdram, recomp_context* ctx);
 void func_80800A08_gcnewpause(uint8_t* rdram, recomp_context* ctx);
 void func_8080232C_chdinoboss(uint8_t* rdram, recomp_context* ctx);

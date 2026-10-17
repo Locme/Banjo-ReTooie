@@ -1,3 +1,5 @@
 # Jump targets inside another function, each made into its own function.
 # Format: <ELF section> <vram>. Added by tools/recomp_loop.py.
+# <ELF section> <vram> <size>: a function no symbol covers, reached only through a pointer.
 .core1 0x80013B90  # from func_80013B70
+.core1 0x8002DC78 0x28  # proutSprintf, sprintf's output callback for _Printf (the multiplayer arenas stopped on it)

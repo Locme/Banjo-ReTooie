@@ -535,6 +535,7 @@ static FuncEntry section_13_core1_funcs[] = {
     { .func = func_80019A10, .offset = 0x000079E0, .rom_size = 0x00000088 },
     { .func = func_8001A0A8, .offset = 0x00008078, .rom_size = 0x0000000C },
     { .func = sprintf_recomp, .offset = 0x0001BBF0, .rom_size = 0x00000058 },
+    { .func = func_8002DC78, .offset = 0x0001BC48, .rom_size = 0x00000028 },
     { .func = osInvalICache_recomp, .offset = 0x0001EA80, .rom_size = 0x00000000 },
     { .func = _bcopy, .offset = 0x0001FBC0, .rom_size = 0x00000304 },
     { .func = func_8002BD40, .offset = 0x00019D10, .rom_size = 0x000004F0 },
