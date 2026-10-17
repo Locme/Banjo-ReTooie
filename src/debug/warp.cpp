@@ -72,6 +72,7 @@ namespace {
     struct Request {
         uint16_t map;
         uint8_t exit;
+        bool same_map = false;
     };
 
     std::mutex request_mutex;
@@ -105,9 +106,9 @@ namespace {
     }
 }
 
-void tooie::debug::request_warp(uint16_t map, uint8_t exit) {
+void tooie::debug::request_warp(uint16_t map, uint8_t exit, bool same_map) {
     std::lock_guard lock{request_mutex};
-    pending = Request{map, exit};
+    pending = Request{map, exit, same_map};
 }
 
 bool tooie::debug::can_warp() {
@@ -202,7 +203,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     }
 
     uint16_t from = tooie::debug::current_map(rdram);
-    if (request->map == from) {
+    if (request->map == from && !request->same_map) {
         fprintf(stderr, "[warp] already in map 0x%X, nothing to do\n", from);
         return;
     }

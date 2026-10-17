@@ -3696,3 +3696,12 @@
   2. Play as Mumbo and stand still for a while, watching his eyes; then visit Mumbo in Mayahem Temple's skull
 - Look for: his eyelids sit higher, so the whole of each iris shows, and every few seconds he blinks: the lids come down in three steps to shut and back up, with the same timing as the original Mumbo. In his skull he sits with his eyes shut until you talk to him, as the original does. Checked headless with the zip: the eyes open in a close-up ([v5.png](screens/viva-mumbo/v5.png)), each blink step drawn offline, and the game's blink values (1 open, 2-4 closing) read while playing as Mumbo. A blink itself was not caught on screen.
 - Status: waiting for L
+
+## T363 Texture sweep: every entrance of each map
+- Asked: 2026-10-17 UTC
+- Build: latest Windows build from main
+- Steps:
+  1. Empty the `texture_dump` folder, load a spare save file
+  2. DEV > Texture dump: Sweep all maps, Start sweep. Leave it running (longer than before: each map is entered from every entrance)
+- Look for: the notice shows "(entrance N)" as it goes through a map's entrances. `texture_dump/sweep.txt` has a line per entrance (`done 0x0B8:3 ... Banjo at x y z`) and a `leave` line per map. More textures than the 7,000 of the last sweep: headless, Mayahem Temple alone went from 223 to 408 over its 11 entrances. Send sweep.txt and the PNG count.
+- Status: waiting for L

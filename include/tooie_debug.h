@@ -14,7 +14,8 @@ namespace tooie::debug {
     bool get_scripted_right_stick(float* x_out, float* y_out);
     // Map warps (see src/debug/warp.cpp). The request is issued on the game
     // thread at the start of the next frame.
-    void request_warp(uint16_t map, uint8_t exit);
+    // same_map: also when that map is the one loaded now (another entrance of it; the texture sweep).
+    void request_warp(uint16_t map, uint8_t exit, bool same_map = false);
     uint16_t current_map(uint8_t* rdram);
     // True while a save file is being played, so a warp can be issued.
     bool can_warp();

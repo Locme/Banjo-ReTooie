@@ -11,13 +11,15 @@
 // texture pack as it stands.
 //
 // "Sweep all maps" also warps to every map in map_names.inc (multiplayer maps, the title
-// screen and the game select left out; cutscene maps last), waits for the map to load and
-// fade in, holds C-right to turn the camera around, and moves on. Progress is written to
-// texture_dump/sweep.txt as it goes. Picking it asks first ("Start the texture sweep?"), and
-// the warning says it carries on after a restart: with the option still on, the next start
-// resumes after the map the game stopped in and skips that map, so a map that crashes is only
-// tried once. When the sweep is done it warps back to where it started and stops dumping; the
-// option then does nothing (also after a restart) until it is picked again, which starts anew.
+// screen and the game select left out; cutscene maps last), from each of its entrances (exit
+// 0, 1, 2, ... until two in a row put Banjo where an earlier one did or at 0 0 0), waits for the map to
+// load and fade in, holds C-right to turn the camera around, and moves on. Progress is written
+// to texture_dump/sweep.txt as it goes.
+//
+// Picking it asks first ("Start the texture sweep?"); the warning says it carries on after a
+// restart: with the option still on, the next start resumes from the entrance after the one the
+// game stopped in. When the sweep is done it warps back to where it started and stops dumping;
+// the option then does nothing (also after a restart) until it is picked again, which starts anew.
 //
 // Warping through maps every few seconds loads a texture pack's replacements much faster
 // than normal play. RT64 keeps replacements nobody uses until its pool (2/3 of video memory)
@@ -32,6 +34,7 @@
 // TOOIE_TEXTURE_DUMP_DIR=<dir> writes there instead of the app-data folder.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -43,6 +46,7 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
@@ -391,10 +395,22 @@ namespace {
     constexpr auto turn_press = 150ms;
     constexpr uint16_t c_right = 0x0001;
     constexpr uint64_t sweep_pool_limit = 1024ull * 1024 * 1024;
+    // Every entrance (L, 2026-10-17): each map is entered from exit 0, 1, 2, ... A spawn within
+    // same_spawn units of one already seen in this map is a repeat (an exit the map doesn't have
+    // puts Banjo at another one); after max_repeats repeats in a row, or max_exits, the sweep
+    // moves on to the next map.
+    constexpr uint8_t max_exits = 16;
+    constexpr int max_repeats = 2;
+    constexpr float same_spawn = 150.0f;
+    // A warp within the same map doesn't change the map id, so the load is given this long first.
+    constexpr auto min_load_time = 4s;
+    constexpr uint32_t player_table = 0x80135490;
+    constexpr uint32_t player_pos_ptr = 0xE4;
 
     struct Target {
         uint16_t map;
         std::string name;
+        uint8_t first_exit = 0;
     };
 
     fs::path root;
@@ -412,6 +428,9 @@ namespace {
     uint16_t start_map = 0;
     steady::time_point phase_start;
     uint32_t pngs_at_map_start = 0;
+    uint8_t exit_now = 0;
+    int repeats = 0;
+    std::vector<std::array<float, 3>> spawns;
     std::atomic<bool> turning{false};
     std::atomic<int64_t> turn_start_ns{0};
 
@@ -448,8 +467,14 @@ namespace {
         return list;
     }
 
+    // The sweep's progress (what it has done, for resuming): texture_dump/sweep.txt.
+    fs::path progress_file() {
+        return dump_folder() / "sweep.txt";
+    }
+
+
     void log_line(const std::string& line) {
-        std::ofstream out(root / "sweep.txt", std::ios::app);
+        std::ofstream out(progress_file(), std::ios::app);
         out << line << "\n";
         out.flush();
         printf("[texture-sweep] %s\n", line.c_str());
@@ -464,9 +489,17 @@ namespace {
 
     enum class Progress { None, Unfinished, Finished };
 
-    // Reads sweep.txt: the maps already done, and whether the sweep finished.
-    Progress read_progress(std::set<uint16_t>& done) {
-        std::ifstream in(root / "sweep.txt");
+    // What sweep.txt says so far: maps finished, where each unfinished map got to, and the MAJOR
+    // lines (passed-over entrances, for the summary at the end).
+    struct SweepRecord {
+        std::set<uint16_t> complete;
+        std::map<uint16_t, unsigned> last_exit;
+        std::vector<std::string> major;
+    };
+
+    // Reads sweep.txt. Lines name an entrance as 0xMAP:EXIT; "leave" ends a map.
+    Progress read_progress(SweepRecord& record) {
+        std::ifstream in(progress_file());
         if (!in) {
             return Progress::None;
         }
@@ -474,23 +507,31 @@ namespace {
         bool finished = false;
         bool any = false;
         int open_map = -1;
+        unsigned open_exit = 0;
         while (std::getline(in, line)) {
-            unsigned map = 0;
+            unsigned map = 0, exit = 0;
             char word[16] = {};
-            if (std::sscanf(line.c_str(), "%15s %x", word, &map) < 1) {
+            if (std::sscanf(line.c_str(), "%15s %x:%u", word, &map, &exit) < 1) {
                 continue;
             }
             any = true;
             std::string w = word;
             if (w == "start") {
                 open_map = (int)map;
-            } else if (w == "done" || w == "skipped" || w == "missed") {
-                done.insert((uint16_t)map);
+                open_exit = exit;
+            } else if (w == "done" || w == "same" || w == "missed") {
+                record.last_exit[(uint16_t)map] = exit;
                 open_map = -1;
+            } else if (w == "MAJOR") {
+                record.last_exit[(uint16_t)map] = exit;
+                record.major.push_back(line);
+                open_map = -1;
+            } else if (w == "leave") {
+                record.complete.insert((uint16_t)map);
             } else if (w == "finished") {
                 finished = true;
             } else if (w == "begin") {
-                done.clear();
+                record = SweepRecord{};
                 finished = false;
                 open_map = -1;
             }
@@ -502,36 +543,54 @@ namespace {
             return Progress::Finished;
         }
         if (open_map >= 0) {
-            // The game stopped in this map last time: leave it out.
-            done.insert((uint16_t)open_map);
-            log_line("skipped " + hex((uint16_t)open_map) + " (the game stopped here last time)");
+            // The game stopped there with no crash report (killed, or it froze and was closed).
+            const std::string line = "MAJOR " + hex((uint16_t)open_map) + ":" + std::to_string(open_exit) +
+                " passed over: the game stopped here with no crash report (closed, frozen or killed)";
+            log_line(line);
+            record.major.push_back(line);
+            record.last_exit[(uint16_t)open_map] = open_exit;
         }
         return Progress::Unfinished;
     }
+
+    std::vector<std::string> majors;
 
     // At start-up a finished sweep stays finished; picked from the menu it starts anew.
     void begin_sweep(bool at_startup) {
         targets = all_targets();
         next_target = 0;
-        std::set<uint16_t> done;
-        const Progress progress = read_progress(done);
+        SweepRecord record;
+        const Progress progress = read_progress(record);
         if (progress == Progress::Finished && at_startup) {
             phase = Phase::Done;
             return;
         }
+        majors.clear();
         if (progress == Progress::Unfinished) {
             std::vector<Target> left;
-            for (const Target& t : targets) {
-                if (!done.contains(t.map)) left.push_back(t);
+            for (Target t : targets) {
+                if (record.complete.contains(t.map)) {
+                    continue;
+                }
+                if (auto it = record.last_exit.find(t.map); it != record.last_exit.end()) {
+                    t.first_exit = (uint8_t)std::min<unsigned>(it->second + 1, max_exits);
+                    if (t.first_exit >= max_exits || is_cutscene(t.name.c_str())) {
+                        continue;
+                    }
+                }
+                left.push_back(t);
             }
+            majors = record.major;
             log_line("resume, " + std::to_string(left.size()) + " of " + std::to_string(targets.size()) + " maps left");
             targets = std::move(left);
         } else {
             std::error_code ec;
-            fs::remove(root / "sweep.txt", ec);
+            fs::create_directories(progress_file().parent_path(), ec);
+            fs::remove(progress_file(), ec);
             log_line("begin, " + std::to_string(targets.size()) + " maps");
         }
         phase = Phase::WaitForFile;
+        phase_start = steady::now();
     }
 
     void enter(Phase p) {
@@ -539,29 +598,79 @@ namespace {
         phase_start = steady::now();
     }
 
+    bool player_position(uint8_t* rdram, std::array<float, 3>& out) {
+        auto word = [rdram](uint32_t addr) { return *reinterpret_cast<uint32_t*>(rdram + (addr - 0x80000000u)); };
+        auto valid = [](uint32_t p) { return p >= 0x80000000u && p < 0x81000000u; };
+        const uint32_t player = word(player_table);
+        const uint32_t pos = valid(player) ? word(player + player_pos_ptr) : 0;
+        if (!valid(pos)) {
+            return false;
+        }
+        for (int k = 0; k < 3; k++) {
+            const uint32_t bits = word(pos + 4 * k);
+            std::memcpy(&out[k], &bits, sizeof(float));
+        }
+        return true;
+    }
+
+    std::string where() {
+        return hex(targets[next_target].map) + ":" + std::to_string(exit_now);
+    }
+
+    void warp_exit() {
+        const Target& t = targets[next_target];
+        log_line("start " + where() + " " + t.name);
+        tooie::toast::show("Texture sweep " + std::to_string(next_target + 1) + "/" + std::to_string(targets.size()) + ": " + t.name +
+            (exit_now > 0 ? " (entrance " + std::to_string(exit_now) + ")" : ""));
+        pngs_at_map_start = new_pngs.load();
+        tooie::debug::request_warp(t.map, exit_now, true);
+        enter(Phase::Warping);
+    }
+
     void warp_next(uint8_t* rdram) {
         if (next_target >= targets.size()) {
+            // Everything passed over in this sweep, also in earlier runs of the game.
+            SweepRecord record;
+            read_progress(record);
+            majors = record.major;
+            log_line("summary: " + std::to_string(majors.size()) + " entrances passed over (MAJOR)" + (majors.empty() ? "" : ":"));
+            for (const std::string& m : majors) {
+                log_line("  " + m);
+            }
             log_line("finished");
-            tooie::toast::show("Texture sweep finished");
+            tooie::toast::show(majors.empty() ? std::string("Texture sweep finished") :
+                "Texture sweep finished, " + std::to_string(majors.size()) + " passed over: see texture_dump/sweep.txt");
             if (start_map != 0 && start_map != tooie::debug::current_map(rdram)) {
                 tooie::debug::request_warp(start_map, 0);
             }
             enter(Phase::Done);
             return;
         }
-        const Target& t = targets[next_target];
-        log_line("start " + hex(t.map) + " " + t.name);
-        tooie::toast::show("Texture sweep " + std::to_string(next_target + 1) + "/" + std::to_string(targets.size()) + ": " + t.name);
-        pngs_at_map_start = new_pngs.load();
-        tooie::debug::request_warp(t.map, 0);
-        enter(Phase::Warping);
+        exit_now = targets[next_target].first_exit;
+        repeats = 0;
+        spawns.clear();
+        warp_exit();
     }
 
-    void finish_map(const char* word) {
-        const Target& t = targets[next_target];
+    // Logs this entrance and goes on to the map's next one, or to the next map.
+    std::string spawn_note;
+
+    void finish_exit(uint8_t* rdram, const char* word, bool repeat) {
         const std::string vram = tooie::vram_log::summary();
-        log_line(std::string(word) + " " + hex(t.map) + " " + std::to_string(new_pngs.load() - pngs_at_map_start) + " new textures" + (vram.empty() ? "" : ", " + vram));
+        log_line(std::string(word) + " " + where() + " " + std::to_string(new_pngs.load() - pngs_at_map_start) + " new textures" + spawn_note + (vram.empty() ? "" : ", " + vram));
+        spawn_note.clear();
+        repeats = repeat ? repeats + 1 : 0;
+        // A map that can't be reached at all has no other entrances to try.
+        // A cutscene plays the same from any exit.
+        const bool missed = std::strcmp(word, "missed") == 0;
+        if (!missed && !is_cutscene(targets[next_target].name.c_str()) && repeats < max_repeats && exit_now + 1 < max_exits) {
+            exit_now++;
+            warp_exit();
+            return;
+        }
+        log_line("leave " + hex(targets[next_target].map));
         next_target++;
+        warp_next(rdram);
     }
 
     void sweep_tick(uint8_t* rdram) {
@@ -569,20 +678,43 @@ namespace {
         switch (phase) {
             case Phase::WaitForFile:
                 if (tooie::debug::can_warp()) {
-                    start_map = tooie::debug::current_map(rdram);
+                    // Back to where it started at the end, unless that was the title.
+                    start_map = tooie::debug::can_warp() ? tooie::debug::current_map(rdram) : 0;
                     warp_next(rdram);
                 }
                 break;
             case Phase::Warping:
-                if (tooie::debug::current_map(rdram) == targets[next_target].map) {
+                if (elapsed > min_load_time && tooie::debug::current_map(rdram) == targets[next_target].map && tooie::debug::can_warp()) {
                     enter(Phase::Settling);
                 } else if (elapsed > load_timeout) {
-                    finish_map("missed");
-                    warp_next(rdram);
+                    finish_exit(rdram, "missed", true);
                 }
                 break;
             case Phase::Settling:
                 if (elapsed > settle_time) {
+                    std::array<float, 3> pos{};
+                    if (player_position(rdram, pos)) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), ", Banjo at %.0f %.0f %.0f", pos[0], pos[1], pos[2]);
+                        spawn_note = buf;
+                        // An exit the map doesn't have leaves Banjo at 0 0 0.
+                        if (pos[0] == 0.0f && pos[1] == 0.0f && pos[2] == 0.0f) {
+                            finish_exit(rdram, "same", true);
+                            return;
+                        }
+                        for (const auto& seen : spawns) {
+                            const float dx = pos[0] - seen[0], dy = pos[1] - seen[1], dz = pos[2] - seen[2];
+                            if (dx * dx + dy * dy + dz * dz < same_spawn * same_spawn) {
+                                finish_exit(rdram, "same", true);
+                                return;
+                            }
+                        }
+                        spawns.push_back(pos);
+                    } else if (spawn_note = ", no Banjo"; exit_now > 0) {
+                        // No player (a cutscene): its other exits would show the same scene.
+                        finish_exit(rdram, "same", true);
+                        return;
+                    }
                     turn_start_ns = steady::now().time_since_epoch().count();
                     turning = true;
                     enter(Phase::Turning);
@@ -591,8 +723,7 @@ namespace {
             case Phase::Turning:
                 if (elapsed > turn_time) {
                     turning = false;
-                    finish_map("done");
-                    warp_next(rdram);
+                    finish_exit(rdram, "done", false);
                 }
                 break;
             default:
