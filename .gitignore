@@ -8,6 +8,7 @@ decompressed*
 # Build output
 build/
 build-cmake/
+build-cmake-*/
 Release/
 out/
 patches/*.o
