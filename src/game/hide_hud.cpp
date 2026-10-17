@@ -24,6 +24,7 @@
 #endif
 
 #include "recomp.h"
+#include "tooie_achievements.h"
 #include "tooie_debug.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_hide_hud.h"
@@ -80,6 +81,8 @@ extern "C" void tooie_draw2d_mark(uint8_t* rdram, recomp_context* ctx, int index
         tooie::dl_dump::scene_end(rdram, end + added);
     }
     if (index == 6) {
+        // The achievement pop-up goes on top of the game's 2D, shown even with the HUD hidden.
+        tooie::achievements::draw_popup(rdram, ctx, (uint32_t)gfx_ctx);
         // And the 2D after it: its panels and icons are also placed through
         // the projection (model_tagging.cpp).
         uint32_t end = (uint32_t)MEM_W(0, gfx_ctx);

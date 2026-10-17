@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -923,6 +924,55 @@ namespace {
     constexpr int ach_description_lines = 4;
     int ach_cursor = 0;
     int ach_top = 0;
+    // Each row's icon sits before its name; the picked one is shown larger beside its description.
+    constexpr int ach_icon_size = 11;
+    constexpr int ach_icon_gap = 14;
+    constexpr int ach_big_icon_size = 40;
+
+    // Draws a talking-head portrait (an id in gczoomboxdata's table) as the game's dialogue boxes do:
+    // gczoomboxdata_entrypoint_1 gives the portrait's sprite asset and func_800D674C loads it (gczoombox
+    // func_80802B94). The game draws the sprite itself, cut out as in a dialogue box, so a texture pack
+    // that replaces the portrait replaces the icon too. x, y are its middle; size its height in pixels.
+    void draw_portrait(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, int portrait, int x, int y, int size) {
+        if (portrait < 0) {
+            return;
+        }
+        // The table is fixed, so each portrait's asset is looked up once (the call may load the overlay).
+        static std::unordered_map<int, uint32_t> assets;
+        auto found = assets.find(portrait);
+        if (found == assets.end()) {
+            found = assets.emplace(portrait, call(rdram, ctx, _gczoomboxdata_entrypoint_1, (uint32_t)portrait) & 0xFFFF).first;
+        }
+        const uint32_t asset = found->second;
+        if (asset == 0) {
+            return;
+        }
+        const uint32_t image = call(rdram, ctx, func_800D674C, asset);
+        if (image == 0) {
+            return;
+        }
+        const gpr image_addr = (gpr)(int32_t)image;
+        const int width = MEM_H(8, image_addr);
+        const int height = MEM_H(0xA, image_addr);
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        if (std::getenv("TOOIE_ACH_ICON_LOG") != nullptr) {
+            static int logged = 0;
+            if (logged < 64) {
+                logged++;
+                fprintf(stderr, "[ach-icon] portrait 0x%X asset 0x%X %dx%d frames %u\n", portrait, asset,
+                        width, height, (uint16_t)MEM_H(0, image_addr));
+            }
+        }
+        const gpr coords = string_area + (string_area_size - 8);   // Coords2D, in quarter pixels
+        MEM_W(0, coords) = x * 4;
+        // Portraits come out 12 pixels lower than asked at any size (measured headless), so ask higher.
+        MEM_W(4, coords) = (y - 12 + rise) * 4;
+        // func_800E2568 sets the drawn size in quarter pixels.
+        call(rdram, ctx, func_800E2568, (uint32_t)(width * size * 4 / height), (uint32_t)(size * 4));
+        call(rdram, ctx, func_800E30E0, gfx, image, 0, (uint32_t)coords);
+    }
 
     void draw_achievements(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, uint32_t& offset, int steps) {
         const std::vector<tooie::achievements::PauseEntry> entries = tooie::achievements::pause_entries();
@@ -960,8 +1010,12 @@ namespace {
             const int y = block_y + line_height * row;
             const bool picked = ach_top + row == ach_cursor;
             const int colour = e.unlocked ? colour_yellow : colour_white;
-            const std::string name = fit(rdram, ctx, offset, text_scale, printable(e.name), ach_right - ach_left - points_width);
-            print(rdram, ctx, gfx, offset, colour, text_scale, ach_left, y, name, false, !picked);
+            const int name_x = e.portrait >= 0 ? ach_left + ach_icon_gap : ach_left;
+            const std::string name = fit(rdram, ctx, offset, text_scale, printable(e.name), ach_right - name_x - points_width);
+            if (page_in >= 1.0f) {
+                draw_portrait(rdram, ctx, gfx, e.portrait, ach_left + ach_icon_size / 2, y + ach_icon_size / 2, ach_icon_size);
+            }
+            print(rdram, ctx, gfx, offset, colour, text_scale, name_x, y, name, false, !picked);
             print(rdram, ctx, gfx, offset, colour, text_scale, ach_right, y, std::to_string(e.points) + "G", true, !picked);
         }
         if (ach_top > 0) {
@@ -988,6 +1042,9 @@ namespace {
             state = "LOCKED";
         }
         print(rdram, ctx, gfx, offset, colour, text_scale, ach_left, y, state);
+        if (page_in >= 1.0f) {
+            draw_portrait(rdram, ctx, gfx, e.portrait, ach_right + 4 + ach_big_icon_size / 2, y + ach_big_icon_size / 2, ach_big_icon_size);
+        }
         const std::vector<std::string> lines = wrap(rdram, ctx, offset, text_scale, printable(e.description), ach_right - ach_left);
         for (int i = 0; i < (int)lines.size() && i < ach_description_lines; i++) {
             y += line_height;
@@ -998,6 +1055,58 @@ namespace {
             print(rdram, ctx, gfx, offset, colour_white, text_scale, ach_left, y, line);
         }
     }
+}
+
+namespace {
+    // ---- The unlock pop-up: the portrait with "ACHIEVEMENT UNLOCKED" and the name and score beside
+    // it, at the top of the screen, sliding down and fading in, then out. Its strings go after the
+    // pause page's in the string area.
+    constexpr uint32_t popup_string_offset = 0x800;
+    constexpr int64_t popup_in_ms = 300;
+    constexpr int64_t popup_show_ms = 4000;
+    constexpr int64_t popup_out_ms = 500;
+    constexpr int popup_icon_size = 30;
+    constexpr int popup_x = 104;
+    constexpr int popup_y = 18;
+
+    tooie::achievements::Popup popup;
+    int64_t popup_start = -1;
+}
+
+void tooie::achievements::draw_popup(uint8_t* rdram, recomp_context* ctx, uint32_t gfx) {
+    const int64_t ms = now_ms();
+    if (popup_start >= 0 && ms - popup_start > popup_in_ms + popup_show_ms + popup_out_ms) {
+        popup_start = -1;
+    }
+    if (popup_start < 0) {
+        if (!take_popup(popup)) {
+            return;
+        }
+        popup_start = ms;
+    }
+    const int64_t t = ms - popup_start;
+    float in = 1.0f;
+    if (t < popup_in_ms) {
+        in = (float)t / popup_in_ms;
+    } else if (t > popup_in_ms + popup_show_ms) {
+        in = 1.0f - (float)(t - popup_in_ms - popup_show_ms) / popup_out_ms;
+    }
+    in = std::clamp(in, 0.0f, 1.0f);
+    const float saved_in = page_in;
+    const int saved_rise = rise;
+    page_in = in;
+    rise = -(int)((1.0f - in) * 12.0f + 0.5f);
+    uint32_t offset = popup_string_offset;
+    // The game's sprites draw at full strength, so the icon shows only while the text is fully in.
+    if (in >= 1.0f) {
+        draw_portrait(rdram, ctx, gfx, popup.portrait, popup_x + popup_icon_size / 2, popup_y + popup_icon_size / 2, popup_icon_size);
+    }
+    const int text_x = popup_x + popup_icon_size + 6;
+    print(rdram, ctx, gfx, offset, colour_blue, text_scale, text_x, popup_y + 2, "ACHIEVEMENT UNLOCKED");
+    print(rdram, ctx, gfx, offset, colour_yellow, text_scale, text_x, popup_y + 2 + line_height,
+          printable(popup.name) + "  " + std::to_string(popup.points) + "G");
+    page_in = saved_in;
+    rise = saved_rise;
 }
 
 extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx) {

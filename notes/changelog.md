@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Character Shaders: Enemy fur is now **NPC fur**, with its own length, density and noisiness sliders, and Canary Mary moved to **NPC feathers** with its own amount, size, length, density, noisiness and transparency (L). The yeti's face, eyes and hands stay bare; Mary's crest, beak and face stay bare. Kazooie's crest (hairdo) stays bare, her wings' yellow tips get feathers and the dark feathers from the back of her wings are gone. Banjo keeps his fur on Icy Side's ice (a yeti in view turned it inwards) and his brightest-lit fur no longer shows bald patches. Untested on PC (T392).
 - Game Frame Rate 60 and up: Banjo's jumps and falls are as high and long as at 30 FPS (they peaked about 6% higher before). Untested on PC (T377).
 - New Freeze key (under Interpolation Debug in the Controls tab, no default; no menu switch, L): holds the game on two of its frames so you can switch the blend mode and compare the frames blended between them; sound is muted while frozen (L). Fixed with it: a Load State could leave the game hung for good when it landed while the game had paused its graphics output. Untested on PC (T371).
 - Free camera: two new optional settings in QOL (L). **Ease back** (Off, Flying only, Always) lets the camera drift back behind Banjo a second after you let go of the right stick while he flies or moves. **Smooth walls** makes the camera glide in and out around walls instead of jumping, and fades Banjo out when the camera gets very close. Both are off by default. Untested on PC (T370).
@@ -71,6 +72,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Graphics
 - Fixed: Banjo's shadow flickered while the camera turned, at every frame rate. Bits of it failed the check against the ground's depth on uneven ground, and which bits failed changed every frame. The shadow now gets more room on that check, so it keeps its shape. Untested on PC (T387).
 - New Graphics > Ice reflections slider (L): all ice now reflects, not only Icy Side's frozen decals: ice floors and platforms, the mottled ice of walls and platform sides, the see-through blocks round notes, the frozen lake and Icicle Grotto's floor. Ice now reflects from any camera height (before, it stopped once the camera looked down more than about 45 degrees). Ice no longer follows Water reflections. Untested on PC (T384).
+- Blend texture seams now finds every texture drawn in clamped pieces by itself, in 2D and in the 3D world: the pads the player stands on, Grunty Industries' wall panels and Mayahem Temple's carvings blend the same way the title logo does. Palette textures are included. Edges with no matching neighbour, or with a sharp colour change in the 3D world (a pad's rim against its picture), stay vanilla (L: "Look for all textures since there are too many"). Untested on PC (T393).
 - Blend texture seams now joins the title logo's pieces fully: each piece blends into the texels of the piece drawn beside it, so the level lines are gone too, not only the upright ones. Pieces in the 3D world still get the softer blend. The shader is also smaller again, so the first black screen at start is no longer longer than before (L: "can it be better?"). Untested on PC (T389).
 - New DEV switch Blend texture seams (on by default) smooths the lines where the pieces of a picture drawn in parts meet, such as the title screen's logo, a vanilla issue that shows at high resolutions: each piece carries its shading on to its edge instead of holding its last texel flat. The upright lines go and the level ones get much fainter; the earlier Texture upscale change for this is undone (L). Untested on PC (T383).
 - 3D grass no longer grows through stone floors laid on grass (Mayahem Temple by the entrance), and keeps off gently sloping parts of roads and paths too (L). Untested on PC (T381).
@@ -210,6 +212,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Treasure Hunt, one of each collectible (df684cf). Untested on PC (T83).
 - Shoot Em Up!, 20 targets in the shooting games (009573c). Untested on PC (T83).
 - All Beaten Up and Calamari Bonanza counters (965eb06). Untested on PC (T83).
+- Icons: every achievement shows a portrait matched to its XBLA icon, small before its name and large beside the picked one, and the unlock pop-up is now drawn by the game at the top of the screen with the icon. The game draws them itself, so HD texture packs replace them too. The pause menu's Achievements row shows King Jingaling (it showed Sabreman). Untested on PC (T391).
 
 ### Stability
 

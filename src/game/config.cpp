@@ -606,8 +606,12 @@ void tooie::init_config() {
                                        &tooie::picture_filters::banjo_fur_noisiness_option, &tooie::picture_filters::kazooie_feathers_option,
                                        &tooie::picture_filters::kazooie_feather_size_option, &tooie::picture_filters::kazooie_feather_length_option,
                                        &tooie::picture_filters::kazooie_feather_density_option, &tooie::picture_filters::kazooie_feather_noisiness_option,
-                                       &tooie::picture_filters::kazooie_feather_transparency_option, &tooie::picture_filters::enemy_fur_option,
-                                       &tooie::picture_filters::npc_feathers_option }) {
+                                       &tooie::picture_filters::kazooie_feather_transparency_option, &tooie::picture_filters::npc_fur_option,
+                                       &tooie::picture_filters::npc_fur_length_option, &tooie::picture_filters::npc_fur_density_option,
+                                       &tooie::picture_filters::npc_fur_noisiness_option, &tooie::picture_filters::npc_feathers_option,
+                                       &tooie::picture_filters::npc_feather_size_option, &tooie::picture_filters::npc_feather_length_option,
+                                       &tooie::picture_filters::npc_feather_density_option, &tooie::picture_filters::npc_feather_noisiness_option,
+                                       &tooie::picture_filters::npc_feather_transparency_option }) {
         recompui::config::set_option_display_before(*option, tooie::picture_filters::contrast_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");

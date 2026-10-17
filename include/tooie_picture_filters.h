@@ -102,9 +102,17 @@ namespace tooie::picture_filters {
     inline const std::string kazooie_feather_density_option = "kazooie_feather_density";
     inline const std::string kazooie_feather_noisiness_option = "kazooie_feather_noisiness";
     inline const std::string kazooie_feather_transparency_option = "kazooie_feather_transparency";
-    // Furry enemies' white fur (the yetis), on or off (L).
-    inline const std::string enemy_fur_option = "enemy_fur";
-    inline const std::string npc_feathers_option = "npc_feathers";
+    // Furry NPCs' white fur (the yetis) and feathered NPCs' feathers (Canary Mary), each with its own sliders (L).
+    inline const std::string npc_fur_option = "npc_fur";
+    inline const std::string npc_fur_length_option = "npc_fur_length";
+    inline const std::string npc_fur_density_option = "npc_fur_density";
+    inline const std::string npc_fur_noisiness_option = "npc_fur_noisiness";
+    inline const std::string npc_feathers_option = "npc_feather_amount";
+    inline const std::string npc_feather_size_option = "npc_feather_size";
+    inline const std::string npc_feather_length_option = "npc_feather_length";
+    inline const std::string npc_feather_density_option = "npc_feather_density";
+    inline const std::string npc_feather_noisiness_option = "npc_feather_noisiness";
+    inline const std::string npc_feather_transparency_option = "npc_feather_transparency";
     // DEV tab, on by default (L, 2026-10-17): blends the seams of clamped textures, such as the lines between the
     // pieces of the title's logo (a vanilla issue that shows at high resolutions).
     inline const std::string texture_seams_option = "blend_texture_seams";
@@ -115,7 +123,7 @@ namespace tooie::picture_filters {
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
     bool kazooie_feathers_on();
     // Whether furry enemies' fur is on, for the model tagging to mark them.
-    bool enemy_fur_on();
+    bool npc_fur_on();
     bool npc_feathers_on();
     // How far under water the view is, 0 above to 1 under (easing between), for the day and night cycle's rain.
     float underwater();

@@ -32,8 +32,20 @@ namespace tooie::achievements {
         std::string unlocked_at;    // "YYYY-MM-DD HH:MM", empty when locked
         int count = -1;             // counted achievements: the count so far, else -1
         int goal = 0;
+        int portrait = -1;          // its icon: a talking-head portrait id (gczoomboxdata), -1 for none
     };
     std::vector<PauseEntry> pause_entries();
+
+    // The unlock pop-up, drawn by the game at the end of its 2D (src/gameplay/totals_checklist.cpp, from
+    // tooie_draw2d_mark) so its icon is the game's own portrait art, texture packs included.
+    struct Popup {
+        std::string name;
+        int points = 0;
+        int portrait = -1;
+    };
+    // The pop-up to show next, if one is waiting; taken off the queue.
+    bool take_popup(Popup& out);
+    void draw_popup(uint8_t* rdram, recomp_context* ctx, uint32_t gfx);
 }
 
 #endif

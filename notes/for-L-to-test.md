@@ -1,5 +1,40 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T393 Texture seams blend everywhere (DEV Blend texture seams, on)
+- Asked: 2026-10-17 15:02 UTC
+- Build: main
+- Steps:
+  1. Watch the title screen logo
+  2. Stand on a flight pad and a Split-Up pad (Isle o' Hags, any world)
+  3. Look at the wall panels in Grunty Industries and the carvings in Mayahem Temple
+  4. Optional: turn DEV > Blend texture seams off and back on to compare
+- Look for: Are the thin lines between texture pieces gone on the logo, pads and walls, with no new specks or bright lines (pad rims, cliffs)?
+- Status: waiting for L
+
+## T392 NPC fur and NPC feathers sliders; Kazooie's crest, wings; Banjo on ice; yeti face; Mary's head
+- Asked: 2026-10-17 14:40 UTC
+- Build: main (pull and build)
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur, Kazooie feathers, NPC fur and NPC feathers all on (NPC fur replaces Enemy fur; both NPC options are 0-100 sliders with their own sub-sliders)
+  2. Spiral Mountain or any level: look at Kazooie up close, with her out (Talon Trot or a cutscene)
+  3. Hailfire Peaks Icy Side: walk slowly on the ice by the entrance, then go near the yeti
+  4. Glitter Gulch Mine: talk to Canary Mary after a race (Race Warps)
+  5. Move the NPC sliders (size, length, density, noisiness, transparency) and watch Mary and the yeti change
+- Look for: Kazooie: is her crest (hairdo) completely bare, do the yellow tips of her wings have feathers, and are there no dark feathers on her wings? Banjo: any bald patches left, and does he keep his fur walking slowly on ice with the yeti nearby? Yeti: are his face, eyes and hands bare and his body furred? Mary: are her crest, face and beak bare with her dress and wings feathered? Do the NPC sliders change only the NPCs, not Banjo or Kazooie?
+- Status: waiting for L
+
+## T391 Achievement icons and in-game unlock pop-up
+- Asked: 2026-10-17 14:31 UTC
+- Build: main from this commit
+- Steps:
+  1. Pull main and build
+  2. Load a save, press Start, pick ACHIEVEMENTS (its icon is now King Jingaling)
+  3. Scroll through all 12 achievements
+  4. Unlock any achievement (or use a save just before one, e.g. scrub Old King Coal)
+  5. Optional: load an HD texture pack that replaces portraits and look again
+- Look for: Each row has a small portrait before its name and the picked one shows a large portrait on the right, with no box behind it. The unlock pop-up appears at the top of the game screen (portrait, ACHIEVEMENT UNLOCKED, name and G) instead of the menu-style toast. With a texture pack, the icons use the pack's portraits. Icons: Klungo, Kazooie, washing machine, Old King Coal, Banjo, dark creature, Sabreman, Jinjo, skeleton Grunty, Mr. Patch, grey rhino, Stony.
+- Status: waiting for L
+
 ## T390 Discord Status (General, off by default)
 - Asked: 2026-10-17 13:41 UTC
 - Build: main (pull and build)
