@@ -5829,10 +5829,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d46a94f
+index 0000000..e08a2a2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2269 @@
+@@ -0,0 +1,2278 @@
 +//
 +// RT64
 +//
@@ -6228,6 +6228,7 @@ index 0000000..d46a94f
 +            uint64_t workload = 0;
 +            bool used = false;
 +            float player[3] = {};
++            bool grounded = true;
 +            float rippleX[3] = {}, rippleZ[3] = {}, rippleAge[3] = {};
 +        };
 +        PlayerFrame playerFrames[16];
@@ -6238,16 +6239,18 @@ index 0000000..d46a94f
 +        thread_local bool effectsWorkloadKnown = false;
 +    }
 +
-+    void SetScenePlayer(bool valid, float x, float y, float z) {
++    void SetScenePlayer(bool valid, float x, float y, float z, bool grounded) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.player[0] = x;
 +        effectsSettings.player[1] = valid ? y : -1e9f;
 +        effectsSettings.player[2] = z;
++        effectsSettings.playerGrounded = grounded;
 +        if (anySubmittedWorkload) {
 +            PlayerFrame &frame = playerFrames[playerFrameNext];
 +            playerFrameNext = (playerFrameNext + 1) % std::size(playerFrames);
 +            frame.workload = lastSubmittedWorkload;
 +            frame.used = true;
++            frame.grounded = grounded;
 +            for (int i = 0; i < 3; i++) {
 +                frame.player[i] = effectsSettings.player[i];
 +                frame.rippleX[i] = effectsSettings.rippleX[i];
@@ -6279,6 +6282,7 @@ index 0000000..d46a94f
 +        if (best == nullptr) {
 +            return;
 +        }
++        settings.playerGrounded = best->grounded;
 +        for (int i = 0; i < 3; i++) {
 +            settings.player[i] = best->player[i];
 +            settings.rippleX[i] = best->rippleX[i];
@@ -7007,7 +7011,7 @@ index 0000000..d46a94f
 +    // he goes. Each cell holds how far the snow was pressed down there, how far it was pushed up into a bank beside the
 +    // trail, Banjo's height when it was (so a jump leaves nothing, and the trail only shows on the ground he walked on),
 +    // when, and its tag. Snow.hlsli springs it back from then on: held a few seconds, then filling back in.
-+    static constexpr uint32_t SnowGridSize = 320;
++    static constexpr uint32_t SnowGridSize = 640;
 +    static constexpr float SnowCell = 2.5f;
 +    static constexpr float SnowTicksPerSecond = 20.0f;
 +    // About ankle deep at height 1 (he wades in it at 3); the banks rise a third above it.
@@ -7222,6 +7226,11 @@ index 0000000..d46a94f
 +                trail.stillSeconds = 0.0f;
 +                trail.stoodPrinted = false;
 +            }
++            else if ((moved > 0.4f) && !settings.playerGrounded) {
++                // In the air (a jump, a fall): nothing pressed until he lands; the next stride starts afresh.
++                trail.stride = 0.0f;
++                trail.stillSeconds = 0.0f;
++            }
 +            else if (moved > 0.4f) {
 +                trail.heading[0] = dx / moved;
 +                trail.heading[1] = dz / moved;
@@ -7252,7 +7261,7 @@ index 0000000..d46a94f
 +            else {
 +                // Standing still: both feet pressed in where he stands.
 +                trail.stillSeconds += dt;
-+                if ((trail.stillSeconds > 0.5f) && !trail.stoodPrinted) {
++                if ((trail.stillSeconds > 0.5f) && !trail.stoodPrinted && settings.playerGrounded) {
 +                    trail.stoodPrinted = true;
 +                    for (float side : { 8.0f, -8.0f }) {
 +                        SnowPressOval(trail, x - trail.heading[1] * side, z + trail.heading[0] * side, y, trail.heading[0], trail.heading[1], 9.0f, 5.0f, 1.0f, 0.8f, now, recover);
@@ -7273,7 +7282,7 @@ index 0000000..d46a94f
 +        if (havePlayer && trail.started) {
 +            for (uint32_t i = 0; i < settings.snowStampCount; i++) {
 +                const float *stamp = &settings.snowStamps[i * 5];
-+                if ((std::abs(stamp[0] - settings.player[0]) > 380.0f) || (std::abs(stamp[2] - settings.player[2]) > 380.0f)) {
++                if ((std::abs(stamp[0] - settings.player[0]) > SnowGridSize * SnowCell * 0.45f) || (std::abs(stamp[2] - settings.player[2]) > SnowGridSize * SnowCell * 0.45f)) {
 +                    continue;
 +                }
 +                const float radius = std::clamp(stamp[3], 3.0f, 60.0f);
@@ -7337,7 +7346,7 @@ index 0000000..d46a94f
 +            for (size_t i = 0; i < trail.cells.size(); i += 2) {
 +                pressed += (trail.cells[i + 1] != 0) ? 1 : 0;
 +            }
-+            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f, %u cells pressed, depth %.1f, recover %.0f s, %u actor stamps\n", settings.player[0], settings.player[1], settings.player[2],
++            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u actor stamps\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
 +                pressed, depth, recover, settings.snowStampCount);
 +        }
 +        frameParams.snowSpring = { SnowHoldSeconds, recover, SnowBank, float(now) };
@@ -8104,10 +8113,10 @@ index 0000000..d46a94f
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..3529265
+index 0000000..674c7db
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,377 @@
 +//
 +// RT64
 +//
@@ -8200,6 +8209,8 @@ index 0000000..3529265
 +        float rippleZ[3] = {};
 +        float rippleAge[3] = { -1.0f, -1.0f, -1.0f };
 +        float player[3] = { 0.0f, -1e9f, 0.0f };
++        // Banjo stands on the ground (not jumping or falling): only then does he press a trail into deep snow.
++        bool playerGrounded = true;
 +        float waveSpeed = 1.0f;
 +        float grass = 0.0f;
 +        float grassHeight = 1.0f;
@@ -8327,7 +8338,7 @@ index 0000000..3529265
 +    // The last noted camera's world height; false until there is one.
 +    bool GetSceneCameraHeight(float *height);
 +    // Banjo-Tooie: Banjo's world position, which the fog is measured from (valid false: from the camera).
-+    void SetScenePlayer(bool valid, float x, float y, float z);
++    void SetScenePlayer(bool valid, float x, float y, float z, bool grounded = true);
 +    // The game frames: the id of each workload as the game hands it over, and the workload whose effects are
 +    // being recorded next. Banjo and his ripples are kept for each handed-over frame, so the effects use the
 +    // ones the drawn frame had, not the game's newest (it can run frames ahead of what is drawn).
@@ -11627,7 +11638,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..8c5c3c0 100644
+index e7895c3..519eb8e 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11692,7 +11703,7 @@ index e7895c3..8c5c3c0 100644
 +    if (snowShell && ((gConstants.grassShells & RASTER_SNOW_TESS) != 0)) {
 +        // The tessellated snow (SnowTess.hlsl): its anchor is the ground under the pixel, so its slopes are the ground's.
 +        // Where the snow is less than a hair deep (where it thins out by its reach), the ground shows instead.
-+        if (!SnowTessShape(grassWorld, cross(grassDx, grassDy), snowSample) || (snowSample.height < SnowTessLeast)) {
++        if (!SnowTessShape(grassWorld, cross(grassDx, grassDy), 0.0f, snowSample) || (snowSample.height < SnowTessLeast)) {
 +            return false;
 +        }
 +        snowShare = snowSample.height / max(FrParams.snowParams.y, 1e-3f);
@@ -14506,10 +14517,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..1c1a389
+index 0000000..7b752c7
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,265 @@
 +//
 +// RT64
 +//
@@ -14555,10 +14566,11 @@ index 0000000..1c1a389
 +        return 0.0f;
 +    }
 +    const uint a = snowTrail[index];
-+    // On Icy Side the snow is drawn 20 to 60 units above where Banjo walks (his feet sink into it); a print with
-+    // Banjo higher than that was made in the air.
++    // Icy Side's snow is drawn from about 80 units below where Banjo walks to 60 above (his feet sink into it); a
++    // print further from the ground than that belongs to another floor. (Prints made in the air never get here:
++    // ComputeSceneSnow presses nothing while Banjo is off the ground.)
 +    const float above = groundY - float(int(a) >> 16);
-+    if ((above < -20.0f) || (above > 80.0f)) {
++    if ((above < -80.0f) || (above > 200.0f)) {
 +        return 0.0f;
 +    }
 +    const float4 spring = FrParams.snowSpring;
@@ -14670,11 +14682,22 @@ index 0000000..1c1a389
 +// the same depth; thinner than that (where it thins out by its reach), the ground shows instead.
 +static const float SnowTessLeast = 0.35f;
 +
++// The trail at a world position smoothed over about blur world units (a 3 x 3 tent), so a surface cut no finer than
++// that follows it without jagged spikes along the trench's walls.
++float2 SnowTrailSmoothed(float2 xz, float groundY, float blur) {
++    float2 sum = 4.0f * SnowTrailAt(xz, groundY);
++    sum += 2.0f * (SnowTrailAt(xz + float2(blur, 0.0f), groundY) + SnowTrailAt(xz - float2(blur, 0.0f), groundY) +
++        SnowTrailAt(xz + float2(0.0f, blur), groundY) + SnowTrailAt(xz - float2(0.0f, blur), groundY));
++    sum += SnowTrailAt(xz + float2(blur, blur), groundY) + SnowTrailAt(xz + float2(-blur, blur), groundY) +
++        SnowTrailAt(xz + float2(blur, -blur), groundY) + SnowTrailAt(xz - float2(blur, blur), groundY);
++    return sum / 16.0f;
++}
++
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with the
 +// ground's normal there, any length) in s.height, s.shellY the same (the pixel is on the snow's surface). False where
-+// no snow lies: a wall, or past the snow's reach. Both the domain shader (where to raise the surface to) and the pixel
-+// shader (how to shade it) ask, so the two agree.
-+bool SnowTessShape(float3 ground, float3 normal, out SnowSample s) {
++// no snow lies: a wall, or past the snow's reach. Both the domain shader (where to raise the surface to, with the trail
++// smoothed over blur world units, as far apart as its vertices are) and the pixel shader (how to shade it, blur 0) ask.
++bool SnowTessShape(float3 ground, float3 normal, float blur, out SnowSample s) {
 +    s = (SnowSample)0;
 +    const bool why = FrParams.snowGrid.w > 3.5f;
 +    const float4 params = FrParams.snowParams;
@@ -14703,7 +14726,7 @@ index 0000000..1c1a389
 +    // Banjo's trail, near him only, on ground facing up (a steep bank keeps its snow as it is).
 +    const float4 player = FrParams.snowPlayer;
 +    s.nearTrail = !steep && (player.w > 0.0f) && all(abs(ground.xz - player.xy) < player.w);
-+    s.trail = s.nearTrail ? SnowTrailAt(ground.xz, ground.y) : 0.0f;
++    s.trail = !s.nearTrail ? 0.0f : (blur > 0.5f) ? SnowTrailSmoothed(ground.xz, ground.y, blur) : SnowTrailAt(ground.xz, ground.y);
 +    s.height = SnowHeight(s.surface, s.trail);
 +    s.shellY = s.height;
 +    return true;
@@ -14765,10 +14788,10 @@ index 0000000..1c1a389
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..8f8f5f8
+index 0000000..32ea3bf
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,164 @@
 +//
 +// RT64
 +//
@@ -14832,8 +14855,13 @@ index 0000000..8f8f5f8
 +    return (player.w > 0.0f) && all(abs(xz - player.xy) < player.w) && SnowBlockActive(xz);
 +}
 +
++// How far apart the new vertices over the trail are at a distance from the camera (world units).
++float SnowTrailSegment(float cameraDistance) {
++    return max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f);
++}
++
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
-+    const float segment = trail ? max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f) : max(60.0f, cameraDistance * 0.15f);
++    const float segment = trail ? SnowTrailSegment(cameraDistance) : max(60.0f, cameraDistance * 0.15f);
 +    return clamp(edgeLength / segment, 1.0f, SnowTessMaxFactor);
 +}
 +
@@ -14912,9 +14940,12 @@ index 0000000..8f8f5f8
 +
 +    // Up to the snow's height there, as RasterVS raises a shell (snowClipUp is the snow's full height straight up),
 +    // then through the draw's screen scale and offset as the position already went.
++    // (The trail smoothed over about as far as the vertices over it are apart, so its trench has no jagged spikes; by
++    // the distance from the camera only, so a vertex shared by two patches lands in the same place for both.)
 +    SnowSample s;
 +    float height = SnowTessLeast;
-+    if (SnowTessShape(v.furAnchor.xyz, p.normal, s)) {
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    if (SnowTessShape(v.furAnchor.xyz, p.normal, 0.75f * SnowTrailSegment(distance(v.furAnchor.xyz, camera)), s)) {
 +        height = max(s.height, SnowTessLeast);
 +    }
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));

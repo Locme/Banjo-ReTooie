@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T416 Deep snow: trail everywhere on Icy Side, no prints from jumps, smooth trench walls; Graphics API in the menu
+- Asked: 2026-10-17 23:32 UTC
+- Build: main (this commit)
+- Steps:
+  1. Go to the spot where the trail was missing (about 2558, 96, -1983) with Snow height 300 and walk through the snow
+  2. Jump over the snow a few times
+  3. Look back along a long trail and at its walls
+  4. Check Settings > Graphics: Graphics API is there (changing it restarts the game)
+- Look for: The trail shows there too and Banjo carves a trench instead of being buried. Jumps leave no marks until he lands. The trench walls are smooth, with no spikes. The trail reaches about twice as far behind him as before.
+- Status: waiting for L
+
 ## T415 Smash Banjo fur
 - Asked: 2026-10-17 23:20 UTC
 - Build: main (Smash Banjo fur commit)

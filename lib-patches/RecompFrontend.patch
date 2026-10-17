@@ -1909,7 +1909,7 @@ index 49e05db..a9dce3a 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..8098009 100644
+index 4fdf81f..65fedeb 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -2086,7 +2086,7 @@ index 4fdf81f..8098009 100644
              config.add_enum_option(
                  graphics::options::msaa_option,
                  "MS Anti-Aliasing",
-@@ -338,7 +366,7 @@ namespace recompui {
+@@ -338,16 +366,15 @@ namespace recompui {
                  "HUD Placement",
                  "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
                  hud_ratio_mode_options,
@@ -2095,16 +2095,18 @@ index 4fdf81f..8098009 100644
              );
  
              config.add_enum_option(
-@@ -346,7 +374,7 @@ namespace recompui {
+                 graphics::options::api_option,
                  "Graphics API",
-                 "Selects the graphics API to use.",
+-                "Selects the graphics API to use.",
++                "Which graphics API draws the game. <recomp-color primary>Vulkan</recomp-color> is the default; <recomp-color primary>D3D12</recomp-color> is Windows only. Changing it restarts the game.",
                  graphics_api_options,
 -                ultramodern::renderer::GraphicsApi::Auto,
-+                ultramodern::renderer::GraphicsApi::Vulkan,
-                 true
+-                true
++                ultramodern::renderer::GraphicsApi::Vulkan
              );
  
-@@ -359,6 +387,16 @@ namespace recompui {
+             config.add_enum_option(
+@@ -359,6 +386,16 @@ namespace recompui {
                  true
              );
  
