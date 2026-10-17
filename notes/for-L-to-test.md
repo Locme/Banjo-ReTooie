@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T395 Warp tab: Flooded Caves (Torch enemy)
+- Asked: 2026-10-17 19:20 UTC
+- Build: main
+- Steps:
+  1. Load a file
+  2. Open the Warp tab, Glitter Gulch Mine group
+  3. Pick Flooded Caves (Torch enemy)
+- Look for: Do you land at the Flooded Caves entrance, with the torch on the ledge ahead when Cut Content: Torch enemy is on?
+- Status: waiting for L
+
 ## T394 Cut Content: Torch enemy in the Flooded Caves
 - Asked: 2026-10-17 15:32 UTC
 - Build: main
