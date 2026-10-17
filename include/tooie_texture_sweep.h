@@ -24,6 +24,14 @@ namespace tooie::texture_sweep {
     void apply_input(uint16_t* buttons);
     // True while a sweep is warping around, so nothing saves the game meanwhile.
     bool sweeping();
+    // True while a sweep is in a map with DEV > Pass over crashes on: a crash or hang should call pass_over.
+    bool pass_over_active();
+    // From the crash handler or the watchdog: writes the MAJOR line for the entrance the sweep is in,
+    // with why, and starts a new copy of the game, which resumes after it. False if not active or
+    // the copy couldn't start. The caller then ends this process.
+    bool pass_over(const char* why);
+    // From the memory guard: a crash it passed over while the sweep was in a map, for sweep.txt.
+    void note_major(const char* why);
 }
 
 #endif

@@ -118,6 +118,8 @@ namespace tooie {
     // tools/read_dump.py --rdram saves. Returns its path, or empty if none was written (always
     // empty off Windows).
     std::string write_hang_dump(const std::string& report_text, const uint8_t* rdram, size_t rdram_size);
+    // Appends one line to logs/crashes.log (the pass-over guard's MAJOR lines, memory_guard.cpp).
+    void crash_log_line(const char* line);
 }
 
 #endif

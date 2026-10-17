@@ -155,3 +155,68 @@ void tooie::api_restart::relaunch_if_requested(int argc, char** argv) {
     std::printf("[api-restart] could not start again\n");
 #endif
 }
+
+// A new copy of the game, started now with the same command line and folder; this one carries on
+// (the texture sweep's pass-over starts one from the crash handler and the watchdog, then ends).
+bool tooie::api_restart::start_copy() {
+#ifdef _WIN32
+    std::filesystem::path exe = exe_path();
+    if (exe.empty()) {
+        return false;
+    }
+    std::wstring command_line = GetCommandLineW();
+    std::vector<wchar_t> command(command_line.begin(), command_line.end());
+    command.push_back(L'\0');
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    const wchar_t* dir = launch_dir.empty() ? nullptr : launch_dir.c_str();
+    if (!CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, dir, &startup, &process)) {
+        return false;
+    }
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return true;
+#elif defined(__ANDROID__)
+    return false;
+#else
+    std::filesystem::path exe = exe_path();
+    if (exe.empty()) {
+        return false;
+    }
+    // The arguments as this process got them.
+    std::vector<std::string> args;
+    {
+        FILE* f = std::fopen("/proc/self/cmdline", "rb");
+        if (f == nullptr) {
+            return false;
+        }
+        std::string arg;
+        int c;
+        while ((c = std::fgetc(f)) != EOF) {
+            if (c == 0) {
+                args.push_back(arg);
+                arg.clear();
+            } else {
+                arg.push_back((char)c);
+            }
+        }
+        std::fclose(f);
+    }
+    std::vector<char*> argv;
+    for (std::string& a : args) {
+        argv.push_back(a.data());
+    }
+    argv.push_back(nullptr);
+    const std::string dir = launch_dir.string();
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (!dir.empty() && chdir(dir.c_str()) != 0) {
+            _exit(127);
+        }
+        execv(exe.c_str(), argv.data());
+        _exit(127);
+    }
+    return pid > 0;
+#endif
+}

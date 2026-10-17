@@ -14,12 +14,18 @@
 // game select left out; cutscene maps last), from each of its entrances (exit
 // 0, 1, 2, ... until two in a row put Banjo where an earlier one did or at 0 0 0), waits for the map to
 // load and fade in, holds C-right to turn the camera around, and moves on. Progress is written
-// to texture_dump/sweep.txt as it goes.
+// to texture_dump/sweep.txt as it goes; what it passes over also goes to logs/PassedOver.txt.
 //
 // Picking it asks first ("Start the texture sweep?"); the warning says it carries on after a
 // restart: with the option still on, the next start resumes from the entrance after the one the
 // game stopped in. When the sweep is done it warps back to where it started and stops dumping;
 // the option then does nothing (also after a restart) until it is picked again, which starts anew.
+//
+// DEV > Pass over crashes (memory_guard.cpp, on by default) also covers the sweep: a crash
+// (crash_handler.cpp) or a hang of 60 s (watchdog.cpp) during a sweep writes a MAJOR line for
+// that entrance with the reason, starts a new copy of the game and ends this one; the copy
+// resumes from the next entrance by itself, warping from the title if nobody loads a file. The
+// MAJOR lines are listed again at the end.
 //
 // Warping through maps every few seconds loads a texture pack's replacements much faster
 // than normal play. RT64 keeps replacements nobody uses until its pool (2/3 of video memory)
@@ -31,7 +37,8 @@
 //
 // Headless: TOOIE_TEXTURE_DUMP=play|sweep sets the option whatever the menu says,
 // TOOIE_TEXTURE_SWEEP_MAPS=AF,B8,... sweeps only those maps (hex), and
-// TOOIE_TEXTURE_DUMP_DIR=<dir> writes there instead of the app-data folder.
+// TOOIE_TEXTURE_DUMP_DIR=<dir> writes there instead of the app-data folder,
+// TOOIE_SWEEP_CRASH_TEST=<map>:<exit> (hex map) crashes on purpose there to check the pass-over.
 
 #include <algorithm>
 #include <array>
@@ -65,6 +72,8 @@
 #include "tooie_texture_sweep.h"
 #include "tooie_toast.h"
 #include "tooie_vram_log.h"
+#include "tooie_api_restart.h"
+#include "tooie_memory_guard.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_STATIC
@@ -466,11 +475,19 @@ namespace {
         return list;
     }
 
-    // The sweep's progress (what it has done, for resuming): texture_dump/sweep.txt.
+    // The sweep's progress (what it has done, for resuming): texture_dump/sweep.txt. What it
+    // had to pass over goes to logs/PassedOver.txt as well (memory_guard.cpp), for people to read.
     fs::path progress_file() {
         return dump_folder() / "sweep.txt";
     }
 
+
+    // For the crash handler and the watchdog, which can't build paths or strings safely.
+    char progress_path[1024] = {};
+    char entry_now[160] = {};
+    std::atomic<bool> pass_over_armed{false};
+    std::atomic<bool> pass_over_enabled{true};
+    std::atomic<bool> passed_over{false};
 
     void log_line(const std::string& line) {
         std::ofstream out(progress_file(), std::ios::app);
@@ -494,6 +511,7 @@ namespace {
         std::set<uint16_t> complete;
         std::map<uint16_t, unsigned> last_exit;
         std::vector<std::string> major;
+        bool resumed_after_pass_over = false;
     };
 
     // Reads sweep.txt. Lines name an entrance as 0xMAP:EXIT; "leave" ends a map.
@@ -503,6 +521,7 @@ namespace {
             return Progress::None;
         }
         std::string line;
+        std::string last_word;
         bool finished = false;
         bool any = false;
         int open_map = -1;
@@ -515,6 +534,7 @@ namespace {
             }
             any = true;
             std::string w = word;
+            last_word = w;
             if (w == "start") {
                 open_map = (int)map;
                 open_exit = exit;
@@ -525,6 +545,8 @@ namespace {
                 record.last_exit[(uint16_t)map] = exit;
                 record.major.push_back(line);
                 open_map = -1;
+            } else if (w == "noted") {
+                record.major.push_back(line);
             } else if (w == "leave") {
                 record.complete.insert((uint16_t)map);
             } else if (w == "finished") {
@@ -541,11 +563,13 @@ namespace {
         if (finished) {
             return Progress::Finished;
         }
+        record.resumed_after_pass_over = last_word == "MAJOR";
         if (open_map >= 0) {
             // The game stopped there with no crash report (killed, or it froze and was closed).
             const std::string line = "MAJOR " + hex((uint16_t)open_map) + ":" + std::to_string(open_exit) +
                 " passed over: the game stopped here with no crash report (closed, frozen or killed)";
             log_line(line);
+            tooie::memory_guard::log_passed_over(("MAJOR texture sweep passed over " + line.substr(6)).c_str());
             record.major.push_back(line);
             record.last_exit[(uint16_t)open_map] = open_exit;
         }
@@ -553,6 +577,7 @@ namespace {
     }
 
     std::vector<std::string> majors;
+    bool auto_start = false;
 
     // At start-up a finished sweep stays finished; picked from the menu it starts anew.
     void begin_sweep(bool at_startup) {
@@ -565,6 +590,7 @@ namespace {
             return;
         }
         majors.clear();
+        auto_start = false;
         if (progress == Progress::Unfinished) {
             std::vector<Target> left;
             for (Target t : targets) {
@@ -580,6 +606,8 @@ namespace {
                 left.push_back(t);
             }
             majors = record.major;
+            // Started again by the pass-over: carry on by itself, from the title if no file is loaded.
+            auto_start = at_startup && record.resumed_after_pass_over;
             log_line("resume, " + std::to_string(left.size()) + " of " + std::to_string(targets.size()) + " maps left");
             targets = std::move(left);
         } else {
@@ -588,6 +616,7 @@ namespace {
             fs::remove(progress_file(), ec);
             log_line("begin, " + std::to_string(targets.size()) + " maps");
         }
+        std::snprintf(progress_path, sizeof(progress_path), "%s", progress_file().string().c_str());
         phase = Phase::WaitForFile;
         phase_start = steady::now();
     }
@@ -619,6 +648,16 @@ namespace {
     void warp_exit() {
         const Target& t = targets[next_target];
         log_line("start " + where() + " " + t.name);
+        std::snprintf(entry_now, sizeof(entry_now), "%s %s", where().c_str(), t.name.c_str());
+        // Headless check of the pass-over restart: TOOIE_SWEEP_CRASH_TEST=0B8:1 crashes there.
+        if (const char* test = std::getenv("TOOIE_SWEEP_CRASH_TEST")) {
+            unsigned map = 0, exit = 0;
+            if (std::sscanf(test, "%x:%u", &map, &exit) == 2 && map == t.map && exit == exit_now) {
+                std::printf("[texture-sweep] test: crashing on purpose\n");
+                std::fflush(stdout);
+                *static_cast<volatile int*>(nullptr) = 0;
+            }
+        }
         tooie::toast::show("Texture sweep " + std::to_string(next_target + 1) + "/" + std::to_string(targets.size()) + ": " + t.name +
             (exit_now > 0 ? " (entrance " + std::to_string(exit_now) + ")" : ""));
         pngs_at_map_start = new_pngs.load();
@@ -638,7 +677,7 @@ namespace {
             }
             log_line("finished");
             tooie::toast::show(majors.empty() ? std::string("Texture sweep finished") :
-                "Texture sweep finished, " + std::to_string(majors.size()) + " passed over: see texture_dump/sweep.txt");
+                "Texture sweep finished, " + std::to_string(majors.size()) + " passed over: see logs/PassedOver.txt");
             if (start_map != 0 && start_map != tooie::debug::current_map(rdram)) {
                 tooie::debug::request_warp(start_map, 0);
             }
@@ -676,7 +715,9 @@ namespace {
         auto elapsed = steady::now() - phase_start;
         switch (phase) {
             case Phase::WaitForFile:
-                if (tooie::debug::can_warp()) {
+                // After a pass-over restart nobody is there to load a file: warp from the title, as
+                // the headless sweeps do, once the game has run a while.
+                if (tooie::debug::can_warp() || (auto_start && elapsed > 15s)) {
                     // Back to where it started at the end, unless that was the title.
                     start_map = tooie::debug::can_warp() ? tooie::debug::current_map(rdram) : 0;
                     warp_next(rdram);
@@ -771,12 +812,18 @@ void tooie::texture_sweep::tick(uint8_t* rdram) {
         }
         sweep_tick(rdram);
     } else {
+        pass_over_armed = false;
         if (phase != Phase::Idle && phase != Phase::Done) {
             stop_sweep();
         }
         if (picked != tooie::TextureDump::SweepAllMaps) {
             phase = Phase::Idle;
         }
+    }
+
+    if (value == tooie::TextureDump::SweepAllMaps) {
+        pass_over_armed = phase == Phase::Warping || phase == Phase::Settling || phase == Phase::Turning;
+        pass_over_enabled = tooie::memory_guard::enabled();
     }
 
     const bool cap = value == tooie::TextureDump::SweepAllMaps;
@@ -833,6 +880,38 @@ void tooie::texture_sweep::apply_input(uint16_t* buttons) {
     if (since % turn_pulse < turn_press) {
         *buttons |= c_right;
     }
+}
+
+bool tooie::texture_sweep::pass_over_active() {
+    return pass_over_armed.load() && pass_over_enabled.load() && !passed_over.load();
+}
+
+void tooie::texture_sweep::note_major(const char* why) {
+    if (!pass_over_armed.load() || progress_path[0] == '\0') {
+        return;
+    }
+    if (FILE* f = std::fopen(progress_path, "a")) {
+        // "noted": the sweep carried on in this entrance; a resume reads it as a remark only.
+        std::fprintf(f, "noted MAJOR %s: %s\n", entry_now, why);
+        std::fclose(f);
+    }
+}
+
+bool tooie::texture_sweep::pass_over(const char* why) {
+    if (!pass_over_active() || progress_path[0] == '\0') {
+        return false;
+    }
+    passed_over = true;
+    char line[1400];
+    std::snprintf(line, sizeof(line), "MAJOR %s passed over: %s", entry_now, why);
+    if (FILE* f = std::fopen(progress_path, "a")) {
+        std::fprintf(f, "%s\n", line);
+        std::fclose(f);
+    }
+    char shown[1500];
+    std::snprintf(shown, sizeof(shown), "MAJOR texture sweep passed over %s: %s; the game was started again to carry on", entry_now, why);
+    tooie::memory_guard::log_passed_over(shown);
+    return tooie::api_restart::start_copy();
 }
 
 bool tooie::texture_sweep::sweeping() {

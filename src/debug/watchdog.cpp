@@ -21,6 +21,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
 #include "tooie_watchdog.h"
+#include "tooie_texture_sweep.h"
 
 // Three parts of the program are watched, each by a counter that moves while that part is working:
 //  - the game: a display list sent by the game threads. The screen keeps being refreshed every VI
@@ -34,6 +35,7 @@ namespace {
     using namespace std::chrono_literals;
     using clock_type = std::chrono::steady_clock;
 
+    constexpr auto sweep_pass_over_after = std::chrono::seconds(60);
     constexpr auto poll_interval = 250ms;
     // A hang is written to the log after this long, and a minidump after dump_after.
     constexpr auto game_threshold = 3s;
@@ -323,6 +325,17 @@ namespace {
                 std::fflush(stdout);
                 episode_text += text;
                 episode = true;
+            }
+
+            // A texture sweep with "pass over crashes" on: a game stuck this long is given up on, logged as
+            // MAJOR, and the game starts again to carry on from the next entrance.
+            if (game_part.in_hang && now - game_part.last_change >= sweep_pass_over_after && tooie::texture_sweep::pass_over_active()) {
+                const std::string why = "hang: the game sent no new frame for " + seconds_text(seconds_since(game_part.last_change, now));
+                log_text(wall_time() + " texture sweep passed over the " + why + "\n");
+                if (tooie::texture_sweep::pass_over(why.c_str())) {
+                    std::fflush(stdout);
+                    std::_Exit(4);
+                }
             }
 
             // Still stuck well after it was reported: save a minidump of the whole program as it is.

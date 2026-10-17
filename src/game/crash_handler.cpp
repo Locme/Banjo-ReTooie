@@ -26,6 +26,7 @@
 #endif
 #endif
 
+#include "tooie_texture_sweep.h"
 #include "tooie_game.h"
 
 namespace fs = std::filesystem;
@@ -326,6 +327,15 @@ namespace {
         }
         // The crash is recorded, so the marker no longer means "died silently".
         remove_marker();
+        // A texture sweep with "pass over crashes" on starts the game again and carries on.
+        if (tooie::texture_sweep::pass_over_active()) {
+            const char* dump_file = std::strrchr(dump_name, '\\');
+            char why[1400];
+            std::snprintf(why, sizeof(why), "crash at %s (%s), dump %s", where, reason, dumped ? (dump_file ? dump_file + 1 : dump_name) : "not written");
+            if (tooie::texture_sweep::pass_over(why)) {
+                append_log_line("    texture sweep: passed over, the game was started again");
+            }
+        }
     }
 
     LONG WINAPI unhandled_exception_filter(EXCEPTION_POINTERS* ep) {
@@ -367,6 +377,11 @@ namespace {
             std::snprintf(line, sizeof(line), "%s crash: signal %d (%s)", ts, sig, strsignal(sig));
             append_log_line(line);
             append_context();
+            if (tooie::texture_sweep::pass_over_active()) {
+                char why[160];
+                std::snprintf(why, sizeof(why), "crash: signal %d (%s)", sig, strsignal(sig));
+                tooie::texture_sweep::pass_over(why);
+            }
 #if defined(__GLIBC__)
             // Raw addresses and any exported symbols; recompiled functions appear as func_80XXXXXX when the symbols are available.
             int fd = open(crash_log_path, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -456,6 +471,17 @@ std::string tooie::write_hang_dump(const std::string&, const uint8_t*, size_t) {
     return {};
 }
 #endif
+
+void tooie::crash_log_line(const char* line) {
+    if (crash_log_path[0] == '\0') {
+        return;
+    }
+    FILE* f = std::fopen(crash_log_path, "a");
+    if (f) {
+        std::fprintf(f, "%s\n", line);
+        std::fclose(f);
+    }
+}
 
 void tooie::set_crash_context(const std::string& text) {
     int next = 1 - context_index.load();

@@ -51,6 +51,7 @@
 #include "tooie_interp_check.h"
 #include "tooie_texture_slide.h"
 #include "tooie_texture_sweep.h"
+#include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
 #include "tooie_damage.h"
 
@@ -615,6 +616,7 @@ void tooie::init_config() {
         },
         tooie::TextureDump::Off);
     tooie::texture_sweep::add_prompt(wip);
+    tooie::memory_guard::add_option(wip);
     wip.add_bool_option(
         tooie::more_memory::option,
         "More game memory",

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T368 Pass over crashes (DEV) and logs/PassedOver.txt; texture sweep restarts itself after a crash
+- Asked: 2026-10-17 09:28 UTC
+- Build: main
+- Steps:
+  1. DEV tab: check Pass over crashes is on (it is by default)
+  2. Play normally or run DEV > Texture dump: Sweep all maps
+  3. If a crash would have happened, watch for the notice Passed over a crash
+- Look for: Where the game used to close on a bad pointer (like the chanim_entrypoint_6 sweep crashes) it carries on, a notice says logs/PassedOver.txt has the details, and that file has a MAJOR line saying what was read or written, in which function and map. During a sweep, any other crash or a 60 s hang starts the game again and the sweep carries on from the next entrance; PassedOver.txt and the sweep summary list each one. Send PassedOver.txt.
+- Status: waiting for L
+
 ## T367 F4 no longer benchmarks; LT + Y transforms
 - Asked: 2026-10-17 09:39 UTC
 - Build: main (next Windows build)

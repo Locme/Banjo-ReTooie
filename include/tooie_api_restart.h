@@ -14,6 +14,8 @@ namespace tooie::api_restart {
     void add_prompt(recomp::config::Config& graphics);
     // Called at the end of main(): starts the game again if a restart was confirmed.
     void relaunch_if_requested(int argc, char** argv);
+    // Starts another copy of the game now (same command line and folder); false if it couldn't.
+    bool start_copy();
 }
 
 #endif
