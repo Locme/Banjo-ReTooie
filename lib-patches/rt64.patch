@@ -1718,7 +1718,7 @@ index 69a82ac..455118c 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..754ab46 100644
+index 9fae0d4..336e389 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,11 @@
@@ -2579,7 +2579,7 @@ index 9fae0d4..754ab46 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,8 +2464,279 @@ namespace RT64 {
+@@ -1747,8 +2464,292 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -2847,6 +2847,19 @@ index 9fae0d4..754ab46 100644
 +                            parallax = SceneParallaxTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                        }
 +                    }
++                    // TOOIE_PARALLAX_LOG: each texture of the 3D world once, with or without parallax mapping, to find
++                    // stone the list misses.
++                    static const bool parallaxLog = (getenv("TOOIE_PARALLAX_LOG") != nullptr);
++                    if (parallaxLog) {
++                        static std::unordered_set<uint64_t> parallaxLogged;
++                        for (uint32_t t = 0; t < call.callDesc.tileCount; t++) {
++                            const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                            if (parallaxLogged.insert(hash).second) {
++                                fprintf(stdout, "[parallax-tex] %016llx %s tile %u, %u triangles\n", (unsigned long long)hash,
++                                    (SceneParallaxTexture(hash) != 0) ? "on" : "off", t, call.callDesc.triangleCount);
++                            }
++                        }
++                    }
 +                    // Drawn with its material's shader built with parallax mapping.
 +                    if (parallax != 0) {
 +                        instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
@@ -2859,7 +2872,7 @@ index 9fae0d4..754ab46 100644
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
-@@ -1758,13 +2746,179 @@ namespace RT64 {
+@@ -1758,13 +2759,179 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
