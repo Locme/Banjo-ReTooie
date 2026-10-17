@@ -1,12 +1,23 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T406 Intro: the music keeps playing between scenes
+## T407 Intro: the music keeps playing between scenes
 - Asked: 2026-10-17 21:21 UTC
 - Build: next build from main
 - Steps:
   1. Start a new game and watch the intro from the start
   2. Listen through the black screens between scenes (after Klungo, after the poker game, and so on)
 - Look for: The intro music keeps playing through each black screen between scenes, and the scenes stay in step with the music. The black screens themselves are the original game's timing (2 to 7 s each); they're just no longer silent. Checked headless: before, about 11 s of music went missing over the first three scene changes; now none
+- Status: waiting for L
+
+## T406 Deep snow: trail after a warp, no snow on the ice, Vulkan check
+- Asked: 2026-10-17 21:20 UTC
+- Build: main (next push)
+- Steps:
+  1. Settings > Graphics: Deep snow on
+  2. Warp to Hailfire Peaks Icy Side and slide down the snow slope by the warp-in spot
+  3. Walk across the ice and look down at it
+  4. If there is still no trail: Settings > Graphics > Graphics API: Vulkan (the game restarts), then slide down the same slope
+- Look for: Does the slide leave a trail? Is the ice free of snow blobs? If the trail only shows with Vulkan, say so (it means a D3D12-only bug).
 - Status: waiting for L
 
 ## T405 Banjo's shadow holds still in 16:9 and Fill
