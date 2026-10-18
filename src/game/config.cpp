@@ -284,19 +284,26 @@ void tooie::init_config() {
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
-        "Banjo's snout wobbles as he runs, turns, jumps, falls and lands, like Mario's nose in Super Mario Odyssey: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
+        "Banjo's snout wobbles as he runs, turns, jumps, falls and lands: it trails behind the way he moves and folds back towards his eyes in a dive. It stays mid-wobble in Photo Mode. Works with player model mods that keep his skeleton, such as Smash Banjo.",
         false);
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout jiggle: stiffness",
-            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 600, 10, 0, false, 150);
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
         general.add_number_option(damping_option, "Snout jiggle: damping",
-            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 60, 1, 0, false, 12);
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
         general.add_number_option(mass_option, "Snout jiggle: mass",
-            "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 5, 0.1, 1, false, 1);
-        general.add_number_option(squash_option, "Snout jiggle: max squash & stretch",
-            "How far the tip may move from rest, as a share of the snout's length. The snout squashes into his face and stretches out to follow it.", 5, 150, 5, 0, true, 50);
-        for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_option }) {
+            "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(squash_in_option, "Snout jiggle: max squash & stretch inwards",
+            "How far the tip may be pushed back into his face and eyes, as a share of the snout's length.", 0, 95, 5, 0, true, 50);
+        general.add_number_option(squash_out_option, "Snout jiggle: max squash & stretch outwards",
+            "How far the tip may stretch out, as a share of the snout's length.", 0, 300, 5, 0, true, 50);
+        general.add_number_option(squash_across_option, "Snout jiggle: max squash & stretch up and down",
+            "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
+        general.add_bool_option(nose_option, "Snout jiggle: nose jiggle",
+            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same settings.", false);
+        for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_out_option,
+                                       &squash_across_option, &nose_option }) {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }

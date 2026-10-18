@@ -4,8 +4,9 @@
 #include <string>
 
 // General > Snout jiggle (src/gameplay/snout_jiggle.cpp): Banjo's snout wobbles on a spring as he
-// moves, like Mario's nose in Super Mario Odyssey. Works with player-model mods that keep his
-// skeleton (Smash Banjo). Four sliders under it: stiffness, damping, mass, max squash & stretch.
+// moves. Works with player-model mods that keep his
+// skeleton (Smash Banjo). Sliders under it: stiffness, damping, mass and three squash & stretch limits; Nose jiggle
+// swings the black nose with the same sliders.
 #include <cstdint>
 
 namespace tooie::snout_jiggle {
@@ -24,7 +25,11 @@ namespace tooie::snout_jiggle {
     inline const std::string stiffness_option = "snout_jiggle_stiffness";
     inline const std::string damping_option = "snout_jiggle_damping";
     inline const std::string mass_option = "snout_jiggle_mass";
-    inline const std::string squash_option = "snout_jiggle_squash";           // % of its length the tip may move
+    // How far the tip may move from rest, as % of the bone's length.
+    inline const std::string squash_in_option = "snout_jiggle_squash_in";     // back into the face
+    inline const std::string squash_out_option = "snout_jiggle_squash_out";   // out along it
+    inline const std::string squash_across_option = "snout_jiggle_squash_across"; // up, down and sideways
+    inline const std::string nose_option = "snout_jiggle_nose";               // the black nose, same sliders
 }
 
 #endif

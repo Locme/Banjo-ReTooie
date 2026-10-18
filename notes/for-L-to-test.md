@@ -1,6 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T430 Snout jiggle: Odyssey-style jiggle bone, four sliders
+## T431 Snout jiggle: three squash & stretch limits, nose jiggle, bigger maxes
+- Asked: 2026-10-18 22:15 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on; Max squash & stretch is now three sliders: inwards (into his face), outwards, and up and down (also sideways)
+  2. Turn on the new Snout jiggle: nose jiggle toggle: the black nose wobbles on its own jiggle bone on the end of the snout, with the same sliders
+  3. Push the maxes: stiffness 900, damping 90, mass 7.5, outwards and up/down 300% (inwards stops at 95%, since 100% would flatten the snout)
+  4. Jump, fall, run, stop and turn
+- Look for: Each limit only changes its own direction; the nose swings a little after the snout and comes back with no gaps or stuck vertices; turning nose jiggle off puts the nose back. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
+## T430 Snout jiggle: jiggle bone, four sliders
 - Asked: 2026-10-18 21:37 UTC
 - Build: main
 - Steps:
@@ -888,7 +899,7 @@
   2. Run, stop, turn, jump and land with vanilla Banjo
   3. Do the same with Smash Banjo v13 in the mods folder
   4. Turn the toggle off in the middle of a run
-- Look for: Banjo's snout wobbles on a spring like Mario's nose in Odyssey and settles when he stands still (about 3 wobbles a second, up to about 12 degrees when he lands headless). On vanilla Banjo only his nose ball moves, because that is the only part of his snout on its own bone; on Smash Banjo the front of the muzzle moves. Tell me if you want it bouncier, stiffer, or the whole muzzle on vanilla Banjo too (that needs a model edit). Off: the snout is still.
+- Look for: Banjo's snout wobbles on a spring and settles when he stands still (about 3 wobbles a second, up to about 12 degrees when he lands headless). On vanilla Banjo only his nose ball moves, because that is the only part of his snout on its own bone; on Smash Banjo the front of the muzzle moves. Tell me if you want it bouncier, stiffer, or the whole muzzle on vanilla Banjo too (that needs a model edit). Off: the snout is still.
 
 ## T342 No stutter on the first Jiggy wipe into the save select
 - Asked: 2026-10-16 23:02 UTC
