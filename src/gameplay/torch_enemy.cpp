@@ -770,12 +770,12 @@ namespace {
     constexpr float boing_near = 150.0f;
     constexpr float boing_far = 1800.0f;
 
-    uint32_t play_sound(uint8_t* rdram, recomp_context* ctx, uint32_t sound, const float pos[3], float pitch, float volume, float near, float far) {
+    uint32_t play_sound(uint8_t* rdram, recomp_context* ctx, uint32_t sound, const float pos[3], float pitch, float volume, float near_dist, float far_dist) {
         GameCall call(rdram, ctx);
         call.vec(0, pos);
         const uint32_t sp = call.scratch - 0x80u;
-        write_float(rdram, sp + 0x10, near);
-        write_float(rdram, sp + 0x14, far);
+        write_float(rdram, sp + 0x10, near_dist);
+        write_float(rdram, sp + 0x14, far_dist);
         write_word(rdram, sp + 0x18, 2);
         uint32_t pitch_bits;
         std::memcpy(&pitch_bits, &pitch, 4);
