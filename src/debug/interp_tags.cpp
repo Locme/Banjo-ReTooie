@@ -54,6 +54,13 @@ namespace {
         {0x0AAEA09B, tooie::interp_tags::mode_vertex}, // map AF at -2678,380,1034, 28 matrices
         {0xD9A9C09E, tooie::interp_tags::mode_vertex}, // map 113 at -38,815,-1829, 1 matrix
         {0x453E57C9, tooie::interp_tags::mode_vertex}, // Banjo (map 113 at -1,16,1524, 72 matrices)
+        // L's interp_tags.txt, 2026-10-18: the opening (map 18B, logos and title flight).
+        {0xD2A9E6F6, tooie::interp_tags::mode_vertex}, // map 18B at 841,6630,-2688, 1 matrix
+        {0x116D58F2, tooie::interp_tags::mode_vertex}, // map 18B at 426,5739,-2452, 1 matrix
+        {0xBB3B4002, tooie::interp_tags::mode_vertex}, // map 18B at 1006,7018,-2780, 2 matrices
+        {0xB5047C23, tooie::interp_tags::mode_vertex}, // map 18B at 248,5359,-2350, 1 matrix
+        {0xF71E10F1, tooie::interp_tags::mode_vertex}, // map 18B at -1058,4038,-1313, 1 matrix
+        {0xED8867CE, tooie::interp_tags::mode_vertex}, // map 18B at 1569,107,-2400, 1 matrix
     };
     // Models drawn without the screen effects by default.
     const uint32_t default_no_effects[] = {
