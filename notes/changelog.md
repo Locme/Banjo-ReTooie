@@ -78,6 +78,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Interpolation pick mode (a Debug key in Controls): click a model or character to step its frame blending tag or turn its screen effects off, saved at once to Dev Files/interp_tags.txt (T422).
 - Shader Effects pick mode (a Debug key in Controls): click a texture to give it Disable, Grass, Deep Snow or Ice Reflection, saved to Dev Files/shader_effect_tags.txt; the parallax and interpolation tag files now go in Dev Files too (T421).
 - Banjo fur length now goes up to 1500 (was 300), for fun (L). The default stays 100.
 - Banjo's fur and Kazooie's feathers now grow on the same parts everywhere: they are picked by his model's own colours instead of the colours as each level lights them, so his coat no longer goes bald in dark or tinted places (the Flooded Caves, Stomping Plains), no fur grows on his skin or shorts in Witchyworld's red light, and Kazooie keeps her feathers underneath where she is lit from behind (L). His cutscene double and model mods other than ones replacing the player model keep the old colour test. Untested on PC (T409).

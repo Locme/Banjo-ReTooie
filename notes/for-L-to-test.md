@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T422 Interpolation pick mode (mouse)
+- Asked: 2026-10-18 08:14 UTC
+- Build: main
+- Steps:
+  1. Set Graphics > Interpolation above Original and bind Interpolation Pick Mode under Debug in Controls
+  2. Press the key and point at Banjo or an NPC: the label names the model and its tag
+  3. Left click steps snap, vertex, untagged, default; middle click turns its screen effects off or on; Shift + left click puts it back
+  4. Open Dev Files next to the save files: interp_tags.txt has the change after each click
+  5. Press the Parallax or Shader Effects pick key: that mode takes over and this one turns off
+- Look for: Does the click land on the character under the cursor, and does its blending change at once?
+- Status: waiting for L
+
 ## T421 Shader Effects pick mode and the Dev Files folder
 - Asked: 2026-10-18 07:58 UTC
 - Build: main
