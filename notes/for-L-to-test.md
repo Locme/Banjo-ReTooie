@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T427 Snout jiggle: longer snout from the mouth corners, second bounce joint
+- Asked: 2026-10-18 19:52 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on, with your settings
+  2. Run, stop, jump and land, and watch from the side
+  3. Close up in Photo Mode mid-wobble
+- Look for: The whole snout now swings from the corners of his mouth, and its front bounces again on top from the old point, a bit faster, so it whips. The mouth still stays put with no gap. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T426 Sand and Smooth parallax shapes, key names in the pick label
 - Asked: 2026-10-18 19:38 UTC
 - Build: main

@@ -25,7 +25,8 @@
 //
 // On the game's own models only the front of the snout is bone 10; the rest of the muzzle is the
 // head's (bone 9). So that the muzzle bends too (L: "the snout part in the vanilla model could go
-// further back"), the head's vertices in front of the snout's root minus the Reach slider take the
+// further back"; 2026-10-18: "all the way down to his mouth point"), the snout swings about the
+// corners of the mouth, and the head's vertices in front of them minus the Reach slider take the
 // snout's turn, blended in towards the front (as skinning does), written into the model's own
 // vertex list each frame; the originals are put back when the option is turned off. The mouth stays
 // out of it (L): the lips and the corners of the mouth don't bend, and the lips on the snout bone are
@@ -68,6 +69,8 @@ namespace {
     constexpr int16_t head_id = 18, snout_id = 42, jaw_id = 74;
     // Snout tip from the snout bone's root in the bind pose (vanilla 062A: root 0,100,35, nose 39-56).
     constexpr float tip_offset[3] = { 0.0f, 5.0f, 17.0f };
+    // The corners of the mouth, behind the snout bone's root (vanilla 062A: z 25 against 35).
+    constexpr float mouth_back = 10.0f;
     // What the sliders scale: at their defaults about 3.5 wobbles a second that die out over about
     // half a second, turning at most 28 degrees.
     constexpr float base_follow = 1.3f;   // the Wobble slider's scale at 100% (shared with the old spring's tuning)
@@ -176,7 +179,7 @@ namespace {
     }
 
     // The model being drawn, and where the snout's root and tip are in its bind pose.
-    struct ModelInfo { bool player = false, jaw = false; Vec root{}, tip{}; uint32_t vtx = 0; int vertices = 0; };
+    struct ModelInfo { bool player = false, jaw = false; Vec root{}, pivot{}, tip{}; uint32_t vtx = 0; int vertices = 0; };
     // The player's model (physical start and end of its asset) while its vertices are rewritten.
     std::atomic<uint32_t> bent_from{ 0 }, bent_to{ 0 };
     bool drawing_player = false;
@@ -207,6 +210,10 @@ namespace {
             info.tip = info.root + Vec{ tip_offset[0], tip_offset[1], tip_offset[2] };
             info.vtx = model + vtx_off;
             info.vertices = (uint16_t)read_half(rdram, info.vtx + 0x16) / 2;
+            // On the game's own models the snout swings from the corners of the mouth (z 25), not from the
+            // snout bone's root (z 35): L, 2026-10-18, "its too short". Mods turn their bone at its root.
+            info.pivot = info.root;
+            if (info.vertices > 0 && info.vertices <= vanilla_vertices) info.pivot.z -= mouth_back;
             info.jaw = count > jaw_bone && read_half(rdram, bone(jaw_bone) + 12) == jaw_id &&
                        read_half(rdram, bone(jaw_bone) + 14) == head_bone;
         }
@@ -312,19 +319,35 @@ namespace {
                  p.x * m[2] + p.y * m[6] + p.z * m[10] + m[14] };
     }
 
+    // An affine map p' = p * L + t (row vectors).
+    struct Affine { Mat L; Vec t; };
+    Affine then(const Affine& a, const Affine& b) { return { mul(a.L, b.L), apply(a.t, b.L) + b.t }; }
+    void apply_affine(const float m[16], const Affine& a, float out[16]) {
+        for (int row = 0; row < 3; row++) {
+            const Vec r = apply({ m[row * 4], m[row * 4 + 1], m[row * 4 + 2] }, a.L);
+            out[row * 4] = r.x; out[row * 4 + 1] = r.y; out[row * 4 + 2] = r.z;
+            out[row * 4 + 3] = m[row * 4 + 3];
+        }
+        const Vec moved = apply(Vec{ m[12], m[13], m[14] }, a.L) + a.t;
+        out[12] = moved.x; out[13] = moved.y; out[14] = moved.z;
+        out[15] = m[15];
+    }
+
     // How much of the mouth a bind position is: 1 at the lips and below, 0 from mouth_top + mouth_band.
     // The snout swings, the mouth stays put (L, 2026-10-17: "it should affect his snout not his mouth").
     float mouth(Vec v) {
         return 1.0f - smooth((v.y - mouth_top) / mouth_band);
     }
 
-    // Bend the muzzle: each head vertex in front of root.z - reach takes the snout's turn Q about its
-    // root (root_posed, where the snout bone puts it), blended in by how far forward it is; the snout
-    // bone's own lips are turned back by the mouth's share. Vertices are in the bind pose: head is the
-    // head's matrix, snout and turned the snout bone's before and after the turn.
-    void bend_muzzle(uint8_t* rdram, const Mat& Q, Vec root_posed, const float head[16], const float snout[16],
+    // Bend the muzzle: each head vertex takes the front joint's turn B (blended in over the few units
+    // behind the snout bone's root), then the mouth joint's turn A (blended in from pivot.z - reach to
+    // the corners of the mouth), both in posed space; the snout bone's own lips are turned back by the
+    // mouth's share. Vertices are in the bind pose: head is the head's matrix, snout and turned the snout
+    // bone's before and after the turns.
+    void bend_muzzle(uint8_t* rdram, const Affine& A, const Affine& B, const float head[16], const float snout[16],
                      const float turned[16]) {
-        const float front = current.root.z, back = current.root.z - settings.reach;
+        const float front = current.pivot.z, back = current.pivot.z - settings.reach;
+        constexpr float front_blend = 6.0f;
         Mat inv_head, inv_turned;
         if (!inverse(upper(head), inv_head) || !inverse(upper(turned), inv_turned)) return;
         std::vector<int16_t> out(muzzle.original.size());
@@ -340,19 +363,18 @@ namespace {
                     v = apply(want - Vec{ turned[12], turned[13], turned[14] }, inv_turned);
                 }
             } else {
-                float w = 0.0f;
-                if (settings.reach > 0.01f) {
-                    w = smooth((v.z - back) / (front - back));
-                    // Leave the brow round the eyes alone (the eyes are selectors and don't move), or
-                    // they come apart (L's photo, 2026-10-17), and the mouth.
-                    w *= 1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f);
-                    w *= 1.0f - mouth(v);
-                }
-                if (w > 0.0f) {
+                // Leave the brow round the eyes alone (the eyes are selectors and don't move), or they come
+                // apart (L's photo, 2026-10-17), and the mouth.
+                const float keep = (1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f)) *
+                                   (1.0f - mouth(v));
+                const float wa = keep * (front > back ? smooth((v.z - back) / (front - back)) : (v.z >= front ? 1.0f : 0.0f));
+                const float wb = keep * smooth((v.z - (current.root.z - front_blend)) / front_blend);
+                if (wa > 0.0f || wb > 0.0f) {
                     const Vec posed = transform(head, v);
-                    const Vec bent = root_posed + apply(posed - root_posed, Q);
-                    const Vec moved = apply(bent - Vec{ head[12], head[13], head[14] }, inv_head);
-                    v = v + (moved - v) * w;
+                    Vec p = posed;
+                    p = p + (apply(p, B.L) + B.t - p) * wb;
+                    p = p + (apply(p, A.L) + A.t - p) * wa;
+                    v = apply(p - Vec{ head[12], head[13], head[14] }, inv_head);
                 }
             }
             out[3 * k] = (int16_t)std::lround(std::clamp(v.x, -32768.0f, 32767.0f));
@@ -466,12 +488,16 @@ namespace {
         Vec prev_tip{}, prev_vel{};
         bool have_vel = false;
         double last = 0.0;            // game time of the last step, seconds
-    } flop;
+    };
+    // Two joints (L, 2026-10-18): the whole snout swings from the corners of the mouth, and its front
+    // bounces again on top from the snout bone's root, faster and a little less far.
+    Flop flop_mouth, flop_front;
+    constexpr float front_speed = 1.8f, front_angle = 0.7f;
 
     // One step per game frame (by the game's own clock, so the shadow pass's second draw and any
     // frame rate give the same swing). Long gaps and warps keep the swing as it is and only forget the
     // speed, so the snout never snaps back to rest (L: "the snout also resets a lot").
-    void update_flop(Vec tip_world, Vec f, Vec u, Vec s) {
+    void update_flop(Flop& flop, Vec tip_world, Vec f, Vec u, Vec s, float speed_scale, float angle_scale) {
         if (tooie::photo_mode::active()) {
             return;
         }
@@ -510,13 +536,13 @@ namespace {
         const float limp = settings.floppiness, heavy = settings.heaviness;
         const Vec push = to_model_dir((v * air + a * (weight * heavy)) * (-settings.follow / base_follow)) * model_scale;
         const Vec gravity = to_model_dir(Vec{ 0.0f, -limp_gravity * limp * heavy, 0.0f }) * model_scale;
-        const float w = 2.0f * pi * settings.frequency / std::sqrt(heavy);
+        const float w = 2.0f * pi * settings.frequency * speed_scale / std::sqrt(heavy);
         // Floppiness 0..100 takes the spring down to limp_stiffness; 100..150 nearly to nothing.
         const float stiff = limp <= 1.0f ? 1.0f + (limp_stiffness - 1.0f) * limp
                                          : limp_stiffness * (1.0f - 0.9f * (limp - 1.0f) / 0.5f);
         const float k = w * w * stiff;
         const float c = 2.0f * settings.damping * std::max(0.05f, 1.0f - 0.7f * limp) * std::sqrt(k);
-        const float max_a = settings.max_angle * pi / 180.0f;
+        const float max_a = settings.max_angle * angle_scale * pi / 180.0f;
         for (float t = 0.0f; t < dt; t += step) {
             const float h = std::min(step, dt - t);
             const float cp = std::cos(flop.pitch), sp = std::sin(flop.pitch);
@@ -545,6 +571,31 @@ namespace {
                 }
             }
         }
+    }
+
+    // A joint's frame: along the arm, the head's up made square to it (towards the eyes), and the side.
+    struct Frame { Vec f, u, s; };
+    Frame frame(Vec arm, Vec up) {
+        Frame r;
+        r.f = arm * (1.0f / length(arm));
+        Vec u = up - r.f * dot(up, r.f);
+        const float lu = length(u);
+        r.u = lu > 1e-4f ? u * (1.0f / lu) : Vec{ 0, 1, 0 };
+        r.s = cross(r.f, r.u);
+        return r;
+    }
+    // The turn that takes the frame's arm to a flop's angles; angle in radians.
+    Mat turn(const Frame& fr, const Flop& flop, float& angle) {
+        angle = 0.0f;
+        const float cy = std::cos(flop.yaw);
+        const Vec dir = fr.f * (std::cos(flop.pitch) * cy) + fr.u * (std::sin(flop.pitch) * cy) + fr.s * std::sin(flop.yaw);
+        const Vec axis = cross(fr.f, dir);
+        const float sin_t = length(axis);
+        if (sin_t < 1e-5f) {
+            return rotation({ 1, 0, 0 }, 0.0f);
+        }
+        angle = std::atan2(sin_t, dot(fr.f, dir));
+        return rotation(axis * (1.0f / sin_t), angle);
     }
 
     // ---- Kazooie's feathers ----
@@ -654,20 +705,6 @@ namespace {
                 }
             }
         }
-    }
-
-    // An affine map p' = p * L + t (row vectors).
-    struct Affine { Mat L; Vec t; };
-    Affine then(const Affine& a, const Affine& b) { return { mul(a.L, b.L), apply(a.t, b.L) + b.t }; }
-    void apply_affine(const float m[16], const Affine& a, float out[16]) {
-        for (int row = 0; row < 3; row++) {
-            const Vec r = apply({ m[row * 4], m[row * 4 + 1], m[row * 4 + 2] }, a.L);
-            out[row * 4] = r.x; out[row * 4 + 1] = r.y; out[row * 4 + 2] = r.z;
-            out[row * 4 + 3] = m[row * 4 + 3];
-        }
-        const Vec moved = apply(Vec{ m[12], m[13], m[14] }, a.L) + a.t;
-        out[12] = moved.x; out[13] = moved.y; out[14] = moved.z;
-        out[15] = m[15];
     }
 
     // Every feather bone's turned matrix, into its copy. list = the matrix list (bone 0's matrix).
@@ -806,65 +843,56 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     if (!snout_on) {
         return;
     }
-    const Vec root = transform(m, current.root);
+    const Vec pivot = transform(m, current.pivot);   // the corners of the mouth (vanilla) or the root
+    const Vec root = transform(m, current.root);     // the snout bone's root: the second joint
     const Vec tip = transform(m, current.tip);
-    const Vec arm = tip - root;
-    const float la = length(arm);
-    if (la < 1e-3f) {
+    if (length(tip - pivot) < 1e-3f || length(tip - root) < 1e-3f) {
         return;
     }
-    // The head's frame at the snout: along it, the head's up (towards the eyes) and to the side.
-    const Vec f = arm * (1.0f / la);
-    Vec u = Vec{ m[4], m[5], m[6] };
-    u = u - f * dot(u, f);
-    const float lu = length(u);
-    u = lu > 1e-4f ? u * (1.0f / lu) : Vec{ 0, 1, 0 };
-    const Vec side = cross(f, u);
-    update_flop(to_world(tip), f, u, side);
-    // Headless: TOOIE_SNOUT_FORCE=<pitch>,<yaw> (degrees) holds the snout at that bend, for close-ups.
+    const Vec head_up{ m[4], m[5], m[6] };
+    const bool two_joints = length(root - pivot) > 1e-3f;
+
+    // First joint: the whole snout about the corners of the mouth.
+    Frame fa = frame(tip - pivot, head_up);
+    update_flop(flop_mouth, to_world(tip), fa.f, fa.u, fa.s, 1.0f, 1.0f);
+    // Headless: TOOIE_SNOUT_FORCE=<pitch>,<yaw> (degrees) holds the first joint at that bend, for close-ups.
     static const char* force = std::getenv("TOOIE_SNOUT_FORCE");
     if (force != nullptr) {
         float fp = 0.0f, fy = 0.0f;
         if (std::sscanf(force, "%f,%f", &fp, &fy) >= 1) {
-            flop.pitch = fp * pi / 180.0f;
-            flop.yaw = fy * pi / 180.0f;
+            flop_mouth.pitch = fp * pi / 180.0f;
+            flop_mouth.yaw = fy * pi / 180.0f;
         }
     }
-
-    // Turn the snout about its root to the flop's angles.
-    const float cp = std::cos(flop.pitch), cy = std::cos(flop.yaw);
-    const Vec dir = f * (cp * cy) + u * (std::sin(flop.pitch) * cy) + side * std::sin(flop.yaw);
-    Mat R = rotation({ 1, 0, 0 }, 0.0f);
     float angle = 0.0f;
-    {
-        const Vec axis = cross(f, dir);
-        const float sin_t = length(axis);
-        if (sin_t > 1e-5f) {
-            angle = std::atan2(sin_t, dot(f, dir));
-            R = rotation(axis * (1.0f / sin_t), angle);
-        }
-    }
+    const Mat Ra = turn(fa, flop_mouth, angle);
     // Size, and squash and stretch along the snout as it swings (thinner as it stretches).
-    const float d[3] = { f.x, f.y, f.z };
-    const float swing = std::sqrt(flop.pitch_v * flop.pitch_v + flop.yaw_v * flop.yaw_v);
+    const float d[3] = { fa.f.x, fa.f.y, fa.f.z };
+    const float swing = std::sqrt(flop_mouth.pitch_v * flop_mouth.pitch_v + flop_mouth.yaw_v * flop_mouth.yaw_v);
     const float st = 1.0f + settings.stretch * std::min(swing / 12.0f, 1.0f);
     const float across = 1.0f / std::sqrt(std::max(st, 0.05f));
     Mat S{};
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
             S.m[i * 3 + j] = settings.size * ((i == j ? across : 0.0f) + (st - across) * d[i] * d[j]);
-    const Mat Q = mul(S, R);   // p' = root + (p - root) * S * R
+    const Mat Qa = mul(S, Ra);   // p' = pivot + (p - pivot) * S * R
+    const Affine A{ Qa, pivot - apply(pivot, Qa) };
 
-    // M' = M * T(-root) * Q * T(root).
-    float out[16];
-    for (int row = 0; row < 3; row++) {
-        const Vec r = apply({ m[row * 4], m[row * 4 + 1], m[row * 4 + 2] }, Q);
-        out[row * 4] = r.x; out[row * 4 + 1] = r.y; out[row * 4 + 2] = r.z;
-        out[row * 4 + 3] = m[row * 4 + 3];
+    // Second joint: the front again about the snout bone's root, in the snout's own frame; its spring
+    // feels the first joint's swing too, so the front whips after it.
+    Affine B{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
+    float angle_b = 0.0f;
+    if (two_joints) {
+        const Frame fb = frame(tip - root, head_up);
+        const Frame fb_now{ apply(fb.f, Ra), apply(fb.u, Ra), apply(fb.s, Ra) };
+        update_flop(flop_front, to_world(apply(tip, Qa) + A.t), fb_now.f, fb_now.u, fb_now.s, front_speed, front_angle);
+        const Mat Rb = turn(fb, flop_front, angle_b);
+        B = { Rb, root - apply(root, Rb) };
     }
-    const Vec moved = apply(Vec{ m[12], m[13], m[14] } - root, Q) + root;
-    out[12] = moved.x; out[13] = moved.y; out[14] = moved.z;
-    out[15] = m[15];
+    const Affine T = then(B, A);
+
+    float out[16];
+    apply_affine(m, T, out);
     for (int i = 0; i < 16; i++) {
         write_float(rdram, matrix_copy + 4 * i, out[i]);
     }
@@ -872,14 +900,14 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
 
     // The muzzle and the mouth on the game's own models.
     if (have_head && prepare_muzzle(rdram)) {
-        bend_muzzle(rdram, Q, root, head_matrix, m, out);
+        bend_muzzle(rdram, A, B, head_matrix, m, out);
     }
     if (logging()) {
         static int n = 0;
         if (++n % 15 == 0) {
-            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f pitch %.1f yaw %.1f angle %.1f stretch %.2f muzzle %zu%s\n",
-                   model_pos.x, model_pos.y, model_pos.z, model_yaw, flop.prev_vel.x, flop.prev_vel.y, flop.prev_vel.z,
-                   flop.pitch * 180.0f / pi, flop.yaw * 180.0f / pi, angle * 180.0f / pi, st, muzzle.index.size(),
+            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f pitch %.1f yaw %.1f angle %.1f front %.1f stretch %.2f muzzle %zu%s\n",
+                   model_pos.x, model_pos.y, model_pos.z, model_yaw, flop_mouth.prev_vel.x, flop_mouth.prev_vel.y, flop_mouth.prev_vel.z,
+                   flop_mouth.pitch * 180.0f / pi, flop_mouth.yaw * 180.0f / pi, angle * 180.0f / pi, angle_b * 180.0f / pi, st, muzzle.index.size(),
                    tooie::photo_mode::active() ? " (photo)" : "");
             fflush(stdout);
         }
