@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Snout jiggle is now an Odyssey-style jiggle bone from the mouth corners to the tip: the tip hangs on a damped spring, so falling pushes the snout up into his face and jumping makes it hang down, and it squashes and stretches to follow. The sliders are cut down to Stiffness, Damping, Mass and Max squash & stretch (L). Untested on PC (T430).
 - Snout jiggle: one joint again, at the corners of the mouth; the underside of the snout now bends down with the rest; new Tilt (rest angle up or down) and Fullness (thickness, volume kept as it stretches) sliders (L). Untested on PC (T429).
 - Snout jiggle: the whole snout now swings from the corners of the mouth, with its front bouncing again on top from the old point (a second, faster joint), so it whips (L). Untested on PC (T427).
 - Ice reflections: Banjo's reflection no longer cuts out when the camera looks down on the ice; it stays under him at every camera height. Seen low across it, the ice keeps its own surface showing through the reflection and no longer ripples like water (L). Untested on PC (T416).

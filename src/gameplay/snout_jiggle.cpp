@@ -10,17 +10,14 @@
 //   (id 42, the snout): asset 062A (Banjo, also alone after Split Up) and 0838 (Banjo with Dragon
 //   Kazooie). A model mod that keeps the skeleton (Smash Banjo) gets the jiggle on whatever it
 //   puts on bone 10.
-// - The snout swings on two angles about its root in the head's own frame (up towards the eyes, and
-//   to the side). Each game frame its tip feels the air against its velocity in the world (the
-//   model's position, turn and scale come from func_800DE498's arguments) and its weight against its
-//   acceleration, so running, turning, jumping, falling, landing and the animation's own head moves
-//   all set it swinging; springs pull it back to straight. A push straight back along the snout
-//   (diving down, a fast run) folds it up towards the eyes once it beats the spring, never sideways
-//   (it leaned right before, L 2026-10-17). It steps by the game's own clock, so it behaves the same
-//   at any frame rate and never snaps back to rest after a hitch.
-// - The sliders under the option set the rest (tooie_snout_jiggle.h); Floppiness takes the spring
-//   away and lets it hang and flop like a shaken hot dog; Heaviness gives it more weight (slower,
-//   bigger swings from starts and stops, more droop) (L, 2026-10-17).
+// - The snout is one jiggle bone from the corners of the mouth to its tip (L, 2026-10-18, after
+//   Unity's single-joint nose jiggle): a point hangs on a damped spring from the tip in the world
+//   (the model's position, turn and scale come from func_800DE498's arguments), and the snout turns
+//   to point at it and stretches or squashes to reach it, keeping its volume. Falling, the point lags
+//   above and the snout pushes up into his face; jumping, it hangs down; stops slap it forward. The
+//   tip moves at most Max squash & stretch times the snout's length from rest. It steps by the
+//   game's own clock, so it behaves the same at any frame rate and never snaps back after a hitch.
+// - Four sliders (tooie_snout_jiggle.h): stiffness, damping, mass, max squash & stretch.
 // - In Photo Mode the swing stops, so the snout stays mid-wobble (L, 2026-10-16).
 //
 // On the game's own models only the front of the snout is bone 10; the rest of the muzzle is the
@@ -71,10 +68,6 @@ namespace {
     constexpr float tip_offset[3] = { 0.0f, 5.0f, 17.0f };
     // The corners of the mouth, behind the snout bone's root (vanilla 062A: z 25 against 35).
     constexpr float mouth_back = 10.0f;
-    // What the sliders scale: at their defaults about 3.5 wobbles a second that die out over about
-    // half a second, turning at most 28 degrees.
-    constexpr float base_follow = 1.3f;   // the Wobble slider's scale at 100% (shared with the old spring's tuning)
-    constexpr float base_angle = 28.0f;   // degrees
     constexpr float teleport = 300.0f;    // world units in one step: a warp, not a move
     constexpr float step = 1.0f / 240.0f;
     // Models with more vertices than this are mods with their own snout: no muzzle bending.
@@ -150,30 +143,22 @@ namespace {
         }
     }
 
-    // The sliders, read once per draw of the player's model.
+    // The sliders, read once per draw of the player's model (L, 2026-10-18: just the jiggle bone's own
+    // four, as Mario's nose in Super Mario Odyssey).
     struct Settings {
-        float follow = base_follow, damping = 0.18f, frequency = 3.5f, max_angle = base_angle;
-        float stretch = 0.5f, size = 0.9f, reach = 6.0f, floppiness = 0.8f, heaviness = 1.0f, fullness = 1.0f;
-        float tilt = 0.0f;   // radians, its rest angle up (+) or down (-)
+        float stiffness = 150.0f;   // spring, per unit of mass
+        float damping = 12.0f;      // against the tip's velocity
+        float mass = 1.0f;
+        float squash = 0.5f;        // how far the tip may move from rest, as a share of the snout's length
+        float reach = 6.0f;         // vanilla model: how far behind the mouth's corners the head blends in
     } settings;
 
     void read_settings() {
         using namespace tooie::snout_jiggle;
-        settings.follow = base_follow * (float)option_number(strength_option, 30.0) / 100.0f;
-        // Bounce 0..100: damping from 0.33 (settles at once) to 0.03 (wobbles for seconds); 50 is 0.18.
-        // Above 100 (up to 150) it falls on to almost nothing: wobbles that hardly die out.
-        const float bounce = std::clamp((float)option_number(bounce_option, 75.0), 0.0f, 150.0f);
-        settings.damping = bounce <= 100.0f ? 0.03f + 0.30f * (1.0f - bounce / 100.0f)
-                                            : 0.03f * (1.0f - 0.85f * (bounce - 100.0f) / 50.0f);
-        settings.frequency = std::clamp((float)option_number(speed_option, 3.0), 0.5f, 20.0f);
-        settings.max_angle = std::min(base_angle * (float)option_number(exaggeration_option, 150.0) / 100.0f, 126.0f);
-        settings.stretch = (float)option_number(stretch_option, 50.0) / 100.0f;
-        settings.size = std::clamp((float)option_number(size_option, 90.0) / 100.0f, 0.25f, 4.0f);
-        settings.reach = std::max((float)option_number(reach_option, 6.0), 0.0f);
-        settings.floppiness = std::clamp((float)option_number(floppiness_option, 80.0), 0.0f, 150.0f) / 100.0f;
-        settings.heaviness = std::clamp((float)option_number(heaviness_option, 100.0), 10.0f, 300.0f) / 100.0f;
-        settings.fullness = std::clamp((float)option_number(fullness_option, 100.0), 25.0f, 300.0f) / 100.0f;
-        settings.tilt = std::clamp((float)option_number(tilt_option, 0.0), -60.0f, 60.0f) * pi / 180.0f;
+        settings.stiffness = std::clamp((float)option_number(stiffness_option, 150.0), 1.0f, 2000.0f);
+        settings.damping = std::clamp((float)option_number(damping_option, 12.0), 0.0f, 200.0f);
+        settings.mass = std::clamp((float)option_number(mass_option, 1.0), 0.05f, 20.0f);
+        settings.squash = std::clamp((float)option_number(squash_option, 50.0), 1.0f, 300.0f) / 100.0f;
     }
 
     bool logging() {
@@ -456,135 +441,48 @@ namespace {
         return rotation(axis * (1.0f / sin_t), angle);
     }
 
-    // ---- the snout's swing (see the top) ----
-    // Two angles about the snout's root, in the head's own frame: pitch (towards the head's up, back
-    // over the eyes) and yaw (to the side). Each game frame the snout's tip feels the air (against its
-    // velocity) and its own weight lagging behind (against its acceleration); springs pull the angles
-    // back to 0. Forward-only speed pushes straight back along the snout, which turns it no way at
-    // all until it buckles: it then folds up towards the eyes (diving down, L 2026-10-17), never to
-    // the side, which is what leaned it to the right before.
-    constexpr float air = 0.25f;          // rad/s^2 per world unit/s of the tip's speed, at 100% wobble
-    constexpr float weight = 0.04f;       // rad/s^2 per world unit/s^2 of the tip's acceleration
-    constexpr float buckle_up = 0.3f;     // of a push back along the snout, how much folds it up
-    constexpr float side_stiffness = 1.6f;
-    constexpr float limp_stiffness = 0.02f;   // spring left at Floppiness 100
-    constexpr float limp_gravity = 40.0f;     // rad/s^2 of droop at Floppiness 100 and Heaviness 100
-
-    struct Flop {
+    // ---- the snout's jiggle bone (see the top) ----
+    // A point hangs on a damped spring from the snout's tip, in the world: F = -stiffness * (point -
+    // tip) - damping * velocity, a = F / mass. The snout points from the corners of the mouth at where
+    // the point is, as long as the head's frame lets it (at most squash * its length away from rest),
+    // and stretches or squashes to reach it, keeping its volume. Falling, the tip lags above and the
+    // snout folds up into the face; jumping, it hangs down; stopping, it slaps forward.
+    struct Jiggle {
         bool started = false;
-        float pitch = 0.0f, yaw = 0.0f, pitch_v = 0.0f, yaw_v = 0.0f;
-        Vec prev_tip{}, prev_vel{};
-        bool have_vel = false;
+        Vec point{}, velocity{};
+        Vec offset{};                 // point - tip after the last step, model space
         double last = 0.0;            // game time of the last step, seconds
-    };
-    // The whole snout swings from the corners of the mouth (L, 2026-10-18; a second joint at the snout
-    // bone's root was tried and taken out).
-    Flop flop_mouth;
+    } jiggle;
 
-    // One step per game frame (by the game's own clock, so the shadow pass's second draw and any
-    // frame rate give the same swing). Long gaps and warps keep the swing as it is and only forget the
-    // speed, so the snout never snaps back to rest (L: "the snout also resets a lot").
-    void update_flop(Flop& flop, Vec tip_world, Vec f, Vec u, Vec s, float speed_scale, float angle_scale) {
+    // One step per game frame by the game's own clock (the shadow pass's second draw and any frame rate
+    // give the same wobble). After a long gap or a warp the point comes back where it was on the snout,
+    // still, so it never snaps to rest (L: "the snout also resets a lot").
+    void update_jiggle(Vec tip_world) {
         if (tooie::photo_mode::active()) {
             return;
         }
         const double now = tooie::game_frame_rate::game_seconds();
-        if (!flop.started) {
-            flop.started = true;
-            flop.prev_tip = tip_world;
-            flop.last = now;
+        const float dt = (float)(now - jiggle.last);
+        const Vec back_on = tip_world + to_world(jiggle.offset) - to_world(Vec{ 0, 0, 0 });
+        if (!jiggle.started || dt > 0.25f || length(tip_world - jiggle.point) > teleport) {
+            jiggle.point = jiggle.started ? back_on : tip_world;
+            jiggle.velocity = {};
+            jiggle.started = true;
+            jiggle.last = now;
             return;
         }
-        const float dt = (float)(now - flop.last);
         if (dt <= 1e-5f) {
             return;
         }
-        flop.last = now;
-        const Vec moved = tip_world - flop.prev_tip;
-        flop.prev_tip = tip_world;
-        if (dt > 0.25f || length(moved) > teleport) {
-            flop.have_vel = false;
-            return;
-        }
-        Vec v = moved * (1.0f / dt);
-        const float vl = length(v);
-        if (vl > 5000.0f) v = v * (5000.0f / vl);
-        Vec a{ 0, 0, 0 };
-        if (flop.have_vel) {
-            a = (v - flop.prev_vel) * (1.0f / dt);
-            const float al = length(a);
-            if (al > 40000.0f) a = a * (40000.0f / al);
-        }
-        flop.prev_vel = v;
-        flop.have_vel = true;
-
-        // Heaviness: a heavier snout swings slower and further from its own weight and droops more;
-        // the air pushes it the same.
-        const float limp = settings.floppiness, heavy = settings.heaviness;
-        const Vec push = to_model_dir((v * air + a * (weight * heavy)) * (-settings.follow / base_follow)) * model_scale;
-        const Vec gravity = to_model_dir(Vec{ 0.0f, -limp_gravity * limp * heavy, 0.0f }) * model_scale;
-        const float w = 2.0f * pi * settings.frequency * speed_scale / std::sqrt(heavy);
-        // Floppiness 0..100 takes the spring down to limp_stiffness; 100..150 nearly to nothing.
-        const float stiff = limp <= 1.0f ? 1.0f + (limp_stiffness - 1.0f) * limp
-                                         : limp_stiffness * (1.0f - 0.9f * (limp - 1.0f) / 0.5f);
-        const float k = w * w * stiff;
-        const float c = 2.0f * settings.damping * std::max(0.05f, 1.0f - 0.7f * limp) * std::sqrt(k);
-        const float max_a = settings.max_angle * angle_scale * pi / 180.0f;
+        jiggle.last = now;
+        const float k = settings.stiffness, c = settings.damping, inv_m = 1.0f / settings.mass;
         for (float t = 0.0f; t < dt; t += step) {
             const float h = std::min(step, dt - t);
-            const float cp = std::cos(flop.pitch), sp = std::sin(flop.pitch);
-            const float cy = std::cos(flop.yaw), sy = std::sin(flop.yaw);
-            const Vec dir = f * (cp * cy) + u * (sp * cy) + s * sy;
-            const Vec t_pitch = (f * (-sp) + u * cp) * cy;
-            const Vec t_yaw = (f * cp + u * sp) * (-sy) + s * cy;
-            const Vec F = push + gravity;
-            const float pitch_a = dot(F, t_pitch) + buckle_up * std::max(0.0f, -dot(push, dir))
-                                  - k * (flop.pitch - settings.tilt) - c * flop.pitch_v;
-            const float yaw_a = dot(F, t_yaw) - k * side_stiffness * flop.yaw - c * flop.yaw_v;
-            flop.pitch_v += pitch_a * h;
-            flop.yaw_v += yaw_a * h;
-            flop.pitch += flop.pitch_v * h;
-            flop.yaw += flop.yaw_v * h;
-            // At the Exaggeration limit it bounces back a little instead of sticking.
-            // (Measured from the Tilt slider's rest angle.)
-            const float off = flop.pitch - settings.tilt;
-            const float bend = std::sqrt(off * off + flop.yaw * flop.yaw);
-            if (bend > max_a && bend > 1e-6f) {
-                const float rp = off / bend, ry = flop.yaw / bend;
-                flop.pitch = settings.tilt + rp * max_a;
-                flop.yaw = ry * max_a;
-                const float out = flop.pitch_v * rp + flop.yaw_v * ry;
-                if (out > 0.0f) {
-                    flop.pitch_v -= 1.3f * out * rp;
-                    flop.yaw_v -= 1.3f * out * ry;
-                }
-            }
+            const Vec accel = ((jiggle.point - tip_world) * (-k) - jiggle.velocity * c) * inv_m;
+            jiggle.velocity = jiggle.velocity + accel * h;
+            jiggle.point = jiggle.point + jiggle.velocity * h;
         }
-    }
-
-    // A joint's frame: along the arm, the head's up made square to it (towards the eyes), and the side.
-    struct Frame { Vec f, u, s; };
-    Frame frame(Vec arm, Vec up) {
-        Frame r;
-        r.f = arm * (1.0f / length(arm));
-        Vec u = up - r.f * dot(up, r.f);
-        const float lu = length(u);
-        r.u = lu > 1e-4f ? u * (1.0f / lu) : Vec{ 0, 1, 0 };
-        r.s = cross(r.f, r.u);
-        return r;
-    }
-    // The turn that takes the frame's arm to a flop's angles; angle in radians.
-    Mat turn(const Frame& fr, const Flop& flop, float& angle) {
-        angle = 0.0f;
-        const float cy = std::cos(flop.yaw);
-        const Vec dir = fr.f * (std::cos(flop.pitch) * cy) + fr.u * (std::sin(flop.pitch) * cy) + fr.s * std::sin(flop.yaw);
-        const Vec axis = cross(fr.f, dir);
-        const float sin_t = length(axis);
-        if (sin_t < 1e-5f) {
-            return rotation({ 1, 0, 0 }, 0.0f);
-        }
-        angle = std::atan2(sin_t, dot(fr.f, dir));
-        return rotation(axis * (1.0f / sin_t), angle);
+        jiggle.offset = to_model_dir(jiggle.point - tip_world);
     }
 
     // ---- Kazooie's feathers ----
@@ -839,33 +737,52 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     }
     const Vec head_up{ m[4], m[5], m[6] };
 
-    // The whole snout about the corners of the mouth.
-    Frame fa = frame(tip - pivot, head_up);
-    update_flop(flop_mouth, to_world(tip), fa.f, fa.u, fa.s, 1.0f, 1.0f);
-    // Headless: TOOIE_SNOUT_FORCE=<pitch>,<yaw> (degrees) holds the snout at that bend, for close-ups.
+    update_jiggle(to_world(tip));
+    // Where the tip is now, in model space, held to squash * the snout's length from rest.
+    const Vec arm = tip - pivot;
+    const float la = length(arm);
+    Vec offset = to_model_dir(jiggle.point - to_world(tip));
+    // Headless: TOOIE_SNOUT_FORCE=<up>,<side> (degrees) holds the tip there, for close-ups.
     static const char* force = std::getenv("TOOIE_SNOUT_FORCE");
     if (force != nullptr) {
         float fp = 0.0f, fy = 0.0f;
         if (std::sscanf(force, "%f,%f", &fp, &fy) >= 1) {
-            flop_mouth.pitch = fp * pi / 180.0f;
-            flop_mouth.yaw = fy * pi / 180.0f;
+            const Vec f = arm * (1.0f / la);
+            Vec u = head_up - f * dot(head_up, f);
+            u = u * (1.0f / std::max(length(u), 1e-4f));
+            const Vec sd = cross(f, u);
+            const float p = fp * pi / 180.0f, y = fy * pi / 180.0f;
+            offset = (f * (std::cos(p) * std::cos(y)) + u * (std::sin(p) * std::cos(y)) + sd * std::sin(y)) * la - arm;
         }
     }
+    const float limit = settings.squash * la;
+    if (length(offset) > limit) {
+        offset = offset * (limit / length(offset));
+    }
+    const Vec want = arm + offset;
+    const float lw = std::max(length(want), 0.05f * la);
+    // Turn the snout to point at it...
+    Mat R = rotation({ 1, 0, 0 }, 0.0f);
     float angle = 0.0f;
-    const Mat Ra = turn(fa, flop_mouth, angle);
-    // Size, and squash and stretch along the snout as it swings (thinner as it stretches).
-    const float d[3] = { fa.f.x, fa.f.y, fa.f.z };
-    const float swing = std::sqrt(flop_mouth.pitch_v * flop_mouth.pitch_v + flop_mouth.yaw_v * flop_mouth.yaw_v);
-    const float st = 1.0f + settings.stretch * std::min(swing / 12.0f, 1.0f);
-    // Fullness: how thick the snout is; stretching keeps its volume (thinner as it gets longer).
-    const float across = settings.fullness / std::sqrt(std::max(st, 0.05f));
+    {
+        const Vec a = arm * (1.0f / la), b = want * (1.0f / lw);
+        const Vec axis = cross(a, b);
+        const float sin_t = length(axis);
+        if (sin_t > 1e-5f) {
+            angle = std::atan2(sin_t, dot(a, b));
+            R = rotation(axis * (1.0f / sin_t), angle);
+        }
+    }
+    // ...and stretch or squash along it to reach it, keeping its volume (thinner as it gets longer).
+    const float st = lw / la;
+    const float d[3] = { arm.x / la, arm.y / la, arm.z / la };
+    const float across = 1.0f / std::sqrt(st);
     Mat S{};
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
-            S.m[i * 3 + j] = settings.size * ((i == j ? across : 0.0f) + (st - across) * d[i] * d[j]);
-    const Mat Qa = mul(S, Ra);   // p' = pivot + (p - pivot) * S * R
+            S.m[i * 3 + j] = (i == j ? across : 0.0f) + (st - across) * d[i] * d[j];
+    const Mat Qa = mul(S, R);   // p' = pivot + (p - pivot) * S * R
     const Affine A{ Qa, pivot - apply(pivot, Qa) };
-
     const Affine T = A;
 
     float out[16];
@@ -882,9 +799,9 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     if (logging()) {
         static int n = 0;
         if (++n % 15 == 0) {
-            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f pitch %.1f yaw %.1f angle %.1f stretch %.2f muzzle %zu%s\n",
-                   model_pos.x, model_pos.y, model_pos.z, model_yaw, flop_mouth.prev_vel.x, flop_mouth.prev_vel.y, flop_mouth.prev_vel.z,
-                   flop_mouth.pitch * 180.0f / pi, flop_mouth.yaw * 180.0f / pi, angle * 180.0f / pi, st, muzzle.index.size(),
+            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f offset %.1f,%.1f,%.1f angle %.1f stretch %.2f muzzle %zu%s\n",
+                   model_pos.x, model_pos.y, model_pos.z, model_yaw, jiggle.velocity.x, jiggle.velocity.y, jiggle.velocity.z,
+                   offset.x, offset.y, offset.z, angle * 180.0f / pi, st, muzzle.index.size(),
                    tooie::photo_mode::active() ? " (photo)" : "");
             fflush(stdout);
         }

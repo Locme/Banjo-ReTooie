@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T430 Snout jiggle: Odyssey-style jiggle bone, four sliders
+- Asked: 2026-10-18 21:37 UTC
+- Build: main
+- Steps:
+  1. Turn on General > Snout jiggle; the sliders are now Stiffness, Damping, Mass and Max squash & stretch (defaults 150, 12, 1, 50%)
+  2. Jump, then fall from a height, dive and land
+  3. Run, stop sharply and turn
+  4. Try low stiffness with high mass, then high stiffness with low damping
+- Look for: Falling pushes the snout up into his face and jumping makes it hang down; stops slap it forward; it squashes and stretches as it moves; the mouth stays closed with no gap; no snapping back to rest. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T429 Snout jiggle: one joint at the mouth, Tilt and Fullness, underside bends down
 - Asked: 2026-10-18 20:25 UTC
 - Build: main

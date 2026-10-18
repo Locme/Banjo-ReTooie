@@ -5,7 +5,7 @@
 
 // General > Snout jiggle (src/gameplay/snout_jiggle.cpp): Banjo's snout wobbles on a spring as he
 // moves, like Mario's nose in Super Mario Odyssey. Works with player-model mods that keep his
-// skeleton (Smash Banjo). The sliders under it shape the wobble.
+// skeleton (Smash Banjo). Four sliders under it: stiffness, damping, mass, max squash & stretch.
 #include <cstdint>
 
 namespace tooie::snout_jiggle {
@@ -20,17 +20,11 @@ namespace tooie::snout_jiggle {
     inline const std::string kazooie_bounce_option = "kazooie_jiggle_bounce";
     inline const std::string kazooie_speed_option = "kazooie_jiggle_speed";
     inline const std::string kazooie_exaggeration_option = "kazooie_jiggle_exaggeration";
-    inline const std::string strength_option = "snout_jiggle_strength";       // % of the default swing
-    inline const std::string bounce_option = "snout_jiggle_bounce";           // 0 stiff .. 100 wobbles for ages
-    inline const std::string speed_option = "snout_jiggle_speed";             // wobbles a second
-    inline const std::string exaggeration_option = "snout_jiggle_exaggeration"; // % of the largest swing
-    inline const std::string stretch_option = "snout_jiggle_stretch";         // % squash and stretch
-    inline const std::string size_option = "snout_jiggle_size";               // % snout size
-    inline const std::string reach_option = "snout_jiggle_reach";             // vanilla model: how far back it bends
-    inline const std::string floppiness_option = "snout_jiggle_floppiness";   // 0 springy .. 150 limp, flops like a hot dog
-    inline const std::string heaviness_option = "snout_jiggle_heaviness";     // % of its weight: slower, bigger swings, more droop
-    inline const std::string tilt_option = "snout_jiggle_tilt";               // degrees its rest angle points up (+) or down (-)
-    inline const std::string fullness_option = "snout_jiggle_fullness";       // % thickness; stretching keeps the volume
+    // The jiggle bone (L, 2026-10-18): a point on a damped spring from the tip.
+    inline const std::string stiffness_option = "snout_jiggle_stiffness";
+    inline const std::string damping_option = "snout_jiggle_damping";
+    inline const std::string mass_option = "snout_jiggle_mass";
+    inline const std::string squash_option = "snout_jiggle_squash";           // % of its length the tip may move
 }
 
 #endif

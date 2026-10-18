@@ -288,30 +288,15 @@ void tooie::init_config() {
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(strength_option, "Snout jiggle: wobble",
-            "How far the snout swings when Banjo moves.", 0, 600, 10, 0, true, 30);
-        general.add_number_option(bounce_option, "Snout jiggle: bounce",
-            "How long it keeps wobbling. 0 settles at once, 100 wobbles for seconds, 150 hardly stops.", 0, 150, 5, 0, false, 75);
-        general.add_number_option(speed_option, "Snout jiggle: speed",
-            "Wobbles per second.", 0.5, 18, 0.5, 1, false, 3);
-        general.add_number_option(exaggeration_option, "Snout jiggle: exaggeration",
-            "How far the snout may bend before it stops: 100% is 28 degrees, 300% nearly a right angle, 450% folds right back.", 25, 450, 25, 0, true, 150);
-        general.add_number_option(stretch_option, "Snout jiggle: stretch",
-            "Cartoon squash and stretch: the snout gets longer and thinner as it swings.", 0, 300, 10, 0, true, 50);
-        general.add_number_option(size_option, "Snout jiggle: snout size",
-            "Makes Banjo's snout bigger or smaller.", 50, 375, 10, 0, true, 90);
-        general.add_number_option(reach_option, "Snout jiggle: reach",
-            "On Banjo's own model, how far back from the nose the snout bends (0: the nose only). Model mods with their own snout ignore it.", 0, 60, 2, 0, false, 6);
-        general.add_number_option(floppiness_option, "Snout jiggle: floppiness",
-            "How limp the snout is. 0 is springy; 100 has almost no spring, so it droops and flops about like a shaken hot dog even while Banjo stands still; 150 is limper still.", 0, 150, 5, 0, true, 80);
-        general.add_number_option(heaviness_option, "Snout jiggle: heaviness",
-            "How heavy the snout is: heavier swings slower and further when Banjo starts, stops and lands, and droops more. The air pushes it the same.", 10, 300, 10, 0, true, 100);
-        general.add_number_option(tilt_option, "Snout jiggle: tilt",
-            "Where the snout points at rest: up towards his eyes (positive) or down (negative), in degrees. It wobbles round that.", -60, 60, 5, 0, false, 0);
-        general.add_number_option(fullness_option, "Snout jiggle: fullness",
-            "How full and thick the snout is. It keeps the same volume as it swings and stretches.", 25, 300, 10, 0, true, 100);
-        for (const std::string* id : { &strength_option, &bounce_option, &speed_option, &exaggeration_option,
-                                       &stretch_option, &size_option, &reach_option, &floppiness_option, &heaviness_option, &tilt_option, &fullness_option }) {
+        general.add_number_option(stiffness_option, "Snout jiggle: stiffness",
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 600, 10, 0, false, 150);
+        general.add_number_option(damping_option, "Snout jiggle: damping",
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 60, 1, 0, false, 12);
+        general.add_number_option(mass_option, "Snout jiggle: mass",
+            "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 5, 0.1, 1, false, 1);
+        general.add_number_option(squash_option, "Snout jiggle: max squash & stretch",
+            "How far the tip may move from rest, as a share of the snout's length. The snout squashes into his face and stretches out to follow it.", 5, 150, 5, 0, true, 50);
+        for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_option }) {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
