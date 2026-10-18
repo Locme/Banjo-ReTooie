@@ -2011,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..e0bbfcb 100644
+index 9fae0d4..20e38c3 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3087,7 +3087,7 @@ index 9fae0d4..e0bbfcb 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2647,979 @@ namespace RT64 {
+@@ -1747,24 +2647,980 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3434,7 +3434,7 @@ index 9fae0d4..e0bbfcb 100644
 +                        const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex].tmemHashOrID;
 +                        if (textureCacheReplacementMapEnabled && (textureCacheHeightBases.find(hash) != textureCacheHeightBases.end())) {
 +                            // (With the shape, depth and shadows picked for it, if any.)
-+                            parallax = (RASTER_PARALLAX_HEIGHT_MAP >> 8) | (SceneParallaxTexture(hash) & 0x1FE0000u);
++                            parallax = (RASTER_PARALLAX_HEIGHT_MAP >> 8) | (SceneParallaxTexture(hash) & 0x3FFE0000u);
 +                        }
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (parallax == 0); t++) {
 +                            parallax = SceneParallaxTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
@@ -3593,7 +3593,8 @@ index 9fae0d4..e0bbfcb 100644
 +                    }
 +                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
-+                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH)) : 0));
++                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
++                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
 +
                  instanceDrawCallVector.push_back(instanceDrawCall);
@@ -5840,10 +5841,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..80aee35
+index 0000000..0cf3e99
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2329 @@
+@@ -0,0 +1,2331 @@
 +//
 +// RT64
 +//
@@ -6438,14 +6439,16 @@ index 0000000..80aee35
 +        return textureSeamsBlend;
 +    }
 +
-+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles) {
++    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths) {
 +        std::unordered_map<uint64_t, uint32_t> textures;
 +        for (size_t i = 0; i < count; i++) {
 +            // The style goes in bits 17 to 23, which the renderer moves up by 8 into RasterParams.nightLight, and the shape's
-+            // bit 3 (style bit 7) in bit 24, which the renderer moves to RASTER_PARALLAX_SHAPE_HIGH.
++            // bit 3 (style bit 7) in bit 24, which the renderer moves to RASTER_PARALLAX_SHAPE_HIGH, and a fine depth in bits
++            // 25 to 29, which it moves to RASTER_PARALLAX_FINE_DEPTH.
 +            const uint32_t style = (styles != nullptr) ? uint32_t(styles[i]) : 0u;
++            const uint32_t fine = (fineDepths != nullptr) ? (uint32_t(fineDepths[i]) & 0x1Fu) : 0u;
 +            textures[hashes[i]] = uint32_t(ranges[i * 2]) | (uint32_t(std::max(ranges[i * 2 + 1], uint8_t(ranges[i * 2] + 1))) << 8) |
-+                ((style & 0x7Fu) << 17) | ((style & 0x80u) << 17);
++                ((style & 0x7Fu) << 17) | ((style & 0x80u) << 17) | (fine << 25);
 +        }
 +        const std::scoped_lock lock(parallaxMutex);
 +        parallaxTextures.swap(textures);
@@ -8175,10 +8178,10 @@ index 0000000..80aee35
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..46fe214
+index 0000000..ccd908b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,384 @@
+@@ -0,0 +1,385 @@
 +//
 +// RT64
 +//
@@ -8517,7 +8520,8 @@ index 0000000..46fe214
 +    // ranges: each texture's darkest and lightest brightness (0 to 255, two a texture), its deepest and highest parts.
 +    // styles (or none): each texture's shape (bits 0 to 2), depth (3 to 5) and no shadows (6), as
 +    // RASTER_PARALLAX_NO_SHADOWS and the bits beside it in rt64_raster_params.h.
-+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles = nullptr);
++    // fineDepths: 0 for the style's depth, else the depth in 10% steps (1 to 31).
++    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles = nullptr, const uint8_t *fineDepths = nullptr);
 +    // Banjo-Tooie: parallax pick mode: the cursor (x, y from 0 to 1 across the window) picks the nearest textured
 +    // surface of the 3D world under it, or the one layer deeper, and draws with that texture are highlighted.
 +    void SetScenePick(bool on, float x, float y, uint32_t layer);
@@ -11163,10 +11167,10 @@ index 0000000..b3907b6
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..7729004
+index 0000000..7012659
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,252 @@
 +//
 +// RT64
 +//
@@ -11302,7 +11306,8 @@ index 0000000..7729004
 +    // The texture's own shape, depth and shadows (RasterParams.nightLight, rt64_raster_params.h).
 +    const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
 +    float4 params = FrParams.parallaxParams;
-+    params.x *= ParallaxDepthScale((bits >> 28) & 0x7u);
++    const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
++    params.x *= (fineDepth != 0) ? (float(fineDepth) * 0.1f) : ParallaxDepthScale((bits >> 28) & 0x7u);
 +    const float4 shading = ((bits & RASTER_PARALLAX_NO_SHADOWS) != 0) ? float4(0.0f, 0.0f, 0.0f, 0.0f) : FrParams.parallaxShading;
 +    const float3 p = ParallaxViewPosition(pixelPosition);
 +    const float3 dp1 = ddx(p);
@@ -15808,10 +15813,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..9980829 100644
+index 0a5c332..d89b270 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,64 @@
+@@ -9,11 +9,67 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -15846,6 +15851,9 @@ index 0a5c332..9980829 100644
 +// 13 tiles, 14 sand, 15 smooth), its depth in 28 to 30 (0 100%, 1 25%, 2 50%, 3 150%, 4 200%, 5 300%) and no shadows in 31.
 +#define RASTER_PARALLAX_NO_SHADOWS 0x80000000u
 +#define RASTER_PARALLAX_SHAPE_HIGH 0x4u
++// Banjo-Tooie: a texture's depth in 10% steps (1 to 31), instead of the depth bits, when not 0.
++#define RASTER_PARALLAX_FINE_DEPTH 0xF8u
++#define RASTER_PARALLAX_FINE_DEPTH_SHIFT 3
 +    // Banjo-Tooie: no piece beside the draw on that side (RasterParams.seamTiles).
 +#define RASTER_SEAM_NONE 0xFFFFFFFFu
 +

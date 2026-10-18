@@ -75,6 +75,9 @@ namespace tooie::interp_tags {
     size_t unsaved_count();
     // The Delete All Changes button: every tag back as the file has it. Returns how many changed.
     size_t discard_changes();
+    // A model's live tag and screen effects (for Copy Pick and Undo Pick), and setting them.
+    void live(uint32_t model, int& mode, bool& no_effects_on);
+    void set_live(uint32_t model, int mode, bool no_effects_on);
     // The Delete Saved Pick key: the model back to default, in the game and the file (other unsaved tags stay unsaved).
     void unsave(uint32_t model);
 }

@@ -55,14 +55,14 @@ namespace {
     std::atomic<uint32_t> picks_version{1};
 
     bool same_pick(const Pick& a, const Pick& b) {
-        return (a.off == b.off) && (a.off || ((a.shape == b.shape) && (a.depth == b.depth) && (a.shadows == b.shadows)));
+        return (a.off == b.off) && (a.off || ((a.shape == b.shape) && (a.depth == b.depth) && (a.fine == b.fine) && (a.shadows == b.shadows)));
     }
 
     const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded",
         "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth" };
     const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded",
         "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth" };
-    const int depth_percent[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
+    const int depth_percents[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
     // Right click goes up from 100%, then round from the shallowest.
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
 
@@ -92,10 +92,16 @@ namespace {
                     }
                 }
                 const int percent = std::atoi(depth_text.c_str());
+                bool preset = false;
                 for (int d = 0; d < tooie::parallax_pick::depth_count; d++) {
-                    if (percent == depth_percent[d]) {
+                    if (percent == depth_percents[d]) {
                         pick.depth = uint8_t(d);
+                        preset = true;
                     }
+                }
+                // Any other depth is a fine one (Shift + wheel), in 10% steps.
+                if (!preset && (percent > 0)) {
+                    pick.fine = uint8_t(std::clamp((percent + 5) / 10, 1, 31));
                 }
                 pick.shadows = (shadows_text != "noshadows");
             }
@@ -120,7 +126,7 @@ namespace {
             if (pick.off) {
                 out << text << " off\n";
             } else {
-                out << text << " " << shape_names[pick.shape] << " " << depth_percent[pick.depth] << "% " << (pick.shadows ? "shadows" : "noshadows") << "\n";
+                out << text << " " << shape_names[pick.shape] << " " << pick.depth_percent() << "% " << (pick.shadows ? "shadows" : "noshadows") << "\n";
             }
         }
     }
@@ -230,7 +236,7 @@ namespace {
             snprintf(text, sizeof(text), "%016llx\nOff (%s%s)", (unsigned long long)hash, own ? "yours" : "built-in", unsaved_note(hash));
         } else {
             snprintf(text, sizeof(text), "%016llx\n%s, %d%%, %s (%s%s)", (unsigned long long)hash, shape_labels[pick.shape],
-                depth_percent[pick.depth], pick.shadows ? "shadows" : "no shadows", own ? "yours" : "built-in", unsaved_note(hash));
+                pick.depth_percent(), pick.shadows ? "shadows" : "no shadows", own ? "yours" : "built-in", unsaved_note(hash));
         }
         std::string result = text;
         if (layers > 1) {
@@ -394,6 +400,39 @@ namespace {
     }
 
     // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, built-in again.
+    // A texture's effect pick as it stands (had = false: none, the built-in choice), and setting it back.
+    bool effect_of(uint64_t hash, Effect& effect) {
+        std::lock_guard lock{ effects_mutex };
+        const auto it = effects.find(hash);
+        if (it == effects.end()) {
+            return false;
+        }
+        effect = it->second;
+        return true;
+    }
+
+    void set_effect(uint64_t hash, bool had, Effect effect) {
+        {
+            std::lock_guard lock{ effects_mutex };
+            if (had) {
+                effects[hash] = effect;
+            } else {
+                effects.erase(hash);
+            }
+        }
+        effects_version.fetch_add(1);
+    }
+
+    bool pick_of(uint64_t hash, Pick& pick) {
+        std::lock_guard lock{ picks_mutex };
+        const auto it = picks.find(hash);
+        if (it == picks.end()) {
+            return false;
+        }
+        pick = it->second;
+        return true;
+    }
+
     void step_effect(uint64_t hash, bool reset) {
         {
             std::lock_guard lock{ effects_mutex };
@@ -635,6 +674,52 @@ namespace {
         }
         bool key_was_down[3] = {};
         bool save_was_down = false, delete_was_down = false;
+        bool copy_was_down = false, paste_was_down = false, undo_was_down = false;
+        // Undo Pick's history: each texture or model as it was before a change, newest last.
+        struct Undo {
+            Mode mode;
+            uint64_t key;
+            bool had;
+            Pick pick;
+            Effect effect;
+            int interp_mode;
+            bool no_effects;
+        };
+        std::vector<Undo> undo_stack;
+        // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode).
+        Undo copied{ mode_off, 0, false, Pick{}, tooie::effect_pick::effect_disable, 0, false };
+        // The texture or model's state now, in the mode's terms.
+        auto snapshot = [&](Mode m, uint64_t key) {
+            Undo u{ m, key, false, Pick{}, tooie::effect_pick::effect_disable, tooie::interp_tags::mode_default, false };
+            if (m == mode_parallax) {
+                u.had = pick_of(key, u.pick);
+            } else if (m == mode_effects) {
+                u.had = effect_of(key, u.effect);
+            } else if (m == mode_interp) {
+                tooie::interp_tags::live(uint32_t(key), u.interp_mode, u.no_effects);
+                u.had = true;
+            }
+            return u;
+        };
+        // Puts a snapshot's state on a texture or model (key), as a change the pick modes see at once.
+        auto apply = [&](const Undo& u, uint64_t key) {
+            if (u.mode == mode_parallax) {
+                set(key, u.had ? &u.pick : nullptr);
+            } else if (u.mode == mode_effects) {
+                set_effect(key, u.had, u.effect);
+            } else if (u.mode == mode_interp) {
+                tooie::interp_tags::set_live(uint32_t(key), u.interp_mode, u.no_effects);
+            }
+        };
+        auto remember = [&](Mode m, uint64_t key) {
+            if (key == 0) {
+                return;
+            }
+            undo_stack.push_back(snapshot(m, key));
+            if (undo_stack.size() > 200) {
+                undo_stack.erase(undo_stack.begin());
+            }
+        };
         uint32_t buttons_were = 0;
         int32_t wheel_was = recompinput::get_mouse_wheel_pos();
         uint32_t layer = 0;
@@ -709,6 +794,8 @@ namespace {
             wheel_was = wheel;
             const int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
             bool press_save = false, press_delete = false, press_save_all = false, press_discard = false;
+            bool press_copy = false, press_paste = false, press_undo = false;
+            int32_t depth_steps = 0;
             while (!script.empty() && (script.front().at <= ms)) {
                 const std::string& what = script.front().what;
                 press_save = press_save || (what == "save");
@@ -720,6 +807,10 @@ namespace {
                 middle = middle || (what == "middle");
                 reset = reset || (what == "reset");
                 deeper += (what == "deeper") ? 1 : 0;
+                press_copy = press_copy || (what == "copy");
+                press_paste = press_paste || (what == "paste");
+                press_undo = press_undo || (what == "undo");
+                depth_steps += (what == "depthup") ? 1 : ((what == "depthdown") ? -1 : 0);
                 script.erase(script.begin());
             }
             // A left click on Save All saves every unsaved pick of this mode, and on Delete All Changes puts every pick
@@ -737,6 +828,21 @@ namespace {
             press_delete = press_delete || (delete_down && !delete_was_down);
             save_was_down = save_down;
             delete_was_down = delete_down;
+            // Copy Pick, Paste Pick and Undo Pick.
+            const bool copy_down = tooie::hotkeys::down(recompinput::GameInput::PICK_COPY);
+            const bool paste_down = tooie::hotkeys::down(recompinput::GameInput::PICK_PASTE);
+            const bool undo_down = tooie::hotkeys::down(recompinput::GameInput::PICK_UNDO);
+            press_copy = press_copy || (copy_down && !copy_was_down);
+            press_paste = press_paste || (paste_down && !paste_was_down);
+            press_undo = press_undo || (undo_down && !undo_was_down);
+            copy_was_down = copy_down;
+            paste_was_down = paste_down;
+            undo_was_down = undo_down;
+            // In parallax pick mode, Shift + wheel steps the depth by 10% (down deeper) instead of the layer.
+            if (on && shift && (deeper != 0)) {
+                depth_steps += deeper;
+                deeper = 0;
+            }
             if (deeper > 0) {
                 layer += uint32_t(deeper);
             } else if (deeper < 0) {
@@ -772,7 +878,56 @@ namespace {
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
             }
+            {
+                // What the keys act on: the texture under the cursor, or in interpolation pick mode its model.
+                const uint64_t key = interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash;
+                char text[160] = {};
+                if (press_undo) {
+                    if (undo_stack.empty() || (undo_stack.back().mode != mode)) {
+                        snprintf(text, sizeof(text), "Nothing to undo in this pick mode");
+                    } else {
+                        const Undo u = undo_stack.back();
+                        undo_stack.pop_back();
+                        apply(u, u.key);
+                        snprintf(text, sizeof(text), "Undone: %016llx as it was", (unsigned long long)u.key);
+                    }
+                } else if (press_copy) {
+                    if (key == 0) {
+                        snprintf(text, sizeof(text), "Nothing under the cursor to copy");
+                    } else {
+                        copied = snapshot(mode, key);
+                        snprintf(text, sizeof(text), "Copied %016llx's pick", (unsigned long long)key);
+                    }
+                } else if (press_paste) {
+                    if (key == 0) {
+                        snprintf(text, sizeof(text), "Nothing under the cursor to paste on");
+                    } else if (copied.mode != mode) {
+                        snprintf(text, sizeof(text), "Copy a pick in this pick mode first");
+                    } else {
+                        remember(mode, key);
+                        apply(copied, key);
+                        snprintf(text, sizeof(text), "Pasted onto %016llx (not saved yet)", (unsigned long long)key);
+                    }
+                } else if ((depth_steps != 0) && (hash != 0)) {
+                    remember(mode, hash);
+                    bool own = false;
+                    Pick pick = current(hash, own);
+                    const int percent = std::clamp(pick.depth_percent() / 10 + int(depth_steps), 1, 31) * 10;
+                    pick.off = false;
+                    pick.fine = uint8_t(percent / 10);
+                    set(hash, &pick);
+                    snprintf(text, sizeof(text), "%016llx: depth %d%%", (unsigned long long)hash, percent);
+                }
+                if (text[0] != '\0') {
+                    tooie::toast::show(text);
+                    fprintf(stderr, "[pick] %s\n", text);
+                    shown_hash = UINT64_MAX;
+                }
+            }
             if (press_save || press_delete) {
+                if (press_delete) {
+                    remember(mode, interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash);
+                }
                 const uint32_t model = interp_on ? tooie::interp_tags::hovered() : 0;
                 const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt");
                 char name[32];
@@ -810,6 +965,9 @@ namespace {
             if (interp_on) {
                 const uint32_t model = tooie::interp_tags::hovered();
                 if ((model != 0) && (model == tooie::interp_tags::picked())) {
+                    if (left || middle || reset) {
+                        remember(mode, model);
+                    }
                     if (reset) {
                         tooie::interp_tags::reset(model);
                     } else if (left) {
@@ -850,6 +1008,7 @@ namespace {
             }
             if (effects_on) {
                 if ((hash != 0) && (left || reset)) {
+                    remember(mode, hash);
                     step_effect(hash, reset);
                     fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
                 }
@@ -872,6 +1031,7 @@ namespace {
                 continue;
             }
             if ((hash != 0) && (left || right || middle || reset)) {
+                remember(mode, hash);
                 bool own = false;
                 Pick pick = current(hash, own);
                 if (reset) {
@@ -890,6 +1050,7 @@ namespace {
                     }
                     if (right) {
                         pick.depth = pick.off ? 0 : depth_next[pick.depth];
+                        pick.fine = 0;
                         pick.off = false;
                     }
                     if (middle) {
@@ -947,4 +1108,8 @@ void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effect
     for (const auto& [hash, effect] : effects) {
         visit(hash, effect);
     }
+}
+
+int tooie::parallax_pick::Pick::depth_percent() const {
+    return (fine != 0) ? int(fine) * 10 : depth_percents[depth];
 }

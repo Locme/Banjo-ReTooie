@@ -537,3 +537,26 @@ size_t tooie::interp_tags::discard_changes() {
     have_no_effects = !no_effects.empty();
     return count;
 }
+
+void tooie::interp_tags::live(uint32_t model, int& mode, bool& no_effects_on) {
+    std::lock_guard<std::mutex> guard(lock);
+    const auto it = tags.find(model);
+    mode = it == tags.end() ? mode_default : it->second;
+    no_effects_on = no_effects.count(model) != 0;
+}
+
+void tooie::interp_tags::set_live(uint32_t model, int mode, bool no_effects_on) {
+    std::lock_guard<std::mutex> guard(lock);
+    if (mode == mode_default) {
+        tags.erase(model);
+    } else {
+        tags[model] = mode;
+    }
+    if (no_effects_on) {
+        no_effects.insert(model);
+    } else {
+        no_effects.erase(model);
+    }
+    have_tags = !tags.empty();
+    have_no_effects = !no_effects.empty();
+}

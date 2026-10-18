@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T428 Copy, Paste and Undo Pick keys; Shift + wheel depth
+- Asked: 2026-10-18 19:55 UTC
+- Build: main
+- Steps:
+  1. Bind Copy Pick, Paste Pick and Undo Pick in Controls, Pick Modes
+  2. Hover a texture, Copy Pick, hover another, Paste Pick: it gets the same pick
+  3. Press Undo Pick: the paste is taken back; keep pressing to step back further
+  4. In Parallax pick mode, hold Shift and scroll: the depth changes by 10% and the label shows it
+  5. Save it: the file keeps the exact percent
+- Look for: Do paste and undo act on the right thing, and is 10% depth fine enough?
+- Status: waiting for L
+
 ## T427 Snout jiggle: longer snout from the mouth corners, second bounce joint
 - Asked: 2026-10-18 19:52 UTC
 - Build: main

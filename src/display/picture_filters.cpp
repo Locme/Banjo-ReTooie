@@ -83,7 +83,7 @@ namespace RT64 {
     void SetSceneSnowStamps(const float *stamps, uint32_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
-    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles);
+    void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
     void SetScenePlayer(bool valid, float x, float y, float z, bool grounded);
     bool GetSceneCameraHeight(float *height);
@@ -4000,18 +4000,22 @@ namespace {
         std::vector<uint8_t> ranges;
         std::vector<uint8_t> styles;
         hashes.reserve(std::size(parallax_textures) + picks.size());
+        std::vector<uint8_t> fines;
         auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest) {
             const auto pick = picks.find(hash);
             if (pick != picks.end()) {
                 const bool off = pick->second.off;
                 const uint8_t style = pick->second.style();
+                const uint8_t fine = pick->second.fine;
                 picks.erase(pick);
                 if (off) {
                     return;
                 }
                 styles.push_back(style);
+                fines.push_back(fine);
             } else {
                 styles.push_back(0);
+                fines.push_back(0);
             }
             hashes.push_back(hash);
             ranges.push_back(darkest);
@@ -4026,7 +4030,7 @@ namespace {
         for (const auto& [hash, pick] : std::unordered_map<uint64_t, tooie::parallax_pick::Pick>(picks)) {
             add(hash, 40, 190);
         }
-        RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data());
+        RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data(), fines.data());
         parallax_sent_version = version;
     }
 }

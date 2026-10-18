@@ -35,7 +35,10 @@ namespace tooie::parallax_pick {
         bool off = false;
         uint8_t shape = shape_stone;
         uint8_t depth = 0;
+        // Shift + wheel's depth in 10% steps (1 to 31), over depth when not 0.
+        uint8_t fine = 0;
         bool shadows = true;
+        int depth_percent() const;
         // As SetSceneParallaxTextures takes it: shape's low 3 bits, depth << 3, no shadows << 6, shape's bit 3 << 7.
         uint8_t style() const { return uint8_t((shape & 0x7) | (depth << 3) | (shadows ? 0 : 0x40) | ((shape & 0x8) << 4)); }
     };

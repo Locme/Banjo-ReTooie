@@ -293,7 +293,14 @@ models, so they say "No model here".
 
 Save Pick and Delete Saved Pick work in all three modes, on whatever is under
 the cursor, and only touch that mode's file. The label beside the cursor shows
-what each is bound to (keyboard, then controller), or Unbinded. At the top left each mode shows
+what each is bound to (keyboard, then controller), or Unbinded.
+
+Also in Controls, Pick Modes: **Copy Pick** copies the hovered texture's or
+model's pick and **Paste Pick** gives it to whatever you hover next (unsaved
+until you save it); **Undo Pick** takes back the last change (clicks, pastes,
+depth steps, Delete Saved Pick), one at a time. In Parallax pick mode,
+**Shift + mouse wheel** steps the hovered texture's depth by 10% (10 to 310%,
+wheel down deeper); right click goes back to the fixed steps. At the top left each mode shows
 how many of its picks are unsaved, a **Save All** button that writes them all,
 and a **Delete All Changes** button that puts every pick back as its file has
 it. Only one pick mode is on at a time: turning one

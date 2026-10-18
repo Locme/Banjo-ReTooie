@@ -57,7 +57,7 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::MODEL_EFFECTS, "Model Effects",
         "Turns the screen effects (ambient occlusion, outlines, fog, bloom and the rest) off and on for the picked model: it is drawn over them as the game draws it. Save Tags keeps it.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::PARALLAX_PICK, "Parallax Pick Mode",
-        "Frees the mouse as a crosshair and highlights the texture under it. Left click steps its parallax shape (then off), right click its depth, middle click its shadows; Shift + left click puts it back to the built-in choice and the wheel picks a layer deeper. The Save Pick key writes the one under the cursor to parallax_tags.txt in the Dev Files folder next to the save files and Delete Saved Pick takes it back out.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
+        "Frees the mouse as a crosshair and highlights the texture under it. Left click steps its parallax shape (then off), right click its depth (Shift + wheel in 10% steps), middle click its shadows; Shift + left click puts it back to the built-in choice and the wheel picks a layer deeper. The Save Pick key writes the one under the cursor to parallax_tags.txt in the Dev Files folder next to the save files and Delete Saved Pick takes it back out.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::EFFECTS_PICK, "Shader Effects Pick Mode",
         "Frees the mouse as a crosshair and highlights the texture under it. Left click steps the shader effect it gets: Disable, Grass, Deep Snow, Ice Reflection, then back to the built-in choice; Shift + left click puts it back at once and the wheel picks a layer deeper. The Save Pick key writes the one under the cursor to shader_effect_tags.txt in the Dev Files folder next to the save files and Delete Saved Pick takes it back out.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::INTERP_PICK, "Interpolation Pick Mode",
@@ -66,6 +66,12 @@ void tooie::hotkeys::register_inputs() {
         "In a pick mode, saves the texture or model under the cursor, only that one, to its file in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
     add(GameInput::PICK_DELETE, "Delete Saved Pick",
         "In a pick mode, puts the texture or model under the cursor back to the built-in choice and deletes its save from its file in the Dev Files folder.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
+    add(GameInput::PICK_COPY, "Copy Pick",
+        "In a pick mode, copies the pick of the texture or model under the cursor.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
+    add(GameInput::PICK_PASTE, "Paste Pick",
+        "In a pick mode, gives the texture or model under the cursor the copied pick (not saved until you save it).", SDL_SCANCODE_UNKNOWN, "Pick Modes");
+    add(GameInput::PICK_UNDO, "Undo Pick",
+        "In a pick mode, takes back the last change to a texture or model (clicks, pastes, Shift + wheel depth, Delete Saved Pick), one at a time.", SDL_SCANCODE_UNKNOWN, "Pick Modes");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {
