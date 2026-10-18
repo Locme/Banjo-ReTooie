@@ -77,10 +77,10 @@ index 1961e29..616c34b 100644
 +    bool pick_mode();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..56d84ea 100644
+index f5ed6c0..f8cdd58 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,40 @@ namespace recompinput {
+@@ -37,10 +37,41 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -111,7 +111,8 @@ index f5ed6c0..56d84ea 100644
 +        DEFINE_INPUT(PARALLAX_PICK, 0, "Parallax Pick Mode") \
 +        DEFINE_INPUT(BENCHMARK, 0, "Benchmark") \
 +        DEFINE_INPUT(TRANSFORM, 0, "Transform") \
-+        DEFINE_INPUT(FREEZE, 0, "Freeze")
++        DEFINE_INPUT(FREEZE, 0, "Freeze") \
++        DEFINE_INPUT(EFFECTS_PICK, 0, "Shader Effects Pick Mode")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -122,7 +123,7 @@ index f5ed6c0..56d84ea 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +102,9 @@ namespace recompinput {
+@@ -72,6 +103,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -132,7 +133,7 @@ index f5ed6c0..56d84ea 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +123,33 @@ namespace recompinput {
+@@ -90,15 +124,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -166,7 +167,7 @@ index f5ed6c0..56d84ea 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +178,10 @@ namespace recompinput {
+@@ -127,6 +179,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);

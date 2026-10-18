@@ -3,7 +3,7 @@
 
 // Parallax pick mode (src/debug/parallax_pick.cpp): the Parallax Pick Mode key frees the mouse as a crosshair, the
 // texture under it is highlighted, and clicks set that texture's parallax: its shape, depth and shadows, or off.
-// The picks are kept in parallax_tags.txt next to the save files and override the built-in list
+// The picks are kept in parallax_tags.txt in the Dev Files folder next to the save files and override the built-in list
 // (parallax_textures[] in picture_filters.cpp), which they can be folded into.
 #include <cstdint>
 #include <functional>

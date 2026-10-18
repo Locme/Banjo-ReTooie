@@ -863,7 +863,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool tag_now = !overlay && tooie::interp_tags::take_tag();
     if (!overlay && tooie::interp_tags::take_save()) {
         char text[64];
-        std::snprintf(text, sizeof(text), "%zu tags saved to interp_tags.txt", tooie::interp_tags::save());
+        std::snprintf(text, sizeof(text), "%zu tags saved to Dev Files/interp_tags.txt", tooie::interp_tags::save());
         tooie::toast::show(text);
     }
     if (!overlay && tooie::interp_tags::take_unsave()) {
@@ -873,7 +873,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         } else {
             tooie::interp_tags::unsave_picked();
             char text[96];
-            std::snprintf(text, sizeof(text), "Model %08X: tag removed from interp_tags.txt", current_pick);
+            std::snprintf(text, sizeof(text), "Model %08X: tag removed from Dev Files/interp_tags.txt", current_pick);
             tooie::toast::show(text);
         }
     }

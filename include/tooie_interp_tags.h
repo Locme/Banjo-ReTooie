@@ -3,7 +3,7 @@
 
 // Manual interpolation tags (src/debug/interp_tags.cpp): a model picked in
 // the game (the Pick Model key) gets its own blend between game frames (the
-// Tag Model key), kept in interp_tags.txt next to the save files, with the
+// Tag Model key), kept in interp_tags.txt in the Dev Files folder next to the save files, with the
 // built-in defaults in the same file's format. model_tagging.cpp names the
 // models (a hash of a model's display list, the same in every run) and
 // applies the tags.

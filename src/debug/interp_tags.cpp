@@ -4,7 +4,7 @@
 // middle of the picture first; a toast names the picked model. The Tag Model
 // key steps the picked model's blend: default, snap, vertex blend,
 // untagged; the tags show in the "custom" blend mode. The Save Tags key
-// writes them to interp_tags.txt next to the save files, one line per model:
+// writes them to interp_tags.txt in the Dev Files folder next to the save files, one line per model:
 //   <model> <mode>   # map <map> <where it was picked>
 // The file is read at start over the built-in defaults below, so a tag made
 // in the game wins. L sends the file; its lines go into `defaults` to ship.
@@ -34,6 +34,7 @@
 
 #include "librecomp/game.hpp"
 
+#include "tooie_dev_files.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
 #include "tooie_toast.h"
@@ -89,7 +90,7 @@ namespace {
     std::string picked_note;
 
     std::filesystem::path file_path() {
-        return recomp::get_config_path() / "interp_tags.txt";
+        return tooie::dev_files::path("interp_tags.txt");
     }
 
     int parse_mode(const std::string& word) {
@@ -115,7 +116,7 @@ namespace {
                 no_effects.insert(model);
             }
         }
-        std::ifstream in(file_path());
+        std::ifstream in(tooie::dev_files::read_path("interp_tags.txt"));
         std::string line;
         size_t read = 0;
         while (std::getline(in, line)) {

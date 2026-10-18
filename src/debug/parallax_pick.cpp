@@ -1,4 +1,5 @@
-// Parallax pick mode (see include/tooie_parallax_pick.h).
+// Parallax pick mode and Shader Effects pick mode (see include/tooie_parallax_pick.h and include/tooie_effect_pick.h):
+// one worker, as both drive the same pick in RT64.
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -26,6 +27,8 @@
 #include "elements/ui_element.h"
 #include "elements/ui_label.h"
 
+#include "tooie_dev_files.h"
+#include "tooie_effect_pick.h"
 #include "tooie_hotkeys.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
@@ -34,6 +37,8 @@ namespace RT64 {
     void SetScenePick(bool on, float x, float y, uint32_t layer);
     void ScenePickResult(uint64_t &hash, uint32_t &layers);
     uint32_t SceneParallaxTexture(uint64_t hash);
+    uint32_t SceneGrassTexture(uint64_t hash);
+    bool SceneIceTexture(uint64_t hash);
 }
 
 namespace {
@@ -51,12 +56,12 @@ namespace {
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
 
     std::filesystem::path file_path() {
-        return recomp::get_config_path() / "parallax_tags.txt";
+        return tooie::dev_files::path("parallax_tags.txt");
     }
 
     // One line a texture: "<hash> off", or "<hash> <shape> <depth>% shadows|noshadows".
     void load() {
-        std::ifstream in(file_path());
+        std::ifstream in(tooie::dev_files::read_path("parallax_tags.txt"));
         std::string line;
         std::lock_guard lock{ picks_mutex };
         while (std::getline(in, line)) {
@@ -154,6 +159,110 @@ namespace {
         return result;
     }
 
+    // Shader Effects pick mode's picks.
+    using tooie::effect_pick::Effect;
+    std::mutex effects_mutex;
+    std::map<uint64_t, Effect> effects;
+    std::atomic<uint32_t> effects_version{1};
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection" };
+
+    std::filesystem::path effects_path() {
+        return tooie::dev_files::path("shader_effect_tags.txt");
+    }
+
+    // One line a texture: "<hash> disable|grass|deep_snow|ice".
+    void load_effects() {
+        std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
+        std::string line;
+        std::lock_guard lock{ effects_mutex };
+        while (std::getline(in, line)) {
+            std::istringstream words(line);
+            std::string hash_text, effect_text;
+            if (!(words >> hash_text >> effect_text) || (hash_text[0] == '#')) {
+                continue;
+            }
+            for (int e = 0; e < tooie::effect_pick::effect_count; e++) {
+                if (effect_text == effect_names[e]) {
+                    effects[std::strtoull(hash_text.c_str(), nullptr, 16)] = Effect(e);
+                }
+            }
+        }
+        if (!effects.empty()) {
+            fprintf(stderr, "[effect-pick] %zu picks from %s\n", effects.size(), effects_path().string().c_str());
+        }
+        effects_version.fetch_add(1);
+    }
+
+    void save_effects() {
+        std::error_code ec;
+        std::filesystem::create_directories(effects_path().parent_path(), ec);
+        std::ofstream out(effects_path());
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice). Send this file in for the port's lists.\n";
+        std::lock_guard lock{ effects_mutex };
+        for (const auto& [hash, effect] : effects) {
+            char text[32];
+            snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
+            out << text << " " << effect_names[effect] << "\n";
+        }
+    }
+
+    // The built-in choice: grass (or grass along an edge) or ice from the lists, else none.
+    const char* built_in_effect(uint64_t hash) {
+        const uint32_t grass = RT64::SceneGrassTexture(hash);
+        if (grass == 1) {
+            return "Grass";
+        }
+        if (grass == 2) {
+            return "Grass along edges";
+        }
+        return RT64::SceneIceTexture(hash) ? "Ice Reflection" : "None";
+    }
+
+    std::string describe_effect(uint64_t hash, uint32_t layer, uint32_t layers) {
+        if (hash == 0) {
+            return "No textured surface here";
+        }
+        char text[160];
+        bool own = false;
+        Effect effect = tooie::effect_pick::effect_disable;
+        {
+            std::lock_guard lock{ effects_mutex };
+            const auto it = effects.find(hash);
+            own = (it != effects.end());
+            if (own) {
+                effect = it->second;
+            }
+        }
+        if (own) {
+            snprintf(text, sizeof(text), "%016llx\n%s (yours)", (unsigned long long)hash, effect_labels[effect]);
+        } else {
+            snprintf(text, sizeof(text), "%016llx\n%s (built-in)", (unsigned long long)hash, built_in_effect(hash));
+        }
+        std::string result = text;
+        if (layers > 1) {
+            result += "\nLayer " + std::to_string((layer % layers) + 1) + " of " + std::to_string(layers);
+        }
+        return result;
+    }
+
+    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, built-in again.
+    void step_effect(uint64_t hash, bool reset) {
+        {
+            std::lock_guard lock{ effects_mutex };
+            const auto it = effects.find(hash);
+            if (reset || ((it != effects.end()) && (it->second + 1 >= tooie::effect_pick::effect_count))) {
+                effects.erase(hash);
+            } else if (it == effects.end()) {
+                effects[hash] = tooie::effect_pick::effect_disable;
+            } else {
+                it->second = Effect(it->second + 1);
+            }
+        }
+        effects_version.fetch_add(1);
+        save_effects();
+    }
+
     // The label beside the cursor.
     struct Label {
         recompui::ContextId context = recompui::ContextId::null();
@@ -241,6 +350,7 @@ namespace {
 
     void worker() {
         load();
+        load_effects();
         float forced_x = -1.0f, forced_y = -1.0f;
         if (const char* v = std::getenv("TOOIE_PICK")) {
             std::sscanf(v, "%f,%f", &forced_x, &forced_y);
@@ -261,8 +371,12 @@ namespace {
         }
         const auto start = std::chrono::steady_clock::now();
         Label label;
-        bool on = (forced_x >= 0.0f);
+        // TOOIE_PICK_EFFECTS=1: the headless pick is Shader Effects pick mode's.
+        const bool forced_effects = (std::getenv("TOOIE_PICK_EFFECTS") != nullptr) && (std::getenv("TOOIE_PICK_EFFECTS")[0] == '1');
+        bool on = (forced_x >= 0.0f) && !forced_effects;
+        bool effects_on = (forced_x >= 0.0f) && forced_effects;
         bool key_was_down = false;
+        bool effects_key_was_down = false;
         uint32_t buttons_were = 0;
         int32_t wheel_was = recompinput::get_mouse_wheel_pos();
         uint32_t layer = 0;
@@ -281,8 +395,24 @@ namespace {
                     "Shift + left click built-in, wheel deeper" : "Parallax pick mode off");
             }
             key_was_down = key_down;
-            recompinput::set_pick_mode(on);
-            if (!on) {
+            const bool effects_key_down = tooie::hotkeys::down(recompinput::GameInput::EFFECTS_PICK);
+            if (effects_key_down && !effects_key_was_down) {
+                effects_on = !effects_on;
+                layer = 0;
+                tooie::toast::show(effects_on ? "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, "
+                    "built-in; Shift + left click built-in, wheel deeper" : "Shader Effects pick mode off");
+            }
+            effects_key_was_down = effects_key_down;
+            // One mode at a time: the newer one wins.
+            if (effects_on && on) {
+                if (effects_key_down) {
+                    on = false;
+                } else {
+                    effects_on = false;
+                }
+            }
+            recompinput::set_pick_mode(on || effects_on);
+            if (!on && !effects_on) {
                 RT64::SetScenePick(false, 0.0f, 0.0f, 0);
                 label.update(false, "", 0.0f, 0.0f);
                 buttons_were = 0;
@@ -341,6 +471,28 @@ namespace {
             uint64_t hash = 0;
             uint32_t layers = 0;
             RT64::ScenePickResult(hash, layers);
+            if (effects_on) {
+                if ((hash != 0) && (left || reset)) {
+                    step_effect(hash, reset);
+                    fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
+                }
+                const uint32_t version = effects_version.load() + 0x80000000u;
+                if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
+                    (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
+                {
+                    label.update(true, describe_effect(hash, layer, layers), x, y);
+                    if ((hash != shown_hash) && (ms - last_log > 200)) {
+                        fprintf(stderr, "[effect-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
+                        last_log = ms;
+                    }
+                    shown_hash = hash;
+                    shown_layers = layers;
+                    shown_version = version;
+                    shown_x = x;
+                    shown_y = y;
+                }
+                continue;
+            }
             if ((hash != 0) && (left || right || middle || reset)) {
                 bool own = false;
                 Pick pick = current(hash, own);
@@ -404,5 +556,16 @@ void tooie::parallax_pick::for_each(const std::function<void(uint64_t hash, cons
     std::lock_guard lock{ picks_mutex };
     for (const auto& [hash, pick] : picks) {
         visit(hash, pick);
+    }
+}
+
+uint32_t tooie::effect_pick::version() {
+    return effects_version.load();
+}
+
+void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effect effect)>& visit) {
+    std::lock_guard lock{ effects_mutex };
+    for (const auto& [hash, effect] : effects) {
+        visit(hash, effect);
     }
 }

@@ -254,11 +254,22 @@ the cursor names the texture and its parallax ("yours" or "built-in").
 - **Shift + left click**: back to the built-in choice.
 - **Mouse wheel**: the surface behind it (when several are under the cursor).
 
-Every change shows at once and is saved to `parallax_tags.txt` next to the save
-files (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
+Every change shows at once and is saved to `parallax_tags.txt` in the `Dev Files`
+folder next to the save files (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
 `<hash> off`). Picks override the built-in list and load again next time; send
 the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
+
+**Shader Effects Pick Mode** (a Debug key in Controls, no default) works the
+same way for the texture effects. The label names the texture's effect ("yours"
+or "built-in"), and each **left click** steps it: Disable (no grass, ice
+reflection or deep snow on it), Grass, Deep Snow, Ice Reflection, then back to
+the built-in choice. **Shift + left click** puts it back at once and the
+**mouse wheel** picks the surface behind. Grass and Ice Reflection show at once;
+Deep Snow is only recorded for now, as deep snow goes by level and colour, not
+texture. Picks are saved to `shader_effect_tags.txt` in the `Dev Files` folder
+(one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
+them added to the port. Turning one pick mode on turns the other off.
 
 ### Height maps in texture packs
 
@@ -464,7 +475,7 @@ Game Frame Rate.
   with bones: NPCs, enemies, bosses, the player) blend with their vertices,
   and a model or particle you tagged in the game (see the Pick Model and Tag
   Model keys in keys.md) does as its tag says; the tags live in
-  `interp_tags.txt` next to the save files. Normal blends every model
+  `interp_tags.txt` in the `Dev Files` folder next to the save files. Normal blends every model
   without vertex blending. Starts on custom each launch. The Blend Mode key
   steps through them.
 

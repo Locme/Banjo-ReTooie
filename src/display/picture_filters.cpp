@@ -39,6 +39,7 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_effect_pick.h"
 #include "tooie_parallax_pick.h"
 
 namespace RT64 {
@@ -60,6 +61,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
+    void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
@@ -3903,6 +3905,74 @@ namespace {
         }
     }
 
+    // The grass, grass edge, ice and snow-off lists sent to RT64: the built-in ones (grass_textures[],
+    // grass_edge_textures[], ice_textures[]) with Shader Effects pick mode's picks over them. A pick other than
+    // Deep Snow also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
+    // snow goes by map and colour, not texture.
+    std::atomic<uint32_t> effects_sent_version{0};
+    void send_effect_textures() {
+        static const std::vector<uint64_t> ice_extra = [] {
+            std::vector<uint64_t> list;
+            if (const char* extra = std::getenv("TOOIE_ICE_TEXTURES")) {
+                for (const char* p = extra; *p != '\0';) {
+                    char* end = nullptr;
+                    const unsigned long long h = std::strtoull(p, &end, 16);
+                    if (end == p) {
+                        break;
+                    }
+                    list.push_back((uint64_t)h);
+                    p = (*end == ',') ? end + 1 : end;
+                }
+            }
+            return list;
+        }();
+        const uint32_t version = tooie::effect_pick::version();
+        std::unordered_map<uint64_t, tooie::effect_pick::Effect> picks;
+        tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effect effect) {
+            picks[hash] = effect;
+        });
+        // Built-in entries a pick does not move elsewhere, then the picks for that effect.
+        auto build = [&](const uint64_t* begin, const uint64_t* end, tooie::effect_pick::Effect effect, bool add_picks) {
+            std::vector<uint64_t> list;
+            for (const uint64_t* h = begin; h != end; h++) {
+                const auto pick = picks.find(*h);
+                if ((pick == picks.end()) || (pick->second == effect)) {
+                    list.push_back(*h);
+                }
+            }
+            if (add_picks) {
+                for (const auto& [hash, picked] : picks) {
+                    if ((picked == effect) && (std::find(list.begin(), list.end(), hash) == list.end())) {
+                        list.push_back(hash);
+                    }
+                }
+            }
+            return list;
+        };
+        std::vector<uint64_t> grass = build(std::begin(grass_textures), std::end(grass_textures), tooie::effect_pick::effect_grass, true);
+        std::vector<uint64_t> edges = build(std::begin(grass_edge_textures), std::end(grass_edge_textures), tooie::effect_pick::effect_grass, false);
+        std::vector<uint64_t> ice_all(std::begin(ice_textures), std::end(ice_textures));
+        ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
+        std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
+        std::vector<uint64_t> snow_off;
+        for (const auto& [hash, picked] : picks) {
+            if (picked != tooie::effect_pick::effect_deep_snow) {
+                snow_off.push_back(hash);
+            }
+        }
+        // An edge entry picked as Grass is grass all over: the grass list wins.
+        edges.erase(std::remove_if(edges.begin(), edges.end(), [&](uint64_t h) { return picks.count(h) != 0; }), edges.end());
+        // RT64 reads an empty grass list as every texture, so a list emptied by Disable picks keeps one entry no draw has.
+        if (grass.empty()) {
+            grass.push_back(0);
+        }
+        RT64::SetSceneGrassTextures(grass.data(), grass.size());
+        RT64::SetSceneIceTextures(ice.data(), ice.size());
+        RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
+        RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
+        effects_sent_version.store(version);
+    }
+
     // The parallax list sent to RT64: the built-in one (parallax_textures[]), with pick mode's picks over it.
     std::atomic<uint32_t> parallax_sent_version{0};
     void send_parallax_textures() {
@@ -4038,24 +4108,7 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
         (float)(value<double>(grass_chunk_size_option, 200.0) / 100.0), value<bool>(grass_pixelated_option, false),
         (float)value<double>(grass_pixel_size_option, 1.0), (float)(value<double>(grass_blend_option, 50.0) / 100.0));
-    RT64::SetSceneGrassTextures(grass_textures, std::size(grass_textures));
-    static const std::vector<uint64_t> ice_list = [] {
-        std::vector<uint64_t> list(std::begin(ice_textures), std::end(ice_textures));
-        if (const char* extra = std::getenv("TOOIE_ICE_TEXTURES")) {
-            for (const char* p = extra; *p != '\0';) {
-                char* end = nullptr;
-                const unsigned long long h = std::strtoull(p, &end, 16);
-                if (end == p) {
-                    break;
-                }
-                list.push_back((uint64_t)h);
-                p = (*end == ',') ? end + 1 : end;
-            }
-        }
-        return list;
-    }();
-    RT64::SetSceneIceTextures(ice_list.data(), ice_list.size());
-    RT64::SetSceneGrassEdgeTextures(grass_edge_textures, value<bool>(grass_edges_option, true) ? std::size(grass_edge_textures) : 0);
+    send_effect_textures();
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
         fur = std::atof(forced);
@@ -4241,6 +4294,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
         send_parallax_textures();
+    }
+    // Likewise for Shader Effects pick mode.
+    if (tooie::effect_pick::version() != effects_sent_version.load()) {
+        send_effect_textures();
     }
     // DEV > Blend texture seams; TOOIE_TEXTURE_SEAMS=0 or 1 sets it instead (headless A/B).
     {

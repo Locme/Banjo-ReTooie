@@ -51,13 +51,15 @@ void tooie::hotkeys::register_inputs() {
     add(GameInput::TAG_MODEL, "Tag Model",
         "Steps the picked model's blend between game frames: default (the custom rule: characters blend with vertices, the rest snaps), snap, vertex, untagged. Shows in the custom blend mode.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::SAVE_TAGS, "Save Tags",
-        "Writes the tagged models to interp_tags.txt next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
+        "Writes the tagged models to interp_tags.txt in the Dev Files folder next to the save files, to send in for the port's defaults.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::UNSAVE_TAG, "Unsave Tag",
         "Removes the picked model's tag, from the game and from interp_tags.txt.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::MODEL_EFFECTS, "Model Effects",
         "Turns the screen effects (ambient occlusion, outlines, fog, bloom and the rest) off and on for the picked model: it is drawn over them as the game draws it. Save Tags keeps it.", SDL_SCANCODE_UNKNOWN, "Interpolation Debug");
     add(GameInput::PARALLAX_PICK, "Parallax Pick Mode",
-        "Frees the mouse as a crosshair and highlights the texture under it. Left click steps its parallax shape (then off), right click its depth, middle click its shadows; Shift + left click puts it back to the built-in choice and the wheel picks a layer deeper. Saved to parallax_tags.txt next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
+        "Frees the mouse as a crosshair and highlights the texture under it. Left click steps its parallax shape (then off), right click its depth, middle click its shadows; Shift + left click puts it back to the built-in choice and the wheel picks a layer deeper. Saved to parallax_tags.txt in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
+    add(GameInput::EFFECTS_PICK, "Shader Effects Pick Mode",
+        "Frees the mouse as a crosshair and highlights the texture under it. Left click steps the shader effect it gets: Disable, Grass, Deep Snow, Ice Reflection, then back to the built-in choice; Shift + left click puts it back at once and the wheel picks a layer deeper. Saved to shader_effect_tags.txt in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {

@@ -2011,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..64a325f 100644
+index 9fae0d4..cf15732 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3087,7 +3087,7 @@ index 9fae0d4..64a325f 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2647,968 @@ namespace RT64 {
+@@ -1747,24 +2647,969 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3331,10 +3331,11 @@ index 9fae0d4..64a325f 100644
 +                    // (Also ground drawn without writing depth, as the snowy platforms round Chilly Willy's arena are: its
 +                    // shells write it, below.)
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
-+                    // Not on ice (SceneIceTexture): its pale streaks pass for snow.
++                    // Not on ice (SceneIceTexture): its pale streaks pass for snow. Nor on a texture picked for no snow.
 +                    bool iceGround = false;
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !iceGround; t++) {
-+                        iceGround = SceneIceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                        iceGround = SceneIceTexture(hash) || SceneSnowOffTexture(hash);
 +                    }
 +                    if (!iceGround && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
 +                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams), 255u));
@@ -5829,10 +5830,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..8fae59f
+index 0000000..3814acd
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2291 @@
+@@ -0,0 +1,2305 @@
 +//
 +// RT64
 +//
@@ -6357,6 +6358,20 @@ index 0000000..8fae59f
 +    bool SceneIceTexture(uint64_t hash) {
 +        const std::scoped_lock lock(iceTextureMutex);
 +        return iceTextures.count(hash) != 0;
++    }
++
++    static std::mutex snowOffTextureMutex;
++    static std::unordered_set<uint64_t> snowOffTextures;
++
++    void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(snowOffTextureMutex);
++        snowOffTextures.swap(textures);
++    }
++
++    bool SceneSnowOffTexture(uint64_t hash) {
++        const std::scoped_lock lock(snowOffTextureMutex);
++        return snowOffTextures.count(hash) != 0;
 +    }
 +
 +    static std::mutex nightLightMutex;
@@ -8126,10 +8141,10 @@ index 0000000..8fae59f
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..674c7db
+index 0000000..0cc81da
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,377 @@
+@@ -0,0 +1,380 @@
 +//
 +// RT64
 +//
@@ -8450,6 +8465,9 @@ index 0000000..674c7db
 +    // Banjo-Tooie: the ice textures (RT64 hashes): floors, walls and blocks drawn with them reflect with Ice reflections.
 +    void SetSceneIceTextures(const uint64_t *hashes, size_t count);
 +    bool SceneIceTexture(uint64_t hash);
++    // Banjo-Tooie: textures deep snow never covers (Shader Effects pick mode's picks other than Deep Snow).
++    void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
++    bool SceneSnowOffTexture(uint64_t hash);
 +    // Fills the frame's night light terms. False when nothing lights up this frame (day, or the cycle is off).
 +    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
 +    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
