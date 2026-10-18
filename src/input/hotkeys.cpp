@@ -84,3 +84,19 @@ bool tooie::hotkeys::down(recompinput::GameInput input) {
     }
     return down;
 }
+
+std::string tooie::hotkeys::binding_text(recompinput::GameInput input) {
+    std::string text;
+    for (int profile : { recompinput::profiles::get_sp_keyboard_profile_index(), recompinput::profiles::get_sp_controller_profile_index() }) {
+        if (profile < 0) {
+            continue;
+        }
+        for (size_t b = 0; b < recompinput::num_bindings_per_input; b++) {
+            const std::string name = recompinput::profiles::get_input_binding(profile, input, b).to_string();
+            if (!name.empty()) {
+                text += (text.empty() ? "" : ", ") + name;
+            }
+        }
+    }
+    return text;
+}

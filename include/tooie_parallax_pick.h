@@ -25,7 +25,9 @@ namespace tooie::parallax_pick {
         shape_metal = 11,
         shape_leaves = 12,
         shape_tiles = 13,
-        shape_count = 14
+        shape_sand = 14,
+        shape_smooth = 15,
+        shape_count = 16
     };
     // Depth steps, as RASTER_PARALLAX_DEPTH bits: 100%, 25, 50, 150, 200, 300%.
     constexpr int depth_count = 6;

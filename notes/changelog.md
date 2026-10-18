@@ -78,6 +78,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Parallax pick mode: Sand and Smooth shapes (blurred brightness, no jaggies); the pick label shows what Save Pick and Delete Saved Pick are bound to (T426).
 - Pick modes: an unsaved count with Save All and Delete All Changes buttons at the top left; parallax pick mode gets eight more shapes: Grass, Wood, Bark, Brick, Dirt, Metal, Leaves and Tiles (T425).
 - Pick modes: Save Pick and Delete Saved Pick keys (Controls, Pick Modes) save or delete only the texture or model under the cursor; the top-left Save buttons are gone (T424).
 - Pick modes: Save and Delete Save buttons at the top left (clicks no longer save on their own), and the three pick keys have their own Pick Modes section in Controls (T423).

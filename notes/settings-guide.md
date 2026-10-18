@@ -251,7 +251,9 @@ the cursor names the texture and its parallax ("yours" or "built-in").
   Wood (shallow grain, deep gaps between planks), Bark (deep furrows), Brick
   (flat bricks, wide sunk mortar), Dirt (soft shallow lumps), Metal (flat
   plates, only the seams sink), Leaves (rounded, the shade under each sunk),
-  Tiles (flat tiles, a narrow sharp grout line), then Off.
+  Tiles (flat tiles, a narrow sharp grout line), Sand (low soft ripples) and
+  Smooth (Bumpy's depth with no stair steps; Sand and Smooth blur the texture's
+  brightness first, which hides the jaggies of small textures), then Off.
 - **Right click**: the depth, as a share of the Parallax slider: 100, 150, 200,
   300, 25 and 50%.
 - **Middle click**: its shadows off or on.
@@ -290,7 +292,8 @@ Pick takes it back out. It needs interpolation on
 models, so they say "No model here".
 
 Save Pick and Delete Saved Pick work in all three modes, on whatever is under
-the cursor, and only touch that mode's file. At the top left each mode shows
+the cursor, and only touch that mode's file. The label beside the cursor shows
+what each is bound to (keyboard, then controller), or Unbinded. At the top left each mode shows
 how many of its picks are unsaved, a **Save All** button that writes them all,
 and a **Delete All Changes** button that puts every pick back as its file has
 it. Only one pick mode is on at a time: turning one

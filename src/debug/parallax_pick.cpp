@@ -59,9 +59,9 @@ namespace {
     }
 
     const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded",
-        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles" };
+        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth" };
     const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded",
-        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles" };
+        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth" };
     const int depth_percent[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
     // Right click goes up from 100%, then round from the shallowest.
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
@@ -436,6 +436,10 @@ namespace {
         recompui::ContextId context = recompui::ContextId::null();
         recompui::Element* box = nullptr;
         recompui::Label* label = nullptr;
+        // The Save Pick and Delete Saved Pick rows: the key's name, then what it is bound to in promptfont's glyphs.
+        recompui::Label* key_glyphs[2] = {};
+        recompui::Label* key_unbound[2] = {};
+        std::string shown_keys[2] = { "?", "?" };
         recompui::Label* count_label = nullptr;
         recompui::Element* panel_buttons[2] = {};
         size_t shown_count = SIZE_MAX;
@@ -461,8 +465,23 @@ namespace {
                 box->set_border_radius(recompui::theme::border::radius_md);
                 box->set_background_color(recompui::theme::color::ModalOverlay);
                 box->set_pointer_events(recompui::PointerEvents::None);
+                box->set_flex_direction(recompui::FlexDirection::Column);
                 label = ctx.create_element<recompui::Label>(box, "", recompui::LabelStyle::Small);
                 label->set_pointer_events(recompui::PointerEvents::None);
+                static const char* key_names[2] = { "Save Pick: ", "Delete Saved Pick: " };
+                for (int k = 0; k < 2; k++) {
+                    recompui::Element* row = ctx.create_element<recompui::Element>(box);
+                    row->set_display(recompui::Display::Flex);
+                    row->set_flex_direction(recompui::FlexDirection::Row);
+                    row->set_align_items(recompui::AlignItems::Center);
+                    row->set_pointer_events(recompui::PointerEvents::None);
+                    ctx.create_element<recompui::Label>(row, key_names[k], recompui::LabelStyle::Small)->set_pointer_events(recompui::PointerEvents::None);
+                    key_glyphs[k] = ctx.create_element<recompui::Label>(row, "", recompui::LabelStyle::Small);
+                    key_glyphs[k]->set_font_family("promptfont");
+                    key_glyphs[k]->set_pointer_events(recompui::PointerEvents::None);
+                    key_unbound[k] = ctx.create_element<recompui::Label>(row, "Unbinded", recompui::LabelStyle::Small);
+                    key_unbound[k]->set_pointer_events(recompui::PointerEvents::None);
+                }
                 recompui::Element* count_box = ctx.create_element<recompui::Element>(root);
                 count_box->set_display(recompui::Display::Flex);
                 count_box->set_position(recompui::Position::Absolute);
@@ -515,7 +534,17 @@ namespace {
             }
             if (show) {
                 context.open();
-                label->set_text(text + "\nSave Pick key: save this\nDelete Saved Pick key: delete its save");
+                label->set_text(text);
+                static const recompinput::GameInput key_inputs[2] = { recompinput::GameInput::PICK_SAVE, recompinput::GameInput::PICK_DELETE };
+                for (int k = 0; k < 2; k++) {
+                    const std::string keys = tooie::hotkeys::binding_text(key_inputs[k]);
+                    if (keys != shown_keys[k]) {
+                        key_glyphs[k]->set_text(keys);
+                        key_glyphs[k]->set_display(keys.empty() ? recompui::Display::None : recompui::Display::Block);
+                        key_unbound[k]->set_display(keys.empty() ? recompui::Display::Block : recompui::Display::None);
+                        shown_keys[k] = keys;
+                    }
+                }
                 // Just below and right of the cursor, on the other side near the window's right or bottom edge.
                 if (x < 0.75f) {
                     box->unset_right();

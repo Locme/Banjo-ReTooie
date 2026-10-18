@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T426 Sand and Smooth parallax shapes, key names in the pick label
+- Asked: 2026-10-18 19:38 UTC
+- Build: main
+- Steps:
+  1. In Parallax pick mode, step a sandy or blocky texture to Sand, then Smooth
+  2. Compare its edges with Bumpy: Smooth should have no stair steps
+  3. Look at the label: Save Pick and Delete Saved Pick show your keyboard and controller bindings, or Unbinded
+- Look for: Do Sand and Smooth hide the jaggies, and do the bindings show right?
+- Status: waiting for L
+
 ## T425 Unsaved count, Save All, Delete All Changes, new parallax shapes
 - Asked: 2026-10-18 19:11 UTC
 - Build: main

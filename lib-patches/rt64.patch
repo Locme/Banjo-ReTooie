@@ -11163,10 +11163,10 @@ index 0000000..b3907b6
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
-index 0000000..4fe5833
+index 0000000..7729004
 --- /dev/null
 +++ b/src/shaders/Parallax.hlsli
-@@ -0,0 +1,235 @@
+@@ -0,0 +1,251 @@
 +//
 +// RT64
 +//
@@ -11215,7 +11215,17 @@ index 0000000..4fe5833
 +        return saturate(1.0f - c.r);
 +    }
 +
-+    const float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
++    float luma = dot(c.rgb, float3(0.299f, 0.587f, 0.114f));
++    // Sand and Smooth: the brightness blurred over about a texel and a half, so the surface has no stair steps where a
++    // small texture's texels meet (jaggies), at four more lookups a step.
++    if (shape >= 14u) {
++        const float2 o = float2(0.75f, -0.75f);
++        luma *= 0.2f;
++        luma += 0.2f * dot(sampleTexture(otherMode, renderFlags, uv + o.xx, ddxUV, ddyUV, rdpTile, gpuTile, false).rgb, float3(0.299f, 0.587f, 0.114f));
++        luma += 0.2f * dot(sampleTexture(otherMode, renderFlags, uv + o.xy, ddxUV, ddyUV, rdpTile, gpuTile, false).rgb, float3(0.299f, 0.587f, 0.114f));
++        luma += 0.2f * dot(sampleTexture(otherMode, renderFlags, uv + o.yx, ddxUV, ddyUV, rdpTile, gpuTile, false).rgb, float3(0.299f, 0.587f, 0.114f));
++        luma += 0.2f * dot(sampleTexture(otherMode, renderFlags, uv + o.yy, ddxUV, ddyUV, rdpTile, gpuTile, false).rgb, float3(0.299f, 0.587f, 0.114f));
++    }
 +    const float darkness = saturate((range.y - luma) / max(range.y - range.x, 0.05f));
 +    switch (shape) {
 +    // Bumpy: the whole surface follows its brightness (rough rock, bark).
@@ -11260,6 +11270,12 @@ index 0000000..4fe5833
 +    // Tiles: flat tiles and a narrow, sharp line of grout.
 +    case 13u:
 +        return smoothstep(0.75f, 0.85f, darkness);
++    // Sand: low, soft ripples from the blurred brightness.
++    case 14u:
++        return 0.4f * smoothstep(0.1f, 0.9f, darkness);
++    // Smooth: Bumpy's full depth from the blurred brightness, with no stair steps.
++    case 15u:
++        return smoothstep(0.0f, 1.0f, darkness);
 +    // Stone: the speckle on a stone's face isn't its shape, so most of it is one flat top and only the darkest parts
 +    // (the gaps, cracks and the shade under a ledge) sink, steeply at their edges.
 +    default:
@@ -15792,7 +15808,7 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..82e86b4 100644
+index 0a5c332..9980829 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
 @@ -9,11 +9,64 @@
@@ -15827,7 +15843,7 @@ index 0a5c332..82e86b4 100644
 +#define RASTER_PARALLAX_HEIGHT_MAP 0x1000000u
 +// Banjo-Tooie: a texture's parallax shape in bits 25 to 27 with its bit 3 in RASTER_PARALLAX_SHAPE_HIGH (0 stone,
 +// 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 6 grass, 7 wood, 8 bark, 9 brick, 10 dirt, 11 metal, 12 leaves,
-+// 13 tiles), its depth in 28 to 30 (0 100%, 1 25%, 2 50%, 3 150%, 4 200%, 5 300%) and no shadows in 31.
++// 13 tiles, 14 sand, 15 smooth), its depth in 28 to 30 (0 100%, 1 25%, 2 50%, 3 150%, 4 200%, 5 300%) and no shadows in 31.
 +#define RASTER_PARALLAX_NO_SHADOWS 0x80000000u
 +#define RASTER_PARALLAX_SHAPE_HIGH 0x4u
 +    // Banjo-Tooie: no piece beside the draw on that side (RasterParams.seamTiles).
