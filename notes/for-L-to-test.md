@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T421 Shader Effects pick mode and the Dev Files folder
+- Asked: 2026-10-18 07:58 UTC
+- Build: main
+- Steps:
+  1. Bind Shader Effects Pick Mode under Debug in Controls and turn 3D grass on
+  2. In Spiral Mountain press the key, point at the grass and left click: the label says Disable (yours) and the grass on it goes
+  3. Keep clicking: Grass, Deep Snow, Ice Reflection, then the built-in choice again; Shift + left click puts it back at once
+  4. Point at a rock or path and click to Grass: grass grows on it
+  5. Look in the folder next to the save files: Dev Files holds shader_effect_tags.txt, and parallax_tags.txt / interp_tags.txt land there too when you save them
+- Look for: Does each click change the grass at once, and is the Dev Files folder made with the text file in it?
+- Status: waiting for L
+
 ## T420 Sun shadows over the whole level
 - Asked: 2026-10-18 07:46 UTC
 - Build: main
