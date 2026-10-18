@@ -12912,6 +12912,7 @@ RECOMP_FUNC void bsbansack_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void capod_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_test_room_quiet()) { ctx->r2 = 0; return; }
     // 0x80800130: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x80800134: sw          $ra, 0x14($sp)

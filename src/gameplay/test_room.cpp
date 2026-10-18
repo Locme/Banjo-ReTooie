@@ -11,6 +11,17 @@
 // removed, so spawned actors are found again each frame by their id struct
 // pointer (object +0), never by the object's address.
 //
+// No scenes (L, 2026-10-17: "turn off every cutscene trigger"): while the room is up (from its first
+// spawn until Banjo leaves the area), tooie_test_room_quiet() is true and banjotooie.us.toml's hooks
+// make the game's two dialogue starters (func_800C0534 and func_800C05B8, the only callers of
+// gcdialogexec's start) give up as they do when the dialogue system is busy, func_800F4A58 skip
+// putting Banjo in the scripted walk (state 152) that Mumbo, Heggy, Master Jiggywiggy and King
+// Jingaling use to call him over, and every capod entry point (how a character drives its scripted
+// camera) take its "no camera pod" path, so the gameplay camera stays. The characters keep idling.
+// Quagmire's own Gruntlings are held under the floor (they knock Banjo across the area). Gruntilda,
+// Merry Maggie Malpass, Chilli Billi and Stomponadon stay out of the line-up: they start their quiz,
+// scene or boss fight by themselves.
+//
 // Headless test aids:
 //   TOOIE_TEST_ROOM=1             fill the room as soon as Banjo is in its area
 //                                 (warp there with TOOIE_WARP)
@@ -34,6 +45,7 @@
 #include "recomp.h"
 #include "funcs.h"
 #include "tooie_debug.h"
+#include "tooie_hooks.h"
 #include "tooie_test_room.h"
 #include "tooie_transform_picker.h"
 #include "tooie_rdram.h"
@@ -67,6 +79,10 @@ namespace {
     // The id struct an object's +0 points at holds the model id here.
     constexpr uint32_t marker_model = 0x14;
     constexpr int max_objects = 2048;
+    // Quagmire's own Gruntlings (model 0x671) run at Banjo and knock him across the area: while the room is
+    // up they are held far under the floor.
+    constexpr uint16_t gruntling_model = 0x671;
+    constexpr float gruntling_depth = -20000.0f;
     constexpr gpr game_state_addr = (int32_t)0x80127630;
 
     // Layout: rows across Banjo's view, the first row this far ahead, each row further back.
@@ -344,6 +360,10 @@ namespace {
         std::vector<int> seen(slots.size(), 0);
         for_each_object(rdram, [&](uint32_t object) {
             const uint32_t marker = read_word(rdram, object);
+            if (valid_ptr(marker) && (read_word(rdram, marker + marker_model) >> 16) == gruntling_model) {
+                write_float(rdram, object + object_pos + 4, gruntling_depth);
+                return;
+            }
             for (size_t i = 0; i < slots.size(); i++) {
                 if (slots[i].marker != 0 && slots[i].marker == marker) {
                     seen[i] = 1;
@@ -364,6 +384,21 @@ namespace {
             }
         }
     }
+}
+
+extern "C" int tooie_test_room_quiet(void) {
+    // Game thread only, as tick().
+    if (slots.empty()) {
+        return 0;
+    }
+    if (log_on) {
+        static int blocked = 0;
+        if (++blocked % 60 == 1) {
+            printf("[test-room] talk or scripted walk held back (%d so far)\n", blocked);
+            fflush(stdout);
+        }
+    }
+    return 1;
 }
 
 void tooie::test_room::request() {
@@ -412,7 +447,8 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
             Slot& slot = slots[next_spawn];
             const Entry& entry = entries[slot.entry];
             if (log_on) {
-                printf("[test-room] spawning 0x%X %s\n", entry.id, entry.name);
+                printf("[test-room] spawning 0x%X %s at %.0f %.0f %.0f\n", entry.id, entry.name, slot.pos[0], slot.pos[1],
+                    slot.pos[2]);
                 fflush(stdout);
             }
             if (heap_check_on) {
@@ -483,8 +519,10 @@ void tooie::test_room::tick(uint8_t* rdram, recomp_context* ctx) {
             heap_bytes_free(rdram, ctx);
             const uint32_t free_bytes = (uint32_t)ctx->r2;
             *ctx = saved;
-            printf("[test-room] %d of %zu actors present, heap %u KB free (largest block %u KB)\n", alive, slots.size(),
-                free_bytes / 1024, largest_free(rdram) / 1024);
+            float p[3] = {0, 0, 0};
+            player_position(rdram, p);
+            printf("[test-room] %d of %zu actors present, heap %u KB free (largest block %u KB), Banjo at %.0f %.0f %.0f\n",
+                alive, slots.size(), free_bytes / 1024, largest_free(rdram) / 1024, p[0], p[1], p[2]);
             fflush(stdout);
         }
     }

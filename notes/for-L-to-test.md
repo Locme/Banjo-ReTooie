@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T419 Test room: no cutscenes at all
+- Asked: 2026-10-18 01:22 UTC
+- Build: main
+- Steps:
+  1. Warp > Test > Test room
+  2. Stand still for a minute, then walk up to Mumbo, Heggy, King Jingaling and Master Jiggywiggy
+- Look for: Nobody talks, Banjo is never walked anywhere by himself and the camera stays behind him the whole time (enemies can still hit him)
+- Status: waiting for L
+
 ## T418 DEV Sound test (find the torch enemy's grunt)
 - Asked: 2026-10-17 23:32 UTC
 - Build: main

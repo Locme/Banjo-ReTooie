@@ -29,19 +29,27 @@ overlay chbaddieDll) are not in that table and cannot be spawned this way.
 - Crowd crashes (display list overflow, full animation caches) were fixed by
   More game memory; with it off the room may crash.
 
-## Characters that start scenes (2026-10-16)
+## No scenes in the room (2026-10-17)
 
-Six characters started a scene by themselves from across the room on a file
-that hasn't met them yet (headless, no file loaded), so they are commented out
-in `test_room_actors.inc`. Gruntilda (0x528) starts her Tower of Tragedy quiz
-intro ("I'm Grunty, your host"). King Jingaling, Jolly Roger, Bullion Bill,
-Conga and Biggafoot start talking. With them out, the full room ran 100 s
-after filling with no scene. Two things were tried first and dropped. Fast-
-forwarding the talk with the cutscene skip hit its 45 s limit on Jingaling.
-Reading every FTT ("first time talk") flag as set left the screen black, and
-Jingaling, Bill and Biggafoot don't use FTT flags anyway.
-Not cutscenes: the "Isle O' Hags (Quagmire)" name card on arrival, and
-Stomponadon's boss name card when Banjo gets near it.
+L found the room still unusable after the first pass (T318): characters
+talked, walked Banjo over to them and took the camera. Now, while the room is
+up, hooks in `banjotooie.us.toml` (all guarded by `tooie_test_room_quiet()`):
+
+- make the two dialogue starters (`func_800C0534`, `func_800C05B8`) give up
+  as they do when the dialogue system is busy;
+- skip `func_800F4A58`, the scripted walk (state 152) Mumbo, Heggy, Master
+  Jiggywiggy, King Jingaling and Bottles' molehill use to call Banjo over;
+- make every `capod_entrypoint_0..22` (a character driving its camera pod)
+  take its "no pod" path. Hooking only the pod start or only the camera mode
+  switch (`func_8010F9C0` mode 8) left ncpod writing through nulls later.
+
+Quagmire's Gruntlings (model 0x671) are held under the floor; they knocked
+Banjo across the area. Gruntilda (her quiz crashes outside her tower), Merry
+Maggie Malpass, Chilli Billi and Stomponadon stay out of the line-up.
+Headless: the full room ran 130 s with no scene, no pass-over and Banjo
+standing still; teleported next to Mumbo, Heggy, Jingaling and Jiggywiggy,
+none of them talked or took the camera (Banjo still gets hit by the enemies
+nearby). Not cutscenes: the "Isle O' Hags (Quagmire)" name card on arrival.
 
 ## Finding which actor crashes
 

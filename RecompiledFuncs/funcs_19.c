@@ -4654,6 +4654,7 @@ L_8080018C:
 RECOMP_FUNC void capod_entrypoint_12(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_test_room_quiet()) { ctx->r2 = 0; return; }
     // 0x80800320: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x80800324: sw          $ra, 0x14($sp)

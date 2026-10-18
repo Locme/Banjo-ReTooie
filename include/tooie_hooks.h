@@ -161,6 +161,8 @@ void tooie_vanilla_widescreen_title(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_row_a0(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_text(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_row_stack(uint8_t* rdram, recomp_context* ctx);
+// Test room (src/gameplay/test_room.cpp): true while the room is up, so no dialogue starts.
+int tooie_test_room_quiet(void);
 
 #ifdef __cplusplus
 }
