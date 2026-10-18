@@ -604,25 +604,29 @@ namespace {
 
     // ---- the black nose (see the top) ----
     struct Nose {
-        uint32_t model = 0;
+        uint32_t model = 0, vtx = 0;
         std::vector<int> index;
         std::vector<float> weight;
         std::vector<int16_t> original, written;
         Vec pivot{}, tip{};          // the snout bone's vertex space
     } nose;
 
+    uint32_t nose_vertex(int i) { return nose.vtx + 0x18 + 16 * i; }
+
     bool nose_intact(uint8_t* rdram) {
         const std::vector<int16_t>& expect = nose.written.empty() ? nose.original : nose.written;
         for (size_t k = 0; k < nose.index.size(); k++)
             for (int c = 0; c < 3; c++)
-                if (read_half(rdram, vertex_addr(nose.index[k]) + 2 * c) != expect[3 * k + c]) return false;
+                if (read_half(rdram, nose_vertex(nose.index[k]) + 2 * c) != expect[3 * k + c]) return false;
         return true;
     }
 
+    // Puts the nose back on whichever model it was last written into (another player model drawn in
+    // between must not keep a swung nose, or its swung vertices would be read as the rest next time).
     void restore_nose(uint8_t* rdram) {
-        if (nose.model != 0 && !nose.written.empty() && nose.model == current_model && nose_intact(rdram)) {
+        if (nose.model != 0 && !nose.written.empty() && valid_ptr(nose.vtx) && nose_intact(rdram)) {
             for (size_t k = 0; k < nose.index.size(); k++)
-                for (int c = 0; c < 3; c++) write_half(rdram, vertex_addr(nose.index[k]) + 2 * c, nose.original[3 * k + c]);
+                for (int c = 0; c < 3; c++) write_half(rdram, nose_vertex(nose.index[k]) + 2 * c, nose.original[3 * k + c]);
         }
         nose = {};
     }
@@ -650,11 +654,12 @@ namespace {
         if (current.vertices <= 0) {
             return false;
         }
-        if (nose.model == current_model && !nose.index.empty() && nose_intact(rdram)) {
+        if (nose.model == current_model && nose.vtx == current.vtx && !nose.index.empty() && nose_intact(rdram)) {
             return true;
         }
-        nose = {};
+        restore_nose(rdram);
         nose.model = current_model;
+        nose.vtx = current.vtx;
         std::vector<int> all;
         collect_snout(rdram, current_model + read_word(rdram, current_model + 4), -1, false, 0, all);
         std::sort(all.begin(), all.end());
@@ -698,8 +703,21 @@ namespace {
                     zmin = std::min(zmin, v.p.z); zmax = std::max(zmax, v.p.z);
                 }
             }
+            // The nose stays joined to the snout (L, 2026-10-18, "still not connected"): its back ring,
+            // where it meets the snout's skin (062A: z 45-48 of 45-56), stays put and the swing blends in
+            // towards the tip. Weights follow the bind position, so the black and white vertices at the
+            // same place move together.
+            const float ring = zmin + 0.35f * (zmax - zmin);
+            Vec ring_sum{ 0, 0, 0 };
+            float ring_n = 0.0f;
+            for (size_t k = 0; k < nose.index.size(); k++) {
+                const Vec p{ (float)nose.original[3 * k], (float)nose.original[3 * k + 1], (float)nose.original[3 * k + 2] };
+                nose.weight[k] = smooth((p.z - ring) / std::max(zmax - ring, 1.0f));
+                if (p.z <= ring) { ring_sum = ring_sum + p; ring_n += 1.0f; }
+            }
             const Vec c = sum * (1.0f / total);
-            nose.pivot = { c.x, c.y, zmin };
+            const Vec base = ring_n > 0.0f ? ring_sum * (1.0f / ring_n) : Vec{ c.x, c.y, zmin };
+            nose.pivot = base;
             nose.tip = { c.x, c.y, zmax };
         } else {
             // No black vertices (mods): the front third of the snout's mesh, blended in.
@@ -741,7 +759,7 @@ namespace {
             out[3 * k + 2] = (int16_t)std::lround(std::clamp(v.z, -32768.0f, 32767.0f));
         }
         for (size_t k = 0; k < nose.index.size(); k++)
-            for (int c = 0; c < 3; c++) write_half(rdram, vertex_addr(nose.index[k]) + 2 * c, out[3 * k + c]);
+            for (int c = 0; c < 3; c++) write_half(rdram, nose_vertex(nose.index[k]) + 2 * c, out[3 * k + c]);
         nose.written = std::move(out);
         return turn.angle;
     }

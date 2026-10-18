@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T433 Nose jiggle: nose stays joined to the snout
+- Asked: 2026-10-18 22:47 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on, Nose jiggle on, any settings (try the maxes)
+  2. Run, jump, fall and stop, and look at the black nose from the front and the side
+- Look for: The back of the nose never lifts off the snout and no fur shows through behind it; only the tip of the nose wobbles. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T432 Snout jiggle: squash & stretch while walking, nose stays whole
 - Asked: 2026-10-18 22:34 UTC
 - Build: main
