@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T429 Snout jiggle: one joint at the mouth, Tilt and Fullness, underside bends down
+- Asked: 2026-10-18 20:25 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on
+  2. Run, stop, jump and land: the whole snout swings from the corners of the mouth (the second joint is gone)
+  3. Make it swing down (a jump up, or Tilt negative): the underside of the snout goes down with the rest
+  4. Try the new Tilt slider (up/down rest angle) and Fullness slider (thickness, volume kept while it stretches)
+- Look for: No part of the snout stuck in place when it swings down; the mouth corners still stay joined. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T428 Copy, Paste and Undo Pick keys; Shift + wheel depth
 - Asked: 2026-10-18 19:55 UTC
 - Build: main

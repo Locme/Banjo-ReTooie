@@ -306,8 +306,12 @@ void tooie::init_config() {
             "How limp the snout is. 0 is springy; 100 has almost no spring, so it droops and flops about like a shaken hot dog even while Banjo stands still; 150 is limper still.", 0, 150, 5, 0, true, 80);
         general.add_number_option(heaviness_option, "Snout jiggle: heaviness",
             "How heavy the snout is: heavier swings slower and further when Banjo starts, stops and lands, and droops more. The air pushes it the same.", 10, 300, 10, 0, true, 100);
+        general.add_number_option(tilt_option, "Snout jiggle: tilt",
+            "Where the snout points at rest: up towards his eyes (positive) or down (negative), in degrees. It wobbles round that.", -60, 60, 5, 0, false, 0);
+        general.add_number_option(fullness_option, "Snout jiggle: fullness",
+            "How full and thick the snout is. It keeps the same volume as it swings and stretches.", 25, 300, 10, 0, true, 100);
         for (const std::string* id : { &strength_option, &bounce_option, &speed_option, &exaggeration_option,
-                                       &stretch_option, &size_option, &reach_option, &floppiness_option, &heaviness_option }) {
+                                       &stretch_option, &size_option, &reach_option, &floppiness_option, &heaviness_option, &tilt_option, &fullness_option }) {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }

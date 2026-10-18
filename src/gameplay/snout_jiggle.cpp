@@ -153,7 +153,8 @@ namespace {
     // The sliders, read once per draw of the player's model.
     struct Settings {
         float follow = base_follow, damping = 0.18f, frequency = 3.5f, max_angle = base_angle;
-        float stretch = 0.5f, size = 0.9f, reach = 6.0f, floppiness = 0.8f, heaviness = 1.0f;
+        float stretch = 0.5f, size = 0.9f, reach = 6.0f, floppiness = 0.8f, heaviness = 1.0f, fullness = 1.0f;
+        float tilt = 0.0f;   // radians, its rest angle up (+) or down (-)
     } settings;
 
     void read_settings() {
@@ -171,6 +172,8 @@ namespace {
         settings.reach = std::max((float)option_number(reach_option, 6.0), 0.0f);
         settings.floppiness = std::clamp((float)option_number(floppiness_option, 80.0), 0.0f, 150.0f) / 100.0f;
         settings.heaviness = std::clamp((float)option_number(heaviness_option, 100.0), 10.0f, 300.0f) / 100.0f;
+        settings.fullness = std::clamp((float)option_number(fullness_option, 100.0), 25.0f, 300.0f) / 100.0f;
+        settings.tilt = std::clamp((float)option_number(tilt_option, 0.0), -60.0f, 60.0f) * pi / 180.0f;
     }
 
     bool logging() {
@@ -223,8 +226,7 @@ namespace {
     // ---- the muzzle on the game's own models (see the top) ----
     struct Muzzle {
         uint32_t model = 0;
-        std::vector<int> index;            // the head's vertices that can bend, and the snout bone's own
-        std::vector<char> on_snout;        // drawn with the snout bone's (turned) matrix
+        std::vector<int> index;            // the head's vertices that can bend
         std::vector<int16_t> original;     // their bind positions, 3 per vertex
         std::vector<int16_t> written;      // what was last written, 3 per vertex (empty: nothing yet)
     } muzzle;
@@ -254,8 +256,8 @@ namespace {
     // The head's own vertices: draw nodes on bone 9 outside selectors, the head side of the snout's
     // skin node (on bone 10, its second half) and of the jaw's (bone 11): the corners of the mouth are
     // one point in all three, so they must move alike or the mouth tears open there (L's close-up,
-    // 2026-10-17). And the snout bone's own vertices (its draw nodes and its side of its skin), so the
-    // lips on it can be held back with the mouth. Second of each pair: true for the snout bone's.
+    // 2026-10-17). (Second of each pair: true for the snout bone's own; none now, L 2026-10-18: holding
+    // its underside back with the mouth stopped the snout bending down.)
     void collect(uint8_t* rdram, uint32_t node, int bone, bool in_selector, int depth, std::vector<std::pair<int, bool>>& out) {
         const bool jaw = current.jaw;
         for (int guard = 0; guard < 4096 && depth < 32; guard++) {
@@ -266,14 +268,12 @@ namespace {
                 const int options = (uint16_t)read_half(rdram, node + 8);
                 for (int i = 0; i < options && i < 64; i++)
                     collect(rdram, node + read_word(rdram, node + 12 + 4 * i), bone, true, depth + 1, out);
-            } else if (cmd == 0x11 && !in_selector && (bone == head_bone || bone == snout_bone)) {
+            } else if (cmd == 0x11 && !in_selector && bone == head_bone) {
                 const int v0 = (uint16_t)read_half(rdram, node + 10), nv = (uint16_t)read_half(rdram, node + 12);
-                for (int i = v0; i < v0 + nv; i++) out.push_back({ i, bone == snout_bone });
+                for (int i = v0; i < v0 + nv; i++) out.push_back({ i, false });
             } else if (cmd == 0x18 && !in_selector && (bone == snout_bone || (jaw && bone == jaw_bone))) {
                 const int n_parent = (uint16_t)read_half(rdram, node + 20), n_child = (uint16_t)read_half(rdram, node + 32);
                 const int v0 = (uint16_t)read_half(rdram, node + 44);
-                if (bone == snout_bone)
-                    for (int i = v0; i < v0 + n_child; i++) out.push_back({ i, true });
                 for (int i = v0 + n_child; i < v0 + n_child + n_parent; i++) out.push_back({ i, false });
             }
             if (size == 0 || size > 0x100000) return;
@@ -295,10 +295,10 @@ namespace {
         collect(rdram, geo, -1, false, 0, all);
         std::sort(all.begin(), all.end());
         all.erase(std::unique(all.begin(), all.end(), [](auto& a, auto& b) { return a.first == b.first; }), all.end());
-        for (const auto& [i, on_snout] : all) {
+        for (const auto& entry : all) {
+            const int i = entry.first;
             if (i < 0 || i >= current.vertices) continue;
             muzzle.index.push_back(i);
-            muzzle.on_snout.push_back(on_snout);
             for (int c = 0; c < 3; c++) muzzle.original.push_back(read_half(rdram, vertex_addr(i) + 2 * c));
         }
         return !muzzle.index.empty();
@@ -310,7 +310,7 @@ namespace {
     }
     // The game's head (bind space, 062A and 0838): the eyes reach forward to z 27 and down to y 106;
     // the mouth (the lips on the snout and head, its corners at y 98, and the jaw) is below about y 99.
-    constexpr float eye_front = 27.0f, eye_bottom = 106.0f, mouth_top = 96.0f, mouth_band = 6.0f;
+    constexpr float eye_front = 27.0f, eye_bottom = 106.0f, mouth_top = 96.0f, mouth_band = 6.0f, mouth_corner_z = 26.0f;
 
     // Row vectors, as the game's matrices: p' = p * M.
     Vec transform(const float m[16], Vec p) {
@@ -333,46 +333,34 @@ namespace {
         out[15] = m[15];
     }
 
-    // How much of the mouth a bind position is: 1 at the lips and below, 0 from mouth_top + mouth_band.
-    // The snout swings, the mouth stays put (L, 2026-10-17: "it should affect his snout not his mouth").
+    // How much of the mouth a bind position is: 1 at the lips and below, 0 from mouth_top + mouth_band,
+    // and only back at the corners of the mouth (z 25), not under the snout in front of them. The snout
+    // swings, the mouth stays put (L, 2026-10-17: "it should affect his snout not his mouth"), and the
+    // underside of the snout bends down with the rest (L, 2026-10-18).
     float mouth(Vec v) {
-        return 1.0f - smooth((v.y - mouth_top) / mouth_band);
+        return (1.0f - smooth((v.y - mouth_top) / mouth_band)) * (1.0f - smooth((v.z - mouth_corner_z) / 4.0f));
     }
 
-    // Bend the muzzle: each head vertex takes the front joint's turn B (blended in over the few units
-    // behind the snout bone's root), then the mouth joint's turn A (blended in from pivot.z - reach to
-    // the corners of the mouth), both in posed space; the snout bone's own lips are turned back by the
-    // mouth's share. Vertices are in the bind pose: head is the head's matrix, snout and turned the snout
-    // bone's before and after the turns.
-    void bend_muzzle(uint8_t* rdram, const Affine& A, const Affine& B, const float head[16], const float snout[16],
-                     const float turned[16]) {
+    // Bend the muzzle: each head vertex takes the snout's turn A (posed space, about the corners of the
+    // mouth), blended in from pivot.z - reach to the pivot. Vertices are in the bind pose; head is the
+    // head's matrix.
+    void bend_muzzle(uint8_t* rdram, const Affine& A, const float head[16]) {
         const float front = current.pivot.z, back = current.pivot.z - settings.reach;
-        constexpr float front_blend = 6.0f;
-        Mat inv_head, inv_turned;
-        if (!inverse(upper(head), inv_head) || !inverse(upper(turned), inv_turned)) return;
+        Mat inv_head;
+        if (!inverse(upper(head), inv_head)) return;
         std::vector<int16_t> out(muzzle.original.size());
         for (size_t k = 0; k < muzzle.index.size(); k++) {
             Vec v{ (float)muzzle.original[3 * k], (float)muzzle.original[3 * k + 1], (float)muzzle.original[3 * k + 2] };
             // Weights depend only on the bind position, so points shared by the head, the snout's skin
             // and the jaw's skin move together.
-            if (muzzle.on_snout[k]) {
-                const float hold = mouth(v);
-                if (hold > 0.0f) {
-                    const Vec was = transform(snout, v), now = transform(turned, v);
-                    const Vec want = now + (was - now) * hold;
-                    v = apply(want - Vec{ turned[12], turned[13], turned[14] }, inv_turned);
-                }
-            } else {
+            {
                 // Leave the brow round the eyes alone (the eyes are selectors and don't move), or they come
                 // apart (L's photo, 2026-10-17), and the mouth.
                 const float keep = (1.0f - (1.0f - smooth((v.z - eye_front) / 4.0f)) * smooth((v.y - (eye_bottom - 4.0f)) / 4.0f)) *
                                    (1.0f - mouth(v));
                 const float wa = keep * (front > back ? smooth((v.z - back) / (front - back)) : (v.z >= front ? 1.0f : 0.0f));
-                const float wb = keep * smooth((v.z - (current.root.z - front_blend)) / front_blend);
-                if (wa > 0.0f || wb > 0.0f) {
-                    const Vec posed = transform(head, v);
-                    Vec p = posed;
-                    p = p + (apply(p, B.L) + B.t - p) * wb;
+                if (wa > 0.0f) {
+                    Vec p = transform(head, v);
                     p = p + (apply(p, A.L) + A.t - p) * wa;
                     v = apply(p - Vec{ head[12], head[13], head[14] }, inv_head);
                 }
@@ -489,10 +477,9 @@ namespace {
         bool have_vel = false;
         double last = 0.0;            // game time of the last step, seconds
     };
-    // Two joints (L, 2026-10-18): the whole snout swings from the corners of the mouth, and its front
-    // bounces again on top from the snout bone's root, faster and a little less far.
-    Flop flop_mouth, flop_front;
-    constexpr float front_speed = 1.8f, front_angle = 0.7f;
+    // The whole snout swings from the corners of the mouth (L, 2026-10-18; a second joint at the snout
+    // bone's root was tried and taken out).
+    Flop flop_mouth;
 
     // One step per game frame (by the game's own clock, so the shadow pass's second draw and any
     // frame rate give the same swing). Long gaps and warps keep the swing as it is and only forget the
@@ -552,17 +539,19 @@ namespace {
             const Vec t_yaw = (f * cp + u * sp) * (-sy) + s * cy;
             const Vec F = push + gravity;
             const float pitch_a = dot(F, t_pitch) + buckle_up * std::max(0.0f, -dot(push, dir))
-                                  - k * flop.pitch - c * flop.pitch_v;
+                                  - k * (flop.pitch - settings.tilt) - c * flop.pitch_v;
             const float yaw_a = dot(F, t_yaw) - k * side_stiffness * flop.yaw - c * flop.yaw_v;
             flop.pitch_v += pitch_a * h;
             flop.yaw_v += yaw_a * h;
             flop.pitch += flop.pitch_v * h;
             flop.yaw += flop.yaw_v * h;
             // At the Exaggeration limit it bounces back a little instead of sticking.
-            const float bend = std::sqrt(flop.pitch * flop.pitch + flop.yaw * flop.yaw);
+            // (Measured from the Tilt slider's rest angle.)
+            const float off = flop.pitch - settings.tilt;
+            const float bend = std::sqrt(off * off + flop.yaw * flop.yaw);
             if (bend > max_a && bend > 1e-6f) {
-                const float rp = flop.pitch / bend, ry = flop.yaw / bend;
-                flop.pitch = rp * max_a;
+                const float rp = off / bend, ry = flop.yaw / bend;
+                flop.pitch = settings.tilt + rp * max_a;
                 flop.yaw = ry * max_a;
                 const float out = flop.pitch_v * rp + flop.yaw_v * ry;
                 if (out > 0.0f) {
@@ -844,18 +833,16 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const Vec pivot = transform(m, current.pivot);   // the corners of the mouth (vanilla) or the root
-    const Vec root = transform(m, current.root);     // the snout bone's root: the second joint
     const Vec tip = transform(m, current.tip);
-    if (length(tip - pivot) < 1e-3f || length(tip - root) < 1e-3f) {
+    if (length(tip - pivot) < 1e-3f) {
         return;
     }
     const Vec head_up{ m[4], m[5], m[6] };
-    const bool two_joints = length(root - pivot) > 1e-3f;
 
-    // First joint: the whole snout about the corners of the mouth.
+    // The whole snout about the corners of the mouth.
     Frame fa = frame(tip - pivot, head_up);
     update_flop(flop_mouth, to_world(tip), fa.f, fa.u, fa.s, 1.0f, 1.0f);
-    // Headless: TOOIE_SNOUT_FORCE=<pitch>,<yaw> (degrees) holds the first joint at that bend, for close-ups.
+    // Headless: TOOIE_SNOUT_FORCE=<pitch>,<yaw> (degrees) holds the snout at that bend, for close-ups.
     static const char* force = std::getenv("TOOIE_SNOUT_FORCE");
     if (force != nullptr) {
         float fp = 0.0f, fy = 0.0f;
@@ -870,7 +857,8 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     const float d[3] = { fa.f.x, fa.f.y, fa.f.z };
     const float swing = std::sqrt(flop_mouth.pitch_v * flop_mouth.pitch_v + flop_mouth.yaw_v * flop_mouth.yaw_v);
     const float st = 1.0f + settings.stretch * std::min(swing / 12.0f, 1.0f);
-    const float across = 1.0f / std::sqrt(std::max(st, 0.05f));
+    // Fullness: how thick the snout is; stretching keeps its volume (thinner as it gets longer).
+    const float across = settings.fullness / std::sqrt(std::max(st, 0.05f));
     Mat S{};
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
@@ -878,18 +866,7 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     const Mat Qa = mul(S, Ra);   // p' = pivot + (p - pivot) * S * R
     const Affine A{ Qa, pivot - apply(pivot, Qa) };
 
-    // Second joint: the front again about the snout bone's root, in the snout's own frame; its spring
-    // feels the first joint's swing too, so the front whips after it.
-    Affine B{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
-    float angle_b = 0.0f;
-    if (two_joints) {
-        const Frame fb = frame(tip - root, head_up);
-        const Frame fb_now{ apply(fb.f, Ra), apply(fb.u, Ra), apply(fb.s, Ra) };
-        update_flop(flop_front, to_world(apply(tip, Qa) + A.t), fb_now.f, fb_now.u, fb_now.s, front_speed, front_angle);
-        const Mat Rb = turn(fb, flop_front, angle_b);
-        B = { Rb, root - apply(root, Rb) };
-    }
-    const Affine T = then(B, A);
+    const Affine T = A;
 
     float out[16];
     apply_affine(m, T, out);
@@ -900,14 +877,14 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
 
     // The muzzle and the mouth on the game's own models.
     if (have_head && prepare_muzzle(rdram)) {
-        bend_muzzle(rdram, A, B, head_matrix, m, out);
+        bend_muzzle(rdram, A, head_matrix);
     }
     if (logging()) {
         static int n = 0;
         if (++n % 15 == 0) {
-            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f pitch %.1f yaw %.1f angle %.1f front %.1f stretch %.2f muzzle %zu%s\n",
+            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f pitch %.1f yaw %.1f angle %.1f stretch %.2f muzzle %zu%s\n",
                    model_pos.x, model_pos.y, model_pos.z, model_yaw, flop_mouth.prev_vel.x, flop_mouth.prev_vel.y, flop_mouth.prev_vel.z,
-                   flop_mouth.pitch * 180.0f / pi, flop_mouth.yaw * 180.0f / pi, angle * 180.0f / pi, angle_b * 180.0f / pi, st, muzzle.index.size(),
+                   flop_mouth.pitch * 180.0f / pi, flop_mouth.yaw * 180.0f / pi, angle * 180.0f / pi, st, muzzle.index.size(),
                    tooie::photo_mode::active() ? " (photo)" : "");
             fflush(stdout);
         }
