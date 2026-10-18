@@ -14,11 +14,14 @@
 //   to point at it and stretches or squashes to reach it, keeping its volume. Falling, the point lags
 //   above and the snout pushes up into his face; jumping, it hangs down; stops slap it forward. The
 //   tip moves at most a share of the snout's length from rest: inwards (squashing into the face),
-//   outwards (stretching) and up, down or to the side, each its own slider. It steps by the game's
+//   outwards (stretching) and up, down or to the side, each its own slider; while he walks or runs
+//   on the ground the inwards limit eases to its own Walking slider, so walking forward doesn't
+//   squash his face (L, 2026-10-18). It steps by the game's
 //   own clock, so it behaves the same at any frame rate and never snaps back after a hitch.
 // - Sliders (tooie_snout_jiggle.h): stiffness, damping, mass and the three limits.
 // - Nose jiggle (L, 2026-10-18, its own toggle under Snout jiggle): the black nose is a second jiggle
-//   bone with the same sliders, from its base to its tip, on the end of the swung snout. Its vertices
+//   bone with the same spring, from its base to its tip, on the end of the swung snout; its limits
+//   are capped so it always stays a whole nose (L, 2026-10-18). Its vertices
 //   (the snout bone's black ones and the white highlights over them; on mods without black ones, the
 //   front third of the snout bone's mesh, blended in) are rewritten each frame like the muzzle's.
 // - In Photo Mode the swing stops, so the snout stays mid-wobble (L, 2026-10-16).
@@ -155,6 +158,7 @@ namespace {
         // How far the tip may move from rest, as shares of the bone's length: back along it (into the
         // face), out along it, and across it (up, down, sideways).
         float inwards = 0.5f, outwards = 0.5f, across = 0.5f;
+        float walk_inwards = 0.15f;   // the inwards limit while he walks or runs on the ground (L, 2026-10-18)
         float reach = 6.0f;         // vanilla model: how far behind the mouth's corners the head blends in
     } settings;
 
@@ -166,6 +170,7 @@ namespace {
         settings.inwards = std::clamp((float)option_number(squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
         settings.outwards = std::clamp((float)option_number(squash_out_option, 50.0), 0.0f, 300.0f) / 100.0f;
         settings.across = std::clamp((float)option_number(squash_across_option, 50.0), 0.0f, 300.0f) / 100.0f;
+        settings.walk_inwards = std::clamp((float)option_number(squash_walk_option, 15.0), 0.0f, 95.0f) / 100.0f;
     }
 
     bool logging() {
@@ -493,12 +498,57 @@ namespace {
         jiggle.offset = to_model_dir(jiggle.point - tip_world);
     }
 
+    // Walking (L, 2026-10-18: walking forward smushed his face in): 1 while he moves along the ground,
+    // 0 in the air or standing, eased so the limit never jumps. From the model's own movement, once per
+    // game frame.
+    struct Walk {
+        bool started = false;
+        Vec last_pos{};
+        double last = 0.0;
+        float amount = 0.0f;
+    } walk;
+
+    void update_walk() {
+        if (tooie::photo_mode::active()) {
+            return;
+        }
+        const double now = tooie::game_frame_rate::game_seconds();
+        const float dt = (float)(now - walk.last);
+        if (!walk.started || dt > 0.25f) {
+            walk.started = true;
+            walk.last = now;
+            walk.last_pos = model_pos;
+            return;
+        }
+        if (dt <= 1e-5f) {
+            return;
+        }
+        const Vec d = model_pos - walk.last_pos;
+        walk.last = now;
+        walk.last_pos = model_pos;
+        const float ground = std::sqrt(d.x * d.x + d.z * d.z) / dt, up = std::fabs(d.y) / dt;
+        // Moving along (world units a second) and not much up or down: slopes and steps, not jumps or falls.
+        const float target = (ground > 40.0f && ground < 2000.0f && up < std::max(150.0f, 0.6f * ground)) ? 1.0f : 0.0f;
+        walk.amount += (target - walk.amount) * std::min(1.0f, dt * 6.0f);
+    }
+
+    // Shares of the bone's length its tip may move, and the most it may stretch or squash (the nose
+    // keeps its shape: L, 2026-10-18, "make sure it is always whole").
+    struct Limits { float inwards, outwards, across; };
+    Limits snout_limits() {
+        const float in = settings.inwards + (std::min(settings.walk_inwards, settings.inwards) - settings.inwards) * walk.amount;
+        return { in, settings.outwards, settings.across };
+    }
+    Limits nose_limits() {
+        return { std::min(settings.inwards, 0.15f), std::min(settings.outwards, 0.2f), std::min(settings.across, 0.35f) };
+    }
+
     struct BoneTurn { Affine A; Vec offset; float angle = 0.0f, stretch = 1.0f; };
 
     // The bone from pivot to tip (model space, posed), up being the head's up: steps its spring and
     // returns the turn and stretch about the pivot that takes the tip to the spring's point, within the
     // limits. force (headless, degrees up and to the side) holds it instead.
-    BoneTurn jiggle_bone(Jiggle& jiggle, Vec pivot, Vec tip, Vec up, const float* force) {
+    BoneTurn jiggle_bone(Jiggle& jiggle, Vec pivot, Vec tip, Vec up, const Limits& lim, const float* force) {
         BoneTurn r;
         r.A = { rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
         const Vec arm = tip - pivot;
@@ -517,9 +567,9 @@ namespace {
             offset = (f * (std::cos(p) * std::cos(y)) + u * (std::sin(p) * std::cos(y)) + sd * std::sin(y)) * la - arm;
         }
         // Limits: along the bone, back in (squash) and out (stretch); across it, up, down and sideways.
-        const float along = std::clamp(dot(offset, f), -settings.inwards * la, settings.outwards * la);
+        const float along = std::clamp(dot(offset, f), -lim.inwards * la, lim.outwards * la);
         Vec side = offset - f * dot(offset, f);
-        const float ls = length(side), limit = settings.across * la;
+        const float ls = length(side), limit = lim.across * la;
         if (ls > limit) {
             side = side * (limit / ls);
         }
@@ -673,7 +723,7 @@ namespace {
 
     // Swing the nose: m is the snout bone's matrix as drawn (after the snout's own jiggle).
     float jiggle_nose(uint8_t* rdram, const float m[16], Vec up) {
-        const BoneTurn turn = jiggle_bone(nose_spring, transform(m, nose.pivot), transform(m, nose.tip), up, nullptr);
+        const BoneTurn turn = jiggle_bone(nose_spring, transform(m, nose.pivot), transform(m, nose.tip), up, nose_limits(), nullptr);
         // In the vertex space: v' = pivot + (v - pivot) * M N M^-1.
         const Mat M = upper(m);
         Mat Mi;
@@ -956,7 +1006,8 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     static const char* force_env = std::getenv("TOOIE_SNOUT_FORCE");
     float force[2] = { 0.0f, 0.0f };
     const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f", &force[0], &force[1]) >= 1;
-    const BoneTurn turn = jiggle_bone(snout_spring, pivot, tip, head_up, forced ? force : nullptr);
+    update_walk();
+    const BoneTurn turn = jiggle_bone(snout_spring, pivot, tip, head_up, snout_limits(), forced ? force : nullptr);
     const Affine& A = turn.A;
 
     float out[16];
@@ -977,9 +1028,9 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     if (logging()) {
         static int n = 0;
         if (++n % 15 == 0) {
-            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f offset %.1f,%.1f,%.1f angle %.1f stretch %.2f muzzle %zu nose %.1f/%zu%s\n",
+            printf("[snout] pos %.0f,%.0f,%.0f yaw %.0f vel %.0f,%.0f,%.0f offset %.1f,%.1f,%.1f angle %.1f stretch %.2f walk %.2f muzzle %zu nose %.1f/%zu%s\n",
                    model_pos.x, model_pos.y, model_pos.z, model_yaw, snout_spring.velocity.x, snout_spring.velocity.y, snout_spring.velocity.z,
-                   turn.offset.x, turn.offset.y, turn.offset.z, turn.angle * 180.0f / pi, turn.stretch, muzzle.index.size(),
+                   turn.offset.x, turn.offset.y, turn.offset.z, turn.angle * 180.0f / pi, turn.stretch, walk.amount, muzzle.index.size(),
                    nose_angle * 180.0f / pi, nose.index.size(),
                    tooie::photo_mode::active() ? " (photo)" : "");
             fflush(stdout);

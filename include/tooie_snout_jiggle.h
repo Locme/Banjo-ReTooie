@@ -29,6 +29,7 @@ namespace tooie::snout_jiggle {
     inline const std::string squash_in_option = "snout_jiggle_squash_in";     // back into the face
     inline const std::string squash_out_option = "snout_jiggle_squash_out";   // out along it
     inline const std::string squash_across_option = "snout_jiggle_squash_across"; // up, down and sideways
+    inline const std::string squash_walk_option = "snout_jiggle_squash_walk"; // back into the face while walking or running
     inline const std::string nose_option = "snout_jiggle_nose";               // the black nose, same sliders
 }
 

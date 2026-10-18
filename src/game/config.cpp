@@ -296,13 +296,15 @@ void tooie::init_config() {
             "How heavy the snout is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
         general.add_number_option(squash_in_option, "Snout jiggle: max squash & stretch inwards",
             "How far the tip may be pushed back into his face and eyes, as a share of the snout's length.", 0, 95, 5, 0, true, 50);
+        general.add_number_option(squash_walk_option, "Snout jiggle: squash & stretch while walking",
+            "The inwards limit while Banjo walks or runs along the ground, so walking forward doesn't squash his face. Jumps, falls, stops and turns use the inwards setting above. It can only be gentler than that.", 0, 95, 5, 0, true, 15);
         general.add_number_option(squash_out_option, "Snout jiggle: max squash & stretch outwards",
             "How far the tip may stretch out, as a share of the snout's length.", 0, 300, 5, 0, true, 50);
         general.add_number_option(squash_across_option, "Snout jiggle: max squash & stretch up and down",
             "How far the tip may swing up and down (and to the side), as a share of the snout's length.", 0, 300, 5, 0, true, 50);
         general.add_bool_option(nose_option, "Snout jiggle: nose jiggle",
-            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same settings.", false);
-        for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_out_option,
+            "Banjo's black nose wobbles too, on its own jiggle bone on the end of the snout, with the same spring. Its squash and stretch stays small so it always looks like a nose.", false);
+        for (const std::string* id : { &stiffness_option, &damping_option, &mass_option, &squash_in_option, &squash_walk_option, &squash_out_option,
                                        &squash_across_option, &nose_option }) {
             general.add_option_hidden_dependency(*id, option, false);
         }

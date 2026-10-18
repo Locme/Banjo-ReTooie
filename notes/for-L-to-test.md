@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T432 Snout jiggle: squash & stretch while walking, nose stays whole
+- Asked: 2026-10-18 22:34 UTC
+- Build: main
+- Steps:
+  1. General > Snout jiggle on, Nose jiggle on, your fun settings (inwards high)
+  2. Walk and run forward on flat ground: the new 'Squash & stretch while walking' slider (default 15%) sets how far his face squashes in
+  3. Jump, fall, stop and turn: the normal inwards setting still applies there
+  4. Watch the black nose with every slider at its max
+- Look for: Walking forward no longer smushes his face; jumps and falls still do. The nose wobbles but always stays a whole nose (no black strips hanging down). Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T431 Snout jiggle: three squash & stretch limits, nose jiggle, bigger maxes
 - Asked: 2026-10-18 22:15 UTC
 - Build: main
