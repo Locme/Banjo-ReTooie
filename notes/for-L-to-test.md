@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T424 Save Pick and Delete Saved Pick keys
+- Asked: 2026-10-18 18:41 UTC
+- Build: main
+- Steps:
+  1. Bind Save Pick and Delete Saved Pick in Controls, Pick Modes
+  2. In any pick mode, change two textures or models, then hover one and press Save Pick: only that one goes into its file in Dev Files
+  3. Hover the other: its label still says not saved
+  4. Hover the saved one and press Delete Saved Pick: it goes back to built-in and leaves the file
+- Look for: Does each key act only on the thing under the cursor?
+- Status: waiting for L
+
 ## T423 Pick modes: Save and Delete Save buttons, Pick Modes section
 - Asked: 2026-10-18 10:57 UTC
 - Build: main

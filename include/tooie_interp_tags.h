@@ -69,7 +69,9 @@ namespace tooie::interp_tags {
     void request_tag();
     void request_effects();
     void reset(uint32_t model);
-    // Delete Save: the model back to default, in the game and the file (other unsaved tags stay unsaved).
+    // The Save Pick key: the model's tag as it stands into the file (only that model's).
+    void save_one(uint32_t model);
+    // The Delete Saved Pick key: the model back to default, in the game and the file (other unsaved tags stay unsaved).
     void unsave(uint32_t model);
 }
 

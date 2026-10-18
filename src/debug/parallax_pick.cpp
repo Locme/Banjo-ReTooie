@@ -50,7 +50,7 @@ namespace {
 
     std::mutex picks_mutex;
     std::map<uint64_t, Pick> picks;
-    // As parallax_tags.txt has them (the Save button writes picks over it).
+    // As parallax_tags.txt has them (the Save Pick key writes the texture under the cursor into it).
     std::map<uint64_t, Pick> saved_picks;
     std::atomic<uint32_t> picks_version{1};
 
@@ -123,15 +123,19 @@ namespace {
         }
     }
 
-    // The Save button: every pick made into the file.
-    size_t save() {
+    // The Save Pick key: the texture's pick as it stands into the file (only that one; its built-in choice takes it out).
+    void save_one(uint64_t hash) {
         std::lock_guard lock{ picks_mutex };
-        saved_picks = picks;
+        const auto live = picks.find(hash);
+        if (live == picks.end()) {
+            saved_picks.erase(hash);
+        } else {
+            saved_picks[hash] = live->second;
+        }
         write_locked();
-        return saved_picks.size();
     }
 
-    // The Delete Save button: the texture back to the built-in choice, in the game and the file (other unsaved picks stay unsaved).
+    // The Delete Saved Pick key: the texture back to the built-in choice, in the game and the file (other unsaved picks stay unsaved).
     void delete_saved(uint64_t hash) {
         {
             std::lock_guard lock{ picks_mutex };
@@ -250,11 +254,15 @@ namespace {
         }
     }
 
-    size_t save_effects() {
+    void save_one_effect(uint64_t hash) {
         std::lock_guard lock{ effects_mutex };
-        saved_effects = effects;
+        const auto live = effects.find(hash);
+        if (live == effects.end()) {
+            saved_effects.erase(hash);
+        } else {
+            saved_effects[hash] = live->second;
+        }
         write_effects_locked();
-        return saved_effects.size();
     }
 
     void delete_saved_effect(uint64_t hash) {
@@ -336,31 +344,11 @@ namespace {
         effects_version.fetch_add(1);
     }
 
-    // The Save and Delete Save buttons, fixed at the top left (toasts use the top right), as fractions of the window
-    // (the worker tests clicks against these).
-    enum Button { button_none, button_save, button_delete };
-    constexpr float button_left = 0.015f, button_width = 0.11f, button_height = 0.05f;
-    constexpr float button_top[2] = { 0.03f, 0.09f };
-
-    Button button_at(float x, float y) {
-        if ((x < button_left) || (x > button_left + button_width)) {
-            return button_none;
-        }
-        for (int k = 0; k < 2; k++) {
-            if ((y >= button_top[k]) && (y <= button_top[k] + button_height)) {
-                return Button(button_save + k);
-            }
-        }
-        return button_none;
-    }
-
-    // The label beside the cursor, and the buttons.
+    // The label beside the cursor.
     struct Label {
         recompui::ContextId context = recompui::ContextId::null();
         recompui::Element* box = nullptr;
         recompui::Label* label = nullptr;
-        recompui::Element* buttons[2] = {};
-        Button shown_hover = button_none;
         bool shown = false;
 
         bool build() {
@@ -384,24 +372,6 @@ namespace {
                 box->set_pointer_events(recompui::PointerEvents::None);
                 label = ctx.create_element<recompui::Label>(box, "", recompui::LabelStyle::Small);
                 label->set_pointer_events(recompui::PointerEvents::None);
-                static const char* names[2] = { "Save", "Delete Save" };
-                for (int k = 0; k < 2; k++) {
-                    recompui::Element* button = ctx.create_element<recompui::Element>(root);
-                    button->set_display(recompui::Display::Flex);
-                    button->set_position(recompui::Position::Absolute);
-                    button->set_left(button_left * 100.0f, recompui::Unit::Percent);
-                    button->set_top(button_top[k] * 100.0f, recompui::Unit::Percent);
-                    button->set_width(button_width * 100.0f, recompui::Unit::Percent);
-                    button->set_height(button_height * 100.0f, recompui::Unit::Percent);
-                    button->set_justify_content(recompui::JustifyContent::Center);
-                    button->set_align_items(recompui::AlignItems::Center);
-                    button->set_border_radius(recompui::theme::border::radius_md);
-                    button->set_background_color(recompui::theme::color::ModalOverlay);
-                    button->set_pointer_events(recompui::PointerEvents::None);
-                    recompui::Label* text = ctx.create_element<recompui::Label>(button, names[k], recompui::LabelStyle::Small);
-                    text->set_pointer_events(recompui::PointerEvents::None);
-                    buttons[k] = button;
-                }
                 ctx.close();
                 ctx.set_captures_input(false);
                 ctx.set_captures_mouse(false);
@@ -412,7 +382,7 @@ namespace {
             }
         }
 
-        void update(bool show, const std::string& text, float x, float y, Button hover = button_none) {
+        void update(bool show, const std::string& text, float x, float y) {
             if ((context == recompui::ContextId::null()) && (!show || !build())) {
                 return;
             }
@@ -422,14 +392,7 @@ namespace {
             }
             if (show) {
                 context.open();
-                label->set_text(text);
-                if (hover != shown_hover) {
-                    for (int k = 0; k < 2; k++) {
-                        buttons[k]->set_background_color((hover == button_save + k) ? recompui::theme::color::PrimaryA80 :
-                            recompui::theme::color::ModalOverlay);
-                    }
-                    shown_hover = hover;
-                }
+                label->set_text(text + "\nSave Pick key: save this\nDelete Saved Pick key: delete its save");
                 // Just below and right of the cursor, on the other side near the window's right or bottom edge.
                 if (x < 0.75f) {
                     box->unset_right();
@@ -498,9 +461,7 @@ namespace {
             mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : mode_parallax);
         }
         bool key_was_down[3] = {};
-        // The last texture or model clicked in each mode, for Delete Save.
-        uint64_t last_parallax = 0, last_effect = 0;
-        uint32_t last_model = 0;
+        bool save_was_down = false, delete_was_down = false;
         uint32_t buttons_were = 0;
         int32_t wheel_was = recompinput::get_mouse_wheel_pos();
         uint32_t layer = 0;
@@ -518,7 +479,6 @@ namespace {
                 "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, built-in; Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper (needs interpolation on)" };
-            // (Save and Delete Save are the buttons at the top left.)
             static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
             for (int k = 0; k < 3; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
@@ -587,13 +547,13 @@ namespace {
                 deeper += (what == "deeper") ? 1 : 0;
                 script.erase(script.begin());
             }
-            // The Save and Delete Save buttons take a left click over them instead of the surface under them.
-            const Button hover = button_at(x, y);
-            if (hover != button_none) {
-                press_save = press_save || ((left || reset) && (hover == button_save));
-                press_delete = press_delete || ((left || reset) && (hover == button_delete));
-                left = right = middle = reset = false;
-            }
+            // The Save Pick and Delete Saved Pick keys act on the texture or model under the cursor.
+            const bool save_down = tooie::hotkeys::down(recompinput::GameInput::PICK_SAVE);
+            const bool delete_down = tooie::hotkeys::down(recompinput::GameInput::PICK_DELETE);
+            press_save = press_save || (save_down && !save_was_down);
+            press_delete = press_delete || (delete_down && !delete_was_down);
+            save_was_down = save_down;
+            delete_was_down = delete_down;
             if (deeper > 0) {
                 layer += uint32_t(deeper);
             } else if (deeper < 0) {
@@ -603,38 +563,47 @@ namespace {
                 layer %= shown_layers;
             }
             RT64::SetScenePick(true, x, y, layer);
+            uint64_t hash = 0;
+            uint32_t layers = 0;
+            RT64::ScenePickResult(hash, layers);
             if (press_save || press_delete) {
-                char text[160];
-                if (press_save) {
-                    const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_effects() : save());
-                    snprintf(text, sizeof(text), "%zu picks saved to Dev Files/%s", count,
-                        interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
-                } else if (interp_on ? (last_model == 0) : ((effects_on ? last_effect : last_parallax) == 0)) {
-                    snprintf(text, sizeof(text), "Click a %s first: Delete Save removes the last one clicked", interp_on ? "model" : "texture");
-                } else if (interp_on) {
-                    tooie::interp_tags::unsave(last_model);
-                    snprintf(text, sizeof(text), "Model %08X: back to default and removed from Dev Files/interp_tags.txt", last_model);
-                } else if (effects_on) {
-                    delete_saved_effect(last_effect);
-                    snprintf(text, sizeof(text), "%016llx: back to built-in and removed from Dev Files/shader_effect_tags.txt", (unsigned long long)last_effect);
+                const uint32_t model = interp_on ? tooie::interp_tags::hovered() : 0;
+                const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt");
+                char name[32];
+                if (interp_on) {
+                    snprintf(name, sizeof(name), "Model %08X", model);
                 } else {
-                    delete_saved(last_parallax);
-                    snprintf(text, sizeof(text), "%016llx: back to built-in and removed from Dev Files/parallax_tags.txt", (unsigned long long)last_parallax);
+                    snprintf(name, sizeof(name), "%016llx", (unsigned long long)hash);
+                }
+                char text[192];
+                if (interp_on ? (model == 0) : (hash == 0)) {
+                    snprintf(text, sizeof(text), "Nothing under the cursor to %s", press_save ? "save" : "delete");
+                } else if (press_save) {
+                    if (interp_on) {
+                        tooie::interp_tags::save_one(model);
+                    } else if (effects_on) {
+                        save_one_effect(hash);
+                    } else {
+                        save_one(hash);
+                    }
+                    snprintf(text, sizeof(text), "%s saved to Dev Files/%s", name, file);
+                } else {
+                    if (interp_on) {
+                        tooie::interp_tags::unsave(model);
+                    } else if (effects_on) {
+                        delete_saved_effect(hash);
+                    } else {
+                        delete_saved(hash);
+                    }
+                    snprintf(text, sizeof(text), "%s: save deleted from Dev Files/%s, back to %s", name, file, interp_on ? "default" : "built-in");
                 }
                 tooie::toast::show(text);
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
             }
-
-            uint64_t hash = 0;
-            uint32_t layers = 0;
-            RT64::ScenePickResult(hash, layers);
             if (interp_on) {
                 const uint32_t model = tooie::interp_tags::hovered();
                 if ((model != 0) && (model == tooie::interp_tags::picked())) {
-                    if (left || middle || reset) {
-                        last_model = model;
-                    }
                     if (reset) {
                         tooie::interp_tags::reset(model);
                     } else if (left) {
@@ -660,8 +629,8 @@ namespace {
                 }
                 // The tag shows a scene after the click, so the label is refreshed every few polls.
                 static int refresh = 0;
-                if ((++refresh % 10 == 0) || (hash != shown_hash) || (hover != label.shown_hover) || (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f)) {
-                    label.update(true, text, x, y, hover);
+                if ((++refresh % 10 == 0) || (hash != shown_hash) || (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f)) {
+                    label.update(true, text, x, y);
                     if ((hash != shown_hash) && (ms - last_log > 200)) {
                         fprintf(stderr, "[interp-pick] under the cursor: model %08X (%s)\n", model, text.c_str());
                         last_log = ms;
@@ -674,15 +643,14 @@ namespace {
             }
             if (effects_on) {
                 if ((hash != 0) && (left || reset)) {
-                    last_effect = hash;
                     step_effect(hash, reset);
                     fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
                 }
                 const uint32_t version = effects_version.load() + 0x80000000u;
-                if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) || (hover != label.shown_hover) ||
+                if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
                     (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
                 {
-                    label.update(true, describe_effect(hash, layer, layers), x, y, hover);
+                    label.update(true, describe_effect(hash, layer, layers), x, y);
                     if ((hash != shown_hash) && (ms - last_log > 200)) {
                         fprintf(stderr, "[effect-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
                         last_log = ms;
@@ -696,7 +664,6 @@ namespace {
                 continue;
             }
             if ((hash != 0) && (left || right || middle || reset)) {
-                last_parallax = hash;
                 bool own = false;
                 Pick pick = current(hash, own);
                 if (reset) {
@@ -726,10 +693,10 @@ namespace {
                 fprintf(stderr, "[parallax-pick] %016llx %s\n", (unsigned long long)hash, describe(hash, layer, layers).c_str());
             }
             const uint32_t version = picks_version.load();
-            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) || (hover != label.shown_hover) ||
+            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
                 (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
             {
-                label.update(true, describe(hash, layer, layers), x, y, hover);
+                label.update(true, describe(hash, layer, layers), x, y);
                 if ((hash != shown_hash) && (ms - last_log > 200)) {
                     fprintf(stderr, "[parallax-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
                     last_log = ms;

@@ -361,6 +361,35 @@ size_t tooie::interp_tags::save() {
     return count;
 }
 
+void tooie::interp_tags::save_one(uint32_t model) {
+    std::lock_guard<std::mutex> guard(lock);
+    // The file gets the saved tags with this model's live one; the other models' unsaved changes stay unsaved.
+    std::unordered_map<uint32_t, int> live = tags;
+    std::unordered_set<uint32_t> live_no_effects = no_effects;
+    tags = saved;
+    no_effects = saved_no_effects;
+    const auto it = live.find(model);
+    if (it == live.end()) {
+        tags.erase(model);
+    } else {
+        tags[model] = it->second;
+    }
+    if (live_no_effects.count(model) != 0) {
+        no_effects.insert(model);
+    } else {
+        no_effects.erase(model);
+    }
+    if (notes.find(model) == notes.end() && !picked_note.empty()) {
+        notes[model] = picked_note;
+    }
+    save_locked();
+    saved = tags;
+    saved_no_effects = no_effects;
+    tags = std::move(live);
+    no_effects = std::move(live_no_effects);
+    std::printf("[interp-tags] model %08X saved\n", model);
+}
+
 void tooie::interp_tags::unsave_picked() {
     unsave(picked_model.load());
 }

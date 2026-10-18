@@ -254,10 +254,11 @@ the cursor names the texture and its parallax ("yours" or "built-in").
 - **Shift + left click**: back to the built-in choice.
 - **Mouse wheel**: the surface behind it (when several are under the cursor).
 
-Every change shows at once. The **Save** button (top left) writes the picks to
-`parallax_tags.txt` in the `Dev Files` folder next to the save files, and the
-label says "not saved" until then. **Delete Save** puts the last texture you
-clicked back to the built-in choice and takes it out of the file (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
+Every change shows at once. The **Save Pick** key (Controls, Pick Modes) writes
+the texture under the cursor, only that one, to `parallax_tags.txt` in the `Dev
+Files` folder next to the save files; the label says "not saved" until then.
+The **Delete Saved Pick** key puts the texture under the cursor back to the
+built-in choice and takes it out of the file (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
 `<hash> off`). Picks override the built-in list and load again next time; send
 the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
@@ -269,7 +270,7 @@ reflection or deep snow on it), Grass, Deep Snow, Ice Reflection, then back to
 the built-in choice. **Shift + left click** puts it back at once and the
 **mouse wheel** picks the surface behind. Grass and Ice Reflection show at once;
 Deep Snow is only recorded for now, as deep snow goes by level and colour, not
-texture. Save writes the picks to `shader_effect_tags.txt` in the `Dev Files` folder
+texture. Save Pick writes the texture under the cursor to `shader_effect_tags.txt` in the `Dev Files` folder
 (one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
 them added to the port.
 
@@ -278,14 +279,14 @@ same for models and characters, NPCs and enemies included: the label names the
 model under the cursor and its interpolation tag. **Left click** steps how it
 blends between game frames (snap, vertex, untagged, then default), **middle
 click** turns its screen effects off or on and **Shift + left click** puts it
-back to default. Save writes the tags to `interp_tags.txt` in the `Dev Files`
-folder (the same file as the Save Tags key), and Delete Save takes the last model
-clicked back out. It needs interpolation on
+back to default. Save Pick writes the model under the cursor to `interp_tags.txt`
+in the `Dev Files` folder (the same file as the Save Tags key), and Delete Saved
+Pick takes it back out. It needs interpolation on
 (Graphics > Interpolation above Original), and level pieces such as the ground are not
 models, so they say "No model here".
 
-All three modes show the **Save** and **Delete Save** buttons at the top left;
-each saves only its own file. Only one pick mode is on at a time: turning one
+Save Pick and Delete Saved Pick work in all three modes, on whatever is under
+the cursor, and only touch that mode's file. Only one pick mode is on at a time: turning one
 on turns the others off.
 
 ### Height maps in texture packs
