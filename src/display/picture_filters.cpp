@@ -4762,7 +4762,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         sun_shadows_option,
         "Sun shadows",
-        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. Everything within Sun shadow distance casts one, on screen or not. 0 is off.",
+        "Real-time shadows from the sun: every character, enemy, object and piece of scenery casts a shadow onto what is behind it, moving as they move. The whole level casts one, on screen or not. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         sun_shadow_banjo_option,
@@ -4777,7 +4777,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         sun_shadow_distance_option,
         "Sun shadow distance",
-        "How far from the camera sun shadows reach, in game units. Everything within it casts a shadow, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
+        "How far from the camera sun shadows are sharp, in game units; past it the level's shadows carry on, softer. The whole level casts, and characters and objects within this distance, on screen or not, so shadows stay put as the camera turns. Past 6000 each shadow is a little blurrier, and higher costs more.",
         1500, 20000, 500, 0, false, 3000);
     graphics.add_number_option(
         light_shafts_option,

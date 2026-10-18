@@ -5829,10 +5829,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..e08a2a2
+index 0000000..8fae59f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2278 @@
+@@ -0,0 +1,2291 @@
 +//
 +// RT64
 +//
@@ -7968,10 +7968,12 @@ index 0000000..e08a2a2
 +            commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
 +        }
-+        // The sun shadow map, made (again when the Sun shadow distance needs another size) and cleared to nothing in
-+        // the way of the sun, so the pass can always read it. Its size follows from shadows.y the way the shaders
-+        // work it out (SunShadowMap.hlsli).
++        // The sun shadow maps, made (again when the Sun shadow distance needs another size) and cleared to nothing in
++        // the way of the sun, so the pass can always read them: the near map at x 0, the far map over the whole level
++        // beside it. The near map's size follows from shadows.y the way the shaders work it out (SunShadowMap.hlsli).
 +        const uint32_t sunMapSize = SunShadowMapSize(std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP) * SUN_SHADOW_MAP_HALF_STEP);
++        const uint32_t sunMapWidth = sunMapSize + SUN_SHADOW_MAP_FAR_SIZE;
++        const uint32_t sunMapHeight = std::max(sunMapSize, uint32_t(SUN_SHADOW_MAP_FAR_SIZE));
 +        if ((res.sunMapTexture != nullptr) && (res.sunMapSize != sunMapSize)) {
 +            res.retireLater(std::move(res.sunMapFramebuffer));
 +            res.retireLater(std::move(res.sunMapTextureView));
@@ -7980,7 +7982,7 @@ index 0000000..e08a2a2
 +        if (res.sunMapTexture == nullptr) {
 +            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
 +            res.sunMapSize = sunMapSize;
-+            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(sunMapSize, sunMapSize, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
++            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(sunMapWidth, sunMapHeight, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
 +            res.sunMapTexture->setName("Scene Effects Sun Shadow Map");
 +            res.sunMapTextureView = res.sunMapTexture->createTextureView(RenderTextureViewDesc::Texture2D(RenderFormat::D32_FLOAT));
 +            const RenderTexture *noColor = nullptr;
@@ -8009,6 +8011,17 @@ index 0000000..e08a2a2
 +            commandList->setGraphicsPipelineLayout(shaderLibrary->sunShadowMap.pipelineLayout.get());
 +            commandList->setGraphicsPushConstants(0, &constants);
 +            drawSunCasters(commandList);
++            // The far map: the same casters, given the far map's half width in shadows.y, beside the near map.
++            // Headless test hook: TOOIE_SUN_FAR_OFF leaves it out (cleared: nothing casts past the near map).
++            static const bool sunFarOff = (getenv("TOOIE_SUN_FAR_OFF") != nullptr);
++            if (!sunFarOff) {
++                interop::SceneEffectsCB farConstants = constants;
++                farConstants.shadows.y = std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(SUN_SHADOW_MAP_FAR_HALF / SUN_SHADOW_MAP_HALF_STEP);
++                commandList->setViewports(RenderViewport(float(sunMapSize), 0.0f, float(SUN_SHADOW_MAP_FAR_SIZE), float(SUN_SHADOW_MAP_FAR_SIZE)));
++                commandList->setScissors(RenderRect(sunMapSize, 0, sunMapSize + SUN_SHADOW_MAP_FAR_SIZE, SUN_SHADOW_MAP_FAR_SIZE));
++                commandList->setGraphicsPushConstants(0, &farConstants);
++                drawSunCasters(commandList);
++            }
 +            static const bool mapLog = (getenv("TOOIE_FX_LOG") != nullptr);
 +            static auto lastMapLog = std::chrono::steady_clock::now();
 +            if (mapLog && (std::chrono::steady_clock::now() - lastMapLog > std::chrono::milliseconds(1000))) {
@@ -12087,10 +12100,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..bbfa1cd
+index 0000000..6ef966b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2409 @@
+@@ -0,0 +1,2426 @@
 +//
 +// RT64
 +//
@@ -13942,6 +13955,53 @@ index 0000000..bbfa1cd
 +// surface is in its shadow. Surfaces turned away from the sun are shaded too, gently, so the dark side of
 +// a thing meets its shadow on the ground.
 +// center and surfaceNormal as AmbientOcclusion's.
++// One of the sun shadow maps (the near one at x 0 in gSunShadowMap, the far one beside it at offsetX): how much of
++// the sun a surface gets none of, looked up a little off the surface, a few texels around (wider the softer the
++// shadows). cover fades out towards the map's edges (0 outside it).
++float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3 worldNormal, float distance, float softness, float jitter, out float cover) {
++    cover = 0.0f;
++    const float texel = 2.0f * mapFrame.halfWidth / mapFrame.size;
++    float3 across, up, towards, middle;
++    SunMapBasis(mapFrame, across, up, towards, middle);
++    // How steeply the sun meets the surface. A low sun (mornings and evenings) grazes the ground: across
++    // the few texels looked up the ground's own depth on the map changes a lot, and a fixed bias let it
++    // shadow itself in fine diagonal lines. The bias and the lift off the surface grow with the slope.
++    const float sunFacing = dot(worldNormal, towards);
++    const float sunCos = saturate(sunFacing);
++    const float sunSin = sqrt(1.0f - sunCos * sunCos);
++    const float sunTan = min(sunSin / max(sunCos, 0.05f), 8.0f);
++    const float radius = 1.0f + softness * 2.5f;
++    const float3 world = worldCenter + worldNormal * (texel * (1.5f + 1.5f * sunSin) + distance * 0.001f);
++    const float3 m = SunMapPosition(mapFrame, world);
++    if ((m.z <= 0.0f) || (m.z >= 1.0f)) {
++        return 0.0f;
++    }
++    cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
++    if (cover <= 0.0f) {
++        return 0.0f;
++    }
++    const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * mapFrame.range);
++    const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * mapFrame.size;
++    const float angle = jitter * 6.2831853f;
++    const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
++    const int Taps = 12;
++    const float2 disk[Taps] = {
++        float2(-0.326f, -0.406f), float2(-0.840f, -0.074f), float2(-0.696f, 0.457f), float2(-0.203f, 0.621f),
++        float2(0.962f, -0.195f), float2(0.473f, -0.480f), float2(0.519f, 0.767f), float2(0.185f, -0.893f),
++        float2(0.507f, 0.064f), float2(0.896f, 0.412f), float2(-0.322f, -0.933f), float2(-0.792f, -0.598f)
++    };
++    const int last = int(mapFrame.size) - 1;
++    float blocked = 0.0f;
++    [unroll] for (int k = 0; k < Taps; k++) {
++        const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(last, last));
++        blocked += ((m.z - depthBias) > gSunShadowMap.Load(int3(at.x + offsetX, at.y, 0))) ? 1.0f : 0.0f;
++    }
++    // A surface turned from the sun gets none of its light either: as dark as a cast shadow, with a soft
++    // turn (wider the softer the shadows) so rounded characters still shade smoothly.
++    const float away = saturate(-sunFacing * lerp(6.0f, 2.0f, softness));
++    return max(blocked / float(Taps), away);
++}
++
 +float SunShadow(int2 pixel, float3 center, float3 surfaceNormal) {
 +    const float3 sun = gConstants.sun.xyz;
 +    const float distance = -center.z;
@@ -14027,49 +14087,19 @@ index 0000000..bbfa1cd
 +    // texels around (wider the softer the shadows), fading out towards the map's edges where the screen-space
 +    // shadows above carry on alone.
 +    if (gConstants.shadows.y < 0.0f) {
-+        const SunMapFrame mapFrame = SUN_MAP_FRAME(gConstants);
-+        const float texel = 2.0f * mapFrame.halfWidth / mapFrame.size;
-+        const float3 worldNormal = normalize(SunMapWorldDirection(SUN_MAP_FRAME(gConstants), normal));
-+        float3 across, up, towards, middle;
-+        SunMapBasis(SUN_MAP_FRAME(gConstants), across, up, towards, middle);
-+        // How steeply the sun meets the surface. A low sun (mornings and evenings) grazes the ground: across
-+        // the few texels looked up the ground's own depth on the map changes a lot, and a fixed bias let it
-+        // shadow itself in fine diagonal lines. The bias and the lift off the surface grow with the slope.
-+        const float sunFacing = dot(worldNormal, towards);
-+        const float sunCos = saturate(sunFacing);
-+        const float sunSin = sqrt(1.0f - sunCos * sunCos);
-+        const float sunTan = min(sunSin / max(sunCos, 0.05f), 8.0f);
-+        const float radius = 1.0f + softness * 2.5f;
-+        const float3 world = WorldPosition(center) + worldNormal * (texel * (1.5f + 1.5f * sunSin) + distance * 0.001f);
-+        const float3 m = SunMapPosition(SUN_MAP_FRAME(gConstants), world);
-+        const float cover = saturate((1.0f - max(abs(m.x), abs(m.y))) / 0.1f);
-+        if ((cover > 0.0f) && (m.z > 0.0f) && (m.z < 1.0f)) {
-+            const float depthBias = texel * (1.5f + sunTan * (radius + 1.0f)) / (2.0f * mapFrame.range);
-+            const float2 base = float2(m.x * 0.5f + 0.5f, 0.5f - m.y * 0.5f) * mapFrame.size;
-+            const float angle = jitter * 6.2831853f;
-+            const float2x2 turn = float2x2(cos(angle), -sin(angle), sin(angle), cos(angle));
-+            const int Taps = 12;
-+            const float2 disk[Taps] = {
-+                float2(-0.326f, -0.406f), float2(-0.840f, -0.074f), float2(-0.696f, 0.457f), float2(-0.203f, 0.621f),
-+                float2(0.962f, -0.195f), float2(0.473f, -0.480f), float2(0.519f, 0.767f), float2(0.185f, -0.893f),
-+                float2(0.507f, 0.064f), float2(0.896f, 0.412f), float2(-0.322f, -0.933f), float2(-0.792f, -0.598f)
-+            };
-+            float blocked = 0.0f;
-+            [unroll] for (int k = 0; k < Taps; k++) {
-+                const int2 at = clamp(int2(floor(base + mul(turn, disk[k]) * radius)), int2(0, 0), int2(int(mapFrame.size) - 1, int(mapFrame.size) - 1));
-+                blocked += ((m.z - depthBias) > gSunShadowMap.Load(int3(at, 0))) ? 1.0f : 0.0f;
-+            }
-+            // A surface turned from the sun gets none of its light either: as dark as a cast shadow, with a soft
-+            // turn (wider the softer the shadows) so rounded characters still shade smoothly.
-+            const float away = saturate(-sunFacing * lerp(6.0f, 2.0f, softness));
-+            const float mapShadow = max(blocked / float(Taps), away);
-+            shadow = max(shadow, mapShadow * cover);
-+            if (mapView) {
-+                return 1.0f - 0.9f * mapShadow;
-+            }
-+        }
++        const SunMapFrame nearFrame = SUN_MAP_FRAME(gConstants);
++        const SunMapFrame farFrame = MakeSunMapFarFrame(nearFrame);
++        const float3 worldNormal = normalize(SunMapWorldDirection(nearFrame, normal));
++        const float3 worldCenter = WorldPosition(center);
++        float nearCover = 0.0f;
++        float farCover = 0.0f;
++        const float nearShadow = SunMapLookup(nearFrame, 0, worldCenter, worldNormal, distance, softness, jitter, nearCover);
++        // Past the near map's edge the far map, over the whole level, carries on.
++        const float farShadow = (nearCover < 1.0f) ? SunMapLookup(farFrame, int(nearFrame.size), worldCenter, worldNormal, distance, softness, jitter, farCover) : 0.0f;
++        const float mapShadow = nearShadow * nearCover + farShadow * farCover * (1.0f - nearCover);
++        shadow = max(shadow, mapShadow);
 +        if (mapView) {
-+            return 0.5f;
++            return ((nearCover > 0.0f) || (farCover > 0.0f)) ? (1.0f - 0.9f * mapShadow) : 0.5f;
 +        }
 +    }
 +    // The side turned from the sun darkens over a wider turn the softer the shadows.
@@ -15000,10 +15030,10 @@ index 0000000..32ea3bf
 +}
 diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
 new file mode 100644
-index 0000000..3ba8443
+index 0000000..32e11d9
 --- /dev/null
 +++ b/src/shaders/SunShadowMap.hlsli
-@@ -0,0 +1,91 @@
+@@ -0,0 +1,101 @@
 +//
 +// RT64
 +//
@@ -15016,8 +15046,9 @@ index 0000000..3ba8443
 +#include "shared/rt64_scene_effects.h"
 +
 +// How far the map reaches is the Sun shadow distance setting: half the width of the square it covers, in world
-+// units, packed into shadows.y (SunMapDecode). The square's middle sits ahead of the camera by 0.6 of that, and
-+// the map reaches towards and away from the sun at least SunMapMinRange from its middle.
++// units, packed into shadows.y (SunMapHalfWidth). The square's middle sits ahead of the camera by 0.6 of that (of
++// at most 6000), and the map reaches towards and away from the sun at least SunMapMinRange from its middle. The far
++// map (SUN_SHADOW_MAP_FAR_HALF) is the same with its own half width: its pass is given that in shadows.y.
 +static const float SunMapMinRange = 8000.0f;
 +
 +// The constants the map needs, copied out member by member. Passing the push constant buffer itself to a
@@ -15068,6 +15099,15 @@ index 0000000..3ba8443
 +
 +#define SUN_MAP_FRAME(cb) MakeSunMapFrame((cb).worldX, (cb).worldY, (cb).worldZ, (cb).sun, (cb).shadows)
 +
++// The far map's frame, for the effects (its pass gets it from SUN_MAP_FRAME).
++SunMapFrame MakeSunMapFarFrame(SunMapFrame nearFrame) {
++    SunMapFrame f = nearFrame;
++    f.halfWidth = SUN_SHADOW_MAP_FAR_HALF;
++    f.range = max(SunMapMinRange, 1.5f * f.halfWidth);
++    f.size = float(SUN_SHADOW_MAP_FAR_SIZE);
++    return f;
++}
++
 +float3 SunMapWorldDirection(SunMapFrame c, float3 d) {
 +    return float3(dot(d, c.worldX.xyz), dot(d, c.worldY.xyz), dot(d, c.worldZ.xyz));
 +}
@@ -15080,7 +15120,7 @@ index 0000000..3ba8443
 +    const float3 camera = float3(c.worldX.w, c.worldY.w, c.worldZ.w);
 +    const float2 forward = -float2(c.worldX.z, c.worldZ.z);
 +    const float forwardLength = length(forward);
-+    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * (0.6f * c.halfWidth) : float2(0.0f, 0.0f);
++    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * (0.6f * min(c.halfWidth, 6000.0f)) : float2(0.0f, 0.0f);
 +    middle = camera + float3(ahead.x, 0.0f, ahead.y);
 +    // Moved in whole texels across the map, so the shadows' edges don't crawl as the camera moves.
 +    const float texel = 2.0f * c.halfWidth / c.size;
@@ -15778,10 +15818,10 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..df4af58
+index 0000000..00f1013
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,107 @@
 +//
 +// RT64
 +//
@@ -15799,8 +15839,17 @@ index 0000000..df4af58
 +#define SUN_SHADOW_MAP_DEFAULT_HALF 3000.0f
 +#define SUN_SHADOW_MAP_HALF_STEP 50.0f
 +#define SUN_SHADOW_MAP_VIEW_FLAG 1000000.0f
++// The far map: a second, coarser square over the whole level (SUN_SHADOW_MAP_FAR_HALF each way round the camera),
++// drawn beside the near one in the same depth texture (the near map at x 0, the far one at x = the near map's size).
++// Past the near map's edge the shadows come from it. Its half width is larger than the setting can go, which is how
++// the map's pass tells the two apart.
++#define SUN_SHADOW_MAP_FAR_HALF 24000.0f
++#define SUN_SHADOW_MAP_FAR_SIZE 4096
 +
 +inline unsigned int SunShadowMapSize(float halfWidth) {
++    if (halfWidth > SUN_SHADOW_MAP_FAR_HALF - 1.0f) {
++        return (unsigned int)(SUN_SHADOW_MAP_FAR_SIZE);
++    }
 +    // Whole steps of 256 texels, rounded up (without ceil, the same on the CPU and in shaders).
 +    const float steps = halfWidth / SUN_SHADOW_MAP_DEFAULT_HALF * float(SUN_SHADOW_MAP_SIZE) / 256.0f;
 +    const unsigned int whole = (unsigned int)(steps);

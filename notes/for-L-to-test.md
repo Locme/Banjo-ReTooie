@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T420 Sun shadows over the whole level
+- Asked: 2026-10-18 07:46 UTC
+- Build: main
+- Steps:
+  1. Graphics: Sun shadows on, Sun shadow distance at 3000
+  2. Spiral Mountain: walk the path by the honeycomb cave and turn the camera slowly all the way round
+  3. Look across the level at hills and cliffs far away
+  4. Try Sun shadow distance 1500 and 20000 while looking at the same spot
+- Look for: Shadows no longer come and go as the camera turns; far hills and cliffs still cast (softer) shadows past the distance; frame rate about the same as before
+- Status: waiting for L
+
 ## T419 Test room: no cutscenes at all
 - Asked: 2026-10-18 01:22 UTC
 - Build: main

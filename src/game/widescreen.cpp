@@ -203,11 +203,12 @@ extern "C" void func_800CA1B0(uint8_t* rdram, recomp_context* ctx) {
 }
 
 // Sun shadows: the game culls what is out of view with two tests, func_800E3E8C(position, radius) for spheres
-// (models, effects) and func_800E3D0C(min, max) for boxes (the level's own geometry, in pieces). The sun shadow map
-// only holds what the game drew, so a cliff just off screen cast its shadow while the camera faced one way and lost
+// (models, effects) and func_800E3D0C(min, max) for boxes (the level's own geometry, in pieces). The sun shadow maps
+// only hold what the game drew, so a cliff just off screen cast its shadow while the camera faced one way and lost
 // it as the camera turned (L's burst of 2026-10-17: a cliff's shadow across Spiral Mountain's path came and went).
-// With sun shadows on, whatever lies within the Sun shadow distance of the camera counts as in view, so the map
-// holds everything round the camera that it covers, whichever way the camera faces. Both hooks run at the test's
+// With sun shadows on, the whole level counts as in view (the far map covers it all) and models within the Sun
+// shadow distance do, so the maps hold the same casters whichever way the camera faces. What lands off screen costs
+// the main picture little: the graphics card drops those triangles before drawing any of their pixels. Both hooks run at the test's
 // end, its answer in $v1 and its arguments still on its stack. Only while the frame's drawing buffers have room
 // (gfx_budget), as for the other extras.
 namespace {
@@ -267,7 +268,7 @@ namespace {
             kept++;
             const auto now = std::chrono::steady_clock::now();
             if (now - last >= std::chrono::seconds(2)) {
-                printf("[sun-cull] kept %u culled spheres and boxes within %.0f in 2 s\n", kept, distance);
+                printf("[sun-cull] kept %u culled spheres and boxes in 2 s (models within %.0f)\n", kept, distance);
                 fflush(stdout);
                 kept = 0;
                 last = now;
@@ -301,26 +302,36 @@ extern "C" void tooie_sun_shadow_cull(uint8_t* rdram, recomp_context* ctx) {
 }
 
 extern "C" void tooie_sun_shadow_cull_box(uint8_t* rdram, recomp_context* ctx) {
+    // Test aid: with TOOIE_SUN_CULL_LOG=1, also the extent of every box tested (the level's size) every 2 s.
+    static const bool log = std::getenv("TOOIE_SUN_CULL_LOG") != nullptr;
+    if (log) {
+        static float lo[3] = { 1e9f, 1e9f, 1e9f }, hi[3] = { -1e9f, -1e9f, -1e9f };
+        static auto last = std::chrono::steady_clock::now();
+        const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
+        const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
+        if (tooie::rdram::valid_ptr(box_min) && tooie::rdram::valid_ptr(box_max)) {
+            for (uint32_t axis = 0; axis < 3; axis++) {
+                lo[axis] = std::min(lo[axis], tooie::rdram::read_float(rdram, box_min + 4 * axis));
+                hi[axis] = std::max(hi[axis], tooie::rdram::read_float(rdram, box_max + 4 * axis));
+            }
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last >= std::chrono::seconds(2)) {
+            printf("[sun-cull] map 0x%X boxes span x %.0f..%.0f y %.0f..%.0f z %.0f..%.0f\n", tooie::debug::current_map(rdram), lo[0], hi[0], lo[1], hi[1], lo[2], hi[2]);
+            fflush(stdout);
+            for (uint32_t axis = 0; axis < 3; axis++) {
+                lo[axis] = 1e9f;
+                hi[axis] = -1e9f;
+            }
+            last = now;
+        }
+    }
     if (ctx->r3 != 0) {
         return;
     }
+    // The level's own pieces are all kept, wherever they are: the far sun shadow map covers the whole level.
     const float distance = sun_cull_distance(rdram);
-    float camera[3];
-    const uint32_t box_min = (uint32_t)MEM_W(0x50, ctx->r29);
-    const uint32_t box_max = (uint32_t)MEM_W(0x54, ctx->r29);
-    if (distance <= 0.0f || !tooie::rdram::valid_ptr(box_min) || !tooie::rdram::valid_ptr(box_max) || !camera_position(rdram, camera)) {
-        return;
-    }
-    // From the camera to the nearest point of the box.
-    float dist2 = 0.0f;
-    for (uint32_t axis = 0; axis < 3; axis++) {
-        const float lo = tooie::rdram::read_float(rdram, box_min + 4 * axis);
-        const float hi = tooie::rdram::read_float(rdram, box_max + 4 * axis);
-        const float nearest = std::clamp(camera[axis], std::min(lo, hi), std::max(lo, hi));
-        const float d = nearest - camera[axis];
-        dist2 += d * d;
-    }
-    if (dist2 < distance * distance) {
+    if (distance > 0.0f) {
         keep(rdram, ctx, distance);
     }
 }
