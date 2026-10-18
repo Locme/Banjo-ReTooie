@@ -17,7 +17,15 @@ namespace tooie::parallax_pick {
         shape_cracks = 3,
         shape_terraced = 4,
         shape_rounded = 5,
-        shape_count = 6
+        shape_grass = 6,
+        shape_wood = 7,
+        shape_bark = 8,
+        shape_brick = 9,
+        shape_dirt = 10,
+        shape_metal = 11,
+        shape_leaves = 12,
+        shape_tiles = 13,
+        shape_count = 14
     };
     // Depth steps, as RASTER_PARALLAX_DEPTH bits: 100%, 25, 50, 150, 200, 300%.
     constexpr int depth_count = 6;
@@ -26,8 +34,8 @@ namespace tooie::parallax_pick {
         uint8_t shape = shape_stone;
         uint8_t depth = 0;
         bool shadows = true;
-        // As SetSceneParallaxTextures takes it: shape, depth << 3, no shadows << 6.
-        uint8_t style() const { return uint8_t(shape | (depth << 3) | (shadows ? 0 : 0x40)); }
+        // As SetSceneParallaxTextures takes it: shape's low 3 bits, depth << 3, no shadows << 6, shape's bit 3 << 7.
+        uint8_t style() const { return uint8_t((shape & 0x7) | (depth << 3) | (shadows ? 0 : 0x40) | ((shape & 0x8) << 4)); }
     };
 
     // Starts watching the key and the mouse and loads parallax_tags.txt (once).

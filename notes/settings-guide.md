@@ -247,7 +247,11 @@ the cursor names the texture and its parallax ("yours" or "built-in").
 - **Left click**: the shape, in turn Stone (only the dark gaps sink), Bumpy (the
   whole surface follows its brightness), Inverted (the light parts sink),
   Cracks (only the darkest lines sink), Terraced (a few flat steps), Rounded
-  (faces bulge like cobbles), then Off.
+  (faces bulge like cobbles), Grass (blade tips up, ground between them deep),
+  Wood (shallow grain, deep gaps between planks), Bark (deep furrows), Brick
+  (flat bricks, wide sunk mortar), Dirt (soft shallow lumps), Metal (flat
+  plates, only the seams sink), Leaves (rounded, the shade under each sunk),
+  Tiles (flat tiles, a narrow sharp grout line), then Off.
 - **Right click**: the depth, as a share of the Parallax slider: 100, 150, 200,
   300, 25 and 50%.
 - **Middle click**: its shadows off or on.
@@ -286,7 +290,10 @@ Pick takes it back out. It needs interpolation on
 models, so they say "No model here".
 
 Save Pick and Delete Saved Pick work in all three modes, on whatever is under
-the cursor, and only touch that mode's file. Only one pick mode is on at a time: turning one
+the cursor, and only touch that mode's file. At the top left each mode shows
+how many of its picks are unsaved, a **Save All** button that writes them all,
+and a **Delete All Changes** button that puts every pick back as its file has
+it. Only one pick mode is on at a time: turning one
 on turns the others off.
 
 ### Height maps in texture packs

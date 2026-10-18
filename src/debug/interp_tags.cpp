@@ -509,3 +509,31 @@ void tooie::interp_tags::reset(uint32_t model) {
     have_tags = !tags.empty();
     have_no_effects = !no_effects.empty();
 }
+
+size_t tooie::interp_tags::unsaved_count() {
+    std::lock_guard<std::mutex> guard(lock);
+    std::unordered_set<uint32_t> models;
+    for (const auto& [model, mode] : tags) models.insert(model);
+    for (const auto& [model, mode] : saved) models.insert(model);
+    models.insert(no_effects.begin(), no_effects.end());
+    models.insert(saved_no_effects.begin(), saved_no_effects.end());
+    size_t count = 0;
+    for (uint32_t model : models) {
+        const auto t = tags.find(model);
+        const auto s = saved.find(model);
+        const int live = t == tags.end() ? mode_default : t->second;
+        const int on_disk = s == saved.end() ? mode_default : s->second;
+        count += (live != on_disk || no_effects.count(model) != saved_no_effects.count(model)) ? 1 : 0;
+    }
+    return count;
+}
+
+size_t tooie::interp_tags::discard_changes() {
+    const size_t count = unsaved_count();
+    std::lock_guard<std::mutex> guard(lock);
+    tags = saved;
+    no_effects = saved_no_effects;
+    have_tags = !tags.empty();
+    have_no_effects = !no_effects.empty();
+    return count;
+}

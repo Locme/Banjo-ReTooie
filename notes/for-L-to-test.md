@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T425 Unsaved count, Save All, Delete All Changes, new parallax shapes
+- Asked: 2026-10-18 19:11 UTC
+- Build: main
+- Steps:
+  1. In any pick mode, change a few things: the top left says how many are unsaved
+  2. Click Save All: the count goes to 0 and the file has them all
+  3. Change more, then click Delete All Changes: they go back as the file has them
+  4. In Parallax pick mode, left click a texture through the new shapes: Grass, Wood, Bark, Brick, Dirt, Metal, Leaves, Tiles
+- Look for: Does the count stay right, and do the new shapes suit grass and wood?
+- Status: waiting for L
+
 ## T424 Save Pick and Delete Saved Pick keys
 - Asked: 2026-10-18 18:41 UTC
 - Build: main

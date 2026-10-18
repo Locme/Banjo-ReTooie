@@ -71,6 +71,10 @@ namespace tooie::interp_tags {
     void reset(uint32_t model);
     // The Save Pick key: the model's tag as it stands into the file (only that model's).
     void save_one(uint32_t model);
+    // Models whose tag or screen effects differ from the file's.
+    size_t unsaved_count();
+    // The Delete All Changes button: every tag back as the file has it. Returns how many changed.
+    size_t discard_changes();
     // The Delete Saved Pick key: the model back to default, in the game and the file (other unsaved tags stay unsaved).
     void unsave(uint32_t model);
 }

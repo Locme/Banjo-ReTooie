@@ -58,8 +58,10 @@ namespace {
         return (a.off == b.off) && (a.off || ((a.shape == b.shape) && (a.depth == b.depth) && (a.shadows == b.shadows)));
     }
 
-    const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded" };
-    const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded" };
+    const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded",
+        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles" };
+    const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded",
+        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles" };
     const int depth_percent[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
     // Right click goes up from 100%, then round from the shallowest.
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
@@ -144,6 +146,39 @@ namespace {
             write_locked();
         }
         picks_version.fetch_add(1);
+    }
+
+    // Textures whose pick differs from the file's.
+    size_t unsaved_count() {
+        std::lock_guard lock{ picks_mutex };
+        size_t count = 0;
+        for (const auto& [hash, pick] : picks) {
+            const auto saved = saved_picks.find(hash);
+            count += ((saved == saved_picks.end()) || !same_pick(pick, saved->second)) ? 1 : 0;
+        }
+        for (const auto& [hash, pick] : saved_picks) {
+            count += (picks.find(hash) == picks.end()) ? 1 : 0;
+        }
+        return count;
+    }
+
+    // The Delete All Changes button: every pick back as the file has it. Returns how many changed.
+    size_t discard_changes() {
+        const size_t count = unsaved_count();
+        {
+            std::lock_guard lock{ picks_mutex };
+            picks = saved_picks;
+        }
+        picks_version.fetch_add(1);
+        return count;
+    }
+
+    // The Save All button: every pick into the file.
+    size_t save_all() {
+        std::lock_guard lock{ picks_mutex };
+        saved_picks = picks;
+        write_locked();
+        return saved_picks.size();
     }
 
     // ", not saved" when the texture's pick differs from the file's.
@@ -275,6 +310,36 @@ namespace {
         effects_version.fetch_add(1);
     }
 
+    size_t effects_unsaved_count() {
+        std::lock_guard lock{ effects_mutex };
+        size_t count = 0;
+        for (const auto& [hash, effect] : effects) {
+            const auto saved = saved_effects.find(hash);
+            count += ((saved == saved_effects.end()) || (saved->second != effect)) ? 1 : 0;
+        }
+        for (const auto& [hash, effect] : saved_effects) {
+            count += (effects.find(hash) == effects.end()) ? 1 : 0;
+        }
+        return count;
+    }
+
+    size_t discard_effect_changes() {
+        const size_t count = effects_unsaved_count();
+        {
+            std::lock_guard lock{ effects_mutex };
+            effects = saved_effects;
+        }
+        effects_version.fetch_add(1);
+        return count;
+    }
+
+    size_t save_all_effects() {
+        std::lock_guard lock{ effects_mutex };
+        saved_effects = effects;
+        write_effects_locked();
+        return saved_effects.size();
+    }
+
     // effects_mutex held.
     const char* effect_unsaved_note_locked(uint64_t hash) {
         const auto live = effects.find(hash);
@@ -344,11 +409,37 @@ namespace {
         effects_version.fetch_add(1);
     }
 
-    // The label beside the cursor.
+    // The Save All and Delete All Changes buttons at the top left, under the unsaved count, as fractions of the window
+    // (the worker tests clicks against them; toasts use the top right).
+    constexpr float panel_left = 0.015f, panel_top = 0.03f, panel_width = 0.12f, count_height = 0.045f, button_height = 0.05f;
+    constexpr float panel_gap = 0.008f;
+    enum PanelButton { panel_none = -1, panel_save_all = 0, panel_discard = 1 };
+
+    float panel_button_top(int button) {
+        return panel_top + count_height + panel_gap + float(button) * (button_height + panel_gap);
+    }
+
+    PanelButton panel_button_at(float x, float y) {
+        if ((x < panel_left) || (x > panel_left + panel_width)) {
+            return panel_none;
+        }
+        for (int k = 0; k < 2; k++) {
+            if ((y >= panel_button_top(k)) && (y <= panel_button_top(k) + button_height)) {
+                return PanelButton(k);
+            }
+        }
+        return panel_none;
+    }
+
+    // The label beside the cursor, and the unsaved count and Save All button.
     struct Label {
         recompui::ContextId context = recompui::ContextId::null();
         recompui::Element* box = nullptr;
         recompui::Label* label = nullptr;
+        recompui::Label* count_label = nullptr;
+        recompui::Element* panel_buttons[2] = {};
+        size_t shown_count = SIZE_MAX;
+        int shown_hover = -2;
         bool shown = false;
 
         bool build() {
@@ -372,6 +463,38 @@ namespace {
                 box->set_pointer_events(recompui::PointerEvents::None);
                 label = ctx.create_element<recompui::Label>(box, "", recompui::LabelStyle::Small);
                 label->set_pointer_events(recompui::PointerEvents::None);
+                recompui::Element* count_box = ctx.create_element<recompui::Element>(root);
+                count_box->set_display(recompui::Display::Flex);
+                count_box->set_position(recompui::Position::Absolute);
+                count_box->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                count_box->set_top(panel_top * 100.0f, recompui::Unit::Percent);
+                count_box->set_width(panel_width * 100.0f, recompui::Unit::Percent);
+                count_box->set_height(count_height * 100.0f, recompui::Unit::Percent);
+                count_box->set_justify_content(recompui::JustifyContent::Center);
+                count_box->set_align_items(recompui::AlignItems::Center);
+                count_box->set_border_radius(recompui::theme::border::radius_md);
+                count_box->set_background_color(recompui::theme::color::ModalOverlay);
+                count_box->set_pointer_events(recompui::PointerEvents::None);
+                count_label = ctx.create_element<recompui::Label>(count_box, "", recompui::LabelStyle::Small);
+                count_label->set_pointer_events(recompui::PointerEvents::None);
+                static const char* button_names[2] = { "Save All", "Delete All Changes" };
+                for (int k = 0; k < 2; k++) {
+                    recompui::Element* button = ctx.create_element<recompui::Element>(root);
+                    button->set_display(recompui::Display::Flex);
+                    button->set_position(recompui::Position::Absolute);
+                    button->set_left(panel_left * 100.0f, recompui::Unit::Percent);
+                    button->set_top(panel_button_top(k) * 100.0f, recompui::Unit::Percent);
+                    button->set_width(panel_width * 100.0f, recompui::Unit::Percent);
+                    button->set_height(button_height * 100.0f, recompui::Unit::Percent);
+                    button->set_justify_content(recompui::JustifyContent::Center);
+                    button->set_align_items(recompui::AlignItems::Center);
+                    button->set_border_radius(recompui::theme::border::radius_md);
+                    button->set_background_color(recompui::theme::color::ModalOverlay);
+                    button->set_pointer_events(recompui::PointerEvents::None);
+                    recompui::Label* button_text = ctx.create_element<recompui::Label>(button, button_names[k], recompui::LabelStyle::Small);
+                    button_text->set_pointer_events(recompui::PointerEvents::None);
+                    panel_buttons[k] = button;
+                }
                 ctx.close();
                 ctx.set_captures_input(false);
                 ctx.set_captures_mouse(false);
@@ -418,7 +541,28 @@ namespace {
                     recompui::hide_context(context);
                 }
                 shown = false;
+                shown_count = SIZE_MAX;
+                shown_hover = -2;
             }
+        }
+
+        // The unsaved count and the Save All button's highlight, when they change (after update has shown the label).
+        void update_panel(size_t unsaved, PanelButton hover) {
+            if (!shown || ((unsaved == shown_count) && (int(hover) == shown_hover))) {
+                return;
+            }
+            auto lifetime = recompui::lock_context_lifetime();
+            if (!recompui::contexts_alive()) {
+                return;
+            }
+            context.open();
+            count_label->set_text(std::to_string(unsaved) + (unsaved == 1 ? " is unsaved" : " are unsaved"));
+            for (int k = 0; k < 2; k++) {
+                panel_buttons[k]->set_background_color((int(hover) == k) ? recompui::theme::color::PrimaryA80 : recompui::theme::color::ModalOverlay);
+            }
+            context.close();
+            shown_count = unsaved;
+            shown_hover = int(hover);
         }
     };
 
@@ -535,10 +679,12 @@ namespace {
             int32_t deeper = wheel_was - wheel;
             wheel_was = wheel;
             const int64_t ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-            bool press_save = false, press_delete = false;
+            bool press_save = false, press_delete = false, press_save_all = false, press_discard = false;
             while (!script.empty() && (script.front().at <= ms)) {
                 const std::string& what = script.front().what;
                 press_save = press_save || (what == "save");
+                press_save_all = press_save_all || (what == "saveall");
+                press_discard = press_discard || (what == "discard");
                 press_delete = press_delete || (what == "delete");
                 left = left || (what == "left");
                 right = right || (what == "right");
@@ -546,6 +692,14 @@ namespace {
                 reset = reset || (what == "reset");
                 deeper += (what == "deeper") ? 1 : 0;
                 script.erase(script.begin());
+            }
+            // A left click on Save All saves every unsaved pick of this mode, and on Delete All Changes puts every pick
+            // back as the file has it, instead of picking what is under them.
+            const PanelButton hover_panel = panel_button_at(x, y);
+            if (hover_panel != panel_none) {
+                press_save_all = press_save_all || ((left || reset) && (hover_panel == panel_save_all));
+                press_discard = press_discard || ((left || reset) && (hover_panel == panel_discard));
+                left = right = middle = reset = false;
             }
             // The Save Pick and Delete Saved Pick keys act on the texture or model under the cursor.
             const bool save_down = tooie::hotkeys::down(recompinput::GameInput::PICK_SAVE);
@@ -566,6 +720,29 @@ namespace {
             uint64_t hash = 0;
             uint32_t layers = 0;
             RT64::ScenePickResult(hash, layers);
+            // The unsaved count and Save All, every poll (they only change the page when they change).
+            auto show_panel = [&] {
+                const size_t unsaved = interp_on ? tooie::interp_tags::unsaved_count() : (effects_on ? effects_unsaved_count() : unsaved_count());
+                label.update_panel(unsaved, hover_panel);
+            };
+            if (press_discard) {
+                const size_t count = interp_on ? tooie::interp_tags::discard_changes() : (effects_on ? discard_effect_changes() : discard_changes());
+                char text[96];
+                snprintf(text, sizeof(text), "Deleted all changes: %zu back as Dev Files/%s has them", count,
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                tooie::toast::show(text);
+                fprintf(stderr, "[pick] %s\n", text);
+                shown_hash = UINT64_MAX;
+            }
+            if (press_save_all) {
+                const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_all_effects() : save_all());
+                char text[96];
+                snprintf(text, sizeof(text), "Saved all: %zu picks in Dev Files/%s", count,
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                tooie::toast::show(text);
+                fprintf(stderr, "[pick] %s\n", text);
+                shown_hash = UINT64_MAX;
+            }
             if (press_save || press_delete) {
                 const uint32_t model = interp_on ? tooie::interp_tags::hovered() : 0;
                 const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt");
@@ -639,6 +816,7 @@ namespace {
                     shown_x = x;
                     shown_y = y;
                 }
+                show_panel();
                 continue;
             }
             if (effects_on) {
@@ -661,6 +839,7 @@ namespace {
                     shown_x = x;
                     shown_y = y;
                 }
+                show_panel();
                 continue;
             }
             if ((hash != 0) && (left || right || middle || reset)) {
@@ -707,6 +886,7 @@ namespace {
                 shown_x = x;
                 shown_y = y;
             }
+            show_panel();
         }
     }
 }
