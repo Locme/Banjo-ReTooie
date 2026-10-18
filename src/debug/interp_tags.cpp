@@ -90,7 +90,6 @@ namespace {
     std::atomic<bool> mouse_on{false};
     std::atomic<uint32_t> mouse_matrix{0};
     std::atomic<uint32_t> hovered_model{0};
-    std::atomic<bool> autosave_pending{false};
     std::string picked_note;
 
     std::filesystem::path file_path() {
@@ -363,8 +362,11 @@ size_t tooie::interp_tags::save() {
 }
 
 void tooie::interp_tags::unsave_picked() {
+    unsave(picked_model.load());
+}
+
+void tooie::interp_tags::unsave(uint32_t model) {
     std::lock_guard<std::mutex> guard(lock);
-    uint32_t model = picked_model.load();
     tags.erase(model);
     notes.erase(model);
     no_effects.erase(model);
@@ -464,19 +466,17 @@ uint32_t tooie::interp_tags::hovered() {
 }
 
 void tooie::interp_tags::request_tag() {
-    autosave_pending = true;
     tag_pending = true;
 }
 
-void tooie::interp_tags::request_unsave() {
-    unsave_pending = true;
-}
-
 void tooie::interp_tags::request_effects() {
-    autosave_pending = true;
     effects_pending = true;
 }
 
-bool tooie::interp_tags::take_autosave() {
-    return autosave_pending.exchange(false);
+void tooie::interp_tags::reset(uint32_t model) {
+    std::lock_guard<std::mutex> guard(lock);
+    tags.erase(model);
+    no_effects.erase(model);
+    have_tags = !tags.empty();
+    have_no_effects = !no_effects.empty();
 }

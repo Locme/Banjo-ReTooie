@@ -78,6 +78,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Pick modes: Save and Delete Save buttons at the top left (clicks no longer save on their own), and the three pick keys have their own Pick Modes section in Controls (T423).
 - Interpolation pick mode (a Debug key in Controls): click a model or character to step its frame blending tag or turn its screen effects off, saved at once to Dev Files/interp_tags.txt (T422).
 - Shader Effects pick mode (a Debug key in Controls): click a texture to give it Disable, Grass, Deep Snow or Ice Reflection, saved to Dev Files/shader_effect_tags.txt; the parallax and interpolation tag files now go in Dev Files too (T421).
 - Banjo fur length now goes up to 1500 (was 300), for fun (L). The default stays 100.

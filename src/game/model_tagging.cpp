@@ -1135,10 +1135,6 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             tooie::toast::show(text);
         }
     }
-    // A click in Interpolation pick mode is saved at once.
-    if (!overlay && tooie::interp_tags::take_autosave()) {
-        tooie::interp_tags::save();
-    }
 
     // The command a flag set just before index lands on: texture rectangles (their coordinates follow them) are
     // passed over. SIZE_MAX when there is none (the list's own end only counts when the walk stopped at it).

@@ -65,11 +65,12 @@ namespace tooie::interp_tags {
     // The model under the cursor (0 = none), set by the tagger.
     void set_hovered(uint32_t model);
     uint32_t hovered();
-    // The clicks: next tag, back to default, screen effects off or on. The tagger applies them and saves the file.
+    // The clicks: next tag, screen effects off or on (the tagger applies them), back to default (not saved yet).
     void request_tag();
-    void request_unsave();
     void request_effects();
-    bool take_autosave();
+    void reset(uint32_t model);
+    // Delete Save: the model back to default, in the game and the file (other unsaved tags stay unsaved).
+    void unsave(uint32_t model);
 }
 
 #endif

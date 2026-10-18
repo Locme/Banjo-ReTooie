@@ -240,7 +240,7 @@ F12 screenshots are taken before these filters, so they don't show them.
 
 ### Parallax pick mode
 
-Bind **Parallax Pick Mode** (Controls, Debug) and press it in a level. The mouse
+Bind **Parallax Pick Mode** (Controls, Pick Modes) and press it in a level. The mouse
 becomes a crosshair, the texture under it pulses light blue, and a label beside
 the cursor names the texture and its parallax ("yours" or "built-in").
 
@@ -254,34 +254,39 @@ the cursor names the texture and its parallax ("yours" or "built-in").
 - **Shift + left click**: back to the built-in choice.
 - **Mouse wheel**: the surface behind it (when several are under the cursor).
 
-Every change shows at once and is saved to `parallax_tags.txt` in the `Dev Files`
-folder next to the save files (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
+Every change shows at once. The **Save** button (top left) writes the picks to
+`parallax_tags.txt` in the `Dev Files` folder next to the save files, and the
+label says "not saved" until then. **Delete Save** puts the last texture you
+clicked back to the built-in choice and takes it out of the file (one line a texture: `<hash> <shape> <depth>% shadows|noshadows`, or
 `<hash> off`). Picks override the built-in list and load again next time; send
 the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
 
-**Shader Effects Pick Mode** (a Debug key in Controls, no default) works the
+**Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
 same way for the texture effects. The label names the texture's effect ("yours"
 or "built-in"), and each **left click** steps it: Disable (no grass, ice
 reflection or deep snow on it), Grass, Deep Snow, Ice Reflection, then back to
 the built-in choice. **Shift + left click** puts it back at once and the
 **mouse wheel** picks the surface behind. Grass and Ice Reflection show at once;
 Deep Snow is only recorded for now, as deep snow goes by level and colour, not
-texture. Picks are saved to `shader_effect_tags.txt` in the `Dev Files` folder
+texture. Save writes the picks to `shader_effect_tags.txt` in the `Dev Files` folder
 (one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
 them added to the port.
 
-**Interpolation Pick Mode** (a Debug key in Controls, no default) does the
+**Interpolation Pick Mode** (Controls, Pick Modes, no default) does the
 same for models and characters, NPCs and enemies included: the label names the
 model under the cursor and its interpolation tag. **Left click** steps how it
 blends between game frames (snap, vertex, untagged, then default), **middle
 click** turns its screen effects off or on and **Shift + left click** puts it
-back to default. Each click is saved at once to `interp_tags.txt` in the `Dev
-Files` folder, the same file as the Save Tags key. It needs interpolation on
+back to default. Save writes the tags to `interp_tags.txt` in the `Dev Files`
+folder (the same file as the Save Tags key), and Delete Save takes the last model
+clicked back out. It needs interpolation on
 (Graphics > Interpolation above Original), and level pieces such as the ground are not
 models, so they say "No model here".
 
-Only one pick mode is on at a time: turning one on turns the others off.
+All three modes show the **Save** and **Delete Save** buttons at the top left;
+each saves only its own file. Only one pick mode is on at a time: turning one
+on turns the others off.
 
 ### Height maps in texture packs
 

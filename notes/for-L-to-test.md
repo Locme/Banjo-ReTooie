@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T423 Pick modes: Save and Delete Save buttons, Pick Modes section
+- Asked: 2026-10-18 10:57 UTC
+- Build: main
+- Steps:
+  1. Open Controls: the three pick keys are in their own Pick Modes section
+  2. Press a pick key: Save and Delete Save buttons show at the top left
+  3. Click a texture or model: the label says not saved; click Save and it goes into its file in Dev Files
+  4. Click Delete Save: the last one you clicked goes back to built-in and leaves the file
+- Look for: Do the buttons respond to a click without picking what is behind them?
+- Status: waiting for L
+
 ## T422 Interpolation pick mode (mouse)
 - Asked: 2026-10-18 08:14 UTC
 - Build: main
