@@ -269,7 +269,19 @@ the built-in choice. **Shift + left click** puts it back at once and the
 Deep Snow is only recorded for now, as deep snow goes by level and colour, not
 texture. Picks are saved to `shader_effect_tags.txt` in the `Dev Files` folder
 (one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
-them added to the port. Turning one pick mode on turns the other off.
+them added to the port.
+
+**Interpolation Pick Mode** (a Debug key in Controls, no default) does the
+same for models and characters, NPCs and enemies included: the label names the
+model under the cursor and its interpolation tag. **Left click** steps how it
+blends between game frames (snap, vertex, untagged, then default), **middle
+click** turns its screen effects off or on and **Shift + left click** puts it
+back to default. Each click is saved at once to `interp_tags.txt` in the `Dev
+Files` folder, the same file as the Save Tags key. It needs interpolation on
+(Graphics > Interpolation above Original), and level pieces such as the ground are not
+models, so they say "No model here".
+
+Only one pick mode is on at a time: turning one on turns the others off.
 
 ### Height maps in texture packs
 

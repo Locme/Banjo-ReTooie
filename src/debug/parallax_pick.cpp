@@ -30,11 +30,14 @@
 #include "tooie_dev_files.h"
 #include "tooie_effect_pick.h"
 #include "tooie_hotkeys.h"
+#include "tooie_interp_tags.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
 
 namespace RT64 {
     void SetScenePick(bool on, float x, float y, uint32_t layer);
+    uint32_t ScenePickMatrixId();
+    void SetScenePickHighlight(bool on);
     void ScenePickResult(uint64_t &hash, uint32_t &layers);
     uint32_t SceneParallaxTexture(uint64_t hash);
     uint32_t SceneGrassTexture(uint64_t hash);
@@ -371,12 +374,15 @@ namespace {
         }
         const auto start = std::chrono::steady_clock::now();
         Label label;
-        // TOOIE_PICK_EFFECTS=1: the headless pick is Shader Effects pick mode's.
-        const bool forced_effects = (std::getenv("TOOIE_PICK_EFFECTS") != nullptr) && (std::getenv("TOOIE_PICK_EFFECTS")[0] == '1');
-        bool on = (forced_x >= 0.0f) && !forced_effects;
-        bool effects_on = (forced_x >= 0.0f) && forced_effects;
-        bool key_was_down = false;
-        bool effects_key_was_down = false;
+        // One pick mode at a time. TOOIE_PICK_MODE=effects or interp: the headless pick is that mode's.
+        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp };
+        Mode mode = mode_off;
+        if (forced_x >= 0.0f) {
+            const char* forced = std::getenv("TOOIE_PICK_MODE");
+            const std::string name = forced != nullptr ? forced : "";
+            mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : mode_parallax);
+        }
+        bool key_was_down[3] = {};
         uint32_t buttons_were = 0;
         int32_t wheel_was = recompinput::get_mouse_wheel_pos();
         uint32_t layer = 0;
@@ -387,32 +393,33 @@ namespace {
         int64_t last_log = 0;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            const bool key_down = tooie::hotkeys::down(recompinput::GameInput::PARALLAX_PICK);
-            if (key_down && !key_was_down) {
-                on = !on;
-                layer = 0;
-                tooie::toast::show(on ? "Parallax pick mode: left click shape, right click depth, middle click shadows, "
-                    "Shift + left click built-in, wheel deeper" : "Parallax pick mode off");
-            }
-            key_was_down = key_down;
-            const bool effects_key_down = tooie::hotkeys::down(recompinput::GameInput::EFFECTS_PICK);
-            if (effects_key_down && !effects_key_was_down) {
-                effects_on = !effects_on;
-                layer = 0;
-                tooie::toast::show(effects_on ? "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, "
-                    "built-in; Shift + left click built-in, wheel deeper" : "Shader Effects pick mode off");
-            }
-            effects_key_was_down = effects_key_down;
-            // One mode at a time: the newer one wins.
-            if (effects_on && on) {
-                if (effects_key_down) {
-                    on = false;
-                } else {
-                    effects_on = false;
+            static const recompinput::GameInput keys[3] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
+                recompinput::GameInput::INTERP_PICK };
+            static const char* on_toasts[3] = {
+                "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
+                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, built-in; Shift + left click built-in, wheel deeper",
+                "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
+                    "Shift + left click default, wheel deeper (needs interpolation on)" };
+            static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
+            for (int k = 0; k < 3; k++) {
+                const bool down = tooie::hotkeys::down(keys[k]);
+                if (down && !key_was_down[k]) {
+                    // The newer mode wins.
+                    const Mode pressed_mode = Mode(mode_parallax + k);
+                    mode = (mode == pressed_mode) ? mode_off : pressed_mode;
+                    layer = 0;
+                    tooie::toast::show(mode == pressed_mode ? on_toasts[k] : off_toasts[k]);
                 }
+                key_was_down[k] = down;
             }
-            recompinput::set_pick_mode(on || effects_on);
-            if (!on && !effects_on) {
+            const bool on = (mode == mode_parallax);
+            const bool effects_on = (mode == mode_effects);
+            const bool interp_on = (mode == mode_interp);
+            recompinput::set_pick_mode(mode != mode_off);
+            // The game highlights a picked model itself.
+            RT64::SetScenePickHighlight(!interp_on);
+            tooie::interp_tags::set_mouse_pick(interp_on, interp_on ? RT64::ScenePickMatrixId() : 0);
+            if (mode == mode_off) {
                 RT64::SetScenePick(false, 0.0f, 0.0f, 0);
                 label.update(false, "", 0.0f, 0.0f);
                 buttons_were = 0;
@@ -471,6 +478,46 @@ namespace {
             uint64_t hash = 0;
             uint32_t layers = 0;
             RT64::ScenePickResult(hash, layers);
+            if (interp_on) {
+                const uint32_t model = tooie::interp_tags::hovered();
+                if ((model != 0) && (model == tooie::interp_tags::picked())) {
+                    if (reset) {
+                        tooie::interp_tags::request_unsave();
+                    } else if (left) {
+                        tooie::interp_tags::request_tag();
+                    } else if (middle) {
+                        tooie::interp_tags::request_effects();
+                    }
+                }
+                std::string text;
+                if (model == 0) {
+                    // Level pieces have no model; nothing has one at the Original refresh rate (no interpolation).
+                    text = "No model here";
+                } else {
+                    char line[48];
+                    snprintf(line, sizeof(line), "Model %08X\n", model);
+                    text = line + tooie::interp_tags::describe(model);
+                    if (layers > 1) {
+                        text += "\nLayer " + std::to_string((layer % layers) + 1) + " of " + std::to_string(layers);
+                    }
+                }
+                if ((left || middle || reset) && (model != 0)) {
+                    fprintf(stderr, "[interp-pick] %08X click\n", model);
+                }
+                // The tag shows a scene after the click, so the label is refreshed every few polls.
+                static int refresh = 0;
+                if ((++refresh % 10 == 0) || (hash != shown_hash) || (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f)) {
+                    label.update(true, text, x, y);
+                    if ((hash != shown_hash) && (ms - last_log > 200)) {
+                        fprintf(stderr, "[interp-pick] under the cursor: model %08X (%s)\n", model, text.c_str());
+                        last_log = ms;
+                    }
+                    shown_hash = hash;
+                    shown_x = x;
+                    shown_y = y;
+                }
+                continue;
+            }
             if (effects_on) {
                 if ((hash != 0) && (left || reset)) {
                     step_effect(hash, reset);

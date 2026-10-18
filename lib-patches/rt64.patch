@@ -2011,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..cf15732 100644
+index 9fae0d4..c583c46 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3087,7 +3087,7 @@ index 9fae0d4..cf15732 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2647,969 @@ namespace RT64 {
+@@ -1747,24 +2647,979 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3368,8 +3368,8 @@ index 9fae0d4..cf15732 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -3483,6 +3483,7 @@ index 9fae0d4..cf15732 100644
 +                    const uint32_t start = call.meshDesc.faceIndicesStart;
 +                    const uint32_t indexCount = call.callDesc.triangleCount * 3;
 +                    float nearest = FLT_MAX;
++                    uint32_t nearestVertex = UINT32_MAX;
 +                    for (uint32_t k = 0; (k + 2 < indexCount) && ((start + k + 2) < drawData.faceIndices.size()); k += 3) {
 +                        float px[3], py[3], pw[3];
 +                        bool ok = true;
@@ -3516,12 +3517,21 @@ index 9fae0d4..cf15732 100644
 +                        }
 +                        // w is linear in screen space through 1/w.
 +                        const float invW = (1.0f - b1 - b2) / pw[0] + b1 / pw[1] + b2 / pw[2];
-+                        if (invW > 0.0f) {
-+                            nearest = std::min(nearest, 1.0f / invW);
++                        if ((invW > 0.0f) && (1.0f / invW < nearest)) {
++                            nearest = 1.0f / invW;
++                            nearestVertex = drawData.faceIndices[start + k];
 +                        }
 +                    }
 +                    if (nearest < FLT_MAX) {
-+                        AddScenePickHit(nearest, hash);
++                        // The matrix group the hit's vertex was placed with (a model's bone, when the game tagged it).
++                        uint32_t matrixId = 0;
++                        if (nearestVertex < drawData.worldIndices.size()) {
++                            const uint32_t world = drawData.worldIndices[nearestVertex];
++                            if ((world < drawData.worldTransformGroups.size()) && (drawData.worldTransformGroups[world] < drawData.transformGroups.size())) {
++                                matrixId = drawData.transformGroups[drawData.worldTransformGroups[world]].matrixId;
++                            }
++                        }
++                        AddScenePickHit(nearest, hash, matrixId);
 +                    }
 +                }
 +                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
@@ -3581,11 +3591,11 @@ index 9fae0d4..cf15732 100644
 +                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
-                 }
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -5830,10 +5840,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3814acd
+index 0000000..28f5f68
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2305 @@
+@@ -0,0 +1,2327 @@
 +//
 +// RT64
 +//
@@ -6444,9 +6454,17 @@ index 0000000..3814acd
 +    static float pickX = 0.5f, pickY = 0.5f;
 +    static uint32_t pickLayer = 0;
 +    static float outputRect[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
-+    static std::vector<std::pair<float, uint64_t>> pickHits;
++    struct PickHit {
++        float w;
++        uint64_t hash;
++        uint32_t matrixId;
++        bool operator<(const PickHit &other) const { return w < other.w; }
++    };
++    static std::vector<PickHit> pickHits;
 +    static uint64_t pickHash = 0;
 +    static uint32_t pickLayers = 0;
++    static uint32_t pickMatrixId = 0;
++    static bool pickHighlight = true;
 +
 +    void SetScenePick(bool on, float x, float y, uint32_t layer) {
 +        const std::scoped_lock lock(pickMutex);
@@ -6457,6 +6475,7 @@ index 0000000..3814acd
 +        if (!on) {
 +            pickHash = 0;
 +            pickLayers = 0;
++            pickMatrixId = 0;
 +        }
 +    }
 +
@@ -6478,15 +6497,25 @@ index 0000000..3814acd
 +        const std::scoped_lock lock(pickMutex);
 +        ndcX = ((pickX - outputRect[0]) / outputRect[2]) * 2.0f - 1.0f;
 +        ndcY = 1.0f - ((pickY - outputRect[1]) / outputRect[3]) * 2.0f;
-+        highlight = pickHash;
++        highlight = pickHighlight ? pickHash : 0;
 +        return pickOn;
 +    }
 +
-+    void AddScenePickHit(float w, uint64_t hash) {
++    void AddScenePickHit(float w, uint64_t hash, uint32_t matrixId) {
 +        const std::scoped_lock lock(pickMutex);
 +        if (pickHits.size() < 4096) {
-+            pickHits.emplace_back(w, hash);
++            pickHits.push_back({ w, hash, matrixId });
 +        }
++    }
++
++    uint32_t ScenePickMatrixId() {
++        const std::scoped_lock lock(pickMutex);
++        return pickMatrixId;
++    }
++
++    void SetScenePickHighlight(bool on) {
++        const std::scoped_lock lock(pickMutex);
++        pickHighlight = on;
 +    }
 +
 +    void FinishScenePick() {
@@ -6496,15 +6525,18 @@ index 0000000..3814acd
 +            return;
 +        }
 +        // Nearest first, each texture once (a wall drawn in several pieces is one layer).
-+        std::sort(pickHits.begin(), pickHits.end());
++        std::stable_sort(pickHits.begin(), pickHits.end());
 +        std::vector<uint64_t> layers;
++        std::vector<uint32_t> layerMatrixIds;
 +        for (const auto &hit : pickHits) {
-+            if (std::find(layers.begin(), layers.end(), hit.second) == layers.end()) {
-+                layers.push_back(hit.second);
++            if (std::find(layers.begin(), layers.end(), hit.hash) == layers.end()) {
++                layers.push_back(hit.hash);
++                layerMatrixIds.push_back(hit.matrixId);
 +            }
 +        }
 +        pickLayers = uint32_t(layers.size());
 +        pickHash = layers.empty() ? 0 : layers[pickLayer % layers.size()];
++        pickMatrixId = layers.empty() ? 0 : layerMatrixIds[pickLayer % layers.size()];
 +        pickHits.clear();
 +    }
 +
@@ -8141,10 +8173,10 @@ index 0000000..3814acd
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..0cc81da
+index 0000000..46fe214
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,384 @@
 +//
 +// RT64
 +//
@@ -8494,7 +8526,11 @@ index 0000000..0cc81da
 +    // For the frame being drawn: pick mode on, the cursor in normalized device coordinates, the texture to highlight.
 +    bool ScenePickCursor(float &ndcX, float &ndcY, uint64_t &highlight);
 +    // A textured surface under the cursor at that depth (w); FinishScenePick picks among those of the frame.
-+    void AddScenePickHit(float w, uint64_t hash);
++    void AddScenePickHit(float w, uint64_t hash, uint32_t matrixId = 0);
++    // The matrix group id of the nearest hit (0 when unknown, G_EX_ID_AUTO when the game gave none) with the picked texture, for picking a model.
++    uint32_t ScenePickMatrixId();
++    // Whether the draws with the picked texture are highlighted (off while a model is picked, the game highlights it).
++    void SetScenePickHighlight(bool on);
 +    void FinishScenePick();
 +    // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
 +    bool ComputeSceneParallax(interop::FrameParams &frameParams);

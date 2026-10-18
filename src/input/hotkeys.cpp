@@ -60,6 +60,8 @@ void tooie::hotkeys::register_inputs() {
         "Frees the mouse as a crosshair and highlights the texture under it. Left click steps its parallax shape (then off), right click its depth, middle click its shadows; Shift + left click puts it back to the built-in choice and the wheel picks a layer deeper. Saved to parallax_tags.txt in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
     add(GameInput::EFFECTS_PICK, "Shader Effects Pick Mode",
         "Frees the mouse as a crosshair and highlights the texture under it. Left click steps the shader effect it gets: Disable, Grass, Deep Snow, Ice Reflection, then back to the built-in choice; Shift + left click puts it back at once and the wheel picks a layer deeper. Saved to shader_effect_tags.txt in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
+    add(GameInput::INTERP_PICK, "Interpolation Pick Mode",
+        "Frees the mouse as a crosshair; the model or character under it is highlighted. Left click steps how it blends between game frames: snap, vertex, untagged, then default; middle click turns its screen effects off or on; Shift + left click puts it back to default. Needs a frame rate above Original. Saved to interp_tags.txt in the Dev Files folder next to the save files.", SDL_SCANCODE_UNKNOWN, "Debug");
 }
 
 bool tooie::hotkeys::down(recompinput::GameInput input) {

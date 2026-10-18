@@ -861,6 +861,25 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // Manual tags: the Pick Model and Tag Model keys, read once per scene.
     const bool pick_now = !overlay && tooie::interp_tags::take_pick();
     const bool tag_now = !overlay && tooie::interp_tags::take_tag();
+    // Interpolation pick mode: the model whose bone RT64 found under the cursor (by last scene's ids) is the picked one.
+    static std::unordered_map<uint32_t, uint32_t> mouse_id_models;
+    uint32_t mouse_matrix = 0;
+    const bool mouse = !overlay && tooie::interp_tags::mouse_pick(mouse_matrix);
+    if (!overlay) {
+        if (mouse) {
+            const auto found = mouse_id_models.find(mouse_matrix);
+            const uint32_t model = found == mouse_id_models.end() ? 0 : found->second;
+            tooie::interp_tags::set_hovered(model);
+            if (model == 0) {
+                tooie::interp_tags::set_picked(0, "");
+            } else if (model != tooie::interp_tags::picked()) {
+                char note[32];
+                std::snprintf(note, sizeof(note), " map %X (mouse)", tooie::debug::current_map(rdram));
+                tooie::interp_tags::set_picked(model, note);
+            }
+        }
+        mouse_id_models.clear();
+    }
     if (!overlay && tooie::interp_tags::take_save()) {
         char text[64];
         std::snprintf(text, sizeof(text), "%zu tags saved to Dev Files/interp_tags.txt", tooie::interp_tags::save());
@@ -881,7 +900,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool interpolating = interpolation_on() && end > start && blend_mode != 1;
     // Without interpolation the scene is still read for the models drawn
     // without effects and for the Pick Model and Model Effects keys.
-    const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now);
+    const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now || mouse);
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
     const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
     const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
@@ -990,7 +1009,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // The tags only count in the custom blend mode (normal plus the tags).
     const bool custom = blend_mode == tooie::interp_check::blend_custom;
     // (Furry enemies and feathered NPCs are known by their prints too.)
-    const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || log_ids ||
+    const bool tags_wanted = !overlay && ((custom && tooie::interp_tags::any()) || tooie::interp_tags::picked() != 0 || pick_now || tag_now || mouse || log_ids ||
         excluding || (end > start && (npc_fur || npc_feathers)));
     if (tags_wanted) {
         for (Block& block : blocks) {
@@ -1115,6 +1134,10 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
             std::snprintf(text, sizeof(text), "Model %08X: effects %s", current_pick, off ? "off" : "on");
             tooie::toast::show(text);
         }
+    }
+    // A click in Interpolation pick mode is saved at once.
+    if (!overlay && tooie::interp_tags::take_autosave()) {
+        tooie::interp_tags::save();
     }
 
     // The command a flag set just before index lands on: texture rectangles (their coordinates follow them) are
@@ -2253,6 +2276,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 }
                 bones_tagged++;
                 blocks[b].ids.push_back(id);
+                if (mouse) {
+                    mouse_id_models[id] = blocks[b].print;
+                }
             }
             else if (particle) {
                 id = unique_id(particle_id[index]);

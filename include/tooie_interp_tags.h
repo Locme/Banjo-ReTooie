@@ -56,6 +56,20 @@ namespace tooie::interp_tags {
     void set_picked(uint32_t model, const std::string& note);
     // Steps the picked model's tag (in memory; the Save Tags key writes the file). Returns the new mode.
     int step_picked();
+
+    // Interpolation pick mode (src/debug/parallax_pick.cpp): the mouse picks the model under the cursor and clicks
+    // tag it, each change saved at once. The pick worker passes the RT64 matrix id under the cursor (0 = mode off);
+    // the tagger turns it into the model it belongs to, which becomes the picked model.
+    void set_mouse_pick(bool on, uint32_t matrix_id);
+    bool mouse_pick(uint32_t& matrix_id);
+    // The model under the cursor (0 = none), set by the tagger.
+    void set_hovered(uint32_t model);
+    uint32_t hovered();
+    // The clicks: next tag, back to default, screen effects off or on. The tagger applies them and saves the file.
+    void request_tag();
+    void request_unsave();
+    void request_effects();
+    bool take_autosave();
 }
 
 #endif

@@ -87,6 +87,10 @@ namespace {
     std::atomic<bool> save_pending{false};
     std::atomic<bool> unsave_pending{false};
     std::atomic<uint32_t> picked_model{0};
+    std::atomic<bool> mouse_on{false};
+    std::atomic<uint32_t> mouse_matrix{0};
+    std::atomic<uint32_t> hovered_model{0};
+    std::atomic<bool> autosave_pending{false};
     std::string picked_note;
 
     std::filesystem::path file_path() {
@@ -436,4 +440,43 @@ int tooie::interp_tags::step_picked() {
     have_tags = !tags.empty();
     std::printf("[interp-tags] model %08X: %s\n", model, mode_name(mode));
     return mode;
+}
+
+void tooie::interp_tags::set_mouse_pick(bool on, uint32_t matrix_id) {
+    mouse_matrix = matrix_id;
+    mouse_on = on;
+    if (!on) {
+        hovered_model = 0;
+    }
+}
+
+bool tooie::interp_tags::mouse_pick(uint32_t& matrix_id) {
+    matrix_id = mouse_matrix.load();
+    return mouse_on.load();
+}
+
+void tooie::interp_tags::set_hovered(uint32_t model) {
+    hovered_model = model;
+}
+
+uint32_t tooie::interp_tags::hovered() {
+    return hovered_model.load();
+}
+
+void tooie::interp_tags::request_tag() {
+    autosave_pending = true;
+    tag_pending = true;
+}
+
+void tooie::interp_tags::request_unsave() {
+    unsave_pending = true;
+}
+
+void tooie::interp_tags::request_effects() {
+    autosave_pending = true;
+    effects_pending = true;
+}
+
+bool tooie::interp_tags::take_autosave() {
+    return autosave_pending.exchange(false);
 }
