@@ -21,14 +21,16 @@ namespace tooie::snout_jiggle {
     inline const std::string body_stiffness_option = "backpack_jiggle_stiffness";
     inline const std::string body_damping_option = "backpack_jiggle_damping";
     inline const std::string body_mass_option = "backpack_jiggle_mass";
-    inline const std::string body_squash_in_option = "backpack_jiggle_squash_in";
-    inline const std::string body_squash_out_option = "backpack_jiggle_squash_out";
-    inline const std::string body_squash_across_option = "backpack_jiggle_squash_across";
+    inline const std::string body_squash_option = "backpack_jiggle_squash";      // % of its size, every direction
+    inline const std::string body_tilt_option = "backpack_jiggle_tilt";          // degrees, + leans its top forward
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
-    inline const std::string kazooie_strength_option = "kazooie_jiggle_strength";
-    inline const std::string kazooie_bounce_option = "kazooie_jiggle_bounce";
-    inline const std::string kazooie_speed_option = "kazooie_jiggle_speed";
-    inline const std::string kazooie_exaggeration_option = "kazooie_jiggle_exaggeration";
+    // Her feathers are jiggle bones too, with the snout's kinds of slider (L, 2026-10-19).
+    inline const std::string kazooie_stiffness_option = "kazooie_jiggle_stiffness";
+    inline const std::string kazooie_damping_option = "kazooie_jiggle_damping";
+    inline const std::string kazooie_mass_option = "kazooie_jiggle_mass";
+    inline const std::string kazooie_squash_in_option = "kazooie_jiggle_squash_in";
+    inline const std::string kazooie_squash_out_option = "kazooie_jiggle_squash_out";
+    inline const std::string kazooie_squash_across_option = "kazooie_jiggle_squash_across";
     // The jiggle bone (L, 2026-10-18): a point on a damped spring from the tip.
     inline const std::string stiffness_option = "snout_jiggle_stiffness";
     inline const std::string damping_option = "snout_jiggle_damping";

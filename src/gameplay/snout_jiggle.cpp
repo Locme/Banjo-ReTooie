@@ -45,10 +45,10 @@
 // and Kazooie riding in it (her feathers, when Kazooie jiggle is on, start from there).
 //
 // General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
-// hang on springs the same way. Each feather bone gets its own spring on the end of the bone, from
-// the root of the chain out, and each bone's turn carries the bones after it, so the tail whips.
-// Her bones are found by index and id: 062A and 0838 (in the backpack; Smash Banjo keeps them) and
-// 061C (alone after Split Up). The snout's sliders don't apply to her.
+// are jiggle bones like the snout (L, 2026-10-19), with her own sliders of the same kinds. Each
+// feather bone has its own spring point at its end, from the root of the chain out, and each bone's
+// swing carries the bones after it, so the tail whips. Her bones are found by index and id: 062A and
+// 0838 (in the backpack; Smash Banjo keeps them) and 061C (alone after Split Up).
 //
 // The copied matrices live in extended RDRAM no one else uses (after the pause menu's strings at
 // 0x80EF1200, src/gameplay/pause_settings.cpp): the snout's at 0x80EF8000, Kazooie's feathers' after
@@ -389,77 +389,7 @@ namespace {
         return { c * d.x - s * d.z, d.y, s * d.x + c * d.z };
     }
 
-    // A spring: a point that follows a place in the world (the snout's tip, a feather's end).
-    struct Spring {
-        bool started = false;
-        Vec point{}, velocity{};
-        std::chrono::steady_clock::time_point last;
-        Vec lag{};      // point - target after the last update, world space
-        Vec target{};   // the target at the last update
-        float period = 1.0f / 30.0f;   // the game's frame time, smoothed
-    };
-
-    // One step of the spring per game frame. The game moves the target by the same amount each frame
-    // whatever the wall clock says, so the spring steps by the game's frame time, smoothed over about
-    // half a second, not by the time since the last draw: frames that arrive unevenly (2 close
-    // together, then a gap) made the wobble stutter (L, 2026-10-17).
-    void update_spring(Spring& spring, Vec target, float frequency, float damping) {
-        const auto now = std::chrono::steady_clock::now();
-        if (tooie::photo_mode::active()) {
-            // Photo Mode: it stays as it was when the photo was framed.
-            spring.last = now;
-            return;
-        }
-        const float since = std::chrono::duration<float>(now - spring.last).count();
-        // Not drawn for a while (Kazooie hides in the pack between moves): start again where it is.
-        if (!spring.started || since > 0.5f || length(target - spring.point) > teleport) {
-            spring.started = true;
-            spring.point = target;
-            spring.velocity = {};
-            spring.last = now;
-            spring.lag = {};
-            spring.target = target;
-            return;
-        }
-        // The shadow pass draws the model again in the same frame, at the same place: one step per frame.
-        if (since < 0.008f && length(target - spring.target) < 1e-4f) {
-            return;
-        }
-        spring.last = now;
-        spring.target = target;
-        spring.period += (std::clamp(since, 1.0f / 240.0f, 0.1f) - spring.period) * 0.1f;
-        const float dt = spring.period;
-        const float w = 2.0f * pi * frequency;
-        const float k = w * w, c = 2.0f * damping * w;
-        for (float t = 0.0f; t < dt; t += step) {
-            const float h = std::min(step, dt - t);
-            Vec accel = (target - spring.point) * k - spring.velocity * c;
-            spring.velocity = spring.velocity + accel * h;
-            spring.point = spring.point + spring.velocity * h;
-        }
-        spring.lag = spring.point - target;
-    }
-
-    // Turn that points arm (from a pivot) at arm + lag, at most max_deg; the angle in radians.
-    Mat aim(Vec arm, Vec lag, float max_deg, float& angle) {
-        angle = 0.0f;
-        const float la = length(arm);
-        const Vec want = arm + lag;
-        const float lw = length(want);
-        if (la < 1e-3f || lw < 1e-3f) {
-            return rotation({ 1, 0, 0 }, 0.0f);
-        }
-        const Vec a = arm * (1.0f / la), b = want * (1.0f / lw);
-        const Vec axis = cross(a, b);
-        const float sin_t = length(axis);
-        if (sin_t < 1e-5f) {
-            return rotation({ 1, 0, 0 }, 0.0f);
-        }
-        angle = std::min(std::atan2(sin_t, dot(a, b)), max_deg * pi / 180.0f);
-        return rotation(axis * (1.0f / sin_t), angle);
-    }
-
-    // ---- the jiggle bones: the snout and the nose (see the top) ----
+    // ---- the jiggle bones: the snout, the nose, the backpack and Kazooie's feathers (see the top) ----
     // A point hangs on a damped spring from the bone's tip, in the world: F = -stiffness * (point -
     // tip) - damping * velocity, a = F / mass. The bone points from its root at where the point is, as
     // far as the limits let it, and stretches or squashes to reach it, keeping its volume. Falling, the
@@ -515,6 +445,7 @@ namespace {
         Vec last_pos{};
         double last = 0.0;
         float amount = 0.0f;
+        float moving = 0.0f;   // 1 while the model moves at all (walking, jumping, falling), 0 standing
     } walk;
 
     void update_walk() {
@@ -539,6 +470,8 @@ namespace {
         // Moving along (world units a second) and not much up or down: slopes and steps, not jumps or falls.
         const float target = (ground > 40.0f && ground < 2000.0f && up < std::max(150.0f, 0.6f * ground)) ? 1.0f : 0.0f;
         walk.amount += (target - walk.amount) * std::min(1.0f, dt * 6.0f);
+        const float moves = (ground > 20.0f || up > 20.0f) ? 1.0f : 0.0f;
+        walk.moving += (moves - walk.moving) * std::min(1.0f, dt * (moves > walk.moving ? 8.0f : 3.0f));
     }
 
     // Shares of the bone's length its tip may move, and the most it may stretch or squash (the nose
@@ -793,18 +726,17 @@ namespace {
         { 4, { 52, 53, 54, 55 }, { 65, 66, 67, 68 } },
         { 2, { 56, 57 }, { 91, 93 } },
     };
-    // Lighter than the snout: slower, longer wobbles and a wider swing per bone. The Kazooie jiggle
-    // sliders scale these (defaults: 2.5 a second, damping 0.15, follow 1.2, 32 degrees per bone).
-    struct FeatherSettings { float frequency = 2.5f, damping = 0.15f, follow = 1.2f, max_angle = 32.0f; } feather_settings;
+    // Her own sliders, the snout's kinds (L, 2026-10-19): the jiggle bone's spring and its limits.
+    struct FeatherSettings { Feel feel{ 150.0f, 12.0f, 1.0f }; Limits lim{ 0.5f, 0.5f, 0.5f }; } feather_settings;
     void read_feather_settings() {
         using namespace tooie::snout_jiggle;
-        feather_settings.follow = 1.2f * (float)option_number(kazooie_strength_option, 100.0) / 100.0f;
-        // Bounce 0..100 as the snout's: damping 0.33 .. 0.03; 60 is 0.15.
-        feather_settings.damping = 0.03f + 0.30f * (1.0f - std::clamp((float)option_number(kazooie_bounce_option, 60.0), 0.0f, 100.0f) / 100.0f);
-        feather_settings.frequency = std::clamp((float)option_number(kazooie_speed_option, 2.5), 0.5f, 20.0f);
-        feather_settings.max_angle = std::min(32.0f * (float)option_number(kazooie_exaggeration_option, 100.0) / 100.0f, 85.0f);
+        feather_settings.feel.stiffness = std::clamp((float)option_number(kazooie_stiffness_option, 150.0), 1.0f, 2000.0f);
+        feather_settings.feel.damping = std::clamp((float)option_number(kazooie_damping_option, 12.0), 0.0f, 200.0f);
+        feather_settings.feel.mass = std::clamp((float)option_number(kazooie_mass_option, 1.0), 0.05f, 20.0f);
+        feather_settings.lim.inwards = std::clamp((float)option_number(kazooie_squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
+        feather_settings.lim.outwards = std::clamp((float)option_number(kazooie_squash_out_option, 50.0), 0.0f, 300.0f) / 100.0f;
+        feather_settings.lim.across = std::clamp((float)option_number(kazooie_squash_across_option, 50.0), 0.0f, 300.0f) / 100.0f;
     }
-    constexpr float feather_arm = 12.0f;     // every bone turns as if it were this long
     constexpr int max_feather_bones = 20, max_bones = 64;
 
     struct Feathers {
@@ -815,7 +747,7 @@ namespace {
         Vec pivot[max_feather_bones]{}, tip[max_feather_bones]{};   // bind pose
         int8_t slot_of[max_bones];
         bool done = false;                   // matrices worked out for this draw
-        Spring spring[max_feather_bones];
+        Jiggle spring[max_feather_bones];
         float max_angle = 0.0f;              // for the log
     } feathers;
 
@@ -844,7 +776,7 @@ namespace {
             return;
         }
         if (kind != feathers.kind) {
-            for (Spring& s : feathers.spring) s = {};
+            for (Jiggle& j : feathers.spring) j = {};
             feathers.kind = kind;
         }
         int slot = 0;
@@ -898,16 +830,10 @@ namespace {
                 apply_affine(m, C, m1);
                 const Vec pivot = transform(m1, feathers.pivot[slot]);
                 const Vec end = transform(m1, feathers.tip[slot]);
-                Spring& s = feathers.spring[slot];
-                update_spring(s, to_world(end), feather_settings.frequency, feather_settings.damping);
-                const Vec arm = end - pivot;
-                const float la = length(arm);
-                if (la > 1e-3f) {
-                    float angle;
-                    const Mat R = aim(arm * (feather_arm / la), to_model_dir(s.lag) * feather_settings.follow, feather_settings.max_angle, angle);
-                    feathers.max_angle = std::max(feathers.max_angle, angle);
-                    C = then(C, Affine{ R, pivot - apply(pivot, R) });
-                }
+                const BoneTurn turn = jiggle_bone(feathers.spring[slot], pivot, end, Vec{ m1[4], m1[5], m1[6] },
+                                                  feather_settings.feel, feather_settings.lim, nullptr);
+                feathers.max_angle = std::max(feathers.max_angle, turn.angle);
+                C = then(C, turn.A);
                 float out[16];
                 apply_affine(m, C, out);
                 for (int i = 0; i < 16; i++) write_float(rdram, feather_copies + 64 * slot + 4 * i, out[i]);
@@ -924,16 +850,17 @@ namespace {
     constexpr int16_t backpack_ids[] = { 60 };
     constexpr int max_body_bones = 128;
 
-    struct BodySettings { Feel feel{ 200.0f, 10.0f, 1.5f }; Limits lim{ 0.1f, 0.15f, 0.4f }; } body_settings;
+    struct BodySettings { Feel feel{ 200.0f, 10.0f, 1.5f }; Limits lim{ 0.25f, 0.25f, 0.25f }; float tilt = 0.0f; } body_settings;
 
     void read_body_settings() {
         using namespace tooie::snout_jiggle;
         body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 200.0), 1.0f, 2000.0f);
         body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 10.0), 0.0f, 200.0f);
         body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.5), 0.05f, 20.0f);
-        body_settings.lim.inwards = std::clamp((float)option_number(body_squash_in_option, 10.0), 0.0f, 95.0f) / 100.0f;
-        body_settings.lim.outwards = std::clamp((float)option_number(body_squash_out_option, 15.0), 0.0f, 300.0f) / 100.0f;
-        body_settings.lim.across = std::clamp((float)option_number(body_squash_across_option, 40.0), 0.0f, 300.0f) / 100.0f;
+        // One squash & stretch for every direction (L, 2026-10-19).
+        const float squash = std::clamp((float)option_number(body_squash_option, 25.0), 0.0f, 300.0f) / 100.0f;
+        body_settings.lim = { std::min(squash, 0.95f), squash, squash };
+        body_settings.tilt = std::clamp((float)option_number(body_tilt_option, 0.0), -90.0f, 90.0f) * pi / 180.0f;
     }
 
     struct Body {
@@ -996,6 +923,7 @@ namespace {
     void work_out_body(uint8_t* rdram, uint32_t list) {
         body.done = true;
         body.max_angle = 0.0f;
+        update_walk();
         Affine acc[max_body_bones];
         int state[max_body_bones]{};   // 0 not yet, 1 working, 2 done
         const Affine none{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
@@ -1005,15 +933,33 @@ namespace {
             if (state[b] == 1) return none;   // a loop in a broken skeleton
             state[b] = 1;
             const int p = body.parent[b];
-            const Affine carried = (p >= 0 && p < body.count && p != b) ? self(self, p) : none;
+            Affine carried = (p >= 0 && p < body.count && p != b) ? self(self, p) : none;
             Affine mine = carried;
             if (body.jiggles[b]) {
                 float m[16], m1[16];
                 for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * b + 4 * i);
                 apply_affine(m, carried, m1);
+                // Tilt: the pack's rest angle while he walks or runs (L, 2026-10-19: "only affect
+                // walking"), eased in and out with the walk, turned about its own side axis at its root
+                // (+ leans its top forward, towards his head).
+                const float tilt = body_settings.tilt * walk.amount;
+                if (tilt != 0.0f) {
+                    const Vec side{ m1[0], m1[1], m1[2] };
+                    const float ls = length(side);
+                    if (ls > 1e-4f) {
+                        const Vec root = transform(m1, body.pivot[b]);
+                        const Mat R = rotation(side * (1.0f / ls), tilt);
+                        carried = then(carried, Affine{ R, root - apply(root, R) });
+                        apply_affine(m, carried, m1);
+                    }
+                }
                 const Vec up{ m1[4], m1[5], m1[6] };
+                // Not in idle animations (L, 2026-10-19): the swing fades out while he stands still
+                // and back in as he moves, so only his own movement swings the pack.
+                const Limits lim{ body_settings.lim.inwards * walk.moving, body_settings.lim.outwards * walk.moving,
+                                  body_settings.lim.across * walk.moving };
                 const BoneTurn turn = jiggle_bone(body.spring[b], transform(m1, body.pivot[b]), transform(m1, body.tip[b]), up,
-                                                  body_settings.feel, body_settings.lim, nullptr);
+                                                  body_settings.feel, lim, nullptr);
                 body.max_angle = std::max(body.max_angle, turn.angle);
                 mine = then(carried, turn.A);
             }

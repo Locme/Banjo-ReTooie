@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T436 Backpack: one squash & stretch, walking tilt, still at idle; Kazooie on jiggle bones
+- Asked: 2026-10-19 08:51 UTC
+- Build: main
+- Steps:
+  1. General > Backpack jiggle on: the sliders are now stiffness, damping, mass, Squash & stretch (one slider) and Tilt
+  2. Stand still through the idle animations: the pack should not swing
+  3. Walk and run with Tilt at +30 and -30: the pack leans only while he moves along the ground, upright again when he stops or jumps
+  4. General > Kazooie jiggle on: her sliders are now the snout's kinds (stiffness 150, damping 12, mass 1, inwards/outwards/up and down 50%)
+- Look for: Pack still at idle, swings when he moves; tilt only while walking or running; Kazooie's crest and tail wobble, whip and settle with no parts coming apart. Tell me if the tilt goes the wrong way. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T435 Backpack jiggle (replaces Body jiggle)
 - Asked: 2026-10-19 08:09 UTC
 - Build: main

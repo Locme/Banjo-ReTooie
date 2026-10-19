@@ -320,14 +320,12 @@ void tooie::init_config() {
             "How quickly the bouncing dies out. 0 bounces for ages.", 0, 90, 1, 0, false, 10);
         general.add_number_option(body_mass_option, "Backpack jiggle: mass",
             "How heavy the backpack is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1.5);
-        general.add_number_option(body_squash_in_option, "Backpack jiggle: max squash & stretch inwards",
-            "How far the pack may squash down on itself, as a share of its size.", 0, 95, 5, 0, true, 10);
-        general.add_number_option(body_squash_out_option, "Backpack jiggle: max squash & stretch outwards",
-            "How far the pack may stretch out, as a share of its size.", 0, 300, 5, 0, true, 15);
-        general.add_number_option(body_squash_across_option, "Backpack jiggle: max squash & stretch up and down",
-            "How far the pack may swing away from his back (up, down and sideways), as a share of its size.", 0, 300, 5, 0, true, 40);
-        for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_in_option,
-                                       &body_squash_out_option, &body_squash_across_option }) {
+        general.add_number_option(body_squash_option, "Backpack jiggle: squash & stretch",
+            "How far the pack may swing, squash and stretch from where it rests, as a share of its size.", 0, 300, 5, 0, true, 25);
+        general.add_number_option(body_tilt_option, "Backpack jiggle: tilt",
+            "How the pack leans while Banjo walks or runs: positive leans its top forward towards his head, negative leans it back, in degrees. It eases back upright when he stops or leaves the ground.", -60, 60, 5, 0, false, 0);
+        for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_option,
+                                       &body_tilt_option }) {
             general.add_option_hidden_dependency(*id, body_option, false);
         }
     }
@@ -336,16 +334,20 @@ void tooie::init_config() {
         false);
     {
         using namespace tooie::snout_jiggle;
-        general.add_number_option(kazooie_strength_option, "Kazooie jiggle: wobble",
-            "How far her crest and tail feathers swing when she moves.", 0, 400, 10, 0, true, 100);
-        general.add_number_option(kazooie_bounce_option, "Kazooie jiggle: bounce",
-            "How long they keep wobbling. 0 settles at once, 100 wobbles for seconds.", 0, 100, 5, 0, false, 60);
-        general.add_number_option(kazooie_speed_option, "Kazooie jiggle: speed",
-            "Wobbles per second.", 0.5, 12, 0.5, 1, false, 2.5);
-        general.add_number_option(kazooie_exaggeration_option, "Kazooie jiggle: exaggeration",
-            "How far each feather may bend: 100% is 32 degrees per bone, 250% is 80.", 25, 250, 25, 0, true, 100);
-        for (const std::string* id : { &kazooie_strength_option, &kazooie_bounce_option, &kazooie_speed_option,
-                                       &kazooie_exaggeration_option }) {
+        general.add_number_option(kazooie_stiffness_option, "Kazooie jiggle: stiffness",
+            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+        general.add_number_option(kazooie_damping_option, "Kazooie jiggle: damping",
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+        general.add_number_option(kazooie_mass_option, "Kazooie jiggle: mass",
+            "How heavy her feathers are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(kazooie_squash_in_option, "Kazooie jiggle: max squash & stretch inwards",
+            "How far each feather may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 50);
+        general.add_number_option(kazooie_squash_out_option, "Kazooie jiggle: max squash & stretch outwards",
+            "How far each feather may stretch out, as a share of its length.", 0, 300, 5, 0, true, 50);
+        general.add_number_option(kazooie_squash_across_option, "Kazooie jiggle: max squash & stretch up and down",
+            "How far each feather may swing up and down (and to the side), as a share of its length.", 0, 300, 5, 0, true, 50);
+        for (const std::string* id : { &kazooie_stiffness_option, &kazooie_damping_option, &kazooie_mass_option,
+                                       &kazooie_squash_in_option, &kazooie_squash_out_option, &kazooie_squash_across_option }) {
             general.add_option_hidden_dependency(*id, kazooie_option, false);
         }
     }

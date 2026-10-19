@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Backpack jiggle: one Squash & stretch slider instead of three, a Tilt slider that leans the pack only while he walks or runs, and no swing during idle animations. Kazooie jiggle now uses jiggle bones with the snout's kinds of slider (stiffness, damping, mass, squash & stretch inwards, outwards, up and down) (L). Untested on PC (T436).
 - General > Backpack jiggle (on/off, default off): Banjo's backpack swings on one jiggle bone, carrying its lid and Kazooie, with its own stiffness, damping, mass and squash & stretch sliders (L; replaces the short-lived Body jiggle). Untested on PC (T435).
 - Nose jiggle: the back of the nose stays joined to the snout and only its tip wobbles; a second player model drawn in between no longer leaves a swung nose behind (L). Untested on PC (T433).
 - Snout jiggle: new Squash & stretch while walking slider (the inwards limit while he walks or runs on the ground, default 15%), so walking forward no longer squashes his face; Nose jiggle's squash, stretch and swing are capped so the nose stays whole (L). Untested on PC (T432).
