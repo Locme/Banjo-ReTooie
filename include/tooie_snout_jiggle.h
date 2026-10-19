@@ -16,6 +16,14 @@ namespace tooie::snout_jiggle {
     bool blend_vertices(uint32_t first_list_phys);
 
     inline const std::string option = "snout_jiggle";
+    // Body jiggle (L, 2026-10-19): every bone of the player's skeleton, its own sliders.
+    inline const std::string body_option = "body_jiggle";
+    inline const std::string body_stiffness_option = "body_jiggle_stiffness";
+    inline const std::string body_damping_option = "body_jiggle_damping";
+    inline const std::string body_mass_option = "body_jiggle_mass";
+    inline const std::string body_squash_in_option = "body_jiggle_squash_in";
+    inline const std::string body_squash_out_option = "body_jiggle_squash_out";
+    inline const std::string body_squash_across_option = "body_jiggle_squash_across";
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string kazooie_strength_option = "kazooie_jiggle_strength";
     inline const std::string kazooie_bounce_option = "kazooie_jiggle_bounce";

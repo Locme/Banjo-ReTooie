@@ -309,6 +309,28 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::body_option, "Body jiggle",
+        "Every bone of Banjo's body (and Kazooie in the backpack) swings on a spring as he moves, so his arms, legs, ears and the rest lag, bounce and settle. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(body_stiffness_option, "Body jiggle: stiffness",
+            "How hard each bone springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 250);
+        general.add_number_option(body_damping_option, "Body jiggle: damping",
+            "How quickly the swinging dies out. 0 swings for ages.", 0, 90, 1, 0, false, 15);
+        general.add_number_option(body_mass_option, "Body jiggle: mass",
+            "How heavy each bone is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(body_squash_in_option, "Body jiggle: max squash & stretch inwards",
+            "How far each bone may squash back on itself, as a share of its length.", 0, 95, 5, 0, true, 10);
+        general.add_number_option(body_squash_out_option, "Body jiggle: max squash & stretch outwards",
+            "How far each bone may stretch out, as a share of its length.", 0, 300, 5, 0, true, 10);
+        general.add_number_option(body_squash_across_option, "Body jiggle: max squash & stretch up and down",
+            "How far each bone may swing away from its pose (up, down and sideways), as a share of its length.", 0, 300, 5, 0, true, 20);
+        for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_in_option,
+                                       &body_squash_out_option, &body_squash_across_option }) {
+            general.add_option_hidden_dependency(*id, body_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         false);

@@ -38,6 +38,11 @@
 // vertices are left alone. (The first Nose jiggle, an angle spring, was taken out on
 // 2026-10-17, "its not doing anything"; the jiggle bone above replaced it.)
 //
+// General > Body jiggle (L, 2026-10-19, its own toggle and sliders): the same jiggle bone on every
+// bone of the player's skeleton, for livelier body reactions. Each bone swings about its root
+// towards a point on a spring at its tip, parents first, so a swing carries the bones under it. Bones
+// the snout or Kazooie jiggles turn are left to them, which then start from the swung body.
+//
 // General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
 // hang on springs the same way. Each feather bone gets its own spring on the end of the bone, from
 // the root of the chain out, and each bone's turn carries the bones after it, so the tail whips.
@@ -470,7 +475,10 @@ namespace {
     // One step per game frame by the game's own clock (the shadow pass's second draw and any frame rate
     // give the same wobble). After a long gap or a warp the point comes back where it was on the bone,
     // still, so it never snaps to rest (L: "the snout also resets a lot").
-    void update_jiggle(Jiggle& jiggle, Vec tip_world) {
+    // The spring: stiffness, damping and mass.
+    struct Feel { float stiffness, damping, mass; };
+
+    void update_jiggle(Jiggle& jiggle, Vec tip_world, const Feel& feel) {
         if (tooie::photo_mode::active()) {
             return;
         }
@@ -488,7 +496,7 @@ namespace {
             return;
         }
         jiggle.last = now;
-        const float k = settings.stiffness, c = settings.damping, inv_m = 1.0f / settings.mass;
+        const float k = feel.stiffness, c = feel.damping, inv_m = 1.0f / feel.mass;
         for (float t = 0.0f; t < dt; t += step) {
             const float h = std::min(step, dt - t);
             const Vec accel = ((jiggle.point - tip_world) * (-k) - jiggle.velocity * c) * inv_m;
@@ -548,7 +556,9 @@ namespace {
     // The bone from pivot to tip (model space, posed), up being the head's up: steps its spring and
     // returns the turn and stretch about the pivot that takes the tip to the spring's point, within the
     // limits. force (headless, degrees up and to the side) holds it instead.
-    BoneTurn jiggle_bone(Jiggle& jiggle, Vec pivot, Vec tip, Vec up, const Limits& lim, const float* force) {
+    Feel snout_feel() { return { settings.stiffness, settings.damping, settings.mass }; }
+
+    BoneTurn jiggle_bone(Jiggle& jiggle, Vec pivot, Vec tip, Vec up, const Feel& feel, const Limits& lim, const float* force) {
         BoneTurn r;
         r.A = { rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
         const Vec arm = tip - pivot;
@@ -556,7 +566,7 @@ namespace {
         if (la < 1e-3f) {
             return r;
         }
-        update_jiggle(jiggle, to_world(tip));
+        update_jiggle(jiggle, to_world(tip), feel);
         const Vec f = arm * (1.0f / la);
         Vec offset = to_model_dir(jiggle.point - to_world(tip));
         if (force != nullptr) {
@@ -741,7 +751,7 @@ namespace {
 
     // Swing the nose: m is the snout bone's matrix as drawn (after the snout's own jiggle).
     float jiggle_nose(uint8_t* rdram, const float m[16], Vec up) {
-        const BoneTurn turn = jiggle_bone(nose_spring, transform(m, nose.pivot), transform(m, nose.tip), up, nose_limits(), nullptr);
+        const BoneTurn turn = jiggle_bone(nose_spring, transform(m, nose.pivot), transform(m, nose.tip), up, snout_feel(), nose_limits(), nullptr);
         // In the vertex space: v' = pivot + (v - pivot) * M N M^-1.
         const Mat M = upper(m);
         Mat Mi;
@@ -903,6 +913,118 @@ namespace {
             }
         }
     }
+    // ---- Body jiggle (see the top) ----
+    // Every bone of the player's skeleton with a parent is a jiggle bone from its root to its tip (the
+    // middle of its children's roots; a bone with none reaches on half as far again as its parent's
+    // length), its own sliders. Parents first: each bone's swing carries the bones under it, and they
+    // feel their spring from where they were carried to, so the body ripples out from the hips.
+    constexpr uint32_t body_copies = 0x80EFB000;   // 64 bytes per bone, after the size cheats' (0x80EF9000)
+    constexpr int max_body_bones = 128;
+
+    struct BodySettings { Feel feel{ 250.0f, 15.0f, 1.0f }; Limits lim{ 0.1f, 0.1f, 0.2f }; } body_settings;
+
+    void read_body_settings() {
+        using namespace tooie::snout_jiggle;
+        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 250.0), 1.0f, 2000.0f);
+        body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 15.0), 0.0f, 200.0f);
+        body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.0), 0.05f, 20.0f);
+        body_settings.lim.inwards = std::clamp((float)option_number(body_squash_in_option, 10.0), 0.0f, 95.0f) / 100.0f;
+        body_settings.lim.outwards = std::clamp((float)option_number(body_squash_out_option, 10.0), 0.0f, 300.0f) / 100.0f;
+        body_settings.lim.across = std::clamp((float)option_number(body_squash_across_option, 20.0), 0.0f, 300.0f) / 100.0f;
+    }
+
+    struct Body {
+        bool active = false;                 // the player's model is being drawn with Body jiggle on
+        bool done = false;                   // matrices worked out for this draw
+        int count = 0;
+        int16_t parent[max_body_bones]{};
+        bool jiggles[max_body_bones]{};
+        Vec pivot[max_body_bones]{}, tip[max_body_bones]{};   // bind pose
+        Jiggle spring[max_body_bones];
+        float max_angle = 0.0f;              // for the log
+    } body;
+
+    // The skeleton, read each draw (the heap reuses memory). skip: bones another jiggle turns.
+    void read_body(uint8_t* rdram, uint32_t model, bool snout, bool feathers_on) {
+        body.active = false;
+        body.done = false;
+        const uint32_t bones = model + read_word(rdram, model + 0x18);
+        const int count = (uint16_t)read_half(rdram, bones + 4);
+        if (count <= snout_bone || count > max_body_bones) {
+            return;
+        }
+        if (count != body.count) {
+            for (Jiggle& j : body.spring) j = {};
+        }
+        body.count = count;
+        auto entry = [&](int i) { return bones + 8 + 16 * i; };
+        int children[max_body_bones]{};
+        Vec child_sum[max_body_bones]{};
+        for (int i = 0; i < count; i++) {
+            body.pivot[i] = { read_float(rdram, entry(i)), read_float(rdram, entry(i) + 4), read_float(rdram, entry(i) + 8) };
+            body.parent[i] = read_half(rdram, entry(i) + 14);
+        }
+        for (int i = 0; i < count; i++) {
+            const int p = body.parent[i];
+            if (p >= 0 && p < count && p != i) {
+                children[p]++;
+                child_sum[p] = child_sum[p] + body.pivot[i];
+            }
+        }
+        for (int i = 0; i < count; i++) {
+            const int p = body.parent[i];
+            body.jiggles[i] = p >= 0 && p < count && p != i;
+            if (children[i] > 0) {
+                body.tip[i] = child_sum[i] * (1.0f / (float)children[i]);
+            } else if (body.jiggles[i]) {
+                body.tip[i] = body.pivot[i] + (body.pivot[i] - body.pivot[p]) * 0.5f;
+            }
+            if (length(body.tip[i] - body.pivot[i]) < 1.0f) body.jiggles[i] = false;
+            if (snout && i == snout_bone) body.jiggles[i] = false;
+            if (feathers_on && feathers.chains != 0 && i < max_bones && feathers.slot_of[i] >= 0) body.jiggles[i] = false;
+        }
+        body.active = true;
+    }
+
+    // All the bones' matrices for this draw, from the game's matrix list (list + 64 * bone) into
+    // body_copies + 64 * bone.
+    void work_out_body(uint8_t* rdram, uint32_t list) {
+        body.done = true;
+        body.max_angle = 0.0f;
+        Affine acc[max_body_bones];
+        int state[max_body_bones]{};   // 0 not yet, 1 working, 2 done
+        const Affine none{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
+        // Parents first, whatever order the list is in.
+        auto work = [&](auto& self, int b) -> const Affine& {
+            if (state[b] == 2) return acc[b];
+            if (state[b] == 1) return none;   // a loop in a broken skeleton
+            state[b] = 1;
+            const int p = body.parent[b];
+            const Affine carried = (p >= 0 && p < body.count && p != b) ? self(self, p) : none;
+            Affine mine = carried;
+            if (body.jiggles[b]) {
+                float m[16], m1[16];
+                for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * b + 4 * i);
+                apply_affine(m, carried, m1);
+                const Vec up{ m1[4], m1[5], m1[6] };
+                const BoneTurn turn = jiggle_bone(body.spring[b], transform(m1, body.pivot[b]), transform(m1, body.tip[b]), up,
+                                                  body_settings.feel, body_settings.lim, nullptr);
+                body.max_angle = std::max(body.max_angle, turn.angle);
+                mine = then(carried, turn.A);
+            }
+            acc[b] = mine;
+            state[b] = 2;
+            return acc[b];
+        };
+        for (int b = 0; b < body.count; b++) {
+            const Affine& a = work(work, b);
+            float m[16], out[16];
+            for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * b + 4 * i);
+            apply_affine(m, a, out);
+            for (int i = 0; i < 16; i++) write_float(rdram, body_copies + 64 * b + 4 * i, out[i]);
+        }
+    }
+
 }
 
 // func_800DE498 once it has settled on the model it draws (0x10C($sp), with the shadow hook):
@@ -921,7 +1043,9 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     const bool feathers_on = option_bool(tooie::snout_jiggle::kazooie_option);
     snout_on = on;
     nose_on = on && option_bool(tooie::snout_jiggle::nose_option);
-    if (!on && !feathers_on && muzzle.model == 0 && nose.model == 0) {
+    const bool body_on = option_bool(tooie::snout_jiggle::body_option);
+    body.active = false;
+    if (!on && !feathers_on && !body_on && muzzle.model == 0 && nose.model == 0) {
         return;
     }
     const ModelInfo info = info_for(rdram, model);
@@ -943,11 +1067,17 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         if (!nose_on) {
             restore_nose(rdram);
         }
+        if (body_on) {
+            read_body(rdram, model, on, feathers_on);
+            if (body.active) {
+                read_body_settings();
+            }
+        }
         const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_on;
         bent_from = bending ? (model & 0x1FFFFFFF) : 0;
         bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
-    if (!drawing_player && feathers.chains == 0) {
+    if (!drawing_player && feathers.chains == 0 && !body.active) {
         return;
     }
     model_pos = { read_float(rdram, sp + 0xE0), read_float(rdram, sp + 0xE4), read_float(rdram, sp + 0xE8) };
@@ -970,7 +1100,7 @@ extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
 }
 
 static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
-    if (!drawing_player && feathers.chains == 0) {
+    if (!drawing_player && feathers.chains == 0 && !body.active) {
         return;
     }
     const uint32_t node = read_word(rdram, (uint32_t)ctx->r29 + 0x24);
@@ -978,9 +1108,26 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const int bone = read_byte(rdram, node + 9);
-    const uint32_t src = (uint32_t)ctx->r2;
+    uint32_t src = (uint32_t)ctx->r2;
     if (!valid_ptr(src)) {
         return;
+    }
+    // Body jiggle first: everything after (Kazooie's feathers, the snout, the size cheats) starts from
+    // the swung bones, read from body_copies laid out like the game's list.
+    if (body.active && bone < body.count) {
+        if (!body.done) {
+            work_out_body(rdram, src - 64 * bone);
+            if (logging()) {
+                static int n = 0;
+                if (++n % 15 == 0) {
+                    printf("[body] bones %d max angle %.1f%s\n", body.count, body.max_angle * 180.0f / pi,
+                           tooie::photo_mode::active() ? " (photo)" : "");
+                    fflush(stdout);
+                }
+            }
+        }
+        src = body_copies + 64 * bone;
+        ctx->r2 = (gpr)(int32_t)src;
     }
     // Kazooie's feathers: the matrix list holds every bone's matrix, 64 bytes each (func_800ADE2C).
     if (feathers.chains != 0 && bone < max_bones && feathers.slot_of[bone] >= 0) {
@@ -1025,7 +1172,7 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     float force[2] = { 0.0f, 0.0f };
     const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f", &force[0], &force[1]) >= 1;
     update_walk();
-    const BoneTurn turn = jiggle_bone(snout_spring, pivot, tip, head_up, snout_limits(), forced ? force : nullptr);
+    const BoneTurn turn = jiggle_bone(snout_spring, pivot, tip, head_up, snout_feel(), snout_limits(), forced ? force : nullptr);
     const Affine& A = turn.A;
 
     float out[16];

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T434 Body jiggle: every bone on a spring
+- Asked: 2026-10-19 07:56 UTC
+- Build: main
+- Steps:
+  1. General > Body jiggle on (its own toggle under the snout settings; defaults stiffness 250, damping 15, mass 1, inwards 10%, outwards 10%, up and down 20%)
+  2. Run, stop, turn, jump, fall, land, swim and fly
+  3. Try it with Snout jiggle and Kazooie jiggle on too, then push the sliders up (up and down 100%+, low stiffness, high mass)
+- Look for: Arms, legs, ears, Kazooie and the rest lag behind and bounce as he moves and settle when he stops; nothing comes apart or snaps; the snout and Kazooie's feathers still jiggle on top. Tell me which bones feel wrong (feet sliding, for instance). Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T433 Nose jiggle: nose stays joined to the snout
 - Asked: 2026-10-18 22:47 UTC
 - Build: main
