@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T437 Mumbo jiggle (Backpack jiggle removed)
+- Asked: 2026-10-19 09:15 UTC
+- Build: main
+- Steps:
+  1. General: Backpack jiggle is gone; Mumbo jiggle is a new toggle under the Kazooie jiggle settings
+  2. Turn on Mumbo jiggle and play as Mumbo (run, jump, stop, turn)
+  3. Visit Mumbo in his skull and watch his head feathers as he moves
+  4. Change the Kazooie jiggle sliders (turn Kazooie jiggle on to see them): Mumbo's feathers follow them
+- Look for: The three feathers on Mumbo's head wobble, whip and settle, staying attached to his head. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T436 Backpack: one squash & stretch, walking tilt, still at idle; Kazooie on jiggle bones
 - Asked: 2026-10-19 08:51 UTC
 - Build: main
@@ -18,7 +29,7 @@
   1. General > Backpack jiggle on (Body jiggle is gone; defaults stiffness 200, damping 10, mass 1.5, inwards 10%, outwards 15%, up and down 40%)
   2. Run, stop, turn, jump, fall and land
 - Look for: Only the backpack swings, on one point like the snout, carrying its lid and Kazooie; the rest of Banjo's body moves as in the normal game. Not checked headless (L asked); it builds.
-- Status: waiting for L
+- Status: backpack part dropped (L: remove Backpack jiggle, T437)
 
 ## T434 Body jiggle: every bone on a spring
 - Asked: 2026-10-19 07:56 UTC

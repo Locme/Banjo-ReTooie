@@ -38,17 +38,15 @@
 // vertices are left alone. (The first Nose jiggle, an angle spring, was taken out on
 // 2026-10-17, "its not doing anything"; the jiggle bone above replaced it.)
 //
-// General > Backpack jiggle (L, 2026-10-19, its own toggle and sliders; first tried on every bone,
-// L: "just add it to the backpack instead", "like the snout, just one bone/point"): one jiggle bone,
-// the backpack (062A bone 13, id 60, under bone 12 id 59 on the chest), found by id so 0838 and Smash
-// Banjo work too. It swings about its root towards a point on a spring at its tip and carries the lid
-// and Kazooie riding in it (her feathers, when Kazooie jiggle is on, start from there).
-//
 // General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
 // are jiggle bones like the snout (L, 2026-10-19), with her own sliders of the same kinds. Each
 // feather bone has its own spring point at its end, from the root of the chain out, and each bone's
 // swing carries the bones after it, so the tail whips. Her bones are found by index and id: 062A and
 // 0838 (in the backpack; Smash Banjo keeps them) and 061C (alone after Split Up).
+//
+// Mumbo jiggle (L, 2026-10-19, its own toggle in Kazooie's section, her sliders): the three feathers on
+// Mumbo's head (asset 0665, playable and in his skulls: bones 4-6, 7-9 and 10-12 on head bone 2)
+// are jiggle bones the same way. (A Backpack jiggle on the pack's bone was tried and taken out, L.)
 //
 // The copied matrices live in extended RDRAM no one else uses (after the pause menu's strings at
 // 0x80EF1200, src/gameplay/pause_settings.cpp): the snout's at 0x80EF8000, Kazooie's feathers' after
@@ -389,7 +387,7 @@ namespace {
         return { c * d.x - s * d.z, d.y, s * d.x + c * d.z };
     }
 
-    // ---- the jiggle bones: the snout, the nose, the backpack and Kazooie's feathers (see the top) ----
+    // ---- the jiggle bones: the snout, the nose and the feathers (Kazooie's, Mumbo's) (see the top) ----
     // A point hangs on a damped spring from the bone's tip, in the world: F = -stiffness * (point -
     // tip) - damping * velocity, a = F / mass. The bone points from its root at where the point is, as
     // far as the limits let it, and stretches or squashes to reach it, keeping its volume. Falling, the
@@ -445,7 +443,6 @@ namespace {
         Vec last_pos{};
         double last = 0.0;
         float amount = 0.0f;
-        float moving = 0.0f;   // 1 while the model moves at all (walking, jumping, falling), 0 standing
     } walk;
 
     void update_walk() {
@@ -470,8 +467,6 @@ namespace {
         // Moving along (world units a second) and not much up or down: slopes and steps, not jumps or falls.
         const float target = (ground > 40.0f && ground < 2000.0f && up < std::max(150.0f, 0.6f * ground)) ? 1.0f : 0.0f;
         walk.amount += (target - walk.amount) * std::min(1.0f, dt * 6.0f);
-        const float moves = (ground > 20.0f || up > 20.0f) ? 1.0f : 0.0f;
-        walk.moving += (moves - walk.moving) * std::min(1.0f, dt * (moves > walk.moving ? 8.0f : 3.0f));
     }
 
     // Shares of the bone's length its tip may move, and the most it may stretch or squash (the nose
@@ -726,6 +721,12 @@ namespace {
         { 4, { 52, 53, 54, 55 }, { 65, 66, 67, 68 } },
         { 2, { 56, 57 }, { 91, 93 } },
     };
+    // 0665 (Mumbo, playable and in his skulls): three feathers on his head (bone 2, id 18).
+    constexpr Chain mumbo_chains[] = {
+        { 3, { 4, 5, 6 }, { 42, 43, 44 } },
+        { 3, { 7, 8, 9 }, { 45, 46, 47 } },
+        { 3, { 10, 11, 12 }, { 48, 49, 50 } },
+    };
     // Her own sliders, the snout's kinds (L, 2026-10-19): the jiggle bone's spring and its limits.
     struct FeatherSettings { Feel feel{ 150.0f, 12.0f, 1.0f }; Limits lim{ 0.5f, 0.5f, 0.5f }; } feather_settings;
     void read_feather_settings() {
@@ -740,7 +741,7 @@ namespace {
     constexpr int max_feather_bones = 20, max_bones = 64;
 
     struct Feathers {
-        int kind = 0;                        // 0 none, 1 pack, 2 solo: springs start again on a change
+        int kind = 0;                        // 0 none, 1 pack, 2 solo, 3 Mumbo: springs start again on a change
         int chains = 0;
         int chain_start[6]{}, chain_count[6]{};
         int bone[max_feather_bones]{};
@@ -752,7 +753,7 @@ namespace {
     } feathers;
 
     // Which of Kazooie's chains this model has (per draw: the heap reuses memory).
-    void pick_feathers(uint8_t* rdram, uint32_t model, bool player) {
+    void pick_feathers(uint8_t* rdram, uint32_t model, bool player, bool kazooie, bool mumbo) {
         std::memset(feathers.slot_of, -1, sizeof(feathers.slot_of));
         feathers.chains = 0;
         feathers.done = false;
@@ -768,10 +769,13 @@ namespace {
         auto pos = [&](int i) { return Vec{ read_float(rdram, bone(i)), read_float(rdram, bone(i) + 4), read_float(rdram, bone(i) + 8) }; };
         const Chain* list = nullptr;
         int n = 0, kind = 0;
-        if (player) {
+        if (kazooie && player) {
             list = pack_chains; n = (int)std::size(pack_chains); kind = 1;
-        } else if (count > 57 && count <= max_bones && id(7) == 108 && id(8) == 42 && parent(8) == 7) {
+        } else if (kazooie && count > 57 && count <= max_bones && id(7) == 108 && id(8) == 42 && parent(8) == 7) {
             list = solo_chains; n = (int)std::size(solo_chains); kind = 2;
+        } else if (mumbo && count > 12 && count <= max_bones && id(2) == 18 && id(4) == 42 && parent(4) == 2 &&
+                   id(7) == 45 && parent(7) == 2 && id(10) == 48 && parent(10) == 2) {
+            list = mumbo_chains; n = (int)std::size(mumbo_chains); kind = 3;
         } else {
             return;
         }
@@ -840,142 +844,6 @@ namespace {
             }
         }
     }
-    // ---- Backpack jiggle (see the top) ----
-    // The backpack's bone is a jiggle bone from its root to its tip (the middle of its children's
-    // roots: the lid and Kazooie), with its own sliders; its swing carries the bones under it. Every
-    // bone's matrix is copied (the rest unchanged) so whatever reads the list after starts from the
-    // swung pack.
-    constexpr uint32_t body_copies = 0x80EFB000;   // 64 bytes per bone, after the size cheats' (0x80EF9000)
-    // The backpack (062A bone 13), by bone id.
-    constexpr int16_t backpack_ids[] = { 60 };
-    constexpr int max_body_bones = 128;
-
-    struct BodySettings { Feel feel{ 200.0f, 10.0f, 1.5f }; Limits lim{ 0.25f, 0.25f, 0.25f }; float tilt = 0.0f; } body_settings;
-
-    void read_body_settings() {
-        using namespace tooie::snout_jiggle;
-        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 200.0), 1.0f, 2000.0f);
-        body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 10.0), 0.0f, 200.0f);
-        body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.5), 0.05f, 20.0f);
-        // One squash & stretch for every direction (L, 2026-10-19).
-        const float squash = std::clamp((float)option_number(body_squash_option, 25.0), 0.0f, 300.0f) / 100.0f;
-        body_settings.lim = { std::min(squash, 0.95f), squash, squash };
-        body_settings.tilt = std::clamp((float)option_number(body_tilt_option, 0.0), -90.0f, 90.0f) * pi / 180.0f;
-    }
-
-    struct Body {
-        bool active = false;                 // the player's model is being drawn with Backpack jiggle on
-        bool done = false;                   // matrices worked out for this draw
-        int count = 0;
-        int16_t parent[max_body_bones]{};
-        bool jiggles[max_body_bones]{};
-        Vec pivot[max_body_bones]{}, tip[max_body_bones]{};   // bind pose
-        Jiggle spring[max_body_bones];
-        float max_angle = 0.0f;              // for the log
-    } body;
-
-    // The skeleton, read each draw (the heap reuses memory).
-    void read_body(uint8_t* rdram, uint32_t model) {
-        body.active = false;
-        body.done = false;
-        const uint32_t bones = model + read_word(rdram, model + 0x18);
-        const int count = (uint16_t)read_half(rdram, bones + 4);
-        if (count <= snout_bone || count > max_body_bones) {
-            return;
-        }
-        if (count != body.count) {
-            for (Jiggle& j : body.spring) j = {};
-        }
-        body.count = count;
-        auto entry = [&](int i) { return bones + 8 + 16 * i; };
-        int children[max_body_bones]{};
-        Vec child_sum[max_body_bones]{};
-        for (int i = 0; i < count; i++) {
-            body.pivot[i] = { read_float(rdram, entry(i)), read_float(rdram, entry(i) + 4), read_float(rdram, entry(i) + 8) };
-            body.parent[i] = read_half(rdram, entry(i) + 14);
-        }
-        bool any = false;
-        for (int i = 0; i < count; i++) {
-            const int p = body.parent[i];
-            if (p >= 0 && p < count && p != i) {
-                children[p]++;
-                child_sum[p] = child_sum[p] + body.pivot[i];
-            }
-        }
-        for (int i = 0; i < count; i++) {
-            const int p = body.parent[i];
-            const int16_t id = read_half(rdram, entry(i) + 12);
-            body.jiggles[i] = p >= 0 && p < count && p != i &&
-                              std::find(std::begin(backpack_ids), std::end(backpack_ids), id) != std::end(backpack_ids);
-            if (children[i] > 0) {
-                body.tip[i] = child_sum[i] * (1.0f / (float)children[i]);
-            } else if (body.jiggles[i]) {
-                body.tip[i] = body.pivot[i] + (body.pivot[i] - body.pivot[p]) * 0.5f;
-            }
-            if (length(body.tip[i] - body.pivot[i]) < 1.0f) body.jiggles[i] = false;
-            any = any || body.jiggles[i];
-        }
-        body.active = any;
-    }
-
-    // All the bones' matrices for this draw, from the game's matrix list (list + 64 * bone) into
-    // body_copies + 64 * bone.
-    void work_out_body(uint8_t* rdram, uint32_t list) {
-        body.done = true;
-        body.max_angle = 0.0f;
-        update_walk();
-        Affine acc[max_body_bones];
-        int state[max_body_bones]{};   // 0 not yet, 1 working, 2 done
-        const Affine none{ rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
-        // Parents first, whatever order the list is in.
-        auto work = [&](auto& self, int b) -> const Affine& {
-            if (state[b] == 2) return acc[b];
-            if (state[b] == 1) return none;   // a loop in a broken skeleton
-            state[b] = 1;
-            const int p = body.parent[b];
-            Affine carried = (p >= 0 && p < body.count && p != b) ? self(self, p) : none;
-            Affine mine = carried;
-            if (body.jiggles[b]) {
-                float m[16], m1[16];
-                for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * b + 4 * i);
-                apply_affine(m, carried, m1);
-                // Tilt: the pack's rest angle while he walks or runs (L, 2026-10-19: "only affect
-                // walking"), eased in and out with the walk, turned about its own side axis at its root
-                // (+ leans its top forward, towards his head).
-                const float tilt = body_settings.tilt * walk.amount;
-                if (tilt != 0.0f) {
-                    const Vec side{ m1[0], m1[1], m1[2] };
-                    const float ls = length(side);
-                    if (ls > 1e-4f) {
-                        const Vec root = transform(m1, body.pivot[b]);
-                        const Mat R = rotation(side * (1.0f / ls), tilt);
-                        carried = then(carried, Affine{ R, root - apply(root, R) });
-                        apply_affine(m, carried, m1);
-                    }
-                }
-                const Vec up{ m1[4], m1[5], m1[6] };
-                // Not in idle animations (L, 2026-10-19): the swing fades out while he stands still
-                // and back in as he moves, so only his own movement swings the pack.
-                const Limits lim{ body_settings.lim.inwards * walk.moving, body_settings.lim.outwards * walk.moving,
-                                  body_settings.lim.across * walk.moving };
-                const BoneTurn turn = jiggle_bone(body.spring[b], transform(m1, body.pivot[b]), transform(m1, body.tip[b]), up,
-                                                  body_settings.feel, lim, nullptr);
-                body.max_angle = std::max(body.max_angle, turn.angle);
-                mine = then(carried, turn.A);
-            }
-            acc[b] = mine;
-            state[b] = 2;
-            return acc[b];
-        };
-        for (int b = 0; b < body.count; b++) {
-            const Affine& a = work(work, b);
-            float m[16], out[16];
-            for (int i = 0; i < 16; i++) m[i] = read_float(rdram, list + 64 * b + 4 * i);
-            apply_affine(m, a, out);
-            for (int i = 0; i < 16; i++) write_float(rdram, body_copies + 64 * b + 4 * i, out[i]);
-        }
-    }
-
 }
 
 // func_800DE498 once it has settled on the model it draws (0x10C($sp), with the shadow hook):
@@ -994,14 +862,13 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     const bool feathers_on = option_bool(tooie::snout_jiggle::kazooie_option);
     snout_on = on;
     nose_on = on && option_bool(tooie::snout_jiggle::nose_option);
-    const bool body_on = option_bool(tooie::snout_jiggle::body_option);
-    body.active = false;
-    if (!on && !feathers_on && !body_on && muzzle.model == 0 && nose.model == 0) {
+    const bool mumbo_on = option_bool(tooie::snout_jiggle::mumbo_option);
+    if (!on && !feathers_on && !mumbo_on && muzzle.model == 0 && nose.model == 0) {
         return;
     }
     const ModelInfo info = info_for(rdram, model);
-    if (feathers_on) {
-        pick_feathers(rdram, model, info.player);
+    if (feathers_on || mumbo_on) {
+        pick_feathers(rdram, model, info.player, feathers_on, mumbo_on);
         if (feathers.chains != 0) {
             read_feather_settings();
         }
@@ -1018,17 +885,11 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         if (!nose_on) {
             restore_nose(rdram);
         }
-        if (body_on) {
-            read_body(rdram, model);
-            if (body.active) {
-                read_body_settings();
-            }
-        }
         const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_on;
         bent_from = bending ? (model & 0x1FFFFFFF) : 0;
         bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
-    if (!drawing_player && feathers.chains == 0 && !body.active) {
+    if (!drawing_player && feathers.chains == 0) {
         return;
     }
     model_pos = { read_float(rdram, sp + 0xE0), read_float(rdram, sp + 0xE4), read_float(rdram, sp + 0xE8) };
@@ -1051,7 +912,7 @@ extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
 }
 
 static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
-    if (!drawing_player && feathers.chains == 0 && !body.active) {
+    if (!drawing_player && feathers.chains == 0) {
         return;
     }
     const uint32_t node = read_word(rdram, (uint32_t)ctx->r29 + 0x24);
@@ -1059,26 +920,9 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     const int bone = read_byte(rdram, node + 9);
-    uint32_t src = (uint32_t)ctx->r2;
+    const uint32_t src = (uint32_t)ctx->r2;
     if (!valid_ptr(src)) {
         return;
-    }
-    // Backpack jiggle first: everything after (Kazooie's feathers, the snout, the size cheats) starts from
-    // the swung bones, read from body_copies laid out like the game's list.
-    if (body.active && bone < body.count) {
-        if (!body.done) {
-            work_out_body(rdram, src - 64 * bone);
-            if (logging()) {
-                static int n = 0;
-                if (++n % 15 == 0) {
-                    printf("[backpack] bones %d max angle %.1f%s\n", body.count, body.max_angle * 180.0f / pi,
-                           tooie::photo_mode::active() ? " (photo)" : "");
-                    fflush(stdout);
-                }
-            }
-        }
-        src = body_copies + 64 * bone;
-        ctx->r2 = (gpr)(int32_t)src;
     }
     // Kazooie's feathers: the matrix list holds every bone's matrix, 64 bytes each (func_800ADE2C).
     if (feathers.chains != 0 && bone < max_bones && feathers.slot_of[bone] >= 0) {
