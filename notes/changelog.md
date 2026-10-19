@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Cheats > Replays: a boss, minigame or cutscene can now be picked during another replay (or a boss rush, which stops): the current one ends the game's way and the new one starts from the game select. Picks also work on the game select screen. Races still need you out of a replay (L). Untested on PC (T438).
 - Backpack jiggle removed again (L). New General > Mumbo jiggle toggle (in Kazooie's section): the three feathers on Mumbo's head wobble on jiggle bones with the Kazooie jiggle settings, playing as him and in his skulls (L). Untested on PC (T437).
 - Backpack jiggle: one Squash & stretch slider instead of three, a Tilt slider that leans the pack only while he walks or runs, and no swing during idle animations. Kazooie jiggle now uses jiggle bones with the snout's kinds of slider (stiffness, damping, mass, squash & stretch inwards, outwards, up and down) (L). Untested on PC (T436).
 - General > Backpack jiggle (on/off, default off): Banjo's backpack swings on one jiggle bone, carrying its lid and Kazooie, with its own stiffness, damping, mass and squash & stretch sliders (L; replaces the short-lived Body jiggle). Untested on PC (T435).

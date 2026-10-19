@@ -8,6 +8,14 @@
 // details). The game sets up the moves and items each needs and, when it ends, goes back to the game
 // select screen, dropping anything unsaved; so the open file is saved first, as Save and quit does.
 //
+// A boss, minigame or cutscene picked during another replay (L, 2026-10-19) does not call entrypoint 7 from
+// inside the running replay: it ends that replay the game's own way (gcfrontend_entrypoint_10, what a boss
+// calls when its fight is over, going to the game select screen) and starts the new one once the game
+// select has loaded, the path boss rush chains its fights on and the game's own Replay menu uses. A running
+// boss rush is stopped first. Picks are taken on the game select screen too, as its Replay menu is there.
+// Still refused: replays during Bottles' Revenge (it holds the same mode byte at 1), and races during a
+// replay (a race runs on the save file's flags, which a replay has swapped for its own set-up).
+//
 // Replay numbers (headless, TOOIE_REPLAY_SCAN, 2026-10-17): bosses 0x20-0x2C, minigames 0x60-0x76,
 // cutscenes 0x80-0x85 (in the order of their unlock flags GFLAG_BC8.., GFLAG_BE3.., GFLAG_BFA..);
 // 0x40-0x4D are the multiplayer games.
@@ -25,6 +33,7 @@
 #include "recomp.h"
 #include "funcs.h"
 #include "recompui/config.h"
+#include "tooie_boss_rush.h"
 #include "tooie_debug.h"
 #include "tooie_race_warp.h"
 #include "tooie_replays.h"
@@ -129,8 +138,17 @@ namespace {
     constexpr gpr game_mode_addr = (int32_t)0x8012B3F2;    // 0 normal, 1 Bottles' Revenge, 2 replay
     constexpr gpr pause_menu_addr = (int32_t)0x80128AF0;   // pause menu object while paused
 
+    constexpr uint16_t game_select_map = 0x158;
+    // Game select frames to wait before a replay is started there, so the screen has finished loading.
+    constexpr int settle_frames = 20;
+    constexpr auto load_timeout = std::chrono::seconds(60);
+
     // The replay number waiting to be started (0 = none).
     std::atomic<int> pending{0};
+    // Game thread only: the replay to start once the one being ended has reached the game select (0 = none).
+    int after_select = 0;
+    int select_frames = 0;
+    std::chrono::steady_clock::time_point ending_started;
     // Set while a drop-down is put back to "Pick one", so that change is not taken as a pick.
     std::atomic<bool> resetting{false};
 
@@ -145,6 +163,14 @@ namespace {
         ctx->r4 = (uint64_t)(int64_t)replay;
         ctx->r5 = 1;
         _gcfrontend_entrypoint_7(rdram, ctx);
+        *ctx = saved;
+    }
+
+    // gcfrontend_entrypoint_10, what a boss calls when its replayed fight is over: back to the game select.
+    void end_replay(uint8_t* rdram, recomp_context* ctx) {
+        recomp_context saved = *ctx;
+        ctx->r29 = (int32_t)((((uint32_t)ctx->r29 - 0x100) & ~0xFu));
+        _gcfrontend_entrypoint_10(rdram, ctx);
         *ctx = saved;
     }
 
@@ -227,6 +253,24 @@ void tooie::replays::tick(uint8_t* rdram, recomp_context* ctx) {
         env_replay = 0;
     }
 
+    // Ending a replay to start another: wait for the game select, then start it as its Replay menu does.
+    if (after_select != 0) {
+        const uint16_t map = tooie::debug::current_map(rdram);
+        if (map != game_select_map || MEM_BU(0x12, game_state_addr) != 0) {
+            select_frames = 0;
+            if (std::chrono::steady_clock::now() - ending_started > load_timeout) {
+                std::fprintf(stderr, "[replays] the game select never loaded; 0x%X dropped\n", after_select);
+                tooie::toast::show("Replay not started: the game select screen did not load");
+                after_select = 0;
+            }
+        } else if (++select_frames >= settle_frames) {
+            const int next = after_select;
+            after_select = 0;
+            std::fprintf(stderr, "[replays] starting replay 0x%X (%s) from the game select\n", next, name_of(next));
+            start_replay(rdram, ctx, next);
+        }
+    }
+
     const int replay = pending.load();
     if (replay == 0) {
         return;
@@ -236,21 +280,40 @@ void tooie::replays::tick(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     pending = 0;
-    if (!tooie::debug::can_warp()) {
+    const uint8_t mode = MEM_BU(0, game_mode_addr);
+    const bool at_select = tooie::debug::current_map(rdram) == game_select_map;
+    if (replay < 0) {
+        if (!tooie::debug::can_warp()) {
+            tooie::toast::show("Start the game and load a file first");
+        } else if (mode != 0) {
+            tooie::toast::show("Races use your save file: quit the replay or mode first");
+        } else {
+            tooie::race_warp::request(-1 - replay);
+            tooie::toast::show(std::string("Racing Canary Mary: ") + tooie::race_warp::name(-1 - replay));
+        }
+        return;
+    }
+    if (!tooie::debug::can_warp() && !at_select) {
         tooie::toast::show("Start the game and load a file first");
         return;
     }
-    if (replay < 0) {
-        tooie::race_warp::request(-1 - replay);
-        tooie::toast::show(std::string("Racing Canary Mary: ") + tooie::race_warp::name(-1 - replay));
+    if (mode == 1) {
+        tooie::toast::show("Turn off Bottles' Revenge first");
         return;
     }
-    if (MEM_BU(0, game_mode_addr) != 0) {
-        tooie::toast::show("Finish the replay or mode you are in first");
+    tooie::boss_rush::cancel();
+    tooie::toast::show(std::string("Replay: ") + name_of(replay));
+    if (mode == 2 && !at_select) {
+        // In a replay: end it as the game does and start this one from the game select.
+        std::fprintf(stderr, "[replays] ending the current replay for 0x%X (%s)\n", replay, name_of(replay));
+        after_select = replay;
+        select_frames = 0;
+        ending_started = std::chrono::steady_clock::now();
+        end_replay(rdram, ctx);
         return;
     }
+    after_select = 0;
     save_open_file(rdram, ctx);
     std::fprintf(stderr, "[replays] starting replay 0x%X (%s)\n", replay, name_of(replay));
-    tooie::toast::show(std::string("Replay: ") + name_of(replay));
     start_replay(rdram, ctx, replay);
 }

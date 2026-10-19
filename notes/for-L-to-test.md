@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T438 Switch replays while one is running
+- Asked: 2026-10-19 19:40 UTC
+- Build: main
+- Steps:
+  1. Cheats > Replays: pick a boss (Klungo)
+  2. During the fight, pick another boss (Targitzan) from the Boss list
+  3. During that fight, pick a minigame, then a cutscene
+  4. Back on the game select screen, open the menu and pick a boss again
+  5. Start a Boss rush, then pick a boss from Cheats > Replays mid-fight
+- Look for: Each pick ends the current replay, shows the game select briefly, then starts the new one with the right moves. The rush stops with a 'Boss rush stopped' message. Load your file afterwards: nothing in it changed. A race picked during a replay is still refused (it needs your save file). Compiles; not run headless.
+- Status: waiting for L
+
 ## T437 Mumbo jiggle (Backpack jiggle removed)
 - Asked: 2026-10-19 09:15 UTC
 - Build: main

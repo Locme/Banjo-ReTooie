@@ -418,3 +418,12 @@ void tooie::boss_rush::tick(uint8_t* rdram, recomp_context* ctx) {
         break;
     }
 }
+
+bool tooie::boss_rush::cancel() {
+    if (stage == Stage::Idle) {
+        return false;
+    }
+    start_requested = false;
+    finish("Boss rush stopped");
+    return true;
+}

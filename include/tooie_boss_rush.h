@@ -19,6 +19,10 @@ namespace tooie::boss_rush {
 
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram, recomp_context* ctx);
+
+    // Ends a running rush at once (game thread), as Cheats > Replays does when another replay is picked.
+    // False when no rush is running.
+    bool cancel();
 }
 
 #endif
