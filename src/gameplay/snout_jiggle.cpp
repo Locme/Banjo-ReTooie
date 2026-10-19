@@ -38,10 +38,11 @@
 // vertices are left alone. (The first Nose jiggle, an angle spring, was taken out on
 // 2026-10-17, "its not doing anything"; the jiggle bone above replaced it.)
 //
-// General > Body jiggle (L, 2026-10-19, its own toggle and sliders): the same jiggle bone on every
-// bone of the player's skeleton, for livelier body reactions. Each bone swings about its root
-// towards a point on a spring at its tip, parents first, so a swing carries the bones under it. Bones
-// the snout or Kazooie jiggles turn are left to them, which then start from the swung body.
+// General > Backpack jiggle (L, 2026-10-19, its own toggle and sliders; first tried on every bone,
+// L: "just add it to the backpack instead", "like the snout, just one bone/point"): one jiggle bone,
+// the backpack (062A bone 13, id 60, under bone 12 id 59 on the chest), found by id so 0838 and Smash
+// Banjo work too. It swings about its root towards a point on a spring at its tip and carries the lid
+// and Kazooie riding in it (her feathers, when Kazooie jiggle is on, start from there).
 //
 // General > Kazooie jiggle (L, 2026-10-17, its own toggle): Kazooie's crest and tail feathers
 // hang on springs the same way. Each feather bone gets its own spring on the end of the bone, from
@@ -913,28 +914,30 @@ namespace {
             }
         }
     }
-    // ---- Body jiggle (see the top) ----
-    // Every bone of the player's skeleton with a parent is a jiggle bone from its root to its tip (the
-    // middle of its children's roots; a bone with none reaches on half as far again as its parent's
-    // length), its own sliders. Parents first: each bone's swing carries the bones under it, and they
-    // feel their spring from where they were carried to, so the body ripples out from the hips.
+    // ---- Backpack jiggle (see the top) ----
+    // The backpack's bone is a jiggle bone from its root to its tip (the middle of its children's
+    // roots: the lid and Kazooie), with its own sliders; its swing carries the bones under it. Every
+    // bone's matrix is copied (the rest unchanged) so whatever reads the list after starts from the
+    // swung pack.
     constexpr uint32_t body_copies = 0x80EFB000;   // 64 bytes per bone, after the size cheats' (0x80EF9000)
+    // The backpack (062A bone 13), by bone id.
+    constexpr int16_t backpack_ids[] = { 60 };
     constexpr int max_body_bones = 128;
 
-    struct BodySettings { Feel feel{ 250.0f, 15.0f, 1.0f }; Limits lim{ 0.1f, 0.1f, 0.2f }; } body_settings;
+    struct BodySettings { Feel feel{ 200.0f, 10.0f, 1.5f }; Limits lim{ 0.1f, 0.15f, 0.4f }; } body_settings;
 
     void read_body_settings() {
         using namespace tooie::snout_jiggle;
-        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 250.0), 1.0f, 2000.0f);
-        body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 15.0), 0.0f, 200.0f);
-        body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.0), 0.05f, 20.0f);
+        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 200.0), 1.0f, 2000.0f);
+        body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 10.0), 0.0f, 200.0f);
+        body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.5), 0.05f, 20.0f);
         body_settings.lim.inwards = std::clamp((float)option_number(body_squash_in_option, 10.0), 0.0f, 95.0f) / 100.0f;
-        body_settings.lim.outwards = std::clamp((float)option_number(body_squash_out_option, 10.0), 0.0f, 300.0f) / 100.0f;
-        body_settings.lim.across = std::clamp((float)option_number(body_squash_across_option, 20.0), 0.0f, 300.0f) / 100.0f;
+        body_settings.lim.outwards = std::clamp((float)option_number(body_squash_out_option, 15.0), 0.0f, 300.0f) / 100.0f;
+        body_settings.lim.across = std::clamp((float)option_number(body_squash_across_option, 40.0), 0.0f, 300.0f) / 100.0f;
     }
 
     struct Body {
-        bool active = false;                 // the player's model is being drawn with Body jiggle on
+        bool active = false;                 // the player's model is being drawn with Backpack jiggle on
         bool done = false;                   // matrices worked out for this draw
         int count = 0;
         int16_t parent[max_body_bones]{};
@@ -944,8 +947,8 @@ namespace {
         float max_angle = 0.0f;              // for the log
     } body;
 
-    // The skeleton, read each draw (the heap reuses memory). skip: bones another jiggle turns.
-    void read_body(uint8_t* rdram, uint32_t model, bool snout, bool feathers_on) {
+    // The skeleton, read each draw (the heap reuses memory).
+    void read_body(uint8_t* rdram, uint32_t model) {
         body.active = false;
         body.done = false;
         const uint32_t bones = model + read_word(rdram, model + 0x18);
@@ -964,6 +967,7 @@ namespace {
             body.pivot[i] = { read_float(rdram, entry(i)), read_float(rdram, entry(i) + 4), read_float(rdram, entry(i) + 8) };
             body.parent[i] = read_half(rdram, entry(i) + 14);
         }
+        bool any = false;
         for (int i = 0; i < count; i++) {
             const int p = body.parent[i];
             if (p >= 0 && p < count && p != i) {
@@ -973,17 +977,18 @@ namespace {
         }
         for (int i = 0; i < count; i++) {
             const int p = body.parent[i];
-            body.jiggles[i] = p >= 0 && p < count && p != i;
+            const int16_t id = read_half(rdram, entry(i) + 12);
+            body.jiggles[i] = p >= 0 && p < count && p != i &&
+                              std::find(std::begin(backpack_ids), std::end(backpack_ids), id) != std::end(backpack_ids);
             if (children[i] > 0) {
                 body.tip[i] = child_sum[i] * (1.0f / (float)children[i]);
             } else if (body.jiggles[i]) {
                 body.tip[i] = body.pivot[i] + (body.pivot[i] - body.pivot[p]) * 0.5f;
             }
             if (length(body.tip[i] - body.pivot[i]) < 1.0f) body.jiggles[i] = false;
-            if (snout && i == snout_bone) body.jiggles[i] = false;
-            if (feathers_on && feathers.chains != 0 && i < max_bones && feathers.slot_of[i] >= 0) body.jiggles[i] = false;
+            any = any || body.jiggles[i];
         }
-        body.active = true;
+        body.active = any;
     }
 
     // All the bones' matrices for this draw, from the game's matrix list (list + 64 * bone) into
@@ -1068,7 +1073,7 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
             restore_nose(rdram);
         }
         if (body_on) {
-            read_body(rdram, model, on, feathers_on);
+            read_body(rdram, model);
             if (body.active) {
                 read_body_settings();
             }
@@ -1112,7 +1117,7 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     if (!valid_ptr(src)) {
         return;
     }
-    // Body jiggle first: everything after (Kazooie's feathers, the snout, the size cheats) starts from
+    // Backpack jiggle first: everything after (Kazooie's feathers, the snout, the size cheats) starts from
     // the swung bones, read from body_copies laid out like the game's list.
     if (body.active && bone < body.count) {
         if (!body.done) {
@@ -1120,7 +1125,7 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
             if (logging()) {
                 static int n = 0;
                 if (++n % 15 == 0) {
-                    printf("[body] bones %d max angle %.1f%s\n", body.count, body.max_angle * 180.0f / pi,
+                    printf("[backpack] bones %d max angle %.1f%s\n", body.count, body.max_angle * 180.0f / pi,
                            tooie::photo_mode::active() ? " (photo)" : "");
                     fflush(stdout);
                 }

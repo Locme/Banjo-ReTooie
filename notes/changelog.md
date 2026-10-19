@@ -10,7 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
-- General > Body jiggle (on/off, default off): every bone of Banjo's skeleton swings on its own spring, parents first so swings ripple out, with its own stiffness, damping, mass and squash & stretch sliders (L). Untested on PC (T434).
+- General > Backpack jiggle (on/off, default off): Banjo's backpack swings on one jiggle bone, carrying its lid and Kazooie, with its own stiffness, damping, mass and squash & stretch sliders (L; replaces the short-lived Body jiggle). Untested on PC (T435).
 - Nose jiggle: the back of the nose stays joined to the snout and only its tip wobbles; a second player model drawn in between no longer leaves a swung nose behind (L). Untested on PC (T433).
 - Snout jiggle: new Squash & stretch while walking slider (the inwards limit while he walks or runs on the ground, default 15%), so walking forward no longer squashes his face; Nose jiggle's squash, stretch and swing are capped so the nose stays whole (L). Untested on PC (T432).
 - Snout jiggle: Max squash & stretch is split into inwards, outwards and up and down; new Nose jiggle toggle swings the black nose on its own jiggle bone with the same sliders; slider maxes raised (stiffness 900, damping 90, mass 7.5, squash & stretch 300%) (L). Untested on PC (T431).

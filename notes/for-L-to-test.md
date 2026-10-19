@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T435 Backpack jiggle (replaces Body jiggle)
+- Asked: 2026-10-19 08:09 UTC
+- Build: main
+- Steps:
+  1. General > Backpack jiggle on (Body jiggle is gone; defaults stiffness 200, damping 10, mass 1.5, inwards 10%, outwards 15%, up and down 40%)
+  2. Run, stop, turn, jump, fall and land
+- Look for: Only the backpack swings, on one point like the snout, carrying its lid and Kazooie; the rest of Banjo's body moves as in the normal game. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T434 Body jiggle: every bone on a spring
 - Asked: 2026-10-19 07:56 UTC
 - Build: main
@@ -8,7 +17,7 @@
   2. Run, stop, turn, jump, fall, land, swim and fly
   3. Try it with Snout jiggle and Kazooie jiggle on too, then push the sliders up (up and down 100%+, low stiffness, high mass)
 - Look for: Arms, legs, ears, Kazooie and the rest lag behind and bounce as he moves and settle when he stops; nothing comes apart or snaps; the snout and Kazooie's feathers still jiggle on top. Tell me which bones feel wrong (feet sliding, for instance). Not checked headless (L asked); it builds.
-- Status: waiting for L
+- Status: replaced by T435 (L: revert, backpack only)
 
 ## T433 Nose jiggle: nose stays joined to the snout
 - Asked: 2026-10-18 22:47 UTC
