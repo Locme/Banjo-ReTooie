@@ -4,7 +4,8 @@
 # Needs the same run folder as headless_boot.sh (RUN_DIR, Xvfb on :99, lavapipe, ImageMagick). Each style is one run
 # per map: Banjo is warped in and teleported from spot to spot, with a screenshot at each. Writes
 # <OUT>/<spot>.png (Original | Modern | Stylised) and <OUT>/all.png.
-# Lavapipe stalls now and then (Game 0 fps): a run whose shots are missing is retried once.
+# Lavapipe stalls now and then (Game 0 fps): a run whose shots are missing is retried once. ICD and ICD_LIBS pick another
+# lavapipe (an older one stalls less: see notes/headless-testing.md).
 run_dir=${RUN_DIR:-/home/claude/run}
 out=${OUT:-$run_dir/water-shots}
 spots=${SPOTS:-all}
@@ -39,7 +40,7 @@ run_map() {  # map key, style number
     for p in $(pgrep -x BanjoTooieN64Re); do kill -9 $p; done
     rm -rf screenshots
     TOOIE_MODERN_WATER=$style TOOIE_WARP=$warp TOOIE_TELEPORT="$teleports" TOOIE_SCREENSHOT_AT="$shots" \
-        LP_NUM_THREADS=0 DISPLAY=:99 VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json SDL_AUDIODRIVER=dummy \
+        LP_NUM_THREADS=0 DISPLAY=:99 VK_ICD_FILENAMES=${ICD:-/usr/share/vulkan/icd.d/lvp_icd.json} LD_LIBRARY_PATH=${ICD_LIBS:-$LD_LIBRARY_PATH} SDL_AUDIODRIVER=dummy \
         timeout -s KILL $secs ./BanjoTooieN64Recomp --game bt ${pad:+--pad-script "$pad"} > "$out/$key-$(style_name $style).log" 2>&1
     # Screenshots are named by time, so in order: two per spot, keep the second.
     local files=($(ls screenshots/*.png 2>/dev/null | sort))
