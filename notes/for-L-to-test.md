@@ -1,5 +1,25 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T468 Graphics > Ray tracing switch
+- Asked: 2026-10-20 18:22 UTC
+- Build: main
+- Steps:
+  1. Open Graphics, find Ray tracing (above Reflections), switch it on
+  2. On a graphics card without hardware ray tracing: a notice says it is not supported and the effects stay as set
+  3. On an RTX / RDNA2+ card: no notice; switch Screen-space reflections up and look at a shiny surface
+- Look for: no crash or stall with it off or on. Known gap: the traced reflection pass itself is not drawn yet (this build only has the switch, the hardware check and the fallback), so on a card with ray tracing the reflections look the same as with it off
+
+## T466 Deep snow: no steps or spikes, height ramps from 0 at edges, fill-back slider
+- Asked: 2026-10-20 19:00 UTC
+- Build: main
+- Steps:
+  1. Icy Side, Deep snow on, height 300
+  2. Walk through it and look at the dents' walls
+  3. Look where the snow meets ice, walls and cliffs
+  4. Set Snow fills back in to 0, then 30
+- Look for: Dent walls are soft slopes, not steps or spikes; snow is 0 high at every edge and rises inward, no gaps or covered ice; at 0 prints stay until you leave the area, at 30 they stay 30 s then fill in
+- Status: waiting for L
+
 ## T465 Mix rate High: music at normal speed
 - Asked: 2026-10-20 18:28 UTC
 - Build: main
