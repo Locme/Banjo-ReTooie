@@ -1453,10 +1453,10 @@ func = "func_800D5B34"
 before_vram = 0x800D5BF4
 text = "if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;"
 
-# --- Save select: hide the game's Wide-screen Mode row (src/game/hide_vanilla_widescreen.cpp) ---
+# --- Save select: hide the game's Wide-screen Mode and Screen Alignment rows (src/game/hide_vanilla_widescreen.cpp) ---
 # DEV > Hide Vanilla Widescreen Entry in the Game Menu. The global settings menu (the TV in the save
 # select, chgameselect state 17) has three rows: 0 Screen Alignment, 1 Wide-screen Mode, 2 Speaker
-# Mode. With the switch on it is built with two rows and row 1 shows and sets Speaker Mode.
+# Mode. With the switch on it is built with one row, which shows and sets Speaker Mode.
 # Building the menu: $a2 = its row count.
 [[patches.hook]]
 func = "func_8080462C_chgameselect"
@@ -1502,6 +1502,12 @@ text = "tooie_vanilla_widescreen_row_stack(rdram, ctx);"
 func = "func_80804750_chgameselect"
 before_vram = 0x80804804
 text = "tooie_vanilla_widescreen_row_stack(rdram, ctx);"
+
+# A row's refresh after an edit: $a0 = the row (row 0 resets Screen Alignment instead).
+[[patches.hook]]
+func = "func_80804878_chgameselect"
+before_vram = 0x808048A4
+text = "tooie_vanilla_widescreen_refresh(rdram, ctx);"
 
 # Test room (src/gameplay/test_room.cpp): while the room is up, no character starts talking or walks Banjo
 # off. func_800C0534 and func_800C05B8 start a dialogue through gcdialogexec and give up (return 0) when the

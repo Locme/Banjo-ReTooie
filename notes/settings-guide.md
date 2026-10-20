@@ -88,12 +88,12 @@ on a controller.
   Default: on.
 
 - **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
-  Mode in the game's global settings on the save select screen (the TV), so it
-  lists Screen Alignment and Speaker Mode only, and keeps the game's own
-  widescreen mode off (also on saves that had it on) while it is on. That mode
-  squashes the picture for a stretched TV; this port's widescreen is Aspect
-  Ratio in the Graphics tab. The menu change shows the next time it opens.
-  Default: on.
+  Mode and Screen Alignment in the game's global settings on the save select
+  screen (the TV), so it lists Speaker Mode only. While it is on, the game's own
+  widescreen mode is kept off and the picture centred, also on saves that had
+  them changed. The game's widescreen squashes the picture for a stretched TV;
+  this port's widescreen is Aspect Ratio in the Graphics tab. The menu change
+  shows the next time it opens. Default: on.
 
 The DEV tab's **Additional Tabs** section shows or hides tabs:
 

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T440 Screen Alignment hidden from the save select TV menu
+- Asked: 2026-10-20 02:23 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Keep DEV > Hide Vanilla Widescreen Entry in the Game Menu on (default)
+  2. On the save select screen, move the hand to the TV and press A
+  3. Change Speaker Mode, confirm, then back out and reopen the TV
+  4. Turn the toggle off and reopen the TV
+- Look for: With the toggle on, the TV shows only Speaker Mode, and its new value sticks. The picture stays centred even if an old save had it shifted. With the toggle off, all three rows (Screen Alignment, Wide-screen Mode, Speaker Mode) come back.
+- Status: waiting for L
+
 ## T439 Jiggle section: Belly jiggle, Backpack jiggle back (holds while Kazooie is out)
 - Asked: 2026-10-20 02:08 UTC
 - Build: main

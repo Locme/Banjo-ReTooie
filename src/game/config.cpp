@@ -714,7 +714,7 @@ void tooie::init_config() {
     wip.add_bool_option(
         tooie::hide_vanilla_widescreen_option,
         "Hide Vanilla Widescreen Entry in the Game Menu",
-        "Hides Wide-screen Mode in the global settings on the save select screen (the TV), leaving Screen Alignment and Speaker Mode, and keeps the game's own widescreen mode off while it is on: that mode squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
+        "Hides Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV), leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
     tooie::torch_enemy::add_sound_test_option(wip);

@@ -154,13 +154,14 @@ void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
 int tooie_more_memory(void);
 
 // DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp): the save
-// select's global settings menu without its Wide-screen Mode row.
+// select's global settings menu with only its Speaker Mode row.
 void tooie_vanilla_widescreen_rows(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_loop(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_title(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_row_a0(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_text(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_row_stack(uint8_t* rdram, recomp_context* ctx);
+void tooie_vanilla_widescreen_refresh(uint8_t* rdram, recomp_context* ctx);
 // Test room (src/gameplay/test_room.cpp): true while the room is up, so no dialogue starts.
 int tooie_test_room_quiet(void);
 

@@ -824,6 +824,7 @@ RECOMP_FUNC void func_80804878_chgameselect(uint8_t* rdram, recomp_context* ctx)
     after_0:
     // 0x808048A0: lw          $a0, 0x20($sp)
     ctx->r4 = MEM_W(ctx->r29, 0X20);
+    tooie_vanilla_widescreen_refresh(rdram, ctx);
     // 0x808048A4: or          $a1, $zero, $zero
     ctx->r5 = 0 | 0;
     // 0x808048A8: bne         $a0, $zero, L_808048C0
