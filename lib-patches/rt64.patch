@@ -18674,10 +18674,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..bbccdd7
+index 0000000..6d2f1f2
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,349 @@
 +//
 +// RT64
 +//
@@ -18909,8 +18909,11 @@ index 0000000..bbccdd7
 +// Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 +float SnowTrailSegment(float cameraDistance) {
 +    const float start = max(FrParams.snowLod.x, 1.0f);
-+    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.)
-+    return max(FrParams.snowGrid.x * 2.0f, 4.0f) * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
++    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.
++    // Further off, coarser with the distance as a point covers fewer pixels, about as many pixels apart everywhere:
++    // finely cut prints all over the level, held until the map changes, cost the most of a frame.)
++    const float closest = max(max(FrParams.snowGrid.x * 2.0f, 4.0f), cameraDistance * 0.008f);
++    return closest * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
 +}
 +
 +// How far the tessellated snow's trail is smoothed over at a distance from the camera (world units): by the domain
