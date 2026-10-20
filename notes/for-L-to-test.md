@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T463 Deep snow: dragon shots, far snow with LOD, prints that stay, ice left alone
+## T464 Deep snow: dragon shots, far snow with LOD, prints that stay, ice left alone
 - Asked: 2026-10-20 17:19 UTC
 - Build: main
 - Steps:
@@ -12,6 +12,13 @@
   6. Chilly Willy: his ice balls dent the snow
   7. Ice reflections on: the ice reflects and is not raised
 - Look for: Prints only reset on map change unless the switch is on; snow reaches far and gets smoother past the LOD distance; ice balls leave dents; ice stays at its own height and reflects
+## T463 Belly jiggle: necklace stays, strongest by the belt
+- Asked: 2026-10-20 16:36 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: Belly jiggle on
+  2. Run, jump, land and stop with the camera on his front
+- Look for: The tooth necklace never vanishes or stretches; it rides on the belly in one piece. The belly moves most just above the belt and less and less up towards the chest. Checked headless (forced swings).
 - Status: waiting for L
 
 ## T462 Cheaper 3D grass
