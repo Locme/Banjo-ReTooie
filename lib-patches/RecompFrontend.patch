@@ -982,10 +982,20 @@ index eb8833e..acd435b 100644
          void add_default_options() {
              add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..63a4152 100644
+index 277a421..4c57a49 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -346,6 +346,13 @@ public:
+@@ -244,7 +244,8 @@ public:
+         
+         context = Rml::CreateContext("main", Rml::Vector2i(width, height));
+ 
+-        Rml::Debugger::Initialise(context);
++        // The RmlUi debugger is started on the first F8 press instead of here: once started it shows a
++        // red "!" beacon in the top-right corner whenever RmlUi logs a warning, even with the debugger closed.
+         {
+             struct FontFace {
+                 const char* filename;
+@@ -346,6 +347,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -999,7 +1009,15 @@ index 277a421..63a4152 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -570,6 +577,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -493,6 +501,7 @@ public:
+ };
+ 
+ std::unique_ptr<UIState> ui_state;
++static bool debugger_initialised = false;
+ std::recursive_mutex ui_state_mutex{};
+ 
+ // TODO make this not be global
+@@ -570,6 +579,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1040,7 +1058,7 @@ index 277a421..63a4152 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -731,7 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -731,7 +774,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1049,7 +1067,17 @@ index 277a421..63a4152 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -776,7 +817,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -747,6 +790,9 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+ 
+                     if (cur_event.key.keysym.scancode == SDL_Scancode::SDL_SCANCODE_F8) {
+                         if (recompui::config::general::get_debug_mode_enabled()) {
++                            if (!debugger_initialised) {
++                                debugger_initialised = Rml::Debugger::Initialise(ui_state->context);
++                            }
+                             Rml::Debugger::SetVisible(!Rml::Debugger::IsVisible());
+                         }
+                     }
+@@ -776,7 +822,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1058,7 +1086,7 @@ index 277a421..63a4152 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -798,12 +839,26 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -798,12 +844,26 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              // Send the event to RmlUi if this type of event is being captured.
              if (is_mouse_input) {
                  if (context_capturing_mouse) {
@@ -1086,7 +1114,7 @@ index 277a421..63a4152 100644
                  }
              }
          }
-@@ -847,7 +902,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +907,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {
@@ -1095,6 +1123,18 @@ index 277a421..63a4152 100644
              next_repeat_time += repeat_rate;
          }
      }
+@@ -893,7 +953,10 @@ void deinit_hook() {
+     recompui::destroy_all_contexts();
+ 
+     std::lock_guard lock {ui_state_mutex};
+-    Rml::Debugger::Shutdown();
++    if (debugger_initialised) {
++        Rml::Debugger::Shutdown();
++        debugger_initialised = false;
++    }
+     Rml::Shutdown();
+     ui_state->unload();
+     ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
 index 6c84c05..3cc43e9 100644
 --- a/recompui/src/config/ui_config.cpp
