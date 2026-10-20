@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T446 Enemy aim: Klungo's potions lead you further (Better / Sharp)
+- Asked: 2026-10-20 07:41 UTC
+- Build: claude/project-thread-quqov9
+- Steps:
+  1. General tab > Gameplay > Enemy aim: set Sharp
+  2. Fight Klungo (any of the three fights) and keep running in a straight line
+  3. Set Original and run the same way, then try Better
+- Look for: With Sharp the potions land on or just ahead of you when you run straight; stopping or turning sharply as one flies still dodges it. Original behaves as before. Only Klungo's potion is covered so far; other enemies follow once this is confirmed. Not built or run yet: the container has no build, so this needs your first test.
+- Status: waiting for L
+
 ## T445 Deep snow: the game's own snow layer is gone, the trail goes down to Banjo's feet and follows him
 - Asked: 2026-10-20 03:57 UTC
 - Build: main

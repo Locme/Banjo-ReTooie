@@ -11,6 +11,12 @@
 // makes that amount 255 in the three handlers that subtract it: func_80108F08, func_80800294_sucoasterhit
 // (watched on an Ugger) and func_80801108_sucoasterfly. Bosses have their own code and are not touched.
 //
+// Enemy aim (L, 2026-10-20): Klungo's potion (func_80800018_chklungophial) already aims ahead of the player:
+// func_8010D12C(player, out, lead, point) returns the player's point plus his movement over "lead" seconds,
+// with the lead read from the potion's +0x58 (a per-fight table value set in func_80802B84_chklungo) and the
+// potion's flight time in +0x24. Better and Sharp multiply that lead by 1.5 and 2, never past the flight time
+// (a perfect shot), so a straight run no longer dodges it but a change of direction still does.
+//
 // Take No Damage (Cheato: HONEYKING, game flag 0x53C, L 2026-10-19): the game's own cheat keeps the health
 // from dropping, but Banjo still got hurt: knocked back and flung up in the air. func_80099B94 handles the
 // player's hit events; each hurt case calls func_800A17A8 with the damage and then picks the hurt state
@@ -20,9 +26,11 @@
 // back in the state he is already in (Dragunda holding him, state 152, re-enters it with each bite).
 // Headless test aid: TOOIE_DAMAGE_LOG=1 logs each damaging hit event, its state and whether it was dropped.
 
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <variant>
 
@@ -31,6 +39,7 @@
 #include "recompui/config.h"
 #include "tooie_cheats.h"
 #include "tooie_damage.h"
+#include "tooie_rdram.h"
 
 namespace {
     // Set while bssplat_entrypoint_0 hands a fall's damage to func_800A17A8.
@@ -131,4 +140,31 @@ extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
     if (drop) {
         ctx->r18 = 0;
     }
+}
+
+// func_80800018_chklungophial, just before its call to func_8010D12C: $s0 is the potion, $a2 the lead.
+extern "C" void tooie_klungo_aim(uint8_t* rdram, recomp_context* ctx) {
+    float factor = 1.0f;
+    try {
+        switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
+        case tooie::damage::Aim::Better: factor = 1.5f; break;
+        case tooie::damage::Aim::Sharp: factor = 2.0f; break;
+        default: break;
+        }
+    } catch (...) {
+    }
+    const uint32_t potion = (uint32_t)ctx->r16;
+    if (factor == 1.0f || !tooie::rdram::valid_ptr(potion)) {
+        return;
+    }
+    const uint32_t lead_bits = (uint32_t)ctx->r6;
+    float lead;
+    std::memcpy(&lead, &lead_bits, sizeof(lead));
+    const float flight = tooie::rdram::read_float(rdram, potion + 0x24);
+    if (!(lead > 0.0f) || !(flight > 0.0f)) {
+        return;
+    }
+    lead = std::min(lead * factor, std::max(flight, lead));
+    std::memcpy(&lead_bits, &lead, sizeof(lead_bits));
+    ctx->r6 = (gpr)(int64_t)(int32_t)lead_bits;
 }

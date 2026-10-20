@@ -10,6 +10,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- General > Gameplay > Enemy aim (Original / Better / Sharp, Original by default): Klungo's potions lead your movement 50% or 100% further than the game's own aim, never past a perfect shot. Untested on PC (T446).
+
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).
 - Sprint dust: starting a sprint (holding Run) kicks up the same puff of dust as a quick turn, at most once every 10 seconds of game time.
 - Interpolation pick mode now finds models at Graphics > Interpolation Original (the default); before, every model said "No model here" unless Interpolation was on (L). Checked headless (T442).

@@ -3819,6 +3819,7 @@ RECOMP_FUNC void func_80800018_chklungophial(uint8_t* rdram, recomp_context* ctx
     ctx->r5 = ADD32(ctx->r29, 0X40);
     // 0x80800040: lw          $a2, 0x58($s0)
     ctx->r6 = MEM_W(ctx->r16, 0X58);
+    tooie_klungo_aim(rdram, ctx);
     // 0x80800044: jal         0x8010D12C
     // 0x80800048: addiu       $a3, $zero, 0x5
     ctx->r7 = ADD32(0, 0X5);
