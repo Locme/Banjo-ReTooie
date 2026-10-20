@@ -82,8 +82,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor);
-    void SetSceneSnowStamps(const float *stamps, uint32_t count);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -134,6 +133,7 @@ namespace {
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
     std::atomic<float> snow_height{1.0f};
+    std::atomic<float> snow_detail{1.0f};
     // What was last sent (-1 to send again).
     std::atomic<float> snow_sent{-1.0f};
 
@@ -162,69 +162,6 @@ namespace {
         return std::find(maps.begin(), maps.end(), map) != maps.end();
     }
     float heat_haze_sent = -1.0f;
-
-    // Deep snow's other actors (note_snow_actor): where each was last frame, and whether it was falling.
-    struct SnowActor { float x = 0.0f, y = 0.0f, z = 0.0f, scale = 1.0f, peak = 1.0f; bool falling = false; };
-    std::unordered_map<uint32_t, SnowActor> snow_actors_last;
-    std::unordered_map<uint32_t, SnowActor> snow_actors_now;
-    // Craters from attacks that landed, kept for a few frames so RT64 surely draws a frame with them.
-    struct SnowCrater { float x, y, z, radius; int frames; };
-    std::vector<SnowCrater> snow_craters;
-    bool snow_actors_wanted = false;
-
-    // A crater's radius from the biggest its maker was while it fell.
-    float crater_radius(float peak) {
-        return 12.0f * std::clamp(peak, 1.0f, 3.0f) * 1.6f;
-    }
-
-    // This frame's stamps for RT64 from the actors drawn last frame: one walking along the ground presses a furrow,
-    // one that was falling and stopped or went away (an attack landing) a crater.
-    void send_snow_stamps(const float player[3], bool have_player) {
-        std::vector<float> stamps;
-        auto add = [&](float x, float y, float z, float radius, float depth) {
-            // RT64 keeps a trail near Banjo only: the rest would only use up the 48.
-            if ((stamps.size() / 5 >= 48) || !have_player || (std::abs(x - player[0]) > 720.0f) || (std::abs(z - player[2]) > 720.0f)) {
-                return;
-            }
-            stamps.insert(stamps.end(), { x, y, z, radius, depth });
-        };
-        for (auto& [actor, now] : snow_actors_now) {
-            const float radius = 12.0f * std::clamp(now.scale, 0.4f, 3.0f);
-            // Banjo has his own trail.
-            if (have_player && std::hypot(now.x - player[0], now.z - player[2]) < 8.0f && std::abs(now.y - player[1]) < 30.0f) {
-                continue;
-            }
-            const auto last = snow_actors_last.find(actor);
-            if (last == snow_actors_last.end()) {
-                continue;
-            }
-            const float moved = std::hypot(now.x - last->second.x, now.z - last->second.z);
-            const float dy = now.y - last->second.y;
-            now.falling = (dy < -1.5f) || (last->second.falling && (dy < -0.2f));
-            // Something that came down (an attack such as Chilly Willy's ice balls, which shrink as they break)
-            // leaves a crater by the biggest it was on the way down, never a small one.
-            now.peak = now.falling ? std::max(now.scale, last->second.falling ? last->second.peak : now.scale) : now.scale;
-            if (last->second.falling && !now.falling) {
-                snow_craters.push_back({ now.x, now.y, now.z, crater_radius(last->second.peak), 3 });
-            }
-            else if ((moved > 0.3f) && (moved < 60.0f) && (std::abs(dy) < 4.0f)) {
-                add(now.x, now.y, now.z, radius, 0.85f);
-            }
-        }
-        for (const auto& [actor, last] : snow_actors_last) {
-            if (last.falling && (snow_actors_now.find(actor) == snow_actors_now.end())) {
-                snow_craters.push_back({ last.x, last.y, last.z, crater_radius(last.peak), 3 });
-            }
-        }
-        for (auto& crater : snow_craters) {
-            add(crater.x, crater.y, crater.z, crater.radius, 1.0f);
-            crater.frames--;
-        }
-        snow_craters.erase(std::remove_if(snow_craters.begin(), snow_craters.end(), [](const SnowCrater& c) { return c.frames <= 0; }), snow_craters.end());
-        snow_actors_last = std::move(snow_actors_now);
-        snow_actors_now.clear();
-        RT64::SetSceneSnowStamps(stamps.data(), (uint32_t)(stamps.size() / 5));
-    }
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
     // inside the volcano.
@@ -376,6 +313,62 @@ namespace {
         0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
         // The see-through blocks round notes themselves (a pale blue texture, 60 triangles, seen in Icy Side 2026-10-17).
         0xe3890f274d878db4,
+    };
+
+    // Shiny textures for Screen-space reflections besides the parallax list's metal and tiles (RT64 hashes, picked by
+    // eye on 2026-10-20 from the dump's 2,618 textures the parallax sweep left out): shiny metal, gold and machine
+    // parts, crystals and gems, glass and windows.
+    constexpr uint64_t shiny_textures[] = {
+        // Metal: steel, gold, brass and copper parts, trims and machinery (143)
+        0x00efe89a05c37cfc, 0x0348aba32abccf8f, 0x052e5e214b074e46, 0x05bed606aa7cf58f,
+        0x06635b868db9a1eb, 0x0aaca422457e0dc8, 0x0dda4130179da841, 0x0edfaf02879af5de,
+        0x1085071aeccbaaec, 0x11127cba84729a83, 0x11d730637623c0e6, 0x12b63e73a3210e1e,
+        0x13a6a0d0720fceaf, 0x17ca8e1154577597, 0x190680dc86de6714, 0x196a3c1d3f89ad46,
+        0x1aec3ae12f288fd4, 0x1b28f93ed91299c5, 0x1c6ea26155d5cbc7, 0x1e3c6f5b7d4fd8ec,
+        0x1e46213c9605d459, 0x1fbad3057ea2a9a0, 0x1fe48ebc9374f00b, 0x2156ef1b48312f53,
+        0x229d1da147c5a73f, 0x2a3b2d8357bf1f98, 0x2ad10735da950566, 0x2ae5cc6ca498ba39,
+        0x2c4c96536b8b7b5a, 0x2f01c0962a3f1119, 0x35a6fa45844784aa, 0x36de1f108f8ec82e,
+        0x3c6c72cebdcfda95, 0x3db08e40e41544f5, 0x3e3f11605465bf14, 0x4113c5eabdb06f71,
+        0x41eb542175e8902f, 0x466039678d7e4844, 0x479848345ac366f7, 0x47f3ff36ed0edd7a,
+        0x4a5e67eca512ec24, 0x4b2dabab65151e30, 0x4befcb59717f5977, 0x4cdd4b08c4cf7f6d,
+        0x4edcfe29eab9f9d7, 0x52b8de47adefccf0, 0x53114bfda1182881, 0x53fd8e1dbdebb8f1,
+        0x556df73cad052835, 0x55974effa10b50b2, 0x560a41300280ed02, 0x562b34c1218fd1b8,
+        0x57d04f8f0c1f03c8, 0x58c70baa02f4a191, 0x594356a84a74082d, 0x5a7d42b55f050f24,
+        0x5ccd85dbd5b0d3ee, 0x614bd692513046a3, 0x62a7a8ccbab246b5, 0x63332c4d31561ed1,
+        0x633f62b741b793a3, 0x643a5679edb3426f, 0x64a1ab6348e2c47c, 0x6579b8c1852b6fbc,
+        0x66fc6d958d629254, 0x66fd10caf2d867d0, 0x67d4ebbdd56e392f, 0x6881f316689a6e95,
+        0x688a2f33e305417b, 0x6bd7eef5b4b544ad, 0x6c1f6b4894437fd7, 0x6ec1169c8ac54fc5,
+        0x708aa6ba9de2e747, 0x776adb5f84d53d24, 0x7ac35f509b00c0ce, 0x7cfca85b81a487c7,
+        0x7d6cb4d798d31abe, 0x81a0f9248b66ce01, 0x81e1103fe17d95b5, 0x833b5594f071abb9,
+        0x8d2f78cc91e85f3d, 0x9045f10c4be8e099, 0x913fa97bc6457120, 0x96e4a5b0cbd49d23,
+        0x9b3389ef372081ec, 0x9ded73062322e234, 0x9f401d180568b47e, 0x9fc0b0edcf634542,
+        0xa07b26167b652a03, 0xa1fbfb4b7e566e8f, 0xa26805cf6fefbda3, 0xa5faaee70e252666,
+        0xa7668c59352abe8a, 0xa970e5517350bb3e, 0xacf387a35a424846, 0xb131649ad7333cef,
+        0xb13f0c7b6669fee6, 0xb30eaf3c65672655, 0xb5abbfe203e51617, 0xbbafc817fb64fdb0,
+        0xbdbf81d7b2621f6b, 0xbe041cdc9df375ef, 0xc0ca4ff2a78b2629, 0xc124d01e79e8fa32,
+        0xc1e65a8a924884d2, 0xc21668249131f412, 0xc3a41edc2676640b, 0xc49d8d291cd81997,
+        0xc5b57e68f931ea8c, 0xc5bc6261dfece826, 0xc769b5fe90c68a17, 0xc898524aba681c86,
+        0xc97249c30ee7b913, 0xc9ac05812888d25f, 0xcd3125fb97b26599, 0xcefe98bd0b65af4a,
+        0xd88f0ffa83b47a39, 0xd932ef70cd7da419, 0xdc74d77466dca12d, 0xde7a8b196a15ea8a,
+        0xe2cd4c17d94c0cb8, 0xe585a469e3cedbac, 0xe6f6ea1ae92f4512, 0xeabc08f85602d542,
+        0xec029110fb80cb68, 0xee57aab90797e593, 0xeef03afb17bf6360, 0xef37e7804f15cd3a,
+        0xefdc76eb8a87b8b8, 0xf05ff4fe9a8b4057, 0xf103a851e363b2ac, 0xf25b7fe8cca57f21,
+        0xf3063a55e8237324, 0xf32c33cf2ddf523b, 0xf54d58565c421075, 0xfa6da10599d876de,
+        0xfb20d484347e507a, 0xfb7bd58e16034e15, 0xfb822a2a95b52ab3, 0xfcd67fa7c1ee3a97,
+        0xfd997b006c0d2279, 0xfeec46c1e07f6ec6, 0xff1789e72c4c5b05,
+        // Crystals and gems (25)
+        0x0f71ebd913354f04, 0x22402ed8424e798b, 0x2fe8e3ecae2a3740, 0x37488137fb10db24,
+        0x3d6d0e08f30e0dcd, 0x4fe0d8976c184a5a, 0x5882c0aed5e94dfa, 0x5a5872a0c544c177,
+        0x61651a70e726dbdb, 0x65d7f51774d6f517, 0x664b0c6644060bed, 0x778b12f89aaeb246,
+        0x78d67b5d46fd6de4, 0x79a8b89ae797effa, 0x9873ab2ea6afc92b, 0x9cd99a44f36bbab5,
+        0xa0754fa808c1eec1, 0xbda54fd31b527f0e, 0xc99adb3fb7f0bc02, 0xca03179894a7570f,
+        0xca3ac18fa0ee884d, 0xd3db47b98a571e16, 0xe0c45d0afc26cf02, 0xe75507b6b900f558,
+        0xfbbc50554bf66f9b,
+        // Glass and windows (6)
+        0x1a1949e1f923e12d, 0x34bf2cae5467cb0e, 0x968d8376fb42d7db, 0xc9eac79984101fc0,
+        0xd61b89ced680452d, 0xf7f170249a3bbefa,
+        // Glossy paint (1)
+        0x12c31c68cdc11203,
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
@@ -4069,9 +4062,9 @@ namespace {
         std::vector<uint64_t> ice_all(std::begin(ice_textures), std::end(ice_textures));
         ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
         std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
-        // Shiny surfaces for Screen-space reflections: the textures the parallax sweep (textures/sweep4) found to be
-        // metal or tiles, with Shiny Reflection picks over them.
-        std::vector<uint64_t> shiny_all;
+        // Shiny surfaces for Screen-space reflections: shiny_textures and the textures the parallax sweep
+        // (textures/sweep4) found to be metal or tiles, with Shiny Reflection picks over them.
+        std::vector<uint64_t> shiny_all(std::begin(shiny_textures), std::end(shiny_textures));
         for (const ParallaxTexture& texture : parallax_textures) {
             if ((texture.shape == Metal) || (texture.shape == Tiles)) {
                 shiny_all.push_back(texture.hash);
@@ -4235,7 +4228,7 @@ void tooie::picture_filters::apply() {
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
-        (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
+        (float)value<double>(grass_distance_option, 1800.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
         (float)(value<double>(grass_patches_option, 50.0) / 100.0));
     RT64::SetSceneGrassBlades((float)(value<double>(grass_thickness_option, 100.0) / 100.0),
         (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
@@ -4288,6 +4281,10 @@ void tooie::picture_filters::apply() {
     snow_height = (float)(value<double>(snow_height_option, 100.0) / 100.0);
     if (const char* forced = std::getenv("TOOIE_SNOW_HEIGHT")) {
         snow_height = (float)(std::atof(forced) / 100.0);
+    }
+    snow_detail = (float)(value<double>(snow_detail_option, 100.0) / 100.0);
+    if (const char* forced = std::getenv("TOOIE_SNOW_DETAIL")) {
+        snow_detail = (float)(std::atof(forced) / 100.0);
     }
     snow_sent = -1.0f;
     // Parallax mapping; TOOIE_PARALLAX=<0-100> sets it instead, TOOIE_PARALLAX_ALL=1 puts it on every texture of the
@@ -4396,33 +4393,6 @@ float tooie::picture_filters::underwater() {
 
 bool tooie::picture_filters::applying_effects_preset() {
     return applying_preset;
-}
-
-void tooie::picture_filters::note_snow_actor(uint32_t actor, float x, float y, float z, float scale) {
-    if (!snow_actors_wanted || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
-        return;
-    }
-    snow_actors_now[actor] = { x, y, z, std::isfinite(scale) ? scale : 1.0f, std::isfinite(scale) ? scale : 1.0f, false };
-    // Test aid: TOOIE_SNOW_LOG=1 also counts the actors seen, every 2 s.
-    static const bool log = std::getenv("TOOIE_SNOW_LOG") != nullptr;
-    if (log) {
-        static auto logged = std::chrono::steady_clock::now();
-        static uint32_t seen = 0;
-        seen++;
-        if (std::chrono::steady_clock::now() - logged > std::chrono::seconds(2)) {
-            logged = std::chrono::steady_clock::now();
-            std::fprintf(stderr, "[snow] %u actor draws seen (last 2 s), e.g. %08X at %.0f %.0f %.0f scale %.2f\n", seen, actor, x, y, z, scale);
-            seen = 0;
-        }
-        // TOOIE_SNOW_LOG=2: every actor drawn, once a second each.
-        static const bool every = std::atoi(std::getenv("TOOIE_SNOW_LOG")) >= 2;
-        static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> printed;
-        auto& last = printed[actor];
-        if (every && (std::chrono::steady_clock::now() - last > std::chrono::seconds(1))) {
-            last = std::chrono::steady_clock::now();
-            std::fprintf(stderr, "[snow] actor %08X at %.0f %.0f %.0f scale %.2f\n", actor, x, y, z, scale);
-        }
-    }
 }
 
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
@@ -4607,22 +4577,13 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
-        if ((snow != snow_sent.load()) || (strict != strict_sent)) {
+        static float detail_sent = -1.0f;
+        const float detail = snow_detail.load();
+        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent)) {
             snow_sent = snow;
             strict_sent = strict;
-            RT64::SetSceneSnow(snow > 0.0f, snow, strict);
-        }
-        snow_actors_wanted = snow > 0.0f;
-        if (snow_actors_wanted) {
-            float pos[3];
-            const bool valid = banjo_position(rdram, pos);
-            send_snow_stamps(pos, valid);
-        }
-        else if (!snow_actors_last.empty() || !snow_actors_now.empty() || !snow_craters.empty()) {
-            snow_actors_last.clear();
-            snow_actors_now.clear();
-            snow_craters.clear();
-            RT64::SetSceneSnowStamps(nullptr, 0);
+            detail_sent = detail;
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail);
         }
     }
     // The fog is measured from Banjo.
@@ -4836,13 +4797,18 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
-        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo wades through it, leaving a furrow and footprints with the snow banked up either side, and after a while the snow fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and after a while it fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_number_option(
         snow_height_option,
         "Snow height",
         "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
         25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        snow_detail_option,
+        "Snow detail",
+        "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
+        25, 100, 5, 0, false, 100);
     graphics.add_number_option(
         parallax_option,
         "Parallax",
@@ -5070,7 +5036,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         grass_distance_option,
         "3D grass distance",
         "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
-        500, 6000, 250, 0, false, 2500);
+        500, 6000, 250, 0, false, 1800);
     graphics.add_number_option(
         grass_density_option,
         "3D grass density",
@@ -5126,7 +5092,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5180,6 +5146,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).

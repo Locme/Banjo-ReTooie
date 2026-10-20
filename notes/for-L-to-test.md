@@ -1,5 +1,27 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T462 Cheaper 3D grass
+- Asked: 2026-10-20 16:15 UTC
+- Build: main
+- Steps:
+  1. Spiral Mountain with 3D grass on, defaults
+  2. Compare frame rate and look to the last build (Graphics > 3D grass distance now defaults to 1800, was 2500; if your saved setting is 2500 reset it)
+  3. Walk toward and away from a meadow, check far grass thins gradually without popping
+- Look for: Noticeably faster in open meadows; grass near Banjo looks the same; far grass coarsens sooner but smoothly
+- Status: waiting for L
+
+## T459 Deep snow presses where models touch it
+- Asked: 2026-10-20 15:59 UTC
+- Build: main
+- Steps:
+  1. Icy Side with Deep snow on (your height 300)
+  2. Walk, run and stand still in the snow
+  3. Jump in place and do a short hop
+  4. Walk past the polar bear or other NPCs
+  5. Try Snow detail (under Snow height): 50 is the old coarser grid, 25 coarser still, for weaker graphics cards
+- Look for: The dent follows Banjo's real feet and body, a jump leaves nothing, a light touch a shallow dent, NPCs leave their own; edges finer than before; prints fill back in after a while
+- Status: waiting for L
+
 ## T458 Belly jiggle sits by the belt
 - Asked: 2026-10-20 14:19 UTC
 - Build: main (next Windows build)

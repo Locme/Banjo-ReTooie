@@ -86,6 +86,7 @@ namespace tooie::picture_filters {
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string snow_height_option = "deep_snow_height";
+    inline const std::string snow_detail_option = "deep_snow_detail";
     // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
@@ -149,9 +150,6 @@ namespace tooie::picture_filters {
     void set_preset(Preset preset);
     // Each game frame: gives RT64 the game's depth buffer for ambient occlusion.
     void tick(uint8_t* rdram, recomp_context* ctx);
-    // An actor the game drew this frame (its address, place and scale), for deep snow: enemies walking leave a
-    // trail in it and attacks landing leave a crater (hd_shadows.cpp calls this after each actor's draw).
-    void note_snow_actor(uint32_t actor, float x, float y, float z, float scale);
     // Hands the current settings to RT64 (the contrast, saturation, vignette and grain only while photo
     // mode is off).
     void apply();
