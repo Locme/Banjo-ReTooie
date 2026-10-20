@@ -92,6 +92,7 @@ void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx);
+void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx);
 void tooie_aim_trace(uint8_t* rdram, recomp_context* ctx, int getter);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
 // Cheats > HONEYKING: func_80099B94 entry, and just before it sets the state in $s2.

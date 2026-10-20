@@ -219,3 +219,47 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
     tooie::rdram::write_float(rdram, out, tooie::rdram::read_float(rdram, out) + dx);
     tooie::rdram::write_float(rdram, out + 8, tooie::rdram::read_float(rdram, out + 8) + dz);
 }
+
+// Steering in flight (Enemy aim Better / Sharp). Klungo's potion (func_80800204_chklungophial is its per-frame
+// update; $a0 is the potion) flies on a fixed arc: position at +4, velocity at +0x28 (x), +0x2C (y), +0x30 (z),
+// gravity pulling +0x2C down, and a state in the top six bits of the halfword at +0x72 (1 = in flight). While in
+// flight the horizontal velocity is nudged toward the speed that would reach where the player is heading
+// (his position plus his measured movement over the time the potion has left) by then, so a potion only
+// misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
+extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
+    const float seconds = aim_seconds();
+    const uint32_t potion = (uint32_t)ctx->r4;
+    if (seconds <= 0.0f || !aim_have_prev || !tooie::rdram::valid_ptr(potion)) {
+        return;
+    }
+    if ((((uint16_t)tooie::rdram::read_half(rdram, potion + 0x72)) >> 10) != 1) {
+        return;
+    }
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!(dt > 0.0f) || dt > 0.5f) {
+        return;
+    }
+    const float px = tooie::rdram::read_float(rdram, potion + 4);
+    const float pz = tooie::rdram::read_float(rdram, potion + 0xC);
+    float vx = tooie::rdram::read_float(rdram, potion + 0x28);
+    float vz = tooie::rdram::read_float(rdram, potion + 0x30);
+    const float speed = std::sqrt(vx * vx + vz * vz);
+    if (speed < 1.0f) {
+        return;
+    }
+    // Time left in flight, from where the potion is now to where the player is now.
+    float dx = aim_prev[0] - px;
+    float dz = aim_prev[2] - pz;
+    const float left = std::max(0.15f, std::sqrt(dx * dx + dz * dz) / speed);
+    dx += aim_vel[0] * left;
+    dz += aim_vel[1] * left;
+    const float want_x = dx / left;
+    const float want_z = dz / left;
+    // How quickly it corrects: Better about a second to settle, Sharp about a third.
+    const float rate = seconds >= 1.0f ? 3.0f : 1.0f;
+    const float k = std::min(1.0f, rate * dt);
+    vx += (want_x - vx) * k;
+    vz += (want_z - vz) * k;
+    tooie::rdram::write_float(rdram, potion + 0x28, vx);
+    tooie::rdram::write_float(rdram, potion + 0x30, vz);
+}

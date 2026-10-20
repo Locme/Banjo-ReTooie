@@ -1717,3 +1717,9 @@ text = "tooie_enemy_aim_end(rdram, ctx);"
 func = "func_8010D09C"
 before_vram = 0x8010D124
 text = "tooie_enemy_aim_end(rdram, ctx);"
+
+# Enemy aim, steering: Klungo's potion corrects its flight toward where the player is heading (its per-frame update).
+[[patches.hook]]
+func = "func_80800204_chklungophial"
+before_vram = 0x80800204
+text = "tooie_klungo_potion_steer(rdram, ctx);"
