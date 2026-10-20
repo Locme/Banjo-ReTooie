@@ -15129,10 +15129,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..d0aeb6d
+index 0000000..47cc721
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3674 @@
+@@ -0,0 +1,3690 @@
 +//
 +// RT64
 +//
@@ -15852,6 +15852,38 @@ index 0000000..d0aeb6d
 +    gRadianceCache.Store2(at, uint2(check, c.r | (c.g << 8) | (c.b << 16)));
 +}
 +
++// Inside a capsule round Banjo (world space): what the sun shadows leave out when they leave him out, and all
++// his contact shadow counts.
++bool InsideBanjo(float3 world) {
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++    const float2 across = world.xz - banjo.xz;
++    return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
++}
++
++// Whether a ray (world space) meets anything: mode 0 anything, 1 anything but Banjo (the ray goes on past him to what
++// is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo.
++bool TraceOccluded(RayDesc ray, uint mode) {
++    if (mode == 0u) {
++        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        while (query.Proceed()) {
++        }
++        return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
++    }
++    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
++            const bool banjo = InsideBanjo(ray.Origin + ray.Direction * query.CandidateTriangleRayT());
++            if ((mode == 1u) != banjo) {
++                query.CommitNonOpaqueTriangleHit();
++                query.Abort();
++            }
++        }
++    }
++    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
++}
++
 +bool RadianceLoad(float3 world, out float3 colour) {
 +    uint check;
 +    const uint at = RadianceCell(world, check);
@@ -15864,8 +15896,8 @@ index 0000000..d0aeb6d
 +// over gSceneBVH, in world space) instead of marching the depth, so it finds what the depth hides (the back of a
 +// pillar, what is behind the nearest surface) and misses nothing between steps. Where it lands: the scene's colour
 +// there when that spot is on the screen and in view; when it is off the screen or hidden behind something nearer, the
-+// colour of the nearest spot of the screen in its direction, trusted less. A ray that leaves the world brings
-+// nothing (the sky is not in the structure).
++// colour of the nearest spot of the screen in its direction, trusted less (or, with Ray tracing hit colours, the
++// colour that spot had when last seen). A ray that leaves the world brings the sky.
 +float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
 +    const float3 direction = reflect(normalize(center), normal);
 +    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
@@ -16000,11 +16032,8 @@ index 0000000..d0aeb6d
 +        ray.Direction = direction;
 +        ray.TMin = 0.0f;
 +        ray.TMax = 320.0f;
-+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+        while (query.Proceed()) {
-+        }
-+        blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (1.0f / 3.0f) : 0.0f;
++        // Only Banjo himself counts: a roof or branch overhead would put a dark disc round him wherever he went.
++        blocked += TraceOccluded(ray, 2u) ? (1.0f / 3.0f) : 0.0f;
 +    }
 +    // The shadow fades out towards its edge.
 +    return 1.0f - 0.45f * blocked * saturate(1.0f - horizontal / reach);
@@ -18170,21 +18199,8 @@ index 0000000..d0aeb6d
 +            ray.Direction = ViewToWorldDirection(direction);
 +            ray.TMin = 0.0f;
 +            ray.TMax = 20000.0f;
-+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+            while (query.Proceed()) {
-+            }
-+            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-+                continue;
-+            }
-+            if (skipBanjo) {
-+                const float3 world = ViewToWorldPoint(start + direction * query.CommittedRayT());
-+                const float2 across = world.xz - banjo.xz;
-+                if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
-+                    continue;
-+                }
-+            }
-+            blocked += 1.0f;
++            // Leaving Banjo out, a ray that meets him goes on to what lies beyond (a cliff's shadow he stands in).
++            blocked += TraceOccluded(ray, skipBanjo ? 1u : 0u) ? 1.0f : 0.0f;
 +        }
 +        shadow = blocked / float(Rays);
 +    }

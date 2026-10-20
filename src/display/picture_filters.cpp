@@ -4920,7 +4920,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         ray_tracing_strength_option,
         "Ray tracing strength",
         "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (reflections, sun shadows and water reflections at this, ambient occlusion and bounce light a little under it). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
-        0, 100, 5, 60, false, 60);
+        0, 100, 5, 0, false, 60);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,
         "Ray tracing hit colours",
