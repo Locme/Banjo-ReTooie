@@ -109,7 +109,7 @@ namespace {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::free_hand_option));
         } catch (...) {
-            return true;
+            return false;
         }
     }
 
@@ -444,8 +444,8 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(free_hand_option, "Free hand on the save select (untested)",
-        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", true);
+    qol.add_bool_option(free_hand_option, "Free hand on the save select (broken, off)",
+        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", false);
     qol.add_bool_option(enabled_option, "Mouse in the game's menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
