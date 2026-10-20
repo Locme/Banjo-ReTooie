@@ -2018,7 +2018,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..7f93f32 100644
+index 9fae0d4..cd1625e 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2431,7 +2431,7 @@ index 9fae0d4..7f93f32 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +805,61 @@ namespace RT64 {
+@@ -465,12 +805,65 @@ namespace RT64 {
          return true;
      }
      
@@ -2473,12 +2473,16 @@ index 9fae0d4..7f93f32 100644
 +        // The steep draws too, marked apart (waterMask 3): Modern water's waterfalls, and with either water, so the
 +        // night doesn't take a pale fall for a light. First, so the flat water wins where both are drawn (a fall's
 +        // part under the surface; nothing writes depth here).
++        GpuCheckpoint(worker->commandList.get(), "water mask: steep draws");
 +        drawWater(3, targetDrawCall.fallInstances);
++        GpuCheckpoint(worker->commandList.get(), "water mask: ice");
 +        drawWater(4, targetDrawCall.iceInstances);
++        GpuCheckpoint(worker->commandList.get(), "water mask: water");
 +        drawWater(1, targetDrawCall.waterInstances);
 +
 +        // Modern water: the same draws' own colours and blending alpha, which tint the new water.
 +        if (skippingWater) {
++            GpuCheckpoint(worker->commandList.get(), "water mask: colours");
 +            BeginSceneWaterMask(worker, colorTarget, depthTarget, true);
 +            drawWater(2, targetDrawCall.fallInstances);
 +            drawWater(2, targetDrawCall.waterInstances);
@@ -2495,7 +2499,24 @@ index 9fae0d4..7f93f32 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -514,6 +903,17 @@ namespace RT64 {
+@@ -499,6 +892,16 @@ namespace RT64 {
+             }
+         };
+ 
++        // Banjo-Tooie: which kind of draw the GPU was on, for a lost device (GpuCheckpoint). Only when it changes,
++        // so a run of plain draws costs one mark.
++        const char *lastMarker = nullptr;
++        auto mark = [&](const char *marker) {
++            if (marker != lastMarker) {
++                GpuCheckpoint(worker->commandList.get(), marker);
++                lastMarker = marker;
++            }
++        };
++
+         auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
+             if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
+                 worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
+@@ -514,6 +917,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2513,7 +2534,7 @@ index 9fae0d4..7f93f32 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,9 +974,115 @@ namespace RT64 {
+@@ -574,12 +988,126 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2528,6 +2549,7 @@ index 9fae0d4..7f93f32 100644
 +                const bool snowTessDraw = (snowShells > 0) && (snowTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                    (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0);
 +                if (!snowTessDraw) {
++                    mark((drawCall.type == InstanceDrawCall::Type::RegularRect) ? "game draws: rectangles" : "game draws: plain");
 +                    drawCallTriangles(drawCall);
 +                }
 +
@@ -2535,6 +2557,7 @@ index 9fae0d4..7f93f32 100644
 +                if ((grassShells > 0) && (grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0)) {
 +                    // Real blades, grown over the same triangles by a geometry shader, in as many passes as they need.
 +                    const uint32_t passes = instanceGrassVector[i] & 0x7F;
++                    mark("game draws: grass blades");
 +                    worker->commandList->setPipeline(grassBladePipeline);
 +                    previousPipeline = grassBladePipeline;
 +                    rasterParams.grassShells = passes | RASTER_GRASS_BLADES | (((instanceGrassVector[i] & 0x80) != 0) ? RASTER_GRASS_EDGES : 0);
@@ -2548,6 +2571,7 @@ index 9fae0d4..7f93f32 100644
 +                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                }
 +                else if ((grassShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0) && (triangles.shellPipeline != nullptr)) {
++                    mark("game draws: grass shells");
 +                    worker->commandList->setPipeline(triangles.shellPipeline);
 +                    previousPipeline = triangles.shellPipeline;
 +                    rasterParams.grassShells = grassShells;
@@ -2563,6 +2587,7 @@ index 9fae0d4..7f93f32 100644
 +                // Banjo-Tooie: deep snow, the same triangles again as one surface, cut finer and raised to the snow's height
 +                // by the tessellation shaders, where the device has them.
 +                if (snowTessDraw) {
++                    mark("game draws: deep snow (tessellated)");
 +                    worker->commandList->setPipeline(snowTessPipeline);
 +                    previousPipeline = snowTessPipeline;
 +                    rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS;
@@ -2576,6 +2601,7 @@ index 9fae0d4..7f93f32 100644
 +                // Otherwise the same triangles again as shells further up each time.
 +                else if ((snowShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0) && (triangles.shellPipeline != nullptr)) {
 +                    const uint32_t shells = instanceSnowVector[i];
++                    mark("game draws: deep snow shells");
 +                    // (The material's shell shader, not the draw's own or the grass blades' one.)
 +                    if (previousPipeline != triangles.shellPipeline) {
 +                        worker->commandList->setPipeline(triangles.shellPipeline);
@@ -2596,6 +2622,7 @@ index 9fae0d4..7f93f32 100644
 +
 +                // Banjo-Tooie: Banjo's fur, the same triangles again as shells pushed further out each time.
 +                if ((furShells > 0) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && ((instanceFurVector[i] == 1) || (instanceFurVector[i] == 4)) && (triangles.shellPipeline != nullptr)) {
++                    mark("game draws: Banjo's fur shells");
 +                    if (previousPipeline != triangles.shellPipeline) {
 +                        worker->commandList->setPipeline(triangles.shellPipeline);
 +                        previousPipeline = triangles.shellPipeline;
@@ -2613,6 +2640,7 @@ index 9fae0d4..7f93f32 100644
 +
 +                // Banjo-Tooie: Kazooie's feathers, grown over the same triangles by the grass blades' geometry shader.
 +                if ((grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFurVector.size()) && (instanceFurVector[i] >= 2) && (instanceFurVector[i] <= 6) && (instanceFurVector[i] != 4)) {
++                    mark("game draws: feathers");
 +                    worker->commandList->setPipeline(grassBladePipeline);
 +                    previousPipeline = grassBladePipeline;
 +                    const uint32_t featherKind = instanceFurVector[i];
@@ -2630,7 +2658,27 @@ index 9fae0d4..7f93f32 100644
  
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
-@@ -1250,6 +1756,67 @@ namespace RT64 {
++                    mark("game draws: dither noise");
+                     if (triangles.postBlendDitherNoiseNegative) {
+                         worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
+                     }
+@@ -597,6 +1125,7 @@ namespace RT64 {
+                 break;
+             };
+             case InstanceDrawCall::Type::FillRect: {
++                mark("game draws: fill");
+                 const auto &clearRect = drawCall.clearRect;
+                 RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
+                 bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
+@@ -616,6 +1145,7 @@ namespace RT64 {
+                 assert(fbStorage->colorTarget != nullptr);
+ 
+                 const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
++                mark("game draws: vertex depth test");
+                 switchToDepthRead();
+ 
+                 const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
+@@ -1250,6 +1780,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2698,7 +2746,7 @@ index 9fae0d4..7f93f32 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1863,98 @@ namespace RT64 {
+@@ -1296,9 +1887,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2798,7 +2846,7 @@ index 9fae0d4..7f93f32 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2006,33 @@ namespace RT64 {
+@@ -1350,10 +2030,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2832,7 +2880,7 @@ index 9fae0d4..7f93f32 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2087,61 @@ namespace RT64 {
+@@ -1408,6 +2111,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2894,7 +2942,7 @@ index 9fae0d4..7f93f32 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2165,22 @@ namespace RT64 {
+@@ -1431,6 +2189,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2917,7 +2965,7 @@ index 9fae0d4..7f93f32 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2200,168 @@ namespace RT64 {
+@@ -1450,12 +2224,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3086,7 +3134,7 @@ index 9fae0d4..7f93f32 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2512,7 @@ namespace RT64 {
+@@ -1606,6 +2536,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3094,7 +3142,7 @@ index 9fae0d4..7f93f32 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2589,20 @@ namespace RT64 {
+@@ -1682,6 +2613,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3115,7 +3163,7 @@ index 9fae0d4..7f93f32 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2668,980 @@ namespace RT64 {
+@@ -1747,24 +2692,980 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -11947,7 +11995,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..14b706b 100644
+index e7895c3..f3d1ea8 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
