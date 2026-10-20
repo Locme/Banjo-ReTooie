@@ -649,6 +649,7 @@ L_8010DEEC:
 RECOMP_FUNC void func_80800DBC_chquicksandbaddy(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800DBC_chquicksandbaddy");
     // 0x80800DBC: addiu       $sp, $sp, -0xB0
     ctx->r29 = ADD32(ctx->r29, -0XB0);
     // 0x80800DC0: sw          $ra, 0x34($sp)
@@ -1204,6 +1205,7 @@ RECOMP_FUNC void func_8010E7F4(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80801A20_chcollballcontrol(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801A20_chcollballcontrol");
     // 0x80801A20: addiu       $sp, $sp, -0x88
     ctx->r29 = ADD32(ctx->r29, -0X88);
     // 0x80801A24: sw          $ra, 0x34($sp)

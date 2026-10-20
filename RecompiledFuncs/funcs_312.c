@@ -3562,6 +3562,7 @@ L_80800058:
 RECOMP_FUNC void fxleaves_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "fxleaves_entrypoint_7");
     // 0x80800494: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x80800498: sw          $ra, 0x4C($sp)

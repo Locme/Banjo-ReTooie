@@ -849,6 +849,7 @@ L_800D4320:
 RECOMP_FUNC void func_808007B4_chevilspirit(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808007B4_chevilspirit");
     // 0x808007B4: addiu       $sp, $sp, -0xA8
     ctx->r29 = ADD32(ctx->r29, -0XA8);
     // 0x808007B8: sw          $s1, 0x2C($sp)

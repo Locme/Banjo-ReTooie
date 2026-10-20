@@ -1978,6 +1978,7 @@ L_80803618:
 RECOMP_FUNC void chusefeather_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "chusefeather_entrypoint_0");
     // 0x80800208: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x8080020C: sw          $ra, 0x14($sp)

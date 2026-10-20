@@ -6603,6 +6603,7 @@ L_800BE9D8:
 RECOMP_FUNC void func_800F84FC(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800F84FC");
     // 0x800F84FC: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x800F8500: sw          $s5, 0x30($sp)

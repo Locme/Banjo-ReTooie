@@ -4831,6 +4831,7 @@ RECOMP_FUNC void bafly_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808000CC_chjigsawcollect(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808000CC_chjigsawcollect");
     // 0x808000CC: addiu       $sp, $sp, -0x90
     ctx->r29 = ADD32(ctx->r29, -0X90);
     // 0x808000D0: sw          $ra, 0x44($sp)

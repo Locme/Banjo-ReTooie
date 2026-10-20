@@ -2604,6 +2604,7 @@ RECOMP_FUNC void sujiggy_entrypoint_24(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808010FC_chbanjoctrl(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808010FC_chbanjoctrl");
     // 0x808010FC: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x80801100: sw          $ra, 0x1C($sp)

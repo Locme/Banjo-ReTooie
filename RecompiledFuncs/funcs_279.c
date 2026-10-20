@@ -1535,6 +1535,7 @@ RECOMP_FUNC void func_800D52A4(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800314_chfantasyathlete(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800314_chfantasyathlete");
     // 0x80800314: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80800318: sw          $ra, 0x2C($sp)
@@ -3893,6 +3894,7 @@ RECOMP_FUNC void _glglobalsettings_entrypoint_8(uint8_t* rdram, recomp_context* 
 RECOMP_FUNC void func_808008C8_chdragonbrothers(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808008C8_chdragonbrothers");
     // 0x808008C8: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x808008CC: sw          $ra, 0x1C($sp)

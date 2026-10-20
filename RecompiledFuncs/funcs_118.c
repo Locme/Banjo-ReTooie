@@ -5,6 +5,7 @@
 RECOMP_FUNC void func_80802F00_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80802F00_chdiggerboss");
     // 0x80802F00: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80802F04: sw          $ra, 0x1C($sp)
@@ -5171,6 +5172,7 @@ L_800AC5EC:
 RECOMP_FUNC void plsu_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "plsu_entrypoint_0");
     // 0x80800000: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80800004: sw          $ra, 0x2C($sp)
@@ -7725,6 +7727,7 @@ RECOMP_FUNC void func_80800C78_baduo(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808021BC_chtrashcangame(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808021BC_chtrashcangame");
     // 0x808021BC: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x808021C0: sw          $s0, 0x18($sp)

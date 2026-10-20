@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T455 DEV toggle renamed Hide Unnecessary Settings Entry
+- Asked: 2026-10-20 13:09 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Esc > DEV: find Hide Unnecessary Settings Entry (on by default)
+  2. Open the save select TV: only Speaker Mode shows
+  3. Turn it off, reopen the TV: three rows come back
+- Look for: The toggle has the new name and still hides Wide-screen Mode and Screen Alignment on the TV.
+- Status: waiting for L
+
 ## T454 SETTINGS page in the Start menu
 - Asked: 2026-10-20 12:19 UTC
 - Build: main (next Windows build)
@@ -8,7 +18,7 @@
   2. Open it: Speaker Mode shows with its value
   3. Press right, left or A to change it, and listen
   4. Press B to go back, reopen it, and check the value stuck
-  5. Optional: turn DEV > Hide Vanilla Widescreen Entry off and reopen the page
+  5. Optional: turn DEV > Hide Unnecessary Settings Entry off and reopen the page
 - Look for: The page shows Speaker Mode, and the value changes at once and sticks. With the DEV switch off, Wide-screen Mode shows too. Also say whether the Banjo icon on the entry is fine.
 - Status: waiting for L
 
@@ -32,6 +42,7 @@
   4. Left click a row, right click to go back
   5. Use a controller in the ESC menu and move the mouse over rows without clicking
 - Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
+- UNTESTED, added 2026-10-20: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
 
 ## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
 - Asked: 2026-10-20 08:41 UTC
@@ -121,7 +132,7 @@
 - Asked: 2026-10-20 02:23 UTC
 - Build: main (next Windows build)
 - Steps:
-  1. Keep DEV > Hide Vanilla Widescreen Entry in the Game Menu on (default)
+  1. Keep DEV > Hide Unnecessary Settings Entry on (default)
   2. On the save select screen, move the hand to the TV and press A
   3. Change Speaker Mode, confirm, then back out and reopen the TV
   4. Turn the toggle off and reopen the TV
@@ -806,7 +817,7 @@
 - Steps:
   1. On the save select screen, pick the TV (global settings)
   2. Look at the list, then change Speaker Mode and open Screen Alignment
-  3. Esc > DEV: turn off Hide Vanilla Widescreen Entry in the Game Menu, close and reopen the TV
+  3. Esc > DEV: turn off Hide Unnecessary Settings Entry, close and reopen the TV
 - Look for: With the toggle on (default) the TV lists Screen Alignment and Speaker Mode only, and Speaker Mode changes and keeps its setting. With it off, Wide-screen Mode is back between them as before. If a save had the game's Wide-screen Mode on, the picture is no longer squashed with the toggle on.
 - Status: waiting for L
 

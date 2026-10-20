@@ -5019,6 +5019,7 @@ L_8080018C:
 RECOMP_FUNC void sumumbofx_entrypoint_14(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "sumumbofx_entrypoint_14");
     // 0x80801074: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80801078: sw          $ra, 0x24($sp)

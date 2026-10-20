@@ -45,6 +45,7 @@ RECOMP_FUNC void func_80800070_chstoneballcontrol(uint8_t* rdram, recomp_context
 RECOMP_FUNC void func_80801804_chstatueboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801804_chstatueboss");
     // 0x80801804: addiu       $sp, $sp, -0xA8
     ctx->r29 = ADD32(ctx->r29, -0XA8);
     // 0x80801808: sw          $ra, 0x5C($sp)

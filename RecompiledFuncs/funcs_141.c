@@ -1645,6 +1645,7 @@ RECOMP_FUNC void _subaddiedraw25d_entrypoint_2(uint8_t* rdram, recomp_context* c
 RECOMP_FUNC void func_80802060_chchuffy(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80802060_chchuffy");
     // 0x80802060: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80802064: sw          $ra, 0x14($sp)

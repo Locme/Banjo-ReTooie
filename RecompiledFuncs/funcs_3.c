@@ -1336,6 +1336,7 @@ L_80800080:
 RECOMP_FUNC void func_80800480_chdinofoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800480_chdinofoot");
     // 0x80800480: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80800484: sw          $ra, 0x1C($sp)
@@ -4369,6 +4370,7 @@ L_8009505C:
 RECOMP_FUNC void func_80800838_chfactorysparkroom(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800838_chfactorysparkroom");
     // 0x80800838: addiu       $sp, $sp, -0xC8
     ctx->r29 = ADD32(ctx->r29, -0XC8);
     // 0x8080083C: sw          $s7, 0x68($sp)

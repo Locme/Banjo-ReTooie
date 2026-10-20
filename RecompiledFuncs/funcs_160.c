@@ -683,6 +683,7 @@ L_808005E8:
 RECOMP_FUNC void func_80800898_chfactorytoxicpools(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800898_chfactorytoxicpools");
     // 0x80800898: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x8080089C: sw          $ra, 0x1C($sp)

@@ -667,6 +667,7 @@ L_800C37D0:
 RECOMP_FUNC void func_8010CD50(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8010CD50");
     // 0x8010CD50: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x8010CD54: sw          $a0, 0x28($sp)
@@ -1705,6 +1706,7 @@ RECOMP_FUNC void func_808003B0_bssnowball(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800EA51C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800EA51C");
     // 0x800EA51C: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x800EA520: sw          $s2, 0x40($sp)

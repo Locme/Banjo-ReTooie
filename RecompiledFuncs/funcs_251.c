@@ -3663,6 +3663,7 @@ RECOMP_FUNC void gczoombox_entrypoint_15(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080419C_chstoneballcontrol(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080419C_chstoneballcontrol");
     // 0x8080419C: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x808041A0: sw          $ra, 0x14($sp)

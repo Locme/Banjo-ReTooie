@@ -239,6 +239,7 @@ L_808006E8:
 RECOMP_FUNC void func_80800980_chbiggafoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800980_chbiggafoot");
     // 0x80800980: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x80800984: sw          $ra, 0x14($sp)
@@ -2986,6 +2987,7 @@ L_8080166C:
 RECOMP_FUNC void func_8010C550(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8010C550");
     // 0x8010C550: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x8010C554: sw          $ra, 0x14($sp)

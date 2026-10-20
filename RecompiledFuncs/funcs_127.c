@@ -499,6 +499,7 @@ RECOMP_FUNC void _glcutDll_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800590_chgruntyfireballbig(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800590_chgruntyfireballbig");
     // 0x80800590: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80800594: sw          $ra, 0x1C($sp)
@@ -956,6 +957,7 @@ RECOMP_FUNC void _bstrexsmall_entrypoint_12(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_808008F0_chfactorycrusher(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808008F0_chfactorycrusher");
     // 0x808008F0: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x808008F4: sw          $ra, 0x14($sp)

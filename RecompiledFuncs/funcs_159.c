@@ -985,6 +985,7 @@ RECOMP_FUNC void func_8080044C_chdiggerbossshell(uint8_t* rdram, recomp_context*
 RECOMP_FUNC void sucoaster_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "sucoaster_entrypoint_2");
     // 0x808000F0: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x808000F4: sw          $ra, 0x1C($sp)

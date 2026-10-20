@@ -2727,6 +2727,7 @@ L_80800D38:
 RECOMP_FUNC void func_8080009C_chgoldfish(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080009C_chgoldfish");
     // 0x8080009C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x808000A0: sw          $ra, 0x24($sp)

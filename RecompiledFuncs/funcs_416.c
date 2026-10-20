@@ -39,6 +39,7 @@ RECOMP_FUNC void func_8009C2A0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800F9488(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800F9488");
     // 0x800F9488: lui         $v0, 0x8013
     ctx->r2 = S32(0X8013 << 16);
     // 0x800F948C: lbu         $v0, 0x5520($v0)
@@ -1710,6 +1711,7 @@ RECOMP_FUNC void _chfactoryroofbits_entrypoint_3(uint8_t* rdram, recomp_context*
 RECOMP_FUNC void func_80806B38_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80806B38_chdiggerboss");
     // 0x80806B38: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x80806B3C: sw          $ra, 0x14($sp)

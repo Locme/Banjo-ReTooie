@@ -415,11 +415,6 @@ void tooie::init_config() {
         "With Enemy aim on Better or Sharp, how many shots are aimed ahead of you and steered, in percent. The others fly as in the game, so the boss cannot be read as always aiming ahead.",
         0, 100, 5, 0, false, 75);
     general.add_option_hidden_dependency(tooie::damage::aim_chance_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
-    general.add_number_option(
-        tooie::damage::throw_delay_option,
-        "Klungo: delayed throws",
-        "How often Klungo holds a potion back until you are in mid-air (or a second has passed), when you cannot change direction, instead of throwing at once. 0 is the game's own timing.",
-        0, 100, 5, 0, false, 0);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -444,7 +439,6 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
-    recompui::config::set_option_group(tooie::damage::throw_delay_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
@@ -761,8 +755,8 @@ void tooie::init_config() {
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
     wip.add_bool_option(
         tooie::hide_vanilla_widescreen_option,
-        "Hide Vanilla Widescreen Entry in the Game Menu",
-        "Hides Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV), leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
+        "Hide Unnecessary Settings Entry",
+        "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
     tooie::torch_enemy::add_sound_test_option(wip);

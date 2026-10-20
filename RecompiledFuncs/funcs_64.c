@@ -1795,6 +1795,7 @@ RECOMP_FUNC void _bskazmove_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800995B8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800995B8");
     // 0x800995B8: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x800995BC: sw          $ra, 0x1C($sp)

@@ -2291,6 +2291,7 @@ RECOMP_FUNC void _bsbwhirl_entrypoint_3(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void sumissilehome_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "sumissilehome_entrypoint_6");
     // 0x80800248: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x8080024C: sw          $ra, 0x14($sp)

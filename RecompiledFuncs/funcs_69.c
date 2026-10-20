@@ -2643,6 +2643,7 @@ RECOMP_FUNC void _bskazdie_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800B9170(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800B9170");
     // 0x800B9170: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x800B9174: sw          $s0, 0x20($sp)
@@ -5950,6 +5951,7 @@ L_808004A0:
 RECOMP_FUNC void func_80800B68_chfantasyeyeball(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800B68_chfantasyeyeball");
     // 0x80800B68: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80800B6C: slti        $at, $a1, 0x41

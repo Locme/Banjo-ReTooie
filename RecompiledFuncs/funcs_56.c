@@ -865,6 +865,7 @@ L_800A87EC:
 RECOMP_FUNC void func_80112168(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80112168");
     // 0x80112168: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x8011216C: sw          $ra, 0x14($sp)
@@ -4350,6 +4351,7 @@ L_80800078:
 RECOMP_FUNC void func_80800000_chcanarymarycage(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800000_chcanarymarycage");
     // 0x80800000: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x80800004: sw          $ra, 0x44($sp)
