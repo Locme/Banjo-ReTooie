@@ -913,6 +913,20 @@ func = "func_80101A50"
 before_vram = 0x80101A58
 text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
 
+# The ice storm (chfireicestorm, Icy Side) spawns snow puffs each game frame through
+# func_80800DC8 and func_80800E08; the puffs die by game time only, so with time frozen
+# (Photo Mode, the ESC menu) they piled up until the display list overflowed onto the
+# heap (L's hang, 2026-10-20). Skipped while time stands still (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80800DC8_chfireicestorm"
+before_vram = 0x80800DC8
+text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
+
+[[patches.hook]]
+func = "func_80800E08_chfireicestorm"
+before_vram = 0x80800E08
+text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
+
 # Klungo's fades (chklungo): func_8080231C fades him out and func_808023A4 in
 # ($a0 Klungo, $a1 the alpha to stop at, $a2 the speed per second, both floats).
 # Each frame they add speed x frame time to the alpha and truncate it to a whole
