@@ -307,7 +307,7 @@ void tooie::init_config() {
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(stiffness_option, "Snout jiggle: stiffness",
-            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+            "How hard the snout springs back to straight. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
         general.add_number_option(damping_option, "Snout jiggle: damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
         general.add_number_option(mass_option, "Snout jiggle: mass",
@@ -333,7 +333,7 @@ void tooie::init_config() {
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(belly_stiffness_option, "Belly jiggle: stiffness",
-            "How hard the belly springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+            "How hard the belly springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
         general.add_number_option(belly_damping_option, "Belly jiggle: damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
         general.add_number_option(belly_mass_option, "Belly jiggle: mass",
@@ -355,19 +355,14 @@ void tooie::init_config() {
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(ears_stiffness_option, "Ear jiggle: stiffness",
-            "How hard the ears spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+            "How hard the ears spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
         general.add_number_option(ears_damping_option, "Ear jiggle: damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 10);
         general.add_number_option(ears_mass_option, "Ear jiggle: mass",
             "How heavy the ears are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
-        general.add_number_option(ears_squash_in_option, "Ear jiggle: max squash & stretch inwards",
-            "How far an ear may squash down into his head, as a share of its height.", 0, 95, 5, 0, true, 40);
-        general.add_number_option(ears_squash_out_option, "Ear jiggle: max squash & stretch outwards",
-            "How far an ear may stretch up, as a share of its height.", 0, 300, 5, 0, true, 40);
-        general.add_number_option(ears_squash_across_option, "Ear jiggle: max squash & stretch sideways",
-            "How far an ear may flop forwards, backwards and to the side, as a share of its height.", 0, 300, 5, 0, true, 80);
-        for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_in_option,
-                                       &ears_squash_out_option, &ears_squash_across_option }) {
+        general.add_number_option(ears_squash_option, "Ear jiggle: max squash & stretch",
+            "How far an ear may squash down, stretch up and flop forwards, backwards and to the side, as a share of its height (squashing stops at 95%).", 0, 300, 5, 0, true, 60);
+        for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_option }) {
             general.add_option_hidden_dependency(*id, ears_option, false);
         }
     }
@@ -377,7 +372,7 @@ void tooie::init_config() {
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(body_stiffness_option, "Backpack jiggle: stiffness",
-            "How hard the backpack springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 200);
+            "How hard the backpack springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
         general.add_number_option(body_damping_option, "Backpack jiggle: damping",
             "How quickly the bouncing dies out. 0 bounces for ages.", 0, 90, 1, 0, false, 10);
         general.add_number_option(body_mass_option, "Backpack jiggle: mass",
@@ -397,7 +392,7 @@ void tooie::init_config() {
     {
         using namespace tooie::snout_jiggle;
         general.add_number_option(kazooie_stiffness_option, "Kazooie jiggle: stiffness",
-            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+            "How hard her feathers spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
         general.add_number_option(kazooie_damping_option, "Kazooie jiggle: damping",
             "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
         general.add_number_option(kazooie_mass_option, "Kazooie jiggle: mass",

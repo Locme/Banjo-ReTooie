@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T482 Ear jiggle slider and stiffness defaults
+- Asked: 2026-10-20 21:59 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Ear jiggle
+  2. Look at its sliders (a stiffness you already changed keeps your value; new ones start at 300)
+  3. Run, turn, jump and land
+- Look for: Ear jiggle shows one max squash & stretch slider; every jiggle stiffness default is 300; the ears still wobble.
+- Status: waiting for L
+
 ## T481 Deep snow frame rate with a level full of prints
 - Asked: 2026-10-20 21:40 UTC
 - Build: main @ acaf08a

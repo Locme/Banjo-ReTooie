@@ -31,14 +31,12 @@ namespace tooie::snout_jiggle {
     inline const std::string belly_squash_in_option = "belly_jiggle_squash_in";
     inline const std::string belly_squash_out_option = "belly_jiggle_squash_out";
     inline const std::string belly_squash_across_option = "belly_jiggle_squash_across";
-    // Ear jiggle (L, 2026-10-20): his two ears, each a jiggle bone, sliders of the snout's kinds.
+    // Ear jiggle (L, 2026-10-20): his two ears, each a jiggle bone; one squash & stretch slider (L).
     inline const std::string ears_option = "ear_jiggle";
     inline const std::string ears_stiffness_option = "ear_jiggle_stiffness";
     inline const std::string ears_damping_option = "ear_jiggle_damping";
     inline const std::string ears_mass_option = "ear_jiggle_mass";
-    inline const std::string ears_squash_in_option = "ear_jiggle_squash_in";
-    inline const std::string ears_squash_out_option = "ear_jiggle_squash_out";
-    inline const std::string ears_squash_across_option = "ear_jiggle_squash_across";
+    inline const std::string ears_squash_option = "ear_jiggle_squash";          // % of its height, every direction
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string mumbo_option = "mumbo_jiggle";                   // the feathers on Mumbo's head, her sliders
     // Her feathers are jiggle bones too, with the snout's kinds of slider (L, 2026-10-19).
