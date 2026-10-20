@@ -12406,10 +12406,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6a69ed7
+index 0000000..aebe5a9
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3031 @@
+@@ -0,0 +1,3033 @@
 +//
 +// RT64
 +//
@@ -14132,10 +14132,12 @@ index 0000000..6a69ed7
 +    const float shallow = (sceneDepth < 0.99999f) ? min(floorDepth, throughLength * 0.5f) : 2000.0f;
 +    // Not on the player: the water there is over their body, not the shore. Instead a ring of foam round them,
 +    // where they cut the water, while they are in it.
-+    const float clearOfPlayer = saturate((fromPlayer - 40.0f) / 10.0f);
++    // (Their arms and pack spread a good way out just under the surface, so the shore's reach is kept well off.)
++    const float clearOfPlayer = saturate((fromPlayer - 70.0f) / 15.0f);
 +    const float playerY = gConstants.rippleAge.w;
 +    const bool playerIn = havePlayer && (gConstants.rippleX.z > 0.5f) && (waterY > playerY - 60.0f) && (waterY < playerY + 160.0f);
-+    const float ring = playerIn ? smoothstep(38.0f, 46.0f, fromPlayer) * (1.0f - smoothstep(52.0f, 72.0f, fromPlayer)) : 0.0f;
++    // Only over open water: where their body lies just under the surface the ring would paint it white.
++    const float ring = playerIn ? smoothstep(38.0f, 46.0f, fromPlayer) * (1.0f - smoothstep(52.0f, 72.0f, fromPlayer)) * smoothstep(25.0f, 45.0f, shallow) : 0.0f;
 +    const float shore = (1.0f - smoothstep(0.0f, 34.0f, shallow)) * clearOfPlayer;
 +    const float breakerPhase = frac(floorDepth / 26.0f + t * 0.35f);
 +    const float breakers = (1.0f - smoothstep(0.0f, 0.12f, breakerPhase)) * smoothstep(80.0f, 30.0f, floorDepth) * smoothstep(8.0f, 20.0f, floorDepth) * clearOfPlayer;

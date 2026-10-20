@@ -97,6 +97,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
+- Graphics > Water: Stylised, next to Original and Modern. It is Modern water (player ripples, reflections, waterfalls, the view from below) with a cartoon look in the style of UnicornWay's Unity stylised water: sharp crossing wave crests, a clean gradient from bright shallows to deep water in each level's own colour (L's pick), crisp white foam with a soft dark edge along shores, in a ring round Banjo and in breakers rolling in, cell caustics on everything under the surface, a hard sun highlight and light through the crests. Checked headless at the Spiral Mountain pool against Original and Modern.
 - The save select's global settings (the TV) now list only Speaker Mode: Screen Alignment is hidden too, and the picture is kept centred while it is, also on saves that had moved it (L). Untested on PC (T440).
 - Extended draw distance: the frozen Sabreman on Icy Side and the ice around him no longer pop out at about 5000 units; they stay drawn as far as everything else (L). Untested on PC (T448).
 - Pick modes: Copy Pick, Paste Pick and Undo Pick keys; Shift + mouse wheel sets a parallax depth in 10% steps (T428).
