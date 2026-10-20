@@ -14,6 +14,7 @@ namespace tooie::damage {
     enum class Aim : uint32_t { Original, Better, Sharp };
     inline const std::string aim_option = "enemy_aim";
     inline const std::string aim_chance_option = "enemy_aim_chance";
+    inline const std::string homing_option = "enemy_aim_homing";
     // Once per frame (tooie_warp_tick): measures the player's movement for Enemy aim.
     void aim_tick(uint8_t* rdram);
 

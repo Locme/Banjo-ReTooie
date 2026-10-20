@@ -246,7 +246,12 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // (his position plus his measured movement over the time the potion has left) by then, so a potion only
 // misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
 extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
-    const float seconds = aim_seconds();
+    bool homing = true;
+    try {
+        homing = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::homing_option));
+    } catch (...) {
+    }
+    const float seconds = homing ? aim_seconds() : 0.0f;
     const uint32_t potion = (uint32_t)ctx->r4;
     if (seconds <= 0.0f || !aim_have_prev || !tooie::rdram::valid_ptr(potion)) {
         return;
