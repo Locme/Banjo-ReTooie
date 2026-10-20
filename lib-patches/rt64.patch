@@ -2011,7 +2011,7 @@ index 69a82ac..8c28c4f 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..20e38c3 100644
+index 9fae0d4..11392eb 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2506,7 +2506,7 @@ index 9fae0d4..20e38c3 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,10 +974,109 @@ namespace RT64 {
+@@ -574,9 +974,115 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2514,8 +2514,16 @@ index 9fae0d4..20e38c3 100644
 +                rasterParams.seamTiles = (i < instanceSeamVector.size()) ? instanceSeamVector[i] : interop::uint4(RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE);
                  worker->commandList->setGraphicsPushConstants(0, &rasterParams);
  
-                 drawCallTriangles(drawCall);
- 
+-                drawCallTriangles(drawCall);
++                // Banjo-Tooie: ground with tessellated deep snow is drawn by the snow alone (below), which shades the
++                // ground as it is where no snow lies: the trail can then go down through a game's own snow layer to
++                // Banjo's feet without that layer covering it.
++                const bool snowTessDraw = (snowShells > 0) && (snowTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
++                    (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0);
++                if (!snowTessDraw) {
++                    drawCallTriangles(drawCall);
++                }
++
 +                // Banjo-Tooie: 3D grass, the same triangles again as shells further up each time.
 +                if ((grassShells > 0) && (grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceGrassVector.size()) && (instanceGrassVector[i] != 0)) {
 +                    // Real blades, grown over the same triangles by a geometry shader, in as many passes as they need.
@@ -2547,7 +2555,7 @@ index 9fae0d4..20e38c3 100644
 +
 +                // Banjo-Tooie: deep snow, the same triangles again as one surface, cut finer and raised to the snow's height
 +                // by the tessellation shaders, where the device has them.
-+                if ((snowShells > 0) && (snowTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0)) {
++                if (snowTessDraw) {
 +                    worker->commandList->setPipeline(snowTessPipeline);
 +                    previousPipeline = snowTessPipeline;
 +                    rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS;
@@ -2612,11 +2620,10 @@ index 9fae0d4..20e38c3 100644
 +                    rasterParams.grassShells = 0;
 +                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                }
-+
+ 
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
-                     if (triangles.postBlendDitherNoiseNegative) {
-@@ -1250,6 +1749,67 @@ namespace RT64 {
+@@ -1250,6 +1756,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2684,7 +2691,7 @@ index 9fae0d4..20e38c3 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1856,84 @@ namespace RT64 {
+@@ -1296,9 +1863,84 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2770,7 +2777,7 @@ index 9fae0d4..20e38c3 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1985,33 @@ namespace RT64 {
+@@ -1350,10 +1992,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2804,7 +2811,7 @@ index 9fae0d4..20e38c3 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2066,61 @@ namespace RT64 {
+@@ -1408,6 +2073,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2866,7 +2873,7 @@ index 9fae0d4..20e38c3 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2144,22 @@ namespace RT64 {
+@@ -1431,6 +2151,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2889,7 +2896,7 @@ index 9fae0d4..20e38c3 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2179,168 @@ namespace RT64 {
+@@ -1450,12 +2186,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3058,7 +3065,7 @@ index 9fae0d4..20e38c3 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2491,7 @@ namespace RT64 {
+@@ -1606,6 +2498,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3066,7 +3073,7 @@ index 9fae0d4..20e38c3 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2568,20 @@ namespace RT64 {
+@@ -1682,6 +2575,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3087,7 +3094,7 @@ index 9fae0d4..20e38c3 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2647,980 @@ namespace RT64 {
+@@ -1747,24 +2654,980 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3368,8 +3375,8 @@ index 9fae0d4..20e38c3 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -3591,12 +3598,12 @@ index 9fae0d4..20e38c3 100644
 +                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
-+                }
+                 }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
 +                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
+ 
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -11752,7 +11759,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..519eb8e 100644
+index e7895c3..d5ad85a 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11767,7 +11774,7 @@ index e7895c3..519eb8e 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,64 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,68 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -11812,16 +11819,20 @@ index e7895c3..519eb8e 100644
 +
 +    // Banjo-Tooie: a shell of deep snow throws away its pixels above the snow before the draw's colours are worked out.
 +    SnowSample snowSample = (SnowSample)0;
++    bool snowTessGround = false;
 +    const bool snowShell = (grassShell != 0) && ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0);
 +    float snowShare = snowShell ? float(grassShell) / float(gConstants.grassShells & RASTER_SHELL_COUNT_MASK) : 0.0f;
 +    if (snowShell && ((gConstants.grassShells & RASTER_SNOW_TESS) != 0)) {
 +        // The tessellated snow (SnowTess.hlsl): its anchor is the ground under the pixel, so its slopes are the ground's.
-+        // Where the snow is less than a hair deep (where it thins out by its reach), the ground shows instead.
-+        if (!SnowTessShape(grassWorld, cross(grassDx, grassDy), 0.0f, snowSample) || (snowSample.height < SnowTessLeast)) {
-+            return false;
++        // It stands in for the ground's own draw: where no snow lies (a wall, past its reach) the ground is shaded as
++        // it is (snowTessGround).
++        if (SnowTessShape(grassWorld, cross(grassDx, grassDy), 0.0f, snowSample)) {
++            snowShare = saturate(snowSample.height / max(FrParams.snowParams.y, 1e-3f));
++            grassWorld.y += snowSample.height;
 +        }
-+        snowShare = snowSample.height / max(FrParams.snowParams.y, 1e-3f);
-+        grassWorld.y += snowSample.height;
++        else {
++            snowTessGround = true;
++        }
 +    }
 +    else if (snowShell && !SnowShellShape(grassWorld, grassDx, grassDy, snowShare, snowSample)) {
 +        return false;
@@ -11834,7 +11845,7 @@ index e7895c3..519eb8e 100644
          return false;
      }
  #endif
-@@ -88,7 +145,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +149,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -11845,7 +11856,7 @@ index e7895c3..519eb8e 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +172,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +176,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -11870,7 +11881,7 @@ index e7895c3..519eb8e 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +220,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +224,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -11879,7 +11890,7 @@ index e7895c3..519eb8e 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +238,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +242,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -11888,7 +11899,7 @@ index e7895c3..519eb8e 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +263,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +267,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -11927,7 +11938,7 @@ index e7895c3..519eb8e 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +367,116 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +371,121 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -11991,8 +12002,13 @@ index e7895c3..519eb8e 100644
 +            }
 +        }
 +    }
-+    else if (snowShell) {
-+        if (!SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, resultColor.rgb)) {
++    else if (snowShell && !snowTessGround) {
++        // (The tessellated snow keeps the ground's own colour where it isn't snowy: it stands in for the ground's draw.)
++        float3 snowColor = resultColor.rgb;
++        if (SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, snowColor)) {
++            resultColor.rgb = snowColor;
++        }
++        else if ((gConstants.grassShells & RASTER_SNOW_TESS) == 0) {
 +            return false;
 +        }
 +    }
@@ -12044,7 +12060,7 @@ index e7895c3..519eb8e 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +484,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +493,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -12068,7 +12084,7 @@ index e7895c3..519eb8e 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +527,7 @@ void PSMain(
+@@ -287,6 +536,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -12076,7 +12092,7 @@ index e7895c3..519eb8e 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +544,7 @@ void PSMain(
+@@ -303,7 +553,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -14690,10 +14706,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..7b752c7
+index 0000000..1ff3b97
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,270 @@
 +//
 +// RT64
 +//
@@ -14727,9 +14743,13 @@ index 0000000..7b752c7
 +    return (luma > limits.w) && ((brightest - darkest) < limits.z * brightest) && (baseColor.g - baseColor.r < limits.x) && (baseColor.b - baseColor.r < limits.y);
 +}
 +
-+// How far one cell was pressed down and banked up now, after springing back for as long as it has been; 0 for a cell
-+// that holds another part of the world, or that was pressed with Banjo well above this ground (in the air).
-+float2 SnowCell(int2 cell, float groundY) {
++// The deepest a game's own snow layer over the ground Banjo walks on is pressed through to his feet (world units).
++static const float SnowLayerMost = 120.0f;
++
++// How far one cell was pressed down (x) and banked up (y) now, after springing back for as long as it has been, and
++// how far below this ground the foot that pressed it stood, times x (z); 0 for a cell that holds another part of the
++// world, or that was pressed with Banjo well above this ground (in the air).
++float3 SnowCell(int2 cell, float groundY) {
 +    const int n = int(FrParams.snowGrid.z);
 +    const int2 slot = ((cell % n) + n) % n;
 +    const uint2 tag = uint2((cell - slot) / n) & 0xFFu;
@@ -14739,9 +14759,10 @@ index 0000000..7b752c7
 +        return 0.0f;
 +    }
 +    const uint a = snowTrail[index];
-+    // Icy Side's snow is drawn from about 80 units below where Banjo walks to 60 above (his feet sink into it); a
-+    // print further from the ground than that belongs to another floor. (Prints made in the air never get here:
-+    // ComputeSceneSnow presses nothing while Banjo is off the ground.)
++    // Icy Side's own snow is drawn as a layer up to about 50 units over the ground Banjo walks on (his legs sink into
++    // it), and the snow ground can lie a little below his feet elsewhere; a print further from the ground than that
++    // belongs to another floor. (Prints made in the air never get here: ComputeSceneSnow presses nothing while Banjo
++    // is off the ground.)
 +    const float above = groundY - float(int(a) >> 16);
 +    if ((above < -80.0f) || (above > 200.0f)) {
 +        return 0.0f;
@@ -14750,25 +14771,29 @@ index 0000000..7b752c7
 +    const float age = float((uint(spring.w) - (b & 0xFFFFu)) & 0xFFFFu) / 20.0f;
 +    const float t = saturate((age - spring.x) / max(spring.y, 1.0f));
 +    const float back = 1.0f - t * t * (3.0f - 2.0f * t);
-+    return float2(float(a & 0xFFu), float((a >> 8) & 0xFFu)) / 255.0f * back;
++    const float2 pressed = float2(float(a & 0xFFu), float((a >> 8) & 0xFFu)) / 255.0f * back;
++    // (Down through such a layer to his feet: the tessellated snow's trail reaches them, RASTER_SNOW_TESS.)
++    return float3(pressed, pressed.x * clamp(above, 0.0f, SnowLayerMost));
 +}
 +
-+// The trail's press (x) and bank (y) at a world position, blended between the four nearest cells.
-+float2 SnowTrailAt(float2 xz, float groundY) {
++// The trail's press (x), bank (y) and depth below the ground (z, SnowCell) at a world position, blended between the
++// four nearest cells.
++float3 SnowTrailAt(float2 xz, float groundY) {
 +    const float2 g = xz * FrParams.snowGrid.y - 0.5f;
 +    const float2 first = floor(g);
 +    const float2 f = g - first;
 +    const int2 c = int2(first);
-+    const float2 a = lerp(SnowCell(c, groundY), SnowCell(c + int2(1, 0), groundY), f.x);
-+    const float2 b = lerp(SnowCell(c + int2(0, 1), groundY), SnowCell(c + int2(1, 1), groundY), f.x);
++    const float3 a = lerp(SnowCell(c, groundY), SnowCell(c + int2(1, 0), groundY), f.x);
++    const float3 b = lerp(SnowCell(c + int2(0, 1), groundY), SnowCell(c + int2(1, 1), groundY), f.x);
 +    return lerp(a, b, f.y);
 +}
 +
 +// The snow's height over the ground (world units) where it is pressed down by trail.x and banked up by trail.y, its
-+// untouched height being surface. The banks only rise beside the trail, not in it.
-+float SnowHeight(float surface, float2 trail) {
++// untouched height being surface; below the ground (negative) where a game's own snow layer lies over Banjo's feet
++// (trail.z). The banks only rise beside the trail, not in it.
++float SnowHeight(float surface, float3 trail) {
 +    const float bank = trail.y * saturate(1.0f - trail.x * 3.0f) * FrParams.snowSpring.z * FrParams.snowParams.x;
-+    return surface * (1.0f - 0.97f * trail.x) + bank;
++    return surface * (1.0f - 0.97f * trail.x) - trail.z + bank;
 +}
 +
 +// How much of the snow's depth lies at a world position (1 near, thinning to 0 by the snow's reach, so it ends without
@@ -14791,7 +14816,7 @@ index 0000000..7b752c7
 +    float surface;
 +    float height;
 +    float shellY;
-+    float2 trail;
++    float3 trail;
 +    bool nearTrail;
 +    float cameraDistance;
 +};
@@ -14851,14 +14876,10 @@ index 0000000..7b752c7
 +    return s.shellY <= s.height;
 +}
 +
-+// The tessellated snow is never drawn less than this far above the ground (world units), so the two don't fight over
-+// the same depth; thinner than that (where it thins out by its reach), the ground shows instead.
-+static const float SnowTessLeast = 0.35f;
-+
 +// The trail at a world position smoothed over about blur world units (a 3 x 3 tent), so a surface cut no finer than
 +// that follows it without jagged spikes along the trench's walls.
-+float2 SnowTrailSmoothed(float2 xz, float groundY, float blur) {
-+    float2 sum = 4.0f * SnowTrailAt(xz, groundY);
++float3 SnowTrailSmoothed(float2 xz, float groundY, float blur) {
++    float3 sum = 4.0f * SnowTrailAt(xz, groundY);
 +    sum += 2.0f * (SnowTrailAt(xz + float2(blur, 0.0f), groundY) + SnowTrailAt(xz - float2(blur, 0.0f), groundY) +
 +        SnowTrailAt(xz + float2(0.0f, blur), groundY) + SnowTrailAt(xz - float2(0.0f, blur), groundY));
 +    sum += SnowTrailAt(xz + float2(blur, blur), groundY) + SnowTrailAt(xz + float2(-blur, blur), groundY) +
@@ -14961,10 +14982,10 @@ index 0000000..7b752c7
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..32ea3bf
+index 0000000..7944cf9
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,168 @@
 +//
 +// RT64
 +//
@@ -14975,7 +14996,9 @@ index 0000000..32ea3bf
 +// vertex straight up to the snow's height over the ground there, pressed down where Banjo walked and banked up beside
 +// it (SnowTessShape in Snow.hlsli), so the trail is a real dent in the snow's surface rather than a stack of shells.
 +// The vertex shader leaves the ground where it is (RASTER_SNOW_TESS, RasterVS.hlsl); the pixel shader asks the same
-+// height again to shade the snow, and throws away pixels where no snow lies (RasterPS.hlsl).
++// height again to shade the snow, and shades the ground as it is where no snow lies (RasterPS.hlsl). The ground's own
++// draw is left out (FramebufferRenderer): this one stands in for it, so the trail can go down through a game's own
++// snow layer (Icy Side's) to Banjo's feet.
 +//
 +// Built twice from this file: HSMain (hull) and DSMain (domain). Both use the ubershader's vertex and pixel shaders,
 +// whose outputs and inputs SnowVertex matches.
@@ -15072,14 +15095,15 @@ index 0000000..32ea3bf
 +    const float3 c = patch[2].furAnchor.xyz;
 +    p.normal = cross(b - a, c - a);
 +
-+    // None at all on a wall, or where all of the triangle is past the snow's reach.
++    // Not cut at all on a wall, or where all of the triangle is past the snow's reach (drawn as it is: the ground's own
++    // draw is left out).
 +    const float normalLength = length(p.normal);
 +    float distanceA, distanceB, distanceC;
 +    const bool wall = (normalLength <= 0.0f) || (abs(p.normal.y) < 0.12f * normalLength);
 +    const bool beyond = (SnowThin(a, distanceA) <= 0.02f) && (SnowThin(b, distanceB) <= 0.02f) && (SnowThin(c, distanceC) <= 0.02f);
 +    if ((wall || beyond) && (FrParams.snowGrid.w <= 3.5f)) {
-+        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
-+        p.inside = 0.0f;
++        p.edges[0] = p.edges[1] = p.edges[2] = 1.0f;
++        p.inside = 1.0f;
 +        return p;
 +    }
 +
@@ -15115,11 +15139,12 @@ index 0000000..32ea3bf
 +    // then through the draw's screen scale and offset as the position already went.
 +    // (The trail smoothed over about as far as the vertices over it are apart, so its trench has no jagged spikes; by
 +    // the distance from the camera only, so a vertex shared by two patches lands in the same place for both.)
++    // (Below the ground where the trail goes down through a game's own snow layer to Banjo's feet.)
 +    SnowSample s;
-+    float height = SnowTessLeast;
++    float height = 0.0f;
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    if (SnowTessShape(v.furAnchor.xyz, p.normal, 0.75f * SnowTrailSegment(distance(v.furAnchor.xyz, camera)), s)) {
-+        height = max(s.height, SnowTessLeast);
++        height = s.height;
 +    }
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
