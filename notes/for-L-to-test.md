@@ -8,6 +8,7 @@
   2. Walk, run and stand still in the snow
   3. Jump in place and do a short hop
   4. Walk past the polar bear or other NPCs
+  5. Try Snow detail (under Snow height): 50 is the old coarser grid, 25 coarser still, for weaker graphics cards
 - Look for: The dent follows Banjo's real feet and body, a jump leaves nothing, a light touch a shallow dent, NPCs leave their own; edges finer than before; prints fill back in after a while
 - Status: waiting for L
 
