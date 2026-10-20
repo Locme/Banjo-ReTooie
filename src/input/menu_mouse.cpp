@@ -261,7 +261,11 @@ namespace {
         }
     }
 
+    int free_last_spot = -1;                // the free hand's previous frame: its spot and where the cursor was
+    float free_last_x = 0.0f, free_last_y = 0.0f;
+
     void clear_steer() {
+        free_last_spot = -1;
         steer = Steer{};
         select_target = -1;
         select_press_a = false;
@@ -293,6 +297,7 @@ namespace {
     constexpr uint32_t state_spots = 0x60;
     constexpr uint32_t state_spot_flags = 0xC0;
     std::atomic<uint32_t> select_state = 0;
+
 
     // Solves the 3x3 system m * out = rhs; false when singular.
     bool solve3(double m[3][3], const double rhs[3], double out[3]) {
@@ -380,7 +385,21 @@ namespace {
         if (std::fabs(det) < 1e-12) {
             return;
         }
-        const double t[2] = { sx - places[spot][spot].x, sy - places[spot][spot].y };
+        // The game does not rewrite the vector while the hand rests (a first version added the whole distance from the
+        // spot's place every frame, and the hand ran away: logged by L 2026-10-20), so it is moved by how far the
+        // cursor has gone since the last frame; from the spot's place when there is no earlier frame or the spot
+        // changed (the camera has panned, the hand is back at its spot).
+        double t[2];
+        if (free_last_spot == spot) {
+            t[0] = sx - free_last_x;
+            t[1] = sy - free_last_y;
+        } else {
+            t[0] = sx - places[spot][spot].x;
+            t[1] = sy - places[spot][spot].y;
+        }
+        free_last_spot = spot;
+        free_last_x = sx;
+        free_last_y = sy;
         const double u[2] = { (mm[1][1] * t[0] - mm[0][1] * t[1]) / det, (-mm[1][0] * t[0] + mm[0][0] * t[1]) / det };
         float v[3];
         for (int k = 0; k < 3; k++) {
@@ -388,7 +407,9 @@ namespace {
             if (!std::isfinite(v[k])) {
                 return;
             }
-            v[k] += (float)(mt[k][0] * u[0] + mt[k][1] * u[1]);
+            // Never further out than the hand's own depth in each direction, so a wrong fit cannot send it far off.
+            const double limit = 4.0 * std::fabs(v[2]) + 400.0;
+            v[k] = (float)std::clamp((double)v[k] + mt[k][0] * u[0] + mt[k][1] * u[1], -limit, limit);
             if (!std::isfinite(v[k])) {
                 return;
             }
@@ -510,7 +531,7 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     const bool have_cursor = cursor_in_frame(&x, &y);
     if (logging() && (use.moved || use.left || use.right)) {
         fprintf(stderr, "[menu-mouse] cursor %.1f,%.1f%s%s page %u\n", x, y, use.left ? " left" : "", use.right ? " right" : "",
-            read_byte(rdram, pause + pause_page));
+            tooie::rdram::valid_ptr(pause) ? read_byte(rdram, pause + pause_page) : 0);
     }
 
     if (use.right) {
