@@ -812,9 +812,24 @@ namespace {
     // half sits; the belly's lower edge at y 63; the necklace at y 68-76, the chest at y 80-82; the
     // fur's skins at |x| 17 and over). Points shared with other skins (the fur's, the shoulders' and
     // the neck's) all get weight 0, so they move alike.
-    float belly_weight(Vec p) {
-        return smooth((p.z - 6.0f) / 10.0f) * smooth((p.y - 57.0f) / 6.0f) * (1.0f - smooth((p.y - 72.0f) / 7.0f)) *
+    float belly_surface_weight(Vec p) {
+        // Fullest at the belly's lower edge (y 63), less and less going up, none from y 80 (L, 2026-10-20:
+        // the lower part moves most, the chest less).
+        return smooth((p.z - 6.0f) / 10.0f) * smooth((p.y - 57.0f) / 6.0f) * std::clamp(1.0f - (p.y - 63.0f) / 17.0f, 0.0f, 1.0f) *
                (1.0f - smooth((std::fabs(p.x) - 6.0f) / 11.0f));
+    }
+    // The tooth necklace (vanilla 062A: |x| 2 and under, y 68-76, z 18-22, just in front of the belly's
+    // middle) is a few units thick, so points of it weighted apart turned its faces round when the belly
+    // swung and it vanished (L, 2026-10-20: the necklace often disappeared). It moves as one piece now,
+    // with the weight of the belly's middle line under its middle (its points at y 63 and 74, straight
+    // between, at y 71), so it rides on the belly.
+    float belly_weight(Vec p) {
+        if (std::fabs(p.x) <= 3.0f && p.y >= 66.0f && p.y <= 78.0f && p.z >= 17.0f) {
+            const float low = belly_surface_weight(Vec{ 0.0f, 63.0f, 16.0f });
+            const float mid = belly_surface_weight(Vec{ 0.0f, 74.0f, 19.0f });
+            return low + (mid - low) * (71.0f - 63.0f) / 11.0f;
+        }
+        return belly_surface_weight(p);
     }
 
     // The bone's own half of the skin nodes on it (the first n_child vertices; the rest are on the parent).

@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T463 Belly jiggle: necklace stays, strongest by the belt
+- Asked: 2026-10-20 16:36 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: Belly jiggle on
+  2. Run, jump, land and stop with the camera on his front
+- Look for: The tooth necklace never vanishes or stretches; it rides on the belly in one piece. The belly moves most just above the belt and less and less up towards the chest. Checked headless (forced swings).
+- Status: waiting for L
+
 ## T462 Cheaper 3D grass
 - Asked: 2026-10-20 16:15 UTC
 - Build: main
