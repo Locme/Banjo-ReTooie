@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T443 Sprint start dust
+- Asked: 2026-10-20 03:17 UTC
+- Build: main @ c1d6889
+- Steps:
+  1. Run as Banjo-Kazooie on grass or dirt
+  2. Hold Run to start a sprint
+  3. Let go, then start another sprint within 10 seconds
+  4. Wait over 10 seconds and sprint again
+- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 10 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
+- Status: waiting for L
+
 ## T442 Interpolation pick mode finds models at Interpolation Original
 - Asked: 2026-10-20 02:51 UTC
 - Build: main
