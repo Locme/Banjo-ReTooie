@@ -1,6 +1,6 @@
 #!/bin/bash
 # Headless water test: the same water spots with Water Original, Modern and Stylised, side by side.
-# Usage: [SPOTS=sm|jrl|all] [STYLES='0 1 2'] [FIRST_SPOT_MS=90000] [OUT=<folder>] tools/water_shots.sh
+# Usage: [SPOTS=sm|all] [STYLES='0 1 2'] [FIRST_SPOT_MS=90000] [OUT=<folder>] tools/water_shots.sh
 # Needs the same run folder as headless_boot.sh (RUN_DIR, Xvfb on :99, lavapipe, ImageMagick). Each style is one run
 # per map: Banjo is warped in and teleported from spot to spot, with a screenshot at each. Writes
 # <OUT>/<spot>.png (Original | Modern | Stylised) and <OUT>/all.png.
@@ -16,7 +16,6 @@ cd "$run_dir" || exit 1
 # pad entry (inputs:ms, as in --pad-script) is held from 8 s after the teleport, to swing the camera round.
 declare -A maps
 maps[sm]="AF:0@30000|pool=1178,640,471/rx=1:500|across=1178,640,471/rx=-1:1400|turned=1178,640,471/rx=1:1600"
-maps[jrl]="1A7:0@30000|harbour=0,0,0"
 first_spot_ms=${FIRST_SPOT_MS:-90000}
 spot_gap_ms=25000
 
@@ -51,7 +50,7 @@ run_map() {  # map key, style number
     [ ${#files[@]} -ge $((i * 2 - 1)) ]
 }
 
-keys=(sm jrl)
+keys=(sm)
 [ "$spots" != all ] && keys=($spots)
 for key in "${keys[@]}"; do
     for style in ${STYLES:-0 1 2}; do
