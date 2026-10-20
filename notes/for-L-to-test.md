@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T474 Deep snow speed and soft dents; Icy Side crash with the game paused
+## T475 Deep snow speed and soft dents; Icy Side crash with the game paused
 - Asked: 2026-10-20 19:56 UTC
 - Build: main @ ac2dccb
 - Steps:
