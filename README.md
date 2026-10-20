@@ -84,7 +84,12 @@ ships its own terms in `assets/promptfont/LICENSE.txt`. The menu icons in
 MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
 (`lib/fsr/LICENSE.txt`). The Totals checklist's rules
 (`src/gameplay/totals_rules.inc`) are translated from the Archipelago
-randomizer's Banjo-Tooie world, MIT (licence text at the top of that file).
+randomizer's Banjo-Tooie world, MIT (licence text at the top of that file). The SSGI and screen-space
+reflections' ray march (in RT64's `SceneEffectsPS.hlsl`, through
+`lib-patches/rt64.patch`) is ported from 0beqz's realism-effects, MIT (licence
+text beside that code). The ambient occlusion is Ground Truth Ambient
+Occlusion written from Jimenez et al.'s 2016 paper; no code is copied from
+MaxwellGengYF's Unity GTAO, which has no licence.
 
 ## Credits
 

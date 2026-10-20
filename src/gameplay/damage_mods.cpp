@@ -11,6 +11,12 @@
 // makes that amount 255 in the three handlers that subtract it: func_80108F08, func_80800294_sucoasterhit
 // (watched on an Ugger) and func_80801108_sucoasterfly. Bosses have their own code and are not touched.
 //
+// Enemy aim (L, 2026-10-20): the game aims in one place: func_8010D12C(player, out, lead, point) returns the
+// player's point plus his movement over "lead" seconds. Only Klungo's potion, the lava gargoyle and the
+// fantasy eyeball call it (the lead is an actor's +0x58; Klungo's comes from a per-fight table). Every other
+// enemy aims at where the player is now. Better and Sharp multiply the lead by 1.5 and 2, so a straight run
+// no longer dodges a shot but a change of direction still does.
+//
 // Take No Damage (Cheato: HONEYKING, game flag 0x53C, L 2026-10-19): the game's own cheat keeps the health
 // from dropping, but Banjo still got hurt: knocked back and flung up in the air. func_80099B94 handles the
 // player's hit events; each hurt case calls func_800A17A8 with the damage and then picks the hurt state
@@ -20,9 +26,11 @@
 // back in the state he is already in (Dragunda holding him, state 152, re-enters it with each bite).
 // Headless test aid: TOOIE_DAMAGE_LOG=1 logs each damaging hit event, its state and whether it was dropped.
 
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <variant>
 
@@ -31,6 +39,7 @@
 #include "recompui/config.h"
 #include "tooie_cheats.h"
 #include "tooie_damage.h"
+#include "tooie_rdram.h"
 
 namespace {
     // Set while bssplat_entrypoint_0 hands a fall's damage to func_800A17A8.
@@ -131,4 +140,31 @@ extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
     if (drop) {
         ctx->r18 = 0;
     }
+}
+
+// func_8010D12C entry: $a2 is the lead in seconds. The game's own users are Klungo's potion, the lava
+// gargoyle's fireball and the fantasy eyeball's shot. The lead stops at 1.2 s (Klungo's flight time) unless
+// the game's own lead is already longer.
+extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
+    float factor = 1.0f;
+    try {
+        switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
+        case tooie::damage::Aim::Better: factor = 1.5f; break;
+        case tooie::damage::Aim::Sharp: factor = 2.0f; break;
+        default: break;
+        }
+    } catch (...) {
+    }
+    if (factor == 1.0f) {
+        return;
+    }
+    uint32_t lead_bits = (uint32_t)ctx->r6;
+    float lead;
+    std::memcpy(&lead, &lead_bits, sizeof(lead));
+    if (!(lead > 0.0f)) {
+        return;
+    }
+    lead = std::min(lead * factor, std::max(1.2f, lead));
+    std::memcpy(&lead_bits, &lead, sizeof(lead_bits));
+    ctx->r6 = (gpr)(int64_t)(int32_t)lead_bits;
 }
