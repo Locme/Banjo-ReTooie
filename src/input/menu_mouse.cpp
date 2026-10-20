@@ -408,7 +408,7 @@ namespace {
                 return;
             }
             // Never further out than the hand's own depth in each direction, so a wrong fit cannot send it far off.
-            const double limit = 4.0 * std::fabs(v[2]) + 400.0;
+            const double limit = 8.0 * std::fabs(v[2]) + 800.0;
             v[k] = (float)std::clamp((double)v[k] + mt[k][0] * u[0] + mt[k][1] * u[1], -limit, limit);
             if (!std::isfinite(v[k])) {
                 return;
@@ -432,9 +432,23 @@ namespace {
         if (logging() && (use.moved || use.left)) {
             fprintf(stderr, "[menu-mouse] hand at spot %d, cursor on %d, target %d\n", spot, hit, select_target);
         }
-        // With the free hand the camera stays where it is until a click: hover steering moved the spot (and the camera
-        // panned, and the hand was put back) every time the cursor crossed a thing (L, 2026-10-20: "keeps resetting").
-        if (use.moved && hit >= 0 && !free_hand_enabled()) {
+        // With the free hand the hand follows the cursor everywhere; the spot (and the camera) changes only when the
+        // cursor has rested on another thing for a moment, or on a click, so crossing things does not pan the camera
+        // and put the hand back every time (L, 2026-10-20: "keeps resetting").
+        static int dwell_hit = -1, dwell_frames = 0;
+        if (free_hand_enabled()) {
+            if (hit >= 0 && hit != spot && hit == dwell_hit) {
+                dwell_frames++;
+            } else {
+                dwell_hit = hit;
+                dwell_frames = 0;
+            }
+            if (dwell_frames >= 12) {
+                select_target = hit;
+                select_press_a = false;
+                dwell_frames = 0;
+            }
+        } else if (use.moved && hit >= 0) {
             select_target = hit;
             select_press_a = false;
         }
