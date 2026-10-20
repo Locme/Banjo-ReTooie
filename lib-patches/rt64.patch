@@ -7058,10 +7058,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d023ced
+index 0000000..2f4780e
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3001 @@
+@@ -0,0 +1,3011 @@
 +//
 +// RT64
 +//
@@ -7338,6 +7338,7 @@ index 0000000..d023ced
 +    static float userAmbientOcclusion = 0.0f;
 +    static float userSsgi = 0.0f;
 +    static float userWaterReflections = 0.0f;
++    static float rayTracingStrength = 0.6f;
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7483,11 +7484,14 @@ index 0000000..d023ced
 +        effectsSettings.screenSpaceGI = userSsgi;
 +        effectsSettings.waterReflections = userWaterReflections;
 +        if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
-+            strength = std::max(strength, 0.6f);
-+            effectsSettings.sunShadows = std::max(userSunShadows, 0.6f);
-+            effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, 0.5f);
-+            effectsSettings.screenSpaceGI = std::max(userSsgi, 0.5f);
-+            effectsSettings.waterReflections = std::max(userWaterReflections, 0.6f);
++            // The least each shows at: the strength (0.6 by default) for reflections, sun shadows and water, a little under it
++            // for ambient occlusion and bounce light (the game's own lighting already has some of both).
++            const float least = rayTracingStrength;
++            strength = std::max(strength, least);
++            effectsSettings.sunShadows = std::max(userSunShadows, least);
++            effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, least * 0.83f);
++            effectsSettings.screenSpaceGI = std::max(userSsgi, least * 0.83f);
++            effectsSettings.waterReflections = std::max(userWaterReflections, least);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
@@ -7504,6 +7508,12 @@ index 0000000..d023ced
 +        count = std::min(count, SceneMaxLights);
 +        memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
 +        effectsSettings.lightCount = count;
++    }
++
++    void SetSceneRayTracingStrength(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        rayTracingStrength = std::clamp(strength, 0.0f, 1.0f);
++        RefreshReflections();
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
@@ -10065,10 +10075,10 @@ index 0000000..d023ced
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..38bb1ed
+index 0000000..5991c65
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,458 @@
+@@ -0,0 +1,461 @@
 +//
 +// RT64
 +//
@@ -10335,6 +10345,9 @@ index 0000000..38bb1ed
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
 +        const std::pair<uint32_t, uint32_t> *runs, size_t runCount);
 +    void SetSceneRayTracing(bool enabled);
++    // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
++    // ray tracing is active (see RefreshReflections).
++    void SetSceneRayTracingStrength(float strength);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
@@ -18686,10 +18699,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..6d2f1f2
+index 0000000..bbccdd7
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,349 @@
+@@ -0,0 +1,346 @@
 +//
 +// RT64
 +//
@@ -18921,11 +18934,8 @@ index 0000000..6d2f1f2
 +// Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 +float SnowTrailSegment(float cameraDistance) {
 +    const float start = max(FrParams.snowLod.x, 1.0f);
-+    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.
-+    // Further off, coarser with the distance as a point covers fewer pixels, about as many pixels apart everywhere:
-+    // finely cut prints all over the level, held until the map changes, cost the most of a frame.)
-+    const float closest = max(max(FrParams.snowGrid.x * 2.0f, 4.0f), cameraDistance * 0.008f);
-+    return closest * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
++    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.)
++    return max(FrParams.snowGrid.x * 2.0f, 4.0f) * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
 +}
 +
 +// How far the tessellated snow's trail is smoothed over at a distance from the camera (world units): by the domain

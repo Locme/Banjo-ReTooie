@@ -68,6 +68,7 @@ namespace RT64 {
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength);
     void SetSceneRayTracing(bool enabled);
+    void SetSceneRayTracingStrength(float strength);
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
@@ -4245,6 +4246,7 @@ void tooie::picture_filters::apply() {
     // nothing but tell you once; the screen-space and water reflections carry on as set.
     const bool ray_tracing = value<bool>(ray_tracing_option, false);
     RT64::SetSceneRayTracing(ray_tracing);
+    RT64::SetSceneRayTracingStrength((float)(value<double>(ray_tracing_strength_option, 60.0) / 100.0));
     ray_tracing_on.store(ray_tracing);
     if (!ray_tracing) {
         ray_tracing_notified.store(false);
@@ -4910,8 +4912,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
-        "Ray traced effects, starting with reflections: on the shiny surfaces Screen-space reflections covers, a ray is traced through the level's triangles instead of marching the picture, so reflections find what the picture hides and nothing is missed between steps. It is a switch of its own, apart from the shader effects, and shows reflections even with Screen-space reflections at 0 (at 60 at least). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
+        "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
         false);
+    graphics.add_number_option(
+        ray_tracing_strength_option,
+        "Ray tracing strength",
+        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (reflections, sun shadows and water reflections at this, ambient occlusion and bounce light a little under it). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
+        0, 100, 5, 60, false, 60);
     graphics.add_bool_option(
         reflections_section_option,
         "Reflections",
@@ -5220,7 +5227,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &ray_tracing_strength_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
