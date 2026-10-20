@@ -84,7 +84,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor, float detail, bool refill, float lodDistance, uint32_t map);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -136,7 +136,7 @@ namespace {
     std::atomic<bool> deep_snow{false};
     std::atomic<float> snow_height{1.0f};
     std::atomic<float> snow_detail{1.0f};
-    std::atomic<bool> snow_refill{false};
+    std::atomic<float> snow_refill{0.0f};
     std::atomic<float> snow_lod_distance{2000.0f};
     // What was last sent (-1 to send again).
     std::atomic<float> snow_sent{-1.0f};
@@ -4296,7 +4296,7 @@ void tooie::picture_filters::apply() {
     if (const char* forced = std::getenv("TOOIE_SNOW_DETAIL")) {
         snow_detail = (float)(std::atof(forced) / 100.0);
     }
-    snow_refill = value<bool>(snow_refill_option, false);
+    snow_refill = (float)value<double>(snow_refill_option, 0.0);
     snow_lod_distance = (float)value<double>(snow_lod_option, 2000.0);
     if (const char* forced = std::getenv("TOOIE_SNOW_LOD")) {
         snow_lod_distance = (float)std::atof(forced);
@@ -4604,11 +4604,11 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
         static float detail_sent = -1.0f;
-        static bool refill_sent = false;
+        static float refill_sent = -1.0f;
         static float lod_sent = -1.0f;
         static uint16_t map_sent = 0xFFFF;
         const float detail = snow_detail.load();
-        const bool refill = snow_refill.load();
+        const float refill = snow_refill.load();
         const float lod = snow_lod_distance.load();
         if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent)) {
             snow_sent = snow;
@@ -4838,11 +4838,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Snow detail",
         "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
         25, 100, 5, 0, false, 100);
-    graphics.add_bool_option(
+    graphics.add_number_option(
         snow_refill_option,
         "Snow fills back in",
-        "Prints in the deep snow fill back in after a while, sooner while it snows. Off, they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
-        false);
+        "How many seconds prints in the deep snow stay before they fill back in (then sooner while it snows). 0 is off: they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
+        0, 600, 5, 0, false, 0);
     graphics.add_number_option(
         snow_lod_option,
         "Snow LOD distance",
