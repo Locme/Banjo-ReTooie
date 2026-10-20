@@ -104,6 +104,14 @@ namespace {
         return log;
     }
 
+    bool free_hand_enabled() {
+        try {
+            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::free_hand_option));
+        } catch (...) {
+            return true;
+        }
+    }
+
     bool enabled() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::enabled_option));
@@ -262,6 +270,52 @@ namespace {
         return best;
     }
 
+    // The free hand (L, 2026-10-20: "100% dependant on the cursor"). UNTESTED: the game keeps the hand as a vector at
+    // menu + 4 that points at the spot's thing and is rewritten each update; the geometry is guessed (see below).
+    // After the update has run, the vector is slid sideways by how far the cursor is from where the spot's thing is on
+    // screen, scaled by its depth. The depth axis is taken as the largest component; the other two are right and up.
+    // TOOIE_HAND_FLIP (bit 1 flip right, 2 flip up, 4 swap the two) fixes the guess if the hand moves the wrong way.
+    constexpr uint32_t hand_vec = 0x04;
+    constexpr float hand_fov_scale = 0.8284f;   // 2 * tan(22.5 degrees): the game's default 45 degree view
+    constexpr float frame_h = 450.0f;           // the window's height in the places' units
+
+    void free_hand(uint8_t* rdram, uint32_t menu, float sx, float sy) {
+        const int spot = read_byte(rdram, menu + select_spot) >> 4;
+        if (spot < 0 || spot >= spots) {
+            return;
+        }
+        float v[3];
+        for (int i = 0; i < 3; i++) {
+            v[i] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * i);
+            if (!std::isfinite(v[i])) {
+                return;
+            }
+        }
+        int depth = 0;
+        for (int i = 1; i < 3; i++) {
+            if (std::fabs(v[i]) > std::fabs(v[depth])) {
+                depth = i;
+            }
+        }
+        int ax = (depth + 1) % 3, ay = (depth + 2) % 3;
+        static const int flip = [] { const char* e = getenv("TOOIE_HAND_FLIP"); return e ? atoi(e) : 0; }();
+        if (flip & 4) {
+            std::swap(ax, ay);
+        }
+        const float per_unit = std::fabs(v[depth]) * hand_fov_scale / frame_h;
+        const Place& at = places[spot][spot];
+        const float dx = (sx - at.x) * per_unit * ((flip & 1) ? -1.0f : 1.0f);
+        const float dy = -(sy - at.y) * per_unit * ((flip & 2) ? -1.0f : 1.0f);
+        v[ax] += dx;
+        v[ay] += dy;
+        if (logging()) {
+            fprintf(stderr, "[menu-mouse] free hand spot %d vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, v[0], v[1], v[2], sx, sy);
+        }
+        for (int i = 0; i < 3; i++) {
+            tooie::rdram::write_float(rdram, menu + hand_vec + 4 * i, v[i]);
+        }
+    }
+
     // Steering the save select's hand.
     void steer_select(uint8_t* rdram, uint32_t menu, const MouseUse& use, float x, float y, bool have_cursor) {
         const int spot = read_byte(rdram, menu + select_spot) >> 4;
@@ -305,6 +359,8 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
+    qol.add_bool_option(free_hand_option, "Free hand on the save select (untested)",
+        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", true);
     qol.add_bool_option(enabled_option, "Mouse in the game's menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
@@ -373,6 +429,9 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
             float sx = 0.0f, sy = 0.0f;
             const bool have = cursor_in_800(&sx, &sy);
             steer_select(rdram, menu, use, sx, sy, have);
+            if (have && free_hand_enabled()) {
+                free_hand(rdram, menu, sx, sy);
+            }
         } else {
             clear_steer();
         }
