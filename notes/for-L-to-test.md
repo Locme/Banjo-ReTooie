@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T445 Deep snow: the game's own snow layer is gone, the trail goes down to Banjo's feet and follows him
+- Asked: 2026-10-20 03:57 UTC
+- Build: main
+- Steps:
+  1. Settings > Graphics: Deep snow on (any height)
+  2. Go to Icy Side, the slope at 2558, 96, -1983 (where the trail didn't show)
+  3. Walk through the snow, then look back
+- Look for: The trench is right behind Banjo, not somewhere else; his legs show in it down to his feet; there is only one snow surface (no second layer cutting through Banjo's knees); jumping leaves no prints
+- Status: waiting for L
+
 ## T444 Take No Damage: no knockback or fly-up either
 - Asked: 2026-10-20 03:49 UTC
 - Build: main
