@@ -7051,10 +7051,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..717ad98
+index 0000000..2a350c7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2942 @@
+@@ -0,0 +1,2951 @@
 +//
 +// RT64
 +//
@@ -7451,10 +7451,16 @@ index 0000000..717ad98
 +    static float userReflections = 0.0f;
 +
 +    // effectsMutex held.
++    static float userSunShadows = 0.0f;
++
++    // The settings the traced effects take over: reflections and sun shadows show at 60 at least while ray tracing is
++    // active (the settings themselves are kept apart, and come back when it is off).
 +    static void RefreshReflections() {
 +        float strength = userReflections;
++        effectsSettings.sunShadows = userSunShadows;
 +        if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
 +            strength = std::max(strength, 0.6f);
++            effectsSettings.sunShadows = std::max(userSunShadows, 0.6f);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
@@ -7623,7 +7629,8 @@ index 0000000..717ad98
 +
 +    void SetSceneSunShadows(float strength, bool onBanjo, float softness) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.sunShadows = strength;
++        userSunShadows = strength;
++        RefreshReflections();
 +        effectsSettings.sunShadowOnBanjo = onBanjo;
 +        effectsSettings.sunShadowSoftness = std::clamp(softness, 0.0f, 1.0f);
 +    }
@@ -9776,7 +9783,9 @@ index 0000000..717ad98
 +        static const bool sunMapOff = (getenv("TOOIE_SUN_MAP_OFF") != nullptr);
 +        static const char *sunMapOffAfter = getenv("TOOIE_SUN_MAP_OFF_AFTER");
 +        const bool sunMapOffNow = sunMapOff || ((sunMapOffAfter != nullptr) && (std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count() > float(atof(sunMapOffAfter))));
-+        if (drawSunCasters && !sunMapOffNow && (constants.shadows.x > 0.0f)) {
++        // The traced pass (the structures are built) traces its shadows, so the map isn't drawn for it.
++        const bool tracedShadows = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr);
++        if (drawSunCasters && !sunMapOffNow && !tracedShadows && (constants.shadows.x > 0.0f)) {
 +            GpuCheckpoint(commandList, "sun shadow map: start");
 +            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
@@ -14972,10 +14981,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..b121481
+index 0000000..71b34b4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3279 @@
+@@ -0,0 +1,3339 @@
 +//
 +// RT64
 +//
@@ -15919,6 +15928,20 @@ index 0000000..b121481
 +    // Ice has Ice reflections of its own, and SSR stays off it.
 +    float maskDepth;
 +    return (WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth);
++}
++
++// Where a reflection starts from: the surface itself, except water (it is drawn over what lies under it, so the
++// scene depth and normal there are the bed's): there it is the water's own surface, facing up in the world.
++void ReflectionSurface(int2 pixel, inout float3 center, inout float3 normal) {
++    float waterDepth;
++    if (LoadShiny(pixel) || (gConstants.water.y >= 1.5f) || !LoadWater(pixel, waterDepth)) {
++        return;
++    }
++    center = ViewPosition(pixel, waterDepth);
++    normal = normalize(gConstants.worldY.xyz);
++    if (dot(normal, center) > 0.0f) {
++        normal = -normal;
++    }
 +}
 +
 +// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
@@ -17666,12 +17689,51 @@ index 0000000..b121481
 +    const float2 size = gConstants.projection.zw;
 +    const bool mapView = SunMapView(gConstants.shadows.y);
 +    const float reach = SunMapReach(gConstants.shadows.y);
-+    const int Steps = 24;
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
 +    // Banjo's own shadow can be left out: what is drawn inside a capsule around him casts none.
 +    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
 +    float shadow = 0.0f;
++#ifdef RAY_TRACED
++    // Traced shadows: rays from the surface towards the sun through the world's triangles (gSceneBVH), a few of them
++    // spread over a narrow cone (wider the softer the shadows) so the edge has a penumbra. Nothing between a surface
++    // and the sun is missed, on screen or not, and there is no depth thickness to guess.
++    {
++        const float3 sunDirection = normalize(sun);
++        const float3 side = normalize(cross(sunDirection, (abs(sunDirection.y) < 0.9f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
++        const float3 up = cross(sunDirection, side);
++        const float spread = lerp(0.006f, 0.04f, softness);
++        const int Rays = 4;
++        float blocked = 0.0f;
++        [loop] for (int k = 0; k < Rays; k++) {
++            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f;
++            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
++            const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
++            RayDesc ray;
++            ray.Origin = ViewToWorldPoint(start);
++            ray.Direction = ViewToWorldDirection(direction);
++            ray.TMin = 0.0f;
++            ray.TMax = 20000.0f;
++            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++            while (query.Proceed()) {
++            }
++            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
++                continue;
++            }
++            if (skipBanjo) {
++                const float3 world = ViewToWorldPoint(start + direction * query.CommittedRayT());
++                const float2 across = world.xz - banjo.xz;
++                if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
++                    continue;
++                }
++            }
++            blocked += 1.0f;
++        }
++        shadow = blocked / float(Rays);
++    }
++#else
++    const int Steps = 24;
 +    [loop] for (int i = 0; i < Steps; i++) {
 +        // Steps grow with distance, so close shadows are sharp and long ones still reach.
 +        const float t = (float(i) + jitter) / float(Steps);
@@ -17730,6 +17792,7 @@ index 0000000..b121481
 +            return ((nearCover > 0.0f) || (farCover > 0.0f)) ? (1.0f - 0.9f * mapShadow) : 0.5f;
 +        }
 +    }
++#endif
 +    // The side turned from the sun darkens over a wider turn the softer the shadows.
 +    const float turnedAway = saturate(-facing * lerp(4.0f, 1.25f, softness)) * lerp(0.6f, 0.45f, softness);
 +    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
@@ -17920,10 +17983,13 @@ index 0000000..b121481
 +        if (!ReflectiveAt(pixel, depth)) {
 +            return float4(dot(scene, float3(0.299f, 0.587f, 0.114f)).xxx * 0.25f, 0.0f);
 +        }
++        float3 reflectCenter = center;
++        float3 reflectNormal = normal;
++        ReflectionSurface(pixel, reflectCenter, reflectNormal);
 +#ifdef RAY_TRACED
-+        const float4 reflection = TracedReflection(pixel, center, normal);
++        const float4 reflection = TracedReflection(pixel, reflectCenter, reflectNormal);
 +#else
-+        const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++        const float4 reflection = ScreenSpaceReflection(pixel, reflectCenter, reflectNormal);
 +#endif
 +        return float4(lerp(float3(0.6f, 0.0f, 0.0f), reflection.rgb, reflection.a), 0.0f);
 +    }
@@ -18106,12 +18172,15 @@ index 0000000..b121481
 +            // SSR: the reflected scene, more at grazing angles (Fresnel) and less in creases (GTAO's specular
 +            // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections). At 100 a
 +            // surface seen straight on is three quarters mirror, and fully at grazing angles.
++            float3 reflectCenter = center;
++            float3 reflectNormal = normal;
++            ReflectionSurface(pixel, reflectCenter, reflectNormal);
 +#ifdef RAY_TRACED
-+            const float4 reflection = TracedReflection(pixel, center, normal);
++            const float4 reflection = TracedReflection(pixel, reflectCenter, reflectNormal);
 +#else
-+            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++            const float4 reflection = ScreenSpaceReflection(pixel, reflectCenter, reflectNormal);
 +#endif
-+            const float facing = saturate(dot(-normalize(center), normal));
++            const float facing = saturate(dot(-normalize(reflectCenter), reflectNormal));
 +            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
 +            const float specularOcclusion = occlusion ? saturate(pow(facing + indirect.a, 0.5f) - 1.0f + indirect.a) : 1.0f;
 +            scene = lerp(scene, reflection.rgb, saturate(SsrStrength() * fresnel * reflection.a * specularOcclusion));
