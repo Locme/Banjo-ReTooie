@@ -284,6 +284,17 @@ To change it: edit the files in `lib/RecompFrontend`, then
   the shader compiler (DXC) is picked by the build machine; the native file dialogs and the texture tools are
   left out; the SDL window path (`RT64_SDL_WINDOW_VULKAN`) is used on Android instead of a stub that stopped
   the build.
+* **Ray traced reflections** (Graphics > Ray tracing; `rt64_scene_effects.cpp/.h`, `SceneEffectsPS.hlsl` built with
+  `-D RAY_TRACED` as `SceneEffectsRT{,2X,4X,8X}PS` (SPIR-V only, shader model 6.5), `rt64_shader_library.cpp`,
+  `rt64_framebuffer_renderer.cpp`, `rt64_workload_queue.cpp`): `SetSceneRayTracing`, `NoteRayTracingSupport`
+  (from the device's `rayQuery` capability; `TOOIE_RAY_TRACING_SUPPORT=0` pretends none), `RayTracingActive()`.
+  While active, `BuildSceneBVH` builds one bottom level structure (a geometry for each run of the sun shadow
+  casters' index ranges, over the vertex processor's world positions) under one top level instance each frame, the
+  world positions are worked out for every frame (they were only for interpolated ones), reflections are at 60 at
+  least, and the scene effects pass uses the traced pipeline: `TracedReflection` replaces the depth march with a ray
+  query over `gSceneBVH` (t13, only in the descriptor set when the device has ray queries). `TOOIE_RT_LOG=1` logs
+  `[rt]` lines. Vulkan only: D3D12 reports no ray query support. Add further traced effects (shadows) beside it,
+  checking `RayTracingActive()`.
 
 To change it: edit the files in `lib/rt64`, then
 `git -C lib/rt64 diff --ignore-submodules > lib-patches/rt64.patch`. New files
@@ -306,6 +317,10 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
   driver's budget (VK_EXT_memory_budget is enabled when the driver has it), for the `[vram]` lines
   from `src/debug/vram_log.cpp`. Failed presents and image acquires (other than out of date) are
   logged; they were silent, so a lost GPU left no trace in console.log.
+
+* **Ray queries and multi-mesh builds**: Vulkan enables `VK_KHR_ray_query` and its feature when the device has it
+  (`capabilities.rayQuery`; D3D12 leaves it false), and `buildBottomLevelAS` gives each geometry its own build
+  range (it gave one range for all, wrong with more than one mesh).
 
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.

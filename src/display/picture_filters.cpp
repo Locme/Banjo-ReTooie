@@ -4454,8 +4454,8 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     if (ray_tracing_on.load() && !ray_tracing_notified.load() && RT64::GetRayTracingSupport() == 1) {
         ray_tracing_notified.store(true);
-        std::fprintf(stderr, "[ray-tracing] this graphics card has no hardware ray tracing; using the current effects\n");
-        tooie::toast::show("Ray tracing is not supported on this graphics card. Using the current effects.");
+        std::fprintf(stderr, "[ray-tracing] no ray queries on this device or renderer; using the current effects\n");
+        tooie::toast::show("Ray tracing needs the Vulkan renderer and a graphics card with ray tracing. Using the current effects.");
     }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
@@ -4898,7 +4898,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
-        "Ray traced effects, starting with reflections on the same shiny surfaces as Screen-space reflections. It is a switch of its own, apart from the shader effects. Needs a graphics card with hardware ray tracing: without one this shows a notice and the effects carry on as you have set them. Early: this build checks for the hardware but does not draw the traced reflections yet, so with it the current reflections are shown.",
+        "Ray traced effects, starting with reflections: on the shiny surfaces Screen-space reflections covers, a ray is traced through the level's triangles instead of marching the picture, so reflections find what the picture hides and nothing is missed between steps. It is a switch of its own, apart from the shader effects, and shows reflections even with Screen-space reflections at 0 (at 60 at least). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
         false);
     graphics.add_bool_option(
         reflections_section_option,
