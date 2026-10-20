@@ -7061,10 +7061,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a06ec3c
+index 0000000..53543d0
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3030 @@
+@@ -0,0 +1,3035 @@
 +//
 +// RT64
 +//
@@ -7345,6 +7345,7 @@ index 0000000..a06ec3c
 +    static float userWaterReflections = 0.0f;
 +    static float rayTracingStrength = 0.6f;
 +    static std::atomic<bool> rayTracingHitColours{ false };
++    static std::atomic<bool> rayTracingPaused{ false };
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7530,6 +7531,10 @@ index 0000000..a06ec3c
 +        const std::scoped_lock lock(effectsMutex);
 +        rayTracingWanted.store(enabled);
 +        RefreshReflections();
++    }
++
++    void SetSceneRayTracingPaused(bool paused) {
++        rayTracingPaused.store(paused);
 +    }
 +
 +    void NoteRayTracingSupport(bool supported) {
@@ -9164,7 +9169,7 @@ index 0000000..a06ec3c
 +    {
 +        Resources &res = resourcesFor(worker);
 +        res.bvhReady = false;
-+        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery) {
++        if (!RayTracingActive() || rayTracingPaused.load() || !worker->device->getCapabilities().rayQuery) {
 +            return;
 +        }
 +        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
@@ -10097,10 +10102,10 @@ index 0000000..a06ec3c
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ce14f50
+index 0000000..0bc6e32
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,467 @@
 +//
 +// RT64
 +//
@@ -10373,6 +10378,9 @@ index 0000000..ce14f50
 +    // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
 +    // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
 +    void SetSceneRayTracingHitColours(bool enabled);
++    // Banjo-Tooie: while paused (letterboxed cutscenes) the pass runs untraced, with the effects still as ray tracing
++    // sets them.
++    void SetSceneRayTracingPaused(bool paused);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
@@ -15129,10 +15137,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..7b9d6ab
+index 0000000..78336a6
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3718 @@
+@@ -0,0 +1,3730 @@
 +//
 +// RT64
 +//
@@ -15962,16 +15970,20 @@ index 0000000..7b9d6ab
 +        ray.Direction = directions[k];
 +        ray.TMin = 0.0f;
 +        ray.TMax = 6000.0f;
-+        if (!TraceOccluded(ray, 0u)) {
++        // Banjo standing over the spot doesn't make it a room.
++        if (!TraceOccluded(ray, 1u)) {
 +            return false;
 +        }
 +    }
 +    return true;
 +}
 +
-+// Shadows from the level's lights, and their light (lamp, rgb, added to the scene: a warm glow on what each lights
-+// and can see it, so a room's lamps light it).
-+float LightShadows(float3 center, float3 normal, out float3 lamp) {
++// The level's lights (lamps, fires), traced: each lights what it can see and leaves the rest in the dark. Within a
++// light's reach the room's own light is dimmed (keep, returned) and the light's own added back (lamp, rgb) only where
++// rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
++// what stands between (four rays over a small disc at the light, a soft edge), not just a glow over the room
++// (L, 2026-10-20: "they don't emit ray traced light").
++float LightShadows(float3 center, float3 normal, bool onBanjo, out float3 lamp) {
 +    lamp = 0.0f;
 +    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
 +    if (count == 0u) {
@@ -15983,7 +15995,7 @@ index 0000000..7b9d6ab
 +    }
 +    const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.003f + 2.0f, 2.0f));
 +    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
-+    float keep = 1.0f;
++    float influence = 0.0f;
 +    [loop] for (uint i = 0u; i < count; i++) {
 +        const float4 light = asfloat(gLights.Load4(16u * (i + 1u)));
 +        const float3 toLight = light.xyz - start;
@@ -15991,22 +16003,25 @@ index 0000000..7b9d6ab
 +        if ((distance < 30.0f) || (distance > light.w)) {
 +            continue;
 +        }
++        const float falloff = saturate(1.0f - distance / light.w);
++        const float reachHere = falloff * falloff;
++        influence = max(influence, reachHere);
 +        const float3 direction = toLight / distance;
 +        const float facing = dot(worldNormal, direction);
-+        if (facing <= 0.05f) {
++        if (facing <= 0.0f) {
 +            continue;
 +        }
-+        const float weight = saturate(1.0f - distance / light.w) * saturate(facing * 2.0f);
-+        // Two points on a small disc round the light.
++        // Four points on a small disc round the light.
 +        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
 +        const float3 across = cross(direction, side);
-+        float blocked = 0.0f;
-+        [unroll] for (int k = 0; k < 2; k++) {
-+            const float angle = float(k) * 3.14159265f;
-+            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 18.0f;
++        float visible = 0.0f;
++        [unroll] for (int k = 0; k < 4; k++) {
++            const float angle = float(k) * 1.5707963f + 0.785398f;
++            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 14.0f;
 +            const float3 toTarget = target - start;
 +            const float reach = length(toTarget) - 30.0f;
 +            if (reach <= 1.0f) {
++                visible += 0.25f;
 +                continue;
 +            }
 +            RayDesc ray;
@@ -16014,17 +16029,13 @@ index 0000000..7b9d6ab
 +            ray.Direction = toTarget / (reach + 30.0f);
 +            ray.TMin = 0.0f;
 +            ray.TMax = reach;
-+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+            while (query.Proceed()) {
-+            }
-+            blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.5f : 0.0f;
++            // Banjo casts his shadow from the lamps too, but not on himself (his fur would speckle).
++            visible += TraceOccluded(ray, onBanjo ? 1u : 0u) ? 0.0f : 0.25f;
 +        }
-+        keep *= 1.0f - 0.5f * weight * blocked;
-+        lamp += float3(1.0f, 0.82f, 0.55f) * (0.7f * weight * weight * (1.0f - blocked));
++        lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
 +    }
 +    lamp *= distanceFade;
-+    return lerp(1.0f, keep, distanceFade);
++    return lerp(1.0f, 1.0f - 0.55f * influence, distanceFade);
 +}
 +
 +// Banjo's contact shadow, traced: while the sun shadows leave him out (the HD shadows give him one), the ground and
@@ -18212,6 +18223,7 @@ index 0000000..7b9d6ab
 +        const float3 up = cross(sunDirection, side);
 +        const float spread = lerp(0.006f, 0.04f, softness);
 +        const int Rays = 4;
++        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
 +        float blocked = 0.0f;
 +        [loop] for (int k = 0; k < Rays; k++) {
 +            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f;
@@ -18223,7 +18235,8 @@ index 0000000..7b9d6ab
 +            ray.TMin = 0.0f;
 +            ray.TMax = 20000.0f;
 +            // Leaving Banjo out, a ray that meets him goes on to what lies beyond (a cliff's shadow he stands in).
-+            blocked += TraceOccluded(ray, skipBanjo ? 1u : 0u) ? 1.0f : 0.0f;
++            // On Banjo himself he never shadows himself: his fur's tufts each caught a different ray and speckled.
++            blocked += TraceOccluded(ray, (skipBanjo || onBanjo) ? 1u : 0u) ? 1.0f : 0.0f;
 +        }
 +        shadow = blocked / float(Rays);
 +        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
@@ -18600,7 +18613,14 @@ index 0000000..7b9d6ab
 +    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
 +        center = ViewPosition(pixel, depth);
 +        normal = ViewNormal(pixel, center);
-+        if (occlusion || globalIllumination) {
++#ifdef RAY_TRACED
++        // Banjo's fur: its tufts' normals turn every pixel, so the traced occlusion and light on him were
++        // a different few rays a pixel and crawled as he moved (L, 2026-10-20). He keeps the game's own shading there, and never shadows himself.
++        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
++#else
++        const bool onBanjo = false;
++#endif
++        if ((occlusion || globalIllumination) && !onBanjo) {
 +            indirect = IndirectAt(pixel, center, normal);
 +        }
 +        if (occlusion) {
@@ -18615,9 +18635,9 @@ index 0000000..7b9d6ab
 +#ifdef RAY_TRACED
 +        // Not tied to the sun: lamps and fires cast their own in caves and at night.
 +        if (lightShadows) {
-+            keep *= LightShadows(center, normal, lamp);
++            keep *= LightShadows(center, normal, onBanjo, lamp);
 +            const float flags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
-+            if (flags > 1.5f) {
++            if ((flags > 1.5f) && !onBanjo) {
 +                keep *= BanjoContactShadow(center, normal);
 +            }
 +        }
