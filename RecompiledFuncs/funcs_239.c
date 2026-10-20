@@ -2753,6 +2753,7 @@ L_80800BB4:
 RECOMP_FUNC void func_8002ABE0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_seq_delta_guard(rdram, ctx)) { ctx->r2 = 0; return; }
     // 0x8002ABE0: addiu       $sp, $sp, -0x10
     ctx->r29 = ADD32(ctx->r29, -0X10);
     // 0x8002ABE4: addiu       $t6, $zero, -0x1
