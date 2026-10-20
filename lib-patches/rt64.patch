@@ -11967,7 +11967,7 @@ index e7895c3..14b706b 100644
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
 -    bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
-+    float4 vertexFurAnchor, bool isFrontFace, out float4 resultColor, out float4 resultAlpha) 
++    float4 vertexFurAnchor, bool isFrontFace, out float4 resultColor, out float4 resultAlpha)
  {
 +    // Banjo-Tooie: the shell redraws' code is only in a shader built with it (RenderParams.features): an ordinary
 +    // draw's specialised shader folds all of it away, so it stays lean.

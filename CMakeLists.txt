@@ -246,8 +246,13 @@ target_compile_options(RecompiledFuncs PRIVATE
     -fno-strict-aliasing
     -Wno-unused-variable
     -Wno-implicit-function-declaration
-    -falign-functions=16
 )
+# clang-cl ignores -falign-functions unless it is passed through with /clang:.
+if (MSVC)
+    target_compile_options(RecompiledFuncs PRIVATE /clang:-falign-functions=16)
+else()
+    target_compile_options(RecompiledFuncs PRIVATE -falign-functions=16)
+endif()
 
 target_include_directories(RecompiledFuncs PRIVATE
     ${CMAKE_SOURCE_DIR}/include
