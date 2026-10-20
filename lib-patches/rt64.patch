@@ -2018,7 +2018,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..4402ac9 100644
+index 9fae0d4..bf77d55 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2047,7 +2047,7 @@ index 9fae0d4..4402ac9 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +135,305 @@ namespace RT64 {
+@@ -125,6 +135,309 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2288,7 +2288,7 @@ index 9fae0d4..4402ac9 100644
 +        if ((end > drawData.faceIndices.size()) || (frameParams.snowPlayer.w <= 0.0f)) {
 +            return;
 +        }
-+        const float reach = frameParams.snowPlayer.w;
++        const float reach = frameParams.snowLod.z;
 +        for (uint32_t i = start; i < end; i += 3) {
 +            float p[9];
 +            bool valid = true;
@@ -2313,7 +2313,8 @@ index 9fae0d4..4402ac9 100644
 +
 +    // Banjo-Tooie: the shells of deep snow a ground draw gets: by its triangles facing up nearest the camera, or 0
 +    // with none facing up within the snow's reach. Level ground has no model transform, so its positions are in the world.
-+    static uint32_t snowShellCount(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
++    // (anyReach: at least 1 however far, for the tessellated snow, which reaches much further.)
++    static uint32_t snowShellCount(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams, bool anyReach) {
 +        const uint32_t start = call.meshDesc.faceIndicesStart;
 +        const uint32_t end = start + call.callDesc.triangleCount * 3;
 +        if (end > drawData.faceIndices.size()) {
@@ -2347,13 +2348,16 @@ index 9fae0d4..4402ac9 100644
 +            }
 +            nearest = std::min(nearest, reach);
 +        }
-+        return (nearest < 1e29f) ? SceneSnowShellsAt(nearest, frameParams) : 0;
++        if (nearest >= 1e29f) {
++            return 0;
++        }
++        return anyReach ? std::max(SceneSnowShellsAt(nearest, frameParams), 1u) : SceneSnowShellsAt(nearest, frameParams);
 +    }
 +
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +478,57 @@ namespace RT64 {
+@@ -169,11 +482,56 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2363,7 +2367,6 @@ index 9fae0d4..4402ac9 100644
 +        grassMaskStarted = false;
 +        frameParams.grassMask.w = 0.0f;
 +        instanceSnowVector.clear();
-+        instanceSnowFlatVector.clear();
 +        snowVertexFirst = UINT32_MAX;
 +        snowVertexEnd = 0;
 +        snowPositionsData = nullptr;
@@ -2411,7 +2414,7 @@ index 9fae0d4..4402ac9 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +574,7 @@ namespace RT64 {
+@@ -219,6 +577,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2419,7 +2422,7 @@ index 9fae0d4..4402ac9 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +606,7 @@ namespace RT64 {
+@@ -250,6 +609,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2427,7 +2430,7 @@ index 9fae0d4..4402ac9 100644
                  }
              }
              else {
-@@ -272,6 +629,9 @@ namespace RT64 {
+@@ -272,6 +632,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2437,7 +2440,7 @@ index 9fae0d4..4402ac9 100644
              }
          }
      }
-@@ -373,6 +733,10 @@ namespace RT64 {
+@@ -373,6 +736,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2448,7 +2451,7 @@ index 9fae0d4..4402ac9 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +807,14 @@ namespace RT64 {
+@@ -443,6 +810,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2463,7 +2466,7 @@ index 9fae0d4..4402ac9 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +837,68 @@ namespace RT64 {
+@@ -465,12 +840,68 @@ namespace RT64 {
          return true;
      }
      
@@ -2534,7 +2537,7 @@ index 9fae0d4..4402ac9 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +927,16 @@ namespace RT64 {
+@@ -499,6 +930,16 @@ namespace RT64 {
              }
          };
  
@@ -2551,7 +2554,7 @@ index 9fae0d4..4402ac9 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +952,17 @@ namespace RT64 {
+@@ -514,6 +955,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2569,7 +2572,7 @@ index 9fae0d4..4402ac9 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +1023,131 @@ namespace RT64 {
+@@ -574,12 +1026,130 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2627,10 +2630,9 @@ index 9fae0d4..4402ac9 100644
 +                    previousPipeline = snowTessPipeline;
 +                    // First the ground where it is (with holes where the trail goes down below it), then the raised snow:
 +                    // the ground shows through any crack the raised surface leaves where it meets other draws.
-+                    const uint32_t snowFlat = ((i < instanceSnowFlatVector.size()) && (instanceSnowFlatVector[i] != 0)) ? RASTER_SNOW_FLAT : 0;
 +                    rasterParams.grassShell = 1;
 +                    for (uint32_t snowPass = 0; snowPass < 2; snowPass++) {
-+                        rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS | snowFlat | ((snowPass == 0) ? RASTER_SNOW_GROUND : 0);
++                        rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS | ((snowPass == 0) ? RASTER_SNOW_GROUND : 0);
 +                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                        drawCallTriangles(drawCall);
 +                    }
@@ -2702,7 +2704,7 @@ index 9fae0d4..4402ac9 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1165,7 @@ namespace RT64 {
+@@ -597,6 +1167,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -2710,7 +2712,7 @@ index 9fae0d4..4402ac9 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1185,7 @@ namespace RT64 {
+@@ -616,6 +1187,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -2718,7 +2720,7 @@ index 9fae0d4..4402ac9 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1250,6 +1820,67 @@ namespace RT64 {
+@@ -1250,6 +1822,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2786,7 +2788,7 @@ index 9fae0d4..4402ac9 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1927,98 @@ namespace RT64 {
+@@ -1296,9 +1929,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2886,7 +2888,7 @@ index 9fae0d4..4402ac9 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2070,33 @@ namespace RT64 {
+@@ -1350,10 +2072,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2920,7 +2922,7 @@ index 9fae0d4..4402ac9 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2151,62 @@ namespace RT64 {
+@@ -1408,6 +2153,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2983,7 +2985,7 @@ index 9fae0d4..4402ac9 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2230,22 @@ namespace RT64 {
+@@ -1431,6 +2232,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3006,7 +3008,7 @@ index 9fae0d4..4402ac9 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2265,168 @@ namespace RT64 {
+@@ -1450,12 +2267,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3175,7 +3177,7 @@ index 9fae0d4..4402ac9 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2577,7 @@ namespace RT64 {
+@@ -1606,6 +2579,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3183,7 +3185,7 @@ index 9fae0d4..4402ac9 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2654,20 @@ namespace RT64 {
+@@ -1682,6 +2656,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3204,7 +3206,7 @@ index 9fae0d4..4402ac9 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2733,1014 @@ namespace RT64 {
+@@ -1747,24 +2735,1011 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3456,7 +3458,6 @@ index 9fae0d4..4402ac9 100644
 +                // Banjo-Tooie: deep snow lies on the level's own opaque, textured ground as 3D grass does; the shader
 +                // keeps only snowy surfaces facing up. Fewer shells further away, none beyond the snow's reach.
 +                uint8_t snowValue = 0;
-+                bool snowFlat = false;
 +                if ((snowShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                    (call.callDesc.tileCount > 0) && levelGeometry(drawData, call))
@@ -3464,8 +3465,8 @@ index 9fae0d4..4402ac9 100644
 +                    // (Also ground drawn without writing depth, as the snowy platforms round Chilly Willy's arena are: its
 +                    // shells write it, below.)
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
-+                    // Not on ice (SceneIceTexture): its pale streaks pass for snow. Nor on a texture picked for no snow.
-+                    // (The tessellated snow raises ice flat with the snow round it instead, so it doesn't lie in a pit.)
++                    // Not on ice (SceneIceTexture): its pale streaks pass for snow, and it stays where the game put it.
++                    // Nor on a texture picked for no snow.
 +                    bool iceGround = false;
 +                    bool snowOff = false;
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !snowOff; t++) {
@@ -3473,9 +3474,8 @@ index 9fae0d4..4402ac9 100644
 +                        iceGround = iceGround || SceneIceTexture(hash);
 +                        snowOff = SceneSnowOffTexture(hash);
 +                    }
-+                    snowFlat = iceGround && (snowTessPipeline != nullptr);
-+                    if (!snowOff && (!iceGround || snowFlat) && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
-+                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams), 255u));
++                    if (!snowOff && !iceGround && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
++                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams, snowTessPipeline != nullptr), 255u));
 +                        if (snowValue != 0) {
 +                            for (uint32_t k = call.meshDesc.faceIndicesStart; k < call.meshDesc.faceIndicesStart + call.callDesc.triangleCount * 3; k++) {
 +                                snowVertexFirst = std::min(snowVertexFirst, drawData.faceIndices[k]);
@@ -3487,15 +3487,14 @@ index 9fae0d4..4402ac9 100644
 +                }
 +                instanceSnowVector.resize(instanceIndex, 0);
 +                instanceSnowVector.push_back(snowValue);
-+                instanceSnowFlatVector.resize(instanceIndex, 0);
-+                instanceSnowFlatVector.push_back(((snowValue != 0) && snowFlat) ? 1 : 0);
 +                // Banjo-Tooie: a model's solid draw (Banjo, an NPC, an enemy, something thrown) presses the snow down
-+                // wherever it reaches into it. Not the level's ground, nor its shadows or effects (decals, see-through).
++                // wherever it reaches into it, see-through ones too (Chilly Willy's ice balls). Not the level's ground,
++                // nor shadows and effects (decals, or what writes no depth).
 +                if ((snowShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !levelGeometry(drawData, call))
 +                {
 +                    const interop::OtherMode tm = call.shaderDesc.otherMode;
-+                    if (tm.zCmp() && tm.zUpd() && (tm.zMode() != ZMODE_DEC) && (tm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(tm)) {
++                    if (tm.zCmp() && tm.zUpd() && (tm.zMode() != ZMODE_DEC) && (tm.cycleType() != G_CYC_COPY)) {
 +                        snowTouchDraw(drawData, call, frameParams);
 +                    }
 +                }
@@ -4221,7 +4220,7 @@ index 9fae0d4..4402ac9 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..b55e5c7 100644
+index 3add9c3..88a8367 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,8 @@
@@ -4280,7 +4279,7 @@ index 3add9c3..b55e5c7 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +97,96 @@ namespace RT64 {
+@@ -62,11 +97,94 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -4303,8 +4302,6 @@ index 3add9c3..b55e5c7 100644
 +        uint32_t grassShells = 0;
 +        // Banjo-Tooie: for each instance, 0, or the shells of deep snow drawn over it.
 +        std::vector<uint8_t> instanceSnowVector;
-+        // Banjo-Tooie: 1 for the tessellated snow's ice, raised flat with the snow round it (RASTER_SNOW_FLAT).
-+        std::vector<uint8_t> instanceSnowFlatVector;
 +        // Banjo-Tooie: the most shells of deep snow (0 when there is none this frame), and its trail grid.
 +        uint32_t snowShells = 0;
 +        SceneSnowTrailCopy snowTrail;
@@ -4377,7 +4374,7 @@ index 3add9c3..b55e5c7 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +207,10 @@ namespace RT64 {
+@@ -87,6 +205,10 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -4388,7 +4385,7 @@ index 3add9c3..b55e5c7 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +224,7 @@ namespace RT64 {
+@@ -100,6 +222,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -4396,7 +4393,7 @@ index 3add9c3..b55e5c7 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +248,10 @@ namespace RT64 {
+@@ -123,6 +246,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4407,7 +4404,7 @@ index 3add9c3..b55e5c7 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +293,15 @@ namespace RT64 {
+@@ -164,7 +291,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -5995,10 +5992,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..757c16e
+index 0000000..b1fe24b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2578 @@
+@@ -0,0 +1,2612 @@
 +//
 +// RT64
 +//
@@ -6866,8 +6863,15 @@ index 0000000..757c16e
 +        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
-+    void SetSceneSnow(bool on, float height, bool strictColor, float detail) {
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail, bool refill, float lodDistance, uint32_t map) {
 +        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.snowRefill = refill;
++        effectsSettings.snowLodDistance = std::clamp(lodDistance, 100.0f, 20000.0f);
++        if (map != effectsSettings.snowMap) {
++            // Another map (a hut and back counts twice): the trail starts afresh.
++            effectsSettings.snowMap = map;
++            effectsSettings.snowMapVisit++;
++        }
 +        effectsSettings.snowDetail = std::clamp(detail, 0.25f, 1.0f);
 +        effectsSettings.snowStrictColor = strictColor;
 +        effectsSettings.snow = on && (height > 0.0f);
@@ -7286,16 +7290,20 @@ index 0000000..757c16e
 +    static constexpr float SnowBank = 0.45f;
 +    static constexpr uint32_t SnowMinShells = 6;
 +    static constexpr uint32_t SnowMaxShells = 24;
-+    // How long a print stays as it was, then how long it takes to fill back in (less while it snows).
++    // How long a print stays as it was, then how long it takes to fill back in (less while it snows), with Snow fills
++    // back in on; otherwise prints stay until Banjo leaves the map (held longer than the cells' time can count).
 +    static constexpr float SnowHoldSeconds = 6.0f;
++    static constexpr float SnowHoldForever = 1e6f;
 +    static constexpr float SnowRecoverSeconds = 45.0f;
 +    // How far a print's floor has risen once it has filled back in (SnowRefillRise in Snow.hlsli).
 +    static constexpr float SnowRefillRise = 260.0f;
 +    // The blocks of the grid FrameParams.snowBlocksLow and High mark (SnowTess.hlsl): SnowBlocks x SnowBlocks of them.
 +    static constexpr uint32_t SnowBlocks = 16;
 +    static constexpr uint32_t SnowBlockCells = SnowGridSize / SnowBlocks;
-+    // The snow thins out to nothing by this far from the camera.
++    // The shells thin out to nothing by this far from the camera; the tessellated snow, cheap far away (SnowTess.hlsl),
++    // by much further.
 +    static constexpr float SnowReach = 2600.0f;
++    static constexpr float SnowTessReach = 20000.0f;
 +    // A camera zoomed in further than the game's usual one (Chilly Willy's fight watches from far back) brings the snow's
 +    // reach out with it: distances count for less by its zoom (SceneSnowZoom, SnowZoom in Snow.hlsli).
 +    static constexpr float SnowUsualFov = 2.2f;
@@ -7309,6 +7317,12 @@ index 0000000..757c16e
 +            float last[3] = {};
 +            // The cells' size (world units), by the Snow detail setting.
 +            float cell = SnowFinestCell;
++            // How long a print is held as it was (SnowHoldSeconds or SnowHoldForever), and the visit to a map it was
++            // made on (SceneEffectsSettings::snowMapVisit).
++            float hold = SnowHoldSeconds;
++            uint32_t mapVisit = 0;
++            // Banjo's height the last time he stood on the ground.
++            float groundY = 0.0f;
 +            uint32_t sweepRow = 0;
 +            // The frame each row was last pressed on (the sweep below doesn't count: renderers copy its rows in full now
 +            // and then, as the times it clears only matter once they wrap round, after 54 minutes).
@@ -7337,11 +7351,11 @@ index 0000000..757c16e
 +        std::vector<float> snowTouches;
 +    }
 +
-+    static float SnowSpringBack(float age, float recover) {
-+        if (age <= SnowHoldSeconds) {
++    static float SnowSpringBack(float age, float hold, float recover) {
++        if (age <= hold) {
 +            return 1.0f;
 +        }
-+        const float t = std::min((age - SnowHoldSeconds) / std::max(recover, 1.0f), 1.0f);
++        const float t = std::min((age - hold) / std::max(recover, 1.0f), 1.0f);
 +        return 1.0f - t * t * (3.0f - 2.0f * t);
 +    }
 +
@@ -7360,10 +7374,14 @@ index 0000000..757c16e
 +        const bool bankOnly = (bank > 0.0f);
 +        if ((b != 0) && (((b >> 16) & 0xFFu) == tagX) && ((b >> 24) == tagZ)) {
 +            const float age = float((now - (b & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond;
-+            const float spring = SnowSpringBack(age, recover);
++            const float spring = SnowSpringBack(age, trail.hold, recover);
 +            const float oldY = float(int32_t(a) >> 8) / 16.0f;
 +            const bool oldBankOnly = (a & 0x80u) != 0;
-+            // (A print on another floor, far above or below, is simply replaced.)
++            // Far over a print (in the air, or a floor above it): the print stays. Far below one, as on a floor below,
++            // it is replaced.
++            if ((y > oldY + 150.0f) && (oldBankOnly ? (float(a & 0x7Fu) / 127.0f * spring > 0.01f) : (spring > 0.05f))) {
++                return;
++            }
 +            if (std::abs(oldY - y) < 150.0f) {
 +                if (bankOnly) {
 +                    // No bank in a print, nor one lower than the bank already there.
@@ -7403,8 +7421,9 @@ index 0000000..757c16e
 +        }
 +    }
 +
-+    // Presses the snow wherever this frame's model triangles reach down into it, round Banjo at (x, y, z), and banks the
-+    // snow they push aside up round them. full is the snow's full height.
++    // Presses the snow wherever this frame's model triangles reach down into it, round Banjo at x and z (y: the ground he
++    // last stood on, so nothing he does in the air reaches down past it), and banks the snow they push aside up round
++    // them. full is the snow's full height.
 +    static void SnowTakeTouches(SnowTrail &trail, float x, float y, float z, float full, uint32_t now, float recover) {
 +        const auto started = std::chrono::steady_clock::now();
 +        std::vector<float> touches;
@@ -7612,6 +7631,7 @@ index 0000000..757c16e
 +        // Falling snow fills the trail back in sooner.
 +        const float snowfall = settings.daySnow ? std::clamp(settings.dayRain, 0.0f, 1.0f) : 0.0f;
 +        const float recover = SnowRecoverSeconds / (1.0f + 1.5f * snowfall);
++        snowTrail.hold = settings.snowRefill ? SnowHoldSeconds : SnowHoldForever;
 +
 +        SnowTrail &trail = snowTrail;
 +        trail.frame++;
@@ -7630,17 +7650,25 @@ index 0000000..757c16e
 +                trail.cell = cell;
 +                trail.started = false;
 +            }
-+            if (!trail.started || (std::abs(x - trail.last[0]) > 400.0f) || (std::abs(z - trail.last[2]) > 400.0f) || (std::abs(y - trail.last[1]) > 400.0f)) {
-+                // A new map or a warp: the old trail is somewhere else.
++            if (settings.snowMapVisit != trail.mapVisit) {
++                trail.mapVisit = settings.snowMapVisit;
++                trail.started = false;
++            }
++            if (!trail.started) {
++                // A new map (going in and out of a hut, too): the old trail is gone.
 +                std::fill(trail.cells.begin(), trail.cells.end(), 0u);
 +                std::fill(trail.rowPressed.begin(), trail.rowPressed.end(), trail.frame);
 +                std::fill(trail.blockPressed.begin(), trail.blockPressed.end(), -1e9);
 +                trail.started = true;
++                trail.groundY = y;
++            }
++            if (settings.playerGrounded) {
++                trail.groundY = y;
 +            }
 +            trail.last[0] = x;
 +            trail.last[1] = y;
 +            trail.last[2] = z;
-+            SnowTakeTouches(trail, x, y, z, full, now, recover);
++            SnowTakeTouches(trail, x, trail.groundY, z, full, now, recover);
 +        }
 +        else {
 +            const std::scoped_lock lock(snowTouchMutex);
@@ -7653,7 +7681,7 @@ index 0000000..757c16e
 +            const uint32_t row = (trail.sweepRow + r) % SnowGridSize;
 +            for (uint32_t c = 0; c < SnowGridSize; c++) {
 +                uint32_t *cell = &trail.cells[(row * SnowGridSize + c) * 2];
-+                if ((cell[1] != 0) && (float((now - (cell[1] & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond > SnowHoldSeconds + SnowRecoverSeconds + 10.0f)) {
++                if ((cell[1] != 0) && (float((now - (cell[1] & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond > trail.hold + SnowRecoverSeconds + 10.0f)) {
 +                    cell[0] = 0;
 +                    cell[1] = 0;
 +                }
@@ -7706,14 +7734,17 @@ index 0000000..757c16e
 +            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u model triangles (%.1f ms)\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
 +                pressed, depth, recover, trail.lastTouches, trail.lastTouchMs);
 +        }
-+        frameParams.snowSpring = { SnowHoldSeconds, recover, SnowBank, float(now) };
++        frameParams.snowSpring = { trail.hold, recover, SnowBank, float(now) };
 +        frameParams.snowLight = { light[0] / lightLength, light[1] / lightLength, light[2] / lightLength, 3.2f };
 +        // (w: how light it must be. The arena's bluer snow is very light, its ice's pale glints not quite.)
 +        frameParams.snowColor = settings.snowStrictColor ? interop::float4{ 0.06f, 0.25f, 0.3f, 0.45f } : interop::float4{ 0.2f, 0.45f, 0.45f, 0.72f };
-+        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * trail.cell * 0.45f : 0.0f };
++        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowTessReach : 0.0f };
++        // (The trail's cells tell one world cell from another, so it can be looked up as far off as the snow goes; it is
++        // only pressed in round Banjo, snowLod.z.)
++        frameParams.snowLod = { settings.snowLodDistance, SnowTessReach, SnowGridSize * trail.cell * 0.45f, 0.0f };
 +        // The blocks with a trail still filling back in (for as long as a print can take to).
 +        uint32_t blocks[8] = {};
-+        const double lasts = SnowHoldSeconds + SnowRecoverSeconds + 2.0;
++        const double lasts = double(trail.hold) + SnowRecoverSeconds + 2.0;
 +        for (uint32_t k = 0; k < SnowBlocks * SnowBlocks; k++) {
 +            if (trail.seconds - trail.blockPressed[k] < lasts) {
 +                blocks[k / 32] |= 1u << (k % 32);
@@ -8579,10 +8610,10 @@ index 0000000..757c16e
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c90f728
+index 0000000..c9500f4
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,407 @@
+@@ -0,0 +1,417 @@
 +//
 +// RT64
 +//
@@ -8731,6 +8762,13 @@ index 0000000..c90f728
 +        float snowHeight = 1.0f;
 +        // How fine deep snow's trail is (0.25 to 1; SetSceneSnow).
 +        float snowDetail = 1.0f;
++        // Whether prints fill back in after a while (otherwise they stay until Banjo leaves the map), the camera
++        // distance the tessellated snow is cut coarser from, and the map and how many times it has changed (each change
++        // clears the trail).
++        bool snowRefill = false;
++        float snowLodDistance = 1500.0f;
++        uint32_t snowMap = 0;
++        uint32_t snowMapVisit = 0;
 +        bool snowStrictColor = true;
 +        uint32_t view = 0;
 +        bool compare = false;
@@ -8879,7 +8917,10 @@ index 0000000..c90f728
 +    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep). strictColor: only white with
 +    // hardly any blue counts as snow (a map with pale ice next to its snow); otherwise bluish white counts too. detail: how
 +    // fine its trail is, 1 the finest (cells 1.25 units across), 0.5 half as fine, down to 0.25 (less work for the GPU).
-+    void SetSceneSnow(bool on, float height, bool strictColor, float detail);
++    // refill: prints fill back in after a while (less work: the snow is cut finely only where prints still show);
++    // otherwise they stay until map changes. lodDistance: the camera distance the snow is cut coarser from. map: the
++    // game's map (a new one clears the trail).
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail, bool refill, float lodDistance, uint32_t map);
 +    // A triangle of a model drawn this frame (not the level's own ground), in the world (x y z three times): deep snow
 +    // is pressed down wherever one reaches into it (ComputeSceneSnow).
 +    void SceneSnowTouch(const float *triangle);
@@ -12215,7 +12256,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..aed536f 100644
+index e7895c3..5284c64 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -12284,7 +12325,7 @@ index e7895c3..aed536f 100644
 +        // it is (snowTessGround).
 +        // The ground pass (RASTER_SNOW_GROUND) is the ground as it is, left out where the trail goes down below it.
 +        const bool shaped = SnowTessShape(grassWorld, cross(grassDx, grassDy),
-+            0.5f * SnowTrailSegment(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), (gConstants.grassShells & RASTER_SNOW_FLAT) == 0, snowSample);
++            0.5f * SnowTrailSegment(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
 +        if ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) {
 +            if (shaped && (snowSample.height < -0.5f)) {
 +                return false;
@@ -15855,10 +15896,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..8d0c879
+index 0000000..030d7b3
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,291 @@
 +//
 +// RT64
 +//
@@ -15956,9 +15997,10 @@ index 0000000..8d0c879
 +    return surface * (1.0f - 0.97f * trail.x) - trail.z + bank;
 +}
 +
-+// How much of the snow's depth lies at a world position (1 near, thinning to 0 by the snow's reach, so it ends without
-+// an edge), and its distance from the camera.
-+float SnowThin(float3 world, out float cameraDistance) {
++// How much of the snow's depth lies at a world position (1 near, thinning to 0 by reach, so it ends without an edge),
++// and its distance from the camera. (The shells reach snowParams.z; the tessellated snow, cheap far away, much further,
++// snowLod.y.)
++float SnowThin(float3 world, out float cameraDistance, float reach) {
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    cameraDistance = distance(world, camera);
 +    // (As far as the snow's reach goes, a camera zoomed in brings it nearer, SceneSnowZoom, and the snow round Banjo is
@@ -15967,7 +16009,6 @@ index 0000000..8d0c879
 +    if (FrParams.snowPlayer.w > 0.0f) {
 +        reachDistance = min(reachDistance, distance(world, float3(FrParams.snowPlayer.x, FrParams.snowPlayer.z, FrParams.snowPlayer.y)) + 600.0f);
 +    }
-+    const float reach = FrParams.snowParams.z;
 +    return saturate(1.0f - (reachDistance - reach * 0.55f) / (reach * 0.45f));
 +}
 +
@@ -16007,7 +16048,7 @@ index 0000000..8d0c879
 +
 +    // Thinner far away, gone by the snow's reach, so it ends without an edge.
 +    const float4 params = FrParams.snowParams;
-+    const float thin = SnowThin(world, s.cameraDistance);
++    const float thin = SnowThin(world, s.cameraDistance, FrParams.snowParams.z);
 +    if (thin <= 0.02f) {
 +        s.trail.x = 2.0f;
 +        return why && (share >= 0.999f);
@@ -16048,23 +16089,25 @@ index 0000000..8d0c879
 +}
 +
 +// How far apart the tessellated snow's new vertices over the trail are (SnowTess.hlsl) at a distance from the camera (world units).
++// Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 +float SnowTrailSegment(float cameraDistance) {
-+    return max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f);
++    const float start = max(FrParams.snowLod.x, 1.0f);
++    return FrParams.snowGrid.x * 2.0f * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
 +}
 +
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with the
 +// ground's normal there, any length) in s.height, s.shellY the same (the pixel is on the snow's surface). False where
 +// no snow lies on it: a wall, or past the snow's reach; s.height is then still how far that ground is raised with the
 +// snow round it (its untouched height there, thinning out by the reach), so the raised ground has no cracks where a
-+// wall or the snow's end meets it. Without trail (ice: RASTER_SNOW_FLAT), the untouched height everywhere. Both the
++// wall or the snow's end meets it. Both the
 +// domain shader (where to raise the surface to, with the trail smoothed over blur world units, as far apart as its
 +// vertices are) and the pixel shader (how to shade it, smoothed a little less so the cells' edges don't show) ask.
-+bool SnowTessShape(float3 ground, float3 normal, float blur, bool trail, out SnowSample s) {
++bool SnowTessShape(float3 ground, float3 normal, float blur, out SnowSample s) {
 +    s = (SnowSample)0;
 +    const bool why = FrParams.snowGrid.w > 3.5f;
 +    const float4 params = FrParams.snowParams;
 +    const float normalLength = length(normal);
-+    const float thin = SnowThin(ground, s.cameraDistance);
++    const float thin = SnowThin(ground, s.cameraDistance, FrParams.snowLod.y);
 +    s.surface = params.x * thin;
 +    if ((normalLength <= 0.0f) || (abs(normal.y) < 0.12f * normalLength)) {
 +        s.trail.x = 1.0f;
@@ -16076,11 +16119,6 @@ index 0000000..8d0c879
 +        s.height = s.shellY = why ? params.x : s.surface;
 +        return why;
 +    }
-+    if (!trail && !why) {
-+        s.height = s.shellY = s.surface;
-+        return false;
-+    }
-+
 +    const bool steep = abs(normal.y) < 0.6f * normalLength;
 +    if (why) {
 +        s.trail.x = steep ? 3.0f : 4.0f;
@@ -16155,18 +16193,18 @@ index 0000000..8d0c879
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..0eaee10
+index 0000000..ad2733f
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,166 @@
 +//
 +// RT64
 +//
 +
 +// Banjo-Tooie: deep snow as one tessellated surface, where the device has hull and domain shaders (D3D12, and Vulkan
 +// with tessellationShader). The level's snowy ground draws are drawn again through these: the hull shader cuts each
-+// triangle finer near Banjo's trail (and a little finer near the camera), and the domain shader raises every new
-+// vertex straight up to the snow's height over the ground there, pressed down where Banjo walked and banked up beside
++// triangle finer near Banjo's trail (coarser past the Snow LOD distance), and the domain shader raises every new vertex
++// straight up to the snow's height over the ground there, pressed down where Banjo walked and banked up beside
 +// it (SnowTessShape in Snow.hlsli), so the trail is a real dent in the snow's surface rather than a stack of shells.
 +// The vertex shader leaves the ground where it is (RASTER_SNOW_TESS, RasterVS.hlsl); the pixel shader asks the same
 +// height again to shade the snow, and shades the ground as it is where no snow lies (RasterPS.hlsl). The ground's own
@@ -16199,8 +16237,8 @@ index 0000000..0eaee10
 +    float3 normal : NORMAL;
 +};
 +
-+// The trail's cells are SnowCell (1.25) units across: over the trail the surface is cut about that fine (coarser further
-+// from the camera), elsewhere only as much as the snow's thinning toward its reach needs.
++// Over the trail the surface is cut about two of its cells fine (SnowTrailSegment: coarser past the Snow LOD distance);
++// elsewhere not at all.
 +static const float SnowTessMaxFactor = 64.0f;
 +// How far apart the points are that look for the trail along an edge or over a triangle (half a block's width).
 +static const float SnowTessProbe = 25.0f;
@@ -16225,8 +16263,11 @@ index 0000000..0eaee10
 +}
 +
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
-+    const float segment = trail ? SnowTrailSegment(cameraDistance) : max(60.0f, cameraDistance * 0.15f);
-+    return clamp(edgeLength / segment, 1.0f, SnowTessMaxFactor);
++    // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
++    if (!trail) {
++        return 1.0f;
++    }
++    return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
 +}
 +
 +float SnowEdgeFactor(float3 a, float3 b) {
@@ -16268,7 +16309,8 @@ index 0000000..0eaee10
 +    const float normalLength = length(p.normal);
 +    float distanceA, distanceB, distanceC;
 +    const bool wall = (normalLength <= 0.0f) || (abs(p.normal.y) < 0.12f * normalLength);
-+    const bool beyond = (SnowThin(a, distanceA) <= 0.02f) && (SnowThin(b, distanceB) <= 0.02f) && (SnowThin(c, distanceC) <= 0.02f);
++    const float reach = FrParams.snowLod.y;
++    const bool beyond = (SnowThin(a, distanceA, reach) <= 0.02f) && (SnowThin(b, distanceB, reach) <= 0.02f) && (SnowThin(c, distanceC, reach) <= 0.02f);
 +    if ((wall || beyond) && (FrParams.snowGrid.w <= 3.5f)) {
 +        p.edges[0] = p.edges[1] = p.edges[2] = 1.0f;
 +        p.inside = 1.0f;
@@ -16311,7 +16353,7 @@ index 0000000..0eaee10
 +    // RASTER_SNOW_GROUND, stays where it is.)
 +    SnowSample s;
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    SnowTessShape(v.furAnchor.xyz, p.normal, 0.75f * SnowTrailSegment(distance(v.furAnchor.xyz, camera)), (gConstants.grassShells & RASTER_SNOW_FLAT) == 0, s);
++    SnowTessShape(v.furAnchor.xyz, p.normal, 0.75f * SnowTrailSegment(distance(v.furAnchor.xyz, camera)), s);
 +    const float height = ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) ? 0.0f : s.height;
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
@@ -16811,10 +16853,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..f6fe696 100644
+index 2e62aaf..5d3eb50 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,99 @@ namespace interop {
+@@ -13,6 +13,102 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -16897,6 +16939,9 @@ index 2e62aaf..f6fe696 100644
 +        float4 snowPlayer;
 +        // Which colours count as snow: the most green and blue may go over red, and the most saturation (Snow.hlsli).
 +        float4 snowColor;
++        // The tessellated snow's level of detail (SnowTess.hlsl): the distance from the camera it starts to be cut
++        // coarser from (Snow LOD distance), then how far it reaches (it thins out to nothing by there).
++        float4 snowLod;
 +        // Where the trail lies: the grid split into 16 x 16 blocks of 20 x 20 cells (by their place in the grid, as
 +        // snowTrail), a bit each (block z * 16 + x, low 128 then high 128), set while anything pressed in it is still
 +        // filling back in. The tessellated snow (SnowTess.hlsl) is cut finely only over those.
@@ -17014,10 +17059,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..5ed4371 100644
+index 0a5c332..2b79dcf 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,74 @@
+@@ -9,11 +9,71 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -17043,9 +17088,6 @@ index 0a5c332..5ed4371 100644
 +    // with holes where the trail goes down below it (through Icy Side's own snow layer); the raised snow is drawn after
 +    // it, so the ground shows through wherever the raised surface leaves a crack.
 +#define RASTER_SNOW_GROUND 0x02000000u
-+    // Banjo-Tooie: with RASTER_SNOW_TESS, ice: raised flat with the snow round it (so it doesn't lie in a pit), without
-+    // trail or snow shading.
-+#define RASTER_SNOW_FLAT 0x01000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
 +    // the shell count.

@@ -90,6 +90,8 @@ namespace tooie::picture_filters {
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string snow_height_option = "deep_snow_height";
     inline const std::string snow_detail_option = "deep_snow_detail";
+    inline const std::string snow_refill_option = "deep_snow_refill";
+    inline const std::string snow_lod_option = "deep_snow_lod_distance";
     // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
