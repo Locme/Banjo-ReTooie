@@ -434,9 +434,8 @@ namespace {
         double dw[3];
         for (int k = 0; k < 3; k++) dw[k] = wm[k][0] * t[0] + wm[k][1] * t[1];
         for (int k = 0; k < 3; k++) {
-            // Never further out than a few times the hand's own depth, so a wrong map cannot send it far off.
-            const double limit = 8.0 * depth + 800.0;
-            v[k] = (float)std::clamp((double)v[k] + dw[k], -limit, limit);
+            // No reach limit (L, 2026-10-20: "truly free"); only a guard against a runaway number.
+            v[k] = (float)std::clamp((double)v[k] + dw[k], -1.0e6, 1.0e6);
         }
         if (logging()) {
             fprintf(stderr, "[menu-mouse] free hand spot %d %s vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, fitted ? "fit" : (have_saved ? "saved" : "default"), v[0], v[1], v[2], sx, sy);
