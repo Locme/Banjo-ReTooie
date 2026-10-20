@@ -16,6 +16,21 @@ namespace tooie::snout_jiggle {
     bool blend_vertices(uint32_t first_list_phys);
 
     inline const std::string option = "snout_jiggle";
+    // Backpack jiggle (L, 2026-10-19): the backpack and its lid, its own sliders.
+    inline const std::string body_option = "backpack_jiggle";
+    inline const std::string body_stiffness_option = "backpack_jiggle_stiffness";
+    inline const std::string body_damping_option = "backpack_jiggle_damping";
+    inline const std::string body_mass_option = "backpack_jiggle_mass";
+    inline const std::string body_squash_option = "backpack_jiggle_squash";      // % of its size, every direction
+    inline const std::string body_tilt_option = "backpack_jiggle_tilt";          // degrees, + leans its top forward
+    // Belly jiggle (L, 2026-10-19): the front of his belly, sliders of the snout's kinds.
+    inline const std::string belly_option = "belly_jiggle";
+    inline const std::string belly_stiffness_option = "belly_jiggle_stiffness";
+    inline const std::string belly_damping_option = "belly_jiggle_damping";
+    inline const std::string belly_mass_option = "belly_jiggle_mass";
+    inline const std::string belly_squash_in_option = "belly_jiggle_squash_in";
+    inline const std::string belly_squash_out_option = "belly_jiggle_squash_out";
+    inline const std::string belly_squash_across_option = "belly_jiggle_squash_across";
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string mumbo_option = "mumbo_jiggle";                   // the feathers on Mumbo's head, her sliders
     // Her feathers are jiggle bones too, with the snout's kinds of slider (L, 2026-10-19).

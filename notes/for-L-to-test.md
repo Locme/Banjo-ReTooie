@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T439 Jiggle section: Belly jiggle, Backpack jiggle back (holds while Kazooie is out)
+- Asked: 2026-10-20 02:08 UTC
+- Build: main
+- Steps:
+  1. General: all the jiggle options now sit in their own Jiggle section (Snout, Belly, Backpack, Kazooie, Mumbo)
+  2. Belly jiggle on: run, jump, land and stop; its sliders are the snout's kinds (defaults stiffness 150, damping 12, mass 1, 25% each way)
+  3. Backpack jiggle on (same sliders as before: squash & stretch, tilt while walking, still at idle): double jump, Beak Barge, Flap Flip and Talon Trot
+- Look for: The middle of his belly wobbles with no gaps at the shorts, fur or chin. The backpack swings when he moves and holds still mid-swing whenever Kazooie comes out, then carries on once she is back in. Not checked headless (L asked); it builds.
+- Status: waiting for L
+
 ## T438 Switch replays while one is running
 - Asked: 2026-10-19 19:40 UTC
 - Build: main

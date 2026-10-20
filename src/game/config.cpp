@@ -309,6 +309,48 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::belly_option, "Belly jiggle",
+        "The front of Banjo's belly wobbles on a spring as he runs, jumps and lands, with its own settings like the snout's. On Banjo's own model (not model mods). It stays mid-wobble in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(belly_stiffness_option, "Belly jiggle: stiffness",
+            "How hard the belly springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+        general.add_number_option(belly_damping_option, "Belly jiggle: damping",
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 12);
+        general.add_number_option(belly_mass_option, "Belly jiggle: mass",
+            "How heavy the belly is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(belly_squash_in_option, "Belly jiggle: max squash & stretch inwards",
+            "How far the belly may squash in, as a share of its depth.", 0, 95, 5, 0, true, 25);
+        general.add_number_option(belly_squash_out_option, "Belly jiggle: max squash & stretch outwards",
+            "How far the belly may bulge out, as a share of its depth.", 0, 300, 5, 0, true, 25);
+        general.add_number_option(belly_squash_across_option, "Belly jiggle: max squash & stretch up and down",
+            "How far the belly may swing up and down (and to the side), as a share of its depth.", 0, 300, 5, 0, true, 25);
+        for (const std::string* id : { &belly_stiffness_option, &belly_damping_option, &belly_mass_option, &belly_squash_in_option,
+                                       &belly_squash_out_option, &belly_squash_across_option }) {
+            general.add_option_hidden_dependency(*id, belly_option, false);
+        }
+    }
+    general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
+        "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(body_stiffness_option, "Backpack jiggle: stiffness",
+            "How hard the backpack springs back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 200);
+        general.add_number_option(body_damping_option, "Backpack jiggle: damping",
+            "How quickly the bouncing dies out. 0 bounces for ages.", 0, 90, 1, 0, false, 10);
+        general.add_number_option(body_mass_option, "Backpack jiggle: mass",
+            "How heavy the backpack is: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1.5);
+        general.add_number_option(body_squash_option, "Backpack jiggle: squash & stretch",
+            "How far the pack may swing, squash and stretch from where it rests, as a share of its size.", 0, 300, 5, 0, true, 25);
+        general.add_number_option(body_tilt_option, "Backpack jiggle: tilt",
+            "How the pack leans while Banjo walks or runs: positive leans its top forward towards his head, negative leans it back, in degrees. It eases back upright when he stops or leaves the ground.", -60, 60, 5, 0, false, 0);
+        for (const std::string* id : { &body_stiffness_option, &body_damping_option, &body_mass_option, &body_squash_option,
+                                       &body_tilt_option }) {
+            general.add_option_hidden_dependency(*id, body_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::kazooie_option, "Kazooie jiggle",
         "Kazooie's crest and tail feathers wobble on springs as she moves, whether she rides in the backpack or walks alone after Split Up. Separate from Snout jiggle. They stay mid-wobble in Photo Mode.",
         false);
@@ -359,6 +401,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::save_backups_option, "Saves");
     recompui::config::set_option_group(tooie::classic_sounds::option, "Back-Ports and cut content");
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
+    recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
