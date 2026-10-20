@@ -2018,7 +2018,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..cd1625e 100644
+index 9fae0d4..f35ce4c 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2431,7 +2431,7 @@ index 9fae0d4..cd1625e 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +805,65 @@ namespace RT64 {
+@@ -465,12 +805,68 @@ namespace RT64 {
          return true;
      }
      
@@ -2473,6 +2473,9 @@ index 9fae0d4..cd1625e 100644
 +        // The steep draws too, marked apart (waterMask 3): Modern water's waterfalls, and with either water, so the
 +        // night doesn't take a pale fall for a light. First, so the flat water wins where both are drawn (a fall's
 +        // part under the surface; nothing writes depth here).
++        // Shiny surfaces first of all (waterMask 5), so water, falls and ice drawn over them win.
++        GpuCheckpoint(worker->commandList.get(), "water mask: shiny");
++        drawWater(5, targetDrawCall.shinyInstances);
 +        GpuCheckpoint(worker->commandList.get(), "water mask: steep draws");
 +        drawWater(3, targetDrawCall.fallInstances);
 +        GpuCheckpoint(worker->commandList.get(), "water mask: ice");
@@ -2499,7 +2502,7 @@ index 9fae0d4..cd1625e 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +892,16 @@ namespace RT64 {
+@@ -499,6 +895,16 @@ namespace RT64 {
              }
          };
  
@@ -2516,7 +2519,7 @@ index 9fae0d4..cd1625e 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +917,17 @@ namespace RT64 {
+@@ -514,6 +920,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2534,7 +2537,7 @@ index 9fae0d4..cd1625e 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +988,126 @@ namespace RT64 {
+@@ -574,12 +991,126 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2662,7 +2665,7 @@ index 9fae0d4..cd1625e 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1125,7 @@ namespace RT64 {
+@@ -597,6 +1128,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -2670,7 +2673,7 @@ index 9fae0d4..cd1625e 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1145,7 @@ namespace RT64 {
+@@ -616,6 +1148,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -2678,7 +2681,7 @@ index 9fae0d4..cd1625e 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1250,6 +1780,67 @@ namespace RT64 {
+@@ -1250,6 +1783,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2746,7 +2749,7 @@ index 9fae0d4..cd1625e 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1887,98 @@ namespace RT64 {
+@@ -1296,9 +1890,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2761,7 +2764,7 @@ index 9fae0d4..cd1625e 100644
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
 +                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
-+                    if ((!targetDrawCall.waterInstances.empty() || !targetDrawCall.fallInstances.empty() || !targetDrawCall.iceInstances.empty()) && SceneWaterWanted()) {
++                    if ((!targetDrawCall.waterInstances.empty() || !targetDrawCall.fallInstances.empty() || !targetDrawCall.iceInstances.empty() || !targetDrawCall.shinyInstances.empty()) && SceneWaterWanted()) {
 +                        GpuSectionScope timed(WorkloadGpuSections(), GpuSection::WaterMask, worker->commandList.get());
 +                        submitWaterMask(worker, framebuffer, targetDrawCall);
 +                    }
@@ -2846,7 +2849,7 @@ index 9fae0d4..cd1625e 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2030,33 @@ namespace RT64 {
+@@ -1350,10 +2033,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2880,7 +2883,7 @@ index 9fae0d4..cd1625e 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2111,61 @@ namespace RT64 {
+@@ -1408,6 +2114,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2889,6 +2892,7 @@ index 9fae0d4..cd1625e 100644
 +        targetDrawCall.waterInstances.clear();
 +        targetDrawCall.fallInstances.clear();
 +        targetDrawCall.iceInstances.clear();
++        targetDrawCall.shinyInstances.clear();
 +        targetDrawCall.waterHandedOn.clear();
 +        targetDrawCall.sunCasterInstances.clear();
 +        targetDrawCall.waterLeftOutClosed = 0;
@@ -2942,7 +2946,7 @@ index 9fae0d4..cd1625e 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2189,22 @@ namespace RT64 {
+@@ -1431,6 +2193,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2965,7 +2969,7 @@ index 9fae0d4..cd1625e 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2224,168 @@ namespace RT64 {
+@@ -1450,12 +2228,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3134,7 +3138,7 @@ index 9fae0d4..cd1625e 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2536,7 @@ namespace RT64 {
+@@ -1606,6 +2540,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3142,7 +3146,7 @@ index 9fae0d4..cd1625e 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2613,20 @@ namespace RT64 {
+@@ -1682,6 +2617,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3163,7 +3167,7 @@ index 9fae0d4..cd1625e 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2692,980 @@ namespace RT64 {
+@@ -1747,24 +2696,997 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3195,6 +3199,18 @@ index 9fae0d4..cd1625e 100644
 +                        }
 +                        iceTextured = found;
 +                    }
++                    // Shiny surfaces (SetSceneShinyTextures: metal and tiles), marked apart in the mask so screen-space
++                    // reflections show only there, while those are on.
++                    bool shinyTextured = !iceTextured && SceneShinyWanted() && (proj.type == Projection::Type::Perspective) && (fbPair.depthWrite || (continuedWorld != nullptr)) && worldOpen &&
++                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                        om.zCmp() && (om.cycleType() != G_CYC_COPY) && (call.callDesc.tileCount > 0);
++                    if (shinyTextured) {
++                        bool found = false;
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !found; t++) {
++                            found = SceneShinyTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        }
++                        shinyTextured = found;
++                    }
 +                    // TOOIE_ICE_LOG: once for each 3D world texture combination, its tiles' hashes and how it is drawn, to find ice.
 +                    static const bool iceLog = (getenv("TOOIE_ICE_LOG") != nullptr);
 +                    if (iceLog && (proj.type == Projection::Type::Perspective) && worldOpen) {
@@ -3221,6 +3237,9 @@ index 9fae0d4..cd1625e 100644
 +                    else if (waterLike && levelGeometry(drawData, call)) {
 +                        targetDrawCall.fallInstances.push_back(instanceIndex);
 +                    }
++                    else if (shinyTextured) {
++                        targetDrawCall.shinyInstances.push_back(instanceIndex);
++                    }
 +                    else if ((proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                        om.zCmp() && !om.zUpd() && (om.zMode() != ZMODE_DEC) && interop::Blender::usesAlphaBlend(om))
 +                    {
@@ -3231,8 +3250,8 @@ index 9fae0d4..cd1625e 100644
 +                            targetDrawCall.waterLeftOutSmall++;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
 +                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
@@ -3667,12 +3686,12 @@ index 9fae0d4..cd1625e 100644
 +                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
-                 }
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
 +                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -3813,6 +3832,7 @@ index 9fae0d4..cd1625e 100644
 +                    targetDrawCall.waterInstances.insert(targetDrawCall.waterInstances.begin(), earlier.waterInstances.begin(), earlier.waterInstances.end());
 +                    targetDrawCall.fallInstances.insert(targetDrawCall.fallInstances.begin(), earlier.fallInstances.begin(), earlier.fallInstances.end());
 +                    targetDrawCall.iceInstances.insert(targetDrawCall.iceInstances.begin(), earlier.iceInstances.begin(), earlier.iceInstances.end());
++                    targetDrawCall.shinyInstances.insert(targetDrawCall.shinyInstances.begin(), earlier.shinyInstances.begin(), earlier.shinyInstances.end());
 +                    targetDrawCall.sunCasterInstances.insert(targetDrawCall.sunCasterInstances.begin(), earlier.sunCasterInstances.begin(), earlier.sunCasterInstances.end());
 +                    earlier.sunCasterInstances.clear();
 +                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
@@ -3822,6 +3842,7 @@ index 9fae0d4..cd1625e 100644
 +                    earlier.waterInstances.clear();
 +                    earlier.fallInstances.clear();
 +                    earlier.iceInstances.clear();
++                    earlier.shinyInstances.clear();
 +                    earlier.sceneEffectsAfter = -1;
 +                    // The camera of the frame's first 3D world, handed on from part to part. A later part's own
 +                    // first projection can carry a model's transform in its view (a part that starts with a
@@ -4146,7 +4167,7 @@ index 9fae0d4..cd1625e 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..ef4d1bf 100644
+index 3add9c3..88a8367 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,8 @@
@@ -4166,7 +4187,7 @@ index 3add9c3..ef4d1bf 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +51,37 @@ namespace RT64 {
+@@ -48,6 +51,38 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -4185,6 +4206,7 @@ index 3add9c3..ef4d1bf 100644
 +        // turns the watery ones into its waterfalls and puts the rest back as the game drew them.
 +        std::vector<uint32_t> fallInstances;
 +        std::vector<uint32_t> iceInstances;    // flat see-through level decals (Icy Side's frozen water), for reflections
++        std::vector<uint32_t> shinyInstances;  // draws with a shiny texture (metal, tiles), for screen-space reflections
 +        // Water this part of the picture draws but handed to a later part's effects (see addFramebuffer):
 +        // Modern water leaves it out here too.
 +        std::vector<uint32_t> waterHandedOn;
@@ -4204,7 +4226,7 @@ index 3add9c3..ef4d1bf 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +96,94 @@ namespace RT64 {
+@@ -62,11 +97,94 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -4299,7 +4321,7 @@ index 3add9c3..ef4d1bf 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +204,10 @@ namespace RT64 {
+@@ -87,6 +205,10 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -4310,7 +4332,7 @@ index 3add9c3..ef4d1bf 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +221,7 @@ namespace RT64 {
+@@ -100,6 +222,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -4318,7 +4340,7 @@ index 3add9c3..ef4d1bf 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +245,10 @@ namespace RT64 {
+@@ -123,6 +246,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4329,7 +4351,7 @@ index 3add9c3..ef4d1bf 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +290,15 @@ namespace RT64 {
+@@ -164,7 +291,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -5917,10 +5939,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a3039b9
+index 0000000..b63620f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2448 @@
+@@ -0,0 +1,2472 @@
 +//
 +// RT64
 +//
@@ -6281,6 +6303,9 @@ index 0000000..a3039b9
 +        effectsSettings.bounceLight = strength;
 +    }
 +
++    // Screen-space reflections on: the shiny list is looked up (SceneShinyWanted).
++    static std::atomic<bool> shinyWanted{ false };
++
 +    void SetSceneScreenSpaceGI(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.screenSpaceGI = strength;
@@ -6289,6 +6314,7 @@ index 0000000..a3039b9
 +    void SetSceneScreenSpaceReflections(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.screenSpaceReflections = strength;
++        shinyWanted.store(strength > 0.0f);
 +    }
 +
 +    void SetSceneWaterWaves(float strength, float speed) {
@@ -6462,6 +6488,26 @@ index 0000000..a3039b9
 +            return 1;
 +        }
 +        return (grassEdgeTextures.count(hash) != 0) ? 2 : 0;
++    }
++
++    // Shiny textures (metal, tiles) for screen-space reflections: read on the render thread like the ice ones,
++    // and only looked up while the reflections are on.
++    static std::mutex shinyTextureMutex;
++    static std::unordered_set<uint64_t> shinyTextures;
++
++    void SetSceneShinyTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(shinyTextureMutex);
++        shinyTextures.swap(textures);
++    }
++
++    bool SceneShinyTexture(uint64_t hash) {
++        const std::scoped_lock lock(shinyTextureMutex);
++        return shinyTextures.count(hash) != 0;
++    }
++
++    bool SceneShinyWanted() {
++        return shinyWanted.load();
 +    }
 +
 +    // Ice textures: read on the render thread like the grass ones.
@@ -7529,7 +7575,7 @@ index 0000000..a3039b9
 +
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
-+        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
 +            // The day and night cycle's mist gathers round water.
 +            // and the rain rings on water need it too.
 +            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
@@ -8371,10 +8417,10 @@ index 0000000..a3039b9
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..aab2da4
+index 0000000..b1dca39
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,395 @@
+@@ -0,0 +1,400 @@
 +//
 +// RT64
 +//
@@ -8705,6 +8751,11 @@ index 0000000..aab2da4
 +    // Banjo-Tooie: the ice textures (RT64 hashes): floors, walls and blocks drawn with them reflect with Ice reflections.
 +    void SetSceneIceTextures(const uint64_t *hashes, size_t count);
 +    bool SceneIceTexture(uint64_t hash);
++    // Banjo-Tooie: the shiny textures (metal, tiles), whose draws go into the water mask marked apart (waterMask 5) so
++    // screen-space reflections show only on them (and on water and ice); looked up only while those are on.
++    void SetSceneShinyTextures(const uint64_t *hashes, size_t count);
++    bool SceneShinyTexture(uint64_t hash);
++    bool SceneShinyWanted();
 +    // Banjo-Tooie: textures deep snow never covers (Shader Effects pick mode's picks other than Deep Snow).
 +    void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
 +    bool SceneSnowOffTexture(uint64_t hash);
@@ -11995,7 +12046,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..f3d1ea8 100644
+index e7895c3..2961f63 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -12297,7 +12348,7 @@ index e7895c3..f3d1ea8 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +494,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +494,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -12312,7 +12363,8 @@ index e7895c3..f3d1ea8 100644
 +    // in alpha what it is: 1 for flat water, a quarter for Modern water's steep draws (waterMask 3, waterfalls).
 +    if (gConstants.waterMask != 0) {
 +        const uint depthBits = uint(saturate(vertexPosition.z) * 16777215.0f);
-+        const float kind = (gConstants.waterMask == 3) ? 64.0f : ((gConstants.waterMask == 4) ? 16.0f : 255.0f);
++        // Ice (4) a sixteenth, shiny surfaces for screen-space reflections (5) 4 / 255.
++        const float kind = (gConstants.waterMask == 3) ? 64.0f : ((gConstants.waterMask == 4) ? 16.0f : ((gConstants.waterMask == 5) ? 4.0f : 255.0f));
 +        resultColor = float4(float((depthBits >> 16) & 0xFF), float((depthBits >> 8) & 0xFF), float(depthBits & 0xFF), kind) / 255.0f;
 +        resultAlpha = 1.0f;
 +        return true;
@@ -12321,7 +12373,7 @@ index e7895c3..f3d1ea8 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +537,7 @@ void PSMain(
+@@ -287,6 +538,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -12329,7 +12381,7 @@ index e7895c3..f3d1ea8 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +554,7 @@ void PSMain(
+@@ -303,7 +555,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -12339,7 +12391,7 @@ index e7895c3..f3d1ea8 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..3d25169 100644
+index 74b1fa0..c2ba983 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,14 +11,53 @@
@@ -12397,20 +12449,21 @@ index 74b1fa0..3d25169 100644
      }
      
      // Apply screen scale and offset.
-@@ -33,6 +72,12 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +72,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
 +    // Banjo-Tooie: ice redrawn into the water mask (waterMask 4) a hair nearer, so a solid ice floor or wall passes
 +    // the depth test (less than) against its own depth from the main pass; what is in front still hides it.
-+    if (gConstants.waterMask == 4) {
++    // Shiny surfaces (waterMask 5) the same way.
++    if ((gConstants.waterMask == 4) || (gConstants.waterMask == 5)) {
 +        ndcPos.z -= 1e-6f * ndcPos.w;
 +    }
 +
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +98,19 @@ void VSMain(
+@@ -53,17 +99,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -12454,10 +12507,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..aebe5a9
+index 0000000..b4768fa
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3033 @@
+@@ -0,0 +1,3060 @@
 +//
 +// RT64
 +//
@@ -13272,6 +13325,17 @@ index 0000000..aebe5a9
 +    return (iceDistance - sceneDistance) < (2.0f + sceneDistance * 0.01f);
 +}
 +
++// A shiny surface in the mask (waterMask 5: metal and tiles, SetSceneShinyTextures), for screen-space reflections.
++bool LoadShiny(int2 pixel) {
++    pixel = clamp(pixel, int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef MULTISAMPLING
++    const float4 m = gWater.Load(pixel, 0);
++#else
++    const float4 m = gWater.Load(int3(pixel, 0));
++#endif
++    return (m.a > 0.008f) && (m.a < 0.03f);
++}
++
 +// Water reflections' strength (0 off, 1 strongest) and Ice reflections' (in steps of 0.01): water.x carries the
 +// first plus twice the second's hundredths, as the push constants have no room left.
 +float WaterReflectionStrength() {
@@ -13280,6 +13344,22 @@ index 0000000..aebe5a9
 +
 +float IceReflectionStrength() {
 +    return floor(gConstants.water.x * 0.5f) / 100.0f;
++}
++
++// Where screen-space reflections show: shiny surfaces (metal, tiles), and water and ice whose own reflections are off,
++// from the water mask (water.y 1 to 2.25 when it was drawn this frame).
++bool ReflectiveAt(int2 pixel, float depth) {
++    if ((gConstants.water.y < 0.5f) || (gConstants.water.y > 2.9f)) {
++        return false;
++    }
++    if (LoadShiny(pixel)) {
++        return true;
++    }
++    float maskDepth;
++    if ((WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth)) {
++        return true;
++    }
++    return (IceReflectionStrength() <= 0.0f) && IceAt(pixel, depth, maskDepth);
 +}
 +
 +// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
@@ -15250,7 +15330,7 @@ index 0000000..aebe5a9
 +    float keep = 1.0f;
 +    const bool occlusion = AoStrength() > 0.0f;
 +    const bool globalIllumination = (SsgiStrength() > 0.0f) && redraw;
-+    const bool reflections = (SsrStrength() > 0.0f) && redraw;
++    const bool reflections = (SsrStrength() > 0.0f) && redraw && ReflectiveAt(pixel, depth);
 +    const bool sunShadows = (gConstants.shadows.x > 0.0f) && (gConstants.view.x < 1.5f);
 +    // The surface's position and normal once for all of them (the normal reads four more depths).
 +    float3 center = 0.0f;

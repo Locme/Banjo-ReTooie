@@ -42,6 +42,7 @@ namespace RT64 {
     uint32_t SceneParallaxTexture(uint64_t hash);
     uint32_t SceneGrassTexture(uint64_t hash);
     bool SceneIceTexture(uint64_t hash);
+    bool SceneShinyTexture(uint64_t hash);
 }
 
 namespace {
@@ -259,14 +260,14 @@ namespace {
     std::map<uint64_t, Effect> effects;
     std::map<uint64_t, Effect> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
     }
 
-    // One line a texture: "<hash> disable|grass|deep_snow|ice".
+    // One line a texture: "<hash> disable|grass|deep_snow|ice|shiny".
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
         std::string line;
@@ -295,7 +296,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice, shiny). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -366,7 +367,8 @@ namespace {
         return (has_live && (live->second != saved->second)) ? ", not saved" : "";
     }
 
-    // The built-in choice: grass (or grass along an edge) or ice from the lists, else none.
+    // The built-in choice: grass (or grass along an edge), ice or shiny from the lists, else none. Shiny shows only
+    // while Screen-space reflections are on, as the list is looked up only then.
     const char* built_in_effect(uint64_t hash) {
         const uint32_t grass = RT64::SceneGrassTexture(hash);
         if (grass == 1) {
@@ -375,7 +377,10 @@ namespace {
         if (grass == 2) {
             return "Grass along edges";
         }
-        return RT64::SceneIceTexture(hash) ? "Ice Reflection" : "None";
+        if (RT64::SceneIceTexture(hash)) {
+            return "Ice Reflection";
+        }
+        return RT64::SceneShinyTexture(hash) ? "Shiny Reflection" : "None";
     }
 
     std::string describe_effect(uint64_t hash, uint32_t layer, uint32_t layers) {
@@ -407,7 +412,7 @@ namespace {
         return result;
     }
 
-    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, built-in again.
+    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in again.
     // A texture's effect pick as it stands (had = false: none, the built-in choice), and setting it back.
     bool effect_of(uint64_t hash, Effect& effect) {
         std::lock_guard lock{ effects_mutex };
@@ -742,7 +747,7 @@ namespace {
                 recompinput::GameInput::INTERP_PICK };
             static const char* on_toasts[3] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
-                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, built-in; Shift + left click built-in, wheel deeper",
+                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in; Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper" };
             static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
