@@ -33,6 +33,7 @@
 #include "tooie_torch_enemy.h"
 #include "tooie_save_state.h"
 #include "tooie_motion_aim.h"
+#include "tooie_menu_mouse.h"
 #include "tooie_game.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
@@ -153,6 +154,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::hold_to_run::tick(rdram, ctx);
     tooie::fine_aim::tick(rdram, ctx);
     tooie::motion_aim::tick(rdram, ctx);
+    tooie::menu_mouse::tick(rdram, ctx);
     tooie::picture_filters::tick(rdram, ctx);
     tooie::widescreen_tick(rdram);
     tooie::vanilla_widescreen_tick(rdram, ctx);

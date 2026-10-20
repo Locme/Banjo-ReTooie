@@ -38,6 +38,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_fine_aim.h"
 #include "tooie_motion_aim.h"
+#include "tooie_menu_mouse.h"
 #include "tooie_picture_filters.h"
 #include "tooie_smaa.h"
 #include "tooie_api_restart.h"
@@ -538,6 +539,7 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
+    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::canary_mary::mode_option,
         "Canary Mary races",

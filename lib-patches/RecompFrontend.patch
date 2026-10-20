@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..616c34b 100644
+index 1961e29..5983aad 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..616c34b 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,9 @@ namespace recompinput {
+@@ -49,4 +56,19 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -75,6 +75,16 @@ index 1961e29..616c34b 100644
 +    // Banjo-Tooie: parallax pick mode: the cursor shows and moves freely (a crosshair), and the mouse stops aiming.
 +    void set_pick_mode(bool on);
 +    bool pick_mode();
++    // Banjo-Tooie: one of the game's own menus (pause menu, save select) is up and reads the mouse:
++    // the cursor is freed from mouse aiming while it is.
++    void set_game_menu_mouse(bool on);
++    bool game_menu_mouse();
++    // Banjo-Tooie: the cursor over the game window in pixels with the window's size (false before the
++    // mouse has been seen), how many times it has moved, and presses of a mouse button (SDL_BUTTON_LEFT ..),
++    // both counted only while no menu of this program has the input.
++    bool get_game_mouse_position(int* x, int* y, int* w, int* h);
++    uint32_t get_game_mouse_moves();
++    uint32_t get_game_mouse_clicks(int button);
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
 index f5ed6c0..ee8ed8c 100644
@@ -348,10 +358,10 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..e534824 100644
+index c76a1dc..9922548 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
-@@ -1,6 +1,7 @@
+@@ -1,10 +1,14 @@
  #include "recompinput/recompinput.h"
  #include "recompinput/input_binding.h"
  #include "recompinput/input_events.h"
@@ -359,7 +369,65 @@ index c76a1dc..e534824 100644
  #include "recompinput/profiles.h"
  #include "recompui/config.h"
  #include "ultramodern/ultramodern.hpp"
-@@ -79,6 +80,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+ 
++#include <atomic>
++#include <mutex>
++
+ static struct {
+     std::list<std::filesystem::path> files_dropped;
+ } DropState;
+@@ -38,6 +42,50 @@ void purge_deferred_controller_profiles() {
+     deferred_controller_profiles.clear();
+ }
+ 
++// Banjo-Tooie: where the cursor is over the game window and how the mouse was used, for the game's own
++// menus (get_game_mouse_position and the counts below).
++static std::mutex game_mouse_mutex;
++static int game_mouse_pos[4] = { -1, -1, 0, 0 };   // x, y, window width, height
++static std::atomic_uint32_t game_mouse_moves = 0;
++static std::atomic_uint32_t game_mouse_clicks[8] = {};
++// The motion SDL sends for the warp to the window's middle (update_cursor_lock) is not the player's.
++static std::chrono::steady_clock::time_point warp_time{};
++static int warp_x = -1;
++static int warp_y = -1;
++
++static void note_game_mouse_position(Uint32 window_id, int x, int y) {
++    SDL_Window* window = SDL_GetWindowFromID(window_id);
++    int w = 0;
++    int h = 0;
++    if (window != nullptr) {
++        SDL_GetWindowSize(window, &w, &h);
++    }
++    if (w > 0 && h > 0) {
++        std::lock_guard lock{ game_mouse_mutex };
++        game_mouse_pos[0] = x;
++        game_mouse_pos[1] = y;
++        game_mouse_pos[2] = w;
++        game_mouse_pos[3] = h;
++    }
++}
++
++bool get_game_mouse_position(int* x, int* y, int* w, int* h) {
++    std::lock_guard lock{ game_mouse_mutex };
++    *x = game_mouse_pos[0];
++    *y = game_mouse_pos[1];
++    *w = game_mouse_pos[2];
++    *h = game_mouse_pos[3];
++    return *w > 0;
++}
++
++uint32_t get_game_mouse_moves() {
++    return game_mouse_moves.load();
++}
++
++uint32_t get_game_mouse_clicks(int button) {
++    return (button >= 0 && button < 8) ? game_mouse_clicks[button].load() : 0;
++}
++
+ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+     switch (event->type) {
+     case SDL_EventType::SDL_KEYDOWN:
+@@ -79,6 +127,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              printf("  Instance ID: %d\n", SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)));
              printf("  Path: %s\n", SDL_JoystickPath(SDL_GameControllerGetJoystick(controller)));
              recompinput::add_controller_state(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)), controller);
@@ -367,7 +435,7 @@ index c76a1dc..e534824 100644
  
              if (SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_GYRO) && SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_ACCEL)) {
                  SDL_GameControllerSetSensorEnabled(controller, SDL_SensorType::SDL_SENSOR_GYRO, SDL_TRUE);
-@@ -151,6 +153,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -151,6 +200,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              queue_if_enabled(event);
          }
          break;
@@ -390,7 +458,7 @@ index c76a1dc..e534824 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
-@@ -208,17 +226,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -208,20 +273,41 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              ControllerState& state = recompinput::get_controller_state(event->csensor.which);
              uint64_t cur_timestamp = event->csensor.timestamp;
              uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
@@ -416,7 +484,26 @@ index c76a1dc..e534824 100644
              SDL_MouseMotionEvent* motion_event = &event->motion;
              recompinput::add_mouse_deltas(motion_event->xrel, motion_event->yrel);
          }
-@@ -246,26 +269,64 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
++        {
++            SDL_MouseMotionEvent* motion_event = &event->motion;
++            note_game_mouse_position(motion_event->windowID, motion_event->x, motion_event->y);
++            const bool from_warp = motion_event->x == warp_x && motion_event->y == warp_y &&
++                std::chrono::steady_clock::now() - warp_time < std::chrono::milliseconds{250};
++            if (!recompinput::game_input_disabled() && !from_warp) {
++                game_mouse_moves.fetch_add(1);
++            }
++        }
++        queue_if_enabled(event);
++        break;
++    case SDL_EventType::SDL_MOUSEBUTTONDOWN:
++        note_game_mouse_position(event->button.windowID, event->button.x, event->button.y);
++        if (!recompinput::game_input_disabled() && event->button.button < 8) {
++            game_mouse_clicks[event->button.button].fetch_add(1);
++        }
+         queue_if_enabled(event);
+         break;
+     case SDL_EventType::SDL_DROPBEGIN:
+@@ -246,26 +332,73 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  
@@ -430,6 +517,12 @@ index c76a1dc..e534824 100644
 +    bool cursor_visible = recompui::get_cursor_visible();
 +    if (cursor_locked) {
 +        cursor_visible = false;
++    }
++    // Banjo-Tooie: the game's own menus (pause menu, save select) take the mouse: the cursor is freed, and
++    // shows once the mouse is used (as in this program's menus).
++    if (recompinput::game_menu_mouse() && !recompinput::game_input_disabled()) {
++        cursor_locked = false;
++        cursor_visible = recompui::get_cursor_visible();
 +    }
 +    // Banjo-Tooie: pick mode frees and shows the cursor, as a crosshair over the game.
 +    static SDL_Cursor *crosshair = nullptr;
@@ -462,6 +555,9 @@ index c76a1dc..e534824 100644
 +            int w = 0;
 +            int h = 0;
 +            SDL_GetWindowSize(window, &w, &h);
++            warp_x = w / 2;
++            warp_y = h / 2;
++            warp_time = std::chrono::steady_clock::now();
 +            SDL_WarpMouseInWindow(window, w / 2, h / 2);
 +        }
 +    }
@@ -496,7 +592,7 @@ index c76a1dc..e534824 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..be5bc91 100644
+index 03ed871..5acd855 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -616,7 +712,7 @@ index 03ed871..be5bc91 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -411,6 +462,20 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+@@ -411,6 +462,30 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
      InputState.pending_mouse_delta[0] += delta_x;
      InputState.pending_mouse_delta[1] += delta_y;
  }
@@ -632,6 +728,16 @@ index 03ed871..be5bc91 100644
 +
 +bool recompinput::pick_mode() {
 +    return pick_mode_on.load();
++}
++
++static std::atomic_bool game_menu_mouse_on = false;
++
++void recompinput::set_game_menu_mouse(bool on) {
++    game_menu_mouse_on.store(on);
++}
++
++bool recompinput::game_menu_mouse() {
++    return game_menu_mouse_on.load();
 +}
 +
  void recompinput::add_mouse_wheel_delta(int32_t delta) {
@@ -982,10 +1088,25 @@ index eb8833e..acd435b 100644
          void add_default_options() {
              add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..63a4152 100644
+index 277a421..ca6598b 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
-@@ -346,6 +346,13 @@ public:
+@@ -311,6 +311,14 @@ public:
+             recompui::set_cursor_visible(mouse_is_active);
+         }
+ 
++        // Banjo-Tooie: RmlUi keeps hovering whatever sits under the cursor's last spot (it checks again on
++        // every update), so with the cursor hidden for a controller or the keyboard, rows that scrolled or
++        // opened under it still lit up and took the highlight. The cursor leaves RmlUi until the mouse is
++        // used again (its next move or click puts it back).
++        if (!mouse_is_active && context != nullptr) {
++            context->ProcessMouseLeave();
++        }
++
+         Rml::ElementDocument* current_document = top_mouse_document();
+         if (current_document == nullptr) {
+             return;
+@@ -346,6 +354,13 @@ public:
                  // Check if not focused or focused element is not focusable.
                  if (focused_el == nullptr || focused_el->is_focusable() != recompui::Element::CanFocus::Yes) {
                      auto recompui_doc = top_context.get_root_element();
@@ -999,7 +1120,7 @@ index 277a421..63a4152 100644
                      auto last_hovered = recompui_doc->get_last_focusable_hovered_element();
                      if (last_hovered && last_hovered->is_focusable() == recompui::Element::CanFocus::Yes) {
                          last_hovered->focus();
-@@ -570,6 +577,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
+@@ -570,6 +585,40 @@ Rml::Input::KeyIdentifier convert_sdl_to_rml(int sdl_key) {
      return identifier;
  }
  
@@ -1040,7 +1161,34 @@ index 277a421..63a4152 100644
  bool check_menu_button_pressed(int profile_index, recompinput::GameInput input, int32_t event_button) {
      auto menuBinding0 = recompinput::profiles::get_input_binding(profile_index, input, 0);
      auto menuBinding1 = recompinput::profiles::get_input_binding(profile_index, input, 1);
-@@ -731,7 +772,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -696,6 +745,10 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+ 
+         if (!all_input_is_disabled) {
+             bool is_mouse_input = false;
++            // Banjo-Tooie: mouse motion that doesn't make the mouse the active input is dropped. It used to
++            // reach RmlUi anyway (as a non-mouse event), so with a controller in use the hidden cursor (and
++            // the warp to the window's middle when mouse aiming lets go of it) still hovered and picked rows.
++            bool drop_event = false;
+             // Implement some additional behavior for specific events on top of what RmlUi normally does with them.
+             switch (cur_event.type) {
+             case SDL_EventType::SDL_MOUSEMOTION: {
+@@ -705,6 +758,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+                     float xD = cur_event.motion.x - last_mouse_pos[0];
+                     float yD = cur_event.motion.y - last_mouse_pos[1];
+                     if (sqrt(xD * xD + yD * yD) < 100) {
++                        drop_event = true;
+                         break;
+                     }
+                 }
+@@ -713,6 +767,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+ 
+                 // if controller is the primary input, don't use mouse movement to allow cursor to reactivate
+                 if (recompui::get_cont_active()) {
++                    drop_event = true;
+                     break;
+                 }
+             }
+@@ -731,7 +786,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
              case SDL_EventType::SDL_CONTROLLERBUTTONDOWN: {
                  int sdl_key = cont_button_to_key(cur_event.cbutton);
                  if (context_capturing_input && sdl_key) {
@@ -1049,7 +1197,7 @@ index 277a421..63a4152 100644
                      latest_controller_key_pressed = sdl_key;
                      next_repeat_time = clock::now() + start_repeat_delay;
                  }
-@@ -776,7 +817,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -776,7 +831,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
                          non_mouse_interacted = true;
                          int sdl_key = cont_axis_to_key(cur_event.caxis, axis_value);
                          if (context_capturing_input && sdl_key) {
@@ -1058,9 +1206,14 @@ index 277a421..63a4152 100644
                              latest_controller_key_pressed = sdl_key;
                              next_repeat_time = clock::now() + start_repeat_delay;
                          }
-@@ -798,12 +839,26 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -796,14 +851,30 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+             }
+ 
              // Send the event to RmlUi if this type of event is being captured.
-             if (is_mouse_input) {
+-            if (is_mouse_input) {
++            if (drop_event) {
++            }
++            else if (is_mouse_input) {
                  if (context_capturing_mouse) {
 +                    // Small moves after a key or controller press are not passed on (so a nudged mouse doesn't
 +                    // take over), so RmlUi's cursor can be out of date: move it to the click first. Without this,
@@ -1086,7 +1239,7 @@ index 277a421..63a4152 100644
                  }
              }
          }
-@@ -847,7 +902,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+@@ -847,7 +918,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
          if (now >= next_repeat_time) {

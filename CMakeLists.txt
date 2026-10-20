@@ -308,6 +308,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/torch_enemy.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/save_state.cpp
     ${CMAKE_SOURCE_DIR}/src/input/motion_aim.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/menu_mouse.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/totals_checklist.cpp
