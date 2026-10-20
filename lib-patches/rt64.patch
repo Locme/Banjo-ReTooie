@@ -5995,7 +5995,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..8ed4e6a
+index 0000000..2bfd5f7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,2571 @@
@@ -12676,10 +12676,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6be905d
+index 0000000..e560852
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3083 @@
+@@ -0,0 +1,3085 @@
 +//
 +// RT64
 +//
@@ -13319,8 +13319,10 @@ index 0000000..6be905d
 +// normal, the 16 pixels of each 4x4 block spreading their 32 over the hemisphere (a Vogel spiral, which is
 +// cosine-weighted), each taking the colour of the scene where it lands. The average light arriving at the surface;
 +// the scene pass multiplies it by the surface's own colour. Rays that leave the screen bring nothing (as
-+// realism-effects without an environment map).
-+float3 ScreenSpaceGI(float3 center, float3 normal, uint cell, float jitter) {
++// realism-effects without an environment map). The spiral and the rays' first steps are the same in every block, so
++// any 4x4 window of the half-size pass holds all 32 rays and IndirectAt's gather comes out smooth: per-pixel noise
++// here (interleaved gradient noise) left diagonal lines the gather couldn't average away.
++float3 ScreenSpaceGI(float3 center, float3 normal, uint cell) {
 +    const float3 side = normalize(cross(normal, (abs(normal.y) < 0.99f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
 +    const float3 across = cross(side, normal);
 +    // Off the surface a little, so the ray doesn't find the surface it starts from.
@@ -13330,10 +13332,12 @@ index 0000000..6be905d
 +    [unroll] for (int r = 0; r < 2; r++) {
 +        const uint index = cell * 2u + uint(r);
 +        const float diskRadius = sqrt((float(index) + 0.5f) / 32.0f);
-+        const float theta = float(index) * 2.39996323f + jitter * 6.2831853f;
++        const float theta = float(index) * 2.39996323f;
++        // Each ray's first step, spread evenly over the block's 32 rays (the golden ratio's fractions).
++        const float stepOffset = frac(float(index) * 0.61803399f + 0.5f);
 +        const float3 direction = normalize(side * (diskRadius * cos(theta)) + across * (diskRadius * sin(theta)) + normal * sqrt(max(1.0f - diskRadius * diskRadius, 0.0f)));
 +        float2 hitPixel;
-+        if (MarchRay(origin, direction, rayDistance, 12, 4, jitter, hitPixel)) {
++        if (MarchRay(origin, direction, rayDistance, 12, 4, stepOffset, hitPixel)) {
 +            light += gColorHalf.SampleLevel(LinearSampler, hitPixel / gConstants.projection.zw, 0).rgb * RayEdgeFade(hitPixel);
 +        }
 +    }
@@ -13515,7 +13519,7 @@ index 0000000..6be905d
 +    return floor(gConstants.water.x * 0.5f) / 100.0f;
 +}
 +
-+// Where screen-space reflections show: shiny surfaces (metal, tiles), and water and ice whose own reflections are off,
++// Where screen-space reflections show: shiny surfaces (metal, gold, glass, glazed tiles), and water whose own reflections are off,
 +// from the water mask (water.y 1 to 2.25 when it was drawn this frame).
 +bool ReflectiveAt(int2 pixel, float depth) {
 +    if ((gConstants.water.y < 0.5f) || (gConstants.water.y > 2.9f)) {
@@ -13524,11 +13528,9 @@ index 0000000..6be905d
 +    if (LoadShiny(pixel)) {
 +        return true;
 +    }
++    // Ice has Ice reflections of its own, and SSR stays off it.
 +    float maskDepth;
-+    if ((WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth)) {
-+        return true;
-+    }
-+    return (IceReflectionStrength() <= 0.0f) && IceAt(pixel, depth, maskDepth);
++    return (WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth);
 +}
 +
 +// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
@@ -15403,7 +15405,7 @@ index 0000000..6be905d
 +        result.a = GroundTruthOcclusion(pixel, center, normal, cell, jitter);
 +    }
 +    if (SsgiStrength() > 0.0f) {
-+        result.rgb = ScreenSpaceGI(center, normal, cell, jitter);
++        result.rgb = ScreenSpaceGI(center, normal, cell);
 +    }
 +    return result;
 +}
