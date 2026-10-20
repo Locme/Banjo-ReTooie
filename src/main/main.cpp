@@ -842,10 +842,16 @@ int main(int argc, char** argv) {
     tooie::init_config();
     tooie::session_log::start(version_string);
     // Zips dropped into the mods folder are unpacked before every mod scan (startup and Refresh Mods).
-    // The first scan is the one at startup, before the renderer takes the window.
+    // The first scan is the one at startup, before the renderer takes the window. The renderer starts right
+    // after it and builds its shader pipelines before it shows anything, which can take a while, so the window
+    // says so instead of staying black. The text stays on the window until the renderer's first frame replaces it.
     recomp::mods::set_before_scan_callback([](bool game_started) {
         static bool at_boot = true;
         tooie::unpack_mod_zips(game_started, at_boot);
+        if (at_boot) {
+            tooie::boot_screen::show("Compiling Shaders", "");
+            tooie::boot_screen::close();
+        }
         at_boot = false;
     });
 

@@ -1,4 +1,5 @@
-// A text screen drawn on the game window before the renderer exists (include/tooie_boot_screen.h).
+// A text screen drawn on the game window before the renderer exists (include/tooie_boot_screen.h):
+// "Installing Mods" while mod zips unpack, then "Compiling Shaders" while the renderer starts (main.cpp).
 //
 // At startup the window is created and the mods are scanned (unpacking any new mod zips) before RT64
 // and the menus start, so the window would otherwise stay blank, and stop responding, for as long as a

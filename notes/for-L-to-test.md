@@ -1,14 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T469 Tessellated water retest: no crash, no facets, rings
-- Asked: 2026-10-20 19:20 UTC
-- Build: main (after b6390c2)
+## T473 ESC menu pauses the game; stays shut in cutscenes and loads; Photo Filter gone; Transform anywhere on
+- Asked: 2026-10-20 19:31 UTC
+- Build: main @ dd4bc20
 - Steps:
-  1. Vulkan, Graphics: Water Modern, Water detail 50
-  2. Spiral Mountain moat: stand still, then swim through it
-  3. Look in console.log for a line starting '[shaders] The graphics driver could not build'
-  4. Repeat with Stylised
-- Look for: No crash. The water is smooth (no small flat facets or sparkly pixels), it swells slowly, and rings and a wake spread from Banjo as he moves. If the console line is there, say which pipeline it names: then the water falls back to the old flat look
+  1. Load a save and walk around in a level
+  2. Press Esc and leave the menu open, then close it
+  3. In QOL: Menu > Pause Special Menu is on, there is no Photo Filter section, Transform anywhere is on
+  4. Press Esc during a cutscene and while a level loads
+  5. Turn Pause Special Menu off and open the menu again
+- Look for: On: gameplay stops behind the menu, only the pause (Start menu) music plays, the sky/water/grass keep moving, play and level music carry on smoothly after closing; Esc does nothing in cutscenes and loads. Off: old behaviour (game runs behind the menu, Esc always opens).
 - Status: waiting for L
 
 ## T472 Ear jiggle
@@ -30,6 +31,28 @@
   3. Run, turn, jump and land
 - Look for: The snout and the other jiggle parts wobble as they do with HD Shadows off, and Banjo's shadow wobbles with him.
 - Status: waiting for L
+
+## T470 Heat haze only above lava and fire
+- Asked: 2026-10-20 19:28 UTC
+- Build: main @ fac564a
+- Steps:
+  1. Graphics: Heat haze 50 or more
+  2. Hailfire Peaks lava side: look across the lava pools and at the walls and sky away from them
+  3. Chilli Billi's fight and inside the volcano too
+- Look for: Shimmer only over and just above the lava and fire, fading upward; plain rock, Banjo and the sky away from lava stay still. Say if something non-hot (red rock, Kazooie) shimmers, or if lava you'd expect to shimmer doesn't
+- Status: waiting for L
+
+## T469 Tessellated water retest: no crash, no facets, rings
+- Asked: 2026-10-20 19:20 UTC
+- Build: main (after b6390c2)
+- Steps:
+  1. Vulkan, Graphics: Water Modern, Water detail 50
+  2. Spiral Mountain moat: stand still, then swim through it
+  3. Look in console.log for a line starting '[shaders] The graphics driver could not build'
+  4. Repeat with Stylised
+- Look for: No crash. The water is smooth (no small flat facets or sparkly pixels), it swells slowly, and rings and a wake spread from Banjo as he moves. If the console line is there, say which pipeline it names: then the water falls back to the old flat look
+- Status: waiting for L
+
 
 ## T468 Graphics > Ray tracing switch
 - Asked: 2026-10-20 18:22 UTC
