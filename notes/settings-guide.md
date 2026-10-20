@@ -112,7 +112,7 @@ framework, not from this port's code, so it is not described here.
 
 - **Pause Special Menu** (Menu section): while this menu (Esc) is open during
   play, the game is paused as if you pressed Start, but without the pause menu
-  or anything else drawn over it, and the music keeps playing. Cutscenes, map
+  or anything else drawn over it, and the pause menu's music plays and the picture's effects keep moving. Cutscenes, map
   changes, the title screen and the file select carry on as before.
   Default: On (L, 2026-10-19).
 - **Press Start Early in Intro**: press Start during the logos and title flight to go

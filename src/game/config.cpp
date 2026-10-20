@@ -438,7 +438,7 @@ void tooie::init_config() {
     qol.add_bool_option(
         tooie::menu_pause::option,
         "Pause Special Menu",
-        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The music keeps playing. Cutscenes and the title screen carry on as before.",
+        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The pause menu's music plays and the picture's effects keep moving. Cutscenes and the title screen carry on as before.",
         true);
     qol.add_bool_option(
         tooie::quick_start_option,
