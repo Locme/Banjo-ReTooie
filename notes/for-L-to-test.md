@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T480 No fur over Banjo's shorts
+- Asked: 2026-10-20 20:54 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur on
+  2. Stand Banjo still in Spiral Mountain and look at his shorts and the top of his legs from the front and behind (free camera or photo mode helps)
+  3. Walk, run and crouch, and watch a cutscene with him in it
+- Look for: His yellow shorts stay clean, with no brown strands hanging over them at the bottom edge or between his legs. The brown on his legs below the shorts, his body and his arms are as furry as before. Before, where the shorts' triangles reach down to his legs their yellow blends into brown, and that blend passed the fur colour test, so strands grew on the shorts there.
+- Status: waiting for L
+
 ## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
 - Asked: 2026-10-20 20:35 UTC
 - Build: main
@@ -102,7 +112,12 @@
   3. Look at shiny surfaces: metal grates, gold, glass, Grunty Industries' warp pads
   4. Turn it off and compare; try 2x MSAA and Original resolution
   5. On D3D12 or a card without ray tracing: switch it on
-- Look for: with it on, reflections on the same shiny surfaces SSR covers, but found by tracing through the level (what the picture hides gets reflected; no stepped edges). Reflections that reach off-screen or hidden spots are fainter. The sky is not reflected (no sky in the traced structure). Without ray tracing or on D3D12 you get a notice and the old effects. Also: no crash, stall or garbage, and the frame rate cost.
+- Look for: with it on, reflections on the same shiny surfaces SSR covers, but found by tracing through the level (what the picture hides gets reflected; no stepped edges). Reflections that reach off-screen or hidden spots are fainter. Without ray tracing or on D3D12 you get a notice and the old effects. Also: no crash, stall or garbage, and the frame rate cost.
+- Also: water is left to its own Water reflections setting (traced from the bed it came out stretched); sun shadows are traced too (Sun shadows shows at 60 at least while it is on; the shadow map isn't drawn then). Look for sharp shadows from everything solid, soft edges, no shadow acne, and none coming and going as you move or turn (the game keeps the whole level drawn for the sun while ray tracing is on, and a pass with no casters reuses the last structure).
+- Also: ambient occlusion and bounce light (SSGI) are traced too while it is on (AO shows at 50 and bounce light at 40 at least; rays through the same structure, 32 per 4x4 block, in the half-size indirect pass). Look for contact shadows in corners and under objects, and coloured light from nearby walls and floors, without noise or blocks.
+- Also: a traced reflection ray that leaves the world now reflects the sky (the sky pixel in that direction when it is on screen, else the horizon haze, fainter). Look at a shiny surface or water facing the sky.
+- Also: lamps and fires cast traced shadows (the level's own lights, up to 32, each lighting what is within its range; rays from the surface to the light, so a pillar or a character blocks a lamp's light on the floor behind it). Look in a cave or at night near a torch for shadows that follow the light, and no flicker.
+- Also: water reflections are traced too (Water reflections shows at 60 at least while it is on; the same ripples, waves and tessellated water as before, the ray found through the world's triangles instead of marched across the screen). Look at the Spiral Mountain moat and river for banks and trees mirrored without stretching.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

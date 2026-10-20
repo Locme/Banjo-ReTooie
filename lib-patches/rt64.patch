@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..f8e16e6 100644
+index 79dfc38..2d82df6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -216,7 +216,7 @@ index 79dfc38..f8e16e6 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +620,64 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +620,68 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -273,6 +273,10 @@ index 79dfc38..f8e16e6 100644
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT2XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_2X")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT4XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_4X")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT8XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_8X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRTPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT2XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_2X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT4XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_4X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT8XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_8X")
 +endif()
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
@@ -1964,7 +1968,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..858b8b0 100644
+index 69a82ac..efe06fb 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -2000,7 +2004,7 @@ index 69a82ac..858b8b0 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,159 @@ namespace RT64 {
+@@ -659,6 +678,162 @@ namespace RT64 {
          }
      };
  
@@ -2058,6 +2062,8 @@ index 69a82ac..858b8b0 100644
 +        uint32_t gIndirect;
 +        // The world's triangles for the traced variant (SceneEffectsPS.hlsl RAY_TRACED), only with ray queries.
 +        uint32_t gSceneBVH = 0;
++        // The level's lights for the traced shadows (SceneEffectsPS.hlsl gLights), with ray queries.
++        uint32_t gLights = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2074,6 +2080,7 @@ index 69a82ac..858b8b0 100644
 +            gIndirect = builder.addTexture(12);
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
++                gLights = builder.addByteAddressBuffer(14);
 +            }
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
@@ -2161,7 +2168,7 @@ index 69a82ac..858b8b0 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..c02554d 100644
+index 9fae0d4..af21112 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -3546,7 +3553,7 @@ index 9fae0d4..c02554d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +2914,1506 @@ namespace RT64 {
+@@ -1747,25 +2914,1507 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4287,10 +4294,11 @@ index 9fae0d4..c02554d 100644
 +        }
 +    }
 +
-+    // Banjo-Tooie: a vertex's fur mark (SetFurVertexFlags) as the w of its fur anchor, for RasterPS.hlsl: 1 bare, 2 unmarked
-+    // (told by its colour as lit), 3 fur, 4 her feathers. Blended across a triangle, fur and bare meet through unmarked
-+    // (the colour test), never unmarked and bare through fur (a backpack's textured top and its bare blue sides grew fur
-+    // along their seam).
++    // Banjo-Tooie: a vertex's fur mark (SetFurVertexFlags) as the w of its fur anchor, for RasterPS.hlsl: 0 unmarked (told
++    // by its colour as lit), 1 bare, 3 fur, 4 her feathers. Blended across a triangle, unmarked and bare never meet
++    // through fur (a backpack's textured top and its bare blue sides grew fur along their seam), and fur and bare
++    // never through unmarked: his shorts' triangles that reach down to his brown legs blend yellow into brown, and
++    // the colour test grew strands over the shorts there (L).
 +    static float FurMarkW(uint8_t flag) {
 +        switch (flag & FUR_VERTEX_MARK_MASK) {
 +        case FUR_VERTEX_BARE:
@@ -4300,7 +4308,7 @@ index 9fae0d4..c02554d 100644
 +        case FUR_VERTEX_FEATHERS:
 +            return 4.0f;
 +        default:
-+            return 2.0f;
++            return 0.0f;
 +        }
 +    }
 +
@@ -7050,10 +7058,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..717ad98
+index 0000000..2e93081
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2942 @@
+@@ -0,0 +1,3001 @@
 +//
 +// RT64
 +//
@@ -7168,6 +7176,11 @@ index 0000000..717ad98
 +            uint64_t bvhTlasSize = 0;
 +            uint64_t bvhScratchSize = 0;
 +            bool bvhReady = false;
++            // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
++            // in world space, so it stays right as the camera moves).
++            bool bvhBuiltOnce = false;
++            // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
++            std::unique_ptr<RenderBuffer> lightsBuffer;
 +            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
@@ -7321,9 +7334,16 @@ index 0000000..717ad98
 +        }
 +    }
 +
++    // The settings as the player has them; ray tracing lifts some (RefreshReflections).
++    static float userAmbientOcclusion = 0.0f;
++    static float userSsgi = 0.0f;
++    static float userWaterReflections = 0.0f;
++    static void RefreshReflections();
++
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.ambientOcclusion = ambientOcclusion;
++        userAmbientOcclusion = ambientOcclusion;
++        RefreshReflections();
 +        effectsSettings.ambientOcclusionRadius = radius;
 +        effectsSettings.depthAddress = depthAddress;
 +    }
@@ -7391,7 +7411,8 @@ index 0000000..717ad98
 +
 +    void SetSceneWaterReflections(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.waterReflections = strength;
++        userWaterReflections = strength;
++        RefreshReflections();
 +    }
 +
 +    static std::atomic<bool> sceneIcyLevel{ false };
@@ -7439,7 +7460,8 @@ index 0000000..717ad98
 +
 +    void SetSceneScreenSpaceGI(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.screenSpaceGI = strength;
++        userSsgi = strength;
++        RefreshReflections();
 +    }
 +
 +    // Banjo-Tooie: hardware ray tracing (Graphics > Ray tracing). While it is on and the device has ray queries, the
@@ -7450,10 +7472,22 @@ index 0000000..717ad98
 +    static float userReflections = 0.0f;
 +
 +    // effectsMutex held.
++    static float userSunShadows = 0.0f;
++
++    // The settings the traced effects take over: reflections and sun shadows show at 60 at least, ambient occlusion at 50
++    // bounce light at 40 and water reflections at 60, while ray tracing is active (the settings themselves are kept apart, and come back when it is off).
 +    static void RefreshReflections() {
 +        float strength = userReflections;
++        effectsSettings.sunShadows = userSunShadows;
++        effectsSettings.ambientOcclusion = userAmbientOcclusion;
++        effectsSettings.screenSpaceGI = userSsgi;
++        effectsSettings.waterReflections = userWaterReflections;
 +        if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
 +            strength = std::max(strength, 0.6f);
++            effectsSettings.sunShadows = std::max(userSunShadows, 0.6f);
++            effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, 0.5f);
++            effectsSettings.screenSpaceGI = std::max(userSsgi, 0.4f);
++            effectsSettings.waterReflections = std::max(userWaterReflections, 0.6f);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
@@ -7463,6 +7497,13 @@ index 0000000..717ad98
 +        const std::scoped_lock lock(effectsMutex);
 +        userReflections = strength;
 +        RefreshReflections();
++    }
++
++    void SetSceneLights(const float *xyzr, uint32_t count) {
++        const std::scoped_lock lock(effectsMutex);
++        count = std::min(count, SceneMaxLights);
++        memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
++        effectsSettings.lightCount = count;
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
@@ -7622,7 +7663,8 @@ index 0000000..717ad98
 +
 +    void SetSceneSunShadows(float strength, bool onBanjo, float softness) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.sunShadows = strength;
++        userSunShadows = strength;
++        RefreshReflections();
 +        effectsSettings.sunShadowOnBanjo = onBanjo;
 +        effectsSettings.sunShadowSoftness = std::clamp(softness, 0.0f, 1.0f);
 +    }
@@ -9102,7 +9144,26 @@ index 0000000..717ad98
 +    {
 +        Resources &res = resourcesFor(worker);
 +        res.bvhReady = false;
-+        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery || (worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
++        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery) {
++            return;
++        }
++        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
++        // dropping to the depth march and its shadow map, which made the shadows come and go.
++        // The lights are written every pass, whatever the casters.
++        if (res.lightsBuffer == nullptr) {
++            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 1)));
++            res.lightsBuffer->setName("Scene Effects lights");
++        }
++        if (res.lightsBuffer != nullptr) {
++            const SceneEffectsSettings lightSettings = GetSceneEffects();
++            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
++            memset(mapped, 0, 16 * (SceneMaxLights + 1));
++            mapped[0] = float(lightSettings.lightCount);
++            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
++            res.lightsBuffer->unmap();
++        }
++        res.bvhReady = res.bvhBuiltOnce;
++        if ((worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
 +            return;
 +        }
 +        static const bool bvhLog = (getenv("TOOIE_RT_LOG") != nullptr);
@@ -9118,6 +9179,7 @@ index 0000000..717ad98
 +        if (meshes.empty()) {
 +            return;
 +        }
++        res.bvhReady = false;
 +        RenderDevice *device = worker->device;
 +        RenderCommandList *commandList = worker->commandList.get();
 +        RenderBottomLevelASBuildInfo blasInfo;
@@ -9186,6 +9248,7 @@ index 0000000..717ad98
 +        });
 +        GpuCheckpoint(commandList, "ray tracing: built");
 +        res.bvhReady = true;
++        res.bvhBuiltOnce = true;
 +        if (bvhLog) {
 +            static auto lastLog = std::chrono::steady_clock::now();
 +            if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
@@ -9775,7 +9838,9 @@ index 0000000..717ad98
 +        static const bool sunMapOff = (getenv("TOOIE_SUN_MAP_OFF") != nullptr);
 +        static const char *sunMapOffAfter = getenv("TOOIE_SUN_MAP_OFF_AFTER");
 +        const bool sunMapOffNow = sunMapOff || ((sunMapOffAfter != nullptr) && (std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count() > float(atof(sunMapOffAfter))));
-+        if (drawSunCasters && !sunMapOffNow && (constants.shadows.x > 0.0f)) {
++        // The traced pass (the structures are built) traces its shadows, so the map isn't drawn for it.
++        const bool tracedShadows = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr);
++        if (drawSunCasters && !sunMapOffNow && !tracedShadows && (constants.shadows.x > 0.0f)) {
 +            GpuCheckpoint(commandList, "sun shadow map: start");
 +            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
@@ -9908,6 +9973,7 @@ index 0000000..717ad98
 +            res.sceneSetBvh = nullptr;
 +            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
 +                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
++                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 1));
 +                res.sceneSetBvh = res.bvhTlas.get();
 +            }
 +        }
@@ -9948,7 +10014,8 @@ index 0000000..717ad98
 +            commandList->setFramebuffer(res.indirectFramebuffer.get());
 +            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
 +            commandList->setScissors(RenderRect(0, 0, indirectWidth, indirectHeight));
-+            commandList->setPipeline(shaderLibrary->sceneIndirect.pipeline.get());
++            const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
++            commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
 +            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
 +            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
 +            commandList->setGraphicsPushConstants(0, &constants);
@@ -9998,10 +10065,10 @@ index 0000000..717ad98
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..6852ac9
+index 0000000..38bb1ed
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,450 @@
+@@ -0,0 +1,458 @@
 +//
 +// RT64
 +//
@@ -10034,7 +10101,12 @@ index 0000000..6852ac9
 +    constexpr uint32_t SceneEffectsViewSsgi = 20;
 +    constexpr uint32_t SceneEffectsViewSsr = 21;
 +
++    constexpr uint32_t SceneMaxLights = 32;
++
 +    struct SceneEffectsSettings {
++        // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
++        float lights[SceneMaxLights * 4] = {};
++        uint32_t lightCount = 0;
 +        float ambientOcclusion = 0.0f;
 +        float ambientOcclusionRadius = 60.0f;
 +        uint32_t depthAddress = 0;
@@ -10263,6 +10335,9 @@ index 0000000..6852ac9
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
 +        const std::pair<uint32_t, uint32_t> *runs, size_t runCount);
 +    void SetSceneRayTracing(bool enabled);
++    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
++    // The traced pass shadows what each one lights (its rays go from the surface to the light).
++    void SetSceneLights(const float *xyzr, uint32_t count);
 +    void NoteRayTracingSupport(bool supported);
 +    int GetRayTracingSupport();
 +    bool RayTracingActive();
@@ -10479,7 +10554,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..9cc0792 100644
+index d1c5273..df11443 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -10506,7 +10581,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +57,41 @@
+@@ -40,7 +57,45 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -10536,6 +10611,10 @@ index d1c5273..9cc0792 100644
 +#include "shaders/SceneEffectsRT2XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffectsRT4XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffectsRT8XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRTPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT2XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT4XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT8XPS.hlsl.spirv.h"
 +#endif
 +#include "shaders/SceneIndirectPS.hlsl.spirv.h"
 +#include "shaders/SceneIndirect2XPS.hlsl.spirv.h"
@@ -10548,7 +10627,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +99,8 @@
+@@ -48,6 +103,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -10557,7 +10636,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +139,35 @@
+@@ -86,7 +143,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -10593,7 +10672,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +175,8 @@
+@@ -94,6 +179,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -10602,7 +10681,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +214,35 @@
+@@ -131,7 +218,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -10638,7 +10717,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +250,8 @@
+@@ -139,6 +254,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -10647,7 +10726,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +261,11 @@
+@@ -148,6 +265,11 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -10659,7 +10738,7 @@ index d1c5273..9cc0792 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +322,7 @@ namespace RT64 {
+@@ -204,7 +326,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -10668,7 +10747,7 @@ index d1c5273..9cc0792 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +667,38 @@ namespace RT64 {
+@@ -549,6 +671,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -10707,7 +10786,7 @@ index d1c5273..9cc0792 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +719,78 @@ namespace RT64 {
+@@ -569,6 +723,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -10786,7 +10865,7 @@ index d1c5273..9cc0792 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +805,20 @@ namespace RT64 {
+@@ -583,6 +809,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -10807,7 +10886,7 @@ index d1c5273..9cc0792 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1068,156 @@ namespace RT64 {
+@@ -832,6 +1072,183 @@ namespace RT64 {
              }
          }
  
@@ -10935,6 +11014,33 @@ index d1c5273..9cc0792 100644
 +            indirectDesc.vertexShader = fullScreenVertexShader.get();
 +            indirectDesc.pixelShader = indirectShader.get();
 +            sceneIndirect.pipeline = device->createGraphicsPipeline(indirectDesc);
++
++            // The same with the occlusion and bounce light traced, Vulkan only.
++#           ifndef __APPLE__
++            if (rayQuery && (shaderFormat == RenderShaderFormat::SPIRV)) {
++                const void *tracedBlob = SceneIndirectRTPSBlobSPIRV;
++                size_t tracedSize = sizeof(SceneIndirectRTPSBlobSPIRV);
++                switch (multisampling.sampleCount) {
++                case RenderSampleCount::COUNT_2:
++                    tracedBlob = SceneIndirectRT2XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT2XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_4:
++                    tracedBlob = SceneIndirectRT4XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT4XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_8:
++                    tracedBlob = SceneIndirectRT8XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT8XPSBlobSPIRV);
++                    break;
++                default:
++                    break;
++                }
++                std::unique_ptr<RenderShader> tracedIndirect = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
++                indirectDesc.pixelShader = tracedIndirect.get();
++                sceneIndirectTraced.pipeline = device->createGraphicsPipeline(indirectDesc);
++            }
++#           endif
 +        }
 +
 +        // Banjo-Tooie: the sun shadow map, the 3D world's triangles drawn from the sun into a depth map. The
@@ -10965,10 +11071,10 @@ index d1c5273..9cc0792 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..cff79b3 100644
+index 641f3ec..2525160 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -47,12 +47,44 @@ namespace RT64 {
+@@ -47,12 +47,45 @@ namespace RT64 {
          ShaderRecord rspVertexTestZ;
          ShaderRecord rspVertexTestZMS;
          ShaderRecord rspWorld;
@@ -10992,6 +11098,7 @@ index 641f3ec..cff79b3 100644
 +        ShaderRecord fireflyTable;
 +        // Banjo-Tooie: the scene effects' indirect pass, GTAO and SSGI at half size (its pipeline only; the layout is sceneEffects').
 +        ShaderRecord sceneIndirect;
++        ShaderRecord sceneIndirectTraced;
 +        // Banjo-Tooie: the sun shadow map's depth-only pass (SunShadowMapVS.hlsl).
 +        ShaderRecord sunShadowMap;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
@@ -12108,10 +12215,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..3f007c2
+index 0000000..277de7d
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,143 @@
 +//
 +// RT64
 +//
@@ -12183,9 +12290,10 @@ index 0000000..3f007c2
 +// anchor is the place on the model (its own units), baseColor the surface's own colour there; white picks a furry
 +// enemy's white fur instead of Banjo's brown. mark is the vertex's fur mark (FurMarkW in rt64_framebuffer_renderer.cpp),
 +// blended across the triangle: 3 fur, 1 or 4 bare (his model tells them by their own colours, so the light on them
-+// doesn't change the coat, L); 2 (unmarked) tells it by the colour as lit here.
++// doesn't change the coat, L); 0 (unmarked) tells it by the colour as lit here. Between fur and bare only the last
++// quarter next to the fur grows it: his shorts' edge blends into his legs' brown, and stays clean (L).
 +bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
-+    if ((mark < 1.5f) || (mark >= 3.5f)) {
++    if (((mark >= 0.5f) && (mark < 2.5f)) || (mark >= 3.5f)) {
 +        return false;
 +    }
 +    else if (mark >= 2.5f) {
@@ -14970,10 +15078,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..b121481
+index 0000000..969c610
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3279 @@
+@@ -0,0 +1,3533 @@
 +//
 +// RT64
 +//
@@ -15020,6 +15128,8 @@ index 0000000..b121481
 +// Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 +// the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
 +RaytracingAccelerationStructure gSceneBVH : register(t13);
++// The level's lights: the count (as a float) in the first 16 bytes, then x, y, z (world) and the outer range of each.
++ByteAddressBuffer gLights : register(t14);
 +#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
@@ -15688,14 +15798,24 @@ index 0000000..b121481
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +    }
++    const float2 size = gConstants.projection.zw;
 +    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-+        return 0.0f;
++        // The ray left the world: it sees the sky. Where that direction lies on the screen and shows sky, that
++        // pixel's colour; otherwise the haze at the horizon stands in, trusted less.
++        const float3 far = origin + direction * 50000.0f;
++        if (far.z < -1.0f) {
++            const float2 skyAt = ViewToPixel(far);
++            const float2 skyInside = clamp(skyAt, float2(0.0f, 0.0f), size - 1.0f);
++            if (all(skyAt == skyInside) && (LoadDepth(int2(skyInside)) >= 0.99999f)) {
++                return float4(gColor.SampleLevel(LinearSampler, (skyInside + 0.5f) / size, 0).rgb, RayEdgeFade(skyInside));
++            }
++        }
++        return float4(gConstants.fogColor.rgb, 0.6f);
 +    }
 +    const float3 hit = origin + direction * query.CommittedRayT();
 +    if (hit.z > -1.0f) {
 +        return 0.0f;
 +    }
-+    const float2 size = gConstants.projection.zw;
 +    const float2 at = ViewToPixel(hit);
 +    const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
 +    const bool onScreen = all(at == inside);
@@ -15704,6 +15824,130 @@ index 0000000..b121481
 +    const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
 +    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
 +    return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
++}
++
++// Shadows from the level's lights (lamps, fires): for each light that reaches the surface, rays from it to the light
++// through the world's triangles; blocked, the surface is darker the closer the light and the more it faces it. A
++// couple of rays over a small disc at the light, so the edge has a penumbra. The light's own fitting (a lamp's
++// shade) doesn't count: the ray stops short of it.
++float LightShadows(float3 center, float3 normal) {
++    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
++    if (count == 0u) {
++        return 1.0f;
++    }
++    const float distanceFade = saturate(1.0f - (-center.z - 4000.0f) / 3000.0f);
++    if (distanceFade <= 0.0f) {
++        return 1.0f;
++    }
++    const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.003f + 2.0f, 2.0f));
++    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
++    float keep = 1.0f;
++    [loop] for (uint i = 0u; i < count; i++) {
++        const float4 light = asfloat(gLights.Load4(16u * (i + 1u)));
++        const float3 toLight = light.xyz - start;
++        const float distance = length(toLight);
++        if ((distance < 30.0f) || (distance > light.w)) {
++            continue;
++        }
++        const float3 direction = toLight / distance;
++        const float facing = dot(worldNormal, direction);
++        if (facing <= 0.05f) {
++            continue;
++        }
++        const float weight = saturate(1.0f - distance / light.w) * saturate(facing * 2.0f);
++        // Two points on a small disc round the light.
++        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
++        const float3 across = cross(direction, side);
++        float blocked = 0.0f;
++        [unroll] for (int k = 0; k < 2; k++) {
++            const float angle = float(k) * 3.14159265f;
++            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 18.0f;
++            const float3 toTarget = target - start;
++            const float reach = length(toTarget) - 30.0f;
++            if (reach <= 1.0f) {
++                continue;
++            }
++            RayDesc ray;
++            ray.Origin = start;
++            ray.Direction = toTarget / (reach + 30.0f);
++            ray.TMin = 0.0f;
++            ray.TMax = reach;
++            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++            while (query.Proceed()) {
++            }
++            blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.5f : 0.0f;
++        }
++        keep *= 1.0f - 0.5f * weight * blocked;
++    }
++    return lerp(1.0f, keep, distanceFade);
++}
++
++// The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
++// spiral, the same ones SSGI's march uses, so IndirectAt's gather still sees all 32), traced through gSceneBVH.
++float3 IndirectDirection(float3 normal, uint index) {
++    const float3 side = normalize(cross(normal, (abs(normal.y) < 0.99f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
++    const float3 across = cross(side, normal);
++    const float diskRadius = sqrt((float(index) + 0.5f) / 32.0f);
++    const float theta = float(index) * 2.39996323f;
++    return normalize(side * (diskRadius * cos(theta)) + across * (diskRadius * sin(theta)) + normal * sqrt(max(1.0f - diskRadius * diskRadius, 0.0f)));
++}
++
++// How far a ray goes before it hits the world (view units), or a negative number when it doesn't within the reach.
++float TraceDistance(float3 origin, float3 direction, float reach) {
++    RayDesc ray;
++    ray.Origin = ViewToWorldPoint(origin);
++    ray.Direction = ViewToWorldDirection(direction);
++    ray.TMin = 0.0f;
++    ray.TMax = reach;
++    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++    }
++    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
++}
++
++// Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
++// within the radius counts less the further away it was). Two rays a pixel, 32 over each 4x4 block.
++float TracedOcclusion(float3 center, float3 normal, uint cell) {
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float radius = gConstants.ambientOcclusion.y * 1.5f;
++    float blocked = 0.0f;
++    [unroll] for (int r = 0; r < 2; r++) {
++        const float t = TraceDistance(origin, IndirectDirection(normal, cell * 2u + uint(r)), radius);
++        if (t >= 0.0f) {
++            blocked += 1.0f - t / radius * 0.6f;
++        }
++    }
++    return 1.0f - blocked * 0.5f;
++}
++
++// Traced bounce light: the colour where each ray lands (its screen position's colour, or the nearest on the screen
++// when it is off it or hidden, trusted less), a ray that reaches nothing brings nothing.
++float3 TracedGI(float3 center, float3 normal, uint cell) {
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float rayDistance = gConstants.ambientOcclusion.y * 3.0f;
++    const float2 size = gConstants.projection.zw;
++    float3 light = 0.0f;
++    [unroll] for (int r = 0; r < 2; r++) {
++        const float3 direction = IndirectDirection(normal, cell * 2u + uint(r));
++        const float t = TraceDistance(origin, direction, rayDistance);
++        if (t < 0.0f) {
++            continue;
++        }
++        const float3 hit = origin + direction * t;
++        if (hit.z > -1.0f) {
++            continue;
++        }
++        const float2 at = ViewToPixel(hit);
++        const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
++        const bool onScreen = all(at == inside);
++        const float sampleDepth = LoadDepth(int2(inside));
++        const float thickness = max(-hit.z * 0.03f, 20.0f);
++        const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
++        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f);
++    }
++    return light * 0.5f;
 +}
 +#endif
 +
@@ -15916,7 +16160,13 @@ index 0000000..b121481
 +    }
 +    // Ice has Ice reflections of its own, and SSR stays off it.
 +    float maskDepth;
++#ifdef RAY_TRACED
++    // Water has its own reflections (Water reflections, traced while ray tracing is on: WaterReflectionMarch), so
++    // the screen-space ones stay off it: they started from the bed's depth and normal and came out stretched.
++    return false;
++#else
 +    return (WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth);
++#endif
 +}
 +
 +// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
@@ -16042,6 +16292,21 @@ index 0000000..b121481
 +    return flat * gap;
 +}
 +
++float WaterNoise(float2 p);
++
++// The waves vary over the water so they never line up in a grid: where a point's waves are taken from is pushed
++// about by a slow, broad noise (the crests bend and wander), and each wave train's height swells and fades from
++// place to place on its own (some patches calm, some choppy).
++float2 WaveWarp(float2 p) {
++    return float2(WaterNoise(p / 420.0f) - 0.5f, WaterNoise(p / 420.0f + float2(7.3f, 2.9f)) - 0.5f) * 170.0f +
++        float2(WaterNoise(p / 150.0f + float2(3.1f, 5.7f)) - 0.5f, WaterNoise(p / 150.0f + float2(9.2f, 1.4f)) - 0.5f) * 45.0f;
++}
++
++float WaveVariation(float2 p, int i) {
++    const float n = WaterNoise(p / (260.0f + 110.0f * float(i)) + float2(float(i) * 3.7f, float(i) * 1.9f));
++    return 0.3f + 1.2f * n * n * (3.0f - 2.0f * n);
++}
++
 +// Water waves: four travelling waves over the world's x and z (in the game's units: Banjo is about 150
 +// tall). Gives the slope along x and z. Waves too small to show at this distance fade out, so far water
 +// doesn't shimmer.
@@ -16051,13 +16316,14 @@ index 0000000..b121481
 +    const float lengths[4] = { 230.0f, 140.0f, 83.0f, 51.0f };
 +    const float heights[4] = { 1.0f, 0.7f, 0.45f, 0.3f };
 +    float2 slope = 0.0f;
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        // Deep water: speed grows with the square root of the wavelength.
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        const float steepness = 0.2f * heights[i] * visible;
-+        slope += dirs[i] * (steepness * cos(k * dot(dirs[i], p) - omega * t));
++        const float steepness = 0.2f * heights[i] * visible * WaveVariation(p, i);
++        slope += dirs[i] * (steepness * cos(k * dot(dirs[i], q) - omega * t));
 +    }
 +    return slope;
 +}
@@ -16219,6 +16485,39 @@ index 0000000..b121481
 +float4 WaterReflectionMarch(float3 surface, float3 r, float nearest, out bool hit) {
 +    hit = false;
 +    const float2 size = gConstants.projection.zw;
++#ifdef RAY_TRACED
++    // Traced (ray queries over the world's triangles, in place of the march): the same reflection, found exactly:
++    // what the ray meets, whether or not the depth buffer shows it from here. Rays that must pass over nearer
++    // things (ice's bent ones, nearest above 0) still march.
++    if (nearest <= 0.0f) {
++        const float3 origin = surface + r * 1.0f;
++        const float t = TraceDistance(origin, r, 8000.0f);
++        if (t >= 0.0f) {
++            const float3 hitPoint = origin + r * t;
++            if (hitPoint.z < -1.0f) {
++                const float2 at = ViewToPixel(hitPoint);
++                const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
++                const float sampleDepth = LoadDepth(int2(inside));
++                const bool inView = all(at == inside) && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hitPoint.z <= max(-hitPoint.z * 0.03f, 20.0f)));
++                hit = true;
++                // What is off the screen or behind something nearer shows faintly, as the march's last resort did.
++                return float4(gColor.Load(int3(int2(inside), 0)).rgb, inView ? RayEdgeFade(inside) : 0.3f);
++            }
++        }
++        else {
++            // Left the world: the sky in that direction when it shows on the screen, else the horizon's haze.
++            const float3 far = surface + r * 50000.0f;
++            if (far.z < -1.0f) {
++                const float2 skyAt = ViewToPixel(far);
++                const float2 skyInside = clamp(skyAt, float2(0.0f, 0.0f), size - 1.0f);
++                if (all(skyAt == skyInside) && (LoadDepth(int2(skyInside)) >= 0.99999f)) {
++                    return float4(gColor.Load(int3(int2(skyInside), 0)).rgb, RayEdgeFade(skyInside));
++                }
++            }
++            return float4(gConstants.fogColor.rgb, 0.6f);
++        }
++    }
++#endif
 +    const float stepLength = max(-surface.z * 0.03f, 4.0f);
 +    float travelled = 0.0f;
 +    [loop] for (int i = 1; i <= 32; i++) {
@@ -16312,11 +16611,12 @@ index 0000000..b121481
 +    const float lengths[4] = { 230.0f, 140.0f, 83.0f, 51.0f };
 +    const float heights[4] = { 1.0f, 0.7f, 0.45f, 0.3f };
 +    float h = 0.0f;
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        h += (0.2f * heights[i] * visible / k) * sin(k * dot(dirs[i], p) - omega * t);
++        h += (0.2f * heights[i] * visible * WaveVariation(p, i) / k) * sin(k * dot(dirs[i], q) - omega * t);
 +    }
 +    return h;
 +}
@@ -16683,12 +16983,14 @@ index 0000000..b121481
 +    const float heights[4] = { 1.0f, 0.9f, 0.4f, 0.28f };
 +    const float sharpness = 2.2f;
 +    float3 wave = 0.0f;
++    // (Varied over the water as Modern water's waves are, WaveWarp.)
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        const float amplitude = 0.2f * heights[i] * visible / k;
-+        const float phase = k * dot(dirs[i], p) - omega * t;
++        const float amplitude = 0.2f * heights[i] * visible * WaveVariation(p, i) / k;
++        const float phase = k * dot(dirs[i], q) - omega * t;
 +        const float s = sin(phase) * 0.5f + 0.5f;
 +        const float raised = pow(max(s, 1e-4f), sharpness);
 +        // Centred on 0 (the mean of s^2.2 is about 0.33), so the water's mean level stays the game's.
@@ -17664,12 +17966,51 @@ index 0000000..b121481
 +    const float2 size = gConstants.projection.zw;
 +    const bool mapView = SunMapView(gConstants.shadows.y);
 +    const float reach = SunMapReach(gConstants.shadows.y);
-+    const int Steps = 24;
 +    // A different start for each pixel hides the steps.
 +    const float jitter = frac(52.9829189f * frac(dot(float2(pixel), float2(0.06711056f, 0.00583715f))));
 +    // Banjo's own shadow can be left out: what is drawn inside a capsule around him casts none.
 +    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
 +    float shadow = 0.0f;
++#ifdef RAY_TRACED
++    // Traced shadows: rays from the surface towards the sun through the world's triangles (gSceneBVH), a few of them
++    // spread over a narrow cone (wider the softer the shadows) so the edge has a penumbra. Nothing between a surface
++    // and the sun is missed, on screen or not, and there is no depth thickness to guess.
++    {
++        const float3 sunDirection = normalize(sun);
++        const float3 side = normalize(cross(sunDirection, (abs(sunDirection.y) < 0.9f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
++        const float3 up = cross(sunDirection, side);
++        const float spread = lerp(0.006f, 0.04f, softness);
++        const int Rays = 4;
++        float blocked = 0.0f;
++        [loop] for (int k = 0; k < Rays; k++) {
++            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f;
++            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
++            const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
++            RayDesc ray;
++            ray.Origin = ViewToWorldPoint(start);
++            ray.Direction = ViewToWorldDirection(direction);
++            ray.TMin = 0.0f;
++            ray.TMax = 20000.0f;
++            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++            while (query.Proceed()) {
++            }
++            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
++                continue;
++            }
++            if (skipBanjo) {
++                const float3 world = ViewToWorldPoint(start + direction * query.CommittedRayT());
++                const float2 across = world.xz - banjo.xz;
++                if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
++                    continue;
++                }
++            }
++            blocked += 1.0f;
++        }
++        shadow = blocked / float(Rays);
++    }
++#else
++    const int Steps = 24;
 +    [loop] for (int i = 0; i < Steps; i++) {
 +        // Steps grow with distance, so close shadows are sharp and long ones still reach.
 +        const float t = (float(i) + jitter) / float(Steps);
@@ -17728,6 +18069,7 @@ index 0000000..b121481
 +            return ((nearCover > 0.0f) || (farCover > 0.0f)) ? (1.0f - 0.9f * mapShadow) : 0.5f;
 +        }
 +    }
++#endif
 +    // The side turned from the sun darkens over a wider turn the softer the shadows.
 +    const float turnedAway = saturate(-facing * lerp(4.0f, 1.25f, softness)) * lerp(0.6f, 0.45f, softness);
 +    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
@@ -17876,12 +18218,21 @@ index 0000000..b121481
 +    const uint cell = IndirectCell(halfPixel);
 +    const float jitter = InterleavedNoise(halfPixel);
 +    float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
++#ifdef RAY_TRACED
++    if (AoStrength() > 0.0f) {
++        result.a = TracedOcclusion(center, normal, cell);
++    }
++    if (SsgiStrength() > 0.0f) {
++        result.rgb = TracedGI(center, normal, cell);
++    }
++#else
 +    if (AoStrength() > 0.0f) {
 +        result.a = GroundTruthOcclusion(pixel, center, normal, cell, jitter);
 +    }
 +    if (SsgiStrength() > 0.0f) {
 +        result.rgb = ScreenSpaceGI(center, normal, cell);
 +    }
++#endif
 +    return result;
 +}
 +#else
@@ -18009,7 +18360,12 @@ index 0000000..b121481
 +    float3 normal = float3(0.0f, 0.0f, 1.0f);
 +    // The indirect pass's GTAO visibility (a) and SSGI light (rgb) here.
 +    float4 indirect = float4(0.0f, 0.0f, 0.0f, 1.0f);
-+    if (occlusion || globalIllumination || reflections || sunShadows) {
++#ifdef RAY_TRACED
++    const bool lightShadows = (gConstants.view.x < 1.5f);
++#else
++    const bool lightShadows = false;
++#endif
++    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
 +        center = ViewPosition(pixel, depth);
 +        normal = ViewNormal(pixel, center);
 +        if (occlusion || globalIllumination) {
@@ -18024,6 +18380,12 @@ index 0000000..b121481
 +        if (sunShadows) {
 +            keep *= SunShadow(pixel, center, normal);
 +        }
++#ifdef RAY_TRACED
++        // Not tied to the sun: lamps and fires cast their own in caves and at night.
++        if (lightShadows) {
++            keep *= LightShadows(center, normal);
++        }
++#endif
 +    }
 +
 +    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
