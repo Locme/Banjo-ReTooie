@@ -5248,6 +5248,7 @@ L_80800378:
 RECOMP_FUNC void func_8010D09C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_enemy_aim(rdram, ctx);
     // 0x8010D09C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x8010D0A0: sw          $ra, 0x14($sp)
