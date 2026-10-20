@@ -432,7 +432,9 @@ namespace {
         if (logging() && (use.moved || use.left)) {
             fprintf(stderr, "[menu-mouse] hand at spot %d, cursor on %d, target %d\n", spot, hit, select_target);
         }
-        if (use.moved && hit >= 0) {
+        // With the free hand the camera stays where it is until a click: hover steering moved the spot (and the camera
+        // panned, and the hand was put back) every time the cursor crossed a thing (L, 2026-10-20: "keeps resetting").
+        if (use.moved && hit >= 0 && !free_hand_enabled()) {
             select_target = hit;
             select_press_a = false;
         }

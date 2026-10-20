@@ -1,5 +1,24 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
+- Asked: 2026-10-20 20:35 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass and go to Spiral Mountain; walk the yellow road and the meadows
+  2. Settings > Graphics > 3D grass: switch Frustum culling, Occlusion culling and Chunking off and on one at a time while standing still, then while turning the camera fast
+  3. Try Pixelated 3D grass with Pixel size 0.5, and Mayahem Temple's courtyard
+  4. Compare the frame rate with all three on against all three off
+- Look for: Grass looks the same with the toggles on or off (no holes, no blades popping in at the screen edges or from behind walls when you turn); no grass on the road, path or rock; grass is full height up close, not growing as you walk nearer; no shimmer at Pixel size under 1; faster than before, most with all three on
+## T478 Deep snow: speed, uncovered cliff edges, patches not cut
+- Asked: 2026-10-20 20:29 UTC
+- Build: main @ 6557e74
+- Steps:
+  1. Deep snow on, Icy Side, the same spots as your last screenshots
+  2. Walk lots of trails, near the cliff by the water too
+  3. Let Chilly Willy's balls hit the snow
+- Look for: Frame rate back near two builds ago, no holes at the cliff edge, every patch dents, ball craters smooth?
+- Status: waiting for L
+
 ## T477 Talking heads: no white box at any frame rate
 - Asked: 2026-10-20 20:11 UTC
 - Build: main
@@ -74,14 +93,18 @@
 - Status: waiting for L
 
 
-## T468 Graphics > Ray tracing switch
+## T468 Graphics > Ray tracing (traced reflections)
 - Asked: 2026-10-20 18:22 UTC
 - Build: main
 - Steps:
-  1. Open Graphics, find Ray tracing (above Reflections), switch it on
-  2. On a graphics card without hardware ray tracing: a notice says it is not supported and the effects stay as set
-  3. On an RTX / RDNA2+ card: no notice; switch Screen-space reflections up and look at a shiny surface
-- Look for: no crash or stall with it off or on. Known gap: the traced reflection pass itself is not drawn yet (this build only has the switch, the hardware check and the fallback), so on a card with ray tracing the reflections look the same as with it off
+  1. Use the Vulkan renderer (Graphics > Renderer) on a card with ray tracing (RTX, RX 6000+); Shaders on
+  2. Graphics > Ray tracing: switch it on (Screen-space reflections can stay at 0; it shows reflections at 60 at least)
+  3. Look at shiny surfaces: metal grates, gold, glass, Grunty Industries' warp pads
+  4. Turn it off and compare; try 2x MSAA and Original resolution
+  5. On D3D12 or a card without ray tracing: switch it on
+- Look for: with it on, reflections on the same shiny surfaces SSR covers, but found by tracing through the level (what the picture hides gets reflected; no stepped edges). Reflections that reach off-screen or hidden spots are fainter. The sky is not reflected (no sky in the traced structure). Without ray tracing or on D3D12 you get a notice and the old effects. Also: no crash, stall or garbage, and the frame rate cost.
+- Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
+- Status: waiting for L
 
 ## T466 Deep snow: no steps or spikes, height ramps from 0 at edges, fill-back slider
 - Asked: 2026-10-20 19:00 UTC
