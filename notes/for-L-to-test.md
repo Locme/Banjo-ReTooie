@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T463 Belly jiggle: necklace stays, strongest by the belt
+- Asked: 2026-10-20 16:36 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: Belly jiggle on
+  2. Run, jump, land and stop with the camera on his front
+- Look for: The tooth necklace never vanishes or stretches; it rides on the belly in one piece. The belly moves most just above the belt and less and less up towards the chest. Checked headless (forced swings).
+- Status: waiting for L
+
 ## T462 Cheaper 3D grass
 - Asked: 2026-10-20 16:15 UTC
 - Build: main
@@ -93,7 +102,7 @@
   4. Left click a row, right click to go back
   5. Use a controller in the ESC menu and move the mouse over rows without clicking
 - Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
-- UNTESTED, 2026-10-20 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
+- UNTESTED, 2026-10-20 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
 
 ## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
 - Asked: 2026-10-20 08:41 UTC
