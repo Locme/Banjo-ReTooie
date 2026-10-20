@@ -274,6 +274,7 @@ endif()
 set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
+    ${CMAKE_SOURCE_DIR}/src/main/boot_screen.cpp
 
     ${CMAKE_SOURCE_DIR}/src/debug/dl_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
@@ -301,6 +302,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/mix_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/photo_mode.cpp

@@ -1085,6 +1085,7 @@ L_808004DC:
     ctx->f16.u32l = MEM_W(ctx->r29, 0X34);
     // 0x80800550: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
+    tooie_fly_turn(rdram, ctx);
     // 0x80800554: add.s       $f18, $f0, $f16
     CHECK_FR(ctx, 18);
     CHECK_FR(ctx, 0);

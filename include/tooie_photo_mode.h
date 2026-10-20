@@ -26,14 +26,13 @@ namespace tooie::photo_mode {
     inline const std::string grain_option = "photo_grain";
     inline const std::string crop_option = "photo_crop";
     inline const std::string grid_option = "photo_grid";
-    // QOL > Photo Filter: hides the photo settings below it (L, 2026-10-16).
-    inline const std::string hide_settings_option = "photo_hide_settings";
     inline const std::string dof_option = "photo_dof";
     inline const std::string tilt_option = "photo_tilt";
     inline const std::string shutter_option = "photo_shutter";
     inline const std::string border_option = "photo_border";
 
-    // Adds photo mode's filter rows to the QOL tab (used only while photo mode is on).
+    // Adds photo mode's filter settings to the QOL tab, hidden there: the photo panel changes them (L,
+    // 2026-10-19: QOL's Photo Filter section went), and qol.json keeps them.
     void add_options(recomp::config::Config& qol);
 
     // Names the Photo Mode key and sets its default bindings (before the controls config loads).

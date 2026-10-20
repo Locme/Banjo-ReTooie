@@ -32,6 +32,7 @@
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_menu_pause.h"
 #include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
@@ -144,6 +145,21 @@ namespace {
         recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
         qol.set_option_value(tooie::cutscene_skip_option, true);
         qol.save_config();
+    }
+
+    // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
+    // on once; turning it off again afterwards stays.
+    void turn_on_transform_anywhere_once() {
+        const std::filesystem::path marker = recomp::get_config_path() / "transform_anywhere_on.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
+        if (!std::get<bool>(qol.get_option_value(tooie::transform_anywhere::option))) {
+            qol.set_option_value(tooie::transform_anywhere::option, true);
+            qol.save_config();
+        }
+        std::ofstream{marker};
     }
 
     // Options that moved from the QOL tab to Graphics (L, 2026-10-13): carry a value saved in qol.json
@@ -381,6 +397,16 @@ void tooie::init_config() {
         "Enemies do double damage",
         "Every hit from an enemy or hazard takes twice the honeycombs. Falls hurt as they always do.",
         false);
+    general.add_enum_option(
+        tooie::damage::aim_option,
+        "Enemy aim",
+        "How far ahead the enemies that aim ahead (Klungo's potions, lava gargoyles, fantasy eyeballs) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> leads 50% further and <recomp-color primary>Sharp</recomp-color> twice as far, so running in a straight line stops working but changing direction still does.",
+        {
+            {tooie::damage::Aim::Original, "Original", "Original"},
+            {tooie::damage::Aim::Better, "Better", "Better"},
+            {tooie::damage::Aim::Sharp, "Sharp", "Sharp"},
+        },
+        tooie::damage::Aim::Original);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -403,10 +429,16 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::boss_rush::option, "Features");
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
+    qol.add_bool_option(
+        tooie::menu_pause::option,
+        "Pause Special Menu",
+        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The music keeps playing. Cutscenes and the title screen carry on as before.",
+        true);
     qol.add_bool_option(
         tooie::quick_start_option,
         "Press Start Anytime In Intro",
@@ -509,7 +541,7 @@ void tooie::init_config() {
         tooie::transform_anywhere::option,
         "Transform anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
-        false);
+        true);
     qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals checklist",
@@ -525,7 +557,7 @@ void tooie::init_config() {
             {tooie::fine_aim::Mode::HoldKey, "Hold R", "Hold key"},
             {tooie::fine_aim::Mode::Always, "Always", "Always"},
         },
-        tooie::fine_aim::Mode::Off);
+        tooie::fine_aim::Mode::HoldKey);
     qol.add_enum_option(
         tooie::fine_aim::speed_option,
         "Fine aim speed",
@@ -550,10 +582,10 @@ void tooie::init_config() {
         tooie::canary_mary::Mode::Fair);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
+    recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
     recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
-    recompui::config::set_option_group(tooie::photo_mode::hide_settings_option, "Photo Filter");
     recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
@@ -747,6 +779,7 @@ void tooie::init_config() {
 
     move_saved_hud_placement();
     recompui::config::finalize();
+    tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
     show_wip_tab();
     move_saved_tab_options();
@@ -754,6 +787,7 @@ void tooie::init_config() {
     show_achievements_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
+    turn_on_transform_anywhere_once();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();
