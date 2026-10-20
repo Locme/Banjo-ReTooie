@@ -1244,6 +1244,13 @@ func = "func_8010D12C"
 before_vram = 0x8010D12C
 text = "tooie_enemy_aim(rdram, ctx);"
 
+# func_8010D09C(player, out, lead) is the same prediction without the point lookup (balloon bomb, dino foot,
+# Gruntilda's fireball, boxing glove and others, 11 callers); its lead ($a2) is lengthened the same way.
+[[patches.hook]]
+func = "func_8010D09C"
+before_vram = 0x8010D09C
+text = "tooie_enemy_aim(rdram, ctx);"
+
 # Cheats > One-hit enemies: the damage an enemy hit handler takes from the enemy's health byte becomes 255.
 [[patches.hook]]
 func = "func_80108F08"
