@@ -668,7 +668,7 @@ void tooie::day_night::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         mist_option,
         "Mist",
-        "With Day and Night on, pale mist drifts in banks over low ground and gathers thickest on and round water. 0 turns it off.",
+        "With Day and Night on, pale mist drifts in banks over low ground, gathers thickest on and round water and rises as spray where waterfalls land. Used in place of the Mist setting while the cycle runs. 0 turns it off.",
         0, 100, 5, 0, false, 50);
     graphics.add_option_hidden_dependency(mist_option, option, Mode::Off);
     graphics.add_enum_option(

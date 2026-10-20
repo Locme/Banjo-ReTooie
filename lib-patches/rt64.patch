@@ -5995,10 +5995,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..0f5a5ff
+index 0000000..359a0fb
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2561 @@
+@@ -0,0 +1,2568 @@
 +//
 +// RT64
 +//
@@ -6805,6 +6805,11 @@ index 0000000..0f5a5ff
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.dayMist = std::clamp(strength, 0.0f, 1.0f);
 +        effectsSettings.dayMistWhen = std::min(when, 2u);
++    }
++
++    void SetSceneOwnMist(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.ownMist = std::clamp(strength, 0.0f, 1.0f);
 +    }
 +
 +    // The cloud shape (cover 0 to 1, height 0.25 to 4, thickness 0.1 to 2, speed 0 to 8) in 6 bits each, with
@@ -7714,7 +7719,7 @@ index 0000000..0f5a5ff
 +        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
 +            // The day and night cycle's mist gathers round water.
 +            // and the rain rings on water need it too.
-+            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
++            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) || (effectsSettings.ownMist > 0.0f) ||
 +            (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
 +    }
 +
@@ -7786,7 +7791,7 @@ index 0000000..0f5a5ff
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -7912,8 +7917,10 @@ index 0000000..0f5a5ff
 +            const float rain = settings.timeOfDay ? settings.dayRain : 0.0f;
 +            // The mist and the rain's details ride above the softness and Banjo's flag: 4 * (the mist's strength
 +            // (0 to 100) + 128 * when + 512 * how wet the ground is (0 to 31) + 16384 when raindrops land on the screen).
++            // Without the cycle, Graphics > Mist on its own: always showing.
 +            const float mistPacked = settings.timeOfDay ? 4.0f * (std::round(settings.dayMist * 100.0f) + 128.0f * float(settings.dayMistWhen) +
-+                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) : 0.0f;
++                512.0f * std::round(settings.dayWet * 31.0f) + (settings.dayDrops ? 16384.0f : 0.0f)) :
++                ((settings.ownMist > 0.0f) ? 4.0f * (std::round(settings.ownMist * 100.0f) + 128.0f * 2.0f) : 0.0f);
 +            constants.shadows = { settings.sunShadows * daylight * moonlight * (1.0f - rain),
 +                std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(settings.sunShadowDistance / SUN_SHADOW_MAP_HALF_STEP), dayPacked, (settings.sunShadowOnBanjo ? 0.0f : 2.0f) + settings.sunShadowSoftness * 0.99f + mistPacked };
 +            if (sunLength > 1e-6f) {
@@ -8000,7 +8007,7 @@ index 0000000..0f5a5ff
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -8562,10 +8569,10 @@ index 0000000..0f5a5ff
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..66515af
+index 0000000..2ed8c1f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,401 @@
+@@ -0,0 +1,404 @@
 +//
 +// RT64
 +//
@@ -8659,6 +8666,8 @@ index 0000000..66515af
 +        // The mist's strength (0 off, 1 thickest) and when it shows (0 mornings, 1 mornings and nights, 2 always).
 +        float dayMist = 0.5f;
 +        uint32_t dayMistWhen = 0;
++        // Graphics > Mist (0 off, 1 thickest): the same mist on its own, always showing, used while the cycle is off.
++        float ownMist = 0.0f;
 +        // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
 +        float dayWet = 0.0f;
 +        bool dayDrops = false;
@@ -8785,6 +8794,7 @@ index 0000000..66515af
 +    // snow: it falls as snow.
 +    void SetSceneWeather(float rain, float flash, bool snow);
 +    void SetSceneMist(float strength, uint32_t when);
++    void SetSceneOwnMist(float strength);
 +    void SetSceneRainDetail(float wet, bool drops);
 +    void SetSceneClouds(float cover, float height, float thickness, float speed);
 +    // Banjo-Tooie: the moon's phase for the day and night cycle, 0 new, 2 first quarter, 4 full, 6 last quarter.
@@ -12663,10 +12673,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6be905d
+index 0000000..cc35048
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3083 @@
+@@ -0,0 +1,3104 @@
 +//
 +// RT64
 +//
@@ -14784,8 +14794,9 @@ index 0000000..6be905d
 +}
 +
 +// Mist: pale banks drifting slowly over low ground (below and a little above Banjo's height), thicker with
-+// distance, and thickest on and around water, where it hangs just over the surface even close by. Lit warm
-+// towards the sun. Separate from the Fog setting.
++// distance, and thickest on and around water, where it hangs just over the surface even close by, with spray
++// billowing up where a waterfall lands. Lit warm towards the sun. Separate from the Fog setting. Also drawn
++// without the cycle for Graphics > Mist (always showing, tint 1).
 +float3 DayMist(float3 color, int2 pixel, float depth, float3 tint) {
 +    const float2 setting = DayMistSetting();
 +    const float morning = DayMorning(tint);
@@ -14804,6 +14815,9 @@ index 0000000..6be905d
 +    // and the point itself. The mist settles at the water's height.
 +    float nearWater = 0.0f;
 +    float waterY = 0.0f;
++    // Waterfalls nearby (steep watery draws): how many looks found one, and the lowest point of it (its foot).
++    float nearFall = 0.0f;
++    float fallFoot = 1e9f;
 +    if (gConstants.water.y > 0.5f) {
 +        const float height = gConstants.projection.w;
 +        const float radius = clamp((260.0f / scale) * gConstants.projection.y * 0.5f * height / max(-center.z, 1e-3f), 3.0f, height * 0.2f);
@@ -14813,15 +14827,21 @@ index 0000000..6be905d
 +            const float2 offset = (i == 8) ? float2(0.0f, 0.0f) : float2(cos(angle), sin(angle)) * radius * ((i & 1) ? 1.0f : 0.5f);
 +            const int2 at = pixel + int2(offset);
 +            float waterDepth;
-+            if (LoadWater(at, waterDepth)) {
++            float3 fallTint;
++            if (LoadWater(at, waterDepth) && (SteepAt(at) < 0.5f)) {
 +                found += 1.0f;
 +                waterY += WorldPosition(ViewPosition(at, waterDepth)).y;
++            }
++            else if (LoadAnyWater(at, waterDepth) && (FallWatery(at, fallTint) > 0.3f)) {
++                nearFall += 1.0f;
++                fallFoot = min(fallFoot, WorldPosition(ViewPosition(at, waterDepth)).y);
 +            }
 +        }
 +        if (found > 0.0f) {
 +            waterY /= found;
 +            nearWater = saturate(found / 4.0f);
 +        }
++        nearFall = saturate(nearFall / 3.0f);
 +    }
 +
 +    // Slowly drifting banks, so the mist lies in patches rather than as an even haze.
@@ -14835,7 +14855,13 @@ index 0000000..6be905d
 +    const float groundRun = (world.y < groundTop) ? distance * ((cameraY > groundTop) ? (groundTop - world.y) / max(cameraY - world.y, 1.0f) : 1.0f) : 0.0f;
 +    const float waterTop = waterY + 70.0f;
 +    const float waterRun = ((nearWater > 0.0f) && (world.y < waterTop)) ? distance * ((cameraY > waterTop) ? (waterTop - world.y) / max(cameraY - world.y, 1.0f) : 1.0f) : 0.0f;
-+    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f;
++    // Spray where a fall lands: thick close by (it doesn't need distance to build up), from the water (or the fall's
++    // foot) to about 120 units up, billowing and rising.
++    const float footY = (nearWater > 0.0f) ? min(waterY, fallFoot) : fallFoot;
++    const float sprayRise = (nearFall > 0.0f) ? saturate((footY + 120.0f - world.y) / 120.0f) : 0.0f;
++    const float billow = WaterNoise(float2(world.x + world.z, world.y) / 40.0f - float2(0.0f, time * 0.5f)) * 0.6f + WaterNoise((world.xz - world.y) / 17.0f + time * 0.2f) * 0.4f;
++    const float spray = nearFall * sprayRise * (0.4f + 0.6f * billow) * 0.9f;
++    const float thickness = groundRun * (0.2f + 0.8f * banks) / 1600.0f + waterRun * nearWater * (0.45f + 0.55f * banks) / 1400.0f + spray;
 +    const float amount = (1.0f - exp(-thickness * when * setting.x * 2.0f)) * 0.85f;
 +    const float toward = saturate(dot(normalize(center), gConstants.sun.xyz)) * morning;
 +    // Mist in shade (a cave mouth, under trees) is lit less: dimmer where the scene behind it is dark.
@@ -15480,7 +15506,7 @@ index 0000000..6be905d
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -15726,15 +15752,20 @@ index 0000000..6be905d
 +            scene = DayWorld(scene, dayTint, !wet);
 +            const float3 weather = DayWeather();
 +            scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
-+            // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
-+            // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
++        }
++        // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
++        // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
++        // Without the cycle this is Graphics > Mist on its own.
++        if (DayMistSetting().x > 0.0f) {
 +            float mistDepth = depth;
 +            float frontWater;
 +            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, frontWater)) {
 +                mistDepth = min(mistDepth, frontWater);
 +            }
-+            scene = DayMist(scene, pixel, mistDepth, dayTint);
-+            scene = DayLensDrops(scene, pixel, dayTint, weather.x);
++            scene = DayMist(scene, pixel, mistDepth, daytime ? dayTint : float3(1.0f, 1.0f, 1.0f));
++        }
++        if (daytime) {
++            scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
 +            rim *= dayTint;
 +        }
 +        if (gConstants.bloom.z > 0.0f) {

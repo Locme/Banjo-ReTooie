@@ -68,6 +68,7 @@ namespace RT64 {
     void SetSceneScreenSpaceReflections(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
+    void SetSceneOwnMist(float strength);
     void SetSceneModernWater(bool enabled, bool stylised);
     void SetSceneIcyLevel(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
@@ -3908,6 +3909,7 @@ namespace {
         { &tooie::picture_filters::npc_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
+        { &tooie::picture_filters::mist_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -4254,6 +4256,12 @@ void tooie::picture_filters::apply() {
         shore_foam = std::atoi(forced) != 0;
     }
     RT64::SetSceneShoreFoam(shore_foam);
+    // Test aid: TOOIE_OWN_MIST=<0 to 100> whatever the setting says.
+    float own_mist = shaders ? (float)(value<double>(mist_option, 0.0) / 100.0) : 0.0f;
+    if (const char* forced = std::getenv("TOOIE_OWN_MIST")) {
+        own_mist = (float)(std::atof(forced) / 100.0);
+    }
+    RT64::SetSceneOwnMist(own_mist);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
@@ -4730,6 +4738,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
+    graphics.add_number_option(
+        mist_option,
+        "Mist",
+        "Pale mist drifts in banks over low ground, hangs thickest on and round water, and rises as spray where waterfalls land. Always showing, at any time of day. While Day and Night runs in a level, its own Mist and Mist Time settings are used instead. 0 turns it off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
@@ -5023,7 +5036,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5062,6 +5075,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(mist_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
