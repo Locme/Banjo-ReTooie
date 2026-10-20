@@ -58,7 +58,7 @@ namespace RT64 {
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
     void SetSceneUnderwater(float tint, float haze);
-    void SetSceneHeatHaze(float strength);
+    void SetSceneHeatHaze(float strength, bool warmOnly);
     void SetSceneWaterReflections(float strength);
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
@@ -169,6 +169,7 @@ namespace {
         return std::find(maps.begin(), maps.end(), map) != maps.end();
     }
     float heat_haze_sent = -1.0f;
+    bool heat_haze_warm_sent = false;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
     // inside the volcano.
@@ -4657,11 +4658,14 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f, banjo_grounded(rdram));
     }
 
-    // The same shimmer, gentler, under water.
-    const float heat = by_lava(rdram) ? heat_haze.load() : underwater_distortion.load() * underwater_amount * 0.5f;
-    if (heat != heat_haze_sent) {
+    // The same shimmer, gentler, under water. By lava it only rises above hot things (lava, fire); under water it
+    // covers the whole picture.
+    const bool warm = by_lava(rdram);
+    const float heat = warm ? heat_haze.load() : underwater_distortion.load() * underwater_amount * 0.5f;
+    if ((heat != heat_haze_sent) || (warm != heat_haze_warm_sent)) {
         heat_haze_sent = heat;
-        RT64::SetSceneHeatHaze(heat);
+        heat_haze_warm_sent = warm;
+        RT64::SetSceneHeatHaze(heat, warm);
     }
 
     // The cutscene depth of field in letterboxed scenes, focused on the middle of the picture; the gameplay one
@@ -5021,7 +5025,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         heat_haze_option,
         "Heat haze",
-        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers, more in the distance. 0 is off.",
+        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         sun_shadows_option,

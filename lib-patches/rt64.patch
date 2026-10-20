@@ -6197,10 +6197,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..bd9f08e
+index 0000000..8ca333f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2778 @@
+@@ -0,0 +1,2781 @@
 +//
 +// RT64
 +//
@@ -6487,9 +6487,10 @@ index 0000000..bd9f08e
 +        effectsSettings.eyeAdaptation = strength;
 +    }
 +
-+    void SetSceneHeatHaze(float strength) {
++    void SetSceneHeatHaze(float strength, bool warmOnly) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.heatHaze = strength;
++        effectsSettings.heatHazeWarmOnly = warmOnly;
 +    }
 +
 +    // Screen-space reflections on, or their debug view: the shiny list is looked up (SceneShinyWanted).
@@ -8224,7 +8225,9 @@ index 0000000..bd9f08e
 +        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
-+        constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, settings.heatHaze };
++        // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
++        const float heatPacked = (settings.heatHazeWarmOnly && (settings.heatHaze > 0.0f)) ? 2.0f + std::min(settings.heatHaze, 1.0f) : settings.heatHaze;
++        constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, heatPacked };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        // The fog darkens with the time of day as the sky does.
 +        const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
@@ -8981,10 +8984,10 @@ index 0000000..bd9f08e
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2b372a8
+index 0000000..9e9057d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,436 @@
+@@ -0,0 +1,438 @@
 +//
 +// RT64
 +//
@@ -9036,6 +9039,7 @@ index 0000000..2b372a8
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
++        bool heatHazeWarmOnly = false;
 +        float waterReflections = 0.0f;
 +        float iceReflections = 0.0f;
 +        bool shoreFoam = false; // Original water: Modern's shore foam on the game's water.
@@ -9165,8 +9169,9 @@ index 0000000..2b372a8
 +    void SetSceneRimLight(float strength);
 +    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
 +    void SetSceneUnderwater(float tint, float haze);
-+    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance.
-+    void SetSceneHeatHaze(float strength);
++    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance. With warmOnly, only where heat rises:
++    // above hot-looking surfaces (glowing lava, fire) on screen.
++    void SetSceneHeatHaze(float strength, bool warmOnly);
 +    // Water reflections (0 off, 1 strongest) on the game's water surfaces, which the framebuffer renderer
 +    // redraws into a mask (BeginSceneWaterMask) before the pass.
 +    void SetSceneWaterReflections(float strength);
@@ -13129,10 +13134,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..1e1bc10
+index 0000000..1c74fe4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3172 @@
+@@ -0,0 +1,3207 @@
 +//
 +// RT64
 +//
@@ -13882,14 +13887,49 @@ index 0000000..1e1bc10
 +    return (light / weight) * saturate(weight * (3.0f / float(samples)));
 +}
 +
++// How hot a colour looks (0 to 1): bright orange to yellow, like glowing lava and fire. Dull red rock and brown
++// earth are too dark, pinks and white have too much blue, and pure reds (Kazooie) too little green.
++float Warmth(float3 c) {
++    return saturate((c.r - 0.55f) * 4.0f) * saturate((c.r * 0.6f - c.b) * 5.0f) * saturate((c.r * 0.97f - c.g) * 5.0f) *
++        saturate((c.g - c.r * 0.12f) * 8.0f);
++}
++
++// How much heat rises through a pixel (0 to 1): hot surfaces at it or below it on screen, up to a fifth of the
++// picture's height down, fading the further down they are. Three columns, the middle one counting twice, so
++// the shimmer's sides fade out. The sky never counts as hot.
++float WarmthBelow(int2 pixel) {
++    const float2 size = gConstants.projection.zw;
++    const float step = size.y * (9.0f / 540.0f);
++    float warmth = 0.0f;
++    [unroll]
++    for (int column = -1; column <= 1; column++) {
++        float hottest = 0.0f;
++        [loop]
++        for (int i = 0; i < 12; i++) {
++            const int2 at = clamp(int2(round(float2(pixel) + float2(float(column) * 2.5f * step, float(i) * step))), int2(0, 0), int2(size) - 1);
++            if (LoadDepth(at) < 0.99999f) {
++                hottest = max(hottest, Warmth(gColor.Load(int3(at, 0)).rgb) * (1.0f - float(i) / 12.0f));
++            }
++        }
++        warmth += hottest * ((column == 0) ? 0.5f : 0.25f);
++    }
++    return saturate(warmth * 1.5f);
++}
++
 +// Heat haze: the scene so far, read a little to the side and up and down in waves that rise, more with
 +// distance. The waves are sized to the picture, not to pixels, so they look the same at any resolution,
 +// and read between pixels so the shimmer is smooth. A pixel isn't read from something nearer than itself,
-+// so near things keep their edges.
++// so near things keep their edges. view.w is the strength, or 2 + it when the haze only rises above warm
++// surfaces (by lava); then it starts nearer, as the lava is often close by.
 +float3 HeatHaze(int2 pixel, float distance) {
 +    const float2 size = gConstants.projection.zw;
++    const bool warmOnly = gConstants.view.w > 1.5f;
++    const float strength = warmOnly ? (gConstants.view.w - 2.0f) * WarmthBelow(pixel) : gConstants.view.w;
++    if (strength <= 0.0f) {
++        return gColor.Load(int3(pixel, 0)).rgb;
++    }
 +    // In 540ths of the picture's height: up to 3 far away.
-+    const float amount = gConstants.view.w * 3.0f * saturate((distance - 150.0f) / 1800.0f);
++    const float amount = strength * 3.0f * (warmOnly ? saturate((distance - 60.0f) / 900.0f) : saturate((distance - 150.0f) / 1800.0f));
 +    const float t = gConstants.view.z;
 +    const float2 at = float2(pixel) / size.y * 540.0f;
 +    const float2 wave = float2(sin(at.y * 0.21f + t * 6.0f) + 0.5f * sin(at.y * 0.083f + at.x * 0.035f + t * 2.9f),
@@ -17834,7 +17874,7 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..504bd1e
+index 0000000..757dc97
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,112 @@
@@ -17898,7 +17938,7 @@ index 0000000..504bd1e
 +        float4 fogColor;
 +        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), the day and night
 +        // cycle's cloud shape packed with F8 compare (see PackSceneClouds), a time in seconds, then the heat haze (0 off,
-+        // 1 strongest).
++        // 1 strongest; 2 + strength when it only rises above warm surfaces).
 +        float4 view;
 +        // Water reflections strength (0 off), 1 when the water mask was drawn this frame (2: and Modern water draws
 +        // the water, from the mask and its colours), bounce light (0 off, 1 strongest), then the water waves'
