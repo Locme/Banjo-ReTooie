@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Flying: turning above 30 FPS (40, 60, 120, 175, 240, Uncapped) is as fast as in the original game; it sped up with the frame rate and kept swinging after the stick was let go (L). Checked headless at Original, 120, 240 and Uncapped (T447).
 - General > Gameplay > Enemy aim (Original / Better / Sharp, Original by default): The enemies that already aim ahead (Klungo, lava gargoyles, fantasy eyeballs) lead your movement 50% or 100% further than the game's own aim. Untested on PC (T446).
 
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).
