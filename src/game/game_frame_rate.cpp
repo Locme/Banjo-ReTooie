@@ -874,6 +874,20 @@ extern "C" int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx) {
     return blink_gate.skip(rdram, (uint32_t)ctx->r4) ? 1 : 0;
 }
 
+// The ice storm (chfireicestorm, Icy Side) spawns one to three snow puffs every game frame
+// (func_80800DC8 and func_80800E08, each a new emitter), whatever the frame's time, while the
+// puffs only age and die by that time. With time frozen (Photo Mode, the ESC menu's pause:
+// delta 1e-7) they never died: L's hang of 2026-10-20 had about 2,400 of them at the storm,
+// which filled the frame's display list and wrote over the heap. No new puffs while time
+// stands still. Returns 1 to skip the spawn.
+extern "C" int tooie_storm_spawn_skip(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    float dt;
+    const uint32_t bits = (uint32_t)MEM_W(0, (int32_t)0x8012C760);
+    std::memcpy(&dt, &bits, sizeof(dt));
+    return (dt < 1.0e-5f) ? 1 : 0;
+}
+
 // Klungo's fades (func_8080231C_chklungo out, func_808023A4_chklungo in; $a0 Klungo,
 // $a1 the alpha to stop at, $a2 the speed per second, both floats): alpha +- speed x
 // frame time, truncated to a whole number and stored, returning 1 once the stop is

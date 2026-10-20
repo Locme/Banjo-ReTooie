@@ -276,6 +276,19 @@ namespace {
         muzzle = {};
     }
 
+    // Banjo's ears on the game's own models: six head-bone points each (the right ear; the left is its
+    // mirror image). Ear jiggle moves them (see the ears below).
+    constexpr int ear_points = 6;
+    constexpr int16_t ear_shape[ear_points][3] = { { 9, 113, 12 }, { 7, 116, 14 }, { 12, 120, 16 }, { 15, 115, 13 }, { 13, 116, 10 }, { 10, 120, 13 } };
+    // The vertices Ear jiggle has taken (both ears, this model), left out of the muzzle.
+    std::vector<int> ear_taken;
+    bool on_ear(int i, int x, int y, int z) {
+        if (std::find(ear_taken.begin(), ear_taken.end(), i) != ear_taken.end()) return true;
+        for (const auto& q : ear_shape)
+            if ((x == q[0] || x == -q[0]) && y == q[1] && z == q[2]) return true;
+        return false;
+    }
+
     // The head's own vertices: draw nodes on bone 9 outside selectors, the head side of the snout's
     // skin node (on bone 10, its second half) and of the jaw's (bone 11): the corners of the mouth are
     // one point in all three, so they must move alike or the mouth tears open there (L's close-up,
@@ -321,6 +334,11 @@ namespace {
         for (const auto& entry : all) {
             const int i = entry.first;
             if (i < 0 || i >= current.vertices) continue;
+            // The ears are far behind the muzzle and never bend with it; leaving them out keeps the muzzle
+            // (written after them, on the snout bone) from putting Ear jiggle's swing back every frame
+            // (L, 2026-10-20: "ear jiggle seems static").
+            if (on_ear(i, (int16_t)read_half(rdram, vertex_addr(i)), (int16_t)read_half(rdram, vertex_addr(i) + 2),
+                       (int16_t)read_half(rdram, vertex_addr(i) + 4))) continue;
             muzzle.index.push_back(i);
             for (int c = 0; c < 3; c++) muzzle.original.push_back(read_half(rdram, vertex_addr(i) + 2 * c));
         }
@@ -928,8 +946,6 @@ namespace {
     // snout's kinds. Picked by bind position, so a head vertex at the same place moves with the ear;
     // the base stays on the head and the swing grows towards the top.
     constexpr int ear_bone = 9;
-    constexpr int ear_points = 6;
-    constexpr int16_t ear_shape[ear_points][3] = { { 9, 113, 12 }, { 7, 116, 14 }, { 12, 120, 16 }, { 15, 115, 13 }, { 13, 116, 10 }, { 10, 120, 13 } };
 
     struct EarSettings { Feel feel{ 150.0f, 10.0f, 1.0f }; Limits lim{ 0.4f, 0.4f, 0.8f }; } ear_settings;
     void read_ear_settings() {
@@ -1024,7 +1040,17 @@ namespace {
         if (ears.side[0].index.size() < ear_points || ears.side[1].index.size() < ear_points) {
             ears.side[0].index.clear();
             ears.side[1].index.clear();
+            ear_taken.clear();
             return false;
+        }
+        ear_taken = ears.side[0].index;
+        ear_taken.insert(ear_taken.end(), ears.side[1].index.begin(), ears.side[1].index.end());
+        // A muzzle picked before the ears holds them too: put it back and let it pick again without them.
+        for (int i : muzzle.index) {
+            if (std::find(ear_taken.begin(), ear_taken.end(), i) != ear_taken.end()) {
+                restore_muzzle(rdram);
+                break;
+            }
         }
         return true;
     }

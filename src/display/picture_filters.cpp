@@ -81,6 +81,7 @@ namespace RT64 {
     void SetSceneSunShadowDistance(float distance);
     void SetSceneGrass(float amount, float height, float distance, float density, float patches);
     void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
+    void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
@@ -131,6 +132,7 @@ namespace {
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
     std::atomic<bool> sun_shadows{false};
+    std::atomic<float> sun_shadow_distance_set{3000.0f};
     std::atomic<float> sun_shadow_reach{0.0f};
     std::atomic<bool> kazooie_feathers{false};
     std::atomic<bool> npc_fur{false};
@@ -4254,6 +4256,7 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     const float shadow_distance = (float)value<double>(sun_shadow_distance_option, 3000.0);
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
+    sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 1800.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
@@ -4262,6 +4265,8 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
         (float)(value<double>(grass_chunk_size_option, 200.0) / 100.0), value<bool>(grass_pixelated_option, false),
         (float)value<double>(grass_pixel_size_option, 1.0), (float)(value<double>(grass_blend_option, 50.0) / 100.0));
+    RT64::SetSceneGrassCulling(value<bool>(grass_frustum_cull_option, true), value<bool>(grass_occlusion_cull_option, true),
+        value<bool>(grass_chunking_option, true));
     send_effect_textures();
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
@@ -4411,12 +4416,18 @@ bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
 }
 
+// Ray tracing shows sun shadows (traced ones) at 60 at least whatever the slider says, so the game keeps the whole
+// level and the off-screen casters drawn then too.
+static bool traced_shadows_on() {
+    return ray_tracing_on.load() && (RT64::GetRayTracingSupport() == 2);
+}
+
 bool tooie::picture_filters::sun_shadows_on() {
-    return sun_shadows;
+    return sun_shadows || traced_shadows_on();
 }
 
 float tooie::picture_filters::sun_shadow_distance() {
-    return sun_shadow_reach;
+    return traced_shadows_on() ? sun_shadow_distance_set.load() : sun_shadow_reach.load();
 }
 
 bool tooie::picture_filters::kazooie_feathers_on() {
@@ -4451,8 +4462,8 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     }
     if (ray_tracing_on.load() && !ray_tracing_notified.load() && RT64::GetRayTracingSupport() == 1) {
         ray_tracing_notified.store(true);
-        std::fprintf(stderr, "[ray-tracing] this graphics card has no hardware ray tracing; using the current effects\n");
-        tooie::toast::show("Ray tracing is not supported on this graphics card. Using the current effects.");
+        std::fprintf(stderr, "[ray-tracing] no ray queries on this device or renderer; using the current effects\n");
+        tooie::toast::show("Ray tracing needs the Vulkan renderer and a graphics card with ray tracing. Using the current effects.");
     }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
@@ -4895,7 +4906,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
-        "Ray traced effects, starting with reflections on the same shiny surfaces as Screen-space reflections. It is a switch of its own, apart from the shader effects. Needs a graphics card with hardware ray tracing: without one this shows a notice and the effects carry on as you have set them. Early: this build checks for the hardware but does not draw the traced reflections yet, so with it the current reflections are shown.",
+        "Ray traced effects, starting with reflections: on the shiny surfaces Screen-space reflections covers, a ray is traced through the level's triangles instead of marching the picture, so reflections find what the picture hides and nothing is missed between steps. It is a switch of its own, apart from the shader effects, and shows reflections even with Screen-space reflections at 0 (at 60 at least). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
         false);
     graphics.add_bool_option(
         reflections_section_option,
@@ -5185,12 +5196,27 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "3D grass on edges",
         "Also grow 3D grass on the grassy parts of textures that are only partly grass: the grass fringe along cliff tops and banks, and grass at the foot of rocks and walls. The blades lean out from slopes and walls.",
         true);
+    graphics.add_bool_option(
+        grass_frustum_cull_option,
+        "Frustum culling",
+        "Skips 3D grass blades that are off the edges of the screen before they are drawn. Looks the same; faster.",
+        true);
+    graphics.add_bool_option(
+        grass_occlusion_cull_option,
+        "Occlusion culling",
+        "Skips 3D grass blades hidden behind walls, hills and other nearer things, using the depth of the frame before. Looks the same; faster where much of the grass is hidden. Turns itself off for a frame when the camera cuts or turns fast.",
+        true);
+    graphics.add_bool_option(
+        grass_chunking_option,
+        "Chunking",
+        "With Frustum culling: sorts the grassy ground into chunks and skips whole chunks that are off screen (or, with Occlusion culling, hidden) at once, before looking at single blades. Not the same as Chunky 3D grass. Looks the same; faster.",
+        true);
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5245,6 +5271,9 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_chunk_size_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_pixel_size_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_frustum_cull_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_occlusion_cull_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
