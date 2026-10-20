@@ -78,6 +78,7 @@ void tooie_lod_distance(uint8_t* rdram, recomp_context* ctx);
 void tooie_banjo_detail(uint8_t* rdram, recomp_context* ctx);
 // HD shadows (src/gameplay/hd_shadows.cpp): func_800A6250 has the shadow model at $sp+0x1C8 and the on-screen model at $sp+0x1C4.
 void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx);
+void tooie_player_shadow_done(uint8_t* rdram, recomp_context* ctx);
 // Same file: func_80101808's entry ($a1 is the draw callback) and just after it draws the actor ($s0) model.
 void tooie_actor_draw_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx);

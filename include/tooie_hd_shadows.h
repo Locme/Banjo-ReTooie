@@ -18,4 +18,7 @@ namespace tooie::hd_shadows {
     void fix_pastes(uint8_t* rdram, uint32_t start, uint32_t end);
     // The same list: poses the player's shadow with this frame's bones instead of last frame's.
     void fix_shadow_pose(uint8_t* rdram, uint32_t start, uint32_t end);
+    // True while a model is drawn into a shadow: an actor's HD shadow, or Banjo's own model drawn as
+    // his shadow (func_800A6250 with HD Shadows on). Per-frame motion (jiggle springs) skips these draws.
+    bool drawing_shadow();
 }

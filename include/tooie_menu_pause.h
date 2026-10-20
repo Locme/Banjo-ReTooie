@@ -15,6 +15,11 @@ namespace tooie::menu_pause {
     // Called by the main thread's event loop with whether a menu takes the input (update_gfx in main.cpp).
     void set_menu_open(bool open);
 
+    // False while the game would not open its own Start menu (a cutscene or a map change during play), and
+    // Pause Special Menu is on: Esc and the menu button then don't open the menu (L, 2026-10-20). Read on the
+    // main thread; set by tick().
+    bool open_allowed();
+
     // Call each game frame from the game thread (tooie_warp_tick), after photo mode's: freezes the
     // frame's delta time and handles the pause music while the pause applies.
     void tick(uint8_t* rdram, recomp_context* ctx);

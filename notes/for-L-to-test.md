@@ -1,5 +1,25 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T472 Ear jiggle
+- Asked: 2026-10-20 19:22 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Ear jiggle
+  2. Run, turn, jump and land
+  3. Try its sliders
+- Look for: Both ears wobble and flop on their own springs and stay joined to his head; the sliders change how floppy and how far they go.
+- Status: waiting for L
+
+## T471 Jiggle with HD Shadows on
+- Asked: 2026-10-20 19:22 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn HD Shadows on
+  2. General > Jiggle: turn on Snout jiggle (and any other jiggle)
+  3. Run, turn, jump and land
+- Look for: The snout and the other jiggle parts wobble as they do with HD Shadows off, and Banjo's shadow wobbles with him.
+- Status: waiting for L
+
 ## T468 Graphics > Ray tracing switch
 - Asked: 2026-10-20 18:22 UTC
 - Build: main
