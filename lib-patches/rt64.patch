@@ -1968,7 +1968,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..efe06fb 100644
+index 69a82ac..3d5b165 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -2004,7 +2004,7 @@ index 69a82ac..efe06fb 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,162 @@ namespace RT64 {
+@@ -659,6 +678,165 @@ namespace RT64 {
          }
      };
  
@@ -2064,6 +2064,8 @@ index 69a82ac..efe06fb 100644
 +        uint32_t gSceneBVH = 0;
 +        // The level's lights for the traced shadows (SceneEffectsPS.hlsl gLights), with ray queries.
 +        uint32_t gLights = 0;
++        // The world radiance cache the traced effects remember colours in (SceneEffectsPS.hlsl gRadianceCache).
++        uint32_t gRadianceCache = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2081,6 +2083,7 @@ index 69a82ac..efe06fb 100644
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
 +                gLights = builder.addByteAddressBuffer(14);
++                gRadianceCache = builder.addReadWriteByteAddressBuffer(15);
 +            }
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
@@ -7058,10 +7061,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..2f4780e
+index 0000000..a06ec3c
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3011 @@
+@@ -0,0 +1,3030 @@
 +//
 +// RT64
 +//
@@ -7181,6 +7184,8 @@ index 0000000..2f4780e
 +            bool bvhBuiltOnce = false;
 +            // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
 +            std::unique_ptr<RenderBuffer> lightsBuffer;
++            // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
++            std::unique_ptr<RenderBuffer> radianceBuffer;
 +            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
@@ -7339,6 +7344,7 @@ index 0000000..2f4780e
 +    static float userSsgi = 0.0f;
 +    static float userWaterReflections = 0.0f;
 +    static float rayTracingStrength = 0.6f;
++    static std::atomic<bool> rayTracingHitColours{ false };
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7508,6 +7514,10 @@ index 0000000..2f4780e
 +        count = std::min(count, SceneMaxLights);
 +        memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
 +        effectsSettings.lightCount = count;
++    }
++
++    void SetSceneRayTracingHitColours(bool enabled) {
++        rayTracingHitColours.store(enabled);
 +    }
 +
 +    void SetSceneRayTracingStrength(float strength) {
@@ -9164,11 +9174,16 @@ index 0000000..2f4780e
 +            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 1)));
 +            res.lightsBuffer->setName("Scene Effects lights");
 +        }
++        if (res.radianceBuffer == nullptr) {
++            res.radianceBuffer = worker->device->createBuffer(RenderBufferDesc::DefaultBuffer(8ull << 20, RenderBufferFlag::STORAGE | RenderBufferFlag::UNORDERED_ACCESS));
++            res.radianceBuffer->setName("Scene Effects radiance cache");
++        }
 +        if (res.lightsBuffer != nullptr) {
 +            const SceneEffectsSettings lightSettings = GetSceneEffects();
 +            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
 +            memset(mapped, 0, 16 * (SceneMaxLights + 1));
 +            mapped[0] = float(lightSettings.lightCount);
++            mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
 +            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
@@ -9984,6 +9999,7 @@ index 0000000..2f4780e
 +            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
 +                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
 +                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 1));
++                res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
 +                res.sceneSetBvh = res.bvhTlas.get();
 +            }
 +        }
@@ -10015,6 +10031,12 @@ index 0000000..2f4780e
 +            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +            commandList->drawInstanced(3, 1, 0, 0);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.fireflyTexture.get(), RenderTextureLayout::SHADER_READ) });
++        }
++
++        // The radiance cache is written by the passes below (the effects) and read by them (the indirect pass and the next
++        // frame's): its writes from the last pass are made visible first.
++        if ((res.sceneSetBvh != nullptr) && (res.radianceBuffer != nullptr) && rayTracingHitColours.load()) {
++            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderBufferBarrier(res.radianceBuffer.get(), RenderBufferAccess::READ | RenderBufferAccess::WRITE) });
 +        }
 +
 +        // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
@@ -10075,10 +10097,10 @@ index 0000000..2f4780e
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..5991c65
+index 0000000..ce14f50
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,461 @@
+@@ -0,0 +1,464 @@
 +//
 +// RT64
 +//
@@ -10348,6 +10370,9 @@ index 0000000..5991c65
 +    // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
 +    // ray tracing is active (see RefreshReflections).
 +    void SetSceneRayTracingStrength(float strength);
++    // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
++    // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
++    void SetSceneRayTracingHitColours(bool enabled);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
@@ -15091,10 +15116,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..9244d53
+index 0000000..d0aeb6d
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3613 @@
+@@ -0,0 +1,3674 @@
 +//
 +// RT64
 +//
@@ -15143,6 +15168,10 @@ index 0000000..9244d53
 +RaytracingAccelerationStructure gSceneBVH : register(t13);
 +// The level's lights: the count (as a float) in the first 16 bytes, then x, y, z (world) and the outer range of each.
 +ByteAddressBuffer gLights : register(t14);
++// The world radiance cache (Graphics > Ray tracing hit colours): what the screen showed at each spot of the world, in
++// 16-unit cells (a hash of the cell, then the colour), so a ray that lands where the picture can't see it still finds
++// the colour the surface had when it was last on screen.
++RWByteAddressBuffer gRadianceCache : register(u15);
 +#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
@@ -15791,6 +15820,33 @@ index 0000000..9244d53
 +    return float3(dot(view, gConstants.worldX.xyz), dot(view, gConstants.worldY.xyz), dot(view, gConstants.worldZ.xyz));
 +}
 +
++// The radiance cache (see gRadianceCache): on when lights word 1 says so (Graphics > Ray tracing hit colours).
++bool HitColoursOn() {
++    return asfloat(gLights.Load(4)) > 0.5f;
++}
++
++uint RadianceCell(float3 world, out uint check) {
++    const int3 cell = int3(floor(world * (1.0f / 16.0f)));
++    const uint h = uint(cell.x) * 73856093u ^ uint(cell.y) * 19349663u ^ uint(cell.z) * 83492791u;
++    check = h | 1u;
++    return ((h * 2654435761u) >> 12) * 8u;
++}
++
++void RadianceStore(float3 world, float3 colour) {
++    uint check;
++    const uint at = RadianceCell(world, check);
++    const uint3 c = uint3(saturate(colour) * 255.0f + 0.5f);
++    gRadianceCache.Store2(at, uint2(check, c.r | (c.g << 8) | (c.b << 16)));
++}
++
++bool RadianceLoad(float3 world, out float3 colour) {
++    uint check;
++    const uint at = RadianceCell(world, check);
++    const uint2 entry = gRadianceCache.Load2(at);
++    colour = float3(float(entry.y & 255u), float((entry.y >> 8) & 255u), float((entry.y >> 16) & 255u)) * (1.0f / 255.0f);
++    return entry.x == check;
++}
++
 +// Traced reflections: the same mirror ray as ScreenSpaceReflection, but through the world's triangles (a ray query
 +// over gSceneBVH, in world space) instead of marching the depth, so it finds what the depth hides (the back of a
 +// pillar, what is behind the nearest surface) and misses nothing between steps. Where it lands: the scene's colour
@@ -15836,6 +15892,13 @@ index 0000000..9244d53
 +    const float thickness = max(-hit.z * 0.03f, 20.0f);
 +    const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
 +    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
++    if (!inView && HitColoursOn()) {
++        // Off the screen or hidden: the colour the surface had when it was last seen.
++        float3 remembered;
++        if (RadianceLoad(ViewToWorldPoint(hit), remembered)) {
++            return float4(remembered, 0.85f);
++        }
++    }
 +    return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
 +}
 +
@@ -16008,7 +16071,16 @@ index 0000000..9244d53
 +        const float thickness = max(-hit.z * 0.03f, 20.0f);
 +        const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
 +        const float far = lerp(1.0f, 0.4f, saturate(t / (nearReach * 4.0f)));
-+        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f) * far;
++        float3 hitColour = gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
++        float trust = inView ? RayEdgeFade(inside) : 0.35f;
++        if (!inView && HitColoursOn()) {
++            float3 remembered;
++            if (RadianceLoad(ViewToWorldPoint(hit), remembered)) {
++                hitColour = remembered;
++                trust = 0.8f;
++            }
++        }
++        light += hitColour * trust * far;
 +    }
 +    return light * 0.5f;
 +}
@@ -16583,7 +16655,12 @@ index 0000000..9244d53
 +                const float sampleDepth = LoadDepth(int2(inside));
 +                const bool inView = all(at == inside) && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hitPoint.z <= max(-hitPoint.z * 0.03f, 20.0f)));
 +                hit = true;
-+                // What is off the screen or behind something nearer shows faintly, as the march's last resort did.
++                // What is off the screen or behind something nearer shows faintly, as the march's last resort did, or as it
++                // was remembered when last seen (the radiance cache).
++                float3 remembered;
++                if (!inView && HitColoursOn() && RadianceLoad(ViewToWorldPoint(hitPoint), remembered)) {
++                    return float4(remembered, 0.85f);
++                }
 +                return float4(gColor.Load(int3(int2(inside), 0)).rgb, inView ? RayEdgeFade(inside) : 0.3f);
 +            }
 +        }
@@ -18439,6 +18516,15 @@ index 0000000..9244d53
 +        return float4(gConstants.fogColor.rgb * skyFog + bloom, 1.0f - skyFog);
 +    }
 +
++#ifdef RAY_TRACED
++    // The radiance cache's writes: about one pixel in eight each frame notes the colour of the spot of the world it shows.
++    if (redraw && HitColoursOn()) {
++        const uint seed = uint(pixel.x) * 73856093u ^ uint(pixel.y) * 19349663u ^ uint(gConstants.view.z * 60.0f) * 83492791u;
++        if (((seed * 2654435761u) >> 29) == 0u) {
++            RadianceStore(ViewToWorldPoint(ViewPosition(pixel, depth)), gColor.Load(int3(pixel, 0)).rgb);
++        }
++    }
++#endif
 +    float keep = 1.0f;
 +    const bool occlusion = AoStrength() > 0.0f;
 +    const bool globalIllumination = (SsgiStrength() > 0.0f) && redraw;
