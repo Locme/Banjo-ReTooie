@@ -82,7 +82,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -133,6 +133,7 @@ namespace {
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
     std::atomic<float> snow_height{1.0f};
+    std::atomic<float> snow_detail{1.0f};
     // What was last sent (-1 to send again).
     std::atomic<float> snow_sent{-1.0f};
 
@@ -4225,6 +4226,10 @@ void tooie::picture_filters::apply() {
     if (const char* forced = std::getenv("TOOIE_SNOW_HEIGHT")) {
         snow_height = (float)(std::atof(forced) / 100.0);
     }
+    snow_detail = (float)(value<double>(snow_detail_option, 100.0) / 100.0);
+    if (const char* forced = std::getenv("TOOIE_SNOW_DETAIL")) {
+        snow_detail = (float)(std::atof(forced) / 100.0);
+    }
     snow_sent = -1.0f;
     // Parallax mapping; TOOIE_PARALLAX=<0-100> sets it instead, TOOIE_PARALLAX_ALL=1 puts it on every texture of the
     // 3D world (headless, to find textures that suit it).
@@ -4516,10 +4521,13 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
-        if ((snow != snow_sent.load()) || (strict != strict_sent)) {
+        static float detail_sent = -1.0f;
+        const float detail = snow_detail.load();
+        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent)) {
             snow_sent = snow;
             strict_sent = strict;
-            RT64::SetSceneSnow(snow > 0.0f, snow, strict);
+            detail_sent = detail;
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail);
         }
     }
     // The fog is measured from Banjo.
@@ -4733,13 +4741,18 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
-        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo wades through it, leaving a furrow and footprints with the snow banked up either side, and after a while the snow fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and after a while it fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_number_option(
         snow_height_option,
         "Snow height",
         "How deep the deep snow is, in percent. 100 is about ankle deep on Banjo, 300 up to his knees. Deeper snow costs a little more.",
         25, 300, 5, 0, false, 100);
+    graphics.add_number_option(
+        snow_detail_option,
+        "Snow detail",
+        "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
+        25, 100, 5, 0, false, 100);
     graphics.add_number_option(
         parallax_option,
         "Parallax",
@@ -5023,7 +5036,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5077,6 +5090,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_edges_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).
