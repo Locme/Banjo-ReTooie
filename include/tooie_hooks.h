@@ -89,7 +89,7 @@ void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx);
 void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
-void tooie_klungo_aim(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
 // Cheats > HONEYKING: func_80099B94 entry, and just before it sets the state in $s2.
 void tooie_player_hit_begin(uint8_t* rdram, recomp_context* ctx);

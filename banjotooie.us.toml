@@ -1236,12 +1236,13 @@ func = "func_80099B94"
 before_vram = 0x8009AB54
 text = "tooie_player_hit_state(rdram, ctx);"
 
-# General > Gameplay > Enemy aim (src/gameplay/damage_mods.cpp): Klungo's potion passes its lead ($a2) to
-# func_8010D12C; the lead is lengthened there ($s0 is the potion).
+# General > Gameplay > Enemy aim (src/gameplay/damage_mods.cpp): func_8010D12C(player, out, lead, point) is
+# the game's own "where will the player be" (Klungo's potion, the lava gargoyle, the fantasy eyeball);
+# $a2, the lead in seconds, is lengthened at its entry.
 [[patches.hook]]
-func = "func_80800018_chklungophial"
-before_vram = 0x80800044
-text = "tooie_klungo_aim(rdram, ctx);"
+func = "func_8010D12C"
+before_vram = 0x8010D12C
+text = "tooie_enemy_aim(rdram, ctx);"
 
 # Cheats > One-hit enemies: the damage an enemy hit handler takes from the enemy's health byte becomes 255.
 [[patches.hook]]
