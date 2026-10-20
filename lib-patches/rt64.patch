@@ -2018,7 +2018,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..11392eb 100644
+index 9fae0d4..7f93f32 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2698,7 +2698,7 @@ index 9fae0d4..11392eb 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1863,84 @@ namespace RT64 {
+@@ -1296,9 +1863,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2747,15 +2747,29 @@ index 9fae0d4..11392eb 100644
 +                        const float depthScale = hasViewport ? effectsData->rspViewports[effectsIndex].scale.z : 0.5f;
 +                        const float depthTranslate = hasViewport ? effectsData->rspViewports[effectsIndex].translate.z : 0.5f;
 +                        // The sun shadow map's casters, drawn from the sun (the scene effects set up the map and the pass).
++                        // Casters whose indices follow on from the last one's are drawn together, as one draw: with the whole
++                        // level kept for the sun there are a thousand or more of them, mostly in runs.
++                        // Test aid: TOOIE_SUN_CASTERS_UNMERGED=1 draws each on its own, as before.
++                        static const bool castersUnmerged = (getenv("TOOIE_SUN_CASTERS_UNMERGED") != nullptr);
++                        std::vector<std::pair<uint32_t, uint32_t>> casterRuns;
++                        for (uint32_t i : targetDrawCall.sunCasterInstances) {
++                            const auto &triangles = instanceDrawCallVector[i].triangles;
++                            if (triangles.faceCount == 0) {
++                                continue;
++                            }
++                            if (!castersUnmerged && !casterRuns.empty() && (casterRuns.back().first + casterRuns.back().second == triangles.indexStart)) {
++                                casterRuns.back().second += triangles.faceCount * 3;
++                            }
++                            else {
++                                casterRuns.emplace_back(triangles.indexStart, triangles.faceCount * 3);
++                            }
++                        }
 +                        auto drawSunCasters = [&](RenderCommandList *commandList) {
 +                            commandList->setGraphicsDescriptorSet(sunShadowSet->get(), 0);
 +                            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +                            commandList->setIndexBuffer(&indexBufferView);
-+                            for (uint32_t i : targetDrawCall.sunCasterInstances) {
-+                                const auto &triangles = instanceDrawCallVector[i].triangles;
-+                                if (triangles.faceCount > 0) {
-+                                    commandList->drawIndexedInstanced(triangles.faceCount * 3, 1, triangles.indexStart, 0, 0);
-+                                }
++                            for (const auto &run : casterRuns) {
++                                commandList->drawIndexedInstanced(run.second, 1, run.first, 0, 0);
 +                            }
 +                        };
 +                        const bool sunCasters = !targetDrawCall.sunCasterInstances.empty() && (sunShadowSet != nullptr);
@@ -2766,7 +2780,7 @@ index 9fae0d4..11392eb 100644
 +                                lastCasterLog = std::chrono::steady_clock::now();
 +                                uint32_t faces = 0;
 +                                for (uint32_t i : targetDrawCall.sunCasterInstances) faces += instanceDrawCallVector[i].triangles.faceCount;
-+                                fprintf(stderr, "[sunmap] casters %zu faces %u\n", targetDrawCall.sunCasterInstances.size(), faces);
++                                fprintf(stderr, "[sunmap] casters %zu faces %u draws %zu\n", targetDrawCall.sunCasterInstances.size(), faces, casterRuns.size());
 +                            }
 +                        }
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
@@ -2784,7 +2798,7 @@ index 9fae0d4..11392eb 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +1992,33 @@ namespace RT64 {
+@@ -1350,10 +2006,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2818,7 +2832,7 @@ index 9fae0d4..11392eb 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2073,61 @@ namespace RT64 {
+@@ -1408,6 +2087,61 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2880,7 +2894,7 @@ index 9fae0d4..11392eb 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2151,22 @@ namespace RT64 {
+@@ -1431,6 +2165,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2903,7 +2917,7 @@ index 9fae0d4..11392eb 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2186,168 @@ namespace RT64 {
+@@ -1450,12 +2200,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3072,7 +3086,7 @@ index 9fae0d4..11392eb 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2498,7 @@ namespace RT64 {
+@@ -1606,6 +2512,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3080,7 +3094,7 @@ index 9fae0d4..11392eb 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2575,20 @@ namespace RT64 {
+@@ -1682,6 +2589,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3101,7 +3115,7 @@ index 9fae0d4..11392eb 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2654,980 @@ namespace RT64 {
+@@ -1747,24 +2668,980 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5855,10 +5869,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..29eec1e
+index 0000000..5082e51
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2390 @@
+@@ -0,0 +1,2445 @@
 +//
 +// RT64
 +//
@@ -5897,6 +5911,14 @@ index 0000000..29eec1e
 +        const auto sunMapProcessStart = std::chrono::steady_clock::now();
 +        std::mutex effectsMutex;
 +        SceneEffectsSettings effectsSettings;
++        // The sun's direction (towards it, in the world) when the game gives none: fairly low, to one side (the game has
++        // no sun of its own to follow), so it is often in view.
++        constexpr float FixedSun[3] = { 0.47f, 0.42f, -0.78f };
++        // The far sun shadow map is drawn again after this many maps at most (it picks up what moved or was loaded
++        // since), and at once when the camera crosses into another of its cells or the sun moves more than about a
++        // tenth of a degree. In between only the near map is drawn.
++        constexpr uint32_t SunFarRefresh = 12;
++        constexpr double SunFarMoveCosine = 0.9999985;
 +
 +        // The pass's own textures and descriptor sets. Ones replaced after a resize are kept (not freed)
 +        // since frames still in flight may use them; resizes are rare.
@@ -5927,6 +5949,12 @@ index 0000000..29eec1e
 +            std::unique_ptr<RenderFramebuffer> sunMapFramebuffer;
 +            const RenderTexture *sceneSetSunMap = nullptr;
 +            uint32_t sunMapSize = 0;
++            // The far map is drawn again only now and then (SunFarRefresh): where its middle was (SUN_SHADOW_MAP_FAR_CELL),
++            // the sun's world direction it was drawn with, and how many maps have been drawn since.
++            bool sunFarValid = false;
++            float sunFarMiddle[2] = {};
++            float sunFarSun[3] = {};
++            uint32_t sunFarAge = 0;
 +            // The fireflies' table: where each of the night's fireflies is on the screen this frame, worked out
 +            // once (FireflyTablePS) rather than in every pixel.
 +            std::unique_ptr<RenderTexture> fireflyTexture;
@@ -7604,11 +7632,8 @@ index 0000000..29eec1e
 +                constants.worldY = { 0.0f, 1.0f, 0.0f, 0.0f };
 +            }
 +
-+            // The sun stands fairly low, to one side (the game has no sun of its own to follow), so it is
-+            // often in view: its direction in view space, through the view matrix (directions skip the
-+            // translation).
-+            static const float fixedSun[3] = { 0.47f, 0.42f, -0.78f };
-+            const float *sunWorld = settings.customSun ? settings.sunDirection : fixedSun;
++            // The sun's direction in view space, through the view matrix (directions skip the translation).
++            const float *sunWorld = settings.customSun ? settings.sunDirection : FixedSun;
 +            float sunView[3];
 +            for (int c = 0; c < 3; c++) {
 +                sunView[c] = sunWorld[0] * v[0][c] + sunWorld[1] * v[1][c] + sunWorld[2] * v[2][c];
@@ -7628,7 +7653,8 @@ index 0000000..29eec1e
 +            const float worldLength = std::sqrt(sunWorld[0] * sunWorld[0] + sunWorld[1] * sunWorld[1] + sunWorld[2] * sunWorld[2]);
 +            const float height = (worldLength > 1e-6f) ? sunWorld[1] / worldLength : 0.0f;
 +            const float daylight = std::clamp(height / 0.15f, 0.0f, 1.0f);
-+            float dayPacked = 0.0f;
++            // Without the cycle, 0.5 shows the sun in the sky while the sun shadows are on (HeldSun in SceneEffectsPS).
++            float dayPacked = ((settings.sunShadows > 0.0f) && (daylight > 0.0f)) ? 0.5f : 0.0f;
 +            if (settings.timeOfDay) {
 +                uint32_t packed = 0;
 +                for (int c = 0; c < 3; c++) {
@@ -8068,6 +8094,7 @@ index 0000000..29eec1e
 +        if (res.sunMapTexture == nullptr) {
 +            RenderClearValue clearValue = RenderClearValue::Depth(RenderDepth(), RenderFormat::D32_FLOAT);
 +            res.sunMapSize = sunMapSize;
++            res.sunFarValid = false;
 +            res.sunMapTexture = worker->device->createTexture(RenderTextureDesc::DepthTarget(sunMapWidth, sunMapHeight, RenderFormat::D32_FLOAT, RenderMultisampling(), &clearValue));
 +            res.sunMapTexture->setName("Scene Effects Sun Shadow Map");
 +            res.sunMapTextureView = res.sunMapTexture->createTextureView(RenderTextureViewDesc::Texture2D(RenderFormat::D32_FLOAT));
@@ -8090,7 +8117,36 @@ index 0000000..29eec1e
 +            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
 +            commandList->setFramebuffer(res.sunMapFramebuffer.get());
-+            commandList->clearDepth(true, 1.0f);
++            // Whether the far map is drawn again this time (see SunFarRefresh). Headless test hook: TOOIE_SUN_FAR_OFF
++            // leaves it out (cleared: nothing casts past the near map); TOOIE_SUN_FAR_EVERY=1 draws it every time, as before.
++            static const bool sunFarOff = (getenv("TOOIE_SUN_FAR_OFF") != nullptr);
++            static const bool sunFarEvery = (getenv("TOOIE_SUN_FAR_EVERY") != nullptr);
++            const float *farSunWorld = settings.customSun ? settings.sunDirection : FixedSun;
++            const float cell = SUN_SHADOW_MAP_FAR_CELL;
++            const float farMiddle[2] = { std::floor(constants.worldX.w * (1.0f / cell) + 0.5f) * cell, std::floor(constants.worldZ.w * (1.0f / cell) + 0.5f) * cell };
++            // For the log: maps drawn, and far maps among them, since the last line.
++            static uint32_t mapsDrawn = 0, farMapsDrawn = 0;
++            mapsDrawn++;
++            bool drawFar = !sunFarOff;
++            if (drawFar && !sunFarEvery && res.sunFarValid && (res.sunFarAge + 1 < SunFarRefresh) &&
++                (farMiddle[0] == res.sunFarMiddle[0]) && (farMiddle[1] == res.sunFarMiddle[1]))
++            {
++                double dot = 0.0, a = 0.0, b = 0.0;
++                for (int c = 0; c < 3; c++) {
++                    dot += double(farSunWorld[c]) * res.sunFarSun[c];
++                    a += double(farSunWorld[c]) * farSunWorld[c];
++                    b += double(res.sunFarSun[c]) * res.sunFarSun[c];
++                }
++                drawFar = (dot < SunFarMoveCosine * std::sqrt(a * b));
++            }
++            if (drawFar || sunFarOff) {
++                commandList->clearDepth(true, 1.0f);
++            }
++            else {
++                // The far map is kept: only the near one is cleared.
++                const RenderRect nearRect(0, 0, sunMapSize, sunMapSize);
++                commandList->clearDepth(true, 1.0f, &nearRect, 1);
++            }
 +            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(sunMapSize), float(sunMapSize)));
 +            commandList->setScissors(RenderRect(0, 0, sunMapSize, sunMapSize));
 +            commandList->setPipeline(shaderLibrary->sunShadowMap.pipeline.get());
@@ -8098,9 +8154,15 @@ index 0000000..29eec1e
 +            commandList->setGraphicsPushConstants(0, &constants);
 +            drawSunCasters(commandList);
 +            // The far map: the same casters, given the far map's half width in shadows.y, beside the near map.
-+            // Headless test hook: TOOIE_SUN_FAR_OFF leaves it out (cleared: nothing casts past the near map).
-+            static const bool sunFarOff = (getenv("TOOIE_SUN_FAR_OFF") != nullptr);
-+            if (!sunFarOff) {
++            res.sunFarValid = res.sunFarValid && !sunFarOff;
++            res.sunFarAge++;
++            if (drawFar) {
++                res.sunFarValid = true;
++                res.sunFarAge = 0;
++                res.sunFarMiddle[0] = farMiddle[0];
++                res.sunFarMiddle[1] = farMiddle[1];
++                std::copy(farSunWorld, farSunWorld + 3, res.sunFarSun);
++                farMapsDrawn++;
 +                interop::SceneEffectsCB farConstants = constants;
 +                farConstants.shadows.y = std::min(settings.sunShadowReach, 999.0f) + 1000.0f * std::round(SUN_SHADOW_MAP_FAR_HALF / SUN_SHADOW_MAP_HALF_STEP);
 +                commandList->setViewports(RenderViewport(float(sunMapSize), 0.0f, float(SUN_SHADOW_MAP_FAR_SIZE), float(SUN_SHADOW_MAP_FAR_SIZE)));
@@ -8112,7 +8174,10 @@ index 0000000..29eec1e
 +            static auto lastMapLog = std::chrono::steady_clock::now();
 +            if (mapLog && (std::chrono::steady_clock::now() - lastMapLog > std::chrono::milliseconds(1000))) {
 +                lastMapLog = std::chrono::steady_clock::now();
-+                fprintf(stderr, "[sunmap] drawn at %.1f s sun %.3f %.3f %.3f distance %.0f size %u\n", std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count(), constants.sun.x, constants.sun.y, constants.sun.z, settings.sunShadowDistance, sunMapSize);
++                fprintf(stderr, "[sunmap] drawn at %.1f s sun %.3f %.3f %.3f distance %.0f size %u, far map drawn %u of %u times\n", std::chrono::duration<float>(std::chrono::steady_clock::now() - sunMapProcessStart).count(), constants.sun.x, constants.sun.y, constants.sun.z, settings.sunShadowDistance, sunMapSize,
++                    farMapsDrawn, mapsDrawn);
++                farMapsDrawn = 0;
++                mapsDrawn = 0;
 +            }
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
 +            WorkloadGpuSections().end(sunMapSpan);
@@ -8120,6 +8185,10 @@ index 0000000..29eec1e
 +            // Headless test hook: TOOIE_SUN_MAP_VIEW shows only what the map shades (grey outside it).
 +            static const bool sunMapView = (getenv("TOOIE_SUN_MAP_VIEW") != nullptr);
 +            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? SUN_SHADOW_MAP_VIEW_FLAG : 0.0f);
++        }
++        else {
++            // Not drawn this time: the far map may be out of date by the next.
++            res.sunFarValid = false;
 +        }
 +
 +        // The indirect pass's target, at half size (made again after a resize) and cleared to no occlusion and no
@@ -12331,10 +12400,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..3a8247c
+index 0000000..60b37d4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2711 @@
+@@ -0,0 +1,2730 @@
 +//
 +// RT64
 +//
@@ -12600,6 +12669,22 @@ index 0000000..3a8247c
 +// The sky under the tint: it darkens more than the world, glows warm round the sun near the horizon when the tint
 +// is warm (sunrise and sunset), and at night shows stars fixed in the world and the moon (the sun constant's
 +// direction, which the cycle points at the moon at night).
++// The sun in the sky while the day and night cycle is off and the sun shadows are on (shadows.z = 0.5, see
++// rt64_scene_effects.cpp): the same disc and glow as the cycle's by day (DaySky), added over the sky where the sun
++// shadows' light comes from.
++bool HeldSunShown() {
++    return abs(gConstants.shadows.z - 0.5f) < 0.25f;
++}
++
++float3 HeldSun(int2 pixel) {
++    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
++    const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
++    const float toward = saturate(dot(look, gConstants.sun.xyz));
++    const float3 sunColor = float3(1.0f, 0.97f, 0.88f);
++    const float disc = smoothstep(0.99955f, 0.99975f, toward);
++    return sunColor * (disc * 1.1f + pow(toward, 600.0f) * 0.6f + pow(toward, 60.0f) * 0.15f);
++}
++
 +float3 DaySky(float3 color, int2 pixel, float3 tint) {
 +    const float2 ndc = float2((pixel.x + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (pixel.y + 0.5f) / gConstants.projection.w * 2.0f);
 +    const float3 look = normalize(float3(ndc.x / gConstants.projection.x, ndc.y / gConstants.projection.y, -1.0f));
@@ -14781,6 +14866,9 @@ index 0000000..3a8247c
 +        // Less on the sky itself, so the beams show over the scenery rather than the sky washing out.
 +        bloom += LightShafts(pixel) * ((depth >= 0.99999f) ? 0.4f : 1.0f);
 +    }
++    if (!daytime && (depth >= 0.99999f) && HeldSunShown() && (gConstants.view.x < 1.5f)) {
++        bloom += HeldSun(pixel);
++    }
 +
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
@@ -15555,10 +15643,10 @@ index 0000000..7944cf9
 +}
 diff --git a/src/shaders/SunShadowMap.hlsli b/src/shaders/SunShadowMap.hlsli
 new file mode 100644
-index 0000000..32e11d9
+index 0000000..87b5ac1
 --- /dev/null
 +++ b/src/shaders/SunShadowMap.hlsli
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,110 @@
 +//
 +// RT64
 +//
@@ -15587,6 +15675,8 @@ index 0000000..32e11d9
 +    float halfWidth;
 +    float range;
 +    float size;
++    // The far map's middle stays put (SUN_SHADOW_MAP_FAR_CELL) instead of following the camera.
++    bool fixedMiddle;
 +};
 +
 +// shadows.y: |y| = the screen-space reach (under 1000) + 1000 * the map's half width in steps of
@@ -15619,6 +15709,7 @@ index 0000000..32e11d9
 +    f.halfWidth = SunMapHalfWidth(shadows.y);
 +    f.range = max(SunMapMinRange, 1.5f * f.halfWidth);
 +    f.size = float(SunShadowMapSize(f.halfWidth));
++    f.fixedMiddle = (f.halfWidth > SUN_SHADOW_MAP_FAR_HALF - 1.0f);
 +    return f;
 +}
 +
@@ -15630,6 +15721,7 @@ index 0000000..32e11d9
 +    f.halfWidth = SUN_SHADOW_MAP_FAR_HALF;
 +    f.range = max(SunMapMinRange, 1.5f * f.halfWidth);
 +    f.size = float(SUN_SHADOW_MAP_FAR_SIZE);
++    f.fixedMiddle = true;
 +    return f;
 +}
 +
@@ -15643,6 +15735,11 @@ index 0000000..32e11d9
 +    across = (abs(towards.y) > 0.999f) ? float3(1.0f, 0.0f, 0.0f) : normalize(float3(towards.z, 0.0f, -towards.x));
 +    up = cross(towards, across);
 +    const float3 camera = float3(c.worldX.w, c.worldY.w, c.worldZ.w);
++    if (c.fixedMiddle) {
++        const float cell = SUN_SHADOW_MAP_FAR_CELL;
++        middle = float3(floor(camera.x * (1.0f / cell) + 0.5f) * cell, 0.0f, floor(camera.z * (1.0f / cell) + 0.5f) * cell);
++        return;
++    }
 +    const float2 forward = -float2(c.worldX.z, c.worldZ.z);
 +    const float forwardLength = length(forward);
 +    const float2 ahead = (forwardLength > 1e-6f) ? forward / forwardLength * (0.6f * min(c.halfWidth, 6000.0f)) : float2(0.0f, 0.0f);
@@ -16348,10 +16445,10 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..00f1013
+index 0000000..504bd1e
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,112 @@
 +//
 +// RT64
 +//
@@ -16375,6 +16472,11 @@ index 0000000..00f1013
 +// the map's pass tells the two apart.
 +#define SUN_SHADOW_MAP_FAR_HALF 24000.0f
 +#define SUN_SHADOW_MAP_FAR_SIZE 4096
++// The far map's middle does not follow the camera: it sits at the camera's place rounded to whole cells of this
++// many world units (x and z, at height 0), so the map stays right for many frames and is drawn again only now and
++// then (when the camera crosses into another cell, the sun moves or the level may have changed). A power of two, so
++// the rounding (x * (1 / cell) + 0.5, then floor) comes out the same on the CPU and in shaders.
++#define SUN_SHADOW_MAP_FAR_CELL 8192.0f
 +
 +inline unsigned int SunShadowMapSize(float halfWidth) {
 +    if (halfWidth > SUN_SHADOW_MAP_FAR_HALF - 1.0f) {
