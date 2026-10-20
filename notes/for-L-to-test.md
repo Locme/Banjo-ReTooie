@@ -112,9 +112,10 @@
   3. Look at shiny surfaces: metal grates, gold, glass, Grunty Industries' warp pads
   4. Turn it off and compare; try 2x MSAA and Original resolution
   5. On D3D12 or a card without ray tracing: switch it on
-- Look for: with it on, reflections on the same shiny surfaces SSR covers, but found by tracing through the level (what the picture hides gets reflected; no stepped edges). Reflections that reach off-screen or hidden spots are fainter. The sky is not reflected (no sky in the traced structure). Without ray tracing or on D3D12 you get a notice and the old effects. Also: no crash, stall or garbage, and the frame rate cost.
+- Look for: with it on, reflections on the same shiny surfaces SSR covers, but found by tracing through the level (what the picture hides gets reflected; no stepped edges). Reflections that reach off-screen or hidden spots are fainter. Without ray tracing or on D3D12 you get a notice and the old effects. Also: no crash, stall or garbage, and the frame rate cost.
 - Also: water (when Water reflections is 0) now reflects from its own surface, not the river bed, so no faceted look; sun shadows are traced too (Sun shadows shows at 60 at least while it is on; the shadow map isn't drawn then). Look for sharp shadows from everything solid, soft edges, no shadow acne.
 - Also: ambient occlusion and bounce light (SSGI) are traced too while it is on (AO shows at 50 and bounce light at 40 at least; rays through the same structure, 32 per 4x4 block, in the half-size indirect pass). Look for contact shadows in corners and under objects, and coloured light from nearby walls and floors, without noise or blocks.
+- Also: a traced reflection ray that leaves the world now reflects the sky (the sky pixel in that direction when it is on screen, else the horizon haze, fainter). Look at a shiny surface or water facing the sky.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

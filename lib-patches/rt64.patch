@@ -15029,10 +15029,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..32cd6d0
+index 0000000..6360007
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3415 @@
+@@ -0,0 +1,3425 @@
 +//
 +// RT64
 +//
@@ -15747,14 +15747,24 @@ index 0000000..32cd6d0
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +    }
++    const float2 size = gConstants.projection.zw;
 +    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-+        return 0.0f;
++        // The ray left the world: it sees the sky. Where that direction lies on the screen and shows sky, that
++        // pixel's colour; otherwise the haze at the horizon stands in, trusted less.
++        const float3 far = origin + direction * 50000.0f;
++        if (far.z < -1.0f) {
++            const float2 skyAt = ViewToPixel(far);
++            const float2 skyInside = clamp(skyAt, float2(0.0f, 0.0f), size - 1.0f);
++            if (all(skyAt == skyInside) && (LoadDepth(int2(skyInside)) >= 0.99999f)) {
++                return float4(gColor.SampleLevel(LinearSampler, (skyInside + 0.5f) / size, 0).rgb, RayEdgeFade(skyInside));
++            }
++        }
++        return float4(gConstants.fogColor.rgb, 0.6f);
 +    }
 +    const float3 hit = origin + direction * query.CommittedRayT();
 +    if (hit.z > -1.0f) {
 +        return 0.0f;
 +    }
-+    const float2 size = gConstants.projection.zw;
 +    const float2 at = ViewToPixel(hit);
 +    const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
 +    const bool onScreen = all(at == inside);
