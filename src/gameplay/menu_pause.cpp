@@ -33,6 +33,7 @@
 
 namespace {
     using tooie::rdram::write_float;
+    using tooie::rdram::read_word;
 
     constexpr uint32_t delta_time_addr = 0x8012C760;
     constexpr uint32_t game_pause_addr = 0x80128AF0;
@@ -83,7 +84,7 @@ void tooie::menu_pause::set_menu_open(bool open) {
 }
 
 void tooie::menu_pause::tick(uint8_t* rdram, recomp_context* ctx) {
-    const bool game_pause = MEM_W(0, game_pause_addr) != 0;
+    const bool game_pause = read_word(rdram, game_pause_addr) != 0;
     if (game_pause) {
         // The game's own pause menu plays its music and puts it back itself.
         paused = false;
