@@ -450,6 +450,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
+    recompui::config::set_open_allowed_callback(tooie::menu_pause::open_allowed);
     qol.add_bool_option(
         tooie::menu_pause::option,
         "Pause Special Menu",
