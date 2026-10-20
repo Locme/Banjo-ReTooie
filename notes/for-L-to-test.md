@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T473 ESC menu pauses the game; stays shut in cutscenes and loads; Photo Filter gone; Transform anywhere on
+- Asked: 2026-10-20 19:31 UTC
+- Build: main @ dd4bc20
+- Steps:
+  1. Load a save and walk around in a level
+  2. Press Esc and leave the menu open, then close it
+  3. In QOL: Menu > Pause Special Menu is on, there is no Photo Filter section, Transform anywhere is on
+  4. Press Esc during a cutscene and while a level loads
+  5. Turn Pause Special Menu off and open the menu again
+- Look for: On: gameplay stops behind the menu, only the pause (Start menu) music plays, the sky/water/grass keep moving, play and level music carry on smoothly after closing; Esc does nothing in cutscenes and loads. Off: old behaviour (game runs behind the menu, Esc always opens).
+- Status: waiting for L
+
 ## T472 Ear jiggle
 - Asked: 2026-10-20 19:22 UTC
 - Build: main
