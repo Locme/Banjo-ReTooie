@@ -750,6 +750,14 @@ func = "func_80026500"
 before_vram = 0x80026500
 text = "if (tooie_sound_event_full(rdram, ctx)) return;"
 
+# func_8002ABE0 (a sequence's time to its next event) loops over as many tracks
+# as its first pointer's word +4 says; a broken count walked over all memory
+# above it (L's Mr. Patch crash, 2026-10-20). More than 32 answers no event.
+[[patches.hook]]
+func = "func_8002ABE0"
+before_vram = 0x8002ABE0
+text = "if (tooie_seq_delta_guard(rdram, ctx)) { ctx->r2 = 0; return; }"
+
 # --- Sound mix rate (src/gameplay/mix_rate.cpp) -----------------------------
 # Sound > Mix rate = High mixes at 44100 Hz instead of 22050. func_800125B0 sets
 # up the audio heap, then calls func_8001268C (synthesizer, AI rate, buffers);
@@ -912,6 +920,20 @@ text = "if (tooie_portrait_step_skip(rdram, ctx)) { return; }"
 func = "func_80101A50"
 before_vram = 0x80101A58
 text = "if (tooie_blink_step_skip(rdram, ctx)) { ctx->r6 = ctx->r4; goto L_80101B58; }"
+
+# The ice storm (chfireicestorm, Icy Side) spawns snow puffs each game frame through
+# func_80800DC8 and func_80800E08; the puffs die by game time only, so with time frozen
+# (Photo Mode, the ESC menu) they piled up until the display list overflowed onto the
+# heap (L's hang, 2026-10-20). Skipped while time stands still (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "func_80800DC8_chfireicestorm"
+before_vram = 0x80800DC8
+text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
+
+[[patches.hook]]
+func = "func_80800E08_chfireicestorm"
+before_vram = 0x80800E08
+text = "if (tooie_storm_spawn_skip(rdram, ctx)) { return; }"
 
 # Klungo's fades (chklungo): func_8080231C fades him out and func_808023A4 in
 # ($a0 Klungo, $a1 the alpha to stop at, $a2 the speed per second, both floats).
@@ -1153,6 +1175,18 @@ text = "tooie_banjo_detail(rdram, ctx);"
 func = "func_800A6250"
 before_vram = 0x800A62C0
 text = "tooie_player_shadow_model(rdram, ctx);"
+
+# HD Shadows: the player's shadow draws (two func_800DE448 calls) are over by 0x800A66C4; 0x800A69E0
+# is the way out for the early return. Ends tooie::hd_shadows::drawing_shadow() for Banjo.
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A66C4
+text = "tooie_player_shadow_done(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A69E0
+text = "tooie_player_shadow_done(rdram, ctx);"
 
 # Deep snow: every model drawn (func_800DE498, the model draw), where it stands.
 [[patches.hook]]

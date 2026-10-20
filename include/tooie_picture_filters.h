@@ -89,6 +89,11 @@ namespace tooie::picture_filters {
     inline const std::string grass_blend_option = "grass_3d_blend";
     inline const std::string grass_pixel_size_option = "grass_3d_pixel_size";
     inline const std::string grass_edges_option = "grass_3d_edges";
+    // Instanced 3D grass's culling: skip blades off screen, blades hidden behind nearer things, and whole patches of
+    // ground at a time.
+    inline const std::string grass_frustum_cull_option = "grass_3d_frustum_cull";
+    inline const std::string grass_occlusion_cull_option = "grass_3d_occlusion_cull";
+    inline const std::string grass_chunking_option = "grass_3d_chunking";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";

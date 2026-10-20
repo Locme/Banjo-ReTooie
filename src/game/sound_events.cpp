@@ -18,6 +18,7 @@
 #include <cstdlib>
 
 #include "recomp.h"
+#include "tooie_debug.h"
 #include "tooie_hooks.h"
 
 namespace {
@@ -82,5 +83,38 @@ extern "C" int tooie_sound_event_full(uint8_t* rdram, recomp_context* ctx) {
         return 0;
     }
     dropped++;
+    return 1;
+}
+
+// A sequence whose track count is broken (L's crash of 2026-10-20 in Mr. Patch's arena, map 0x0F9).
+// func_8002ABE0 (the compact sequence player's "time to the next event", called by func_80024DD8 for
+// seqp->target) loops over the sequence's tracks, as many as the word at +4 of the sequence's first
+// pointer, and subtracts the last delta from each one's timer at +0x158. With a stale or broken
+// sequence that count was huge: the loop walked and wrote through all of memory above the sequence
+// until it ran off the end at 0xA0000044 (passed over 1000s of times, then the game died). A real
+// sequence has at most 32 tracks (the valid-track mask is one word). Returns 1 to answer "no event"
+// ($v0 = 0), as the game does for a sequence with no valid tracks, so that player goes quiet instead.
+extern "C" int tooie_seq_delta_guard(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t seq = (uint32_t)ctx->r4;
+    bool bad = seq < 0x80000000u || seq + 0x158 + 4 * 32 > 0x81000000u;
+    uint32_t base = 0, count = 0;
+    if (!bad) {
+        base = (uint32_t)MEM_W(0, ctx->r4);
+        bad = base < 0x80000000u || base + 8 > 0x81000000u;
+        if (!bad) {
+            count = (uint32_t)MEM_W(4, k0(base));
+            bad = count > 32;
+        }
+    }
+    if (!bad) {
+        return 0;
+    }
+    static unsigned times = 0;
+    if (times++ % 600 == 0) {
+        const uint32_t player = (uint32_t)MEM_W(0x30, ctx->r29);   // func_80024DD8's $a0, at 0x30 of its frame
+        std::printf("[sound] sequence %08X has a broken track count (first pointer %08X, count %08X; player %08X, map 0x%03X): "
+                    "skipped, that music goes quiet (%u times)\n", seq, base, count, player, tooie::debug::current_map(rdram), times);
+        std::fflush(stdout);
+    }
     return 1;
 }
