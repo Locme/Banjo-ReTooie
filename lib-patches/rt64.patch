@@ -6197,10 +6197,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..ed0e2e9
+index 0000000..8ca333f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2750 @@
+@@ -0,0 +1,2781 @@
 +//
 +// RT64
 +//
@@ -6487,9 +6487,10 @@ index 0000000..ed0e2e9
 +        effectsSettings.eyeAdaptation = strength;
 +    }
 +
-+    void SetSceneHeatHaze(float strength) {
++    void SetSceneHeatHaze(float strength, bool warmOnly) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.heatHaze = strength;
++        effectsSettings.heatHazeWarmOnly = warmOnly;
 +    }
 +
 +    // Screen-space reflections on, or their debug view: the shiny list is looked up (SceneShinyWanted).
@@ -7832,6 +7833,15 @@ index 0000000..ed0e2e9
 +        effectsSettings.waterDetail = std::clamp(detail, 0.0f, 1.0f);
 +    }
 +
++    // Tessellated water's waves and player this frame (ComputeSceneWater), for the effects pass to light the same waves.
++    struct WaterTessShared {
++        float clock = 0.0f;
++        float push = 0.0f;
++        float velocity[2] = {};
++    };
++    static std::mutex waterTessMutex;
++    static WaterTessShared waterTessShared;
++
 +    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
 +        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
 +        interop::FrameParams &frameParams)
@@ -7870,6 +7880,7 @@ index 0000000..ed0e2e9
 +        frameParams.waterClipUp = { float(toClip[0][1]), float(toClip[1][1]), float(toClip[2][1]), float(toClip[3][1]) };
 +        for (int r = 0; r < 4; r++) {
 +            frameParams.waterClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
++            frameParams.waterWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
 +        }
 +
 +        // The camera: view space's origin in the world.
@@ -7927,7 +7938,15 @@ index 0000000..ed0e2e9
 +        frameParams.waterMotion = { velocity[0], velocity[1], float(clock), 3.5f };
 +        // The swell follows Water waves (half when that is 0), as the shading's waves do.
 +        const float waves = (settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f;
++        // (5 and 3.5: as SceneEffectsPS's TessellatedSlope.)
 +        frameParams.waterSwell = { 5.0f * waves, 1.0f, settings.stylisedWater ? 1.0f : 0.0f, 0.0f };
++        {
++            const std::scoped_lock lock(waterTessMutex);
++            waterTessShared.clock = float(clock);
++            waterTessShared.push = frameParams.waterPlayer.w;
++            waterTessShared.velocity[0] = velocity[0];
++            waterTessShared.velocity[1] = velocity[1];
++        }
 +        return true;
 +    }
 +
@@ -8206,7 +8225,9 @@ index 0000000..ed0e2e9
 +        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
-+        constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, settings.heatHaze };
++        // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
++        const float heatPacked = (settings.heatHazeWarmOnly && (settings.heatHaze > 0.0f)) ? 2.0f + std::min(settings.heatHaze, 1.0f) : settings.heatHaze;
++        constants.view = { float(settings.view), PackSceneClouds(settings.dayCloudShape, settings.compare), seconds, heatPacked };
 +        constants.fog = { settings.fog, settings.fogStart, std::max(settings.fogLength, 1.0f), settings.underwaterTint };
 +        // The fog darkens with the time of day as the sky does.
 +        const float fogTint[3] = { settings.dayTint[0] * settings.dayTint[0], settings.dayTint[1] * settings.dayTint[1], settings.dayTint[2] * settings.dayTint[2] };
@@ -8701,6 +8722,16 @@ index 0000000..ed0e2e9
 +            constants.rippleX.y = RippleCellSize;
 +            constants.rippleZ.y = float(RippleCells);
 +            constants.rippleX.z = (res.rippleCornerKnown && havePlayer) ? 1.0f : 0.0f;
++            // Tessellated: no grid; the waves' clock, the player's velocity (rippleX.xy) and push (rippleZ.x) as the
++            // surface was raised with, so the light follows the same waves (TessellatedSlope).
++            if (waterTessellated) {
++                const std::scoped_lock lock(waterTessMutex);
++                constants.ambientOcclusion.z = waterTessShared.clock;
++                constants.rippleX.x = waterTessShared.velocity[0];
++                constants.rippleX.y = waterTessShared.velocity[1];
++                constants.rippleZ.x = waterTessShared.push;
++                constants.rippleX.z = havePlayer ? 1.0f : 0.0f;
++            }
 +        }
 +        // The fireflies' table, made once and cleared, so the pass can always read it (it does only at night).
 +        if (res.fireflyTexture == nullptr) {
@@ -8953,10 +8984,10 @@ index 0000000..ed0e2e9
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..2b372a8
+index 0000000..9e9057d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,436 @@
+@@ -0,0 +1,438 @@
 +//
 +// RT64
 +//
@@ -9008,6 +9039,7 @@ index 0000000..2b372a8
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
++        bool heatHazeWarmOnly = false;
 +        float waterReflections = 0.0f;
 +        float iceReflections = 0.0f;
 +        bool shoreFoam = false; // Original water: Modern's shore foam on the game's water.
@@ -9137,8 +9169,9 @@ index 0000000..2b372a8
 +    void SetSceneRimLight(float strength);
 +    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
 +    void SetSceneUnderwater(float tint, float haze);
-+    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance.
-+    void SetSceneHeatHaze(float strength);
++    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance. With warmOnly, only where heat rises:
++    // above hot-looking surfaces (glowing lava, fire) on screen.
++    void SetSceneHeatHaze(float strength, bool warmOnly);
 +    // Water reflections (0 off, 1 strongest) on the game's water surfaces, which the framebuffer renderer
 +    // redraws into a mask (BeginSceneWaterMask) before the pass.
 +    void SetSceneWaterReflections(float strength);
@@ -12973,10 +13006,10 @@ index e7895c3..bdfce66 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..8c568d0 100644
+index 74b1fa0..f40af9d 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,14 +11,55 @@
+@@ -11,16 +11,65 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -13032,8 +13065,18 @@ index 74b1fa0..8c568d0 100644
 +        }
      }
      
++    // Banjo-Tooie: Modern water drawn into the water mask while it may be tessellated: its place in the world, for the
++    // hull and domain shaders (WaterTess.hlsl), so they need neither this draw's screen scale nor its position.
++    if (((gConstants.waterMask == 1) || (gConstants.waterMask == 2)) && (FrParams.waterCamera.w > 0.0f)) {
++        const float4 world = float4(dot(FrParams.waterClipToWorld[0], ndcPos), dot(FrParams.waterClipToWorld[1], ndcPos),
++            dot(FrParams.waterClipToWorld[2], ndcPos), dot(FrParams.waterClipToWorld[3], ndcPos));
++        oFurAnchor = float4(world.xyz / ((abs(world.w) > 1e-8f) ? world.w : 1e-8f), 1.0f);
++    }
++
      // Apply screen scale and offset.
-@@ -33,6 +74,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+     ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
+     
+@@ -33,6 +82,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -13047,7 +13090,7 @@ index 74b1fa0..8c568d0 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +101,19 @@ void VSMain(
+@@ -53,17 +109,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -13091,10 +13134,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..7b2831d
+index 0000000..1c74fe4
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3191 @@
+@@ -0,0 +1,3207 @@
 +//
 +// RT64
 +//
@@ -13105,6 +13148,7 @@ index 0000000..7b2831d
 +
 +#include "shared/rt64_scene_effects.h"
 +#include "SunShadowMap.hlsli"
++#include "WaterTess.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
 +
@@ -13843,14 +13887,49 @@ index 0000000..7b2831d
 +    return (light / weight) * saturate(weight * (3.0f / float(samples)));
 +}
 +
++// How hot a colour looks (0 to 1): bright orange to yellow, like glowing lava and fire. Dull red rock and brown
++// earth are too dark, pinks and white have too much blue, and pure reds (Kazooie) too little green.
++float Warmth(float3 c) {
++    return saturate((c.r - 0.55f) * 4.0f) * saturate((c.r * 0.6f - c.b) * 5.0f) * saturate((c.r * 0.97f - c.g) * 5.0f) *
++        saturate((c.g - c.r * 0.12f) * 8.0f);
++}
++
++// How much heat rises through a pixel (0 to 1): hot surfaces at it or below it on screen, up to a fifth of the
++// picture's height down, fading the further down they are. Three columns, the middle one counting twice, so
++// the shimmer's sides fade out. The sky never counts as hot.
++float WarmthBelow(int2 pixel) {
++    const float2 size = gConstants.projection.zw;
++    const float step = size.y * (9.0f / 540.0f);
++    float warmth = 0.0f;
++    [unroll]
++    for (int column = -1; column <= 1; column++) {
++        float hottest = 0.0f;
++        [loop]
++        for (int i = 0; i < 12; i++) {
++            const int2 at = clamp(int2(round(float2(pixel) + float2(float(column) * 2.5f * step, float(i) * step))), int2(0, 0), int2(size) - 1);
++            if (LoadDepth(at) < 0.99999f) {
++                hottest = max(hottest, Warmth(gColor.Load(int3(at, 0)).rgb) * (1.0f - float(i) / 12.0f));
++            }
++        }
++        warmth += hottest * ((column == 0) ? 0.5f : 0.25f);
++    }
++    return saturate(warmth * 1.5f);
++}
++
 +// Heat haze: the scene so far, read a little to the side and up and down in waves that rise, more with
 +// distance. The waves are sized to the picture, not to pixels, so they look the same at any resolution,
 +// and read between pixels so the shimmer is smooth. A pixel isn't read from something nearer than itself,
-+// so near things keep their edges.
++// so near things keep their edges. view.w is the strength, or 2 + it when the haze only rises above warm
++// surfaces (by lava); then it starts nearer, as the lava is often close by.
 +float3 HeatHaze(int2 pixel, float distance) {
 +    const float2 size = gConstants.projection.zw;
++    const bool warmOnly = gConstants.view.w > 1.5f;
++    const float strength = warmOnly ? (gConstants.view.w - 2.0f) * WarmthBelow(pixel) : gConstants.view.w;
++    if (strength <= 0.0f) {
++        return gColor.Load(int3(pixel, 0)).rgb;
++    }
 +    // In 540ths of the picture's height: up to 3 far away.
-+    const float amount = gConstants.view.w * 3.0f * saturate((distance - 150.0f) / 1800.0f);
++    const float amount = strength * 3.0f * (warmOnly ? saturate((distance - 60.0f) / 900.0f) : saturate((distance - 150.0f) / 1800.0f));
 +    const float t = gConstants.view.z;
 +    const float2 at = float2(pixel) / size.y * 540.0f;
 +    const float2 wave = float2(sin(at.y * 0.21f + t * 6.0f) + 0.5f * sin(at.y * 0.083f + at.x * 0.035f + t * 2.9f),
@@ -14350,11 +14429,27 @@ index 0000000..7b2831d
 +    return h;
 +}
 +
++// Modern water's flags in water.y's eighths over 2 (or 3 with no water drawn): a quarter for Stylised (Graphics > Water
++// Stylised), an eighth when the water was drawn tessellated this frame (WaterTess.hlsl).
++uint ModernWaterBits() {
++    return (gConstants.water.y > 1.5f) ? (uint(round(frac(gConstants.water.y) * 8.0f)) & 3u) : 0u;
++}
++
++bool StylisedWaterOn() {
++    return (ModernWaterBits() & 2u) != 0u;
++}
++
++// Tessellated water: the mask holds the moving surface itself (its swell and the player's rings), so nothing is marched.
++bool TessellatedWaterOn() {
++    return (ModernWaterBits() & 1u) != 0u;
++}
++
 +// Modern water's ripples from the player at a world x and z: height (x), slope along x and z (yz) and how
 +// fast the water moves there (w, for foam). Zero away from the grid, or on water far from the player's height.
 +float4 Ripples(float2 p, float waterY) {
 +    const float playerY = gConstants.rippleAge.w;
-+    if ((gConstants.rippleX.z < 0.5f) || (playerY < -1e8f) || (waterY < playerY - 60.0f) || (waterY > playerY + 160.0f)) {
++    // (Tessellated water has its rings in its surface, and no grid.)
++    if (TessellatedWaterOn() || (gConstants.rippleX.z < 0.5f) || (playerY < -1e8f) || (waterY < playerY - 60.0f) || (waterY > playerY + 160.0f)) {
 +        return 0.0f;
 +    }
 +    const float cell = gConstants.rippleX.y;
@@ -14471,50 +14566,19 @@ index 0000000..7b2831d
 +    return (foam > 0.0f) ? foam * OriginalShoreLevel(pixel) : 0.0f;
 +}
 +
-+// Modern water's flags in water.y's eighths over 2 (or 3 with no water drawn): a quarter for Stylised (Graphics > Water
-+// Stylised), an eighth when the water was drawn tessellated this frame (WaterTess.hlsl).
-+uint ModernWaterBits() {
-+    return (gConstants.water.y > 1.5f) ? (uint(round(frac(gConstants.water.y) * 8.0f)) & 3u) : 0u;
-+}
-+
-+bool StylisedWaterOn() {
-+    return (ModernWaterBits() & 2u) != 0u;
-+}
-+
-+// Tessellated water: the mask holds the moving surface itself (its swell and the player's rings), so nothing is marched.
-+bool TessellatedWaterOn() {
-+    return (ModernWaterBits() & 1u) != 0u;
-+}
-+
-+// Tessellated water's facing, from the mask's depth a little way either side (wide enough to smooth over its small
-+// triangles). A side that jumps to another surface (an edge, or water behind) is left out.
-+float3 TessellatedNormal(int2 pixel, float3 surface) {
-+    const int k = max(1, int(gConstants.projection.w / 360.0f));
-+    const float jump = -surface.z * 0.04f + 4.0f;
-+    float3 sides[4];
-+    [unroll] for (int i = 0; i < 4; i++) {
-+        const int2 at = pixel + ((i == 0) ? int2(k, 0) : (i == 1) ? int2(-k, 0) : (i == 2) ? int2(0, k) : int2(0, -k));
-+        float d;
-+        sides[i] = surface;
-+        if (LoadWater(at, d)) {
-+            const float3 q = ViewPosition(at, d);
-+            if (abs(q.z - surface.z) < jump) {
-+                sides[i] = q;
-+            }
-+        }
-+    }
-+    const float3 px = sides[0] - sides[1];
-+    const float3 py = sides[2] - sides[3];
-+    const float3 up = normalize(gConstants.worldY.xyz);
-+    if ((dot(px, px) < 1e-6f) || (dot(py, py) < 1e-6f)) {
-+        return up;
-+    }
-+    float3 n = normalize(cross(px, py));
-+    if (dot(n, up) < 0.0f) {
-+        n = -n;
-+    }
-+    // (Never steeper than the waves can make it.)
-+    return (dot(n, up) > 0.5f) ? n : up;
++// Tessellated water's slope along the world's x and z: the same swell and player's rings as raise its surface
++// (WaterTess.hlsli, with the swell's height and rings' as ComputeSceneWater sets them), by differences.
++float2 TessellatedSlope(float3 world) {
++    const float t = gConstants.ambientOcclusion.z;
++    const float swell = 5.0f * gConstants.water.w;
++    // (In tessellated water, rippleX.xy hold the player's velocity and rippleZ.x their push: no ripple grid is read.)
++    const float4 player = float4(gConstants.rippleX.w, gConstants.rippleZ.w, gConstants.rippleAge.w, gConstants.rippleZ.x);
++    const float2 velocity = gConstants.rippleX.xy;
++    const float e = 1.5f;
++    const float h = WaterTessHeight(world, t, swell, 1.0f, player, velocity, 3.5f);
++    const float hx = WaterTessHeight(world + float3(e, 0.0f, 0.0f), t, swell, 1.0f, player, velocity, 3.5f);
++    const float hz = WaterTessHeight(world + float3(0.0f, 0.0f, e), t, swell, 1.0f, player, velocity, 3.5f);
++    return float2(hx - h, hz - h) / e;
 +}
 +
 +// Tessellated water's fine waves: two scrolling normal maps (smooth noise drifting two ways, one turned against the
@@ -14584,11 +14648,9 @@ index 0000000..7b2831d
 +    const float3 world = WorldPosition(surface);
 +    const float4 ripple = tessellated ? 0.0f : Ripples(world.xz, waterY);
 +    float fineHeight = 0.0f;
-+    const float2 slope = tessellated ? ScrollingNormals(world.xz, gConstants.ambientOcclusion.z, footprint, fineHeight) * strength :
++    // (Lit by the waves' own slope, not the surface's facing in the mask: the game's water polygons tilt as they bob.)
++    const float2 slope = tessellated ? ScrollingNormals(world.xz, gConstants.ambientOcclusion.z, footprint, fineHeight) * strength + TessellatedSlope(world) :
 +        WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * strength + ripple.yz;
-+    if (tessellated) {
-+        normal = TessellatedNormal(pixel, surface);
-+    }
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // Not on the player's own spot: the water there is over their body, and foam would paint it white.
 +    const float awayFromPlayer = saturate((length(world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 30.0f) / 25.0f);
@@ -14829,10 +14891,7 @@ index 0000000..7b2831d
 +    const float4 ripple = tessellated ? 0.0f : Ripples(p, waterY);
 +    float fineHeight = 0.0f;
 +    const float3 wave = tessellated ? 0.0f : StylisedWave(p, t, footprint);
-+    const float2 slope = tessellated ? ScrollingNormals(p, t, footprint, fineHeight) * strength : wave.yz * strength + ripple.yz;
-+    if (tessellated) {
-+        normal = TessellatedNormal(pixel, surface);
-+    }
++    const float2 slope = tessellated ? ScrollingNormals(p, t, footprint, fineHeight) * strength + TessellatedSlope(world) : wave.yz * strength + ripple.yz;
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // How high on the waves this point is: 0 in the deepest troughs, about 0.6 on a single crest and 1 where the two
 +    // big trains' crests meet.
@@ -17311,10 +17370,10 @@ index 3f33475..7d84d10 100644
 \ No newline at end of file
 diff --git a/src/shaders/WaterTess.hlsl b/src/shaders/WaterTess.hlsl
 new file mode 100644
-index 0000000..7ff7563
+index 0000000..4e559b9
 --- /dev/null
 +++ b/src/shaders/WaterTess.hlsl
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,120 @@
 +//
 +// RT64
 +//
@@ -17334,6 +17393,7 @@ index 0000000..7ff7563
 +#include "shared/rt64_raster_params.h"
 +
 +#include "FbRendererCommon.hlsli"
++#include "WaterTess.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
 +
@@ -17350,20 +17410,10 @@ index 0000000..7ff7563
 +    float inside : SV_InsideTessFactor;
 +};
 +
-+// RasterVS's position (with the draw's screen scale and offset) back to the one before them, which waterClipToWorld takes.
-+float4 WaterUnscaled(float4 position) {
-+    float4 p = position;
-+#ifdef __spirv__
-+    p.y = -p.y;
-+#endif
-+    p.xy = (p.xy - gConstants.screenOffset * p.w) / gConstants.screenScale;
-+    return p;
-+}
-+
-+float3 WaterWorld(float4 position) {
-+    const float4 p = WaterUnscaled(position);
-+    const float4 w = float4(dot(FrParams.waterClipToWorld[0], p), dot(FrParams.waterClipToWorld[1], p), dot(FrParams.waterClipToWorld[2], p), dot(FrParams.waterClipToWorld[3], p));
-+    return w.xyz / ((abs(w.w) > 1e-8f) ? w.w : 1e-8f);
++// Where a world point lands before the draw's screen scale and offset (as RasterVS's position before them).
++float4 WaterClip(float3 world) {
++    const float4 p = float4(world, 1.0f);
++    return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
 +}
 +
 +// How finely an edge between two world points is cut: finer near the camera, only round the player, never more than
@@ -17391,15 +17441,16 @@ index 0000000..7ff7563
 +
 +WaterPatch WaterPatchConstants(InputPatch<WaterVertex, 3> patch) {
 +    WaterPatch p;
++    // The corners' places in the world, from RasterVS (furAnchor).
++    const float3 a = patch[0].furAnchor.xyz;
++    const float3 b = patch[1].furAnchor.xyz;
++    const float3 c = patch[2].furAnchor.xyz;
 +    // Off screen: left out (a factor of 0 draws nothing).
-+    if (WaterOffScreen(WaterUnscaled(patch[0].position), WaterUnscaled(patch[1].position), WaterUnscaled(patch[2].position))) {
++    if (WaterOffScreen(WaterClip(a), WaterClip(b), WaterClip(c))) {
 +        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
 +        p.inside = 0.0f;
 +        return p;
 +    }
-+    const float3 a = WaterWorld(patch[0].position);
-+    const float3 b = WaterWorld(patch[1].position);
-+    const float3 c = WaterWorld(patch[2].position);
 +    // (Edge 0 is the one across from vertex 0.)
 +    p.edges[0] = WaterEdgeFactor(b, c);
 +    p.edges[1] = WaterEdgeFactor(c, a);
@@ -17418,33 +17469,10 @@ index 0000000..7ff7563
 +    return patch[i];
 +}
 +
-+// The water's height above its flat surface at a world point (x, z; y the flat surface's height), in world units.
++// The water's height above its flat surface at a world point (WaterTess.hlsli), with this frame's waves and player.
 +float WaterHeight(float3 world) {
-+    const float t = FrParams.waterMotion.z;
-+    // The swell: two slow sines crossing, one longer and taller.
-+    const float swell = FrParams.waterSwell.x;
-+    const float speed = FrParams.waterSwell.y;
-+    float h = swell * (sin(dot(world.xz, float2(0.0219f, 0.0137f)) + t * 0.9f * speed) + 0.55f * sin(dot(world.xz, float2(-0.0153f, 0.0311f)) + t * 1.3f * speed));
-+    // The player's rings: a sine spreading out from them, fading with distance, and stretched behind them as they move
-+    // (a wake). Only on the water they are in (near their height).
-+    const float4 player = FrParams.waterPlayer;
-+    if ((player.z > -1e8f) && (player.w > 0.001f) && (world.y > player.z - 60.0f) && (world.y < player.z + 160.0f)) {
-+        const float2 v = FrParams.waterMotion.xy;
-+        const float speedNow = length(v);
-+        const float2 along = (speedNow > 1.0f) ? v / speedNow : float2(0.0f, 0.0f);
-+        float2 d = world.xz - player.xy;
-+        // Behind them the rings are drawn out (up to twice as far apart), ahead pressed together: a bow wave and a wake.
-+        const float behind = max(-dot(d, along), 0.0f);
-+        const float stretch = 1.0f + saturate(speedNow / 300.0f);
-+        d -= along * (behind * (1.0f - 1.0f / stretch));
-+        const float r = length(d);
-+        const float k = 6.2831853f / 45.0f;
-+        const float ring = sin(k * r - t * 7.0f);
-+        // Faint right on the player (their body is there), strongest a little way out, gone by about 300 units.
-+        const float fade = smoothstep(10.0f, 40.0f, r) * exp(-r / 110.0f);
-+        h += FrParams.waterMotion.w * player.w * ring * fade;
-+    }
-+    return h;
++    return WaterTessHeight(world, FrParams.waterMotion.z, FrParams.waterSwell.x, FrParams.waterSwell.y, FrParams.waterPlayer,
++        FrParams.waterMotion.xy, FrParams.waterMotion.w);
 +}
 +
 +[domain("tri")]
@@ -17457,7 +17485,7 @@ index 0000000..7ff7563
 +    v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
 +
 +    // Raised or lowered straight up in the world, then through the draw's screen scale and offset as the position was.
-+    const float height = WaterHeight(WaterWorld(v.position));
++    const float height = WaterHeight(v.furAnchor.xyz);
 +    float4 up = FrParams.waterClipUp * height;
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 +#ifdef __spirv__
@@ -17466,11 +17494,49 @@ index 0000000..7ff7563
 +    v.position += up;
 +    return v;
 +}
+diff --git a/src/shaders/WaterTess.hlsli b/src/shaders/WaterTess.hlsli
+new file mode 100644
+index 0000000..e6accce
+--- /dev/null
++++ b/src/shaders/WaterTess.hlsli
+@@ -0,0 +1,32 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: tessellated Modern and Stylised water's height above its flat surface (WaterTess.hlsl raises the surface
++// by it; SceneEffectsPS.hlsl shades the surface by its slope, so the light follows the same waves). In world units.
++//   world: the point (x, z; y the flat surface's height).
++//   t: the waves' clock in seconds. swell: the swell's height (Water waves). speed: the swell's speed.
++//   player: x, z, y (y below -1e8 when there is none), how hard they push the water (0 to 1).
++//   velocity: theirs over the water (x, z). rings: the rings' full height.
++float WaterTessHeight(float3 world, float t, float swell, float speed, float4 player, float2 velocity, float rings) {
++    // The swell: two slow sines crossing, one longer and taller.
++    float h = swell * (sin(dot(world.xz, float2(0.0219f, 0.0137f)) + t * 0.9f * speed) + 0.55f * sin(dot(world.xz, float2(-0.0153f, 0.0311f)) + t * 1.3f * speed));
++    // The player's rings: a sine spreading out from them, fading with distance, and stretched behind them as they move
++    // (a wake). Only on the water they are in (near their height).
++    if ((player.z > -1e8f) && (player.w > 0.001f) && (world.y > player.z - 60.0f) && (world.y < player.z + 160.0f)) {
++        const float speedNow = length(velocity);
++        const float2 along = (speedNow > 1.0f) ? velocity / speedNow : float2(0.0f, 0.0f);
++        float2 d = world.xz - player.xy;
++        // Behind them the rings are drawn out (up to twice as far apart): a wake.
++        const float behind = max(-dot(d, along), 0.0f);
++        const float stretch = 1.0f + saturate(speedNow / 300.0f);
++        d -= along * (behind * (1.0f - 1.0f / stretch));
++        const float r = length(d);
++        const float k = 6.2831853f / 45.0f;
++        const float ring = sin(k * r - t * 7.0f);
++        // Faint right on the player (their body is there), strongest a little way out, gone by about 300 units.
++        const float fade = smoothstep(10.0f, 40.0f, r) * exp(-r / 110.0f);
++        h += rings * player.w * ring * fade;
++    }
++    return h;
++}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..6c2ea43 100644
+index 2e62aaf..5922941 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,121 @@ namespace interop {
+@@ -13,6 +13,122 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -17575,6 +17641,7 @@ index 2e62aaf..6c2ea43 100644
 +        // grassClipToWorld).
 +        float4 waterClipUp;
 +        float4 waterClipToWorld[4];
++        float4 waterWorldToClip[4];
 +        // The camera's world x, y and z, then the Water detail setting (0 to 1; 0: not tessellated this frame).
 +        float4 waterCamera;
 +        // How finely it is cut: the most a triangle's edge is cut into (capped low), the shortest piece in world units,
@@ -17807,7 +17874,7 @@ index b7a6750..f853626 100644
 \ No newline at end of file
 diff --git a/src/shared/rt64_scene_effects.h b/src/shared/rt64_scene_effects.h
 new file mode 100644
-index 0000000..504bd1e
+index 0000000..757dc97
 --- /dev/null
 +++ b/src/shared/rt64_scene_effects.h
 @@ -0,0 +1,112 @@
@@ -17871,7 +17938,7 @@ index 0000000..504bd1e
 +        float4 fogColor;
 +        // The debug view (0 none, 1 the effects alone as grey, 2 depth, 3 normals, 4 water mask), the day and night
 +        // cycle's cloud shape packed with F8 compare (see PackSceneClouds), a time in seconds, then the heat haze (0 off,
-+        // 1 strongest).
++        // 1 strongest; 2 + strength when it only rises above warm surfaces).
 +        float4 view;
 +        // Water reflections strength (0 off), 1 when the water mask was drawn this frame (2: and Modern water draws
 +        // the water, from the mask and its colours), bounce light (0 off, 1 strongest), then the water waves'
