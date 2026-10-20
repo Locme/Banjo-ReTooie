@@ -17,7 +17,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - General > Gameplay > Klungo: delayed throws (0% by default = the game's timing): that share of his potion throws is held back until you are in mid-air or 1.2 s have passed, when you cannot change direction. Untested on PC, written without running the game (T446).
 
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).
-- Sprint dust: starting a sprint (holding Run) kicks up the same puff of dust as a quick turn, at most once every 10 seconds of game time.
+- Sprint dust: starting a sprint (holding Run) kicks up the same puff of dust as a quick turn, at most once every 5 seconds of game time.
 - Interpolation pick mode now finds models at Graphics > Interpolation Original (the default); before, every model said "No model here" unless Interpolation was on (L). Checked headless (T442).
 - Cheats > Replays: a boss, minigame or cutscene can now be picked during another replay (or a boss rush, which stops): the current one ends the game's way and the new one starts from the game select. Picks also work on the game select screen. Races still need you out of a replay (L). Untested on PC (T438).
 - General > Jiggle: a new section holding every jiggle option. New Belly jiggle (the front of his belly on a jiggle bone, its own sliders of the snout's kinds). Backpack jiggle is back and holds still mid-swing while Kazooie is out of the pack, so it no longer fights her animations (L). Untested on PC (T439).

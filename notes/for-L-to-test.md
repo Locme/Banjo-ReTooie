@@ -80,9 +80,9 @@
 - Steps:
   1. Run as Banjo-Kazooie on grass or dirt
   2. Hold Run to start a sprint
-  3. Let go, then start another sprint within 10 seconds
-  4. Wait over 10 seconds and sprint again
-- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 10 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
+  3. Let go, then start another sprint within 5 seconds
+  4. Wait over 5 seconds and sprint again
+- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 5 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
 - Status: waiting for L
 
 ## T442 Interpolation pick mode finds models at Interpolation Original
