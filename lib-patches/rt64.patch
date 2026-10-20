@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..ab0ffc6 100644
+index 79dfc38..25f8a6b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -189,7 +189,7 @@ index 79dfc38..ab0ffc6 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -505,6 +562,10 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
+@@ -505,6 +562,11 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlatMS.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR" "-D MULTISAMPLING")
  build_vertex_shader( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSDynamic.hlsl" "-D DYNAMIC_RENDER_PARAMS")
@@ -197,10 +197,11 @@ index 79dfc38..ab0ffc6 100644
 +build_geometry_shader(rt64 "src/shaders/GrassGS.hlsl")
 +# Banjo-Tooie: deep snow as a tessellated surface.
 +build_tessellation_shaders(rt64 "src/shaders/SnowTess.hlsl" "src/shaders/SnowTessHS.hlsl" "src/shaders/SnowTessDS.hlsl")
++build_tessellation_shaders(rt64 "src/shaders/WaterTess.hlsl" "src/shaders/WaterTessHS.hlsl" "src/shaders/WaterTessDS.hlsl")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +604,53 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +605,53 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -2018,7 +2019,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..bf77d55 100644
+index 9fae0d4..f009a08 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2357,7 +2358,7 @@ index 9fae0d4..bf77d55 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +482,56 @@ namespace RT64 {
+@@ -169,11 +482,58 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2372,6 +2373,8 @@ index 9fae0d4..bf77d55 100644
 +        snowPositionsData = nullptr;
 +        snowShells = 0;
 +        frameParams.snowGrid.w = 0.0f;
++        waterTessOn = false;
++        frameParams.waterCamera.w = 0.0f;
 +        instanceFurVector.clear();
 +        instanceNightLightVector.clear();
 +        instanceSeamVector.clear();
@@ -2414,7 +2417,7 @@ index 9fae0d4..bf77d55 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +577,7 @@ namespace RT64 {
+@@ -219,6 +579,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2422,7 +2425,7 @@ index 9fae0d4..bf77d55 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +609,7 @@ namespace RT64 {
+@@ -250,6 +611,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2430,7 +2433,7 @@ index 9fae0d4..bf77d55 100644
                  }
              }
              else {
-@@ -272,6 +632,9 @@ namespace RT64 {
+@@ -272,6 +634,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2440,7 +2443,7 @@ index 9fae0d4..bf77d55 100644
              }
          }
      }
-@@ -373,6 +736,10 @@ namespace RT64 {
+@@ -373,6 +738,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2451,7 +2454,7 @@ index 9fae0d4..bf77d55 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +810,14 @@ namespace RT64 {
+@@ -443,6 +812,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2466,7 +2469,7 @@ index 9fae0d4..bf77d55 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +840,68 @@ namespace RT64 {
+@@ -465,12 +842,73 @@ namespace RT64 {
          return true;
      }
      
@@ -2486,7 +2489,9 @@ index 9fae0d4..bf77d55 100644
 +        worker->commandList->setVertexBuffers(0, indexedVertexViews.data(), uint32_t(indexedVertexViews.size()), vertexInputSlots.data());
 +        worker->commandList->setIndexBuffer(&indexBufferView);
 +
-+        auto drawWater = [&](uint32_t mode, const std::vector<uint32_t> &instances) {
++        // Modern and Stylised water's flat water is drawn tessellated, raised and lowered by its waves (WaterTess.hlsl).
++        const bool tessellated = skippingWater && waterTessOn && (waterTessPipeline != nullptr);
++        auto drawWater = [&](uint32_t mode, const std::vector<uint32_t> &instances, bool tess = false) {
 +            interop::RasterParams rasterParams = {};
 +            rasterParams.waterMask = mode;
 +            for (uint32_t i : instances) {
@@ -2496,7 +2501,7 @@ index 9fae0d4..bf77d55 100644
 +                    continue;
 +                }
 +                worker->commandList->setScissors(triangles.scissor);
-+                worker->commandList->setPipeline(triangles.pipeline);
++                worker->commandList->setPipeline(tess ? waterTessPipeline : triangles.pipeline);
 +                rasterParams.renderIndex = i;
 +                rasterParams.screenScale = triangles.screenScale;
 +                rasterParams.screenOffset = triangles.screenOffset;
@@ -2515,15 +2520,18 @@ index 9fae0d4..bf77d55 100644
 +        drawWater(3, targetDrawCall.fallInstances);
 +        GpuCheckpoint(worker->commandList.get(), "water mask: ice");
 +        drawWater(4, targetDrawCall.iceInstances);
-+        GpuCheckpoint(worker->commandList.get(), "water mask: water");
-+        drawWater(1, targetDrawCall.waterInstances);
++        GpuCheckpoint(worker->commandList.get(), tessellated ? "water mask: water (tessellated)" : "water mask: water");
++        drawWater(1, targetDrawCall.waterInstances, tessellated);
++        if (tessellated) {
++            MarkSceneWaterTessellated(worker);
++        }
 +
 +        // Modern water: the same draws' own colours and blending alpha, which tint the new water.
 +        if (skippingWater) {
 +            GpuCheckpoint(worker->commandList.get(), "water mask: colours");
 +            BeginSceneWaterMask(worker, colorTarget, depthTarget, true);
 +            drawWater(2, targetDrawCall.fallInstances);
-+            drawWater(2, targetDrawCall.waterInstances);
++            drawWater(2, targetDrawCall.waterInstances, tessellated);
 +        }
 +    }
 +
@@ -2537,7 +2545,7 @@ index 9fae0d4..bf77d55 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +930,16 @@ namespace RT64 {
+@@ -499,6 +937,16 @@ namespace RT64 {
              }
          };
  
@@ -2554,7 +2562,7 @@ index 9fae0d4..bf77d55 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +955,17 @@ namespace RT64 {
+@@ -514,6 +962,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2572,7 +2580,7 @@ index 9fae0d4..bf77d55 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +1026,130 @@ namespace RT64 {
+@@ -574,12 +1033,130 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2704,7 +2712,7 @@ index 9fae0d4..bf77d55 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1167,7 @@ namespace RT64 {
+@@ -597,6 +1174,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -2712,7 +2720,7 @@ index 9fae0d4..bf77d55 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1187,7 @@ namespace RT64 {
+@@ -616,6 +1194,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -2720,7 +2728,7 @@ index 9fae0d4..bf77d55 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1250,6 +1822,67 @@ namespace RT64 {
+@@ -1250,6 +1829,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2788,7 +2796,7 @@ index 9fae0d4..bf77d55 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1929,98 @@ namespace RT64 {
+@@ -1296,9 +1936,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2888,7 +2896,7 @@ index 9fae0d4..bf77d55 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2072,33 @@ namespace RT64 {
+@@ -1350,10 +2079,34 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2919,10 +2927,11 @@ index 9fae0d4..bf77d55 100644
 +        // (Test aid: TOOIE_SNOW_SHELLS draws the deep snow as shells even where it could be tessellated.)
 +        static const bool snowShellsForced = (std::getenv("TOOIE_SNOW_SHELLS") != nullptr);
 +        snowTessPipeline = snowShellsForced ? nullptr : rasterShaderUber->snowTessPipeline.get();
++        waterTessPipeline = rasterShaderUber->waterTessReady.load();
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2153,62 @@ namespace RT64 {
+@@ -1408,6 +2161,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2985,7 +2994,7 @@ index 9fae0d4..bf77d55 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2232,22 @@ namespace RT64 {
+@@ -1431,6 +2240,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3008,7 +3017,7 @@ index 9fae0d4..bf77d55 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2267,168 @@ namespace RT64 {
+@@ -1450,12 +2275,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3089,6 +3098,13 @@ index 9fae0d4..bf77d55 100644
 +                                    snowShells = SceneSnowShells();
 +                                }
 +                            }
++                        }
++                        // Banjo-Tooie: Modern and Stylised water's tessellated surface, from the first 3D world of the frame.
++                        if (!waterTessOn && (waterTessPipeline != nullptr) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
++                            const auto &waterViewport = drawData.rspViewports[proj.transformsIndex];
++                            waterTessOn = ComputeSceneWater(drawData.modProjTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex],
++                                drawData.modViewProjTransforms[proj.transformsIndex], waterViewport.scale, waterViewport.translate, fbParams.resolution,
++                                p.submissionFrame, frameParams);
 +                        }
 +                        // Banjo-Tooie: Banjo's fur, from the first 3D world of the frame.
 +                        if ((furShells == 0) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
@@ -3177,7 +3193,7 @@ index 9fae0d4..bf77d55 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2579,7 @@ namespace RT64 {
+@@ -1606,6 +2594,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3185,7 +3201,7 @@ index 9fae0d4..bf77d55 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2656,20 @@ namespace RT64 {
+@@ -1682,6 +2671,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3206,7 +3222,7 @@ index 9fae0d4..bf77d55 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2735,1011 @@ namespace RT64 {
+@@ -1747,24 +2750,1011 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3681,7 +3697,7 @@ index 9fae0d4..bf77d55 100644
 +                        }
 +                        AddScenePickHit(nearest, hash, matrixId);
 +                    }
-                 }
++                }
 +                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
 +                // within a texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend
 +                // texture seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
@@ -3739,7 +3755,7 @@ index 9fae0d4..bf77d55 100644
 +                                proj.type == Projection::Type::Perspective, call.shaderDesc.hash() });
 +                        }
 +                    }
-+                }
+                 }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
 +                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
@@ -4220,7 +4236,7 @@ index 9fae0d4..bf77d55 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..88a8367 100644
+index 3add9c3..857b29c 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -5,6 +5,8 @@
@@ -4279,7 +4295,7 @@ index 3add9c3..88a8367 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +97,94 @@ namespace RT64 {
+@@ -62,11 +97,96 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -4304,6 +4320,8 @@ index 3add9c3..88a8367 100644
 +        std::vector<uint8_t> instanceSnowVector;
 +        // Banjo-Tooie: the most shells of deep snow (0 when there is none this frame), and its trail grid.
 +        uint32_t snowShells = 0;
++        // Banjo-Tooie: Modern and Stylised water's surface is tessellated this frame (ComputeSceneWater).
++        bool waterTessOn = false;
 +        SceneSnowTrailCopy snowTrail;
 +        BufferPair snowTrailBuffer;
 +        // Banjo-Tooie: the vertices deep snow's draws use this frame (from snowPositionsData's posFloats), for their
@@ -4374,7 +4392,7 @@ index 3add9c3..88a8367 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +205,10 @@ namespace RT64 {
+@@ -87,6 +207,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -4382,10 +4400,12 @@ index 3add9c3..88a8367 100644
 +        RenderPipeline *grassBladePipeline = nullptr;
 +        // Banjo-Tooie: deep snow as a tessellated surface (SnowTess.hlsl), or null for shells.
 +        RenderPipeline *snowTessPipeline = nullptr;
++        // Banjo-Tooie: Modern and Stylised water's tessellated surface in the water mask (WaterTess.hlsl), or null.
++        RenderPipeline *waterTessPipeline = nullptr;
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +222,7 @@ namespace RT64 {
+@@ -100,6 +226,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -4393,7 +4413,7 @@ index 3add9c3..88a8367 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +246,10 @@ namespace RT64 {
+@@ -123,6 +250,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4404,7 +4424,7 @@ index 3add9c3..88a8367 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +291,15 @@ namespace RT64 {
+@@ -164,7 +295,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -5234,7 +5254,7 @@ index 5bc3a2a..c5c88cc 100644
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..a50ec98 100644
+index 721a01e..bf5485d 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -5245,21 +5265,25 @@ index 721a01e..a50ec98 100644
  
  #include "shaders/RenderParams.hlsli.rw.h"
  #include "shaders/RasterPSDynamic.hlsl.spirv.h"
-@@ -19,7 +20,13 @@
+@@ -19,7 +20,17 @@
  #include "shaders/PostBlendDitherNoiseAddPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubNegativePS.hlsl.spirv.h"
 +#include "shaders/GrassGS.hlsl.spirv.h"
 +#include "shaders/SnowTessHS.hlsl.spirv.h"
 +#include "shaders/SnowTessDS.hlsl.spirv.h"
++#include "shaders/WaterTessHS.hlsl.spirv.h"
++#include "shaders/WaterTessDS.hlsl.spirv.h"
  #ifdef _WIN32
 +#   include "shaders/GrassGS.hlsl.dxil.h"
 +#   include "shaders/SnowTessHS.hlsl.dxil.h"
 +#   include "shaders/SnowTessDS.hlsl.dxil.h"
++#   include "shaders/WaterTessHS.hlsl.dxil.h"
++#   include "shaders/WaterTessDS.hlsl.dxil.h"
  #   include "shaders/RasterPSLibrary.hlsl.dxil.h"
  #   include "shaders/RasterPSLibraryMS.hlsl.dxil.h"
  #   include "shaders/RasterVSLibrary.hlsl.dxil.h"
-@@ -117,7 +124,7 @@ namespace RT64 {
+@@ -117,7 +128,7 @@ namespace RT64 {
              thread_local std::vector<uint8_t> optimizedVS;
              thread_local std::vector<uint8_t> optimizedPS;
              if (!specConstantsSetup) {
@@ -5268,7 +5292,7 @@ index 721a01e..a50ec98 100644
                      specConstants.push_back(respv::SpecConstant(i, { 0 }));
                  }
  
-@@ -129,6 +136,7 @@ namespace RT64 {
+@@ -129,6 +140,7 @@ namespace RT64 {
              specConstants[2].values[0] = desc.colorCombiner.L;
              specConstants[3].values[0] = desc.colorCombiner.H;
              specConstants[4].values[0] = desc.flags.value;
@@ -5276,7 +5300,7 @@ index 721a01e..a50ec98 100644
              
              bool vsRun = respv::Optimizer::run(*VS, specConstants.data(), uint32_t(specConstants.size()), optimizedVS);
              bool psRun = respv::Optimizer::run(*PS, specConstants.data(), uint32_t(specConstants.size()), optimizedPS);
-@@ -172,6 +180,7 @@ namespace RT64 {
+@@ -172,6 +184,7 @@ namespace RT64 {
              specConstants.emplace_back(2, desc.colorCombiner.L);
              specConstants.emplace_back(3, desc.colorCombiner.H);
              specConstants.emplace_back(4, desc.flags.value);
@@ -5284,7 +5308,7 @@ index 721a01e..a50ec98 100644
  #       else
              assert(false && "This platform does not support METAL shaders.");
  #       endif
-@@ -180,39 +189,57 @@ namespace RT64 {
+@@ -180,39 +193,57 @@ namespace RT64 {
  #       if defined(_WIN32)
              RasterShaderText shaderText = generateShaderText(desc, useMSAA);
  
@@ -5374,7 +5398,7 @@ index 721a01e..a50ec98 100644
  #       else
              assert(false && "This platform does not support runtime shader compilation.");
  #       endif
-@@ -249,25 +276,26 @@ namespace RT64 {
+@@ -249,25 +280,26 @@ namespace RT64 {
          vss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          vss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          vss <<
@@ -5405,7 +5429,7 @@ index 721a01e..a50ec98 100644
              "}";
  
          // Generate pixel shader.
-@@ -275,7 +303,7 @@ namespace RT64 {
+@@ -275,7 +307,7 @@ namespace RT64 {
          pss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          pss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          pss <<
@@ -5414,7 +5438,7 @@ index 721a01e..a50ec98 100644
              "[shader(\"pixel\")]"
              "void PSMain("
              "  in float4 vertexPosition : SV_POSITION"
-@@ -286,6 +314,8 @@ namespace RT64 {
+@@ -286,6 +318,8 @@ namespace RT64 {
              pss << ", nointerpolation in float4 vertexFlatColor : COLOR1";
          }
  
@@ -5423,7 +5447,7 @@ index 721a01e..a50ec98 100644
          pss <<
              ", out float4 pixelColor : SV_TARGET0"
              ", out float4 pixelAlpha : SV_TARGET1"
-@@ -298,7 +328,7 @@ namespace RT64 {
+@@ -298,7 +332,7 @@ namespace RT64 {
          pss <<
              "   float4 resultColor;"
              "   float4 resultAlpha;"
@@ -5432,7 +5456,7 @@ index 721a01e..a50ec98 100644
              "   pixelColor = resultColor;"
              "   pixelAlpha = resultAlpha;"
              "}";
-@@ -323,9 +353,12 @@ namespace RT64 {
+@@ -323,9 +357,12 @@ namespace RT64 {
          pipelineDesc.inputElements = RasterInputElements;
          pipelineDesc.inputElementsCount = uint32_t(std::size(RasterInputElements));
          pipelineDesc.pipelineLayout = c.pipelineLayout;
@@ -5446,7 +5470,7 @@ index 721a01e..a50ec98 100644
          pipelineDesc.specConstants = c.specConstants.data();
          pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
  
-@@ -449,7 +482,12 @@ namespace RT64 {
+@@ -449,7 +486,12 @@ namespace RT64 {
          FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
          RenderPipelineLayoutBuilder layoutBuilder;
          layoutBuilder.begin(false, true);
@@ -5460,7 +5484,7 @@ index 721a01e..a50ec98 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +521,59 @@ namespace RT64 {
+@@ -483,6 +525,89 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -5515,16 +5539,64 @@ index 721a01e..a50ec98 100644
 +                snowCreation.cvgAdd = false;
 +                snowTessPipeline = RasterShader::createPipeline(snowCreation);
 +            }
++
++            // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl), drawn into the water mask:
++            // depth tested against the 3D world, writing none of its own.
++            switch (shaderFormat) {
++#   ifdef _WIN32
++            case RenderShaderFormat::DXIL:
++                waterHullShader = device->createShader(WaterTessHSBlobDXIL, std::size(WaterTessHSBlobDXIL), "HSMain", shaderFormat);
++                waterDomainShader = device->createShader(WaterTessDSBlobDXIL, std::size(WaterTessDSBlobDXIL), "DSMain", shaderFormat);
++                break;
++#   endif
++            case RenderShaderFormat::SPIRV:
++                waterHullShader = device->createShader(WaterTessHSBlobSPIRV, std::size(WaterTessHSBlobSPIRV), "HSMain", shaderFormat);
++                waterDomainShader = device->createShader(WaterTessDSBlobSPIRV, std::size(WaterTessDSBlobSPIRV), "DSMain", shaderFormat);
++                break;
++            default:
++                break;
++            }
++
++            if ((waterHullShader != nullptr) && (waterDomainShader != nullptr)) {
++                PipelineCreation waterCreation = creation;
++                waterCreation.hullShader = waterHullShader.get();
++                waterCreation.domainShader = waterDomainShader.get();
++                waterCreation.zCmp = true;
++                waterCreation.zUpd = false;
++                waterCreation.cvgAdd = false;
++                waterTessThread = std::make_unique<std::thread>([this, waterCreation]() {
++                    waterTessPipeline = RasterShader::createPipeline(waterCreation);
++                    waterTessReady = waterTessPipeline.get();
++                });
++            }
 +        }
 +
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
+@@ -556,6 +681,9 @@ namespace RT64 {
+ 
+     RasterShaderUber::~RasterShaderUber() {
+         waitForPipelineCreation();
++        if ((waterTessThread != nullptr) && waterTessThread->joinable()) {
++            waterTessThread->join();
++        }
+     }
+ 
+     void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..055757d 100644
+index 3b991ff..4a24241 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
-@@ -44,6 +44,11 @@ namespace RT64 {
+@@ -6,6 +6,7 @@
+ 
+ #include "rt64_shader_common.h"
+ 
++#include <atomic>
+ #include <condition_variable>
+ #include <mutex>
+ #include <thread>
+@@ -44,6 +45,11 @@ namespace RT64 {
          const RenderPipelineLayout *pipelineLayout;
          const RenderShader *vertexShader;
          const RenderShader *pixelShader;
@@ -5536,7 +5608,7 @@ index 3b991ff..055757d 100644
          bool alphaBlend;
          bool culling;
          bool NoN;
-@@ -90,6 +95,15 @@ namespace RT64 {
+@@ -90,6 +96,23 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -5549,6 +5621,14 @@ index 3b991ff..055757d 100644
 +        std::unique_ptr<RenderShader> snowHullShader;
 +        std::unique_ptr<RenderShader> snowDomainShader;
 +        std::unique_ptr<RenderPipeline> snowTessPipeline;
++        // Banjo-Tooie: Modern and Stylised water's tessellated surface in the water mask (WaterTess.hlsl; null without
++        // tessellation, the water then keeps its flat surface). Made on its own thread, so it adds nothing to the time
++        // before the first picture: waterTessReady is null until it is done.
++        std::unique_ptr<RenderShader> waterHullShader;
++        std::unique_ptr<RenderShader> waterDomainShader;
++        std::unique_ptr<RenderPipeline> waterTessPipeline;
++        std::atomic<RenderPipeline *> waterTessReady{ nullptr };
++        std::unique_ptr<std::thread> waterTessThread;
  
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
@@ -5992,10 +6072,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..b1fe24b
+index 0000000..c09edb7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2612 @@
+@@ -0,0 +1,2725 @@
 +//
 +// RT64
 +//
@@ -6113,6 +6193,8 @@ index 0000000..b1fe24b
 +            std::unique_ptr<RenderFramebuffer> waterColorFramebuffer;
 +            const RenderTexture *sceneSetWaterColor = nullptr;
 +            bool waterColorDrawn = false;
++            // Banjo-Tooie: the flat water went into the mask tessellated this frame (WaterTess.hlsl).
++            bool waterTessDrawn = false;
 +            // Modern water's ripple simulation: two grids (height, speed) stepped back and forth, ending each frame
 +            // in [0], which the pass reads; where the grid's corner is, in cells; steps owed at 120 a second.
 +            std::unique_ptr<RenderTexture> rippleTexture[2];
@@ -7595,6 +7677,110 @@ index 0000000..b1fe24b
 +        return SnowGridSize * 2;
 +    }
 +
++    void SetSceneWaterDetail(float detail) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.waterDetail = std::clamp(detail, 0.0f, 1.0f);
++    }
++
++    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
++        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
++        interop::FrameParams &frameParams)
++    {
++        SceneEffectsSettings settings = GetSceneEffects();
++        frameParams.waterCamera.w = 0.0f;
++        if (!settings.modernWater || (settings.waterDetail <= 0.0f) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++            return false;
++        }
++        UsePlayerFrame(settings, workloadId);
++
++        // As ComputeSceneGrass: row-vector matrices told apart by the projection, and RasterVS's positions.
++        const float (&m)[4][4] = projection.m;
++        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
++        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
++            return false;
++        }
++        const float halfWidth = resolution.x / 2.0f;
++        const float halfHeight = resolution.y / 2.0f;
++        double toClip[4][4];
++        for (int j = 0; j < 4; j++) {
++            float c[4];
++            for (int k = 0; k < 4; k++) {
++                c[k] = rowVector ? viewProj.m[j][k] : viewProj.m[k][j];
++            }
++            toClip[0][j] = c[0] * (viewportScale.x / halfWidth) + c[3] * ((viewportTranslate.x - halfWidth) / halfWidth);
++            toClip[1][j] = c[1] * (viewportScale.y / halfHeight) - c[3] * ((viewportTranslate.y - halfHeight) / halfHeight);
++            toClip[2][j] = c[2] * viewportScale.z + c[3] * viewportTranslate.z;
++            toClip[3][j] = c[3];
++        }
++        double inverse[4][4];
++        if (!InvertMatrix4(toClip, inverse)) {
++            return false;
++        }
++        // One world unit straight up: the map's y column.
++        frameParams.waterClipUp = { float(toClip[0][1]), float(toClip[1][1]), float(toClip[2][1]), float(toClip[3][1]) };
++        for (int r = 0; r < 4; r++) {
++            frameParams.waterClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
++        }
++
++        // The camera: view space's origin in the world.
++        float v[4][4];
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                v[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
++            }
++        }
++        double viewD[4][4], viewInverse[4][4];
++        for (int r = 0; r < 4; r++) {
++            for (int c = 0; c < 4; c++) {
++                viewD[r][c] = v[r][c];
++            }
++        }
++        if (!InvertMatrix4(viewD, viewInverse)) {
++            return false;
++        }
++        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
++        const float detail = settings.waterDetail;
++        frameParams.waterCamera = { float(viewInverse[3][0]), float(viewInverse[3][1]), float(viewInverse[3][2]), detail };
++
++        // Water detail: up to 4 to 16 pieces an edge, pieces no shorter than 24 down to 8 units, cut finely within 500 to
++        // 1500 units of the player, coarsening over 600 to 2000 units from the camera.
++        frameParams.waterTess = { 4.0f + 12.0f * detail, 24.0f - 16.0f * detail, 500.0f + 1000.0f * detail, 600.0f + 1400.0f * detail };
++
++        // The player's push: from how fast they move over the water this frame, dying away over about a second and a
++        // half once they stop, with a little always left (bobbing in place). Their velocity from the last frame's place.
++        static auto lastTime = std::chrono::steady_clock::now();
++        static float last[3] = { 0.0f, -1e9f, 0.0f };
++        static float velocity[2] = { 0.0f, 0.0f };
++        static float push = 0.0f;
++        static double clock = 0.0;
++        const auto now = std::chrono::steady_clock::now();
++        const float dt = std::min(std::chrono::duration<float>(now - lastTime).count(), 0.25f);
++        lastTime = now;
++        clock = std::fmod(clock + double(dt) * settings.waveSpeed, 3600.0);
++        const bool havePlayer = settings.player[1] > -1e8f;
++        if (havePlayer && (last[1] > -1e8f) && (dt > 1e-4f)) {
++            const float vx = (settings.player[0] - last[0]) / dt;
++            const float vz = (settings.player[2] - last[2]) / dt;
++            // (A warp or teleport is no movement.)
++            if ((vx * vx + vz * vz) < 3000.0f * 3000.0f) {
++                const float smooth = 1.0f - std::exp(-dt / 0.15f);
++                velocity[0] += (vx - velocity[0]) * smooth;
++                velocity[1] += (vz - velocity[1]) * smooth;
++            }
++        }
++        for (int i = 0; i < 3; i++) {
++            last[i] = settings.player[i];
++        }
++        const float speed = std::sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
++        push = std::max(std::clamp(speed / 250.0f, 0.0f, 1.0f), push * std::exp(-dt / 1.5f));
++        frameParams.waterPlayer = { settings.player[0], settings.player[2], havePlayer ? settings.player[1] : -1e9f, havePlayer ? std::max(push, 0.25f) : 0.0f };
++        frameParams.waterMotion = { velocity[0], velocity[1], float(clock), 3.5f };
++        // The swell follows Water waves (half when that is 0), as the shading's waves do.
++        const float waves = (settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f;
++        frameParams.waterSwell = { 5.0f * waves, 1.0f, settings.stylisedWater ? 1.0f : 0.0f, 0.0f };
++        return true;
++    }
++
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
 +        SceneSnowTrailCopy &trailCopy)
@@ -7762,6 +7948,10 @@ index 0000000..b1fe24b
 +            // and the rain rings on water need it too.
 +            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) || (effectsSettings.ownMist > 0.0f) ||
 +            (effectsSettings.view == SceneEffectsSoloFirst + 8) || (effectsSettings.view == SceneEffectsSoloFirst + 9);
++    }
++
++    void MarkSceneWaterTessellated(RenderWorker *worker) {
++        resourcesFor(worker).waterTessDrawn = true;
 +    }
 +
 +    RenderFramebuffer *BeginSceneWaterMask(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget, bool colors) {
@@ -8334,6 +8524,8 @@ index 0000000..b1fe24b
 +        // setting or a moderate default, and the old reflections are left out (it reflects by itself).
 +        const bool modern = waterDrawn && res.waterColorDrawn && settings.modernWater;
 +        res.waterColorDrawn = false;
++        const bool waterTessellated = modern && res.waterTessDrawn;
++        res.waterTessDrawn = false;
 +        RenderTexture *water = res.waterTexture.get();
 +        RenderTexture *waterColor = res.waterColorTexture.get();
 +        // water.y 3: Modern water with no water drawn this frame (its caustics under the water still show).
@@ -8342,7 +8534,8 @@ index 0000000..b1fe24b
 +        const float waterReflect = (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? std::min(settings.waterReflections, 1.0f) : 0.0f;
 +        const float iceReflect = waterDrawn ? std::round(std::clamp(settings.iceReflections, 0.0f, 1.0f) * 100.0f) : 0.0f;
 +        // water.y: a quarter more for Stylised water (2.25 drawn, 3.25 with no water this frame).
-+        const float stylised = settings.stylisedWater ? 0.25f : 0.0f;
++        // An eighth more when its surface was tessellated this frame (the mask holds the moving surface itself).
++        const float stylised = (settings.stylisedWater ? 0.25f : 0.0f) + (waterTessellated ? 0.125f : 0.0f);
 +        constants.water = { waterReflect + 2.0f * iceReflect, modern ? 2.0f + stylised : (modernOn ? 3.0f + stylised : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
 +            modernOn ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
 +        if (modernOn) {
@@ -8610,10 +8803,10 @@ index 0000000..b1fe24b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c9500f4
+index 0000000..4c83fe3
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,428 @@
 +//
 +// RT64
 +//
@@ -8677,6 +8870,9 @@ index 0000000..c9500f4
 +        bool modernWater = false;
 +        // Stylised water (Graphics > Water Stylised): Modern water with the stylised look.
 +        bool stylisedWater = false;
++        // Water detail (0 to 1): how finely Modern and Stylised water's surface is tessellated round the player (0 keeps it
++        // flat, its waves only in the shading).
++        float waterDetail = 0.0f;
 +        // Modern water under the water: how far into the underwater look (0 to 1), the water's surface height and
 +        // whether the whole level is under water (Atlantis, the Sea Bottom).
 +        float modernUnderwater = 0.0f;
@@ -8944,6 +9140,12 @@ index 0000000..c9500f4
 +    };
 +    // Fills the frame's snow terms (as ComputeSceneGrass, which must have filled the camera's terms first) and brings
 +    // the renderer's trail grid up to date (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
++    // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl): the camera's terms, the player's place
++    // and motion, and how finely to cut, into frameParams' water fields. False when it isn't tessellated this frame.
++    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
++        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
++        interop::FrameParams &frameParams);
++    void SetSceneWaterDetail(float detail);
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
 +        SceneSnowTrailCopy &trail);
@@ -9009,6 +9211,8 @@ index 0000000..c9500f4
 +    uint32_t SceneParallaxTexture(uint64_t hash);
 +    // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).
 +    bool SceneWaterWanted();
++    // Banjo-Tooie: the flat water went into the water mask tessellated (WaterTess.hlsl) for this worker's next effects pass.
++    void MarkSceneWaterTessellated(RenderWorker *worker);
 +    // Gets the water mask ready (cleared, with the depth target attached) and sets it as the framebuffer;
 +    // the caller then redraws the water's draw calls into it with RasterParams.waterMask set. The second
 +    // target (colors true) takes the same draws' own colours and blending alpha (RasterParams.waterMask 2),
@@ -12727,10 +12931,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..edcef0b
+index 0000000..7b2831d
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3106 @@
+@@ -0,0 +1,3191 @@
 +//
 +// RT64
 +//
@@ -14107,6 +14311,74 @@ index 0000000..edcef0b
 +    return (foam > 0.0f) ? foam * OriginalShoreLevel(pixel) : 0.0f;
 +}
 +
++// Modern water's flags in water.y's eighths over 2 (or 3 with no water drawn): a quarter for Stylised (Graphics > Water
++// Stylised), an eighth when the water was drawn tessellated this frame (WaterTess.hlsl).
++uint ModernWaterBits() {
++    return (gConstants.water.y > 1.5f) ? (uint(round(frac(gConstants.water.y) * 8.0f)) & 3u) : 0u;
++}
++
++bool StylisedWaterOn() {
++    return (ModernWaterBits() & 2u) != 0u;
++}
++
++// Tessellated water: the mask holds the moving surface itself (its swell and the player's rings), so nothing is marched.
++bool TessellatedWaterOn() {
++    return (ModernWaterBits() & 1u) != 0u;
++}
++
++// Tessellated water's facing, from the mask's depth a little way either side (wide enough to smooth over its small
++// triangles). A side that jumps to another surface (an edge, or water behind) is left out.
++float3 TessellatedNormal(int2 pixel, float3 surface) {
++    const int k = max(1, int(gConstants.projection.w / 360.0f));
++    const float jump = -surface.z * 0.04f + 4.0f;
++    float3 sides[4];
++    [unroll] for (int i = 0; i < 4; i++) {
++        const int2 at = pixel + ((i == 0) ? int2(k, 0) : (i == 1) ? int2(-k, 0) : (i == 2) ? int2(0, k) : int2(0, -k));
++        float d;
++        sides[i] = surface;
++        if (LoadWater(at, d)) {
++            const float3 q = ViewPosition(at, d);
++            if (abs(q.z - surface.z) < jump) {
++                sides[i] = q;
++            }
++        }
++    }
++    const float3 px = sides[0] - sides[1];
++    const float3 py = sides[2] - sides[3];
++    const float3 up = normalize(gConstants.worldY.xyz);
++    if ((dot(px, px) < 1e-6f) || (dot(py, py) < 1e-6f)) {
++        return up;
++    }
++    float3 n = normalize(cross(px, py));
++    if (dot(n, up) < 0.0f) {
++        n = -n;
++    }
++    // (Never steeper than the waves can make it.)
++    return (dot(n, up) > 0.5f) ? n : up;
++}
++
++// Tessellated water's fine waves: two scrolling normal maps (smooth noise drifting two ways, one turned against the
++// other), their slope along the world's x and z by differences. Also gives their height, 0 to 1, for Stylised's crests.
++float2 ScrollingNormals(float2 p, float t, float footprint, out float height) {
++    const float sizeA = 38.0f;
++    const float sizeB = 23.0f;
++    const float e = 0.05f;
++    const float2 a = p / sizeA + float2(t * 0.06f, t * 0.035f);
++    const float2 turned = float2(p.x * 0.8f - p.y * 0.6f, p.x * 0.6f + p.y * 0.8f);
++    const float2 b = turned / sizeB - float2(t * 0.05f, -t * 0.07f);
++    const float ha = WaterNoise(a);
++    const float hb = WaterNoise(b);
++    const float2 ga = float2(WaterNoise(a + float2(e, 0.0f)) - ha, WaterNoise(a + float2(0.0f, e)) - ha) / (e * sizeA);
++    const float2 gt = float2(WaterNoise(b + float2(e, 0.0f)) - hb, WaterNoise(b + float2(0.0f, e)) - hb) / (e * sizeB);
++    // (Back from the turned layer's axes to the world's.)
++    const float2 gb = float2(gt.x * 0.8f + gt.y * 0.6f, -gt.x * 0.6f + gt.y * 0.8f);
++    // Fading out where they would be smaller than a pixel or two, so far water doesn't shimmer.
++    const float visibleA = saturate(sizeA / (footprint * 3.0f) - 1.0f);
++    const float visibleB = saturate(sizeB / (footprint * 3.0f) - 1.0f);
++    height = ha * 0.65f + hb * 0.35f;
++    return ga * (4.0f * visibleA) + gb * (2.2f * visibleB);
++}
++
 +float3 ModernWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
 +    const float3 v = normalize(surface);
 +    const float3 up = normalize(gConstants.worldY.xyz);
@@ -14121,7 +14393,8 @@ index 0000000..edcef0b
 +    // meets it is found by stepping along the ray through the band they can reach.
 +    const float band = 9.0f * strength + 14.0f;
 +    const float along = dot(v, up);
-+    if (abs(along) > 0.02f) {
++    const bool tessellated = TessellatedWaterOn();
++    if (!tessellated && (abs(along) > 0.02f)) {
 +        const float tFlat = length(surface);
 +        // From above the band down to below it (along is negative looking down).
 +        const float tStart = tFlat + band / along;
@@ -14146,9 +14419,16 @@ index 0000000..edcef0b
 +    const float distance = -surface.z;
 +
 +    // The surface's slope: the waves' and the ripples', with a little foam where the ripples move fast.
++    // Tessellated: the swell and the player's rings are in the surface itself, and two scrolling normal maps add the
++    // fine waves.
 +    const float3 world = WorldPosition(surface);
-+    const float4 ripple = Ripples(world.xz, waterY);
-+    const float2 slope = WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * strength + ripple.yz;
++    const float4 ripple = tessellated ? 0.0f : Ripples(world.xz, waterY);
++    float fineHeight = 0.0f;
++    const float2 slope = tessellated ? ScrollingNormals(world.xz, gConstants.ambientOcclusion.z, footprint, fineHeight) * strength :
++        WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * strength + ripple.yz;
++    if (tessellated) {
++        normal = TessellatedNormal(pixel, surface);
++    }
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // Not on the player's own spot: the water there is over their body, and foam would paint it white.
 +    const float awayFromPlayer = saturate((length(world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 30.0f) / 25.0f);
@@ -14189,7 +14469,7 @@ index 0000000..edcef0b
 +
 +    // Refraction: the floor seen through the waves, shifted more where the water is deeper, but only to
 +    // places that are under the water too (otherwise things in front would bleed into it).
-+    const float3 bend = n - normal;
++    const float3 bend = n - up;
 +    const float2 shift = float2(bend.x, -bend.y) * (gConstants.projection.w * 0.05f) * saturate(throughLength / 150.0f) * saturate(800.0f / distance);
 +    const int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
 +    float3 below = scene;
@@ -14230,6 +14510,10 @@ index 0000000..edcef0b
 +    const float glint = pow(saturate(dot(r, sun)), 220.0f) * 2.5f + pow(saturate(dot(r, sun)), 24.0f) * 0.12f;
 +    color += float3(1.0f, 0.96f, 0.88f) * glint * saturate(dot(n, normalize(gConstants.worldY.xyz)) * 2.0f);
 +
++    // The shoreline: the water fades out over the last few units, where the floor comes up through it (by the depth
++    // buffer), so its edge doesn't cut a hard line.
++    color = lerp(scene, color, smoothstep(0.0f, 10.0f, throughLength));
++
 +    // Foam: a broken line along the shore (where the floor comes up near the surface), and the player's.
 +    const float t = gConstants.ambientOcclusion.z;
 +    const float2 p = surfaceWorld.xz;
@@ -14253,11 +14537,6 @@ index 0000000..edcef0b
 +    const float allFoam = saturate(max(max(shoreFoam, foam * (0.15f + 0.45f * pattern)), boilFoam));
 +    color = lerp(color, float3(0.93f, 0.96f, 0.98f), allFoam * 0.55f);
 +    return color;
-+}
-+
-+// Stylised water (Graphics > Water Stylised): water.y is a quarter over Modern's (2.25, or 3.25 with no water drawn).
-+bool StylisedWaterOn() {
-+    return (gConstants.water.y > 1.5f) && (frac(gConstants.water.y) > 0.2f);
 +}
 +
 +// Cellular noise over a plane: the distance to the nearest of a jittered grid of points (x) and to the second
@@ -14361,7 +14640,8 @@ index 0000000..edcef0b
 +    // The moving surface, found as Modern water's is.
 +    const float band = 12.0f * strength + 14.0f;
 +    const float along = dot(v, up);
-+    if (abs(along) > 0.02f) {
++    const bool tessellated = TessellatedWaterOn();
++    if (!tessellated && (abs(along) > 0.02f)) {
 +        const float tFlat = length(surface);
 +        const float tStart = tFlat + band / along;
 +        const float tEnd = tFlat - band / along;
@@ -14384,13 +14664,19 @@ index 0000000..edcef0b
 +    const float distance = -surface.z;
 +    const float3 world = WorldPosition(surface);
 +    const float2 p = world.xz;
-+    const float4 ripple = Ripples(p, waterY);
-+    const float3 wave = StylisedWave(p, t, footprint);
-+    const float2 slope = wave.yz * strength + ripple.yz;
++    // Tessellated: the swell and the player's rings are in the surface itself, and two scrolling normal maps add the
++    // fine waves (and the crests' shading).
++    const float4 ripple = tessellated ? 0.0f : Ripples(p, waterY);
++    float fineHeight = 0.0f;
++    const float3 wave = tessellated ? 0.0f : StylisedWave(p, t, footprint);
++    const float2 slope = tessellated ? ScrollingNormals(p, t, footprint, fineHeight) * strength : wave.yz * strength + ripple.yz;
++    if (tessellated) {
++        normal = TessellatedNormal(pixel, surface);
++    }
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // How high on the waves this point is: 0 in the deepest troughs, about 0.6 on a single crest and 1 where the two
 +    // big trains' crests meet.
-+    const float crest = saturate((wave.x + 8.5f) / 25.0f);
++    const float crest = tessellated ? smoothstep(0.2f, 0.85f, fineHeight) : saturate((wave.x + 8.5f) / 25.0f);
 +
 +    // The level's water colour, as Modern water reads it.
 +    const int reach = max(2, int(gConstants.projection.w / 90.0f));
@@ -14425,7 +14711,7 @@ index 0000000..edcef0b
 +    }
 +
 +    // Refraction, guarded as Modern water's: only from places that are under the water too.
-+    const float3 bend = n - normal;
++    const float3 bend = n - up;
 +    const float2 shift = float2(bend.x, -bend.y) * (gConstants.projection.w * 0.06f) * saturate(throughLength / 120.0f) * saturate(800.0f / distance);
 +    const int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
 +    float3 below = scene;
@@ -14474,6 +14760,9 @@ index 0000000..edcef0b
 +    const float toSun = saturate(dot(r, sun));
 +    const float highlight = smoothstep(0.9965f, 0.9985f, toSun) * 1.4f + pow(toSun, 40.0f) * 0.15f;
 +    color += float3(1.0f, 0.97f, 0.9f) * highlight * saturate(dot(n, up) * 2.0f);
++
++    // The shoreline: faded out over the last few units, as Modern water's (the foam still draws over it).
++    color = lerp(scene, color, smoothstep(0.0f, 10.0f, throughLength));
 +
 +    // Foam. Where it may show (level): along the shore and round anything poking through the surface, by how much
 +    // water lies between the surface and what is under it; on the tallest crests; in the player's wake; and in
@@ -16852,11 +17141,168 @@ index 3f33475..7d84d10 100644
  #endif
  }
 \ No newline at end of file
+diff --git a/src/shaders/WaterTess.hlsl b/src/shaders/WaterTess.hlsl
+new file mode 100644
+index 0000000..7ff7563
+--- /dev/null
++++ b/src/shaders/WaterTess.hlsl
+@@ -0,0 +1,151 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: Modern and Stylised water as a real moving surface, where the device has hull and domain shaders (D3D12,
++// and Vulkan with tessellationShader). The game's flat water draws are drawn into the scene effects' water mask (and its
++// colours) through these: the hull shader cuts each triangle finer near the camera and round the player (capped low, and
++// not at all past Water detail's reach), and leaves out triangles wholly off screen; the domain shader raises and lowers
++// every new vertex by a slow swell over all the water and the rings the player pushes out as they move through it. The
++// effects pass then shades the surface the mask holds (SceneEffectsPS.hlsl): its waves are real bumps in it, with two
++// scrolling normal maps for the fine ripples. Nothing is simulated: the rings are a sine spreading from where the player
++// is, from their position and velocity this frame (FrameParams.waterPlayer and waterMotion).
++//
++// Built twice from this file: HSMain (hull) and DSMain (domain). Both use the ubershader's vertex and pixel shaders,
++// whose outputs and inputs WaterVertex matches (as SnowTess.hlsl's SnowVertex).
++
++#include "shared/rt64_raster_params.h"
++
++#include "FbRendererCommon.hlsli"
++
++[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
++
++struct WaterVertex {
++    float4 position : SV_POSITION;
++    float2 uv : TEXCOORD;
++    float4 smoothColor : COLOR0;
++    nointerpolation float4 flatColor : COLOR1;
++    float4 furAnchor : TEXCOORD1;
++};
++
++struct WaterPatch {
++    float edges[3] : SV_TessFactor;
++    float inside : SV_InsideTessFactor;
++};
++
++// RasterVS's position (with the draw's screen scale and offset) back to the one before them, which waterClipToWorld takes.
++float4 WaterUnscaled(float4 position) {
++    float4 p = position;
++#ifdef __spirv__
++    p.y = -p.y;
++#endif
++    p.xy = (p.xy - gConstants.screenOffset * p.w) / gConstants.screenScale;
++    return p;
++}
++
++float3 WaterWorld(float4 position) {
++    const float4 p = WaterUnscaled(position);
++    const float4 w = float4(dot(FrParams.waterClipToWorld[0], p), dot(FrParams.waterClipToWorld[1], p), dot(FrParams.waterClipToWorld[2], p), dot(FrParams.waterClipToWorld[3], p));
++    return w.xyz / ((abs(w.w) > 1e-8f) ? w.w : 1e-8f);
++}
++
++// How finely an edge between two world points is cut: finer near the camera, only round the player, never more than
++// the cap. By the edge alone, so the triangles either side of it cut it the same way and no cracks open.
++float WaterEdgeFactor(float3 a, float3 b) {
++    const float3 middle = (a + b) * 0.5f;
++    const float2 player = FrParams.waterPlayer.xy;
++    const float reach = FrParams.waterTess.z;
++    const float round = (FrParams.waterPlayer.z > -1e8f) ? (1.0f - smoothstep(reach * 0.6f, reach, distance(middle.xz, player))) : 0.0f;
++    const float near = 1.0f - smoothstep(0.0f, FrParams.waterTess.w, distance(middle, FrParams.waterCamera.xyz));
++    const float wanted = 1.0f + (FrParams.waterTess.x - 1.0f) * round * near;
++    // (No finer than the shortest piece: a short edge needs no cutting.)
++    return clamp(min(wanted, distance(a, b) / FrParams.waterTess.y), 1.0f, FrParams.waterTess.x);
++}
++
++// Whether all three corners lie past one side of the screen (with room for the waves to reach back in).
++bool WaterOffScreen(float4 a, float4 b, float4 c) {
++    const float m = 1.15f;
++    if ((a.w <= 0.0f) && (b.w <= 0.0f) && (c.w <= 0.0f)) {
++        return true;
++    }
++    return ((a.x > a.w * m) && (b.x > b.w * m) && (c.x > c.w * m)) || ((a.x < -a.w * m) && (b.x < -b.w * m) && (c.x < -c.w * m)) ||
++        ((a.y > a.w * m) && (b.y > b.w * m) && (c.y > c.w * m)) || ((a.y < -a.w * m) && (b.y < -b.w * m) && (c.y < -c.w * m));
++}
++
++WaterPatch WaterPatchConstants(InputPatch<WaterVertex, 3> patch) {
++    WaterPatch p;
++    // Off screen: left out (a factor of 0 draws nothing).
++    if (WaterOffScreen(WaterUnscaled(patch[0].position), WaterUnscaled(patch[1].position), WaterUnscaled(patch[2].position))) {
++        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
++        p.inside = 0.0f;
++        return p;
++    }
++    const float3 a = WaterWorld(patch[0].position);
++    const float3 b = WaterWorld(patch[1].position);
++    const float3 c = WaterWorld(patch[2].position);
++    // (Edge 0 is the one across from vertex 0.)
++    p.edges[0] = WaterEdgeFactor(b, c);
++    p.edges[1] = WaterEdgeFactor(c, a);
++    p.edges[2] = WaterEdgeFactor(a, b);
++    p.inside = max(p.edges[0], max(p.edges[1], p.edges[2]));
++    return p;
++}
++
++[domain("tri")]
++[partitioning("fractional_odd")]
++[outputtopology("triangle_cw")]
++[outputcontrolpoints(3)]
++[patchconstantfunc("WaterPatchConstants")]
++[maxtessfactor(16.0f)]
++WaterVertex HSMain(InputPatch<WaterVertex, 3> patch, uint i : SV_OutputControlPointID) {
++    return patch[i];
++}
++
++// The water's height above its flat surface at a world point (x, z; y the flat surface's height), in world units.
++float WaterHeight(float3 world) {
++    const float t = FrParams.waterMotion.z;
++    // The swell: two slow sines crossing, one longer and taller.
++    const float swell = FrParams.waterSwell.x;
++    const float speed = FrParams.waterSwell.y;
++    float h = swell * (sin(dot(world.xz, float2(0.0219f, 0.0137f)) + t * 0.9f * speed) + 0.55f * sin(dot(world.xz, float2(-0.0153f, 0.0311f)) + t * 1.3f * speed));
++    // The player's rings: a sine spreading out from them, fading with distance, and stretched behind them as they move
++    // (a wake). Only on the water they are in (near their height).
++    const float4 player = FrParams.waterPlayer;
++    if ((player.z > -1e8f) && (player.w > 0.001f) && (world.y > player.z - 60.0f) && (world.y < player.z + 160.0f)) {
++        const float2 v = FrParams.waterMotion.xy;
++        const float speedNow = length(v);
++        const float2 along = (speedNow > 1.0f) ? v / speedNow : float2(0.0f, 0.0f);
++        float2 d = world.xz - player.xy;
++        // Behind them the rings are drawn out (up to twice as far apart), ahead pressed together: a bow wave and a wake.
++        const float behind = max(-dot(d, along), 0.0f);
++        const float stretch = 1.0f + saturate(speedNow / 300.0f);
++        d -= along * (behind * (1.0f - 1.0f / stretch));
++        const float r = length(d);
++        const float k = 6.2831853f / 45.0f;
++        const float ring = sin(k * r - t * 7.0f);
++        // Faint right on the player (their body is there), strongest a little way out, gone by about 300 units.
++        const float fade = smoothstep(10.0f, 40.0f, r) * exp(-r / 110.0f);
++        h += FrParams.waterMotion.w * player.w * ring * fade;
++    }
++    return h;
++}
++
++[domain("tri")]
++WaterVertex DSMain(WaterPatch p, float3 w : SV_DomainLocation, const OutputPatch<WaterVertex, 3> patch) {
++    WaterVertex v;
++    v.position = patch[0].position * w.x + patch[1].position * w.y + patch[2].position * w.z;
++    v.uv = patch[0].uv * w.x + patch[1].uv * w.y + patch[2].uv * w.z;
++    v.smoothColor = patch[0].smoothColor * w.x + patch[1].smoothColor * w.y + patch[2].smoothColor * w.z;
++    v.flatColor = patch[0].flatColor;
++    v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
++
++    // Raised or lowered straight up in the world, then through the draw's screen scale and offset as the position was.
++    const float height = WaterHeight(WaterWorld(v.position));
++    float4 up = FrParams.waterClipUp * height;
++    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
++#ifdef __spirv__
++    up.y = -up.y;
++#endif
++    v.position += up;
++    return v;
++}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..5d3eb50 100644
+index 2e62aaf..6c2ea43 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,102 @@ namespace interop {
+@@ -13,6 +13,121 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -16956,6 +17402,25 @@ index 2e62aaf..5d3eb50 100644
 +        // Banjo-Tooie: 1 to blend the seams of clamped textures (TextureSampler.hlsli), the DEV option; then 1 to show the
 +        // blended edges in magenta (TOOIE_SEAM_SHOW).
 +        float4 textureSeams;
++        // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl), in the water mask. One world unit
++        // straight up, as RasterVS's positions (as grassClipUp); those positions back to world space (as
++        // grassClipToWorld).
++        float4 waterClipUp;
++        float4 waterClipToWorld[4];
++        // The camera's world x, y and z, then the Water detail setting (0 to 1; 0: not tessellated this frame).
++        float4 waterCamera;
++        // How finely it is cut: the most a triangle's edge is cut into (capped low), the shortest piece in world units,
++        // how far round the player it is cut finely (world units; past it a triangle is drawn as it is), then the
++        // camera distance it coarsens over.
++        float4 waterTess;
++        // The player's world x, z and y (y below -1e8 with no player), then how strongly they push the water (0 to 1:
++        // from their speed, dying away over a second or two once they stop).
++        float4 waterPlayer;
++        // The player's velocity over the water (world x and z, units a second), the time in seconds, then the ripples'
++        // height in world units at full push.
++        float4 waterMotion;
++        // The slow swell over all the water: its height in world units, its speed, then 1 for Stylised water.
++        float4 waterSwell;
      };
  #ifdef HLSL_CPU
  };

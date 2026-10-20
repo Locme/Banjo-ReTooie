@@ -66,6 +66,8 @@ namespace tooie::picture_filters {
     inline const std::string sun_shadow_softness_option = "sun_shadow_softness";
     inline const std::string sun_shadow_distance_option = "sun_shadow_distance";
     inline const std::string wave_speed_option = "water_wave_speed";
+    // Graphics > Water detail: how finely Modern and Stylised water is cut into moving geometry round the player (0 = none).
+    inline const std::string water_detail_option = "water_detail";
     inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
     inline const std::string water_option = "water_style";

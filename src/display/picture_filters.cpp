@@ -70,6 +70,7 @@ namespace RT64 {
     void SetSceneShoreFoam(bool enabled);
     void SetSceneOwnMist(float strength);
     void SetSceneModernWater(bool enabled, bool stylised);
+    void SetSceneWaterDetail(float detail);
     void SetSceneIcyLevel(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
@@ -4321,6 +4322,11 @@ void tooie::picture_filters::apply() {
         stylised_water = std::atoi(forced) == 2;
     }
     RT64::SetSceneModernWater(modern_water, stylised_water);
+    double water_detail = value<double>(water_detail_option, 50.0);
+    if (const char* forced = std::getenv("TOOIE_WATER_DETAIL")) {
+        water_detail = std::atof(forced);
+    }
+    RT64::SetSceneWaterDetail((float)(water_detail / 100.0));
     bool shore_foam = shaders && value<bool>(shore_foam_option, false);
     if (const char* forced = std::getenv("TOOIE_SHORE_FOAM")) {
         shore_foam = std::atoi(forced) != 0;
@@ -4789,6 +4795,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Water wave speed",
         "How fast the water waves move, in percent. 100 is normal.",
         25, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        water_detail_option,
+        "Water detail",
+        "With Water on <recomp-color primary>Modern</recomp-color> or <recomp-color primary>Stylised</recomp-color>: the water round the player is cut into fine moving geometry, so the swell and the rings the player pushes out are real bumps in the surface. Higher cuts it finer and further out, which costs more. 0 keeps the flat surface with drawn-on waves. Needs a graphics card with tessellation; without it the drawn-on waves are used.",
+        0, 100, 5, 0, false, 50);
     graphics.add_enum_option(
         water_option,
         "Water",
@@ -5137,7 +5148,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5175,6 +5186,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(mist_option, lighting_section_option, false);
