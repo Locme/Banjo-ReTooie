@@ -58,6 +58,7 @@
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
 #include "tooie_damage.h"
+#include "tooie_aim_trace.h"
 
 namespace {
     void show_cheats_tab() {
@@ -401,13 +402,24 @@ void tooie::init_config() {
     general.add_enum_option(
         tooie::damage::aim_option,
         "Enemy aim",
-        "How far ahead the enemies that aim ahead (Klungo's potions, lava gargoyles, fantasy eyeballs) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> leads 50% further and <recomp-color primary>Sharp</recomp-color> twice as far, so running in a straight line stops working but changing direction still does.",
+        "The enemies and shots that aim ahead of you (Klungo's potions, lava gargoyles, fantasy eyeballs, balloon bombs, Gruntilda's fireballs and others) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> aims half a second of your running ahead and <recomp-color primary>Sharp</recomp-color> a full second ahead, and Klungo's potion also steers toward you while it flies. Running in a straight line stops working; only really changing direction still dodges.",
         {
             {tooie::damage::Aim::Original, "Original", "Original"},
             {tooie::damage::Aim::Better, "Better", "Better"},
             {tooie::damage::Aim::Sharp, "Sharp", "Sharp"},
         },
         tooie::damage::Aim::Original);
+    general.add_number_option(
+        tooie::damage::aim_chance_option,
+        "Enemy aim: aimed shots",
+        "With Enemy aim on Better or Sharp, how many shots are aimed ahead of you and steered, in percent. The others fly as in the game, so the boss cannot be read as always aiming ahead.",
+        0, 100, 5, 0, false, 75);
+    general.add_option_hidden_dependency(tooie::damage::aim_chance_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
+    general.add_number_option(
+        tooie::damage::throw_delay_option,
+        "Klungo: delayed throws",
+        "How often Klungo holds a potion back until you are in mid-air (or a second has passed), when you cannot change direction, instead of throwing at once. 0 is the game's own timing.",
+        0, 100, 5, 0, false, 0);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -431,6 +443,8 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::snout_jiggle::option, "Jiggle");
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::throw_delay_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
@@ -757,6 +771,7 @@ void tooie::init_config() {
     tooie::interp_check::add_options(wip);
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
+    tooie::aim_trace::add_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,

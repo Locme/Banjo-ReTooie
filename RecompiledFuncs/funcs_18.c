@@ -5349,6 +5349,7 @@ RECOMP_FUNC void func_8010D09C(uint8_t* rdram, recomp_context* ctx) {
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x8010D120: addiu       $sp, $sp, 0x40
     ctx->r29 = ADD32(ctx->r29, 0X40);
+    tooie_enemy_aim_end(rdram, ctx);
     // 0x8010D124: jr          $ra
     // 0x8010D128: nop
 

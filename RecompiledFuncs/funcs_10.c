@@ -2583,6 +2583,7 @@ L_8080239C:
 RECOMP_FUNC void func_80802B84_chklungo(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_klungo_throw(rdram, ctx)) return;
     // 0x80802B84: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80802B88: sw          $ra, 0x14($sp)

@@ -5,6 +5,7 @@
 RECOMP_FUNC void func_800F5A00(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, 0);
     // 0x800F5A00: sll         $t6, $a0, 2
     ctx->r14 = S32(ctx->r4 << 2);
     // 0x800F5A04: addiu       $sp, $sp, -0x18
