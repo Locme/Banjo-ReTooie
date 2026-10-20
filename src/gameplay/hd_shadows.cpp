@@ -140,6 +140,10 @@ namespace {
     std::vector<std::pair<uint32_t, uint32_t>> actor_pastes;
     // True while an actor is drawn into the shadow buffer.
     bool in_shadow_pass = false;
+    // The point list the outermost func_80101808 draw stored its model's points in (0x8012C844), 0 if
+    // none; only for TOOIE_SHADOW_LOG's check that the shadow leaves them alone.
+    uint32_t drawn_points = 0;
+    int points_moved = 0;
 
     float load_float(uint8_t* rdram, gpr addr) {
         uint32_t bits = MEM_W(0, addr);
@@ -423,8 +427,9 @@ void tooie::hd_shadows::tick() {
     if (shadow_log) {
         static int frames = 0;
         if (++frames >= 60) {
-            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d, no room %d, lit by a level light %d\n",
-                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall], outcomes[NoRoom], outcomes[Lit]);
+            std::printf("[shadow] actors in 60 frames: drawn %d, no model %d, no floor %d, steep %d, off screen %d, too small %d, no room %d, lit by a level light %d, points moved by the shadow %d\n",
+                outcomes[Drawn], outcomes[NoModel], outcomes[NoFloor], outcomes[Steep], outcomes[Offscreen], outcomes[TooSmall], outcomes[NoRoom], outcomes[Lit], points_moved);
+            points_moved = 0;
             std::fflush(stdout);
             std::memset(outcomes, 0, sizeof(outcomes));
             frames = 0;
@@ -439,6 +444,19 @@ extern "C" void tooie_shadow_render_mode(uint8_t* /*rdram*/, recomp_context* ctx
 }
 
 extern "C" void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx) {
+    // The draw callback has run by now. During the shadow pass it set the actor's point list again
+    // (func_801015D0 through func_800DF738, 0x8012C844), and the point commands (func_800DD410)
+    // would store the flattened shadow's points in it: Klungo's potion, which starts at his point 4,
+    // was thrown from near the floor. Without a list the shadow draw leaves the points as the real
+    // draw stored them.
+    // TOOIE_SHADOW_OLD_POINTS=1 leaves the list, to compare.
+    static const bool old_points = std::getenv("TOOIE_SHADOW_OLD_POINTS") != nullptr;
+    if (in_shadow_pass && !old_points) {
+        MEM_W(-0x37BC, (gpr)(int32_t)0x80130000) = 0;
+    }
+    if (!in_shadow_pass && draw_callbacks.size() == 1) {
+        drawn_points = MEM_W(-0x37BC, (gpr)(int32_t)0x80130000);
+    }
     if (!in_shadow_pass) {
         tooie::gfx_budget::note_model_kind(rdram, (uint32_t)MEM_W(0x10C, ctx->r29));
     }
@@ -450,6 +468,7 @@ extern "C" void tooie_shadow_note_model(uint8_t* rdram, recomp_context* ctx) {
 extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) {
     if (draw_callbacks.empty()) {
         drawn_model = 0;
+        drawn_points = 0;
     }
     draw_callbacks.push_back((uint32_t)ctx->r5);
 }
@@ -503,7 +522,21 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     for (int i = 0; i < 0x9C / 4; i++) {
         saved[i] = MEM_W(i * 4, actor);
     }
+    // TOOIE_SHADOW_LOG: the first 8 points before the shadow draw, to count the ones it moved.
+    constexpr int checked_words = 8 * 3;
+    uint32_t points[checked_words] = {};
+    const gpr point_list = (gpr)(int32_t)drawn_points;
+    const bool check_points = shadow_log && drawn_points >= 0x80000000u && drawn_points < 0x80800000u;
+    for (int i = 0; check_points && i < checked_words; i++) {
+        points[i] = MEM_W(4 + i * 4, point_list);
+    }
     draw_actor_shadow(rdram, &scratch, actor, frame, draw_callback, drawn_model);
+    for (int i = 0; check_points && i < checked_words; i++) {
+        if (MEM_W(4 + i * 4, point_list) != points[i]) {
+            points_moved++;
+            break;
+        }
+    }
     for (int i = 0; i < 0x9C / 4; i++) {
         MEM_W(i * 4, actor) = saved[i];
     }

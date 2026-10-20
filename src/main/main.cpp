@@ -44,8 +44,10 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_asset_mods.h"
+#include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
+#include "tooie_menu_pause.h"
 #include "tooie_photo_mode.h"
 #include "tooie_picture_filters.h"
 #include "tooie_save_state.h"
@@ -198,6 +200,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
         exit_error("Failed to create window: %s\n", SDL_GetError());
     }
 
+    tooie::boot_screen::set_window(window);
+
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
     SDL_GetWindowWMInfo(window, &wmInfo);
@@ -231,7 +235,9 @@ void update_gfx(void*) {
     const auto now = std::chrono::steady_clock::now();
     if (now >= next_menu_check) {
         next_menu_check = now + std::chrono::milliseconds(50);
-        RT64::SetIdleRepaint(ultramodern::is_game_started() && recompui::is_context_capturing_input());
+        const bool menu_open = recompui::is_context_capturing_input();
+        RT64::SetIdleRepaint(ultramodern::is_game_started() && menu_open);
+        tooie::menu_pause::set_menu_open(menu_open);
     }
 #ifdef __ANDROID__
     tooie::android::update_touch();
@@ -836,7 +842,12 @@ int main(int argc, char** argv) {
     tooie::init_config();
     tooie::session_log::start(version_string);
     // Zips dropped into the mods folder are unpacked before every mod scan (startup and Refresh Mods).
-    recomp::mods::set_before_scan_callback([](bool game_started) { tooie::unpack_mod_zips(game_started); });
+    // The first scan is the one at startup, before the renderer takes the window.
+    recomp::mods::set_before_scan_callback([](bool game_started) {
+        static bool at_boot = true;
+        tooie::unpack_mod_zips(game_started, at_boot);
+        at_boot = false;
+    });
 
     tooie::start_save_backups();
 

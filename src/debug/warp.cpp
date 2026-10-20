@@ -30,6 +30,7 @@
 #include "tooie_music_player.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
+#include "tooie_enemy_spawner.h"
 #include "tooie_torch_enemy.h"
 #include "tooie_save_state.h"
 #include "tooie_motion_aim.h"
@@ -42,6 +43,7 @@
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_menu_pause.h"
 #include "tooie_music_player.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
@@ -145,6 +147,8 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     ticked = true;
     // First, so the other ticks act on a loaded state.
     tooie::save_state::tick(rdram, ctx);
+    // Waits here while the ESC menu pauses the game; before the ticks that read this frame's delta time.
+    tooie::menu_pause::tick(rdram, ctx);
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);
@@ -164,6 +168,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::music_player::tick(rdram, ctx);
     tooie::bottles_revenge::tick(rdram, ctx);
     tooie::torch_enemy::tick(rdram, ctx);
+    tooie::enemy_spawner::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);

@@ -838,6 +838,33 @@ extern "C" void tooie_swim_turn(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
+// bafly_entrypoint_9, steering in flight: it turns the stick's left/right into a turn of up to 3
+// degrees (6 with the sharp-turn key) and adds it to Banjo's target heading once per game frame,
+// with no delta time. The heading follows the target at up to 500 degrees a second, so the turn
+// grew with the frame rate: 90 degrees a second at 30, 360 at 120, and at 175 and up the target
+// ran ahead of him and he kept turning after the stick was let go (L: flying at 120-175 FPS too
+// fast, 2026-10-19). $f16 holds the turn, just before it is added. Above 30 FPS it is scaled to
+// the frame's time, so it turns as in the original game at every rate (L chose 30, 2026-10-20).
+extern "C" void tooie_fly_turn(uint8_t* rdram, recomp_context* ctx) {
+    static const bool off = std::getenv("TOOIE_NO_FLY_TURN_FIX") != nullptr;   // A/B for tests
+    const float dt = read_float(rdram, delta_time_addr);
+    const float turn = ctx->f16.fl;
+    if (!off && above_30() && dt > 0.0f && dt < 1.0f / 30.0f) {
+        ctx->f16.fl *= dt * 30.0f;
+    }
+    // TOOIE_FLY_LOG=1: each frame, game time, the step, the turn before and after, and
+    // Banjo's heading and target heading (PlayerState $s0, +0xF8 points at the yaw block).
+    static const bool log = std::getenv("TOOIE_FLY_LOG") != nullptr;
+    if (log) {
+        const uint32_t yaw = (uint32_t)MEM_W(0xF8, ctx->r16);
+        const float value = yaw >= 0x80000000u ? read_float(rdram, (int32_t)yaw) : 0.0f;
+        const float ideal = yaw >= 0x80000000u ? read_float(rdram, (int32_t)(yaw + 4)) : 0.0f;
+        std::printf("[fly] t %.3f dt %.4f turn %.3f -> %.3f yaw %.2f ideal %.2f\n",
+            game_seconds_total.load(), dt, turn, ctx->f16.fl, value, ideal);
+        std::fflush(stdout);
+    }
+}
+
 // Character blinking: func_80101A50 runs an object's blink ($a0, state in the
 // bits of +0x78 and +0x7A): each frame a random chance to start a blink, then
 // the eyelid frame goes 0 to 3 and back one step a frame. It ends by giving the

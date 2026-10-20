@@ -55,6 +55,8 @@ namespace {
     // (which works without the Cheats switch, since the Warp tab already needs it).
     std::atomic<uint8_t> current_form{0};
     std::atomic<bool> pending_from_room{false};
+    // Set while the row is put back to Off after a reload, so its callback does not ask for the normal form.
+    std::atomic<bool> clearing_row{false};
 
     // Headless test hook: TOOIE_TRANSFORM=<hex form>[@ms][,<hex form>@ms...] applies each form once, ms after
     // the game loop first runs (the Off row is form 1, the normal form).
@@ -69,6 +71,25 @@ namespace {
         std::chrono::steady_clock::time_point started;
     };
     EnvState env;
+
+    // The row goes back to Off once the reload is under way (L, 2026-10-19), so the menu never shows a form
+    // waiting to be applied.
+    void row_to_off() {
+        try {
+            recomp::config::Config& cheats = tooie::cheats::config();
+            const recomp::config::ConfigValueVariant value = cheats.get_option_value(tooie::transform_picker::option);
+            const uint32_t* idx = std::get_if<uint32_t>(&value);
+            if (idx == nullptr || *idx == 0) {
+                return;
+            }
+            clearing_row = true;
+            cheats.update_option_value(tooie::transform_picker::option, 0u);
+            // Saved too, so the next start does not load the form and reload the area again.
+            cheats.save_config();
+        } catch (...) {
+            clearing_row = false;
+        }
+    }
 }
 
 void tooie::transform_picker::add_options(recomp::config::Config& cheats, const std::string& master_option) {
@@ -77,7 +98,7 @@ void tooie::transform_picker::add_options(recomp::config::Config& cheats, const 
         entries.push_back(recomp::config::ConfigOptionEnumOption(i, std::string("form_") + std::to_string(forms[i].id), forms[i].name));
     }
     cheats.add_enum_option(option, "Transformation",
-        "Play as any of Mumbo's or Humba's forms. The area reloads to apply it. Some forms break in areas the game never expects them in.",
+        "Play as any of Mumbo's or Humba's forms. The area reloads to apply it, and the row goes back to Off. Some forms break in areas the game never expects them in.",
         entries, 0u);
     cheats.add_option_hidden_dependency(option, master_option, false);
     cheats.add_option_change_callback(option,
@@ -88,8 +109,12 @@ void tooie::transform_picker::add_options(recomp::config::Config& cheats, const 
                 return;
             }
             fprintf(stderr, "[transform] picker changed to entry %u\n", *idx);
-            // Off goes back to the normal form, but only when something was picked before.
+            // Off goes back to the normal form, but only when something was picked before (and not when
+            // the row is put back to Off after a reload).
             if (*idx == 0) {
+                if (clearing_row.exchange(false)) {
+                    return;
+                }
                 if (was != nullptr && *was > 0) {
                     pending_form = normal_form;
                 }
@@ -165,6 +190,8 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
     if (!tooie::debug::can_warp()) {
         pending_form = 0;
         pending_from_room = false;
+        // Dropped (no save file is being played), so the row does not keep showing it.
+        row_to_off();
         return;
     }
     // A map change is already under way: try again next frame.
@@ -177,6 +204,8 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         const uint32_t cur_player = MEM_W(0, player_table);
         if (cur_player != 0 && MEM_B(0x29, MEM_W(0xA0, (gpr)(int32_t)cur_player)) == form) {
+            // Already in that form: nothing to reload, but the row still goes back to Off.
+            row_to_off();
             return;
         }
     }
@@ -201,4 +230,5 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
     ctx->r6 = 1;
     func_800A7990(rdram, ctx);
     *ctx = saved;
+    row_to_off();
 }

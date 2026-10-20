@@ -50,6 +50,16 @@ switching it off doesn't unlearn them.
 
 **Transformation**: choose a form from the list and the area you are in reloads
 with you in it. It comes back in at the entrance you used, not where you were
-standing. Some forms break in areas the game never expects them in. Choosing
-Off after a form puts you back as Banjo-Kazooie and reloads the area the same
-way. The list is a drop-down.
+standing. Some forms break in areas the game never expects them in. Once the
+area starts reloading the row goes back to Off by itself (it also does if you
+pick the form you already are); pick Banjo-Kazooie (BK) to change back. The list is a
+drop-down.
+
+**Enemy spawner** (Enemies): pick an enemy from the drop-down and press Spawn
+beside it. Each press puts one in front of Banjo, facing him (while the menu
+pauses the game, they appear when it closes). The list is every
+enemy in the game's spawn-by-id table. Enemies marked "(own world)" crashed
+when spawned outside the world they belong to (they follow routes or use props
+that only exist there), so use those in their own world. Gruntlings and other
+enemies the game builds from shared data are not in the table, so they are not
+in the list. Code: `src/gameplay/enemy_spawner.cpp`.

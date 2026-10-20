@@ -888,6 +888,14 @@ func = "baswim_entrypoint_11"
 before_vram = 0x80800380
 text = "tooie_swim_turn(rdram, ctx);"
 
+# bafly_entrypoint_9 adds the stick's turn to Banjo's target heading once per game frame
+# in flight; above 30 FPS the turn ($f16) is scaled to the frame's time
+# (src/game/game_frame_rate.cpp).
+[[patches.hook]]
+func = "bafly_entrypoint_9"
+before_vram = 0x80800554
+text = "tooie_fly_turn(rdram, ctx);"
+
 # func_8080156C_gczoombox steps a talking-head portrait's mouth and blink once
 # per game frame ($a0 = the box). Above 30 FPS it is skipped until 1/30 s of
 # game time has gone by for that box (src/game/game_frame_rate.cpp).
@@ -1191,7 +1199,8 @@ before_vram = 0x800E3DAC
 text = "tooie_sun_shadow_cull_box(rdram, ctx);"
 
 # The model func_800DE498 settled on (0x10C($sp)), kept so an actor's shadow redraws that model
-# instead of fetching it a second time this frame (which unbalanced the model cache).
+# instead of fetching it a second time this frame (which unbalanced the model cache). The draw
+# callback has run here, so the shadow pass also clears the point list the callback set.
 [[patches.hook]]
 func = "func_800DE498"
 before_vram = 0x800DE774
@@ -1234,6 +1243,21 @@ text = "tooie_player_hit_begin(rdram, ctx);"
 func = "func_80099B94"
 before_vram = 0x8009AB54
 text = "tooie_player_hit_state(rdram, ctx);"
+
+# General > Gameplay > Enemy aim (src/gameplay/damage_mods.cpp): func_8010D12C(player, out, lead, point) is
+# the game's own "where will the player be" (Klungo's potion, the lava gargoyle, the fantasy eyeball);
+# $a2, the lead in seconds, is lengthened at its entry.
+[[patches.hook]]
+func = "func_8010D12C"
+before_vram = 0x8010D12C
+text = "tooie_enemy_aim(rdram, ctx);"
+
+# func_8010D09C(player, out, lead) is the same prediction without the point lookup (balloon bomb, dino foot,
+# Gruntilda's fireball, boxing glove and others, 11 callers); its lead ($a2) is lengthened the same way.
+[[patches.hook]]
+func = "func_8010D09C"
+before_vram = 0x8010D09C
+text = "tooie_enemy_aim(rdram, ctx);"
 
 # Cheats > One-hit enemies: the damage an enemy hit handler takes from the enemy's health byte becomes 255.
 [[patches.hook]]
