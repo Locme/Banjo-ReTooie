@@ -1422,7 +1422,7 @@ index 84f4e7c..d6ef175 100644
  
          // The expected size and order for the elements in each array are:
 diff --git a/src/hle/rt64_rdp_tmem.cpp b/src/hle/rt64_rdp_tmem.cpp
-index 6051f4e..6869d51 100644
+index 6051f4e..0d64b44 100644
 --- a/src/hle/rt64_rdp_tmem.cpp
 +++ b/src/hle/rt64_rdp_tmem.cpp
 @@ -6,6 +6,7 @@
@@ -1433,7 +1433,7 @@ index 6051f4e..6869d51 100644
  
  #include "xxHash/xxh3.h"
  
-@@ -14,8 +15,47 @@
+@@ -14,16 +15,59 @@
  #include "rt64_state.h"
  
  namespace RT64 {
@@ -1481,7 +1481,11 @@ index 6051f4e..6869d51 100644
      void TextureManager::uploadEmpty(State *state, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint64_t replacementHash) {
          if (hashSet.find(replacementHash) == hashSet.end()) {
              hashSet.insert(replacementHash);
-@@ -24,6 +64,7 @@ namespace RT64 {
+             textureCache->queueGPUUploadTMEM(replacementHash, creationFrame, nullptr, 0, width, height, 0, LoadTile(), false);
+         }
++        else {
++            textureCache->touchTexture(replacementHash, creationFrame);
++        }
      }
  
      uint64_t TextureManager::uploadTMEM(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t byteOffset, uint16_t byteCount, uint16_t width, uint16_t height, uint32_t tlut) {
@@ -1489,7 +1493,17 @@ index 6051f4e..6869d51 100644
          XXH3_state_t xxh3;
          XXH3_64bits_reset(&xxh3);
          const uint8_t *TMEM = reinterpret_cast<const uint8_t *>(state->rdp->TMEM);
-@@ -50,6 +91,7 @@ namespace RT64 {
+@@ -35,6 +79,9 @@ namespace RT64 {
+             hashSet.insert(hash);
+             textureCache->queueGPUUploadTMEM(hash, creationFrame, TMEM, RDP_TMEM_BYTES, width, height, 0, LoadTile(), false);
+         }
++        else {
++            textureCache->touchTexture(hash, creationFrame);
++        }
+         
+         // Dump memory contents into a file if the process is active.
+         if (!state->dumpingTexturesDirectory.empty()) {
+@@ -50,12 +97,16 @@ namespace RT64 {
      }
  
      uint64_t TextureManager::uploadTexture(State *state, const LoadTile &loadTile, TextureCache *textureCache, uint64_t creationFrame, uint16_t width, uint16_t height, uint32_t tlut) {
@@ -1497,7 +1511,16 @@ index 6051f4e..6869d51 100644
          const uint8_t *TMEM = reinterpret_cast<const uint8_t *>(state->rdp->TMEM);
          uint64_t hash = TMEMHasher::hash(TMEM, loadTile, width, height, tlut, TMEMHasher::CurrentHashVersion);
          if (hashSet.find(hash) == hashSet.end()) {
-@@ -187,6 +229,11 @@ namespace RT64 {
+             hashSet.insert(hash);
+             textureCache->queueGPUUploadTMEM(hash, creationFrame, TMEM, RDP_TMEM_BYTES, width, height, tlut, loadTile, true);
+         }
++        else {
++            textureCache->touchTexture(hash, creationFrame);
++        }
+ 
+         // Dump memory contents into a file if the process is active.
+         if (!state->dumpingTexturesDirectory.empty()) {
+@@ -187,6 +238,11 @@ namespace RT64 {
              dumpTileStream << std::setw(4) << jroot << std::endl;
              dumpTileStream.close();
          }
@@ -10124,7 +10147,7 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..8126772 100644
+index 0848f3e..7095706 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -20,6 +20,8 @@
@@ -10246,7 +10269,49 @@ index 0848f3e..8126772 100644
      bool TextureMap::use(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf) {
          textureScale = IdentityScale;
          hasMipmaps = false;
-@@ -352,6 +427,7 @@ namespace RT64 {
+@@ -314,8 +389,10 @@ namespace RT64 {
+         }
+ 
+         // Remove the existing entry from the list if it exists.
++        // Banjo-Tooie: keep a later use already marked by touch(), so drawing an older frame doesn't age the texture.
+         AccessList::iterator listIt = listIterators[textureIndex];
+         if (listIt != accessList.end()) {
++            submissionFrame = std::max(submissionFrame, listIt->second);
+             accessList.erase(listIt);
+         }
+ 
+@@ -325,6 +402,30 @@ namespace RT64 {
+         return true;
+     }
+ 
++    // Banjo-Tooie: the display list parser only uploads a texture whose hash it hasn't seen, and eviction runs at the
++    // end of each parse, before that frame is drawn. A texture last drawn long ago and used again by the frame just
++    // parsed was evicted there and that frame drew it blank (a white box on a talking head's mouth shapes above 30 FPS).
++    // The parser marks each texture it uses with its frame so eviction counts that use.
++    void TextureMap::touch(uint64_t hash, uint64_t submissionFrame) {
++        const auto it = hashMap.find(hash);
++        if (it == hashMap.end()) {
++            return;
++        }
++
++        const uint32_t textureIndex = it->second;
++        AccessList::iterator listIt = listIterators[textureIndex];
++        if (listIt != accessList.end()) {
++            if (listIt->second >= submissionFrame) {
++                return;
++            }
++
++            accessList.erase(listIt);
++        }
++
++        accessList.push_front({ textureIndex, submissionFrame });
++        listIterators[textureIndex] = accessList.begin();
++    }
++
+     bool TextureMap::evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes) {
+         evictedHashes.clear();
+ 
+@@ -352,6 +453,7 @@ namespace RT64 {
                  listIterators[textureIndex] = accessList.end();
                  hashMap.erase(textureHash);
                  evictedHashes.push_back(textureHash);
@@ -10254,7 +10319,7 @@ index 0848f3e..8126772 100644
                  it = decltype(it)(accessList.erase(std::next(it).base()));
  
                  // If a texture replacement was used for this texture, decrease the reference in the map.
-@@ -976,12 +1052,22 @@ namespace RT64 {
+@@ -976,12 +1078,22 @@ namespace RT64 {
          std::vector<StreamResult> streamResultQueueCopy;
          std::vector<TextureMapAddition> textureMapAdditions;
          std::vector<ReplacementMapAddition> replacementMapAdditions;
@@ -10277,7 +10342,7 @@ index 0848f3e..8126772 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1077,15 @@ namespace RT64 {
+@@ -991,10 +1103,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -10295,7 +10360,7 @@ index 0848f3e..8126772 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1174,6 +1265,50 @@ namespace RT64 {
+@@ -1174,6 +1291,50 @@ namespace RT64 {
                          bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
                          replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
                      }
@@ -10346,7 +10411,7 @@ index 0848f3e..8126772 100644
                  }
                  
                  // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
-@@ -1222,6 +1357,24 @@ namespace RT64 {
+@@ -1222,6 +1383,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -10371,7 +10436,7 @@ index 0848f3e..8126772 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1383,7 @@ namespace RT64 {
+@@ -1230,6 +1409,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -10379,7 +10444,7 @@ index 0848f3e..8126772 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1242,6 +1396,14 @@ namespace RT64 {
+@@ -1242,6 +1422,14 @@ namespace RT64 {
                          textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
                      }
  
@@ -10394,7 +10459,7 @@ index 0848f3e..8126772 100644
                      textureMap.replacementMap.evict(textureMap.evictedTextures);
                  }
  
-@@ -1258,6 +1420,110 @@ namespace RT64 {
+@@ -1258,6 +1446,110 @@ namespace RT64 {
          }
      }
  
@@ -10505,7 +10570,7 @@ index 0848f3e..8126772 100644
      void TextureCache::queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM) {
          assert(!decodeTMEM || ((width > 0) && (height > 0)));
  
-@@ -1317,6 +1583,11 @@ namespace RT64 {
+@@ -1317,6 +1609,16 @@ namespace RT64 {
          return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
      }
  
@@ -10514,14 +10579,19 @@ index 0848f3e..8126772 100644
 +        return textureMap.useHeight(hash, submissionFrame, textureIndex, textureDimensions);
 +    }
 +
++    void TextureCache::touchTexture(uint64_t hash, uint64_t submissionFrame) {
++        std::unique_lock lock(textureMapMutex);
++        textureMap.touch(hash, submissionFrame);
++    }
++
      bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex) {
          interop::float2 textureScale;
          interop::float3 textureDimensions;
 diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
-index 9131697..ec4c1d6 100644
+index 9131697..1500356 100644
 --- a/src/render/rt64_texture_cache.h
 +++ b/src/render/rt64_texture_cache.h
-@@ -137,12 +137,20 @@ namespace RT64 {
+@@ -137,13 +137,22 @@ namespace RT64 {
          std::vector<Texture *> evictedTextures;
          ReplacementMap replacementMap;
          bool replacementMapEnabled;
@@ -10540,9 +10610,11 @@ index 9131697..ec4c1d6 100644
 +        void setHeight(uint64_t hash, uint64_t creationFrame, Texture *texture);
 +        bool useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions);
          bool use(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf);
++        void touch(uint64_t hash, uint64_t submissionFrame);
          bool evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes);
          void incrementLock();
-@@ -151,6 +159,16 @@ namespace RT64 {
+         void decrementLock();
+@@ -151,6 +160,16 @@ namespace RT64 {
          size_t getMaxIndex() const;
      };
  
@@ -10559,7 +10631,7 @@ index 9131697..ec4c1d6 100644
      struct TextureCache {
          struct StreamDescription {
              uint32_t fileSystemIndex = 0;
-@@ -205,6 +223,11 @@ namespace RT64 {
+@@ -205,6 +224,11 @@ namespace RT64 {
          std::vector<std::unique_ptr<RenderBuffer>> tmemUploadResources;
          std::vector<std::unique_ptr<RenderBuffer>> replacementUploadResources;
          std::vector<std::unique_ptr<TextureDecodeDescriptorSet>> descriptorSets;
@@ -10571,7 +10643,7 @@ index 9131697..ec4c1d6 100644
          std::mutex uploadQueueMutex;
          std::condition_variable uploadQueueChanged;
          std::condition_variable uploadQueueFinished;
-@@ -233,11 +256,17 @@ namespace RT64 {
+@@ -233,11 +257,19 @@ namespace RT64 {
          TextureCache(RenderWorker *directWorker, RenderWorker *copyWorker, uint32_t threadCount, const ShaderLibrary *shaderLibrary);
          ~TextureCache();
          void uploadThreadLoop();
@@ -10584,6 +10656,8 @@ index 9131697..ec4c1d6 100644
          void addResolvedPaths(uint64_t hash, uint32_t width, uint32_t height, uint32_t tlut, const LoadTile &loadTile, const std::vector<uint8_t> &bytesTMEM, bool decodeTMEM, std::vector<ReplacementResolvedPath> &resolvedPaths, uint64_t exclusiveDbHash = 0);
          bool useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf);
          bool useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex);
++        // Banjo-Tooie: marks a texture as used by a frame that is parsed but not drawn yet, so it isn't evicted before it is drawn.
++        void touchTexture(uint64_t hash, uint64_t submissionFrame);
 +        // Banjo-Tooie: the texture pack's height map for a replaced texture, if it has one (parallax mapping).
 +        bool useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions);
          bool addReplacement(uint64_t hash, const std::string &relativePath, ReplacementShift shift);

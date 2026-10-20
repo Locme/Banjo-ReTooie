@@ -155,6 +155,12 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 ## rt64.patch
 
+* **Textures kept until drawn** (`src/render/rt64_texture_cache.cpp/.h`, `src/hle/rt64_rdp_tmem.cpp`):
+  the display list parser uploads only textures whose hash it hasn't seen, and evicts old textures at
+  the end of each parse, before that frame is drawn. A texture unused for a while and used again by the
+  frame just parsed was evicted there, so that frame drew it blank (white talking-head boxes above 30
+  FPS). The parser now marks each known texture it uses (`TextureCache::touchTexture`), and a draw of an
+  older frame no longer moves a texture's last use back.
 * **Render to RAM switch** (`src/common/rt64_emulator_configuration.cpp/.h`, `src/hle/rt64_state.cpp`):
   `SetRenderToRAM` turns RT64's copy of each frame back into RDRAM on or off while the game runs
   (Graphics > Frame Read-Back, `src/display/frame_readback.cpp`, off by default). With it on, the

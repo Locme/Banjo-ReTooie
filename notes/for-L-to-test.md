@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T477 Talking heads: no white box at any frame rate
+- Asked: 2026-10-20 20:11 UTC
+- Build: main
+- Steps:
+  1. Set Game Frame Rate to 60, then talk to Klungo, Humba or any character with a talking head
+  2. Watch the head while they talk for a while
+  3. Repeat at 120 or 175 and at 30
+- Look for: The head never flashes a white box, on any character or frame rate. Also no textures going missing anywhere else
+- Status: waiting for L
+
 ## T476 Deep snow speed and soft dents; Icy Side crash with the game paused
 - Asked: 2026-10-20 19:56 UTC
 - Build: main @ ac2dccb
