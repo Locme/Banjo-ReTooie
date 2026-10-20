@@ -327,68 +327,10 @@ namespace {
         if (spot < 0 || spot >= spots || !tooie::rdram::valid_ptr(state)) {
             return;
         }
-        double w[spots][3];
-        bool have[spots] = {};
-        for (int i = 0; i < spots; i++) {
-            if (read_byte(rdram, state + state_spot_flags + i) == 0) {
-                continue;
-            }
-            for (int k = 0; k < 3; k++) {
-                const float f = tooie::rdram::read_float(rdram, state + state_spots + 12 * i + 4 * k);
-                if (!std::isfinite(f)) {
-                    return;
-                }
-                w[i][k] = f;
-            }
-            const Place& p = places[spot][i];
-            have[i] = i == spot || (std::fabs(p.x) < 400.0f && std::fabs(p.y) < 225.0f);
-        }
-        if (!have[spot]) {
-            return;
-        }
-        // Screen offsets from the hand's spot against world offsets: S = D * Mt, fitted with a little ridge so the
-        // direction the spots do not vary in (their plane's normal) stays at zero.
-        double dtd[3][3] = {}, dts[3][2] = {};
-        int n = 0;
-        for (int i = 0; i < spots; i++) {
-            if (!have[i] || i == spot) continue;
-            const double d[3] = { w[i][0] - w[spot][0], w[i][1] - w[spot][1], w[i][2] - w[spot][2] };
-            const double sv[2] = { places[spot][i].x - places[spot][spot].x, places[spot][i].y - places[spot][spot].y };
-            for (int a = 0; a < 3; a++) {
-                for (int b = 0; b < 3; b++) dtd[a][b] += d[a] * d[b];
-                for (int b = 0; b < 2; b++) dts[a][b] += d[a] * sv[b];
-            }
-            n++;
-        }
-        if (n < 2) {
-            return;
-        }
-        const double ridge = 1e-6 * (dtd[0][0] + dtd[1][1] + dtd[2][2]) + 1e-9;
-        for (int a = 0; a < 3; a++) dtd[a][a] += ridge;
-        // Mt columns: world per screen unit mapping, Mt[a][b] = (dtd^-1 * dts)[a][b].
-        double mt[3][2];
-        for (int b = 0; b < 2; b++) {
-            const double rhs[3] = { dts[0][b], dts[1][b], dts[2][b] };
-            double out[3];
-            double m[3][3];
-            memcpy(m, dtd, sizeof(m));
-            if (!solve3(m, rhs, out)) return;
-            for (int a = 0; a < 3; a++) mt[a][b] = out[a];
-        }
-        // Screen = Mt^T * world offset, so the world offset for a screen offset t (least norm, in the spots' plane):
-        // dw = M^T (M M^T)^-1 t with M = Mt^T (2x3).
-        double mm[2][2] = {};
-        for (int a = 0; a < 2; a++)
-            for (int b = 0; b < 2; b++)
-                for (int k = 0; k < 3; k++) mm[a][b] += mt[k][a] * mt[k][b];
-        const double det = mm[0][0] * mm[1][1] - mm[0][1] * mm[1][0];
-        if (std::fabs(det) < 1e-12) {
-            return;
-        }
-        // The game does not rewrite the vector while the hand rests (a first version added the whole distance from the
-        // spot's place every frame, and the hand ran away: logged by L 2026-10-20), so it is moved by how far the
-        // cursor has gone since the last frame; from the spot's place when there is no earlier frame or the spot
-        // changed (the camera has panned, the hand is back at its spot).
+        // The cursor's move in the screen units of the places table: since the last frame, or from the spot's place when
+        // there is no earlier frame or the spot changed (the camera has panned and the hand is back at its spot). The
+        // game does not rewrite the vector while the hand rests (a first version added the whole distance from the
+        // spot's place every frame and the hand ran away: logged by L 2026-10-20).
         double t[2];
         if (free_last_spot == spot) {
             t[0] = sx - free_last_x;
@@ -400,22 +342,104 @@ namespace {
         free_last_spot = spot;
         free_last_x = sx;
         free_last_y = sy;
-        const double u[2] = { (mm[1][1] * t[0] - mm[0][1] * t[1]) / det, (-mm[1][0] * t[0] + mm[0][0] * t[1]) / det };
+
         float v[3];
         for (int k = 0; k < 3; k++) {
             v[k] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * k);
             if (!std::isfinite(v[k])) {
                 return;
             }
-            // Never further out than the hand's own depth in each direction, so a wrong fit cannot send it far off.
-            const double limit = 8.0 * std::fabs(v[2]) + 800.0;
-            v[k] = (float)std::clamp((double)v[k] + mt[k][0] * u[0] + mt[k][1] * u[1], -limit, limit);
-            if (!std::isfinite(v[k])) {
-                return;
+        }
+        const double depth = std::fabs(v[2]);
+
+        // The map from a screen move to a move of the vector (3x2, per unit of depth). Fitted from the spots that have
+        // a world position and are on screen; the files (spots 0 to 2) have too few, so the last good fit is reused,
+        // or the camera's own shape (x right, y up, 45 degree view) before there is one.
+        static double saved[3][2] = {};
+        static bool have_saved = false;
+        double wm[3][2] = {};
+        bool fitted = false;
+        {
+            double w[spots][3];
+            bool have[spots] = {};
+            for (int i = 0; i < spots; i++) {
+                if (read_byte(rdram, state + state_spot_flags + i) == 0) {
+                    continue;
+                }
+                bool ok = true;
+                for (int k = 0; k < 3; k++) {
+                    const float f = tooie::rdram::read_float(rdram, state + state_spots + 12 * i + 4 * k);
+                    ok = ok && std::isfinite(f);
+                    w[i][k] = f;
+                }
+                const Place& p = places[spot][i];
+                have[i] = ok && (i == spot || (std::fabs(p.x) < 400.0f && std::fabs(p.y) < 225.0f));
+            }
+            double dtd[3][3] = {}, dts[3][2] = {};
+            int n = 0;
+            if (have[spot]) {
+                for (int i = 0; i < spots; i++) {
+                    if (!have[i] || i == spot) continue;
+                    const double d[3] = { w[i][0] - w[spot][0], w[i][1] - w[spot][1], w[i][2] - w[spot][2] };
+                    const double sv[2] = { places[spot][i].x - places[spot][spot].x, places[spot][i].y - places[spot][spot].y };
+                    for (int a2 = 0; a2 < 3; a2++) {
+                        for (int b2 = 0; b2 < 3; b2++) dtd[a2][b2] += d[a2] * d[b2];
+                        for (int b2 = 0; b2 < 2; b2++) dts[a2][b2] += d[a2] * sv[b2];
+                    }
+                    n++;
+                }
+            }
+            if (n >= 2) {
+                // Screen offsets against world offsets: S = D * X, with a little ridge so the direction the spots do not
+                // vary in (their plane's normal) stays at zero.
+                const double ridge = 1e-6 * (dtd[0][0] + dtd[1][1] + dtd[2][2]) + 1e-9;
+                for (int a2 = 0; a2 < 3; a2++) dtd[a2][a2] += ridge;
+                double x[3][2];
+                bool ok = true;
+                for (int b2 = 0; b2 < 2 && ok; b2++) {
+                    const double rhs[3] = { dts[0][b2], dts[1][b2], dts[2][b2] };
+                    double out[3];
+                    double m[3][3];
+                    memcpy(m, dtd, sizeof(m));
+                    ok = solve3(m, rhs, out);
+                    for (int a2 = 0; a2 < 3; a2++) x[a2][b2] = out[a2];
+                }
+                // World offset for a screen offset t, least norm: X (X^T X)^-1 t.
+                double xx[2][2] = {};
+                for (int a2 = 0; a2 < 2; a2++)
+                    for (int b2 = 0; b2 < 2; b2++)
+                        for (int k = 0; k < 3; k++) xx[a2][b2] += x[k][a2] * x[k][b2];
+                const double det = xx[0][0] * xx[1][1] - xx[0][1] * xx[1][0];
+                if (ok && std::fabs(det) > 1e-12 && depth > 1.0) {
+                    const double inv[2][2] = { { xx[1][1] / det, -xx[0][1] / det }, { -xx[1][0] / det, xx[0][0] / det } };
+                    for (int k = 0; k < 3; k++)
+                        for (int c = 0; c < 2; c++) wm[k][c] = x[k][0] * inv[0][c] + x[k][1] * inv[1][c];
+                    fitted = true;
+                    for (int k = 0; k < 3; k++)
+                        for (int c = 0; c < 2; c++) saved[k][c] = wm[k][c] / depth;
+                    have_saved = true;
+                }
+            }
+            if (!fitted) {
+                if (have_saved) {
+                    for (int k = 0; k < 3; k++)
+                        for (int c = 0; c < 2; c++) wm[k][c] = saved[k][c] * depth;
+                } else {
+                    const double per_unit = depth * 0.8284 / 450.0;   // 2 * tan(22.5 degrees) over the 450 unit height
+                    wm[0][0] = per_unit;
+                    wm[1][1] = -per_unit;
+                }
             }
         }
+        double dw[3];
+        for (int k = 0; k < 3; k++) dw[k] = wm[k][0] * t[0] + wm[k][1] * t[1];
+        for (int k = 0; k < 3; k++) {
+            // Never further out than a few times the hand's own depth, so a wrong map cannot send it far off.
+            const double limit = 8.0 * depth + 800.0;
+            v[k] = (float)std::clamp((double)v[k] + dw[k], -limit, limit);
+        }
         if (logging()) {
-            fprintf(stderr, "[menu-mouse] free hand spot %d n %d vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, n, v[0], v[1], v[2], sx, sy);
+            fprintf(stderr, "[menu-mouse] free hand spot %d %s vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, fitted ? "fit" : (have_saved ? "saved" : "default"), v[0], v[1], v[2], sx, sy);
         }
         for (int k = 0; k < 3; k++) {
             tooie::rdram::write_float(rdram, menu + hand_vec + 4 * k, v[k]);
