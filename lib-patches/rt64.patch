@@ -6097,7 +6097,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c09edb7
+index 0000000..19e0107
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,2725 @@
@@ -7584,8 +7584,8 @@ index 0000000..c09edb7
 +
 +        // Snow doesn't keep the sharp outline of what pressed it: round each cell reached into, the print's walls
 +        // slope up over a few cells, rounding it off.
-+        const int32_t wallReach = std::max(int32_t(std::lround(6.25f / trail.cell)), 1);
-+        const float wallRise = 30.0f;
++        const int32_t wallReach = std::max(int32_t(std::lround(10.0f / trail.cell)), 1);
++        const float wallRise = 40.0f;
 +        // (Only from the print's edge: inside it, the walls would only land on more of the print.)
 +        auto edge = [&](uint32_t k) {
 +            const int32_t cx = int32_t(k % SnowGridSize), cz = int32_t(k / SnowGridSize);
@@ -12485,7 +12485,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..5284c64 100644
+index e7895c3..3fcada8 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -12554,7 +12554,7 @@ index e7895c3..5284c64 100644
 +        // it is (snowTessGround).
 +        // The ground pass (RASTER_SNOW_GROUND) is the ground as it is, left out where the trail goes down below it.
 +        const bool shaped = SnowTessShape(grassWorld, cross(grassDx, grassDy),
-+            0.5f * SnowTrailSegment(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
++            SnowTrailBlur(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
 +        if ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) {
 +            if (shaped && (snowSample.height < -0.5f)) {
 +                return false;
@@ -16210,10 +16210,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..030d7b3
+index 0000000..643a9f2
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,298 @@
 +//
 +// RT64
 +//
@@ -16409,13 +16409,20 @@ index 0000000..030d7b3
 +    return FrParams.snowGrid.x * 2.0f * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
 +}
 +
++// How far the tessellated snow's trail is smoothed over at a distance from the camera (world units): by the domain
++// shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
++// a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
++float SnowTrailBlur(float cameraDistance) {
++    return max(SnowTrailSegment(cameraDistance) * 0.75f, 4.0f);
++}
++
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with the
 +// ground's normal there, any length) in s.height, s.shellY the same (the pixel is on the snow's surface). False where
 +// no snow lies on it: a wall, or past the snow's reach; s.height is then still how far that ground is raised with the
 +// snow round it (its untouched height there, thinning out by the reach), so the raised ground has no cracks where a
 +// wall or the snow's end meets it. Both the
-+// domain shader (where to raise the surface to, with the trail smoothed over blur world units, as far apart as its
-+// vertices are) and the pixel shader (how to shade it, smoothed a little less so the cells' edges don't show) ask.
++// domain shader (where to raise the surface to) and the pixel shader (how to shade it) ask, both with the trail smoothed
++// over blur world units (SnowTrailBlur).
 +bool SnowTessShape(float3 ground, float3 normal, float blur, out SnowSample s) {
 +    s = (SnowSample)0;
 +    const bool why = FrParams.snowGrid.w > 3.5f;
@@ -16507,7 +16514,7 @@ index 0000000..030d7b3
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..ad2733f
+index 0000000..eb8a355
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
 @@ -0,0 +1,166 @@
@@ -16661,13 +16668,13 @@ index 0000000..ad2733f
 +
 +    // Up to the snow's height there, as RasterVS raises a shell (snowClipUp is the snow's full height straight up),
 +    // then through the draw's screen scale and offset as the position already went.
-+    // (The trail smoothed over about as far as the vertices over it are apart, so its trench has no jagged spikes; by
++    // (The trail smoothed over at least as far as the vertices over it are apart, SnowTrailBlur, so its trench has no spikes; by
 +    // the distance from the camera only, so a vertex shared by two patches lands in the same place for both.)
 +    // (Below the ground where the trail goes down through a game's own snow layer to Banjo's feet. The ground pass,
 +    // RASTER_SNOW_GROUND, stays where it is.)
 +    SnowSample s;
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    SnowTessShape(v.furAnchor.xyz, p.normal, 0.75f * SnowTrailSegment(distance(v.furAnchor.xyz, camera)), s);
++    SnowTessShape(v.furAnchor.xyz, p.normal, SnowTrailBlur(distance(v.furAnchor.xyz, camera)), s);
 +    const float height = ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) ? 0.0f : s.height;
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;

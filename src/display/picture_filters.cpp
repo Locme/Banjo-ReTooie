@@ -372,6 +372,9 @@ namespace {
         // Glazed and gold tiles (the parallax list's other tiles are stone paving).
         0x1cf577bcf120b2b6, 0x31cce062f51590d7, 0x51780acfdf66aedb, 0x563e4f62f46a44d7,
         0x5841e6ebe2f92c7a, 0x7239dd5a1ac6abf6, 0x7fd51000b2716945, 0xc9d07c3b79818c1f,
+        // Notes: the gold 30-triangle model drawn only where notes are (Mayahem Temple 2026-10-20; not yet seen
+        // reflecting headless).
+        0x8962042db2fc940b,
         // Glossy paint (1)
         0x12c31c68cdc11203,
     };

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T465 Mix rate High: music at normal speed
+- Asked: 2026-10-20 18:28 UTC
+- Build: main
+- Steps:
+  1. Start the game and play any area with music
+  2. Sound > Mix rate: pick High (44 kHz) while the music plays
+  3. Pick Original again
+- Look for: The music keeps its normal speed and pitch after each switch, and sound effects still play
+- Status: waiting for L
+
 ## T464 Deep snow: dragon shots, far snow with LOD, prints that stay, ice left alone
 - Asked: 2026-10-20 17:19 UTC
 - Build: main
