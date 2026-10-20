@@ -15091,10 +15091,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..b9773f6
+index 0000000..9244d53
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3545 @@
+@@ -0,0 +1,3613 @@
 +//
 +// RT64
 +//
@@ -15896,6 +15896,44 @@ index 0000000..b9773f6
 +    return lerp(1.0f, keep, distanceFade);
 +}
 +
++// Banjo's contact shadow, traced: while the sun shadows leave him out (the HD shadows give him one), the ground and
++// anything low beside him is shadowed by him straight overhead: three rays a little apart, up from the surface, a
++// hit within his height darkening it, softer the further away he is. His shadow stays under him as he moves.
++float BanjoContactShadow(float3 center, float3 normal) {
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++    if (gConstants.rippleAge.w < -1e8f) {
++        return 1.0f;
++    }
++    const float3 world = ViewToWorldPoint(center);
++    const float2 across = world.xz - banjo.xz;
++    const float reach = 170.0f;
++    const float horizontal = length(across);
++    if ((horizontal > reach) || (world.y > banjo.y + 40.0f) || (world.y < banjo.y - 260.0f)) {
++        return 1.0f;
++    }
++    const float3 up = normalize(ViewToWorldDirection(normalize(gConstants.worldY.xyz)));
++    const float3 side = normalize(cross(up, float3(0.0f, 0.0f, 1.0f)) + float3(0.0f, 1e-4f, 0.0f));
++    const float3 along = cross(up, side);
++    const float3 start = ViewToWorldPoint(center + normal * 3.0f);
++    float blocked = 0.0f;
++    [unroll] for (int k = 0; k < 3; k++) {
++        const float angle = float(k) * 2.0943951f;
++        const float3 direction = normalize(up + (side * cos(angle) + along * sin(angle)) * 0.12f);
++        RayDesc ray;
++        ray.Origin = start;
++        ray.Direction = direction;
++        ray.TMin = 0.0f;
++        ray.TMax = 320.0f;
++        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        while (query.Proceed()) {
++        }
++        blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (1.0f / 3.0f) : 0.0f;
++    }
++    // The shadow fades out towards its edge.
++    return 1.0f - 0.45f * blocked * saturate(1.0f - horizontal / reach);
++}
++
 +// The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
 +// spiral, the same ones SSGI's march uses, so IndirectAt's gather still sees all 32), traced through gSceneBVH.
 +float3 IndirectDirection(float3 normal, uint index) {
@@ -15973,6 +16011,26 @@ index 0000000..b9773f6
 +        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f) * far;
 +    }
 +    return light * 0.5f;
++}
++
++// Traced refraction: where the eye's ray, bent as it enters the water (a surface pointing up at the viewer, an index
++// of 1.33), meets the floor under it, as a pixel of the picture (the floor drawn there is what shows through);
++// the unbent place when it meets nothing near.
++int2 TracedRefractedPixel(float3 surface, float3 normal, int2 fallback) {
++    const float3 bent = refract(normalize(surface), normal, 0.75f);
++    if (dot(bent, bent) < 0.5f) {
++        return fallback;
++    }
++    const float3 origin = surface + bent * 0.5f;
++    const float t = TraceDistance(origin, bent, 2500.0f);
++    if (t < 0.0f) {
++        return fallback;
++    }
++    const float3 hit = origin + bent * t;
++    if (hit.z > -1.0f) {
++        return fallback;
++    }
++    return clamp(int2(ViewToPixel(hit)), int2(0, 0), int2(gConstants.projection.zw) - 1);
 +}
 +#endif
 +
@@ -16910,7 +16968,10 @@ index 0000000..b9773f6
 +    // places that are under the water too (otherwise things in front would bleed into it).
 +    const float3 bend = n - up;
 +    const float2 shift = float2(bend.x, -bend.y) * (gConstants.projection.w * 0.05f) * saturate(throughLength / 150.0f) * saturate(800.0f / distance);
-+    const int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
++    int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef RAY_TRACED
++    bent = TracedRefractedPixel(surface, n, bent);
++#endif
 +    float3 below = scene;
 +    float bentWater;
 +    if (LoadWater(bent, bentWater)) {
@@ -17151,7 +17212,10 @@ index 0000000..b9773f6
 +    // Refraction, guarded as Modern water's: only from places that are under the water too.
 +    const float3 bend = n - up;
 +    const float2 shift = float2(bend.x, -bend.y) * (gConstants.projection.w * 0.06f) * saturate(throughLength / 120.0f) * saturate(800.0f / distance);
-+    const int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
++    int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
++#ifdef RAY_TRACED
++    bent = TracedRefractedPixel(surface, n, bent);
++#endif
 +    float3 below = scene;
 +    float bentWater;
 +    if (LoadWater(bent, bentWater)) {
@@ -18409,6 +18473,10 @@ index 0000000..b9773f6
 +        // Not tied to the sun: lamps and fires cast their own in caves and at night.
 +        if (lightShadows) {
 +            keep *= LightShadows(center, normal);
++            const float flags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
++            if (flags > 1.5f) {
++                keep *= BanjoContactShadow(center, normal);
++            }
 +        }
 +#endif
 +    }
