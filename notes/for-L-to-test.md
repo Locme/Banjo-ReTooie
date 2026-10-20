@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T450 Aim trace: find where enemies chase from
+- Asked: 2026-10-20 10:32 UTC
+- Build: claude/project-thread-quqov9
+- Steps:
+  1. General > DEV tab: turn on Aim trace
+  2. Play a minute near ordinary enemies (Uggers, Snapdragons, anything that chases or lunges), getting chased and hit
+  3. Send me logs/aim_trace.txt (in the logs folder next to the exe)
+- Look for: The file appears and fills up (it rewrites every 5 seconds). It changes nothing in the game; turn it off afterwards.
+- Status: waiting for L
+
 ## T449 Mouse in the Start menu and the save select, and no hidden mouse effect with a controller
 - Asked: 2026-10-20 08:30 UTC
 - Build: main
@@ -70,9 +80,9 @@
 - Steps:
   1. Run as Banjo-Kazooie on grass or dirt
   2. Hold Run to start a sprint
-  3. Let go, then start another sprint within 10 seconds
-  4. Wait over 10 seconds and sprint again
-- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 10 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
+  3. Let go, then start another sprint within 5 seconds
+  4. Wait over 5 seconds and sprint again
+- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 5 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
 - Status: waiting for L
 
 ## T442 Interpolation pick mode finds models at Interpolation Original
