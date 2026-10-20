@@ -15129,10 +15129,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..47cc721
+index 0000000..7b9d6ab
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3690 @@
+@@ -0,0 +1,3718 @@
 +//
 +// RT64
 +//
@@ -15951,7 +15951,28 @@ index 0000000..47cc721
 +// through the world's triangles; blocked, the surface is darker the closer the light and the more it faces it. A
 +// couple of rays over a small disc at the light, so the edge has a penumbra. The light's own fitting (a lamp's
 +// shade) doesn't count: the ray stops short of it.
-+float LightShadows(float3 center, float3 normal) {
++// Whether a spot is shut in (a room, a cave): straight up and four ways up at a slant all meet something. The sun
++// doesn't reach in there, and the game's own lighting is already right, so the traced sun shadows leave it alone
++// (otherwise the roof shadowed the whole room, and its walls facing away from the sun darkened too).
++bool Enclosed(float3 worldStart) {
++    const float3 directions[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
++    [loop] for (int k = 0; k < 5; k++) {
++        RayDesc ray;
++        ray.Origin = worldStart;
++        ray.Direction = directions[k];
++        ray.TMin = 0.0f;
++        ray.TMax = 6000.0f;
++        if (!TraceOccluded(ray, 0u)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++// Shadows from the level's lights, and their light (lamp, rgb, added to the scene: a warm glow on what each lights
++// and can see it, so a room's lamps light it).
++float LightShadows(float3 center, float3 normal, out float3 lamp) {
++    lamp = 0.0f;
 +    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
 +    if (count == 0u) {
 +        return 1.0f;
@@ -16000,7 +16021,9 @@ index 0000000..47cc721
 +            blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.5f : 0.0f;
 +        }
 +        keep *= 1.0f - 0.5f * weight * blocked;
++        lamp += float3(1.0f, 0.82f, 0.55f) * (0.7f * weight * weight * (1.0f - blocked));
 +    }
++    lamp *= distanceFade;
 +    return lerp(1.0f, keep, distanceFade);
 +}
 +
@@ -18203,6 +18226,9 @@ index 0000000..47cc721
 +            blocked += TraceOccluded(ray, skipBanjo ? 1u : 0u) ? 1.0f : 0.0f;
 +        }
 +        shadow = blocked / float(Rays);
++        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
++            return 1.0f;
++        }
 +    }
 +#else
 +    const int Steps = 24;
@@ -18555,6 +18581,8 @@ index 0000000..47cc721
 +    }
 +#endif
 +    float keep = 1.0f;
++    // Light the level's lamps add (traced: LightShadows), on the scene's own colour.
++    float3 lamp = 0.0f;
 +    const bool occlusion = AoStrength() > 0.0f;
 +    const bool globalIllumination = (SsgiStrength() > 0.0f) && redraw;
 +    const bool reflections = (SsrStrength() > 0.0f) && redraw && ReflectiveAt(pixel, depth);
@@ -18587,7 +18615,7 @@ index 0000000..47cc721
 +#ifdef RAY_TRACED
 +        // Not tied to the sun: lamps and fires cast their own in caves and at night.
 +        if (lightShadows) {
-+            keep *= LightShadows(center, normal);
++            keep *= LightShadows(center, normal, lamp);
 +            const float flags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
 +            if (flags > 1.5f) {
 +                keep *= BanjoContactShadow(center, normal);
@@ -18814,10 +18842,10 @@ index 0000000..47cc721
 +            scene = Adapt(scene);
 +        }
 +        if (gConstants.fog.w > 0.0f) {
-+            scene = Underwater(scene * keep + rim, length(ViewPosition(pixel, depth)));
++            scene = Underwater(scene * (keep + lamp) + rim, length(ViewPosition(pixel, depth)));
 +            return float4(scene * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +        }
-+        return float4((scene * keep + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
++        return float4((scene * (keep + lamp) + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
 +
 +    return float4(rim * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
