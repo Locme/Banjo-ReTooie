@@ -110,6 +110,11 @@ framework, not from this port's code, so it is not described here.
 
 ## QOL
 
+- **Pause Special Menu** (Menu section): while this menu (Esc) is open during
+  play, the game is paused as if you pressed Start, but without the pause menu
+  or anything else drawn over it, and the music keeps playing. Cutscenes, map
+  changes, the title screen and the file select carry on as before.
+  Default: On (L, 2026-10-19).
 - **Press Start Early in Intro**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
@@ -144,7 +149,8 @@ framework, not from this port's code, so it is not described here.
   room. Humba says her line for the form on the 1st, 3rd, 5th change. Refused,
   with a sound, in the air, swimming, while talking or in a cutscene (the
   submarine is the other way round: it changes in water only). Golden Goliath
-  and Dragon Kazooie are not part of it. Default: Off.
+  and Dragon Kazooie are not part of it. Default: On (since 2026-10-19; a
+  saved Off turns on once).
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.
@@ -561,9 +567,10 @@ as they are.
   Detonator, Van, small or large T-Rex, Banjo-Kazooie).
   Picking one reloads the area you are in, at the entrance you came in by, so
   the new model shows. Some forms break in areas the game never expects them
-  in (missing animations or data). It is a drop-down. Off puts you back as
-  Banjo-Kazooie (and reloads the area) if you had picked a form. Default: Off;
-  the row goes back to Off when Enable cheats is turned off.
+  in (missing animations or data). It is a drop-down. The row goes back to
+  Off by itself once the area reloads with the new form; pick Banjo-Kazooie to
+  change back. Default: Off; the row also goes back to Off when Enable cheats
+  is turned off.
 - **Warp tab** (now in DEV > Additional Tabs): shows the Warp tab in the menu, with a list of places to warp
   to. The Warp Again key (Debug section of the Controls tab) repeats the last
   warp. Its last group, Race Warps (Replay Race), starts one of Canary Mary's four races as

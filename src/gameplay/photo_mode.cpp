@@ -756,8 +756,6 @@ void tooie::photo_mode::start() {
 }
 
 void tooie::photo_mode::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(hide_settings_option, "Hide Settings",
-        "Hides photo mode's filter, exposure, crop and the other photo settings below. Turn it off to change them.", true);
     qol.add_enum_option(look_option, "Photo filter",
         "A colour look for photo mode (F10). Only shown while photo mode is on, and in its screenshots.",
         {
@@ -772,13 +770,13 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {8, "teal_orange", "Teal and orange"},
             {9, "dream", "Dream"},
         },
-        0u);
-    qol.add_number_option(exposure_option, "Photo exposure", "Brightens or darkens photo mode's picture, in tenths of a stop.", -20, 20, 1, 0, false, 0);
-    qol.add_number_option(contrast_option, "Photo contrast", "Photo mode's contrast, in percent.", -50, 50, 5, 0, false, 0);
-    qol.add_number_option(saturation_option, "Photo saturation", "Photo mode's colour strength, in percent. -100 is black and white.", -100, 100, 5, 0, false, 0);
-    qol.add_number_option(warmth_option, "Photo warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0);
-    qol.add_number_option(vignette_option, "Photo vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0);
-    qol.add_number_option(grain_option, "Photo film grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0);
+        0u, true);
+    qol.add_number_option(exposure_option, "Photo exposure", "Brightens or darkens photo mode's picture, in tenths of a stop.", -20, 20, 1, 0, false, 0, true);
+    qol.add_number_option(contrast_option, "Photo contrast", "Photo mode's contrast, in percent.", -50, 50, 5, 0, false, 0, true);
+    qol.add_number_option(saturation_option, "Photo saturation", "Photo mode's colour strength, in percent. -100 is black and white.", -100, 100, 5, 0, false, 0, true);
+    qol.add_number_option(warmth_option, "Photo warmth", "Tints photo mode's picture warmer (up) or cooler (down).", -100, 100, 5, 0, false, 0, true);
+    qol.add_number_option(vignette_option, "Photo vignette", "Darkens the corners of photo mode's picture.", 0, 100, 5, 0, false, 0, true);
+    qol.add_number_option(grain_option, "Photo film grain", "Adds film grain to photo mode's picture.", 0, 100, 5, 0, false, 0, true);
     qol.add_enum_option(crop_option, "Photo crop",
         "Frames photo mode's picture to a shape: outside the frame is shaded, and screenshots keep only the frame.",
         {
@@ -790,7 +788,7 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {5, "4_5", "4:5"},
             {6, "9_16", "9:16"},
         },
-        0u);
+        0u, true);
     qol.add_enum_option(border_option, "Photo border",
         "A frame round photo mode's picture (inside the crop), kept in its screenshots.",
         {
@@ -801,21 +799,17 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
             {4, "jiggy", "Jiggy"},
             {5, "wooden", "Wooden"},
         },
-        0u);
+        0u, true);
     qol.add_number_option(tilt_option, "Photo tilt",
         "Tilts photo mode's camera, in degrees. 0 is level.",
-        -45, 45, 1, 0, false, 0);
+        -45, 45, 1, 0, false, 0, true);
     qol.add_number_option(dof_option, "Photo depth of field",
         "Blurs what is nearer or further than the focus point (the middle of photo mode's picture, unless the photo panel's Focus point row moves it), which stays sharp. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        0, 100, 5, 0, false, 0, true);
     qol.add_bool_option(shutter_option, "Photo shutter",
-        "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true);
+        "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true, true);
     qol.add_bool_option(grid_option, "Photo grid",
-        "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false);
-    for (const std::string* id : { &look_option, &exposure_option, &contrast_option, &saturation_option, &warmth_option,
-            &vignette_option, &grain_option, &crop_option, &border_option, &tilt_option, &dof_option, &shutter_option, &grid_option }) {
-        qol.add_option_hidden_dependency(*id, hide_settings_option, true);
-    }
+        "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false, true);
 }
 
 bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_row) {

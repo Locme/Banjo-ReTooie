@@ -1,5 +1,25 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T447 Flying: turning at 40 FPS and up matches the original game
+- Asked: 2026-10-20 07:49 UTC
+- Build: main @ 7c7f52d
+- Steps:
+  1. Graphics > Game Frame Rate: 120 FPS (then 175, 240 and Uncapped)
+  2. Take off from a flight pad (or Cheats > Fly anywhere) and hold the stick left for a few seconds, then let go
+  3. Set Original and do the same
+- Look for: Turning speed while flying is the same in every mode (a full circle in about 4 seconds), and Banjo stops turning soon after you let go instead of swinging on. Headless: Original, 120, 240 and Uncapped all turned 90 degrees a second with the same 45-degree settle (was 360 a second at 120 and erratic at 240 before).
+- Status: waiting for L
+
+## T446 Enemy aim: Klungo's potions lead you further (Better / Sharp)
+- Asked: 2026-10-20 07:41 UTC
+- Build: claude/project-thread-quqov9
+- Steps:
+  1. General tab > Gameplay > Enemy aim: set Sharp
+  2. Fight Klungo (any of the three fights) and keep running in a straight line
+  3. Set Original and run the same way, then try Better
+- Look for: With Sharp the potions land on or just ahead of you when you run straight; stopping or turning sharply as one flies still dodges it. Original behaves as before. Covers Klungo, lava gargoyles and fantasy eyeballs (the only enemies the game aims ahead for). Not built or run yet: the container has no build, so this needs your first test.
+- Status: waiting for L
+
 ## T445 Deep snow: the game's own snow layer is gone, the trail goes down to Banjo's feet and follows him
 - Asked: 2026-10-20 03:57 UTC
 - Build: main

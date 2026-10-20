@@ -1,4 +1,4 @@
-// Transform anywhere (L, 2026-10-15): QOL > Transform anywhere, off by default.
+// Transform anywhere (L, 2026-10-15): QOL > Transform anywhere, on by default (L, 2026-10-19).
 //
 // The Transform key (Controls tab, Movement; keyboard T and controller LT + Y by default) changes Banjo-Kazooie into the
 // form Humba Wumba gives in the world he is in, where he stands, and changes him back. A world's

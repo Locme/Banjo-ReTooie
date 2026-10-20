@@ -11,7 +11,8 @@
 // unpacks zips that have no folder yet, which the refresh then opens next to the loaded mods. A marker file in
 // that folder remembers which zip (size and date) it came from, so the zip is
 // only unpacked again when it changes. A pack without a mod.json gets a small
-// one so the loader accepts the folder.
+// one so the loader accepts the folder. At startup the window says "Installing Mods"
+// (src/main/boot_screen.cpp) while a zip unpacks, as nothing else is drawn yet.
 
 #include <cstdio>
 #include <filesystem>
@@ -20,12 +21,16 @@
 
 #include "miniz.h"
 #include "librecomp/mods.hpp"
+#include "tooie_boot_screen.h"
 #include "tooie_game.h"
 
 namespace {
     namespace fs = std::filesystem;
 
     constexpr const char* marker_name = ".unpacked_from_zip";
+
+    // Set during the scan at startup: unpacking shows the "Installing Mods" screen.
+    bool show_boot_screen = false;
 
     std::string zip_stamp(const fs::path& zip) {
         std::error_code ec;
@@ -82,10 +87,13 @@ namespace {
         return found;
     }
 
-    bool unpack(mz_zip_archive& zip, const std::string& root, const fs::path& target) {
+    bool unpack(mz_zip_archive& zip, const std::string& root, const fs::path& target, const std::string& mod_name) {
         std::error_code ec;
         mz_uint count = mz_zip_reader_get_num_files(&zip);
         for (mz_uint i = 0; i < count; i++) {
+            if (show_boot_screen) {
+                tooie::boot_screen::show("Installing Mods", mod_name + "  " + std::to_string(i * 100 / count) + "%");
+            }
             char name[1024];
             if (mz_zip_reader_get_filename(&zip, i, name, sizeof(name)) == 0 || mz_zip_reader_is_file_a_directory(&zip, i)) {
                 continue;
@@ -138,7 +146,7 @@ namespace {
         fs::path temp = target;
         temp += ".unpacking";
         fs::remove_all(temp, ec);
-        bool ok = unpack(zip, root, temp);
+        bool ok = unpack(zip, root, temp, (const char*)zip_path.stem().u8string().c_str());
         mz_zip_reader_end(&zip);
         if (!ok) {
             fs::remove_all(temp, ec);
@@ -170,15 +178,18 @@ namespace {
     }
 }
 
-void tooie::unpack_mod_zips(bool new_only) {
+void tooie::unpack_mod_zips(bool new_only, bool at_boot) {
     std::error_code ec;
     fs::path mods = recomp::mods::get_mods_directory();
     if (!fs::is_directory(mods, ec)) {
         return;
     }
+    show_boot_screen = at_boot;
     for (const auto& entry : fs::directory_iterator(mods, fs::directory_options::skip_permission_denied, ec)) {
         if (entry.is_regular_file(ec) && entry.path().extension() == ".zip") {
             unpack_zip(entry.path(), new_only);
         }
     }
+    show_boot_screen = false;
+    boot_screen::close();
 }

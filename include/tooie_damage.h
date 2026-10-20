@@ -10,6 +10,10 @@
 namespace tooie::damage {
     inline const std::string double_damage_option = "double_damage";
 
+    // General > Gameplay > Enemy aim (src/gameplay/damage_mods.cpp): how far ahead Klungo's potions aim.
+    enum class Aim : uint32_t { Original, Better, Sharp };
+    inline const std::string aim_option = "enemy_aim";
+
     // Whether Take No Damage (Cheato: HONEYKING, game flag 0x53C) is on, read on the game thread. Hits then
     // leave Banjo where he is instead of putting him in the hurt state.
     bool no_damage_on(uint8_t* rdram, recomp_context* ctx);
