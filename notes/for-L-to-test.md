@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T442 Interpolation pick mode finds models at Interpolation Original
+- Asked: 2026-10-20 02:51 UTC
+- Build: main
+- Steps:
+  1. Leave Graphics > Interpolation at Original (the default)
+  2. Press the Interpolation Pick Mode key and move the cursor over Banjo, Bottles and an enemy
+  3. Left click one
+- Look for: The label names a model instead of No model here, and a click steps its tag. Checked headless at Interpolation Original: Banjo's body was found (453E57C9). Known: parts of some models share one name (see the thread).
+- Status: waiting for L
+
 ## T441 Parallax shapes from the new sweep
 - Asked: 2026-10-20 02:38 UTC
 - Build: main (parallax sweep 4)
