@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T483 Deep snow frame rate: pixels reuse the dent shape
+- Asked: 2026-10-20 22:30 UTC
+- Build: main @ e02e15b
+- Steps:
+  1. Deep snow on, Icy Side, 6x resolution as before
+  2. Walk lots of prints, look at them near and far
+  3. Stand at your 25 fps cliff spot
+- Look for: Frame rate and GPU ms there, and do the dents look the same as the last build (soft walls, shading)?
+- Status: waiting for L
+
 ## T482 Ear jiggle slider and stiffness defaults
 - Asked: 2026-10-20 21:59 UTC
 - Build: main
