@@ -39,6 +39,7 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_toast.h"
 #include "tooie_effect_pick.h"
 #include "tooie_parallax_pick.h"
 
@@ -66,6 +67,8 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength);
+    void SetSceneRayTracing(bool enabled);
+    int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
     void SetSceneOwnMist(float strength);
@@ -3930,6 +3933,10 @@ namespace {
     // True while a preset sets the effect options, so their callbacks neither save one by one nor
     // switch the preset back to Custom.
     bool applying_preset = false;
+    // Graphics > Ray tracing is on / the no-hardware notice was shown for it (tick shows it once the renderer has
+    // looked at the device, which is after the first apply).
+    std::atomic<bool> ray_tracing_on{ false };
+    std::atomic<bool> ray_tracing_notified{ false };
 
     // Every effect a preset sets, with its value for Original (everything off).
     struct PresetValue {
@@ -4229,6 +4236,15 @@ void tooie::picture_filters::apply() {
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(shader(value<double>(bounce_light_option, 0.0)) / 100.0));
     RT64::SetSceneScreenSpaceGI((float)(shader(value<double>(ssgi_option, 0.0)) / 100.0));
+    // Graphics > Ray tracing (L, 2026-10-20): its own switch, not one of the shader effects. Reflections are the
+    // first effect it drives. On a device without ray tracing (RT64::GetRayTracingSupport 1) the option does
+    // nothing but tell you once; the screen-space and water reflections carry on as set.
+    const bool ray_tracing = value<bool>(ray_tracing_option, false);
+    RT64::SetSceneRayTracing(ray_tracing);
+    ray_tracing_on.store(ray_tracing);
+    if (!ray_tracing) {
+        ray_tracing_notified.store(false);
+    }
     RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
@@ -4423,6 +4439,19 @@ bool tooie::picture_filters::applying_effects_preset() {
 
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    {
+        static bool logged = false;
+        const int support = RT64::GetRayTracingSupport();
+        if (!logged && support != 0) {
+            logged = true;
+            std::fprintf(stderr, "[ray-tracing] hardware ray tracing: %s (Graphics > Ray tracing is %s)\n", support == 2 ? "yes" : "no", ray_tracing_on.load() ? "on" : "off");
+        }
+    }
+    if (ray_tracing_on.load() && !ray_tracing_notified.load() && RT64::GetRayTracingSupport() == 1) {
+        ray_tracing_notified.store(true);
+        std::fprintf(stderr, "[ray-tracing] this graphics card has no hardware ray tracing; using the current effects\n");
+        tooie::toast::show("Ray tracing is not supported on this graphics card. Using the current effects.");
+    }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
         send_parallax_textures();
@@ -4859,6 +4888,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
     graphics.add_bool_option(
+        ray_tracing_option,
+        "Ray tracing",
+        "Ray traced effects, starting with reflections on the same shiny surfaces as Screen-space reflections. It is a switch of its own, apart from the shader effects. Needs a graphics card with hardware ray tracing: without one this shows a notice and the effects carry on as you have set them. Early: this build checks for the hardware but does not draw the traced reflections yet, so with it the current reflections are shown.",
+        false);
+    graphics.add_bool_option(
         reflections_section_option,
         "Reflections",
         "Shows the reflection settings below. Hiding them does not turn the reflections off.",
@@ -5151,7 +5185,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
