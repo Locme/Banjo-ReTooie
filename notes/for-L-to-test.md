@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T458 Belly jiggle sits by the belt
+- Asked: 2026-10-20 14:19 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: turn Belly jiggle on
+  2. Run, jump, land and stop, then look at his belly from the front
+- Look for: The wobble is now the round of his belly just above the belt, not up at the chest and necklace. No gaps at the belt, the fur or the chest. Checked headless (forced swings and a run).
+- Status: waiting for L
+
 ## T457 Nose jiggle: no missing triangle
 - Asked: 2026-10-20 14:08 UTC
 - Build: main
