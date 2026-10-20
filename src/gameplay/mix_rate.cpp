@@ -33,6 +33,7 @@
 #include "recompui/config.h"
 #include "tooie_hooks.h"
 #include "tooie_mix_rate.h"
+#include "tooie_rdram.h"
 
 extern "C" void osAiSetFrequency_recomp(uint8_t* rdram, recomp_context* ctx);
 
@@ -42,6 +43,8 @@ namespace {
     constexpr gpr heap_addr = (int32_t)0x80046A78;      // ALHeap { base, cur, len, count }
     constexpr gpr fx_params_addr = (int32_t)0x8003CA44; // { sections, length, 8 words per section }
     constexpr gpr pointer_table = (int32_t)0x800459E0;  // 2 command lists, then 3 AudioInfo
+    constexpr gpr synth_pointer = (int32_t)0x800411F4;  // the synthesizer (func_80020F70 keeps it here)
+    constexpr int32_t synth_output_rate = 0x40;
     constexpr uint32_t fx_section_words = 8;
     constexpr uint32_t original_heap_size = 0x22A00;
 
@@ -199,6 +202,13 @@ namespace {
         const gpr saved_v0 = ctx->r2;
         ctx->r4 = 22050 * factor;
         osAiSetFrequency_recomp(rdram, ctx);
+        // The synthesizer keeps its own copy of the output rate (synth +0x40, from the config at boot) and
+        // the sequencer turns its tick times into samples with it. Left at the old rate, music played at
+        // double speed after a live switch to High (and at half speed back to Original).
+        const gpr synth = (gpr)(int32_t)MEM_W(0, synth_pointer);
+        if (tooie::rdram::valid_ptr((uint32_t)synth)) {
+            MEM_W(synth_output_rate, synth) = ctx->r2;
+        }
         ctx->r4 = saved_a0;
         ctx->r2 = saved_v0;
         fprintf(stderr, "[mix rate] switched to %u Hz\n", 22050 * factor);

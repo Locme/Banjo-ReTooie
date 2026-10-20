@@ -25,6 +25,7 @@ namespace tooie::picture_filters {
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).
     inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
+    inline const std::string reflections_section_option = "reflections_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -65,11 +66,16 @@ namespace tooie::picture_filters {
     inline const std::string sun_shadow_softness_option = "sun_shadow_softness";
     inline const std::string sun_shadow_distance_option = "sun_shadow_distance";
     inline const std::string wave_speed_option = "water_wave_speed";
+    // Graphics > Water detail: how finely Modern and Stylised water is cut into moving geometry round the player (0 = none).
+    inline const std::string water_detail_option = "water_detail";
     inline const std::string grass_option = "grass_3d";
     // Graphics > Water: Original (the game's water) or Modern (new water drawn in its place, roadmap 4.45/4.46).
     inline const std::string water_option = "water_style";
     // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
     inline const std::string shore_foam_option = "water_shore_foam";
+    // Graphics > Mist: the day and night cycle's mist (over low ground, on water, spray at waterfalls) on its own, always
+    // showing. While the cycle runs in a level, its own Mist and Mist Time settings are used instead.
+    inline const std::string mist_option = "mist";
     inline const std::string grass_height_option = "grass_3d_height";
     inline const std::string grass_distance_option = "grass_3d_distance";
     inline const std::string grass_density_option = "grass_3d_density";
@@ -87,6 +93,8 @@ namespace tooie::picture_filters {
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string snow_height_option = "deep_snow_height";
     inline const std::string snow_detail_option = "deep_snow_detail";
+    inline const std::string snow_refill_option = "deep_snow_refill";
+    inline const std::string snow_lod_option = "deep_snow_lod_distance";
     // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";

@@ -68,7 +68,9 @@ namespace RT64 {
     void SetSceneScreenSpaceReflections(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
+    void SetSceneOwnMist(float strength);
     void SetSceneModernWater(bool enabled, bool stylised);
+    void SetSceneWaterDetail(float detail);
     void SetSceneIcyLevel(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
@@ -82,7 +84,7 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor, float detail);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, bool refill, float lodDistance, uint32_t map);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -134,6 +136,8 @@ namespace {
     std::atomic<bool> deep_snow{false};
     std::atomic<float> snow_height{1.0f};
     std::atomic<float> snow_detail{1.0f};
+    std::atomic<bool> snow_refill{false};
+    std::atomic<float> snow_lod_distance{2000.0f};
     // What was last sent (-1 to send again).
     std::atomic<float> snow_sent{-1.0f};
 
@@ -315,11 +319,12 @@ namespace {
         0xe3890f274d878db4,
     };
 
-    // Shiny textures for Screen-space reflections besides the parallax list's metal and tiles (RT64 hashes, picked by
+    // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
     // eye on 2026-10-20 from the dump's 2,618 textures the parallax sweep left out): shiny metal, gold and machine
-    // parts, crystals and gems, glass and windows.
+    // parts, crystals and gems, glass and windows. No ice: Ice reflections cover it (ice_textures are left out
+    // below).
     constexpr uint64_t shiny_textures[] = {
-        // Metal: steel, gold, brass and copper parts, trims and machinery (143)
+        // Metal: steel, gold, brass and copper parts, trims and machinery (140)
         0x00efe89a05c37cfc, 0x0348aba32abccf8f, 0x052e5e214b074e46, 0x05bed606aa7cf58f,
         0x06635b868db9a1eb, 0x0aaca422457e0dc8, 0x0dda4130179da841, 0x0edfaf02879af5de,
         0x1085071aeccbaaec, 0x11127cba84729a83, 0x11d730637623c0e6, 0x12b63e73a3210e1e,
@@ -335,38 +340,38 @@ namespace {
         0x556df73cad052835, 0x55974effa10b50b2, 0x560a41300280ed02, 0x562b34c1218fd1b8,
         0x57d04f8f0c1f03c8, 0x58c70baa02f4a191, 0x594356a84a74082d, 0x5a7d42b55f050f24,
         0x5ccd85dbd5b0d3ee, 0x614bd692513046a3, 0x62a7a8ccbab246b5, 0x63332c4d31561ed1,
-        0x633f62b741b793a3, 0x643a5679edb3426f, 0x64a1ab6348e2c47c, 0x6579b8c1852b6fbc,
-        0x66fc6d958d629254, 0x66fd10caf2d867d0, 0x67d4ebbdd56e392f, 0x6881f316689a6e95,
-        0x688a2f33e305417b, 0x6bd7eef5b4b544ad, 0x6c1f6b4894437fd7, 0x6ec1169c8ac54fc5,
-        0x708aa6ba9de2e747, 0x776adb5f84d53d24, 0x7ac35f509b00c0ce, 0x7cfca85b81a487c7,
-        0x7d6cb4d798d31abe, 0x81a0f9248b66ce01, 0x81e1103fe17d95b5, 0x833b5594f071abb9,
-        0x8d2f78cc91e85f3d, 0x9045f10c4be8e099, 0x913fa97bc6457120, 0x96e4a5b0cbd49d23,
-        0x9b3389ef372081ec, 0x9ded73062322e234, 0x9f401d180568b47e, 0x9fc0b0edcf634542,
-        0xa07b26167b652a03, 0xa1fbfb4b7e566e8f, 0xa26805cf6fefbda3, 0xa5faaee70e252666,
-        0xa7668c59352abe8a, 0xa970e5517350bb3e, 0xacf387a35a424846, 0xb131649ad7333cef,
-        0xb13f0c7b6669fee6, 0xb30eaf3c65672655, 0xb5abbfe203e51617, 0xbbafc817fb64fdb0,
-        0xbdbf81d7b2621f6b, 0xbe041cdc9df375ef, 0xc0ca4ff2a78b2629, 0xc124d01e79e8fa32,
-        0xc1e65a8a924884d2, 0xc21668249131f412, 0xc3a41edc2676640b, 0xc49d8d291cd81997,
-        0xc5b57e68f931ea8c, 0xc5bc6261dfece826, 0xc769b5fe90c68a17, 0xc898524aba681c86,
-        0xc97249c30ee7b913, 0xc9ac05812888d25f, 0xcd3125fb97b26599, 0xcefe98bd0b65af4a,
-        0xd88f0ffa83b47a39, 0xd932ef70cd7da419, 0xdc74d77466dca12d, 0xde7a8b196a15ea8a,
-        0xe2cd4c17d94c0cb8, 0xe585a469e3cedbac, 0xe6f6ea1ae92f4512, 0xeabc08f85602d542,
-        0xec029110fb80cb68, 0xee57aab90797e593, 0xeef03afb17bf6360, 0xef37e7804f15cd3a,
-        0xefdc76eb8a87b8b8, 0xf05ff4fe9a8b4057, 0xf103a851e363b2ac, 0xf25b7fe8cca57f21,
-        0xf3063a55e8237324, 0xf32c33cf2ddf523b, 0xf54d58565c421075, 0xfa6da10599d876de,
-        0xfb20d484347e507a, 0xfb7bd58e16034e15, 0xfb822a2a95b52ab3, 0xfcd67fa7c1ee3a97,
-        0xfd997b006c0d2279, 0xfeec46c1e07f6ec6, 0xff1789e72c4c5b05,
-        // Crystals and gems (25)
+        0x643a5679edb3426f, 0x64a1ab6348e2c47c, 0x6579b8c1852b6fbc, 0x66fc6d958d629254,
+        0x66fd10caf2d867d0, 0x67d4ebbdd56e392f, 0x6881f316689a6e95, 0x688a2f33e305417b,
+        0x6bd7eef5b4b544ad, 0x6c1f6b4894437fd7, 0x6ec1169c8ac54fc5, 0x708aa6ba9de2e747,
+        0x776adb5f84d53d24, 0x7ac35f509b00c0ce, 0x7cfca85b81a487c7, 0x7d6cb4d798d31abe,
+        0x81a0f9248b66ce01, 0x81e1103fe17d95b5, 0x833b5594f071abb9, 0x8d2f78cc91e85f3d,
+        0x9045f10c4be8e099, 0x913fa97bc6457120, 0x96e4a5b0cbd49d23, 0x9b3389ef372081ec,
+        0x9ded73062322e234, 0x9f401d180568b47e, 0x9fc0b0edcf634542, 0xa07b26167b652a03,
+        0xa1fbfb4b7e566e8f, 0xa26805cf6fefbda3, 0xa5faaee70e252666, 0xa7668c59352abe8a,
+        0xa970e5517350bb3e, 0xacf387a35a424846, 0xb131649ad7333cef, 0xb13f0c7b6669fee6,
+        0xb30eaf3c65672655, 0xb5abbfe203e51617, 0xbbafc817fb64fdb0, 0xbdbf81d7b2621f6b,
+        0xbe041cdc9df375ef, 0xc0ca4ff2a78b2629, 0xc124d01e79e8fa32, 0xc1e65a8a924884d2,
+        0xc21668249131f412, 0xc3a41edc2676640b, 0xc49d8d291cd81997, 0xc5b57e68f931ea8c,
+        0xc5bc6261dfece826, 0xc769b5fe90c68a17, 0xc898524aba681c86, 0xc97249c30ee7b913,
+        0xc9ac05812888d25f, 0xcefe98bd0b65af4a, 0xd88f0ffa83b47a39, 0xd932ef70cd7da419,
+        0xdc74d77466dca12d, 0xde7a8b196a15ea8a, 0xe2cd4c17d94c0cb8, 0xe585a469e3cedbac,
+        0xe6f6ea1ae92f4512, 0xeabc08f85602d542, 0xec029110fb80cb68, 0xee57aab90797e593,
+        0xef37e7804f15cd3a, 0xefdc76eb8a87b8b8, 0xf05ff4fe9a8b4057, 0xf103a851e363b2ac,
+        0xf25b7fe8cca57f21, 0xf3063a55e8237324, 0xf32c33cf2ddf523b, 0xf54d58565c421075,
+        0xfa6da10599d876de, 0xfb20d484347e507a, 0xfb7bd58e16034e15, 0xfb822a2a95b52ab3,
+        0xfcd67fa7c1ee3a97, 0xfd997b006c0d2279, 0xfeec46c1e07f6ec6, 0xff1789e72c4c5b05,
+        // Crystals and gems (19)
         0x0f71ebd913354f04, 0x22402ed8424e798b, 0x2fe8e3ecae2a3740, 0x37488137fb10db24,
-        0x3d6d0e08f30e0dcd, 0x4fe0d8976c184a5a, 0x5882c0aed5e94dfa, 0x5a5872a0c544c177,
-        0x61651a70e726dbdb, 0x65d7f51774d6f517, 0x664b0c6644060bed, 0x778b12f89aaeb246,
-        0x78d67b5d46fd6de4, 0x79a8b89ae797effa, 0x9873ab2ea6afc92b, 0x9cd99a44f36bbab5,
-        0xa0754fa808c1eec1, 0xbda54fd31b527f0e, 0xc99adb3fb7f0bc02, 0xca03179894a7570f,
-        0xca3ac18fa0ee884d, 0xd3db47b98a571e16, 0xe0c45d0afc26cf02, 0xe75507b6b900f558,
-        0xfbbc50554bf66f9b,
+        0x3d6d0e08f30e0dcd, 0x5882c0aed5e94dfa, 0x5a5872a0c544c177, 0x778b12f89aaeb246,
+        0x78d67b5d46fd6de4, 0x9873ab2ea6afc92b, 0x9cd99a44f36bbab5, 0xa0754fa808c1eec1,
+        0xbda54fd31b527f0e, 0xc99adb3fb7f0bc02, 0xca03179894a7570f, 0xd3db47b98a571e16,
+        0xe0c45d0afc26cf02, 0xe75507b6b900f558, 0xfbbc50554bf66f9b,
         // Glass and windows (6)
         0x1a1949e1f923e12d, 0x34bf2cae5467cb0e, 0x968d8376fb42d7db, 0xc9eac79984101fc0,
         0xd61b89ced680452d, 0xf7f170249a3bbefa,
+        // Glazed and gold tiles (the parallax list's other tiles are stone paving).
+        0x1cf577bcf120b2b6, 0x31cce062f51590d7, 0x51780acfdf66aedb, 0x563e4f62f46a44d7,
+        0x5841e6ebe2f92c7a, 0x7239dd5a1ac6abf6, 0x7fd51000b2716945, 0xc9d07c3b79818c1f,
         // Glossy paint (1)
         0x12c31c68cdc11203,
     };
@@ -3965,6 +3970,7 @@ namespace {
         { &tooie::picture_filters::npc_feathers_option, 0.0 },
         { &tooie::picture_filters::water_option, (uint32_t)tooie::picture_filters::Water::Original },
         { &tooie::picture_filters::shore_foam_option, false },
+        { &tooie::picture_filters::mist_option, 0.0 },
         { &tooie::picture_filters::texture_upscale_option, (uint32_t)tooie::picture_filters::TextureUpscale::Off },
         { &tooie::picture_filters::fog_option, 0.0 },
         { &tooie::picture_filters::contrast_option, 0.0 },
@@ -4063,13 +4069,14 @@ namespace {
         ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
         std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
         // Shiny surfaces for Screen-space reflections: shiny_textures and the textures the parallax sweep
-        // (textures/sweep4) found to be metal or tiles, with Shiny Reflection picks over them.
+        // (textures/sweep4) found to be metal, with Shiny Reflection picks over them.
         std::vector<uint64_t> shiny_all(std::begin(shiny_textures), std::end(shiny_textures));
         for (const ParallaxTexture& texture : parallax_textures) {
-            if ((texture.shape == Metal) || (texture.shape == Tiles)) {
+            if (texture.shape == Metal) {
                 shiny_all.push_back(texture.hash);
             }
         }
+        shiny_all.erase(std::remove_if(shiny_all.begin(), shiny_all.end(), [&](uint64_t h) { return std::find(ice_all.begin(), ice_all.end(), h) != ice_all.end(); }), shiny_all.end());
         std::vector<uint64_t> shiny = build(shiny_all.data(), shiny_all.data() + shiny_all.size(), tooie::effect_pick::effect_shiny, true);
         std::vector<uint64_t> snow_off;
         for (const auto& [hash, picked] : picks) {
@@ -4286,6 +4293,11 @@ void tooie::picture_filters::apply() {
     if (const char* forced = std::getenv("TOOIE_SNOW_DETAIL")) {
         snow_detail = (float)(std::atof(forced) / 100.0);
     }
+    snow_refill = value<bool>(snow_refill_option, false);
+    snow_lod_distance = (float)value<double>(snow_lod_option, 2000.0);
+    if (const char* forced = std::getenv("TOOIE_SNOW_LOD")) {
+        snow_lod_distance = (float)std::atof(forced);
+    }
     snow_sent = -1.0f;
     // Parallax mapping; TOOIE_PARALLAX=<0-100> sets it instead, TOOIE_PARALLAX_ALL=1 puts it on every texture of the
     // 3D world (headless, to find textures that suit it).
@@ -4310,11 +4322,22 @@ void tooie::picture_filters::apply() {
         stylised_water = std::atoi(forced) == 2;
     }
     RT64::SetSceneModernWater(modern_water, stylised_water);
+    double water_detail = value<double>(water_detail_option, 50.0);
+    if (const char* forced = std::getenv("TOOIE_WATER_DETAIL")) {
+        water_detail = std::atof(forced);
+    }
+    RT64::SetSceneWaterDetail((float)(water_detail / 100.0));
     bool shore_foam = shaders && value<bool>(shore_foam_option, false);
     if (const char* forced = std::getenv("TOOIE_SHORE_FOAM")) {
         shore_foam = std::atoi(forced) != 0;
     }
     RT64::SetSceneShoreFoam(shore_foam);
+    // Test aid: TOOIE_OWN_MIST=<0 to 100> whatever the setting says.
+    float own_mist = shaders ? (float)(value<double>(mist_option, 0.0) / 100.0) : 0.0f;
+    if (const char* forced = std::getenv("TOOIE_OWN_MIST")) {
+        own_mist = (float)(std::atof(forced) / 100.0);
+    }
+    RT64::SetSceneOwnMist(own_mist);
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
@@ -4578,12 +4601,20 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
         static float detail_sent = -1.0f;
+        static bool refill_sent = false;
+        static float lod_sent = -1.0f;
+        static uint16_t map_sent = 0xFFFF;
         const float detail = snow_detail.load();
-        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent)) {
+        const bool refill = snow_refill.load();
+        const float lod = snow_lod_distance.load();
+        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent)) {
             snow_sent = snow;
             strict_sent = strict;
             detail_sent = detail;
-            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail);
+            refill_sent = refill;
+            lod_sent = lod;
+            map_sent = map;
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map);
         }
     }
     // The fog is measured from Banjo.
@@ -4720,11 +4751,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Screen-space global illumination: light bounced off the surfaces on screen lights what faces them, so a sunny floor brightens the wall beside it and colours rub off on each other. Heavier than Bounce light. 50 is one bounce as it is. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        ssr_option,
-        "Screen-space reflections",
-        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
         bounce_light_option,
         "Bounce light",
         "Light bounced off nearby surfaces: colourful walls and floors tint and brighten what is next to them a little. 0 is off.",
@@ -4760,16 +4786,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 30);
     graphics.add_number_option(
-        water_reflections_option,
-        "Water reflections",
-        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ice_reflections_option,
-        "Ice reflections",
-        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
         water_waves_option,
         "Water waves",
         "Waves roll across the game's water: the water seen through bends with them, and their slopes catch the light. Drawn on the picture, so Banjo still floats at the same height. 0 is off.",
@@ -4779,6 +4795,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Water wave speed",
         "How fast the water waves move, in percent. 100 is normal.",
         25, 200, 5, 0, false, 100);
+    graphics.add_number_option(
+        water_detail_option,
+        "Water detail",
+        "With Water on <recomp-color primary>Modern</recomp-color> or <recomp-color primary>Stylised</recomp-color>: the water round the player is cut into fine moving geometry, so the swell and the rings the player pushes out are real bumps in the surface. Higher cuts it finer and further out, which costs more. 0 keeps the flat surface with drawn-on waves. Needs a graphics card with tessellation; without it the drawn-on waves are used.",
+        0, 100, 5, 0, false, 50);
     graphics.add_enum_option(
         water_option,
         "Water",
@@ -4794,10 +4815,15 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shore foam",
         "With Water on <recomp-color primary>Original</recomp-color>: a broken white line of foam drifts along the edges of the game's water, where it gets shallow, as in Modern water. Modern water always has it.",
         false);
+    graphics.add_number_option(
+        mist_option,
+        "Mist",
+        "Pale mist drifts in banks over low ground, hangs thickest on and round water, and rises as spray where waterfalls land. Always showing, at any time of day. While Day and Night runs in a level, its own Mist and Mist Time settings are used instead. 0 turns it off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         deep_snow_option,
         "Deep snow",
-        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and after a while it fills back in, sooner while it snows. Drawn on the picture, so nothing in the game changes.",
+        "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
         false);
     graphics.add_number_option(
         snow_height_option,
@@ -4809,6 +4835,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Snow detail",
         "How fine the dents in the deep snow are, in percent. 100 is the finest; 50 is as coarse as it first was, and lower still is coarser. Lower is lighter on weaker graphics cards.",
         25, 100, 5, 0, false, 100);
+    graphics.add_bool_option(
+        snow_refill_option,
+        "Snow fills back in",
+        "Prints in the deep snow fill back in after a while, sooner while it snows. Off, they stay until you leave the area (going into a hut counts). On is a little lighter on the graphics card, as the snow is only cut finely where prints still show.",
+        false);
+    graphics.add_number_option(
+        snow_lod_option,
+        "Snow LOD distance",
+        "How far from the camera the deep snow keeps its full detail. Further away it is drawn smoother and smoother, which is cheaper. Higher shows the dents in full from further off.",
+        250, 10000, 250, 0, false, 2000);
     graphics.add_number_option(
         parallax_option,
         "Parallax",
@@ -4819,6 +4855,26 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on original textures",
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
+    graphics.add_bool_option(
+        reflections_section_option,
+        "Reflections",
+        "Shows the reflection settings below. Hiding them does not turn the reflections off.",
+        true);
+    graphics.add_number_option(
+        ssr_option,
+        "Screen-space reflections",
+        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        water_reflections_option,
+        "Water reflections",
+        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ice_reflections_option,
+        "Ice reflections",
+        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
@@ -5092,7 +5148,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5118,19 +5174,22 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(ambient_occlusion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(bounce_light_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(ssgi_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(water_reflections_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ice_reflections_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(shore_foam_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(mist_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(grass_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_height_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_distance_option, grass_section_option, false);
@@ -5147,6 +5206,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(snow_refill_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(snow_lod_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).

@@ -1,5 +1,36 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T465 Mix rate High: music at normal speed
+- Asked: 2026-10-20 18:28 UTC
+- Build: main
+- Steps:
+  1. Start the game and play any area with music
+  2. Sound > Mix rate: pick High (44 kHz) while the music plays
+  3. Pick Original again
+- Look for: The music keeps its normal speed and pitch after each switch, and sound effects still play
+- Status: waiting for L
+
+## T464 Deep snow: dragon shots, far snow with LOD, prints that stay, ice left alone
+- Asked: 2026-10-20 17:19 UTC
+- Build: main
+- Steps:
+  1. Icy Side, Deep snow on
+  2. Jump around: the prints under you stay
+  3. Go into a hut and out: the prints are gone
+  4. Snow fills back in on: prints fill back in as before
+  5. Look far across the snow, then change Snow LOD distance
+  6. Chilly Willy: his ice balls dent the snow
+  7. Ice reflections on: the ice reflects and is not raised
+- Look for: Prints only reset on map change unless the switch is on; snow reaches far and gets smoother past the LOD distance; ice balls leave dents; ice stays at its own height and reflects
+## T463 Belly jiggle: necklace stays, strongest by the belt
+- Asked: 2026-10-20 16:36 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: Belly jiggle on
+  2. Run, jump, land and stop with the camera on his front
+- Look for: The tooth necklace never vanishes or stretches; it rides on the belly in one piece. The belly moves most just above the belt and less and less up towards the chest. Checked headless (forced swings).
+- Status: waiting for L
+
 ## T462 Cheaper 3D grass
 - Asked: 2026-10-20 16:15 UTC
 - Build: main
