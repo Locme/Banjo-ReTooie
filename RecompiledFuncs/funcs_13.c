@@ -3803,6 +3803,7 @@ RECOMP_FUNC void ncfixposrot_entrypoint_10(uint8_t* rdram, recomp_context* ctx) 
 RECOMP_FUNC void func_80801364_chwaspnestgame(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801364_chwaspnestgame");
     // 0x80801364: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80801368: sw          $ra, 0x1C($sp)

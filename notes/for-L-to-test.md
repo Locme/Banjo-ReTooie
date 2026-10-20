@@ -1,5 +1,80 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T457 Nose jiggle: no missing triangle
+- Asked: 2026-10-20 14:08 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Snout jiggle and Nose jiggle
+  2. Walk, run and turn with the camera in front of Banjo
+  3. Squash the snout with the Squash & Stretch sliders
+- Look for: The black nose stays whole: no crack or orange sliver down its middle or at its tip, whatever the light. It also keeps its own size when the snout squashes.
+- Status: waiting for L
+
+## T456 DEV Sound test plays sounds again
+- Asked: 2026-10-20 13:31 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Load a file and stand anywhere in a level
+  2. Esc > DEV: change Sound test with the arrows, then close the menu
+  3. Try 1432 (the Springy Step Shoes boing), then a few other numbers
+- Look for: Each number plays a sound at Banjo (some numbers are silent) and the previous one stops.
+- Status: waiting for L
+
+## T455 DEV toggle renamed Hide Unnecessary Settings Entry
+- Asked: 2026-10-20 13:09 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Esc > DEV: find Hide Unnecessary Settings Entry (on by default)
+  2. Open the save select TV: only Speaker Mode shows
+  3. Turn it off, reopen the TV: three rows come back
+- Look for: The toggle has the new name and still hides Wide-screen Mode and Screen Alignment on the TV.
+- Status: waiting for L
+
+## T454 SETTINGS page in the Start menu
+- Asked: 2026-10-20 12:19 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. In a level, press Start: SETTINGS is under ACHIEVEMENTS
+  2. Open it: Speaker Mode shows with its value
+  3. Press right, left or A to change it, and listen
+  4. Press B to go back, reopen it, and check the value stuck
+  5. Optional: turn DEV > Hide Unnecessary Settings Entry off and reopen the page
+- Look for: The page shows Speaker Mode, and the value changes at once and sticks. With the DEV switch off, Wide-screen Mode shows too. Also say whether the Banjo icon on the entry is fine.
+- Status: waiting for L
+
+## T450 Aim trace: find where enemies chase from
+- Asked: 2026-10-20 10:32 UTC
+- Build: claude/project-thread-quqov9
+- Steps:
+  1. General > DEV tab: turn on Aim trace
+  2. Play a minute near ordinary enemies (Uggers, Snapdragons, anything that chases or lunges), getting chased and hit
+  3. Send me logs/aim_trace.txt (in the logs folder next to the exe)
+- Look for: The file appears and fills up (it rewrites every 5 seconds). It changes nothing in the game; turn it off afterwards.
+- Status: waiting for L
+
+## T449 Mouse in the Start menu and the save select, and no hidden mouse effect with a controller
+- Asked: 2026-10-20 08:30 UTC
+- Build: main
+- Steps:
+  1. At the save select, move the mouse over Game 2, the copier, the bin, the console, the TV
+  2. Left click the TV (opens Settings), right click to go back
+  3. In a game press Start and move the mouse over the rows
+  4. Left click a row, right click to go back
+  5. Use a controller in the ESC menu and move the mouse over rows without clicking
+- Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
+- UNTESTED, added 2026-10-20: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
+
+## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
+- Asked: 2026-10-20 08:41 UTC
+- Build: main
+- Steps:
+  1. Settings > Graphics: Extended Draw Distance on
+  2. Go to Hailfire Peaks, Icy Side
+  3. Walk away from the frozen Sabreman (the icy man in the block of ice, near 4817, 3, -5403) and keep him in view, 5000 to 9000 units away
+  4. Compare with the other ice blocks round notes
+- Look for: Sabreman and the ice around him stay drawn as far away as the other ice blocks and props, instead of popping out at about 5000 units
+- Status: waiting for L
+
 ## T447 Flying: turning at 40 FPS and up matches the original game
 - Asked: 2026-10-20 07:49 UTC
 - Build: main @ 7c7f52d
@@ -48,9 +123,9 @@
 - Steps:
   1. Run as Banjo-Kazooie on grass or dirt
   2. Hold Run to start a sprint
-  3. Let go, then start another sprint within 10 seconds
-  4. Wait over 10 seconds and sprint again
-- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 10 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
+  3. Let go, then start another sprint within 5 seconds
+  4. Wait over 5 seconds and sprint again
+- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 5 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
 - Status: waiting for L
 
 ## T442 Interpolation pick mode finds models at Interpolation Original
@@ -77,7 +152,7 @@
 - Asked: 2026-10-20 02:23 UTC
 - Build: main (next Windows build)
 - Steps:
-  1. Keep DEV > Hide Vanilla Widescreen Entry in the Game Menu on (default)
+  1. Keep DEV > Hide Unnecessary Settings Entry on (default)
   2. On the save select screen, move the hand to the TV and press A
   3. Change Speaker Mode, confirm, then back out and reopen the TV
   4. Turn the toggle off and reopen the TV
@@ -762,7 +837,7 @@
 - Steps:
   1. On the save select screen, pick the TV (global settings)
   2. Look at the list, then change Speaker Mode and open Screen Alignment
-  3. Esc > DEV: turn off Hide Vanilla Widescreen Entry in the Game Menu, close and reopen the TV
+  3. Esc > DEV: turn off Hide Unnecessary Settings Entry, close and reopen the TV
 - Look for: With the toggle on (default) the TV lists Screen Alignment and Speaker Mode only, and Speaker Mode changes and keeps its setting. With it off, Wide-screen Mode is back between them as before. If a save had the game's Wide-screen Mode on, the picture is no longer squashed with the toggle on.
 - Status: waiting for L
 

@@ -1765,6 +1765,7 @@ L_808098F0:
 RECOMP_FUNC void func_801107B0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_801107B0");
     // 0x801107B0: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x801107B4: sw          $ra, 0x14($sp)
@@ -1971,6 +1972,7 @@ L_8080097C:
 RECOMP_FUNC void func_80800324_chfactoryprop(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800324_chfactoryprop");
     // 0x80800324: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80800328: sw          $ra, 0x24($sp)

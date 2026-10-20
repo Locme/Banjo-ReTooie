@@ -2956,6 +2956,7 @@ L_80800238:
 RECOMP_FUNC void gcgoto_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "gcgoto_entrypoint_4");
     // 0x80800468: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x8080046C: sw          $ra, 0x1C($sp)
@@ -5218,6 +5219,7 @@ L_808010C0:
 RECOMP_FUNC void func_808007D4_scradar(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808007D4_scradar");
     // 0x808007D4: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x808007D8: sw          $s0, 0x20($sp)

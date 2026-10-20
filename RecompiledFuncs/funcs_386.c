@@ -427,6 +427,7 @@ RECOMP_FUNC void _bsbflip_end(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800FDC58(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800FDC58");
     // 0x800FDC58: addiu       $sp, $sp, -0x68
     ctx->r29 = ADD32(ctx->r29, -0X68);
     // 0x800FDC5C: sw          $s1, 0x20($sp)

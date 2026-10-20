@@ -755,6 +755,7 @@ RECOMP_FUNC void _bsbwhirl_entrypoint_24(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080021C_ncpoducam(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080021C_ncpoducam");
     // 0x8080021C: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x80800220: sw          $ra, 0x1C($sp)
@@ -3379,6 +3380,7 @@ L_80800250:
 RECOMP_FUNC void func_80800A2C_chlavagargoyle(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800A2C_chlavagargoyle");
     // 0x80800A2C: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x80800A30: sw          $s0, 0x18($sp)

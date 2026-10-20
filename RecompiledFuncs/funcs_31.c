@@ -3748,6 +3748,7 @@ L_80800E40:
 RECOMP_FUNC void func_80804680_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80804680_chdiggerboss");
     // 0x80804680: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x80804684: sw          $ra, 0x1C($sp)

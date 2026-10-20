@@ -1069,6 +1069,7 @@ RECOMP_FUNC void baduo_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808014B0_chfactorytwinklies(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808014B0_chfactorytwinklies");
     // 0x808014B0: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x808014B4: sw          $s2, 0x1C($sp)
@@ -3228,6 +3229,7 @@ RECOMP_FUNC void func_800CB610(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800000_chfactorytrashbelt(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800000_chfactorytrashbelt");
     // 0x80800000: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80800004: sw          $ra, 0x24($sp)

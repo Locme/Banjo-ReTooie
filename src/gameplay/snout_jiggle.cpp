@@ -201,6 +201,9 @@ namespace {
     std::atomic<uint32_t> bent_from{ 0 }, bent_to{ 0 };
     bool drawing_player = false;
     bool snout_on = false, nose_on = false;
+    // The nose's vertices are rewritten: Nose jiggle, or Snout jiggle on the game's own models (the nose
+    // keeps its size when the snout squashes).
+    bool nose_kept = false;
     uint32_t current_model = 0;
     ModelInfo current;
     Vec model_pos{};
@@ -496,7 +499,7 @@ namespace {
         return { std::min(settings.inwards, 0.15f), std::min(settings.outwards, 0.2f), std::min(settings.across, 0.35f) };
     }
 
-    struct BoneTurn { Affine A; Vec offset; float angle = 0.0f, stretch = 1.0f; };
+    struct BoneTurn { Affine A; Mat R; Vec offset; float angle = 0.0f, stretch = 1.0f; };   // A = squash and stretch, then R
 
     // The bone from pivot to tip (model space, posed), up being the head's up: steps its spring and
     // returns the turn and stretch about the pivot that takes the tip to the spring's point, within the
@@ -508,6 +511,7 @@ namespace {
                          bool hold = false) {
         BoneTurn r;
         r.A = { rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
+        r.R = r.A.L;
         const Vec arm = tip - pivot;
         const float la = length(arm);
         if (la < 1e-3f) {
@@ -528,7 +532,7 @@ namespace {
             u = u * (1.0f / std::max(length(u), 1e-4f));
             const Vec sd = cross(f, u);
             const float p = force[0] * pi / 180.0f, y = force[1] * pi / 180.0f;
-            offset = (f * (std::cos(p) * std::cos(y)) + u * (std::sin(p) * std::cos(y)) + sd * std::sin(y)) * la - arm;
+            offset = (f * (std::cos(p) * std::cos(y)) + u * (std::sin(p) * std::cos(y)) + sd * std::sin(y)) * (la * force[2]) - arm;
         }
         // Limits: along the bone, back in (squash) and out (stretch); across it, up, down and sideways.
         const float along = std::clamp(dot(offset, f), -lim.inwards * la, lim.outwards * la);
@@ -556,13 +560,16 @@ namespace {
         const float st = lw / la;
         r.stretch = st;
         const float d[3] = { f.x, f.y, f.z };
-        const float thin = 1.0f / std::sqrt(st);
+        // Keeping the volume, but never more than 1.4 times as thick or less than 0.7 (L, 2026-10-20:
+        // at 95% inwards the snout grew 4.5 times as wide and its nose with it).
+        const float thin = std::clamp(1.0f / std::sqrt(st), 0.7f, 1.4f);
         Mat S{};
         for (int i = 0; i < 3; i++)
             for (int j = 0; j < 3; j++)
                 S.m[i * 3 + j] = (i == j ? thin : 0.0f) + (st - thin) * d[i] * d[j];
         const Mat Q = mul(S, R);   // p' = pivot + (p - pivot) * S * R
         r.A = { Q, pivot - apply(pivot, Q) };
+        r.R = R;
         return r;
     }
 
@@ -657,10 +664,21 @@ namespace {
                 lo = { std::min(lo.x, b.x), std::min(lo.y, b.y), std::min(lo.z, b.z) };
                 hi = { std::max(hi.x, b.x), std::max(hi.y, b.y), std::max(hi.z, b.z) };
             }
+            // 062A's black vertices are only the nose's right half (and the middle); the left half is drawn
+            // from its own vertices (146-151), mirror images of black ones. Their colours are relit every
+            // frame, so they are found by position: a vertex on a black one or on its mirror image. Picking
+            // them by colour missed them under some lights, and the halves split down the middle as the
+            // nose swung (L, 2026-10-20, a missing triangle at the tip).
+            auto on_black = [&](const Vec& p) {
+                for (const Vec& b : black)
+                    if (std::fabs(std::fabs(p.x) - std::fabs(b.x)) < 0.5f && std::fabs(p.y - b.y) < 0.5f && std::fabs(p.z - b.z) < 0.5f) return true;
+                return false;
+            };
             for (const V& v : verts) {
-                const float m = 3.0f;   // 062A's black vertices are not symmetric: one highlight is 2 outside
-                const bool on_nose = v.black || (v.white && v.p.x >= lo.x - m && v.p.x <= hi.x + m && v.p.y >= lo.y - m &&
-                                                 v.p.y <= hi.y + m && v.p.z >= lo.z - m && v.p.z <= hi.z + m);
+                const float m = 3.0f;
+                const bool inside = v.p.x >= -std::max(std::fabs(lo.x), std::fabs(hi.x)) - m && v.p.x <= std::max(std::fabs(lo.x), std::fabs(hi.x)) + m &&
+                                    v.p.y >= lo.y - m && v.p.y <= hi.y + m && v.p.z >= lo.z - m && v.p.z <= hi.z + m;
+                const bool on_nose = v.black || (inside && (v.white || on_black(v.p)));
                 if (on_nose) {
                     add(v, 1.0f);
                     sum = sum + v.p; total += 1.0f;
@@ -703,16 +721,30 @@ namespace {
         return !nose.index.empty();
     }
 
-    // Swing the nose: m is the snout bone's matrix as drawn (after the snout's own jiggle).
-    float jiggle_nose(uint8_t* rdram, const float m[16], Vec up) {
-        const BoneTurn turn = jiggle_bone(nose_spring, transform(m, nose.pivot), transform(m, nose.tip), up, snout_feel(), nose_limits(), nullptr);
-        // In the vertex space: v' = pivot + (v - pivot) * M N M^-1.
-        const Mat M = upper(m);
-        Mat Mi;
-        if (!inverse(M, Mi)) {
+    // The nose on the end of the snout: raw is the snout bone's matrix from the animation, drawn its
+    // matrix after the snout's jiggle, snout_turn the snout's own turn (no squash). The nose keeps its
+    // own size whatever the snout's squash and stretch do (L, 2026-10-20: a squashed snout grew a huge
+    // black nose, 4.5 times as wide at 95% inwards): its back ring stays on the snout's skin and the rest
+    // is turned with the snout but not squashed. swing: Nose jiggle's own spring on top.
+    float jiggle_nose(uint8_t* rdram, const float raw[16], const float drawn[16], const Mat& snout_turn, bool swing) {
+        BoneTurn turn;
+        turn.A = { rotation({ 1, 0, 0 }, 0.0f), { 0, 0, 0 } };
+        if (swing) {
+            // Headless: TOOIE_NOSE_FORCE=<up>,<side>[,<length>] holds the nose there, as TOOIE_SNOUT_FORCE.
+            static const char* force_env = std::getenv("TOOIE_NOSE_FORCE");
+            float force[3] = { 0.0f, 0.0f, 1.0f };
+            const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f,%f", &force[0], &force[1], &force[2]) >= 1;
+            turn = jiggle_bone(nose_spring, transform(drawn, nose.pivot), transform(drawn, nose.tip), Vec{ drawn[4], drawn[5], drawn[6] },
+                               snout_feel(), forced ? Limits{ 1.0f, 3.0f, 3.0f } : nose_limits(), forced ? force : nullptr);
+        }
+        // In the vertex space: drawn = v * D + t, and the nose should be base + (v - base) * Mr * R * N, so
+        // v' = base + (v - base) * Mr * R * N * D^-1.
+        const Mat D = upper(drawn);
+        Mat Di;
+        if (!inverse(D, Di)) {
             return 0.0f;
         }
-        const Mat Nb = mul(mul(M, turn.A.L), Mi);
+        const Mat Nb = mul(mul(mul(upper(raw), snout_turn), turn.A.L), Di);
         std::vector<int16_t> out(nose.original.size());
         for (size_t k = 0; k < nose.index.size(); k++) {
             Vec v{ (float)nose.original[3 * k], (float)nose.original[3 * k + 1], (float)nose.original[3 * k + 2] };
@@ -1167,7 +1199,8 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         } else {
             restore_muzzle(rdram);
         }
-        if (!nose_on) {
+        nose_kept = on && (nose_on || (current.vertices > 0 && current.vertices <= vanilla_vertices));
+        if (!nose_kept) {
             restore_nose(rdram);
         }
         if (body_on) {
@@ -1182,7 +1215,7 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         } else {
             restore_belly(rdram);
         }
-        const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_on || belly_on;
+        const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_kept || belly_on;
         bent_from = bending ? (model & 0x1FFFFFFF) : 0;
         bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
@@ -1292,10 +1325,10 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
     }
     const Vec head_up{ m[4], m[5], m[6] };
 
-    // Headless: TOOIE_SNOUT_FORCE=<up>,<side> (degrees) holds the snout there, for close-ups.
+    // Headless: TOOIE_SNOUT_FORCE=<up>,<side>[,<length>] (degrees; length as a share of the snout's) holds the snout there, for close-ups.
     static const char* force_env = std::getenv("TOOIE_SNOUT_FORCE");
-    float force[2] = { 0.0f, 0.0f };
-    const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f", &force[0], &force[1]) >= 1;
+    float force[3] = { 0.0f, 0.0f, 1.0f };
+    const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f,%f", &force[0], &force[1], &force[2]) >= 1;
     update_walk();
     const BoneTurn turn = jiggle_bone(snout_spring, pivot, tip, head_up, snout_feel(), snout_limits(), forced ? force : nullptr);
     const Affine& A = turn.A;
@@ -1312,8 +1345,8 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
         bend_muzzle(rdram, A, head_matrix);
     }
     float nose_angle = 0.0f;
-    if (nose_on && prepare_nose(rdram)) {
-        nose_angle = jiggle_nose(rdram, out, Vec{ out[4], out[5], out[6] });
+    if (nose_kept && prepare_nose(rdram)) {
+        nose_angle = jiggle_nose(rdram, m, out, turn.R, nose_on);
     }
     if (logging()) {
         static int n = 0;

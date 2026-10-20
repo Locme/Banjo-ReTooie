@@ -2599,6 +2599,7 @@ L_800A9C88:
 RECOMP_FUNC void func_80801FAC_chdinoboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801FAC_chdinoboss");
     // 0x80801FAC: addiu       $sp, $sp, -0x78
     ctx->r29 = ADD32(ctx->r29, -0X78);
     // 0x80801FB0: sw          $ra, 0x1C($sp)

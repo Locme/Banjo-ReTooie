@@ -87,13 +87,15 @@ on a controller.
   as it was. `TOOIE_TEXTURE_SEAMS=0` or `1` sets it for a headless run.
   Default: on.
 
-- **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
-  Mode and Screen Alignment in the game's global settings on the save select
-  screen (the TV), so it lists Speaker Mode only. While it is on, the game's own
+- **Hide Unnecessary Settings Entry** (DEV; first named Hide Vanilla Widescreen
+  Entry in the Game Menu): hides Wide-screen Mode and Screen Alignment in the
+  game's global settings on the save select screen (the TV), so it lists Speaker
+  Mode only. While it is on, the game's own
   widescreen mode is kept off and the picture centred, also on saves that had
   them changed. The game's widescreen squashes the picture for a stretched TV;
   this port's widescreen is Aspect Ratio in the Graphics tab. The menu change
-  shows the next time it opens. Default: on.
+  shows the next time it opens. The Start menu's SETTINGS page follows it too:
+  with it off, that page also has Wide-screen Mode. Default: on.
 
 The DEV tab's **Additional Tabs** section shows or hides tabs:
 
@@ -112,7 +114,7 @@ framework, not from this port's code, so it is not described here.
 
 - **Pause Special Menu** (Menu section): while this menu (Esc) is open during
   play, the game is paused as if you pressed Start, but without the pause menu
-  or anything else drawn over it, and the music keeps playing. Cutscenes, map
+  or anything else drawn over it, and the pause menu's music plays and the picture's effects keep moving. Cutscenes, map
   changes, the title screen and the file select carry on as before.
   Default: On (L, 2026-10-19).
 - **Press Start Early in Intro**: press Start during the logos and title flight to go

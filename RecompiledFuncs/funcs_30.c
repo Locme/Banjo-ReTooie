@@ -5198,6 +5198,7 @@ RECOMP_FUNC void func_80805474_chgameselect(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_80801B2C_chfactoryempspell(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801B2C_chfactoryempspell");
     // 0x80801B2C: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80801B30: sw          $ra, 0x34($sp)

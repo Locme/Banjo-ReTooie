@@ -91,6 +91,9 @@ void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx);
+void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx);
+void tooie_aim_trace(uint8_t* rdram, recomp_context* ctx, const char* caller);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
 // Cheats > HONEYKING: func_80099B94 entry, and just before it sets the state in $s2.
 void tooie_player_hit_begin(uint8_t* rdram, recomp_context* ctx);
@@ -104,6 +107,8 @@ void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx);
 void tooie_jiggy_dance_init(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f12 is an actor's own draw distance (func_80101970), about to be set.
 void tooie_actor_draw_distance(uint8_t* rdram, recomp_context* ctx);
+// Extended draw distance: start of func_80101808, gives actors that skip func_80101970 the extended distance.
+void tooie_actor_draw_reach(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.
 void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_set_fov(uint8_t* rdram, recomp_context* ctx);
@@ -158,7 +163,7 @@ void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
 // animation caches (hand edits in the generated code, banjotooie.us.toml).
 int tooie_more_memory(void);
 
-// DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp): the save
+// DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp): the save
 // select's global settings menu with only its Speaker Mode row.
 void tooie_vanilla_widescreen_rows(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_loop(uint8_t* rdram, recomp_context* ctx);
@@ -167,6 +172,8 @@ void tooie_vanilla_widescreen_row_a0(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_text(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_row_stack(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_refresh(uint8_t* rdram, recomp_context* ctx);
+// The save select's hand update (src/input/menu_mouse.cpp): $s0 = the menu.
+void tooie_select_menu(uint8_t* rdram, recomp_context* ctx);
 // Test room (src/gameplay/test_room.cpp): true while the room is up, so no dialogue starts.
 int tooie_test_room_quiet(void);
 

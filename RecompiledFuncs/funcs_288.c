@@ -3620,6 +3620,7 @@ L_80800088:
 RECOMP_FUNC void func_80802574_chdragonbrothers(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80802574_chdragonbrothers");
     // 0x80802574: addiu       $sp, $sp, -0x80
     ctx->r29 = ADD32(ctx->r29, -0X80);
     // 0x80802578: sw          $ra, 0x24($sp)

@@ -1,4 +1,4 @@
-// DEV > Hide Vanilla Widescreen Entry in the Game Menu (L, 2026-10-17; Screen Alignment too, 2026-10-19).
+// DEV > Hide Unnecessary Settings Entry (formerly Hide Vanilla Widescreen Entry in the Game Menu; L, 2026-10-17; Screen Alignment too, 2026-10-19; renamed 2026-10-20).
 //
 // The save select's global settings menu (the TV, chgameselect state 17) has three rows: 0 Screen
 // Alignment, 1 Wide-screen Mode, 2 Speaker Mode. The game's own widescreen mode squashes the picture
@@ -13,6 +13,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #include "recomp.h"
 #include "recompui/config.h"
@@ -171,6 +172,75 @@ void tooie::vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx) {
         func_80015670(rdram, &call); // moves the picture back to the centre
         if (log_enabled()) {
             std::printf("[global-settings] screen alignment %d,%d centred\n", x - align_x_centre, y - align_y_centre);
+        }
+    }
+}
+
+// ---- The pause menu's Settings page (L, 2026-10-20): the TV's settings in the Start menu, the rows the
+// TV shows (Speaker Mode; Wide-screen Mode too while the switch above is off). Screen Alignment, a
+// picture you move with the stick, is left to the TV. Values are read and set with the TV's own
+// glglobalsettings calls, so the game saves them the way it saves the TV's.
+namespace {
+    // Speaker Mode's values, as the TV names them (flag 0xBC6, 2 bits; checked headless).
+    const char* const speaker_names[] = { "MONO", "STEREO", "HEADPHONE", "DOLBY SURROUND" };
+    constexpr int32_t speaker_flag = 0xBC6;
+    constexpr int32_t speaker_bits = 2;
+    constexpr int speaker_values = 4;
+
+    enum Setting { setting_speaker, setting_widescreen };
+
+    std::vector<Setting> settings_shown() {
+        std::vector<Setting> shown;
+        if (!enabled()) {
+            shown.push_back(setting_widescreen);
+        }
+        shown.push_back(setting_speaker);
+        return shown;
+    }
+
+    void call_entrypoint(uint8_t* rdram, recomp_context* ctx, void (*func)(uint8_t*, recomp_context*), int32_t a0) {
+        recomp_context call = call_context(ctx);
+        call.r4 = (uint64_t)(int64_t)a0;
+        func(rdram, &call); // loads glglobalsettings if it is not
+    }
+}
+
+std::vector<tooie::game_settings::Row> tooie::game_settings::rows(uint8_t* rdram, recomp_context* ctx) {
+    std::vector<Row> out;
+    for (Setting s : settings_shown()) {
+        if (s == setting_speaker) {
+            const int32_t value = flag_value(rdram, ctx, speaker_flag, speaker_bits);
+            out.push_back({ "SPEAKER MODE", speaker_names[value & (speaker_values - 1)] });
+        } else {
+            recomp_context call = call_context(ctx);
+            call.r4 = (uint64_t)(int64_t)widescreen_flag;
+            func_800DA298(rdram, &call); // the game's flag getter
+            out.push_back({ "WIDE-SCREEN MODE", call.r2 != 0 ? "ON" : "OFF" });
+        }
+    }
+    return out;
+}
+
+void tooie::game_settings::change(uint8_t* rdram, recomp_context* ctx, size_t row, int step) {
+    const std::vector<Setting> shown = settings_shown();
+    if (row >= shown.size() || step == 0) {
+        return;
+    }
+    if (shown[row] == setting_speaker) {
+        const int32_t value = flag_value(rdram, ctx, speaker_flag, speaker_bits);
+        const int32_t next = ((value + step) % speaker_values + speaker_values) % speaker_values;
+        call_entrypoint(rdram, ctx, _glglobalsettings_entrypoint_8, next); // sets the sound output and saves the flag
+        if (log_enabled()) {
+            std::printf("[global-settings] pause menu: speaker mode %d -> %d\n", value, next);
+        }
+    } else {
+        recomp_context call = call_context(ctx);
+        call.r4 = (uint64_t)(int64_t)widescreen_flag;
+        func_800DA298(rdram, &call);
+        const int32_t next = call.r2 != 0 ? 0 : 1;
+        call_entrypoint(rdram, ctx, _glglobalsettings_entrypoint_4, next); // set_widescreen and the flag
+        if (log_enabled()) {
+            std::printf("[global-settings] pause menu: wide-screen mode %d\n", next);
         }
     }
 }

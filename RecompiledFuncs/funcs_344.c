@@ -14,6 +14,7 @@ RECOMP_FUNC void _bsdronebubbled_entrypoint_4(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_80800264_chstinger(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800264_chstinger");
     // 0x80800264: addiu       $sp, $sp, -0xA0
     ctx->r29 = ADD32(ctx->r29, -0XA0);
     // 0x80800268: sw          $s7, 0x60($sp)
@@ -627,6 +628,7 @@ RECOMP_FUNC void func_8009D940(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080044C_chvandoor(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080044C_chvandoor");
     // 0x8080044C: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x80800450: sw          $s7, 0x38($sp)

@@ -2913,6 +2913,7 @@ RECOMP_FUNC void func_8010D12C(uint8_t* rdram, recomp_context* ctx) {
     ctx->r31 = MEM_W(ctx->r29, 0X14);
     // 0x8010D1DC: addiu       $sp, $sp, 0x50
     ctx->r29 = ADD32(ctx->r29, 0X50);
+    tooie_enemy_aim_end(rdram, ctx);
     // 0x8010D1E0: jr          $ra
     // 0x8010D1E4: nop
 
@@ -4575,6 +4576,7 @@ RECOMP_FUNC void func_800EC3C4(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808000BC_chtrashcompactor(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808000BC_chtrashcompactor");
     // 0x808000BC: addiu       $sp, $sp, -0x88
     ctx->r29 = ADD32(ctx->r29, -0X88);
     // 0x808000C0: sw          $ra, 0x24($sp)

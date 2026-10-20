@@ -2324,6 +2324,7 @@ RECOMP_FUNC void _mlwave_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80801260_chhumba(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801260_chhumba");
     // 0x80801260: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80801264: lui         $t6, 0x8080
@@ -3980,6 +3981,7 @@ RECOMP_FUNC void _cadbfunc_entrypoint_35(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800AAC_chminisubgame(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800AAC_chminisubgame");
     // 0x80800AAC: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x80800AB0: sw          $ra, 0x3C($sp)

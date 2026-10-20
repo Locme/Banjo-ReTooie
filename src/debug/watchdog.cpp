@@ -21,7 +21,6 @@
 
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
-#include "tooie_menu_pause.h"
 #include "tooie_watchdog.h"
 #include "tooie_texture_sweep.h"
 
@@ -321,10 +320,6 @@ namespace {
             std::string started;
             for (Part* part : parts) {
                 uint64_t count = part->count.load(std::memory_order_relaxed);
-                // The ESC menu's pause (Pause Special Menu) holds the game on purpose: not a hang.
-                if (part == &game_part && tooie::menu_pause::active()) {
-                    part->last_change = now;
-                }
                 if (count != part->last_count) {
                     if (part->in_hang) {
                         std::string line = wall_time() + " " + part->name + " running again after " + seconds_text(seconds_since(part->last_change, now)) + "\n";

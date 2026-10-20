@@ -246,8 +246,13 @@ target_compile_options(RecompiledFuncs PRIVATE
     -fno-strict-aliasing
     -Wno-unused-variable
     -Wno-implicit-function-declaration
-    -falign-functions=16
 )
+# clang-cl ignores -falign-functions unless it is passed through with /clang:.
+if (MSVC)
+    target_compile_options(RecompiledFuncs PRIVATE /clang:-falign-functions=16)
+else()
+    target_compile_options(RecompiledFuncs PRIVATE -falign-functions=16)
+endif()
 
 target_include_directories(RecompiledFuncs PRIVATE
     ${CMAKE_SOURCE_DIR}/include
@@ -301,6 +306,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/speedup.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_spawner.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
@@ -310,6 +316,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/torch_enemy.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/save_state.cpp
     ${CMAKE_SOURCE_DIR}/src/input/motion_aim.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/menu_mouse.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/totals_checklist.cpp
@@ -377,6 +384,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/game_frame_rate.cpp
     ${CMAKE_SOURCE_DIR}/src/game/audio_task_check.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/heap_check.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/aim_trace.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/toast.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/shader_progress.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/photo_panel.cpp

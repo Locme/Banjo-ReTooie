@@ -43,6 +43,7 @@
 #include "tooie_fine_aim.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_motion_aim.h"
+#include "tooie_menu_mouse.h"
 #include "tooie_texture_sweep.h"
 #include "tooie_totals_checklist.h"
 #include "recompinput/profiles.h"
@@ -311,6 +312,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::player_cheats::apply_input(buttons_out);
         tooie::texture_sweep::apply_input(buttons_out);
         tooie::totals_checklist::apply_input(buttons_out, x_out, y_out);
+        tooie::menu_mouse::apply_input(buttons_out, x_out, y_out);
     }
     return ok;
 }

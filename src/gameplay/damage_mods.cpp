@@ -28,9 +28,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <random>
+#include <unordered_map>
 #include <string>
 #include <variant>
 
@@ -142,29 +145,156 @@ extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-// func_8010D12C entry: $a2 is the lead in seconds. The game's own users are Klungo's potion, the lava
-// gargoyle's fireball and the fantasy eyeball's shot. The lead stops at 1.2 s (Klungo's flight time) unless
-// the game's own lead is already longer.
-extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
-    float factor = 1.0f;
-    try {
-        switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
-        case tooie::damage::Aim::Better: factor = 1.5f; break;
-        case tooie::damage::Aim::Sharp: factor = 2.0f; break;
-        default: break;
+// Enemy aim (second try, L's test of Sharp on Klungo showed no change): scaling the game's own lead did nothing,
+// so the aim measures the player's movement itself. aim_tick (once per frame) samples his position and keeps
+// a smoothed horizontal velocity. func_8010D12C / func_8010D09C (the two aim-ahead functions) save their out
+// pointer ($a1) at entry; at their return the out point is moved on by that velocity times 0.5 s (Better) or
+// 1.0 s (Sharp), at most 600 units. Klungo's potion flies 1.2 s, so Sharp puts it just in front of a runner.
+namespace {
+    float aim_prev[3] = {};
+    float aim_vel[2] = {};
+    bool aim_have_prev = false;
+    uint32_t aim_out = 0;
+    bool aim_out_hunt = true;
+
+    // Dynamic (L, 2026-10-20): not every shot is aimed. Each shot rolls on its own: about 3 in 4 are aimed
+    // ahead and steered, the others fly as in the game, so the boss cannot be read as always-ahead or never-ahead.
+    int aim_hunt_percent() {
+        try {
+            return (int)std::get<double>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_chance_option));
+        } catch (...) {
+            return 75;
         }
+    }
+    bool roll_hunt() {
+        static std::mt19937 rng{ std::random_device{}() };
+        return std::uniform_int_distribution<int>(0, 99)(rng) < aim_hunt_percent();
+    }
+    std::unordered_map<uint32_t, bool> potion_hunt;
+
+    float aim_seconds() {
+        try {
+            switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
+            case tooie::damage::Aim::Better: return 0.5f;
+            case tooie::damage::Aim::Sharp: return 1.0f;
+            default: break;
+            }
+        } catch (...) {
+        }
+        return 0.0f;
+    }
+}
+
+// Once per frame (tooie_warp_tick).
+void tooie::damage::aim_tick(uint8_t* rdram) {
+    const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
+    const uint32_t pos_ptr = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0xE4) : 0;
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!tooie::rdram::valid_ptr(pos_ptr) || !(dt > 0.0f) || dt > 0.5f) {
+        aim_have_prev = false;
+        aim_vel[0] = aim_vel[1] = 0.0f;
+        return;
+    }
+    float pos[3];
+    for (int k = 0; k < 3; k++) {
+        pos[k] = tooie::rdram::read_float(rdram, pos_ptr + 4 * k);
+    }
+    if (aim_have_prev) {
+        const float vx = (pos[0] - aim_prev[0]) / dt;
+        const float vz = (pos[2] - aim_prev[2]) / dt;
+        // A jump of position (warp, loading) is not movement.
+        if (std::fabs(vx) < 3000.0f && std::fabs(vz) < 3000.0f) {
+            aim_vel[0] += (vx - aim_vel[0]) * 0.3f;
+            aim_vel[1] += (vz - aim_vel[1]) * 0.3f;
+        } else {
+            aim_vel[0] = aim_vel[1] = 0.0f;
+        }
+    }
+    std::memcpy(aim_prev, pos, sizeof(pos));
+    aim_have_prev = true;
+}
+
+// func_8010D12C / func_8010D09C entry: $a1 is the out point.
+extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
+    aim_out = (uint32_t)ctx->r5;
+    aim_out_hunt = roll_hunt();
+}
+
+// func_8010D12C / func_8010D09C return.
+extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
+    const float seconds = aim_seconds();
+    const uint32_t out = aim_out;
+    aim_out = 0;
+    if (seconds <= 0.0f || !aim_out_hunt || !tooie::rdram::valid_ptr(out)) {
+        return;
+    }
+    float dx = aim_vel[0] * seconds;
+    float dz = aim_vel[1] * seconds;
+    const float length = std::sqrt(dx * dx + dz * dz);
+    if (length > 600.0f) {
+        dx *= 600.0f / length;
+        dz *= 600.0f / length;
+    }
+    tooie::rdram::write_float(rdram, out, tooie::rdram::read_float(rdram, out) + dx);
+    tooie::rdram::write_float(rdram, out + 8, tooie::rdram::read_float(rdram, out + 8) + dz);
+}
+
+// Steering in flight (Enemy aim Better / Sharp). Klungo's potion (func_80800204_chklungophial is its per-frame
+// update; $a0 is the potion) flies on a fixed arc: position at +4, velocity at +0x28 (x), +0x2C (y), +0x30 (z),
+// gravity pulling +0x2C down, and a state in the top six bits of the halfword at +0x72 (1 = in flight). While in
+// flight the horizontal velocity is nudged toward the speed that would reach where the player is heading
+// (his position plus his measured movement over the time the potion has left) by then, so a potion only
+// misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
+extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
+    bool homing = true;
+    try {
+        homing = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::homing_option));
     } catch (...) {
     }
-    if (factor == 1.0f) {
+    const float seconds = homing ? aim_seconds() : 0.0f;
+    const uint32_t potion = (uint32_t)ctx->r4;
+    if (seconds <= 0.0f || !aim_have_prev || !tooie::rdram::valid_ptr(potion)) {
         return;
     }
-    uint32_t lead_bits = (uint32_t)ctx->r6;
-    float lead;
-    std::memcpy(&lead, &lead_bits, sizeof(lead));
-    if (!(lead > 0.0f)) {
+    if ((((uint16_t)tooie::rdram::read_half(rdram, potion + 0x72)) >> 10) != 1) {
+        potion_hunt.erase(potion);
         return;
     }
-    lead = std::min(lead * factor, std::max(1.2f, lead));
-    std::memcpy(&lead_bits, &lead, sizeof(lead_bits));
-    ctx->r6 = (gpr)(int64_t)(int32_t)lead_bits;
+    auto found = potion_hunt.find(potion);
+    if (found == potion_hunt.end()) {
+        if (potion_hunt.size() > 32) {
+            potion_hunt.clear();
+        }
+        found = potion_hunt.emplace(potion, roll_hunt()).first;
+    }
+    if (!found->second) {
+        return;
+    }
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!(dt > 0.0f) || dt > 0.5f) {
+        return;
+    }
+    const float px = tooie::rdram::read_float(rdram, potion + 4);
+    const float pz = tooie::rdram::read_float(rdram, potion + 0xC);
+    float vx = tooie::rdram::read_float(rdram, potion + 0x28);
+    float vz = tooie::rdram::read_float(rdram, potion + 0x30);
+    const float speed = std::sqrt(vx * vx + vz * vz);
+    if (speed < 1.0f) {
+        return;
+    }
+    // Time left in flight, from where the potion is now to where the player is now.
+    float dx = aim_prev[0] - px;
+    float dz = aim_prev[2] - pz;
+    const float left = std::max(0.15f, std::sqrt(dx * dx + dz * dz) / speed);
+    dx += aim_vel[0] * left;
+    dz += aim_vel[1] * left;
+    const float want_x = dx / left;
+    const float want_z = dz / left;
+    // How quickly it corrects: Better about a second to settle, Sharp about a third.
+    const float rate = seconds >= 1.0f ? 3.0f : 1.0f;
+    const float k = std::min(1.0f, rate * dt);
+    vx += (want_x - vx) * k;
+    vz += (want_z - vz) * k;
+    tooie::rdram::write_float(rdram, potion + 0x28, vx);
+    tooie::rdram::write_float(rdram, potion + 0x30, vz);
 }

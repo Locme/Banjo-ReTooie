@@ -73,7 +73,7 @@ namespace {
     EnvState env;
 
     // The row goes back to Off once the reload is under way (L, 2026-10-19), so the menu never shows a form
-    // waiting to be applied and picking the same form again reloads again.
+    // waiting to be applied.
     void row_to_off() {
         try {
             recomp::config::Config& cheats = tooie::cheats::config();
@@ -190,6 +190,8 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
     if (!tooie::debug::can_warp()) {
         pending_form = 0;
         pending_from_room = false;
+        // Dropped (no save file is being played), so the row does not keep showing it.
+        row_to_off();
         return;
     }
     // A map change is already under way: try again next frame.
@@ -202,6 +204,8 @@ void tooie::transform_picker::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         const uint32_t cur_player = MEM_W(0, player_table);
         if (cur_player != 0 && MEM_B(0x29, MEM_W(0xA0, (gpr)(int32_t)cur_player)) == form) {
+            // Already in that form: nothing to reload, but the row still goes back to Off.
+            row_to_off();
             return;
         }
     }

@@ -23,6 +23,7 @@ RECOMP_FUNC void chdinofamilymissing_entrypoint_0(uint8_t* rdram, recomp_context
 RECOMP_FUNC void func_808012C4_chfactorytoxiccloud(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808012C4_chfactorytoxiccloud");
     // 0x808012C4: addiu       $sp, $sp, -0x90
     ctx->r29 = ADD32(ctx->r29, -0X90);
     // 0x808012C8: sw          $s5, 0x30($sp)

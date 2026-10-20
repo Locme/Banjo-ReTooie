@@ -30,10 +30,13 @@
 #include "tooie_music_player.h"
 #include "tooie_photo_mode.h"
 #include "tooie_bottles_revenge.h"
+#include "tooie_enemy_spawner.h"
 #include "tooie_torch_enemy.h"
 #include "tooie_save_state.h"
 #include "tooie_motion_aim.h"
+#include "tooie_menu_mouse.h"
 #include "tooie_game.h"
+#include "tooie_damage.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
@@ -145,8 +148,6 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     ticked = true;
     // First, so the other ticks act on a loaded state.
     tooie::save_state::tick(rdram, ctx);
-    // Waits here while the ESC menu pauses the game; before the ticks that read this frame's delta time.
-    tooie::menu_pause::tick(rdram, ctx);
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);
@@ -154,8 +155,10 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::player_cheats::tick(rdram, ctx);
     tooie::talon_trot::tick(rdram, ctx);
     tooie::hold_to_run::tick(rdram, ctx);
+    tooie::damage::aim_tick(rdram);
     tooie::fine_aim::tick(rdram, ctx);
     tooie::motion_aim::tick(rdram, ctx);
+    tooie::menu_mouse::tick(rdram, ctx);
     tooie::picture_filters::tick(rdram, ctx);
     tooie::widescreen_tick(rdram);
     tooie::vanilla_widescreen_tick(rdram, ctx);
@@ -165,6 +168,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::music_player::tick(rdram, ctx);
     tooie::bottles_revenge::tick(rdram, ctx);
     tooie::torch_enemy::tick(rdram, ctx);
+    tooie::enemy_spawner::tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);
@@ -182,6 +186,8 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::boss_rush::tick(rdram, ctx);
     // Last: photo mode scales this frame's delta time.
     tooie::photo_mode::tick(rdram, ctx);
+    // After photo mode: the ESC menu's pause sets the frame's delta time too.
+    tooie::menu_pause::tick(rdram, ctx);
 
     // TOOIE_MAP_CHANGE_LOG=1: every map change the game asks for, with its exit, to find exit ids.
     static const bool map_change_log = std::getenv("TOOIE_MAP_CHANGE_LOG") != nullptr;

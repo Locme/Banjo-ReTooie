@@ -457,6 +457,7 @@ RECOMP_FUNC void func_80800BCC_chtntmineshoot(uint8_t* rdram, recomp_context* ct
 RECOMP_FUNC void func_801002C0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_801002C0");
     // 0x801002C0: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x801002C4: sw          $ra, 0x24($sp)
@@ -2842,6 +2843,7 @@ L_808006C8:
 RECOMP_FUNC void func_80801AF0_changlerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801AF0_changlerboss");
     // 0x80801AF0: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80801AF4: sw          $ra, 0x24($sp)

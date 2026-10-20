@@ -2239,6 +2239,7 @@ L_808000C0:
 RECOMP_FUNC void func_80800058_chcoderoombits(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800058_chcoderoombits");
     // 0x80800058: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x8080005C: sw          $ra, 0x1C($sp)
@@ -3269,6 +3270,7 @@ RECOMP_FUNC void _basudie_entrypoint_11(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080298C_chfantasyathlete(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080298C_chfantasyathlete");
     // 0x8080298C: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80802990: sw          $ra, 0x2C($sp)

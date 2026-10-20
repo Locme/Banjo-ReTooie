@@ -2528,6 +2528,7 @@ RECOMP_FUNC void bababykaz_entrypoint_4(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8010D350(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8010D350");
     // 0x8010D350: addiu       $sp, $sp, -0xA8
     ctx->r29 = ADD32(ctx->r29, -0XA8);
     // 0x8010D354: sw          $s0, 0x44($sp)

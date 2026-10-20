@@ -5,6 +5,7 @@
 RECOMP_FUNC void func_808004A4_chdragonbrothers(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808004A4_chdragonbrothers");
     // 0x808004A4: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x808004A8: sw          $s0, 0x18($sp)
@@ -2128,7 +2129,7 @@ RECOMP_FUNC void _bskazstill_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80101808(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    tooie_actor_draw_begin(rdram, ctx);
+    tooie_actor_draw_begin(rdram, ctx); tooie_actor_draw_reach(rdram, ctx);
     // 0x80101808: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x8010180C: sw          $s0, 0x20($sp)

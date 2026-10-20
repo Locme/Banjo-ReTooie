@@ -1286,6 +1286,7 @@ L_80800058:
 RECOMP_FUNC void func_80801A50_chfantasyeyeball(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801A50_chfantasyeyeball");
     // 0x80801A50: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x80801A54: sw          $s0, 0x18($sp)

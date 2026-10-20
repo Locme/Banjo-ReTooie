@@ -819,6 +819,7 @@ RECOMP_FUNC void _chsquits_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80801554_gcmapsects(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801554_gcmapsects");
     // 0x80801554: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80801558: sw          $s4, 0x28($sp)

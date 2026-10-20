@@ -1396,6 +1396,7 @@ L_80800140:
 RECOMP_FUNC void func_800EA45C(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800EA45C");
     // 0x800EA45C: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x800EA460: sw          $s2, 0x34($sp)

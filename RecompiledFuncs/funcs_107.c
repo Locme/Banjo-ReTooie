@@ -4275,6 +4275,7 @@ RECOMP_FUNC void _baeggcursor_entrypoint_8(uint8_t* rdram, recomp_context* ctx) 
 RECOMP_FUNC void baduo_entrypoint_13(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "baduo_entrypoint_13");
     // 0x8080030C: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80800310: sw          $ra, 0x1C($sp)

@@ -13,6 +13,7 @@
 #include "recompui/recompui.h"
 
 #include "tooie_cheats.h"
+#include "tooie_enemy_spawner.h"
 #include "tooie_progress_cheats.h"
 #include "tooie_replays.h"
 #include "tooie_speedup.h"
@@ -130,6 +131,7 @@ namespace {
         }
         tooie::transform_picker::reset(cfg);
         tooie::replays::reset(cfg);
+        tooie::enemy_spawner::reset();
     }
 
     // RDRAM halfwords are stored with the address bit 1 flipped.
@@ -206,6 +208,10 @@ void tooie::cheats::create_tab() {
         }
     }
     config.update_option_hidden(beat_hag_option, true);
+
+    // At the end of the Enemies section.
+    tooie::enemy_spawner::add_options(config, enabled_option);
+    recompui::config::set_option_display_before(tooie::enemy_spawner::option, "cheat_big_head");
 
     tooie::replays::add_options(config, enabled_option);
 

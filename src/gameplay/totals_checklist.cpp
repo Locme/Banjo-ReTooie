@@ -276,6 +276,7 @@ namespace {
     int last_page = -1;
     int last_sub_page = -1;
     bool last_achievements_open = false;
+    bool last_settings_open = false;
 }
 
 // What can be got now: the rules of the Archipelago randomizer's Banjo-Tooie world, translated by
@@ -549,10 +550,12 @@ namespace {
     };
 
     // Shared with the pad filter (apply_input), which runs before the game reads the pad.
-    enum Mode : int { mode_none, mode_table, mode_list };
+    // mode_settings: as mode_table, with left/right kept from the game too (they change a value).
+    enum Mode : int { mode_none, mode_table, mode_list, mode_settings };
     std::atomic<int> input_mode{ mode_none };
     std::atomic<int64_t> drawn_at_ms{ 0 };
     std::atomic<int> moves_down{ 0 };   // cursor steps, down positive
+    std::atomic<int> moves_right{ 0 };  // value steps on the Settings page, right positive
     std::atomic<int> presses_a{ 0 };
     std::atomic<int> presses_b{ 0 };
 
@@ -1058,6 +1061,35 @@ namespace {
 }
 
 namespace {
+    // ---- The pause menu's Settings page (pause_settings.cpp opens it as a Totals sub page): the save
+    // select TV's settings, one per row with its value on the right. Up/down picks a row, left/right
+    // or A changes its value at once, as the TV does after A.
+    constexpr int set_left = 72;
+    constexpr int set_right = 248;
+    constexpr int set_line_height = 16;
+    int set_cursor = 0;
+
+    void draw_settings(uint8_t* rdram, recomp_context* ctx, uint32_t gfx, uint32_t& offset, int steps, int change) {
+        std::vector<tooie::game_settings::Row> rows = tooie::game_settings::rows(rdram, ctx);
+        if (rows.empty()) {
+            return;
+        }
+        const int count = (int)rows.size();
+        set_cursor = std::clamp(set_cursor + steps, 0, count - 1);
+        if (change != 0) {
+            tooie::game_settings::change(rdram, ctx, (size_t)set_cursor, change);
+            rows = tooie::game_settings::rows(rdram, ctx);
+        }
+        for (int row = 0; row < count; row++) {
+            const int y = block_y + set_line_height * row;
+            const bool picked = row == set_cursor;
+            print(rdram, ctx, gfx, offset, colour_white, text_scale, set_left, y, rows[row].name, false, !picked);
+            print(rdram, ctx, gfx, offset, colour_yellow, text_scale, set_right, y, rows[row].value, true, !picked);
+        }
+    }
+}
+
+namespace {
     // ---- The unlock pop-up: the portrait with "ACHIEVEMENT UNLOCKED" and the name and score beside
     // it, at the top of the screen, sliding down and fading in, then out. Its strings go after the
     // pause page's in the string area.
@@ -1160,6 +1192,26 @@ extern "C" void tooie_totals_checklist_draw(uint8_t* rdram, recomp_context* ctx)
         return;
     }
     last_achievements_open = false;
+    if (page == page_totals && sub_page == tooie::game_settings::pause_sub_page) {
+        if (!last_settings_open) {
+            set_cursor = 0;
+            moves_right.exchange(0);
+        }
+        last_settings_open = true;
+        if (MEM_BU(pause_draw_header, pause) == 0) {
+            return;
+        }
+        page_in = std::min(1.0f, MEM_BU(pause_title_step, pause) / 10.0f);
+        rise = (int)((1.0f - page_in) * 12.0f + 0.5f);
+        presses_b.exchange(0);
+        uint32_t offset = 0;
+        drawn_at_ms.store(now_ms());
+        input_mode.store(mode_settings);
+        const int change = moves_right.exchange(0) + presses_a.exchange(0);
+        draw_settings(rdram, ctx, gfx, offset, moves_down.exchange(0), page_in >= 1.0f ? change : 0);
+        return;
+    }
+    last_settings_open = false;
     if (page != page_totals || !enabled(Clock::now())) {
         return;
     }
@@ -1292,11 +1344,16 @@ void tooie::totals_checklist::apply_input(uint16_t* buttons, float* x, float* y)
     constexpr uint16_t dpad_down = 0x0400;
     constexpr uint16_t c_up = 0x0008;
     constexpr uint16_t c_down = 0x0004;
+    constexpr uint16_t dpad_left = 0x0200;
+    constexpr uint16_t dpad_right = 0x0100;
+    constexpr uint16_t c_left = 0x0002;
+    constexpr uint16_t c_right = 0x0001;
 
     static bool held_a = false;
     static bool held_b = false;
     static bool swallow_b = false;
     static int held_dir = 0;
+    static int held_side = 0;
     static int64_t next_repeat = 0;
 
     constexpr uint16_t button_start = 0x1000;
@@ -1320,10 +1377,18 @@ void tooie::totals_checklist::apply_input(uint16_t* buttons, float* x, float* y)
         dir = 1;
     }
 
+    int side = 0;
+    if ((*buttons & (dpad_left | c_left)) != 0 || *x < -0.5f) {
+        side = -1;
+    } else if ((*buttons & (dpad_right | c_right)) != 0 || *x > 0.5f) {
+        side = 1;
+    }
+
     if (mode == mode_none) {
         held_a = a;
         held_b = b;
         held_dir = dir;
+        held_side = side;
         swallow_b = swallow_b && b;
         if (swallow_b) {
             *buttons &= ~button_b;
@@ -1349,6 +1414,14 @@ void tooie::totals_checklist::apply_input(uint16_t* buttons, float* x, float* y)
     }
     held_b = b;
 
+    if (mode == mode_settings) {
+        if (side != 0 && side != held_side) {
+            moves_right.fetch_add(side);
+        }
+        *buttons &= ~(dpad_left | dpad_right | c_left | c_right);
+        *x = 0.0f;
+    }
+    held_side = side;
     *buttons &= ~(button_a | dpad_up | dpad_down | c_up | c_down);
     *y = 0.0f;
     if (mode == mode_list) {

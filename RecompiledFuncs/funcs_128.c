@@ -6231,6 +6231,7 @@ RECOMP_FUNC void _baeggsetup_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80801608_chfactorytwinklies(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801608_chfactorytwinklies");
     // 0x80801608: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x8080160C: sw          $a0, 0x38($sp)
