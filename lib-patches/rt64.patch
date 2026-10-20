@@ -2042,7 +2042,7 @@ index 69a82ac..5107e5d 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..affb6f2 100644
+index 9fae0d4..e67ebbc 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3336,7 +3336,7 @@ index 9fae0d4..affb6f2 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2834,1026 @@ namespace RT64 {
+@@ -1747,24 +2834,1027 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4058,10 +4058,11 @@ index 9fae0d4..affb6f2 100644
 +        }
 +    }
 +
-+    // Banjo-Tooie: a vertex's fur mark (SetFurVertexFlags) as the w of its fur anchor, for RasterPS.hlsl: 1 bare, 2 unmarked
-+    // (told by its colour as lit), 3 fur, 4 her feathers. Blended across a triangle, fur and bare meet through unmarked
-+    // (the colour test), never unmarked and bare through fur (a backpack's textured top and its bare blue sides grew fur
-+    // along their seam).
++    // Banjo-Tooie: a vertex's fur mark (SetFurVertexFlags) as the w of its fur anchor, for RasterPS.hlsl: 0 unmarked (told
++    // by its colour as lit), 1 bare, 3 fur, 4 her feathers. Blended across a triangle, unmarked and bare never meet
++    // through fur (a backpack's textured top and its bare blue sides grew fur along their seam), and fur and bare
++    // never through unmarked: his shorts' triangles that reach down to his brown legs blend yellow into brown, and
++    // the colour test grew strands over the shorts there (L).
 +    static float FurMarkW(uint8_t flag) {
 +        switch (flag & FUR_VERTEX_MARK_MASK) {
 +        case FUR_VERTEX_BARE:
@@ -4071,7 +4072,7 @@ index 9fae0d4..affb6f2 100644
 +        case FUR_VERTEX_FEATHERS:
 +            return 4.0f;
 +        default:
-+            return 2.0f;
++            return 0.0f;
 +        }
 +    }
 +
@@ -10989,10 +10990,10 @@ index 0000000..b4daa7f
 +}
 diff --git a/src/shaders/Fur.hlsli b/src/shaders/Fur.hlsli
 new file mode 100644
-index 0000000..3f007c2
+index 0000000..277de7d
 --- /dev/null
 +++ b/src/shaders/Fur.hlsli
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,143 @@
 +//
 +// RT64
 +//
@@ -11064,9 +11065,10 @@ index 0000000..3f007c2
 +// anchor is the place on the model (its own units), baseColor the surface's own colour there; white picks a furry
 +// enemy's white fur instead of Banjo's brown. mark is the vertex's fur mark (FurMarkW in rt64_framebuffer_renderer.cpp),
 +// blended across the triangle: 3 fur, 1 or 4 bare (his model tells them by their own colours, so the light on them
-+// doesn't change the coat, L); 2 (unmarked) tells it by the colour as lit here.
++// doesn't change the coat, L); 0 (unmarked) tells it by the colour as lit here. Between fur and bare only the last
++// quarter next to the fur grows it: his shorts' edge blends into his legs' brown, and stays clean (L).
 +bool FurShell(float3 anchor, float3 baseColor, float share, bool white, float mark, inout float3 color) {
-+    if ((mark < 1.5f) || (mark >= 3.5f)) {
++    if (((mark >= 0.5f) && (mark < 2.5f)) || (mark >= 3.5f)) {
 +        return false;
 +    }
 +    else if (mark >= 2.5f) {
