@@ -58,6 +58,10 @@
 // fades out at the belt, the fur and the chest so nothing comes apart. (L, 2026-10-20: it sat up at
 // the necklace and read as a chest jiggle; it now sits just above his belt.) Not on mods with many vertices.
 //
+// Ear jiggle (L, 2026-10-20, its own toggle and sliders of the snout's kinds): Banjo's two ears
+// (six head-bone vertices each on the game's own models) are jiggle bones from their base to their
+// top, written into the vertex list like the belly; the base stays on his head. Not on mods.
+//
 // Mumbo jiggle (L, 2026-10-19, its own toggle, Kazooie's sliders): the three feathers on Mumbo's
 // head (asset 0665, playable and in his skulls: bones 4-6, 7-9 and 10-12 on head bone 2) are jiggle
 // bones the same way.
@@ -79,6 +83,7 @@
 #include "tooie_size_cheats.h"
 #include "recompui/config.h"
 #include "tooie_game_frame_rate.h"
+#include "tooie_hd_shadows.h"
 #include "tooie_photo_mode.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_rdram.h"
@@ -464,7 +469,7 @@ namespace {
     } walk;
 
     void update_walk() {
-        if (tooie::photo_mode::active()) {
+        if (tooie::photo_mode::active() || tooie::hd_shadows::drawing_shadow()) {
             return;
         }
         const double now = tooie::game_frame_rate::game_seconds();
@@ -518,7 +523,12 @@ namespace {
         if (la < 1e-3f) {
             return r;
         }
-        if (hold && jiggle.started) {
+        // The shadow's draw of the same model (HD Shadows draws Banjo himself into his shadow, at the
+        // shadow's place) keeps this frame's swing and moves nothing: stepping the spring there saw the
+        // model jump to the shadow and back every frame and reset it, so it stood still (L, 2026-10-20).
+        const bool shadow = tooie::hd_shadows::drawing_shadow();
+        if (shadow) {
+        } else if (hold && jiggle.started) {
             // Carried along as it is: the point follows the tip, still, and picks up from there after.
             jiggle.point = to_world(tip) + to_world(jiggle.offset) - to_world(Vec{ 0, 0, 0 });
             jiggle.velocity = {};
@@ -527,7 +537,7 @@ namespace {
             update_jiggle(jiggle, to_world(tip), feel);
         }
         const Vec f = arm * (1.0f / la);
-        Vec offset = hold && jiggle.started ? jiggle.offset : to_model_dir(jiggle.point - to_world(tip));
+        Vec offset = shadow || (hold && jiggle.started) ? jiggle.offset : to_model_dir(jiggle.point - to_world(tip));
         if (force != nullptr) {
             Vec u = up - f * dot(up, f);
             u = u * (1.0f / std::max(length(u), 1e-4f));
@@ -912,6 +922,148 @@ namespace {
         return turn.angle;
     }
 
+    // ---- the ears (see the top) ----
+    // Banjo's ears (the game's own models: six head-bone vertices each, round +-12,116,13 in 062A) are
+    // two jiggle bones from the middle of each ear's base to its top, their own sliders of the
+    // snout's kinds. Picked by bind position, so a head vertex at the same place moves with the ear;
+    // the base stays on the head and the swing grows towards the top.
+    constexpr int ear_bone = 9;
+    constexpr int ear_points = 6;
+    constexpr int16_t ear_shape[ear_points][3] = { { 9, 113, 12 }, { 7, 116, 14 }, { 12, 120, 16 }, { 15, 115, 13 }, { 13, 116, 10 }, { 10, 120, 13 } };
+
+    struct EarSettings { Feel feel{ 150.0f, 10.0f, 1.0f }; Limits lim{ 0.4f, 0.4f, 0.8f }; } ear_settings;
+    void read_ear_settings() {
+        using namespace tooie::snout_jiggle;
+        ear_settings.feel.stiffness = std::clamp((float)option_number(ears_stiffness_option, 150.0), 1.0f, 2000.0f);
+        ear_settings.feel.damping = std::clamp((float)option_number(ears_damping_option, 10.0), 0.0f, 200.0f);
+        ear_settings.feel.mass = std::clamp((float)option_number(ears_mass_option, 1.0), 0.05f, 20.0f);
+        ear_settings.lim.inwards = std::clamp((float)option_number(ears_squash_in_option, 40.0), 0.0f, 95.0f) / 100.0f;
+        ear_settings.lim.outwards = std::clamp((float)option_number(ears_squash_out_option, 40.0), 0.0f, 300.0f) / 100.0f;
+        ear_settings.lim.across = std::clamp((float)option_number(ears_squash_across_option, 80.0), 0.0f, 300.0f) / 100.0f;
+    }
+
+    bool ears_on = false;
+    struct Ear {
+        Jiggle spring;
+        Vec pivot{}, tip{};
+        std::vector<int> index;
+        std::vector<float> weight;
+        std::vector<int16_t> original, written;
+    };
+    struct Ears {
+        uint32_t model = 0, vtx = 0;
+        Ear side[2];
+    } ears;
+
+    uint32_t ear_vertex(int i) { return ears.vtx + 0x18 + 16 * i; }
+
+    bool ears_intact(uint8_t* rdram) {
+        for (const Ear& e : ears.side) {
+            const std::vector<int16_t>& expect = e.written.empty() ? e.original : e.written;
+            for (size_t k = 0; k < e.index.size(); k++)
+                for (int c = 0; c < 3; c++)
+                    if (read_half(rdram, ear_vertex(e.index[k]) + 2 * c) != expect[3 * k + c]) return false;
+        }
+        return true;
+    }
+
+    void restore_ears(uint8_t* rdram) {
+        if (ears.model != 0 && valid_ptr(ears.vtx) && ears_intact(rdram)) {
+            for (const Ear& e : ears.side) {
+                if (e.written.empty()) continue;
+                for (size_t k = 0; k < e.index.size(); k++)
+                    for (int c = 0; c < 3; c++) write_half(rdram, ear_vertex(e.index[k]) + 2 * c, e.original[3 * k + c]);
+            }
+        }
+        // The springs carry on: a model change (a blink, a new animation set) keeps the swing.
+        Jiggle springs[2] = { ears.side[0].spring, ears.side[1].spring };
+        ears = {};
+        ears.side[0].spring = springs[0];
+        ears.side[1].spring = springs[1];
+    }
+
+    bool prepare_ears(uint8_t* rdram) {
+        if (current.vertices <= 0 || current.vertices > vanilla_vertices) {
+            return false;
+        }
+        if (ears.model == current_model && ears.vtx == current.vtx && !ears.side[0].index.empty() && ears_intact(rdram)) {
+            return true;
+        }
+        restore_ears(rdram);
+        ears.model = current_model;
+        ears.vtx = current.vtx;
+        std::vector<int> all;
+        const uint32_t geo = current_model + read_word(rdram, current_model + 4);
+        collect_bone(rdram, geo, -1, false, 0, ear_bone, all);
+        std::sort(all.begin(), all.end());
+        all.erase(std::unique(all.begin(), all.end()), all.end());
+        for (int s = 0; s < 2; s++) {
+            Ear& e = ears.side[s];
+            const int sign = s == 0 ? 1 : -1;
+            Vec base{ 0, 0, 0 }, top{ 0, 0, 0 };
+            float nb = 0.0f, nt = 0.0f;
+            for (const auto& q : ear_shape) {
+                const Vec p{ (float)(sign * q[0]), (float)q[1], (float)q[2] };
+                if (q[1] >= 119) { top = top + p; nt += 1.0f; } else { base = base + p; nb += 1.0f; }
+            }
+            e.pivot = base * (1.0f / nb);
+            e.tip = top * (1.0f / nt);
+            for (int i : all) {
+                if (i < 0 || i >= current.vertices) continue;
+                const uint32_t a = ear_vertex(i);
+                const int16_t x = (int16_t)read_half(rdram, a), y = (int16_t)read_half(rdram, a + 2), z = (int16_t)read_half(rdram, a + 4);
+                bool match = false;
+                for (const auto& q : ear_shape) match |= x == sign * q[0] && y == q[1] && z == q[2];
+                if (!match) continue;
+                e.index.push_back(i);
+                e.weight.push_back(smooth(((float)y - 114.0f) / 6.0f));
+                e.original.push_back(x); e.original.push_back(y); e.original.push_back(z);
+            }
+        }
+        // Both ears or neither (a model whose head differs from the game's).
+        if (ears.side[0].index.size() < ear_points || ears.side[1].index.size() < ear_points) {
+            ears.side[0].index.clear();
+            ears.side[1].index.clear();
+            return false;
+        }
+        return true;
+    }
+
+    // Swing the ears: m is the head bone's matrix as drawn.
+    float jiggle_ears(uint8_t* rdram, const float m[16]) {
+        // Headless: TOOIE_EAR_FORCE=<up>,<side>[,<length>] holds both ears there, as TOOIE_SNOUT_FORCE.
+        static const char* force_env = std::getenv("TOOIE_EAR_FORCE");
+        float force[3] = { 0.0f, 0.0f, 1.0f };
+        const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f,%f", &force[0], &force[1], &force[2]) >= 1;
+        const Mat M = upper(m);
+        Mat Mi;
+        if (!inverse(M, Mi)) {
+            return 0.0f;
+        }
+        float angle = 0.0f;
+        for (Ear& e : ears.side) {
+            // The ear points up from the head; its "up" for the force is the head's forward (z) axis.
+            const BoneTurn turn = jiggle_bone(e.spring, transform(m, e.pivot), transform(m, e.tip), Vec{ m[8], m[9], m[10] },
+                                              ear_settings.feel, ear_settings.lim, forced ? force : nullptr);
+            angle = std::max(angle, turn.angle);
+            // In the vertex space: v' = pivot + (v - pivot) * M N M^-1.
+            const Mat Nb = mul(mul(M, turn.A.L), Mi);
+            std::vector<int16_t> out(e.original.size());
+            for (size_t k = 0; k < e.index.size(); k++) {
+                Vec v{ (float)e.original[3 * k], (float)e.original[3 * k + 1], (float)e.original[3 * k + 2] };
+                const Vec moved = e.pivot + apply(v - e.pivot, Nb);
+                v = v + (moved - v) * e.weight[k];
+                out[3 * k] = (int16_t)std::lround(std::clamp(v.x, -32768.0f, 32767.0f));
+                out[3 * k + 1] = (int16_t)std::lround(std::clamp(v.y, -32768.0f, 32767.0f));
+                out[3 * k + 2] = (int16_t)std::lround(std::clamp(v.z, -32768.0f, 32767.0f));
+            }
+            for (size_t k = 0; k < e.index.size(); k++)
+                for (int c = 0; c < 3; c++) write_half(rdram, ear_vertex(e.index[k]) + 2 * c, out[3 * k + c]);
+            e.written = std::move(out);
+        }
+        return angle;
+    }
+
     // ---- Kazooie's feathers ----
     // Chains of bones, root first: bone indices and the ids that confirm them.
     struct Chain { int count; int bone[4]; int16_t id[4]; };
@@ -1221,9 +1373,12 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     const bool body_on = option_bool(tooie::snout_jiggle::body_option);
     const bool mumbo_on = option_bool(tooie::snout_jiggle::mumbo_option);
     const bool belly_option = option_bool(tooie::snout_jiggle::belly_option);
+    const bool ears_option = option_bool(tooie::snout_jiggle::ears_option);
     body.active = false;
     belly_on = false;
-    if (!on && !feathers_on && !body_on && !mumbo_on && !belly_option && muzzle.model == 0 && nose.model == 0 && belly.model == 0) {
+    ears_on = false;
+    if (!on && !feathers_on && !body_on && !mumbo_on && !belly_option && !ears_option && muzzle.model == 0 && nose.model == 0 && belly.model == 0 &&
+        ears.model == 0) {
         return;
     }
     const ModelInfo info = info_for(rdram, model);
@@ -1258,11 +1413,17 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         } else {
             restore_belly(rdram);
         }
-        const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_kept || belly_on;
+        ears_on = ears_option && current.vertices > 0 && current.vertices <= vanilla_vertices;
+        if (ears_on) {
+            read_ear_settings();
+        } else {
+            restore_ears(rdram);
+        }
+        const bool bending = (on && current.vertices > 0 && current.vertices <= vanilla_vertices) || nose_kept || belly_on || ears_on;
         bent_from = bending ? (model & 0x1FFFFFFF) : 0;
         bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
-    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on) {
+    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on && !ears_on) {
         return;
     }
     model_pos = { read_float(rdram, sp + 0xE0), read_float(rdram, sp + 0xE4), read_float(rdram, sp + 0xE8) };
@@ -1285,7 +1446,7 @@ extern "C" void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx) {
 }
 
 static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
-    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on) {
+    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on && !ears_on) {
         return;
     }
     const uint32_t node = read_word(rdram, (uint32_t)ctx->r29 + 0x24);
@@ -1326,6 +1487,19 @@ static void snout_bone_node(uint8_t* rdram, recomp_context* ctx) {
             static int n = 0;
             if (++n % 15 == 0) {
                 printf("[belly] angle %.1f verts %zu\n", a * 180.0f / pi, belly.index.size());
+                fflush(stdout);
+            }
+        }
+    }
+    // The ears, on the head bone's own vertices.
+    if (ears_on && bone == ear_bone && prepare_ears(rdram)) {
+        float mh[16];
+        for (int i = 0; i < 16; i++) mh[i] = read_float(rdram, src + 4 * i);
+        const float a = jiggle_ears(rdram, mh);
+        if (logging()) {
+            static int n = 0;
+            if (++n % 15 == 0) {
+                printf("[ears] angle %.1f verts %zu+%zu\n", a * 180.0f / pi, ears.side[0].index.size(), ears.side[1].index.size());
                 fflush(stdout);
             }
         }
