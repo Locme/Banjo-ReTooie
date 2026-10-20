@@ -159,10 +159,16 @@ namespace {
 
     // Dynamic (L, 2026-10-20): not every shot is aimed. Each shot rolls on its own: about 3 in 4 are aimed
     // ahead and steered, the others fly as in the game, so the boss cannot be read as always-ahead or never-ahead.
-    constexpr int aim_hunt_percent = 75;
+    int aim_hunt_percent() {
+        try {
+            return (int)std::get<double>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_chance_option));
+        } catch (...) {
+            return 75;
+        }
+    }
     bool roll_hunt() {
         static std::mt19937 rng{ std::random_device{}() };
-        return std::uniform_int_distribution<int>(0, 99)(rng) < aim_hunt_percent;
+        return std::uniform_int_distribution<int>(0, 99)(rng) < aim_hunt_percent();
     }
     std::unordered_map<uint32_t, bool> potion_hunt;
 
