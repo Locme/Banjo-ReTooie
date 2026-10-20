@@ -16,7 +16,8 @@
 // otherwise walk, and the walk has no sprint. QOL > Running turns the whole feature off.
 //
 // Sprint dust (L, 2026-10-19): "dust trails to sprinting, similar ... as quickly turning from left/right to
-// the opposite direction (the same amount)", only when the sprint starts and at most once every 10 seconds.
+// the opposite direction (the same amount)", only when the sprint starts and at most once every 10 seconds
+// (5 seconds since L, 2026-10-20: "Make it 5 seconds instead").
 // The quick turn (bsturn) spawns its dust through _badust_entrypoint_3(player, angle, speed): for the
 // turn's 0.3 s it counts 1 to 5 then -1, 0, 1, ... each frame and on -1, 0 and 1 puffs at the angle in
 // physics +0x40 minus 10, plus 0 and plus 10 degrees, at 0.88, 1 and 0.88 of the horizontal speed. The
@@ -551,7 +552,7 @@ namespace {
     // Sprint dust: how long the turn's dust lasts (its animation's 0.3 s), the gap between two
     // bursts (both in game time), and the turn's side puffs' angle and speed factor (bsturn rodata).
     constexpr double dust_seconds = 0.3;
-    constexpr double dust_gap = 10.0;
+    constexpr double dust_gap = 5.0;
     constexpr float dust_side_speed = 0.88f;
     constexpr float dust_side_angle = 10.0f;
     // Game thread only: game time the current burst ends and the last one began, bsturn's frame counter.
