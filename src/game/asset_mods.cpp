@@ -55,6 +55,7 @@
 #include "tooie_game.h"
 #include "tooie_hooks.h"
 #include "tooie_original_honeycomb.h"
+#include "tooie_window_beams.h"
 #include "tooie_toast.h"
 
 extern "C" void heap_alloc(uint8_t* rdram, recomp_context* ctx);
@@ -294,6 +295,13 @@ void tooie::asset_mods::tick(uint8_t* rdram) {
         refresh_wanted = true;
     }
     honeycomb_before = honeycomb_now;
+    // Graphics > Window Light Beams switched: reload the room if it is one with beams.
+    static int beams_before = -1;
+    const int beams_now = tooie::window_beams::enabled() ? 1 : 0;
+    if (beams_before != -1 && beams_now != beams_before && tooie::window_beams::has_beams(tooie::debug::current_map(rdram))) {
+        refresh_wanted = true;
+    }
+    beams_before = beams_now;
     // Mods switched on at startup land here on the title screen, where nothing needs reloading.
     if (refresh_wanted.exchange(false) && tooie::debug::can_warp()) {
         uint16_t map = tooie::debug::current_map(rdram);
@@ -370,6 +378,12 @@ extern "C" int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx) {
                 fprintf(stderr, "[assets] Original honeycomb: could not build the comb, Tooie's is used\n");
             }
         }
+        bytes.assign(built.begin(), built.end());
+    } else {
+        std::vector<uint8_t> built = tooie::window_beams::model_for(id, [](uint32_t asset) {
+            std::span<const uint8_t> rom = recomp::get_rom();
+            return rom_asset(rom, read_table(rom), asset);
+        });
         bytes.assign(built.begin(), built.end());
     }
     if (bytes.empty()) {

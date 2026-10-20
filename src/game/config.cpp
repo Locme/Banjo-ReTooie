@@ -19,6 +19,7 @@
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
+#include "tooie_window_beams.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
@@ -676,6 +677,17 @@ void tooie::init_config() {
         tooie::hd_shadows::Direction::Overhead);
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     tooie::day_night::add_options(graphics);
+    graphics.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light fall from the round windows in Bottles' house onto the floor, the way they do from the windows in Mumbo's Skull. Switching it in Bottles' house reloads the room.",
+        true);
+    graphics.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
