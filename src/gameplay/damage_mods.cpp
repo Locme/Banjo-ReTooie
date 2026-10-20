@@ -32,6 +32,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <random>
+#include <unordered_map>
 #include <string>
 #include <variant>
 
@@ -153,6 +155,16 @@ namespace {
     float aim_vel[2] = {};
     bool aim_have_prev = false;
     uint32_t aim_out = 0;
+    bool aim_out_hunt = true;
+
+    // Dynamic (L, 2026-10-20): not every shot is aimed. Each shot rolls on its own: about 3 in 4 are aimed
+    // ahead and steered, the others fly as in the game, so the boss cannot be read as always-ahead or never-ahead.
+    constexpr int aim_hunt_percent = 75;
+    bool roll_hunt() {
+        static std::mt19937 rng{ std::random_device{}() };
+        return std::uniform_int_distribution<int>(0, 99)(rng) < aim_hunt_percent;
+    }
+    std::unordered_map<uint32_t, bool> potion_hunt;
 
     float aim_seconds() {
         try {
@@ -199,6 +211,7 @@ void tooie::damage::aim_tick(uint8_t* rdram) {
 // func_8010D12C / func_8010D09C entry: $a1 is the out point.
 extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
     aim_out = (uint32_t)ctx->r5;
+    aim_out_hunt = roll_hunt();
 }
 
 // func_8010D12C / func_8010D09C return.
@@ -206,7 +219,7 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
     const float seconds = aim_seconds();
     const uint32_t out = aim_out;
     aim_out = 0;
-    if (seconds <= 0.0f || !tooie::rdram::valid_ptr(out)) {
+    if (seconds <= 0.0f || !aim_out_hunt || !tooie::rdram::valid_ptr(out)) {
         return;
     }
     float dx = aim_vel[0] * seconds;
@@ -233,6 +246,17 @@ extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     if ((((uint16_t)tooie::rdram::read_half(rdram, potion + 0x72)) >> 10) != 1) {
+        potion_hunt.erase(potion);
+        return;
+    }
+    auto found = potion_hunt.find(potion);
+    if (found == potion_hunt.end()) {
+        if (potion_hunt.size() > 32) {
+            potion_hunt.clear();
+        }
+        found = potion_hunt.emplace(potion, roll_hunt()).first;
+    }
+    if (!found->second) {
         return;
     }
     const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
