@@ -271,6 +271,9 @@ namespace {
         }
     }
 
+    // DEV > Sound test's next number (sound_test_tick); TOOIE_SOUND_TEST=<n> plays one in the first level.
+    std::atomic<int> sound_test_pending{ -1 };
+
     void read_env() {
         static bool read = false;
         if (read) {
@@ -278,6 +281,9 @@ namespace {
         }
         read = true;
         log_on = std::getenv("TOOIE_TORCH_LOG") != nullptr;
+        if (const char* v = std::getenv("TOOIE_SOUND_TEST")) {
+            sound_test_pending = std::atoi(v);
+        }
         shots_on = std::getenv("TOOIE_TORCH_SHOTS") != nullptr;
         if (const char* v = std::getenv("TOOIE_TORCH_NEAR")) {
             near_distance = (float)std::atof(v);
@@ -794,9 +800,15 @@ namespace {
 
     // DEV > Sound test: plays the game's sound (0x4000 | number) at Banjo whenever the number changes, to find
     // one by ear. It plays like func_800C401C but keeps the voice, so the last one is stopped (func_800C3CE8)
-    // before the next starts; looping sounds would otherwise pile up.
-    std::atomic<int> sound_test_pending{ -1 };
+    // before the next starts; looping sounds would otherwise pile up. func_800C3BDC is what starts the voice;
+    // without it the voice is only set up and nothing is heard. The voice frees itself when its sound ends
+    // (func_800C330C 1) and its slot can go to another sound, so it is stopped only while the slot
+    // (0x80128B90 + voice * 0x80, sound at +0x58) still holds the test's sound.
+    constexpr uint32_t sound_slots = 0x80128B90;
+    constexpr uint32_t sound_slot_size = 0x80;
+    constexpr uint32_t sound_slot_sound = 0x58;
     uint32_t sound_test_voice = 0;
+    uint32_t sound_test_sound = 0;
 
     void sound_test_tick(uint8_t* rdram, recomp_context* ctx) {
         const int number = sound_test_pending.exchange(-1);
@@ -805,7 +817,8 @@ namespace {
             return;
         }
         GameCall call(rdram, ctx);
-        if (sound_test_voice != 0) {
+        if (sound_test_voice != 0 &&
+            read_half(rdram, sound_slots + sound_test_voice * sound_slot_size + sound_slot_sound) == sound_test_sound) {
             call(func_800C3CE8, sound_test_voice);
         }
         sound_test_voice = (uint32_t)call(func_800C2E04) & 0xFF;
@@ -816,7 +829,8 @@ namespace {
         uint32_t bits[3];
         std::memcpy(bits, values, sizeof(bits));
         call(func_800C3418, sound_test_voice, 2);
-        call(func_800C301C, sound_test_voice, 0x4000u | (uint32_t)number);
+        sound_test_sound = 0x4000u | (uint32_t)number;
+        call(func_800C301C, sound_test_voice, sound_test_sound);
         call(func_800C3058, sound_test_voice, 0x7FFF);
         call(func_800C31DC, sound_test_voice, bits[0]);
         call(func_800C3584, sound_test_voice, bits[1], bits[2]);
@@ -825,7 +839,10 @@ namespace {
         call(func_800C330C, sound_test_voice, 1);
         call(func_800C33DC, sound_test_voice, 1);
         call(func_800C36F4, sound_test_voice, 0);
-        printf("[sound test] 0x%04X\n", 0x4000 | number);
+        call(func_800C3BDC, sound_test_voice);
+        // Slot word +0x78 bits 10-12: 1 while the voice plays (func_800C3CE8 checks the same).
+        const uint32_t state = (read_word(rdram, sound_slots + sound_test_voice * sound_slot_size + 0x78) >> 10) & 7;
+        printf("[sound test] 0x%04X voice %u state %u\n", 0x4000 | number, sound_test_voice, state);
         fflush(stdout);
     }
 

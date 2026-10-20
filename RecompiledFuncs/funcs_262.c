@@ -3694,6 +3694,7 @@ RECOMP_FUNC void chrainbow_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080227C_chweldarboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080227C_chweldarboss");
     // 0x8080227C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x80802280: sw          $ra, 0x1C($sp)

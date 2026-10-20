@@ -4535,6 +4535,7 @@ L_80801DD4:
 RECOMP_FUNC void func_808012E4_chfactorymagnet(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808012E4_chfactorymagnet");
     // 0x808012E4: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x808012E8: sw          $ra, 0x14($sp)

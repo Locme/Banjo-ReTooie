@@ -27,6 +27,7 @@ RECOMP_FUNC void seqdefine_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void plcamera_entrypoint_11(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "plcamera_entrypoint_11");
     // 0x80800374: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x80800378: sw          $ra, 0x14($sp)

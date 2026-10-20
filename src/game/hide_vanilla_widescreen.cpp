@@ -1,4 +1,4 @@
-// DEV > Hide Vanilla Widescreen Entry in the Game Menu (L, 2026-10-17; Screen Alignment too, 2026-10-19).
+// DEV > Hide Unnecessary Settings Entry (formerly Hide Vanilla Widescreen Entry in the Game Menu; L, 2026-10-17; Screen Alignment too, 2026-10-19; renamed 2026-10-20).
 //
 // The save select's global settings menu (the TV, chgameselect state 17) has three rows: 0 Screen
 // Alignment, 1 Wide-screen Mode, 2 Speaker Mode. The game's own widescreen mode squashes the picture

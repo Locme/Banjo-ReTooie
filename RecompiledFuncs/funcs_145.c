@@ -1056,6 +1056,7 @@ RECOMP_FUNC void func_80800070_chcollballcontrol(uint8_t* rdram, recomp_context*
 RECOMP_FUNC void func_8080405C_chcollballcontrol(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080405C_chcollballcontrol");
     // 0x8080405C: addiu       $sp, $sp, -0xD8
     ctx->r29 = ADD32(ctx->r29, -0XD8);
     // 0x80804060: sw          $s1, 0x4C($sp)

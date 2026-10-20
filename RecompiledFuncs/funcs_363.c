@@ -2143,6 +2143,7 @@ RECOMP_FUNC void _chfactoryroofbits_entrypoint_5(uint8_t* rdram, recomp_context*
 RECOMP_FUNC void func_800D7948(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800D7948");
     // 0x800D7948: addiu       $sp, $sp, -0x80
     ctx->r29 = ADD32(ctx->r29, -0X80);
     // 0x800D794C: sw          $ra, 0x1C($sp)

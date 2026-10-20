@@ -5754,6 +5754,7 @@ RECOMP_FUNC void _bsdronefired_entrypoint_0(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void idbounce_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "idbounce_entrypoint_5");
     // 0x80800C10: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x80800C14: sw          $ra, 0x1C($sp)

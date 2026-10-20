@@ -538,6 +538,7 @@ L_8010C0EC:
 RECOMP_FUNC void func_80803148_chstoneballcontrol(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80803148_chstoneballcontrol");
     // 0x80803148: addiu       $sp, $sp, -0x98
     ctx->r29 = ADD32(ctx->r29, -0X98);
     // 0x8080314C: sw          $ra, 0x44($sp)

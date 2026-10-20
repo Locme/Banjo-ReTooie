@@ -764,6 +764,7 @@ L_80104570:
 RECOMP_FUNC void chwandglow_entrypoint_0(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "chwandglow_entrypoint_0");
     // 0x80800334: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x80800338: sw          $ra, 0x14($sp)
@@ -3650,6 +3651,7 @@ RECOMP_FUNC void func_800CF6B0(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80808470_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80808470_chdiggerboss");
     // 0x80808470: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x80808474: sw          $ra, 0x1C($sp)

@@ -77,6 +77,7 @@ RECOMP_FUNC void func_808007EC_chhumba(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800A58_chphlegm(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800A58_chphlegm");
     // 0x80800A58: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80800A5C: sw          $ra, 0x1C($sp)
@@ -477,6 +478,7 @@ RECOMP_FUNC void func_801015C8(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080030C_chweldarboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080030C_chweldarboss");
     // 0x8080030C: addiu       $sp, $sp, -0x98
     ctx->r29 = ADD32(ctx->r29, -0X98);
     // 0x80800310: sw          $ra, 0x24($sp)
@@ -4481,6 +4483,7 @@ RECOMP_FUNC void func_80094EEC(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808005C4_chdinofoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808005C4_chdinofoot");
     // 0x808005C4: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x808005C8: sw          $ra, 0x1C($sp)

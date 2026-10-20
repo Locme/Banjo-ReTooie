@@ -506,6 +506,7 @@ RECOMP_FUNC void _chtoxicroomprops_entrypoint_2(uint8_t* rdram, recomp_context* 
 RECOMP_FUNC void ch1pfreeze_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "ch1pfreeze_entrypoint_1");
     // 0x808003B4: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x808003B8: sw          $ra, 0x14($sp)

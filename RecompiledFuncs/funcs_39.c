@@ -56,6 +56,7 @@ RECOMP_FUNC void func_80806A88_chgameselect(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_80800374_chmasterjiggy(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800374_chmasterjiggy");
     // 0x80800374: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x80800378: sw          $ra, 0x14($sp)
@@ -4795,6 +4796,7 @@ RECOMP_FUNC void chexploder_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800BF0_chcollballcontrol(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800BF0_chcollballcontrol");
     // 0x80800BF0: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80800BF4: sw          $s4, 0x2C($sp)

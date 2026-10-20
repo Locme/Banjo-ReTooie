@@ -699,6 +699,7 @@ RECOMP_FUNC void _chlagoonbits_entrypoint_3(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_80804AC8_chdiggerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80804AC8_chdiggerboss");
     // 0x80804AC8: addiu       $sp, $sp, -0x90
     ctx->r29 = ADD32(ctx->r29, -0X90);
     // 0x80804ACC: sw          $s2, 0x30($sp)

@@ -1190,6 +1190,7 @@ L_80802014:
 RECOMP_FUNC void func_808008B0_chfantasycannon(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808008B0_chfantasycannon");
     // 0x808008B0: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x808008B4: sw          $ra, 0x1C($sp)

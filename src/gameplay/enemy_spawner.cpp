@@ -2,19 +2,27 @@
 //
 // A drop-down of the game's enemies with a Spawn button beside it (the button is RecompFrontend's
 // recompui::config::set_option_button). Each press spawns the picked enemy a few steps in front of
-// Banjo, facing him, with func_80108474(actor id, f32 pos[3], yaw), the game's spawn-by-id the test
-// room uses (src/gameplay/test_room.cpp). Presses are queued and spawned on the game thread, one a frame.
+// Banjo, facing him, on the ground there, with func_80108474(actor id, f32 pos[3], yaw), the game's
+// spawn-by-id the test room uses (src/gameplay/test_room.cpp). Presses are queued and spawned on the game
+// thread, one a frame. Enemies that live in water go in the nearest water instead (the game's line test
+// against water surfaces, searched outward in rings), with a notice; with no water nearby, a notice says
+// so and nothing spawns.
 //
 // The list is every enemy in that spawn table (gemarkersDll, ids 0xB6 to 0x545). Every enemy a map
 // places comes from the same table too: Quagmire's ground enemies, called Gruntlings in older notes, are
-// actor 0x131 (chdiggerground, listed as Ugger). Many enemies follow a route or use props that only exist
-// where they live and crash elsewhere (the test room's "crashes here" entries, notes/test-room.md, and
-// headless spawns that hit null reads). Those say "(only where it lives)" and only spawn while the area
-// already has one of them (a live object whose +0x10 is the actor's entry); otherwise a press does nothing.
+// actor 0x131 (chdiggerground, listed as Ugger). Some enemies follow a route or use props that only exist
+// where they live and crash elsewhere: the 16 that still hit null reads or broke the heap in a headless
+// sweep away from home (Spiral Mountain, 2026-10-20). Those say "(only where it lives)" and only spawn
+// while the area already has one of them (a live object whose +0x10 is the actor's entry); otherwise a
+// press shows a notice and does nothing. Passing them a prop of their own, or the nearest route
+// (func_8010856C), did not help; Spiral Mountain has no routes at all.
 //
-// Headless test aid: TOOIE_ENEMY_SPAWN=<hex id>[@ms][,<hex id>@ms...] spawns each enemy once, ms after
-// the game loop first runs, whenever a save is being played.
+// Headless test aids: TOOIE_ENEMY_SPAWN=<hex id>[@ms][,<hex id>@ms...] spawns each enemy once, ms after
+// the game loop first runs, whenever a save is being played. TOOIE_ENEMY_SWEEP=<hex id>,... reloads the
+// area before each enemy and watches it 20 s, so pass-overs between its "begin" and "end" lines are its
+// own (TOOIE_ENEMY_SWEEP_START=<ms> when to start). TOOIE_ENEMY_ANYWHERE=1 lets the guarded ones spawn.
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -30,7 +38,9 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_enemy_spawner.h"
+#include "tooie_memory_guard.h"
 #include "tooie_rdram.h"
+#include "tooie_toast.h"
 
 namespace {
     struct Enemy {
@@ -44,22 +54,22 @@ namespace {
 
     // Alphabetical, as the drop-down shows them. The option saves the actor id.
     constexpr Enemy enemies[] = {
-        { 0x19A, "Beehive (only where it lives)", 0x80086D10 },
+        { 0x19A, "Beehive", 0 },
         { 0x30F, "Big Fish (only where it lives)", 0x80086D90 },
         { 0x310, "Big Fish 2 (only where it lives)", 0x80086D98 },
-        { 0x3E5, "Bigfoot (only where it lives)", 0x80086338 },
+        { 0x3E5, "Bigfoot", 0 },
         { 0x3E6, "Biggafoot", 0 },
-        { 0x44E, "Biggafoot 2 (only where it lives)", 0x80086348 },
+        { 0x44E, "Biggafoot 2", 0 },
         { 0x35F, "Blubbul", 0 },
-        { 0x440, "Boltoid (only where it lives)", 0x800864F0 },
+        { 0x440, "Boltoid", 0 },
         { 0x2C1, "Clinker (only where it lives)", 0x800873A8 },
-        { 0x2BF, "Clinker 2 (only where it lives)", 0x800873B0 },
-        { 0x2C0, "Clinker 3 (only where it lives)", 0x800873B8 },
+        { 0x2BF, "Clinker 2", 0 },
+        { 0x2C0, "Clinker 3", 0 },
         { 0x1EF, "Dragunda", 0 },
         { 0x153, "Evil spirit", 0 },
         { 0x482, "Eyeball", 0 },
         { 0x483, "Eyeball 2", 0 },
-        { 0x3BF, "Factory robot (only where it lives)", 0x80086228 },
+        { 0x3BF, "Factory robot", 0 },
         { 0x3A2, "Flamer", 0 },
         { 0x349, "Floater", 0 },
         { 0x486, "Floatus Floatsum", 0 },
@@ -68,45 +78,45 @@ namespace {
         { 0x2FF, "Freezy 2", 0 },
         { 0x476, "Germ (only where it lives)", 0x80087698 },
         { 0x12D, "Ghost (only where it lives)", 0x80085D50 },
-        { 0x1E0, "Ghost 2 (only where it lives)", 0x80085D58 },
+        { 0x1E0, "Ghost 2", 0 },
         { 0x401, "Gobgoyle", 0 },
-        { 0x402, "Gobgoyle 2 (only where it lives)", 0x80087588 },
-        { 0x133, "Gruntydactyl (only where it lives)", 0x80085CA8 },
-        { 0x134, "Gruntydactyl 2 (only where it lives)", 0x80085CB0 },
-        { 0x3E9, "Hothand (only where it lives)", 0x80087598 },
+        { 0x402, "Gobgoyle 2", 0 },
+        { 0x133, "Gruntydactyl", 0 },
+        { 0x134, "Gruntydactyl 2", 0 },
+        { 0x3E9, "Hothand", 0 },
         { 0x400, "Hothand 2 (only where it lives)", 0x800875A0 },
-        { 0x462, "Hothead (only where it lives)", 0x800865C8 },
+        { 0x462, "Hothead", 0 },
         { 0x35E, "Inky", 0 },
         { 0x31F, "Lagoon fish", 0 },
         { 0x300, "Lake monster", 0 },
         { 0x37C, "Mingy Jongo", 0 },
-        { 0x19C, "Minjo (only where it lives)", 0x80086968 },
-        { 0x112, "Moggy warrior (only where it lives)", 0x80085CC8 },
+        { 0x19C, "Minjo", 0 },
+        { 0x112, "Moggy warrior", 0 },
         { 0x399, "Mucoid", 0 },
         { 0x398, "Mucoid 2", 0 },
         { 0x3A0, "Mucoid 3", 0 },
-        { 0x43E, "Nutta (only where it lives)", 0x800864E0 },
+        { 0x43E, "Nutta", 0 },
         { 0x47F, "Onion", 0 },
-        { 0x46B, "Pansie (only where it lives)", 0x80086650 },
-        { 0x2FC, "Piranha (only where it lives)", 0x80086DD0 },
-        { 0x2FD, "Piranha 2 (only where it lives)", 0x80086DD8 },
-        { 0x2FE, "Piranha 3 (only where it lives)", 0x80086DE0 },
+        { 0x46B, "Pansie", 0 },
+        { 0x2FC, "Piranha", 0 },
+        { 0x2FD, "Piranha 2", 0 },
+        { 0x2FE, "Piranha 3", 0 },
         { 0x3AB, "Rocknut", 0 },
-        { 0x426, "S'Hard (only where it lives)", 0x80086648 },
+        { 0x426, "S'Hard", 0 },
         { 0x243, "Shadow baddie", 0 },
         { 0x111, "Snapdragon", 0 },
-        { 0x39A, "Soarasaur (only where it lives)", 0x80086028 },
+        { 0x39A, "Soarasaur", 0 },
         { 0x113, "Sput Sput (only where it lives)", 0x80086F20 },
-        { 0x123, "Sput Sput 2 (only where it lives)", 0x80086F28 },
+        { 0x123, "Sput Sput 2", 0 },
         { 0x3BD, "Spy-I-Cam (only where it lives)", 0x80086218 },
         { 0x4E9, "Squits", 0 },
         { 0x16F, "Stinger", 0 },
         { 0x29A, "Swellbelly", 0 },
-        { 0x3BE, "Tintup (only where it lives)", 0x80086220 },
+        { 0x3BE, "Tintup", 0 },
         { 0x2AE, "Torch enemy", 0 },
-        { 0x3FF, "Toxi-Gag (only where it lives)", 0x80087518 },
-        { 0x3F0, "Toxi-Klang (only where it lives)", 0x80087440 },
-        { 0x442, "Twinkly 4 (only where it lives)", 0x800864F8 },
+        { 0x3FF, "Toxi-Gag", 0 },
+        { 0x3F0, "Toxi-Klang", 0 },
+        { 0x442, "Twinkly 4", 0 },
         { 0x446, "Twinkly 5 (only where it lives)", 0x80086508 },
         { 0x44D, "Twinkly 6 (only where it lives)", 0x80086500 },
         { 0x443, "Twinkly, blue (only where it lives)", 0x80086510 },
@@ -114,11 +124,11 @@ namespace {
         { 0x445, "Twinkly, red (only where it lives)", 0x80086520 },
         { 0x131, "Ugger", 0 },
         { 0x1DA, "Unga Bunga (only where it lives)", 0x80085AF0 },
-        { 0x1DB, "Unga Bunga 2 (only where it lives)", 0x80085AF8 },
-        { 0x43F, "Washup (only where it lives)", 0x800864E8 },
+        { 0x1DB, "Unga Bunga 2", 0 },
+        { 0x43F, "Washup", 0 },
         { 0x35C, "Whirlweed (only where it lives)", 0x80085F28 },
-        { 0x35D, "Whirlweed 2 (only where it lives)", 0x80085F30 },
-        { 0x213, "Zubba (only where it lives)", 0x800865C0 },
+        { 0x35D, "Whirlweed 2", 0 },
+        { 0x213, "Zubba", 0 },
     };
     constexpr uint16_t default_enemy = 0x111;
 
@@ -189,6 +199,80 @@ namespace {
         return object;
     }
 
+    // The game's line test against the map's collision (func_800BEF00(from, to, normal, kind)): true on a hit,
+    // with *hit_y the height where the line meets it. Kind water_surface finds only water surfaces (the
+    // probe the player's swim check makes, object +0x88's default); kind floor finds solid ground, not water.
+    constexpr uint32_t water_surface = 0x1F00;
+    constexpr uint32_t floor = 0x20020;
+
+    bool line_hit(uint8_t* rdram, recomp_context* ctx, float x, float z, float from_y, float to_y, uint32_t kind, float* hit_y) {
+        using namespace tooie::rdram;
+        recomp_context saved = *ctx;
+        const uint32_t vec = ((uint32_t)ctx->r29 - 0x100) & ~0xFu;
+        write_float(rdram, vec + 0x00, x);
+        write_float(rdram, vec + 0x04, from_y);
+        write_float(rdram, vec + 0x08, z);
+        write_float(rdram, vec + 0x10, x);
+        write_float(rdram, vec + 0x14, to_y);
+        write_float(rdram, vec + 0x18, z);
+        ctx->r29 = (int32_t)(vec - 0x40);
+        ctx->r4 = (int32_t)vec;
+        ctx->r5 = (int32_t)(vec + 0x10);
+        ctx->r6 = (int32_t)(vec + 0x20);
+        ctx->r7 = (int32_t)kind;
+        func_800BEF00(rdram, ctx);
+        const bool hit = (uint32_t)ctx->r2 != 0;
+        *hit_y = read_float(rdram, vec + 0x14);
+        *ctx = saved;
+        return hit;
+    }
+
+    // Enemies that live in water, and of those the ones that sit on the bottom.
+    bool lives_in_water(uint16_t id) {
+        switch (id) {
+            case 0x29A: case 0x2FC: case 0x2FD: case 0x2FE: case 0x300: case 0x30F: case 0x310:
+            case 0x31E: case 0x31F: case 0x35C: case 0x35D: case 0x35E: case 0x35F:
+                return true;
+        }
+        return false;
+    }
+    bool sits_on_bottom(uint16_t id) {
+        return id == 0x35C || id == 0x35D || id == 0x35F;
+    }
+
+    // Where in the water nearest (x, y, z) a water enemy goes: false when there is none within reach.
+    // Searches outward in rings, looking for a water surface from a little above to well below y.
+    bool nearest_water(uint8_t* rdram, recomp_context* ctx, uint16_t id, const float at[3], float out[3]) {
+        constexpr float step = 250.0f;
+        constexpr float reach = 8000.0f;
+        for (float r = 0.0f; r <= reach; r += step) {
+            const int count = r == 0.0f ? 1 : (int)std::ceil(2.0f * 3.14159265f * r / step);
+            for (int i = 0; i < count; i++) {
+                const float angle = 2.0f * 3.14159265f * i / count;
+                const float x = at[0] + std::sin(angle) * r;
+                const float z = at[2] + std::cos(angle) * r;
+                float surface = 0.0f;
+                if (!line_hit(rdram, ctx, x, z, at[1] + 1500.0f, at[1] - 3000.0f, water_surface, &surface)) {
+                    continue;
+                }
+                // The bottom: some water (Spiral Mountain's moat) has none to find within reach.
+                float bottom = 0.0f;
+                const bool has_bottom = line_hit(rdram, ctx, x, z, surface - 5.0f, surface - 3000.0f, 0, &bottom);
+                if (has_bottom && surface - bottom < 120.0f) {
+                    continue; // too shallow to swim in
+                }
+                if (sits_on_bottom(id) && !has_bottom) {
+                    continue;
+                }
+                out[0] = x;
+                out[2] = z;
+                out[1] = sits_on_bottom(id) ? bottom : has_bottom ? std::max(bottom + 60.0f, surface - 250.0f) : surface - 250.0f;
+                return true;
+            }
+        }
+        return false;
+    }
+
     const Enemy* find_enemy(uint16_t id) {
         for (const Enemy& enemy : enemies) {
             if (enemy.id == id) {
@@ -220,7 +304,21 @@ namespace {
         return false;
     }
 
-    // Spawns the enemy in front of Banjo. False when there is no player to spawn it by.
+    // The enemy's name for notices, without the "(only where it lives)" note.
+    std::string short_name(uint16_t id) {
+        const Enemy* enemy = find_enemy(id);
+        if (enemy == nullptr) {
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "Actor 0x%X", id);
+            return buf;
+        }
+        std::string name{enemy->name};
+        const size_t note = name.find(" (");
+        return note == std::string::npos ? name : name.substr(0, note);
+    }
+
+    // Spawns the enemy in front of Banjo, on the ground there; a water enemy goes in the nearest water
+    // instead, or not at all when there is none. False when there is no player to spawn it by.
     bool spawn_in_front(uint8_t* rdram, recomp_context* ctx, uint16_t id) {
         using namespace tooie::rdram;
         const uint32_t player = read_word(rdram, player_table);
@@ -234,16 +332,128 @@ namespace {
         }
         const float yaw = read_float(rdram, yaw_ptr);
         const float rad = yaw * 3.14159265f / 180.0f;
-        const float pos[3] = {
+        float pos[3] = {
             read_float(rdram, pos_ptr) + std::sin(rad) * spawn_distance,
             read_float(rdram, pos_ptr + 4),
             read_float(rdram, pos_ptr + 8) + std::cos(rad) * spawn_distance,
         };
+        if (lives_in_water(id)) {
+            float water[3];
+            if (!nearest_water(rdram, ctx, id, pos, water)) {
+                printf("[enemy-spawner] actor 0x%X not spawned: no water near Banjo\n", id);
+                fflush(stdout);
+                tooie::toast::show(short_name(id) + " lives in water and there is none nearby, so it was not spawned");
+                return true;
+            }
+            pos[0] = water[0];
+            pos[1] = water[1];
+            pos[2] = water[2];
+            tooie::toast::show(short_name(id) + " lives in water: spawned in the nearest water");
+        } else {
+            // On the ground in front of Banjo (he may be on a ledge or in the air).
+            float ground = 0.0f;
+            if (line_hit(rdram, ctx, pos[0], pos[2], pos[1] + 300.0f, pos[1] - 2000.0f, floor, &ground)) {
+                pos[1] = ground;
+            }
+        }
         // Facing back at Banjo.
-        const uint32_t object = spawn(rdram, ctx, id, pos, std::fmod(yaw + 180.0f, 360.0f));
+        const float facing = std::fmod(yaw + 180.0f, 360.0f);
+        const uint32_t object = spawn(rdram, ctx, id, pos, facing);
         printf("[enemy-spawner] actor 0x%X at %.0f %.0f %.0f: object 0x%08X\n", id, pos[0], pos[1], pos[2], object);
         fflush(stdout);
         return true;
+    }
+}
+
+namespace {
+    // Spawns the enemy, or drops it when it can't go here. False to try again next frame (no player yet).
+    bool spawn_now(uint8_t* rdram, recomp_context* ctx, uint16_t id) {
+        const Enemy* enemy = find_enemy(id);
+        // TOOIE_ENEMY_ANYWHERE=1 (headless) spawns them anyway, to test fixes for the crashes.
+        static const bool anywhere = std::getenv("TOOIE_ENEMY_ANYWHERE") != nullptr;
+        if (enemy != nullptr && enemy->home_entry != 0 && !anywhere && !actor_present(rdram, enemy->home_entry)) {
+            // It would crash here: drop the press.
+            printf("[enemy-spawner] actor 0x%X not spawned: none in this area (it only works where it lives)\n", id);
+            fflush(stdout);
+            tooie::toast::show(short_name(id) + " only works where it lives, so it was not spawned here");
+            return true;
+        }
+        return spawn_in_front(rdram, ctx, id);
+    }
+
+    // Headless sweep: TOOIE_ENEMY_SWEEP=<hex id>,<hex id>,... reloads the area before each enemy, so only
+    // that one is alive, spawns it in front of Banjo and watches it for a while. Pass-overs logged
+    // between its "begin" and "end" lines are its own (the guard forgets the places it has seen first).
+    struct Sweep {
+        std::vector<uint16_t> ids;
+        size_t next = 0;
+        int phase = 0; // 0 waiting to start, 1 area reloading, 2 settling, 3 watching
+        std::chrono::steady_clock::time_point since;
+        uint32_t start_ms = 160000;
+    } sweep;
+    bool sweep_read = false;
+
+    void sweep_tick(uint8_t* rdram, recomp_context* ctx) {
+        using clock = std::chrono::steady_clock;
+        if (!sweep_read) {
+            sweep_read = true;
+            if (const char* v = std::getenv("TOOIE_ENEMY_SWEEP")) {
+                std::string list{v};
+                size_t pos = 0;
+                while (pos < list.size()) {
+                    size_t comma = list.find(',', pos);
+                    unsigned id = 0;
+                    if (std::sscanf(list.substr(pos, comma - pos).c_str(), "%x", &id) == 1 && id != 0) {
+                        sweep.ids.push_back((uint16_t)id);
+                    }
+                    pos = comma == std::string::npos ? list.size() : comma + 1;
+                }
+            }
+            if (const char* v = std::getenv("TOOIE_ENEMY_SWEEP_START")) {
+                sweep.start_ms = (uint32_t)std::strtoul(v, nullptr, 10);
+            }
+            sweep.since = clock::now();
+        }
+        if (sweep.next >= sweep.ids.size()) {
+            return;
+        }
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - sweep.since).count();
+        const bool ready = tooie::debug::can_warp() && MEM_B(0x12, game_state_addr) == 0;
+        const uint16_t id = sweep.ids[sweep.next];
+        switch (sweep.phase) {
+            case 0:
+                if (ms >= sweep.start_ms && ready) {
+                    tooie::debug::request_warp(tooie::debug::current_map(rdram), 0, true);
+                    sweep.phase = 1;
+                    sweep.since = clock::now();
+                }
+                break;
+            case 1:
+                if (ms >= 3000 && ready) {
+                    sweep.phase = 2;
+                    sweep.since = clock::now();
+                }
+                break;
+            case 2:
+                if (ms >= 8000 && ready) {
+                    tooie::memory_guard::forget_sites();
+                    printf("[enemy-sweep] begin 0x%X\n", id);
+                    fflush(stdout);
+                    spawn_now(rdram, ctx, id);
+                    sweep.phase = 3;
+                    sweep.since = clock::now();
+                }
+                break;
+            case 3:
+                if (ms >= 20000) {
+                    printf("[enemy-sweep] end 0x%X\n", id);
+                    fflush(stdout);
+                    sweep.next++;
+                    sweep.phase = 0;
+                    sweep.since = clock::now() - std::chrono::milliseconds(sweep.start_ms);
+                }
+                break;
+        }
     }
 }
 
@@ -279,6 +489,7 @@ void tooie::enemy_spawner::tick(uint8_t* rdram, recomp_context* ctx) {
     if (!env_read) {
         read_env();
     }
+    sweep_tick(rdram, ctx);
     uint16_t id = 0;
     bool from_env = false;
     if (env_next < env_requests.size() && tooie::debug::can_warp()) {
@@ -304,12 +515,7 @@ void tooie::enemy_spawner::tick(uint8_t* rdram, recomp_context* ctx) {
     if (!tooie::debug::can_warp() || MEM_B(0x12, game_state_addr) != 0) {
         return;
     }
-    const Enemy* enemy = find_enemy(id);
-    if (enemy != nullptr && enemy->home_entry != 0 && !actor_present(rdram, enemy->home_entry)) {
-        // It would crash here: drop the press.
-        printf("[enemy-spawner] actor 0x%X not spawned: none in this area (it only works where it lives)\n", id);
-        fflush(stdout);
-    } else if (!spawn_in_front(rdram, ctx, id)) {
+    if (!spawn_now(rdram, ctx, id)) {
         return;
     }
     if (from_env) {

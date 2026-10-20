@@ -5,6 +5,7 @@
 RECOMP_FUNC void func_80800830_chtntmineshoot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800830_chtntmineshoot");
     // 0x80800830: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80800834: sw          $ra, 0x1C($sp)
@@ -642,6 +643,7 @@ RECOMP_FUNC void func_800F80D8(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8010D600(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8010D600");
     // 0x8010D600: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x8010D604: sw          $ra, 0x14($sp)
@@ -3279,6 +3281,7 @@ L_800A88B4:
 RECOMP_FUNC void suegg_entrypoint_9(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "suegg_entrypoint_9");
     // 0x80800558: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x8080055C: sw          $ra, 0x1C($sp)
@@ -4069,6 +4072,7 @@ RECOMP_FUNC void func_800C4B70(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800F9240(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800F9240");
     // 0x800F9240: addiu       $sp, $sp, -0x28
     ctx->r29 = ADD32(ctx->r29, -0X28);
     // 0x800F9244: sw          $a0, 0x28($sp)

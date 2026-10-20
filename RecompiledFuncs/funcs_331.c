@@ -1927,6 +1927,7 @@ L_80800F70:
 RECOMP_FUNC void func_80801E3C_changlerboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80801E3C_changlerboss");
     // 0x80801E3C: addiu       $sp, $sp, -0x58
     ctx->r29 = ADD32(ctx->r29, -0X58);
     // 0x80801E40: sw          $ra, 0x24($sp)

@@ -31,7 +31,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <chrono>
 #include <cstring>
 #include <random>
 #include <unordered_map>
@@ -44,7 +43,6 @@
 #include "tooie_cheats.h"
 #include "tooie_damage.h"
 #include "tooie_rdram.h"
-#include "tooie_debug.h"
 
 namespace {
     // Set while bssplat_entrypoint_0 hands a fall's damage to func_800A17A8.
@@ -187,79 +185,8 @@ namespace {
     }
 }
 
-// Delayed throws (Klungo: delayed throws setting). func_80802B84_chklungo(klungo, 0) throws a potion. With a
-// chance (the setting), the throw is held back and made again from aim_tick once the player is in the air
-// (vertical speed over 60), or after 1.2 s, as long as the map is the same. The held throw keeps the same
-// Klungo pointer; the map check and the short wait are what keep it from outliving him.
-namespace {
-    struct PendingThrow {
-        uint32_t klungo = 0;
-        uint16_t map = 0;
-        std::chrono::steady_clock::time_point deadline;
-    };
-    PendingThrow pending_throw;
-    bool throwing_deferred = false;
-
-    int throw_delay_percent() {
-        try {
-            return (int)std::get<double>(recompui::config::get_general_config().get_option_value(tooie::damage::throw_delay_option));
-        } catch (...) {
-            return 0;
-        }
-    }
-
-    bool player_airborne(uint8_t* rdram) {
-        const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
-        const uint32_t physics = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0xC8) : 0;
-        return tooie::rdram::valid_ptr(physics) && std::fabs(tooie::rdram::read_float(rdram, physics + 0x14)) > 60.0f;
-    }
-
-    void run_pending_throw(uint8_t* rdram, recomp_context* ctx) {
-        if (pending_throw.klungo == 0) {
-            return;
-        }
-        if (tooie::debug::current_map(rdram) != pending_throw.map) {
-            pending_throw.klungo = 0;
-            return;
-        }
-        if (!player_airborne(rdram) && std::chrono::steady_clock::now() < pending_throw.deadline) {
-            return;
-        }
-        const uint32_t klungo = pending_throw.klungo;
-        pending_throw.klungo = 0;
-        recomp_context saved = *ctx;
-        ctx->r29 = (int32_t)((((uint32_t)ctx->r29 - 0x100) & ~0xFu));
-        ctx->r4 = (uint64_t)(int64_t)(int32_t)klungo;
-        ctx->r5 = 0;
-        throwing_deferred = true;
-        func_80802B84_chklungo(rdram, ctx);
-        throwing_deferred = false;
-        *ctx = saved;
-    }
-}
-
-// func_80802B84_chklungo entry: $a0 Klungo, $a1 the action (0 = throw a potion). Returns 1 to hold the throw back.
-extern "C" int tooie_klungo_throw(uint8_t* rdram, recomp_context* ctx) {
-    if (throwing_deferred || (uint32_t)ctx->r5 != 0 || pending_throw.klungo != 0) {
-        return 0;
-    }
-    const int percent = throw_delay_percent();
-    if (percent <= 0 || !tooie::rdram::valid_ptr((uint32_t)ctx->r4)) {
-        return 0;
-    }
-    static std::mt19937 rng{ std::random_device{}() };
-    if (std::uniform_int_distribution<int>(0, 99)(rng) >= percent || player_airborne(rdram)) {
-        return 0;
-    }
-    pending_throw.klungo = (uint32_t)ctx->r4;
-    pending_throw.map = tooie::debug::current_map(rdram);
-    pending_throw.deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(1200);
-    return 1;
-}
-
 // Once per frame (tooie_warp_tick).
-void tooie::damage::aim_tick(uint8_t* rdram, recomp_context* ctx) {
-    run_pending_throw(rdram, ctx);
+void tooie::damage::aim_tick(uint8_t* rdram) {
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
     const uint32_t pos_ptr = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0xE4) : 0;
     const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
@@ -319,7 +246,12 @@ extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
 // (his position plus his measured movement over the time the potion has left) by then, so a potion only
 // misses when he really changes direction. The time left is the horizontal distance over the horizontal speed.
 extern "C" void tooie_klungo_potion_steer(uint8_t* rdram, recomp_context* ctx) {
-    const float seconds = aim_seconds();
+    bool homing = true;
+    try {
+        homing = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::damage::homing_option));
+    } catch (...) {
+    }
+    const float seconds = homing ? aim_seconds() : 0.0f;
     const uint32_t potion = (uint32_t)ctx->r4;
     if (seconds <= 0.0f || !aim_have_prev || !tooie::rdram::valid_ptr(potion)) {
         return;

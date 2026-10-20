@@ -799,6 +799,7 @@ RECOMP_FUNC void func_800EF49C(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080219C_chpotogoldgame(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080219C_chpotogoldgame");
     // 0x8080219C: addiu       $sp, $sp, -0x48
     ctx->r29 = ADD32(ctx->r29, -0X48);
     // 0x808021A0: sw          $ra, 0x24($sp)
@@ -978,6 +979,7 @@ L_8080220C:
 RECOMP_FUNC void func_80800158_chwumbawigwam(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800158_chwumbawigwam");
     // 0x80800158: addiu       $sp, $sp, -0x78
     ctx->r29 = ADD32(ctx->r29, -0X78);
     // 0x8080015C: sw          $ra, 0x2C($sp)
@@ -4827,6 +4829,7 @@ RECOMP_FUNC void func_80801604_bstrexlarge(uint8_t* rdram, recomp_context* ctx) 
 RECOMP_FUNC void func_808001E0_gcgoto(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808001E0_gcgoto");
     // 0x808001E0: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x808001E4: lui         $t6, 0x8012

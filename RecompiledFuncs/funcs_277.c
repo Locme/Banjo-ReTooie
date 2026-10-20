@@ -2592,6 +2592,7 @@ RECOMP_FUNC void func_800AA240(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800388_chdingpot(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800388_chdingpot");
     // 0x80800388: addiu       $sp, $sp, -0x38
     ctx->r29 = ADD32(ctx->r29, -0X38);
     // 0x8080038C: sw          $ra, 0x1C($sp)

@@ -615,6 +615,7 @@ RECOMP_FUNC void idflame_entrypoint_2(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808038F8_chweldarboss(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808038F8_chweldarboss");
     // 0x808038F8: addiu       $sp, $sp, -0xA0
     ctx->r29 = ADD32(ctx->r29, -0XA0);
     // 0x808038FC: sw          $ra, 0x64($sp)

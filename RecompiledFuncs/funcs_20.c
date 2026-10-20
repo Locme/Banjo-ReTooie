@@ -1094,6 +1094,7 @@ RECOMP_FUNC void func_800A9F60(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800544_chfantasycannon(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800544_chfantasycannon");
     // 0x80800544: addiu       $sp, $sp, -0x88
     ctx->r29 = ADD32(ctx->r29, -0X88);
     // 0x80800548: sw          $ra, 0x1C($sp)

@@ -3952,6 +3952,7 @@ RECOMP_FUNC void func_8009518C(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800344_chfantasylakebits(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800344_chfantasylakebits");
     // 0x80800344: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80800348: addiu       $t7, $a1, -0x1

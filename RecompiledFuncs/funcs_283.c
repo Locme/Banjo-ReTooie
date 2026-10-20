@@ -3305,6 +3305,7 @@ L_80800764:
 RECOMP_FUNC void chhotwaterpoolbits_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "chhotwaterpoolbits_entrypoint_5");
     // 0x8080088C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x80800890: sw          $ra, 0x1C($sp)
@@ -3440,6 +3441,7 @@ RECOMP_FUNC void bssub_entrypoint_7(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80803F4C_chdragonbrothers(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80803F4C_chdragonbrothers");
     // 0x80803F4C: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x80803F50: sw          $s0, 0x18($sp)

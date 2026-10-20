@@ -86,7 +86,7 @@ namespace tooie {
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";
     inline const std::string cheats_tab_option = "cheats_tab";
-    // DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp).
+    // DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp).
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
     // Once a frame: keeps the game's own widescreen mode off while that switch is on.
     void vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx);

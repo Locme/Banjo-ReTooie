@@ -3474,6 +3474,7 @@ RECOMP_FUNC void chwitchytents_entrypoint_0(uint8_t* rdram, recomp_context* ctx)
 RECOMP_FUNC void func_80800000_chsmalltrexdoor(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800000_chsmalltrexdoor");
     // 0x80800000: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x80800004: sw          $ra, 0x24($sp)

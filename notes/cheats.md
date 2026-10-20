@@ -56,10 +56,13 @@ pick the form you already are); pick Banjo-Kazooie (BK) to change back. The list
 drop-down.
 
 **Enemy spawner** (Enemies): pick an enemy from the drop-down and press Spawn
-beside it. Each press puts one in front of Banjo, facing him (while the menu
-pauses the game, they appear when it closes). The list is every
+beside it. Each press puts one on the ground in front of Banjo, facing him
+(while the menu pauses the game, they appear when it closes). The list is every
 enemy in the game's spawn-by-id table (75), which is also where every enemy a
-map places comes from. Enemies marked "(only where it lives)" crash anywhere
-else (they follow routes or use props that only exist there), so they only
-spawn in an area that already has one of them; elsewhere Spawn does nothing.
-Code: `src/gameplay/enemy_spawner.cpp`.
+map places comes from. Water enemies (fish, eels, Inky, Whirlweeds...) go in
+the nearest water, with a notice; with no water nearby a notice says so and
+none spawns. The 16 enemies marked "(only where it lives)" still crash anywhere
+else (they follow routes or read props that only exist there), so they only
+spawn in an area that already has one of them; elsewhere a notice says so. The
+other 31 that used to be marked ran cleanly in Spiral Mountain in a headless
+sweep (2026-10-20). Code: `src/gameplay/enemy_spawner.cpp`.
