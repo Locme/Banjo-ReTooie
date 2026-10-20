@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T487 Window Light Beams (Bottles' house, Banjo's house, Jingaling's throne room)
+- Asked: 2026-10-20 23:57 UTC
+- Build: main
+- Steps:
+  1. Graphics > Window Light Beams is on by default; go into Bottles' house in Jinjo Village and look at the two round windows either side of the doorway
+  2. Go into Banjo's house in Spiral Mountain (two windows by the door, one by the fireplace) and King Jingaling's throne room (the two bright windows)
+  3. Switch Window Light Beams off and on while in one of those rooms (the room reloads)
+- Look for: See-through white beams fall from each window down onto the floor, faded at the floor, with the same streaky look as the beams in Mumbo's Skull; they don't flicker, cut off or show through walls, and Banjo walking through them looks right. Off gives the rooms back as before. Checked offline (the game's models drawn with its own textures): screens/window-beams/ in project files. Headless the game loaded the beams' models in all three rooms with no error, but the container could not draw a picture, so how they look in the game is untested. Too bright, too faint, too long or too short?
+- Status: waiting for L
+
 ## T485 Toon shading (BotW style)
 - Asked: 2026-10-20 23:40 UTC
 - Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
