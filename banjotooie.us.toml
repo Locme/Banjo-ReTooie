@@ -1154,6 +1154,18 @@ func = "func_800A6250"
 before_vram = 0x800A62C0
 text = "tooie_player_shadow_model(rdram, ctx);"
 
+# HD Shadows: the player's shadow draws (two func_800DE448 calls) are over by 0x800A66C4; 0x800A69E0
+# is the way out for the early return. Ends tooie::hd_shadows::drawing_shadow() for Banjo.
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A66C4
+text = "tooie_player_shadow_done(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_800A6250"
+before_vram = 0x800A69E0
+text = "tooie_player_shadow_done(rdram, ctx);"
+
 # Deep snow: every model drawn (func_800DE498, the model draw), where it stands.
 [[patches.hook]]
 func = "func_800DE498"

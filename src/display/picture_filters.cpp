@@ -58,7 +58,7 @@ namespace RT64 {
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
     void SetSceneUnderwater(float tint, float haze);
-    void SetSceneHeatHaze(float strength);
+    void SetSceneHeatHaze(float strength, bool warmOnly);
     void SetSceneWaterReflections(float strength);
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
@@ -169,6 +169,7 @@ namespace {
         return std::find(maps.begin(), maps.end(), map) != maps.end();
     }
     float heat_haze_sent = -1.0f;
+    bool heat_haze_warm_sent = false;
 
     // Heat haze only by lava: Hailfire Peaks' lava side, its train station, Chilli Billi's fight and
     // inside the volcano.
@@ -478,7 +479,7 @@ namespace {
         { 0x02b5cd0f24705794, 44, 201, Bumpy },
         { 0x02bd3a5b1f23e0ca, 0, 99, Metal, 7 },
         { 0x02d54ba70a8c070f, 0, 247, Metal, 7 },
-        { 0x02d8c6bdefef3e0e, 31, 232, Rounded, 15 },
+        { 0x02d8c6bdefef3e0e, 31, 232, Bumpy, 15 },
         { 0x02e0da37956bb42f, 49, 170, Smooth },
         { 0x02f4c308663b9cdd, 27, 178, Cracks },
         { 0x03025b2ebbdefdbc, 52, 132, Brick, 7 },
@@ -1470,7 +1471,7 @@ namespace {
         { 0x4de6ecc5ad0f1bc5, 15, 103 },
         { 0x4de8e78965df63f4, 31, 120, Bumpy },
         { 0x4df3a71b42f154b7, 29, 121, Metal, 7 },
-        { 0x4e034fe0740cb8ca, 7, 58, Bumpy },
+        { 0x4e034fe0740cb8ca, 7, 58, Bumpy, 15 },
         { 0x4e1d234c5b6a945c, 10, 147 },
         { 0x4e1f169bcc5f20b7, 40, 190, Bumpy },
         { 0x4e2f502bf0aad5ce, 31, 124, Metal, 7 },
@@ -1896,7 +1897,6 @@ namespace {
         { 0x6c20d50edf2fe6bc, 19, 51, Wood, 7 },
         { 0x6c30a4368d488471, 32, 156, Cracks },
         { 0x6c3dbea350dc773e, 15, 153, Brick, 7 },
-        { 0x6c6c951d36db9306, 57, 212, Tiles, 7 },
         { 0x6c7e131856a863af, 26, 71, Wood, 7 },
         { 0x6c82371ee7255f22, 0, 61 },
         { 0x6c9813f82d5b1c78, 44, 154, Cracks },
@@ -2693,7 +2693,7 @@ namespace {
         { 0xa5d67522e054a3ec, 33, 175, Metal, 7 },
         { 0xa5e2cef314e46512, 23, 175, Metal, 7 },
         { 0xa6045147e0e7a456, 41, 165, Bumpy },
-        { 0xa60e85dcf6f85f92, 40, 186, Bumpy },
+        { 0xa60e85dcf6f85f92, 40, 186, Stone },
         { 0xa61b06c88562fbad, 0, 151, Bumpy, 7 },
         { 0xa62a7a4045e244ed, 138, 195, Sand, 7 },
         { 0xa6305666423e78eb, 34, 68, Wood, 7 },
@@ -3327,6 +3327,7 @@ namespace {
         { 0xd36884bd1f2fb61a, 0, 173, Metal, 7 },
         { 0xd369f7a38d1e5251, 14, 150, Bark },
         { 0xd3721bafc0c2acd3, 18, 168 },
+        { 0xd3e61b579c35618c, 40, 190, Stone, 5 },
         { 0xd3f92553376a7758, 10, 83, Metal, 7 },
         { 0xd3fb04e8290eb89f, 46, 191, Bumpy, 7 },
         { 0xd4152d4dcb82a6d2, 18, 110, Metal, 7 },
@@ -3461,7 +3462,7 @@ namespace {
         { 0xdd73116daf40b90e, 26, 95, Brick },
         { 0xdd7ecdf83db839a0, 7, 113, Wood, 7 },
         { 0xdd899e3652968723, 44, 232, Cracks },
-        { 0xdd94be70f8e7fe2a, 37, 159, Bumpy },
+        { 0xdd94be70f8e7fe2a, 37, 159, Stone, 15 },
         { 0xdd96acc525117fe8, 0, 107 },
         { 0xdd9d4d9ad015b48e, 19, 185, Bumpy },
         { 0xddbe30be48fc0e0f, 66, 251, Metal, 7 },
@@ -3716,6 +3717,7 @@ namespace {
         { 0xf10e30d97ceabd4f, 0, 171 },
         { 0xf11d28826deadd8a, 21, 136 },
         { 0xf11fed1def3950dc, 0, 102, Bumpy },
+        { 0xf13b3cfd0e5fc100, 40, 190, Grass, 5 },
         { 0xf1434f38b2bc7204, 15, 140, Metal, 7 },
         { 0xf1483220619bb2b7, 7, 163 },
         { 0xf173be7d0b4b5078, 43, 131 },
@@ -3868,7 +3870,7 @@ namespace {
         { 0xfc113562142a1e77, 0, 84 },
         { 0xfc2a94befcacd6d7, 13, 74, Bumpy },
         { 0xfc3307662a1fe23b, 7, 70, Wood, 7 },
-        { 0xfc4dc4c800ae0c7a, 77, 150, Sand, 7 },
+        { 0xfc4dc4c800ae0c7a, 77, 150, Wood, 3 },
         { 0xfc57075b40c809cb, 22, 160, Smooth },
         { 0xfc66a03814c8a735, 52, 158, Bumpy },
         { 0xfc6747679066341a, 7, 118, Bumpy },
@@ -4656,11 +4658,14 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f, banjo_grounded(rdram));
     }
 
-    // The same shimmer, gentler, under water.
-    const float heat = by_lava(rdram) ? heat_haze.load() : underwater_distortion.load() * underwater_amount * 0.5f;
-    if (heat != heat_haze_sent) {
+    // The same shimmer, gentler, under water. By lava it only rises above hot things (lava, fire); under water it
+    // covers the whole picture.
+    const bool warm = by_lava(rdram);
+    const float heat = warm ? heat_haze.load() : underwater_distortion.load() * underwater_amount * 0.5f;
+    if ((heat != heat_haze_sent) || (warm != heat_haze_warm_sent)) {
         heat_haze_sent = heat;
-        RT64::SetSceneHeatHaze(heat);
+        heat_haze_warm_sent = warm;
+        RT64::SetSceneHeatHaze(heat, warm);
     }
 
     // The cutscene depth of field in letterboxed scenes, focused on the middle of the picture; the gameplay one
@@ -5020,7 +5025,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         heat_haze_option,
         "Heat haze",
-        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers, more in the distance. 0 is off.",
+        "Near lava (Hailfire Peaks' lava side, Chilli Billi, inside the volcano), the air shimmers above hot things such as lava and fire, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         sun_shadows_option,
