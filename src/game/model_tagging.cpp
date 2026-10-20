@@ -219,6 +219,147 @@ namespace {
         return mark_bare;
     }
 
+    // Hue (degrees), saturation and value of an 8-bit colour.
+    void colour_hsv(uint8_t r8, uint8_t g8, uint8_t b8, float& hue, float& saturation, float& value) {
+        const float r = r8 / 255.0f, g = g8 / 255.0f, b = b8 / 255.0f;
+        value = std::max(r, std::max(g, b));
+        const float chroma = value - std::min(r, std::min(g, b));
+        saturation = value > 0.0f ? chroma / value : 0.0f;
+        hue = 0.0f;
+        if (chroma <= 0.0f) {
+            return;
+        }
+        if (value == r) {
+            hue = 60.0f * (g - b) / chroma;
+        }
+        else if (value == g) {
+            hue = 60.0f * (2.0f + (b - r) / chroma);
+        }
+        else {
+            hue = 60.0f * (4.0f + (r - g) / chroma);
+        }
+        if (hue < 0.0f) {
+            hue += 360.0f;
+        }
+    }
+
+    // His shorts, which the colours alone take for fur (L: "fur on the shorts"). Their textures are yellow with
+    // orange creases painted in, on white vertices (left to the colour as lit, so the creases grew strands), and the
+    // shading at the crotch and hems is dark yellow to brown (hue 28-34, the fur's own range). So: every vertex of a
+    // triangle drawn with a mostly yellow texture is bare, and so is a fur-marked vertex of hue 28 and up that shares
+    // an untextured triangle with a yellow one. Found from the model's own lists and textures, so a model mod's
+    // shorts count too. marks has one per vertex of the model's vertex block.
+    void mark_shorts_bare(const std::vector<uint8_t>& asset, const uint32_t header[3], std::vector<uint8_t>& marks) {
+        auto rd16 = [&](size_t o) { return o + 2 <= asset.size() ? uint32_t((asset[o] << 8) | asset[o + 1]) : 0u; };
+        auto rd32 = [&](size_t o) { return (rd16(o) << 16) | rd16(o + 2); };
+        auto texel = [&](size_t at, uint8_t& r, uint8_t& g, uint8_t& b) {
+            const uint32_t c = rd16(at);
+            r = uint8_t(((c >> 11) & 31) * 255 / 31);
+            g = uint8_t(((c >> 6) & 31) * 255 / 31);
+            b = uint8_t(((c >> 1) & 31) * 255 / 31);
+        };
+        auto yellow = [](uint8_t r, uint8_t g, uint8_t b, float min_value) {
+            float hue, saturation, value;
+            colour_hsv(r, g, b, hue, saturation, value);
+            return hue >= 36.0f && hue <= 70.0f && saturation >= 0.5f && value >= min_value;
+        };
+
+        // The model's textures (offset at +0x08: a size, a count, then 8 bytes each: offset from the texture data,
+        // format (1 CI4, 4 CI8; their palettes first), width, height); the lists name them by their texels' offset.
+        std::vector<uint32_t> yellow_textures;
+        const size_t textures = rd16(0x08);
+        const uint32_t texture_count = textures != 0 ? rd16(textures + 4) : 0;
+        const size_t texture_data = textures + 8 + size_t(texture_count) * 8;
+        for (uint32_t t = 0; t < texture_count; t++) {
+            const size_t entry = textures + 8 + size_t(t) * 8;
+            const size_t at = texture_data + rd32(entry);
+            const uint32_t format = rd16(entry + 4);
+            const uint32_t count = uint32_t(asset.size() > entry + 7 ? asset[entry + 6] * asset[entry + 7] : 0);
+            const size_t palette_size = format == 1 ? 0x20 : format == 4 ? 0x200 : 0;
+            const size_t texels = at + palette_size;
+            if (palette_size == 0 || count == 0 || texels + (format == 1 ? count / 2 : count) > asset.size()) {
+                continue;
+            }
+            uint32_t yellow_texels = 0;
+            for (uint32_t i = 0; i < count; i++) {
+                const uint32_t index = format == 1 ? ((asset[texels + i / 2] >> ((i & 1) ? 0 : 4)) & 15) : asset[texels + i];
+                uint8_t r, g, b;
+                texel(at + index * 2, r, g, b);
+                yellow_texels += yellow(r, g, b, 0.3f) ? 1 : 0;
+            }
+            if (yellow_texels * 100 >= count * 35) {
+                yellow_textures.push_back(uint32_t(texels - texture_data));
+            }
+        }
+
+        // The lists' commands (F3DEX2): G_VTX loads vertices from the block (segment 1), G_TRI1/2 draw them, G_TEXTURE
+        // turns texturing on or off and G_SETTIMG names the texture.
+        const size_t vertices = header[2] + 0x18;
+        std::array<uint32_t, 64> loaded;
+        loaded.fill(UINT32_MAX);
+        bool textured = false;
+        bool yellow_texture = false;
+        std::vector<uint32_t> shading;
+        auto triangle = [&](uint32_t a, uint32_t b, uint32_t c) {
+            const uint32_t v[3] = { loaded[(a >> 1) & 63], loaded[(b >> 1) & 63], loaded[(c >> 1) & 63] };
+            if (v[0] >= marks.size() || v[1] >= marks.size() || v[2] >= marks.size()) {
+                return;
+            }
+            if (textured) {
+                if (yellow_texture) {
+                    for (uint32_t i : v) {
+                        marks[i] = mark_bare;
+                    }
+                }
+                return;
+            }
+            bool next_to_yellow = false;
+            for (uint32_t i : v) {
+                const size_t at = vertices + size_t(i) * 16 + 12;
+                next_to_yellow = next_to_yellow || yellow(asset[at], asset[at + 1], asset[at + 2], 0.5f);
+            }
+            if (next_to_yellow) {
+                for (uint32_t i : v) {
+                    const size_t at = vertices + size_t(i) * 16 + 12;
+                    float hue, saturation, value;
+                    colour_hsv(asset[at], asset[at + 1], asset[at + 2], hue, saturation, value);
+                    if (marks[i] == mark_covered && hue >= 28.0f) {
+                        shading.push_back(i);
+                    }
+                }
+            }
+        };
+        for (size_t at = header[1] + 8; at + 8 <= header[2] && at + 8 <= asset.size(); at += 8) {
+            const uint32_t w0 = rd32(at), w1 = rd32(at + 4);
+            switch (w0 >> 24) {
+            case 0x01: { // G_VTX
+                const uint32_t count = (w0 >> 12) & 0xFF;
+                const uint32_t end = (w0 >> 1) & 0x7F;
+                for (uint32_t i = 0; i < count && end >= count; i++) {
+                    loaded[(end - count + i) & 63] = (w1 & 0xFFFFFF) / 16 + i;
+                }
+                break;
+            }
+            case 0x05: // G_TRI1
+                triangle((w0 >> 16) & 0xFF, (w0 >> 8) & 0xFF, w0 & 0xFF);
+                break;
+            case 0x06: // G_TRI2
+                triangle((w0 >> 16) & 0xFF, (w0 >> 8) & 0xFF, w0 & 0xFF);
+                triangle((w1 >> 16) & 0xFF, (w1 >> 8) & 0xFF, w1 & 0xFF);
+                break;
+            case 0xD7: // G_TEXTURE
+                textured = ((w0 >> 1) & 0x7F) != 0;
+                break;
+            case 0xFD: // G_SETTIMG
+                yellow_texture = std::find(yellow_textures.begin(), yellow_textures.end(), w1 & 0xFFFFFF) != yellow_textures.end();
+                break;
+            }
+        }
+        for (uint32_t i : shading) {
+            marks[i] = mark_bare;
+        }
+    }
+
     // The player's model (asset 0x062A, or the model mod that replaces it).
     constexpr uint32_t player_model_asset = 0x062A;
 
@@ -1481,6 +1622,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                             for (size_t v = 0; v < count; v++) {
                                 const size_t at = vertices + v * 16 + 12;
                                 marks[v] = fur_vertex_mark(asset[at], asset[at + 1], asset[at + 2]);
+                            }
+                            // (TOOIE_FUR_SHORTS=0 leaves the shorts to the colours, headless aid.)
+                            static const bool shorts_off = [] { const char* text = std::getenv("TOOIE_FUR_SHORTS"); return text != nullptr && *text == '0'; }();
+                            if (!shorts_off) {
+                                mark_shorts_bare(asset, model.header, marks);
                             }
                         }
                     }
