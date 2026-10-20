@@ -378,6 +378,62 @@ namespace {
         0xe3890f274d878db4,
     };
 
+    // Shiny textures for Screen-space reflections besides the parallax list's metal and tiles (RT64 hashes, picked by
+    // eye on 2026-10-20 from the dump's 2,618 textures the parallax sweep left out): shiny metal, gold and machine
+    // parts, crystals and gems, glass and windows.
+    constexpr uint64_t shiny_textures[] = {
+        // Metal: steel, gold, brass and copper parts, trims and machinery (143)
+        0x00efe89a05c37cfc, 0x0348aba32abccf8f, 0x052e5e214b074e46, 0x05bed606aa7cf58f,
+        0x06635b868db9a1eb, 0x0aaca422457e0dc8, 0x0dda4130179da841, 0x0edfaf02879af5de,
+        0x1085071aeccbaaec, 0x11127cba84729a83, 0x11d730637623c0e6, 0x12b63e73a3210e1e,
+        0x13a6a0d0720fceaf, 0x17ca8e1154577597, 0x190680dc86de6714, 0x196a3c1d3f89ad46,
+        0x1aec3ae12f288fd4, 0x1b28f93ed91299c5, 0x1c6ea26155d5cbc7, 0x1e3c6f5b7d4fd8ec,
+        0x1e46213c9605d459, 0x1fbad3057ea2a9a0, 0x1fe48ebc9374f00b, 0x2156ef1b48312f53,
+        0x229d1da147c5a73f, 0x2a3b2d8357bf1f98, 0x2ad10735da950566, 0x2ae5cc6ca498ba39,
+        0x2c4c96536b8b7b5a, 0x2f01c0962a3f1119, 0x35a6fa45844784aa, 0x36de1f108f8ec82e,
+        0x3c6c72cebdcfda95, 0x3db08e40e41544f5, 0x3e3f11605465bf14, 0x4113c5eabdb06f71,
+        0x41eb542175e8902f, 0x466039678d7e4844, 0x479848345ac366f7, 0x47f3ff36ed0edd7a,
+        0x4a5e67eca512ec24, 0x4b2dabab65151e30, 0x4befcb59717f5977, 0x4cdd4b08c4cf7f6d,
+        0x4edcfe29eab9f9d7, 0x52b8de47adefccf0, 0x53114bfda1182881, 0x53fd8e1dbdebb8f1,
+        0x556df73cad052835, 0x55974effa10b50b2, 0x560a41300280ed02, 0x562b34c1218fd1b8,
+        0x57d04f8f0c1f03c8, 0x58c70baa02f4a191, 0x594356a84a74082d, 0x5a7d42b55f050f24,
+        0x5ccd85dbd5b0d3ee, 0x614bd692513046a3, 0x62a7a8ccbab246b5, 0x63332c4d31561ed1,
+        0x633f62b741b793a3, 0x643a5679edb3426f, 0x64a1ab6348e2c47c, 0x6579b8c1852b6fbc,
+        0x66fc6d958d629254, 0x66fd10caf2d867d0, 0x67d4ebbdd56e392f, 0x6881f316689a6e95,
+        0x688a2f33e305417b, 0x6bd7eef5b4b544ad, 0x6c1f6b4894437fd7, 0x6ec1169c8ac54fc5,
+        0x708aa6ba9de2e747, 0x776adb5f84d53d24, 0x7ac35f509b00c0ce, 0x7cfca85b81a487c7,
+        0x7d6cb4d798d31abe, 0x81a0f9248b66ce01, 0x81e1103fe17d95b5, 0x833b5594f071abb9,
+        0x8d2f78cc91e85f3d, 0x9045f10c4be8e099, 0x913fa97bc6457120, 0x96e4a5b0cbd49d23,
+        0x9b3389ef372081ec, 0x9ded73062322e234, 0x9f401d180568b47e, 0x9fc0b0edcf634542,
+        0xa07b26167b652a03, 0xa1fbfb4b7e566e8f, 0xa26805cf6fefbda3, 0xa5faaee70e252666,
+        0xa7668c59352abe8a, 0xa970e5517350bb3e, 0xacf387a35a424846, 0xb131649ad7333cef,
+        0xb13f0c7b6669fee6, 0xb30eaf3c65672655, 0xb5abbfe203e51617, 0xbbafc817fb64fdb0,
+        0xbdbf81d7b2621f6b, 0xbe041cdc9df375ef, 0xc0ca4ff2a78b2629, 0xc124d01e79e8fa32,
+        0xc1e65a8a924884d2, 0xc21668249131f412, 0xc3a41edc2676640b, 0xc49d8d291cd81997,
+        0xc5b57e68f931ea8c, 0xc5bc6261dfece826, 0xc769b5fe90c68a17, 0xc898524aba681c86,
+        0xc97249c30ee7b913, 0xc9ac05812888d25f, 0xcd3125fb97b26599, 0xcefe98bd0b65af4a,
+        0xd88f0ffa83b47a39, 0xd932ef70cd7da419, 0xdc74d77466dca12d, 0xde7a8b196a15ea8a,
+        0xe2cd4c17d94c0cb8, 0xe585a469e3cedbac, 0xe6f6ea1ae92f4512, 0xeabc08f85602d542,
+        0xec029110fb80cb68, 0xee57aab90797e593, 0xeef03afb17bf6360, 0xef37e7804f15cd3a,
+        0xefdc76eb8a87b8b8, 0xf05ff4fe9a8b4057, 0xf103a851e363b2ac, 0xf25b7fe8cca57f21,
+        0xf3063a55e8237324, 0xf32c33cf2ddf523b, 0xf54d58565c421075, 0xfa6da10599d876de,
+        0xfb20d484347e507a, 0xfb7bd58e16034e15, 0xfb822a2a95b52ab3, 0xfcd67fa7c1ee3a97,
+        0xfd997b006c0d2279, 0xfeec46c1e07f6ec6, 0xff1789e72c4c5b05,
+        // Crystals and gems (25)
+        0x0f71ebd913354f04, 0x22402ed8424e798b, 0x2fe8e3ecae2a3740, 0x37488137fb10db24,
+        0x3d6d0e08f30e0dcd, 0x4fe0d8976c184a5a, 0x5882c0aed5e94dfa, 0x5a5872a0c544c177,
+        0x61651a70e726dbdb, 0x65d7f51774d6f517, 0x664b0c6644060bed, 0x778b12f89aaeb246,
+        0x78d67b5d46fd6de4, 0x79a8b89ae797effa, 0x9873ab2ea6afc92b, 0x9cd99a44f36bbab5,
+        0xa0754fa808c1eec1, 0xbda54fd31b527f0e, 0xc99adb3fb7f0bc02, 0xca03179894a7570f,
+        0xca3ac18fa0ee884d, 0xd3db47b98a571e16, 0xe0c45d0afc26cf02, 0xe75507b6b900f558,
+        0xfbbc50554bf66f9b,
+        // Glass and windows (6)
+        0x1a1949e1f923e12d, 0x34bf2cae5467cb0e, 0x968d8376fb42d7db, 0xc9eac79984101fc0,
+        0xd61b89ced680452d, 0xf7f170249a3bbefa,
+        // Glossy paint (1)
+        0x12c31c68cdc11203,
+    };
+
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
     // The grass textures of the levels' ground (their RT64 texture hashes, picked by eye from a texture dump of 22
     // outdoor maps on 2026-10-16): 3D grass grows only on these, not on other green textures (moss, leaves, walls).
@@ -4069,9 +4125,9 @@ namespace {
         std::vector<uint64_t> ice_all(std::begin(ice_textures), std::end(ice_textures));
         ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
         std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
-        // Shiny surfaces for Screen-space reflections: the textures the parallax sweep (textures/sweep4) found to be
-        // metal or tiles, with Shiny Reflection picks over them.
-        std::vector<uint64_t> shiny_all;
+        // Shiny surfaces for Screen-space reflections: shiny_textures and the textures the parallax sweep
+        // (textures/sweep4) found to be metal or tiles, with Shiny Reflection picks over them.
+        std::vector<uint64_t> shiny_all(std::begin(shiny_textures), std::end(shiny_textures));
         for (const ParallaxTexture& texture : parallax_textures) {
             if ((texture.shape == Metal) || (texture.shape == Tiles)) {
                 shiny_all.push_back(texture.hash);
