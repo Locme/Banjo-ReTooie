@@ -116,6 +116,7 @@
 - Also: water is left to its own Water reflections setting (traced from the bed it came out stretched); sun shadows are traced too (Sun shadows shows at 60 at least while it is on; the shadow map isn't drawn then). Look for sharp shadows from everything solid, soft edges, no shadow acne, and none coming and going as you move or turn (the game keeps the whole level drawn for the sun while ray tracing is on, and a pass with no casters reuses the last structure).
 - Also: ambient occlusion and bounce light (SSGI) are traced too while it is on (AO shows at 50 and bounce light at 40 at least; rays through the same structure, 32 per 4x4 block, in the half-size indirect pass). Look for contact shadows in corners and under objects, and coloured light from nearby walls and floors, without noise or blocks.
 - Also: a traced reflection ray that leaves the world now reflects the sky (the sky pixel in that direction when it is on screen, else the horizon haze, fainter). Look at a shiny surface or water facing the sky.
+- Also: lamps and fires cast traced shadows (the level's own lights, up to 32, each lighting what is within its range; rays from the surface to the light, so a pillar or a character blocks a lamp's light on the floor behind it). Look in a cave or at night near a torch for shadows that follow the light, and no flicker.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

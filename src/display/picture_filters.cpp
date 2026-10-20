@@ -4422,6 +4422,10 @@ static bool traced_shadows_on() {
     return ray_tracing_on.load() && (RT64::GetRayTracingSupport() == 2);
 }
 
+bool tooie::picture_filters::ray_tracing_active() {
+    return traced_shadows_on();
+}
+
 bool tooie::picture_filters::sun_shadows_on() {
     return sun_shadows || traced_shadows_on();
 }
