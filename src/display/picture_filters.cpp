@@ -65,7 +65,7 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
-    void SetSceneModernWater(bool enabled);
+    void SetSceneModernWater(bool enabled, bool stylised);
     void SetSceneIcyLevel(bool enabled);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
@@ -115,8 +115,10 @@ namespace {
     std::atomic<float> heat_haze{0.0f};
     std::atomic<float> underwater_distortion{0.3f};
     std::atomic<bool> water_waves_on{false};
-    // Graphics > Water is Modern (test aid: TOOIE_MODERN_WATER=1 or 0 overrides it).
+    // Graphics > Water is Modern or Stylised (test aid: TOOIE_MODERN_WATER=1, 2 for Stylised, or 0 overrides it).
     std::atomic<bool> modern_water{false};
+    // Graphics > Water is Stylised: Modern water with the stylised look.
+    std::atomic<bool> stylised_water{false};
     // The Water reflections setting (0 to 1), and set when the water settings change, for Icy Side's override.
     std::atomic<float> water_reflections_set{0.0f};
     std::atomic<bool> water_settings_changed{true};
@@ -4286,11 +4288,14 @@ void tooie::picture_filters::apply() {
     const char* parallax_all = std::getenv("TOOIE_PARALLAX_ALL");
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
     send_parallax_textures();
-    modern_water = shaders && value<uint32_t>(water_option, (uint32_t)Water::Original) == (uint32_t)Water::Modern;
+    const uint32_t water = shaders ? value<uint32_t>(water_option, (uint32_t)Water::Original) : (uint32_t)Water::Original;
+    modern_water = (water == (uint32_t)Water::Modern) || (water == (uint32_t)Water::Stylised);
+    stylised_water = water == (uint32_t)Water::Stylised;
     if (const char* forced = std::getenv("TOOIE_MODERN_WATER")) {
         modern_water = std::atoi(forced) != 0;
+        stylised_water = std::atoi(forced) == 2;
     }
-    RT64::SetSceneModernWater(modern_water);
+    RT64::SetSceneModernWater(modern_water, stylised_water);
     bool shore_foam = shaders && value<bool>(shore_foam_option, false);
     if (const char* forced = std::getenv("TOOIE_SHORE_FOAM")) {
         shore_foam = std::atoi(forced) != 0;
@@ -4573,7 +4578,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         static bool icy_sent = false;
         if ((icy != icy_sent) || water_settings_changed.exchange(false)) {
             icy_sent = icy;
-            RT64::SetSceneModernWater(modern_water && !icy);
+            RT64::SetSceneModernWater(modern_water && !icy, stylised_water);
             RT64::SetSceneWaterReflections(water_reflections_set.load());
         }
     }
@@ -4789,10 +4794,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_enum_option(
         water_option,
         "Water",
-        "<recomp-color primary>Original</recomp-color> is the game's own water. <recomp-color primary>Modern</recomp-color> replaces it with new water: clear in the shallows and darker with depth in each level's own colour, bent by rolling waves, reflecting the sky and scenery more at low angles, with the sun's glint, foam along the shores and rings, a wake and splashes round the player. Modern makes its own reflections, so Water reflections is not used; its waves follow Water waves (50 when that is 0) and Water wave speed. Under water, the game's water surface is kept for now. Drawn on the picture, so the player still floats at the same height.",
+        "<recomp-color primary>Original</recomp-color> is the game's own water. <recomp-color primary>Modern</recomp-color> replaces it with new water: clear in the shallows and darker with depth in each level's own colour, bent by rolling waves, reflecting the sky and scenery more at low angles, with the sun's glint, foam along the shores and rings, a wake and splashes round the player. <recomp-color primary>Stylised</recomp-color> is Modern with a cartoon look: sharp crossing wave crests, a clean shallow-to-deep gradient, crisp white foam along the shores, round anything poking out of the water and in breakers rolling in, and bright rippling light on everything under the surface. Modern and Stylised make their own reflections, so Water reflections is not used; their waves follow Water waves (50 when that is 0) and Water wave speed. Under water, the game's water surface is kept for now. Drawn on the picture, so the player still floats at the same height.",
         {
             {Water::Original, "Original", "Original"},
             {Water::Modern, "Modern", "Modern"},
+            {Water::Stylised, "Stylised", "Stylised"},
         },
         Water::Original);
     graphics.add_bool_option(

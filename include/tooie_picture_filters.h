@@ -19,7 +19,7 @@ namespace tooie::picture_filters {
     enum class TextureUpscale : uint32_t { Off, Double, Quadruple };
     enum class FogColour : uint32_t { Haze, Mist, Dusk, Gloom };
     enum class Preset : uint32_t { Custom, Original, Enhanced, Retro };
-    enum class Water : uint32_t { Original, Modern };
+    enum class Water : uint32_t { Original, Modern, Stylised };
 
     inline const std::string preset_option = "effects_preset";
     // Lighting, Water, Fog (Experimental) toggle: hides the effect options below it (they keep their values).

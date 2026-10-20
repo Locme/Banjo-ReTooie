@@ -5848,10 +5848,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..0cf3e99
+index 0000000..6b1b21d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2331 @@
+@@ -0,0 +1,2334 @@
 +//
 +// RT64
 +//
@@ -6168,9 +6168,10 @@ index 0000000..0cf3e99
 +        effectsSettings.shoreFoam = enabled;
 +    }
 +
-+    void SetSceneModernWater(bool enabled) {
++    void SetSceneModernWater(bool enabled, bool stylised) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.modernWater = enabled;
++        effectsSettings.stylisedWater = stylised;
 +    }
 +
 +    void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel) {
@@ -8000,7 +8001,9 @@ index 0000000..0cf3e99
 +        // water.x: Water reflections plus twice Ice reflections' hundredths (see WaterReflectionStrength in SceneEffectsPS).
 +        const float waterReflect = (waterDrawn && !modernOn && (settings.waterReflections > 0.0f)) ? std::min(settings.waterReflections, 1.0f) : 0.0f;
 +        const float iceReflect = waterDrawn ? std::round(std::clamp(settings.iceReflections, 0.0f, 1.0f) * 100.0f) : 0.0f;
-+        constants.water = { waterReflect + 2.0f * iceReflect, modern ? 2.0f : (modernOn ? 3.0f : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
++        // water.y: a quarter more for Stylised water (2.25 drawn, 3.25 with no water this frame).
++        const float stylised = settings.stylisedWater ? 0.25f : 0.0f;
++        constants.water = { waterReflect + 2.0f * iceReflect, modern ? 2.0f + stylised : (modernOn ? 3.0f + stylised : (waterDrawn ? (settings.shoreFoam ? 1.25f : 1.0f) : 0.0f)), settings.bounceLight,
 +            modernOn ? ((settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f) : (waterDrawn ? settings.waterWaves : 0.0f) };
 +        if (modernOn) {
 +            // Modern water reads the ripple grid instead of the rings: its corner in world x and z, its cell size,
@@ -8185,10 +8188,10 @@ index 0000000..0cf3e99
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ccd908b
+index 0000000..2f4dc56
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,385 @@
+@@ -0,0 +1,388 @@
 +//
 +// RT64
 +//
@@ -8242,6 +8245,8 @@ index 0000000..ccd908b
 +        float waterWaves = 0.0f;
 +        // Modern water: the game's water isn't drawn; the pass draws its own in its place.
 +        bool modernWater = false;
++        // Stylised water (Graphics > Water Stylised): Modern water with the stylised look.
++        bool stylisedWater = false;
 +        // Modern water under the water: how far into the underwater look (0 to 1), the water's surface height and
 +        // whether the whole level is under water (Atlantis, the Sea Bottom).
 +        float modernUnderwater = 0.0f;
@@ -8364,7 +8369,8 @@ index 0000000..ccd908b
 +    // Banjo-Tooie: Modern water (Graphics > Water): the game's water draws are left out of the 3D world and the
 +    // scene effects pass draws new water where they were, from the water mask and their colours.
 +    void SetSceneShoreFoam(bool enabled);
-+    void SetSceneModernWater(bool enabled);
++    // stylised: Graphics > Water is Stylised (Modern water with the stylised look).
++    void SetSceneModernWater(bool enabled, bool stylised);
 +    // Whether the game's water draws are left out this frame (Modern water, with the effects pass drawing).
 +    bool SceneModernWater();
 +    // Banjo-Tooie: whether flat see-through level decals are ice that reflects (Icy Side only; elsewhere the same kind
@@ -12217,10 +12223,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6ef966b
+index 0000000..752ca6a
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2426 @@
+@@ -0,0 +1,2677 @@
 +//
 +// RT64
 +//
@@ -13422,6 +13428,256 @@ index 0000000..6ef966b
 +    return color;
 +}
 +
++// Stylised water (Graphics > Water Stylised): water.y is a quarter over Modern's (2.25, or 3.25 with no water drawn).
++bool StylisedWaterOn() {
++    return (gConstants.water.y > 1.5f) && (frac(gConstants.water.y) > 0.2f);
++}
++
++// Cellular noise over a plane: the distance to the nearest of a jittered grid of points (x) and to the second
++// nearest (y), the points slowly wandering round their cells with t. y - x is small along the cells' edges.
++float2 StylisedCells(float2 p, float t) {
++    const float2 cell = floor(p);
++    const float2 f = frac(p);
++    float nearest = 8.0f;
++    float second = 8.0f;
++    [loop] for (int j = -1; j <= 1; j++) {
++        [loop] for (int i = -1; i <= 1; i++) {
++            const float2 o = float2(float(i), float(j));
++            const float2 h = frac(sin(float2(dot(cell + o, float2(127.1f, 311.7f)), dot(cell + o, float2(269.5f, 183.3f)))) * 43758.5453f);
++            const float2 spot = o + 0.5f + 0.4f * sin(t + 6.2831853f * h);
++            const float d = length(spot - f);
++            second = (d < nearest) ? nearest : min(second, d);
++            nearest = min(nearest, d);
++        }
++    }
++    return float2(nearest, second);
++}
++
++// Stylised water's waves at a world x and z: height (x) and slope along x and z (yz), in world units. Two equal wave
++// trains crossing at right angles make a lattice of crests (the look of the Unity asset's cross lattice), with two
++// smaller trains for chop. Each crest is a sine raised to a power and stretched back to the same height, so the
++// tops are sharp and the troughs broad, like Gerstner waves.
++float3 StylisedWave(float2 p, float t, float footprint) {
++    const float2 dirs[4] = { float2(0.83f, 0.56f), float2(-0.56f, 0.83f), float2(0.97f, -0.26f), float2(0.26f, 0.97f) };
++    const float lengths[4] = { 190.0f, 175.0f, 70.0f, 47.0f };
++    const float heights[4] = { 1.0f, 0.9f, 0.4f, 0.28f };
++    const float sharpness = 2.2f;
++    float3 wave = 0.0f;
++    [unroll] for (int i = 0; i < 4; i++) {
++        const float k = 6.2831853f / lengths[i];
++        const float omega = k * sqrt(lengths[i]) * 6.0f;
++        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
++        const float amplitude = 0.2f * heights[i] * visible / k;
++        const float phase = k * dot(dirs[i], p) - omega * t;
++        const float s = sin(phase) * 0.5f + 0.5f;
++        const float raised = pow(max(s, 1e-4f), sharpness);
++        // Centred on 0 (the mean of s^2.2 is about 0.33), so the water's mean level stays the game's.
++        wave.x += amplitude * (2.0f * raised - 0.66f);
++        wave.yz += dirs[i] * (amplitude * 2.0f * sharpness * raised / max(s, 1e-4f) * 0.5f * cos(phase) * k);
++    }
++    return wave;
++}
++
++// Stylised water's surface height above the flat surface at a world x and z (waves and ripples).
++float StylisedHeight(float2 p, float waterY, float strength, float footprint) {
++    return StylisedWave(p, gConstants.ambientOcclusion.z, footprint).x * strength + Ripples(p, waterY).x;
++}
++
++// Stylised caustics: a bright net of light along the edges of two layers of wandering cells drifting across each
++// other, 0 to about 1.6.
++float StylisedCaustics(float2 p, float t) {
++    const float2 a = StylisedCells(p / 46.0f + float2(t * 0.05f, t * 0.03f), t * 0.8f);
++    const float2 b = StylisedCells(p / 33.0f - float2(t * 0.04f, -t * 0.05f) + 17.0f, t * 0.7f + 2.0f);
++    const float lineA = 1.0f - smoothstep(0.02f, 0.16f, a.y - a.x);
++    const float lineB = 1.0f - smoothstep(0.02f, 0.16f, b.y - b.x);
++    return saturate(lineA * lineB * 1.6f + (lineA + lineB) * 0.3f);
++}
++
++// How strongly stylised caustics light a point under the water: everything under the surface, most on what faces up,
++// fading with depth below the surface.
++float StylisedCausticsAt(int2 pixel, float3 view, float depthBelow) {
++    if (depthBelow <= 0.0f) {
++        return 0.0f;
++    }
++    const float facing = 0.35f + 0.65f * saturate(dot(ViewNormal(pixel, view), normalize(gConstants.worldY.xyz)));
++    return StylisedCaustics(WorldPosition(view).xz, gConstants.ambientOcclusion.z) * facing * exp(-depthBelow / 300.0f) * saturate(depthBelow / 10.0f);
++}
++
++// Stylised foam's pattern at a world x and z, 0 to about 1: three octaves of wandering cells, bright in their middles,
++// so a cut through it leaves rounded white blobs and bubbles.
++float StylisedFoamNoise(float2 p, float t) {
++    float n = 0.0f;
++    float amplitude = 0.55f;
++    float2 q = p / 30.0f;
++    [loop] for (int i = 0; i < 3; i++) {
++        const float c = 1.0f - StylisedCells(q, t * (1.0f + 0.4f * float(i))).x;
++        n += c * c * amplitude;
++        amplitude *= 0.5f;
++        q = float2(q.x * 0.88f - q.y * 0.48f, q.x * 0.48f + q.y * 0.88f) * 2.0f + 100.0f;
++    }
++    return n;
++}
++
++// Stylised water: Modern water's surface, reflections, refraction and player ripples with the stylised look of
++// UnicornWay's Unity water: sharp crossing crests, a clean shallow-to-deep gradient, crisp white foam with a soft dark
++// edge along shores, round anything poking through and in breakers rolling in, cell caustics, a hard sun highlight
++// and light glowing through the crests.
++float3 StylisedWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
++    const float3 v = normalize(surface);
++    const float3 up = normalize(gConstants.worldY.xyz);
++    normal = up;
++    const float strength = gConstants.water.w;
++    const float footprint = -surface.z * 2.0f / (gConstants.projection.y * gConstants.projection.w);
++    const float waterY = dot(surface, gConstants.worldY.xyz) + gConstants.worldY.w;
++    const float t = gConstants.ambientOcclusion.z;
++
++    // The moving surface, found as Modern water's is.
++    const float band = 12.0f * strength + 14.0f;
++    const float along = dot(v, up);
++    if (abs(along) > 0.02f) {
++        const float tFlat = length(surface);
++        const float tStart = tFlat + band / along;
++        const float tEnd = tFlat - band / along;
++        float tPrev = tStart;
++        float fPrev = band;
++        float tHit = tFlat;
++        [loop] for (int i = 1; i <= 10; i++) {
++            const float s = lerp(tStart, tEnd, float(i) / 10.0f);
++            const float3 w = WorldPosition(v * s);
++            const float f = (w.y - waterY) - StylisedHeight(w.xz, waterY, strength, footprint);
++            if (f <= 0.0f) {
++                tHit = lerp(tPrev, s, fPrev / max(fPrev - f, 1e-4f));
++                break;
++            }
++            tPrev = s;
++            fPrev = f;
++        }
++        surface = v * tHit;
++    }
++    const float distance = -surface.z;
++    const float3 world = WorldPosition(surface);
++    const float2 p = world.xz;
++    const float4 ripple = Ripples(p, waterY);
++    const float3 wave = StylisedWave(p, t, footprint);
++    const float2 slope = wave.yz * strength + ripple.yz;
++    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
++    // How high on the waves this point is: 0 in the deepest troughs, about 0.6 on a single crest and 1 where the two
++    // big trains' crests meet.
++    const float crest = saturate((wave.x + 8.5f) / 25.0f);
++
++    // The level's water colour, as Modern water reads it.
++    const int reach = max(2, int(gConstants.projection.w / 90.0f));
++    float3 tint = 0.0f;
++    float tintWeight = 0.0f;
++    [unroll] for (int i = 0; i < 5; i++) {
++        const int2 offset = (i == 0) ? int2(0, 0) : (i == 1) ? int2(reach, 0) : (i == 2) ? int2(-reach, 0) : (i == 3) ? int2(0, reach) : int2(0, -reach);
++        float d;
++        if (LoadWater(pixel + offset, d)) {
++            const float3 c = LoadWaterColor(pixel + offset).rgb;
++            const float w = saturate((0.7f - dot(c, float3(0.299f, 0.587f, 0.114f))) * 5.0f) + 0.001f;
++            tint += c * w;
++            tintWeight += w;
++        }
++    }
++    tint = (tintWeight > 0.01f) ? tint / tintWeight : float3(0.2f, 0.45f, 0.55f);
++    const float luma = dot(tint, float3(0.299f, 0.587f, 0.114f));
++    const float3 hue = saturate(lerp(luma.xxx, tint, 1.6f));
++    const float peak = max(max(hue.r, max(hue.g, hue.b)), 0.05f);
++    // Two clean colours from it: bright and clear in the shallows (nudged towards cyan), deep and saturated further
++    // down (nudged towards blue).
++    const float3 shallowColor = saturate(lerp(hue / peak, float3(0.4f, 0.95f, 1.0f), 0.45f));
++    const float3 deepColor = saturate(lerp(hue / peak, float3(0.05f, 0.3f, 0.75f), 0.4f) * 0.55f);
++
++    // How deep the water is under this point and how much of it the eye looks through.
++    float throughLength = 2000.0f;
++    float floorDepth = 2000.0f;
++    if (sceneDepth < 0.99999f) {
++        const float3 floorView = ViewPosition(pixel, sceneDepth);
++        throughLength = max(length(floorView) - length(surface), 0.0f);
++        floorDepth = max(world.y - WorldPosition(floorView).y, 0.0f);
++    }
++
++    // Refraction, guarded as Modern water's: only from places that are under the water too.
++    const float3 bend = n - normal;
++    const float2 shift = float2(bend.x, -bend.y) * (gConstants.projection.w * 0.06f) * saturate(throughLength / 120.0f) * saturate(800.0f / distance);
++    const int2 bent = clamp(int2(float2(pixel) + shift), int2(0, 0), int2(gConstants.projection.zw) - 1);
++    float3 below = scene;
++    float bentWater;
++    if (LoadWater(bent, bentWater)) {
++        const float bentDepth = LoadDepth(bent);
++        if ((bentDepth >= 0.99999f) || (-ViewPosition(bent, bentDepth).z > distance)) {
++            below = gColor.Load(int3(bent, 0)).rgb;
++        }
++    }
++
++    // Caustics on what lies under the water (not on the player's body just under the surface).
++    const float2 playerAt = float2(gConstants.rippleX.w, gConstants.rippleZ.w);
++    const bool havePlayer = gConstants.rippleAge.w > -1e8f;
++    const float fromPlayer = havePlayer ? length(p - playerAt) : 1e4f;
++    if (sceneDepth < 0.99999f) {
++        below *= 1.0f + (0.25f + 0.55f * saturate((fromPlayer - 45.0f) / 35.0f)) * StylisedCausticsAt(pixel, ViewPosition(pixel, sceneDepth), floorDepth);
++    }
++
++    // The gradient: the floor through a clear tint in the shallows, fading into the deep colour by how deep the water
++    // is and how far the eye looks through it. Red goes first, so deep water turns towards blue-green.
++    const float depthRatio = smoothstep(4.0f, 260.0f, floorDepth * 0.7f + throughLength * 0.3f);
++    const float3 volume = lerp(shallowColor, deepColor, depthRatio);
++    const float3 absorb = float3(0.3f, 0.07f, 0.03f) / 90.0f + (1.0f - hue / peak) * (1.0f / 600.0f);
++    const float3 through = exp(-absorb * (throughLength * 0.6f + floorDepth * 0.4f));
++    float3 color = lerp(deepColor, below * lerp(float3(1.0f, 1.0f, 1.0f), volume, 0.6f), through);
++    color = lerp(color, volume, depthRatio * 0.35f);
++
++    // Light through the crests, from behind them: brighter, cleaner water on the tops.
++    const float3 sun = (gConstants.sun.z < 0.98f) ? gConstants.sun.xyz : normalize(float3(0.3f, 0.8f, -0.5f));
++    const float backlit = 0.35f + 0.65f * saturate(dot(v, sun) * 0.5f + 0.5f);
++    color += shallowColor * (0.18f * crest * crest * backlit * saturate(depthRatio * 3.0f));
++    // The stylised gradient over the waves too: crests a lighter shade of the water, troughs a deeper one.
++    color = lerp(color, (crest > 0.5f) ? shallowColor : deepColor, abs(crest - 0.5f) * 0.4f * saturate(strength * 2.0f));
++
++    // Reflections, as Modern water's.
++    const float facing = saturate(dot(-v, n));
++    const float fresnel = 0.04f + 0.96f * pow(1.0f - facing, 5.0f);
++    const float4 reflection = WaterReflection(surface, n);
++    const float3 sky = lerp(float3(0.62f, 0.78f, 0.9f), shallowColor, 0.2f);
++    const float3 reflected = lerp(sky, reflection.rgb, saturate(reflection.a * 2.0f));
++    color = lerp(color, reflected, saturate(0.05f + fresnel * 0.75f));
++
++    // The sun: a hard-edged highlight with a soft halo.
++    const float3 r = reflect(v, n);
++    const float toSun = saturate(dot(r, sun));
++    const float highlight = smoothstep(0.9965f, 0.9985f, toSun) * 1.4f + pow(toSun, 40.0f) * 0.15f;
++    color += float3(1.0f, 0.97f, 0.9f) * highlight * saturate(dot(n, up) * 2.0f);
++
++    // Foam. Where it may show (level): along the shore and round anything poking through the surface, by how much
++    // water lies between the surface and what is under it; on the tallest crests; in the player's wake; and in
++    // breakers rolling in through the shallows towards the shore.
++    const float fine = saturate(1.6f - distance / 3500.0f);
++    const float shallow = (sceneDepth < 0.99999f) ? min(floorDepth, throughLength * 0.5f) : 2000.0f;
++    // Not on the player: the water there is over their body, not the shore. Instead a ring of foam round them,
++    // where they cut the water, while they are in it.
++    const float clearOfPlayer = saturate((fromPlayer - 40.0f) / 10.0f);
++    const float playerY = gConstants.rippleAge.w;
++    const bool playerIn = havePlayer && (gConstants.rippleX.z > 0.5f) && (waterY > playerY - 60.0f) && (waterY < playerY + 160.0f);
++    const float ring = playerIn ? smoothstep(38.0f, 46.0f, fromPlayer) * (1.0f - smoothstep(52.0f, 72.0f, fromPlayer)) : 0.0f;
++    const float shore = (1.0f - smoothstep(0.0f, 34.0f, shallow)) * clearOfPlayer;
++    const float breakerPhase = frac(floorDepth / 26.0f + t * 0.35f);
++    const float breakers = (1.0f - smoothstep(0.0f, 0.12f, breakerPhase)) * smoothstep(80.0f, 30.0f, floorDepth) * smoothstep(8.0f, 20.0f, floorDepth) * clearOfPlayer;
++    const float crestFoam = smoothstep(0.75f, 0.95f, crest) * saturate(strength * 1.5f);
++    const float wake = saturate((ripple.w - 0.25f) * 1.5f) + saturate((length(ripple.yz) - 0.5f) * 0.8f);
++    const float level = saturate(shore * 1.15f + breakers * 0.8f + crestFoam * 0.55f + wake * clearOfPlayer * 0.7f + ring * 0.85f);
++    // The pattern, cut sharply: white where pattern and level together pass the cut, and a dark edge just outside it.
++    const float2 drift = float2(t * 0.9f, t * 0.6f);
++    const float pattern = StylisedFoamNoise(p + drift, t * 0.6f);
++    // Solid only right at the shore; further out the pattern breaks it into blobs and bubbles.
++    const float cut = 1.0f;
++    const float foam = smoothstep(cut, cut + 0.05f, pattern + level * 0.75f) * fine;
++    const float edgePattern = StylisedFoamNoise(p + drift + float2(2.5f, 2.5f), t * 0.6f);
++    const float edge = saturate(smoothstep(cut - 0.12f, cut - 0.02f, edgePattern + level * 0.75f) - foam) * fine;
++    color = lerp(color, deepColor * 0.6f, edge * 0.35f);
++    color = lerp(color, float3(0.96f, 0.98f, 1.0f), foam * 0.92f);
++    return color;
++}
++
 +// Modern water's waterfalls: the game's own fall (its texture keeps scrolling as the game moves it), drawn a little
 +// thicker, with soft streaks of white water pouring down over it, sparkles where the sun catches it, and mist
 +// gathering at its foot where it lands in flat water. Everything is laid out in the world (across the fall as the
@@ -14549,7 +14805,8 @@ index 0000000..6ef966b
 +                        const float watery = FallWatery(pixel, tint);
 +                        back = (watery > 0.0f) ? lerp(original, ModernFall(pixel, waterDepth, original, game), watery * steep) : original;
 +                    }
-+                    scene = (amount > 0.0f) ? lerp(back, ModernWater(pixel, depth, surface, normal, scene), amount) : back;
++                    scene = (amount > 0.0f) ? lerp(back, StylisedWaterOn() ? StylisedWater(pixel, depth, surface, normal, scene) :
++                        ModernWater(pixel, depth, surface, normal, scene), amount) : back;
 +                }
 +            }
 +            else if ((gConstants.water.y < 2.5f) && LoadFall(pixel, waterDepth)) {
@@ -14565,7 +14822,7 @@ index 0000000..6ef966b
 +                // Under the water: caustics on what faces up below the surface.
 +                const float3 view = ViewPosition(pixel, depth);
 +                const float below = (gConstants.rippleAge.y > 0.5f) ? 300.0f : (gConstants.rippleAge.x - WorldPosition(view).y);
-+                scene *= 1.0f + 0.6f * gConstants.rippleZ.z * CausticsAt(pixel, view, below);
++                scene *= 1.0f + 0.6f * gConstants.rippleZ.z * (StylisedWaterOn() ? StylisedCausticsAt(pixel, view, below) : CausticsAt(pixel, view, below));
 +            }
 +        }
 +        else if ((WaterReflectionStrength() > 0.0f) || (gConstants.water.w > 0.0f) || OriginalShoreFoamOn()) {
