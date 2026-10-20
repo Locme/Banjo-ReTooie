@@ -245,6 +245,10 @@ void tooie::cheats::start(uint8_t* rdram) {
     });
 }
 
+recomp::config::Config& tooie::cheats::config() {
+    return recompui::config::get_config(tab_id);
+}
+
 bool tooie::cheats::enabled() {
     return option_on(enabled_option);
 }

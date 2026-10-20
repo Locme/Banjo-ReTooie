@@ -50,6 +50,7 @@ switching it off doesn't unlearn them.
 
 **Transformation**: choose a form from the list and the area you are in reloads
 with you in it. It comes back in at the entrance you used, not where you were
-standing. Some forms break in areas the game never expects them in. Choosing
-Off after a form puts you back as Banjo-Kazooie and reloads the area the same
-way. The list is a drop-down.
+standing. Some forms break in areas the game never expects them in. Once the
+area starts reloading the row goes back to Off by itself, so picking the same
+form again reloads again; pick Banjo-Kazooie (BK) to change back. The list is a
+drop-down.

@@ -3,6 +3,10 @@
 
 #include <cstdint>
 
+namespace recomp::config {
+    class Config;
+}
+
 // Cheats (src/game/cheats.cpp). Everything stays off, and its rows hidden, until the
 // "Enable cheats" master switch is on.
 namespace tooie::cheats {
@@ -22,6 +26,9 @@ namespace tooie::cheats {
     // True when this cheat's option (for example "cheat_levitate") is on and the master switch is on.
     // Cheap enough to call every frame from the game thread.
     bool is_on(const char* option);
+
+    // The Cheats tab's config (looked up each time: the tab list moves its configs as tabs are added).
+    recomp::config::Config& config();
 }
 
 #endif

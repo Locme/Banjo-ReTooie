@@ -567,9 +567,10 @@ as they are.
   Detonator, Van, small or large T-Rex, Banjo-Kazooie).
   Picking one reloads the area you are in, at the entrance you came in by, so
   the new model shows. Some forms break in areas the game never expects them
-  in (missing animations or data). It is a drop-down. Off puts you back as
-  Banjo-Kazooie (and reloads the area) if you had picked a form. Default: Off;
-  the row goes back to Off when Enable cheats is turned off.
+  in (missing animations or data). It is a drop-down. The row goes back to
+  Off by itself once the area reloads with the new form; pick Banjo-Kazooie to
+  change back. Default: Off; the row also goes back to Off when Enable cheats
+  is turned off.
 - **Warp tab** (now in DEV > Additional Tabs): shows the Warp tab in the menu, with a list of places to warp
   to. The Warp Again key (Debug section of the Controls tab) repeats the last
   warp. Its last group, Race Warps (Replay Race), starts one of Canary Mary's four races as
