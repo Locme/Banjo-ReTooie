@@ -119,6 +119,7 @@ namespace {
     // What the pad reads get this frame (set by tick, read by apply_input on the pad thread).
     std::atomic<int> stick_step = 0;            // -1 down, 1 up
     std::atomic<int> stick_x = 0;               // -1 left, 1 right
+    std::atomic<bool> pad_used = false;         // a controller or key was used since the last tick
     int select_target = -1;                     // the spot being steered to
     bool select_press_a = false;                // press A there
     std::atomic<uint16_t> press = 0;
@@ -325,13 +326,32 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     const bool pause_open = tooie::rdram::valid_ptr(pause) && read_byte(rdram, pause + pause_exit_type) == 0;
     const bool on = enabled() && (pause_open || in_save_select);
     recompinput::set_game_menu_mouse(on);
+    // The save select's hand is the cursor while it follows the mouse; elsewhere (copy, erase, yes/no) the system one shows.
+    static int hand_idle = 100;
+    hand_idle = hand_active ? 0 : hand_idle + 1;
+    const bool hand_hides_cursor = on && !pause_open && hand_idle < 30;
     if (!on) {
+        pad_used.store(false);
         take_mouse_use(true);
         clear_steer();
         return;
     }
 
     const MouseUse use = take_mouse_use(false);
+    // The mouse is in use from its first move or click until the pad is used; until then the menus are vanilla
+    // (no cursor, the mouse does nothing).
+    static bool mouse_in_use = false;
+    if (pad_used.exchange(false)) {
+        mouse_in_use = false;
+    }
+    if (use.moved || use.left || use.right) {
+        mouse_in_use = true;
+    }
+    recompinput::set_game_menu_cursor_hidden(!mouse_in_use || hand_hides_cursor);
+    if (!mouse_in_use) {
+        clear_steer();
+        return;
+    }
     float x = 0.0f, y = 0.0f;
     const bool have_cursor = cursor_in_frame(&x, &y);
     if (logging() && (use.moved || use.left || use.right)) {
@@ -375,6 +395,11 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
 }
 
 void tooie::menu_mouse::apply_input(uint16_t* buttons, float* x, float* y) {
+    // What the player's own controller or keys do (before the mouse's presses are added): a press or a pushed
+    // stick hands the menus back to the pad, as in the vanilla game.
+    if (*buttons != 0 || std::fabs(*x) > 0.4f || std::fabs(*y) > 0.4f) {
+        pad_used.store(true);
+    }
     const int step_x = stick_x.load();
     if (step_x != 0) {
         *x = (float)step_x;

@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..5983aad 100644
+index 1961e29..3547656 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..5983aad 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,19 @@ namespace recompinput {
+@@ -49,4 +56,22 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -79,6 +79,9 @@ index 1961e29..5983aad 100644
 +    // the cursor is freed from mouse aiming while it is.
 +    void set_game_menu_mouse(bool on);
 +    bool game_menu_mouse();
++    // Banjo-Tooie: the game draws the cursor itself (the save select's hand), so the system one is hidden.
++    void set_game_menu_cursor_hidden(bool hidden);
++    bool game_menu_cursor_hidden();
 +    // Banjo-Tooie: the cursor over the game window in pixels with the window's size (false before the
 +    // mouse has been seen), how many times it has moved, and presses of a mouse button (SDL_BUTTON_LEFT ..),
 +    // both counted only while no menu of this program has the input.
@@ -358,7 +361,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..9922548 100644
+index c76a1dc..6b04513 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -522,7 +525,7 @@ index c76a1dc..9922548 100644
 +    // shows once the mouse is used (as in this program's menus).
 +    if (recompinput::game_menu_mouse() && !recompinput::game_input_disabled()) {
 +        cursor_locked = false;
-+        cursor_visible = recompui::get_cursor_visible();
++        cursor_visible = recompui::get_cursor_visible() && !recompinput::game_menu_cursor_hidden();
 +    }
 +    // Banjo-Tooie: pick mode frees and shows the cursor, as a crosshair over the game.
 +    static SDL_Cursor *crosshair = nullptr;
@@ -592,7 +595,7 @@ index c76a1dc..9922548 100644
  
      binding::stop_skipping_events();
 diff --git a/recompinput/src/input_state.cpp b/recompinput/src/input_state.cpp
-index 03ed871..5acd855 100644
+index 03ed871..424e914 100644
 --- a/recompinput/src/input_state.cpp
 +++ b/recompinput/src/input_state.cpp
 @@ -7,6 +7,8 @@
@@ -712,7 +715,7 @@ index 03ed871..5acd855 100644
      switch (field.input_type) {
      case InputType::Keyboard:
          if (InputState.keys && field.input_id >= 0 && field.input_id < InputState.numkeys) {
-@@ -411,6 +462,30 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
+@@ -411,6 +462,40 @@ void recompinput::add_mouse_deltas(float delta_x, float delta_y) {
      InputState.pending_mouse_delta[0] += delta_x;
      InputState.pending_mouse_delta[1] += delta_y;
  }
@@ -738,6 +741,16 @@ index 03ed871..5acd855 100644
 +
 +bool recompinput::game_menu_mouse() {
 +    return game_menu_mouse_on.load();
++}
++
++static std::atomic_bool game_menu_cursor_hidden_on = false;
++
++void recompinput::set_game_menu_cursor_hidden(bool hidden) {
++    game_menu_cursor_hidden_on.store(hidden);
++}
++
++bool recompinput::game_menu_cursor_hidden() {
++    return game_menu_cursor_hidden_on.load();
 +}
 +
  void recompinput::add_mouse_wheel_delta(int32_t delta) {
