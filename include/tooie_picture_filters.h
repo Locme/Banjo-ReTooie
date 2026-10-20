@@ -138,6 +138,8 @@ namespace tooie::picture_filters {
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
     bool sun_shadows_on();
+    // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).
+    bool ray_tracing_active();
     // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).
     float sun_shadow_distance();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.

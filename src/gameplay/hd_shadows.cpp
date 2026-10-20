@@ -39,7 +39,14 @@
 #include "tooie_day_night.h"
 #include "tooie_picture_filters.h"
 
+namespace RT64 {
+    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch).
+    void SetSceneLights(const float* xyzr, uint32_t count);
+}
+
 namespace {
+    bool lights_sent_this_frame = false;
+
     bool hd_shadows_on() {
         try {
             return std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::hd_shadows_option));
@@ -242,6 +249,41 @@ namespace {
         return found;
     }
 
+    // Sends the level's active lights (lamps, fires: position and outer range) to RT64 for the traced shadows, the
+    // list level_light walks, once a frame while ray tracing is on.
+    void send_level_lights(uint8_t* rdram, recomp_context* ctx, gpr frame) {
+        const gpr light_pos = frame + 0x1A0;  // vec3
+        const gpr light_range = frame + 0x1B0;  // inner, outer range, intensity
+        float lights[32 * 4];
+        uint32_t count = 0;
+        ctx->r4 = 0;
+        ctx->r5 = 1;
+        func_800C8760(rdram, ctx);
+        for (int guard = 0; ctx->r2 != 0 && guard < 64; guard++) {
+            const gpr light = (int32_t)(uint32_t)ctx->r2;
+            ctx->r4 = light;
+            func_800C89A8(rdram, ctx);
+            if ((ctx->r2 & 0x8) == 0 && count < 32) {
+                ctx->r4 = light;
+                ctx->r5 = light_pos;
+                func_800C8800(rdram, ctx);
+                ctx->r4 = light;
+                ctx->r5 = light_range;
+                func_800C8898(rdram, ctx);
+                lights[count * 4] = load_float(rdram, light_pos);
+                lights[count * 4 + 1] = load_float(rdram, light_pos + 4);
+                lights[count * 4 + 2] = load_float(rdram, light_pos + 8);
+                lights[count * 4 + 3] = load_float(rdram, light_range + 4);
+                count++;
+            }
+            ctx->r4 = light;
+            ctx->r5 = 0;
+            ctx->r6 = 1;
+            func_800C878C(rdram, ctx);
+        }
+        RT64::SetSceneLights(lights, count);
+    }
+
     // The shadow for one actor. ctx is a scratch copy; frame is free RDRAM stack space.
     void draw_actor_shadow(uint8_t* rdram, recomp_context* ctx, gpr actor, gpr frame, uint32_t draw_callback, uint32_t drawn) {
         const gpr start = frame + 0x40;     // vec3
@@ -439,6 +481,7 @@ bool tooie::hd_shadows::drawing_shadow() {
 
 void tooie::hd_shadows::tick() {
     shadows_this_frame = 0;
+    lights_sent_this_frame = false;
     player_shadow_draw = false;
     if (shadow_log) {
         static int frames = 0;
@@ -506,7 +549,17 @@ extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {
     draw_callbacks.pop_back();
     // Only outermost draws: one nested in another actor's draw (or in a shadow pass) would reset
     // the outer draw's state halfway through.
-    if (!draw_callbacks.empty() || in_shadow_pass || !hd_shadows_on()) {
+    if (!draw_callbacks.empty() || in_shadow_pass) {
+        return;
+    }
+    if (!lights_sent_this_frame && tooie::picture_filters::ray_tracing_active()) {
+        lights_sent_this_frame = true;
+        recomp_context light_ctx = *ctx;
+        const gpr light_frame = (ctx->r29 - 0x200) & ~(gpr)0xF;
+        light_ctx.r29 = light_frame;
+        send_level_lights(rdram, &light_ctx, light_frame);
+    }
+    if (!hd_shadows_on()) {
         return;
     }
     if (shadows_this_frame >= max_per_frame || draw_callback == 0 || drawn_model == 0) {

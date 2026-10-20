@@ -1968,7 +1968,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..858b8b0 100644
+index 69a82ac..efe06fb 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -2004,7 +2004,7 @@ index 69a82ac..858b8b0 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,159 @@ namespace RT64 {
+@@ -659,6 +678,162 @@ namespace RT64 {
          }
      };
  
@@ -2062,6 +2062,8 @@ index 69a82ac..858b8b0 100644
 +        uint32_t gIndirect;
 +        // The world's triangles for the traced variant (SceneEffectsPS.hlsl RAY_TRACED), only with ray queries.
 +        uint32_t gSceneBVH = 0;
++        // The level's lights for the traced shadows (SceneEffectsPS.hlsl gLights), with ray queries.
++        uint32_t gLights = 0;
 +
 +        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2078,6 +2080,7 @@ index 69a82ac..858b8b0 100644
 +            gIndirect = builder.addTexture(12);
 +            if (rayQuery) {
 +                gSceneBVH = builder.addAccelerationStructure(13);
++                gLights = builder.addByteAddressBuffer(14);
 +            }
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
@@ -7055,10 +7058,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..59c5d9b
+index 0000000..afeb026
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2974 @@
+@@ -0,0 +1,2997 @@
 +//
 +// RT64
 +//
@@ -7176,6 +7179,8 @@ index 0000000..59c5d9b
 +            // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
 +            // in world space, so it stays right as the camera moves).
 +            bool bvhBuiltOnce = false;
++            // The level's lights for the traced shadows: the count, then each one's x, y, z, range (16 bytes each).
++            std::unique_ptr<RenderBuffer> lightsBuffer;
 +            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
@@ -7488,6 +7493,13 @@ index 0000000..59c5d9b
 +        const std::scoped_lock lock(effectsMutex);
 +        userReflections = strength;
 +        RefreshReflections();
++    }
++
++    void SetSceneLights(const float *xyzr, uint32_t count) {
++        const std::scoped_lock lock(effectsMutex);
++        count = std::min(count, SceneMaxLights);
++        memcpy(effectsSettings.lights, xyzr, size_t(count) * 4 * sizeof(float));
++        effectsSettings.lightCount = count;
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
@@ -9133,6 +9145,19 @@ index 0000000..59c5d9b
 +        }
 +        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
 +        // dropping to the depth march and its shadow map, which made the shadows come and go.
++        // The lights are written every pass, whatever the casters.
++        if (res.lightsBuffer == nullptr) {
++            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 1)));
++            res.lightsBuffer->setName("Scene Effects lights");
++        }
++        if (res.lightsBuffer != nullptr) {
++            const SceneEffectsSettings lightSettings = GetSceneEffects();
++            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
++            memset(mapped, 0, 16 * (SceneMaxLights + 1));
++            mapped[0] = float(lightSettings.lightCount);
++            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
++            res.lightsBuffer->unmap();
++        }
 +        res.bvhReady = res.bvhBuiltOnce;
 +        if ((worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
 +            return;
@@ -9944,6 +9969,7 @@ index 0000000..59c5d9b
 +            res.sceneSetBvh = nullptr;
 +            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
 +                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
++                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 1));
 +                res.sceneSetBvh = res.bvhTlas.get();
 +            }
 +        }
@@ -10035,10 +10061,10 @@ index 0000000..59c5d9b
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..6852ac9
+index 0000000..38bb1ed
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,450 @@
+@@ -0,0 +1,458 @@
 +//
 +// RT64
 +//
@@ -10071,7 +10097,12 @@ index 0000000..6852ac9
 +    constexpr uint32_t SceneEffectsViewSsgi = 20;
 +    constexpr uint32_t SceneEffectsViewSsr = 21;
 +
++    constexpr uint32_t SceneMaxLights = 32;
++
 +    struct SceneEffectsSettings {
++        // Banjo-Tooie: the level's lights (lamps, fires) the traced shadows cast from: world x, y, z and the outer range of each.
++        float lights[SceneMaxLights * 4] = {};
++        uint32_t lightCount = 0;
 +        float ambientOcclusion = 0.0f;
 +        float ambientOcclusionRadius = 60.0f;
 +        uint32_t depthAddress = 0;
@@ -10300,6 +10331,9 @@ index 0000000..6852ac9
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
 +        const std::pair<uint32_t, uint32_t> *runs, size_t runCount);
 +    void SetSceneRayTracing(bool enabled);
++    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
++    // The traced pass shadows what each one lights (its rays go from the surface to the light).
++    void SetSceneLights(const float *xyzr, uint32_t count);
 +    void NoteRayTracingSupport(bool supported);
 +    int GetRayTracingSupport();
 +    bool RayTracingActive();
@@ -15040,10 +15074,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..a11268d
+index 0000000..3489905
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3411 @@
+@@ -0,0 +1,3481 @@
 +//
 +// RT64
 +//
@@ -15090,6 +15124,8 @@ index 0000000..a11268d
 +// Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
 +// the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
 +RaytracingAccelerationStructure gSceneBVH : register(t13);
++// The level's lights: the count (as a float) in the first 16 bytes, then x, y, z (world) and the outer range of each.
++ByteAddressBuffer gLights : register(t14);
 +#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
@@ -15784,6 +15820,63 @@ index 0000000..a11268d
 +    const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
 +    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
 +    return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
++}
++
++// Shadows from the level's lights (lamps, fires): for each light that reaches the surface, rays from it to the light
++// through the world's triangles; blocked, the surface is darker the closer the light and the more it faces it. A
++// couple of rays over a small disc at the light, so the edge has a penumbra. The light's own fitting (a lamp's
++// shade) doesn't count: the ray stops short of it.
++float LightShadows(float3 center, float3 normal) {
++    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
++    if (count == 0u) {
++        return 1.0f;
++    }
++    const float distanceFade = saturate(1.0f - (-center.z - 4000.0f) / 3000.0f);
++    if (distanceFade <= 0.0f) {
++        return 1.0f;
++    }
++    const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.003f + 2.0f, 2.0f));
++    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
++    float keep = 1.0f;
++    [loop] for (uint i = 0u; i < count; i++) {
++        const float4 light = asfloat(gLights.Load4(16u * (i + 1u)));
++        const float3 toLight = light.xyz - start;
++        const float distance = length(toLight);
++        if ((distance < 30.0f) || (distance > light.w)) {
++            continue;
++        }
++        const float3 direction = toLight / distance;
++        const float facing = dot(worldNormal, direction);
++        if (facing <= 0.05f) {
++            continue;
++        }
++        const float weight = saturate(1.0f - distance / light.w) * saturate(facing * 2.0f);
++        // Two points on a small disc round the light.
++        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
++        const float3 across = cross(direction, side);
++        float blocked = 0.0f;
++        [unroll] for (int k = 0; k < 2; k++) {
++            const float angle = float(k) * 3.14159265f;
++            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 18.0f;
++            const float3 toTarget = target - start;
++            const float reach = length(toTarget) - 30.0f;
++            if (reach <= 1.0f) {
++                continue;
++            }
++            RayDesc ray;
++            ray.Origin = start;
++            ray.Direction = toTarget / (reach + 30.0f);
++            ray.TMin = 0.0f;
++            ray.TMax = reach;
++            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++            while (query.Proceed()) {
++            }
++            blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.5f : 0.0f;
++        }
++        keep *= 1.0f - 0.5f * weight * blocked;
++    }
++    return lerp(1.0f, keep, distanceFade);
 +}
 +
 +// The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
@@ -18211,7 +18304,12 @@ index 0000000..a11268d
 +    float3 normal = float3(0.0f, 0.0f, 1.0f);
 +    // The indirect pass's GTAO visibility (a) and SSGI light (rgb) here.
 +    float4 indirect = float4(0.0f, 0.0f, 0.0f, 1.0f);
-+    if (occlusion || globalIllumination || reflections || sunShadows) {
++#ifdef RAY_TRACED
++    const bool lightShadows = (gConstants.view.x < 1.5f);
++#else
++    const bool lightShadows = false;
++#endif
++    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
 +        center = ViewPosition(pixel, depth);
 +        normal = ViewNormal(pixel, center);
 +        if (occlusion || globalIllumination) {
@@ -18226,6 +18324,12 @@ index 0000000..a11268d
 +        if (sunShadows) {
 +            keep *= SunShadow(pixel, center, normal);
 +        }
++#ifdef RAY_TRACED
++        // Not tied to the sun: lamps and fires cast their own in caves and at night.
++        if (lightShadows) {
++            keep *= LightShadows(center, normal);
++        }
++#endif
 +    }
 +
 +    // Toon outlines: dark where the distance jumps against a neighbour (silhouettes against what's behind),
