@@ -301,6 +301,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/speedup.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_spawner.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
@@ -310,6 +311,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/torch_enemy.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/save_state.cpp
     ${CMAKE_SOURCE_DIR}/src/input/motion_aim.cpp
+    ${CMAKE_SOURCE_DIR}/src/input/menu_mouse.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/classic_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/progress_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/totals_checklist.cpp

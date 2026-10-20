@@ -25,6 +25,7 @@
 // models. Only which cells are drawn changes; the cells stay where they are.
 
 #include <algorithm>
+#include <cstring>
 
 #include "recomp.h"
 #include "recompui/config.h"
@@ -89,6 +90,28 @@ extern "C" void tooie_actor_draw_distance(uint8_t* rdram, recomp_context* ctx) {
         return;
     }
     ctx->f12.fl = std::max(own, std::min(own * scale, (float)extended_distance(MEM_HU(0, current_map_addr))));
+}
+
+// Actors that draw themselves through func_80101808 without func_80101970 (Sabreman, frozen in Icy Side's ice;
+// the ice is drawn as a part of his draw, so it goes with him) never set the model draw distance, so D_8012C82C
+// still holds the game's default (D_80125D60, 30000). func_800DE498 treats a model drawn with exactly that
+// default as unimportant: past 4000 units it cuts the distance down to its own size x 50 (about 5000 for
+// Sabreman), so he and his ice popped out far nearer than everything else. Give such a draw the extended
+// distance like every other actor's, which skips that size rule. Never lowers a larger own distance
+// (func_80101970's) except the default itself.
+extern "C" void tooie_actor_draw_reach(uint8_t* rdram, recomp_context* ctx) {
+    if (!enabled() || !tooie::gfx_budget::room_for_extras(rdram)) {
+        return;
+    }
+    constexpr gpr model_distance_addr = (int32_t)0x8012C82C;
+    constexpr gpr default_distance_addr = (int32_t)0x80125D60;
+    const float extended = (float)extended_distance(MEM_HU(0, current_map_addr));
+    const int32_t bits = MEM_W(0, model_distance_addr);
+    float current;
+    std::memcpy(&current, &bits, sizeof(current));
+    if (current < extended || bits == MEM_W(0, default_distance_addr)) {
+        std::memcpy(&MEM_W(0, model_distance_addr), &extended, sizeof(extended));
+    }
 }
 
 extern "C" void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx) {

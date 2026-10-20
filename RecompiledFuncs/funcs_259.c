@@ -3802,6 +3802,7 @@ RECOMP_FUNC void func_80800E24_chgameselect(uint8_t* rdram, recomp_context* ctx)
     MEM_W(0X18, ctx->r29) = ctx->r16;
     // 0x80800E30: or          $s0, $a0, $zero
     ctx->r16 = ctx->r4 | 0;
+    tooie_select_menu(rdram, ctx);
     // 0x80800E34: jal         0x80100094
     // 0x80800E38: or          $a1, $zero, $zero
     ctx->r5 = 0 | 0;

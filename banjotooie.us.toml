@@ -1171,7 +1171,7 @@ text = "tooie_gfx_model_done(rdram, ctx);"
 [[patches.hook]]
 func = "func_80101808"
 before_vram = 0x80101808
-text = "tooie_actor_draw_begin(rdram, ctx);"
+text = "tooie_actor_draw_begin(rdram, ctx); tooie_actor_draw_reach(rdram, ctx);"
 
 [[patches.hook]]
 func = "func_80101808"
@@ -1489,6 +1489,13 @@ text = "tooie_pause_settings_log_text(rdram, ctx);"
 func = "func_800D5B34"
 before_vram = 0x800D5BF4
 text = "if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;"
+
+# --- Save select: the mouse (src/input/menu_mouse.cpp) ---
+# The hand's update (chgameselect func_80800E24): $s0 = the menu, its hand's spot at 0x79 >> 4.
+[[patches.hook]]
+func = "func_80800E24_chgameselect"
+before_vram = 0x80800E34
+text = "tooie_select_menu(rdram, ctx);"
 
 # --- Save select: hide the game's Wide-screen Mode and Screen Alignment rows (src/game/hide_vanilla_widescreen.cpp) ---
 # DEV > Hide Vanilla Widescreen Entry in the Game Menu. The global settings menu (the TV in the save
