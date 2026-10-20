@@ -20,6 +20,9 @@ namespace tooie::memory_guard {
     // Adds a line to logs/PassedOver.txt (with the time in front) and console.log, and shows a
     // notice. Safe from the crash handler and the watchdog once the game has run a frame.
     void log_passed_over(const char* line);
+    // Forgets the places seen so far, so the next hit at each is logged in full again (headless
+    // sweeps that try one thing after another, such as the enemy spawner's TOOIE_ENEMY_SWEEP).
+    void forget_sites();
 }
 
 #endif
