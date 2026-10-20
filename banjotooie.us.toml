@@ -1191,7 +1191,8 @@ before_vram = 0x800E3DAC
 text = "tooie_sun_shadow_cull_box(rdram, ctx);"
 
 # The model func_800DE498 settled on (0x10C($sp)), kept so an actor's shadow redraws that model
-# instead of fetching it a second time this frame (which unbalanced the model cache).
+# instead of fetching it a second time this frame (which unbalanced the model cache). The draw
+# callback has run here, so the shadow pass also clears the point list the callback set.
 [[patches.hook]]
 func = "func_800DE498"
 before_vram = 0x800DE774
