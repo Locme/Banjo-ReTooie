@@ -525,7 +525,7 @@ void tooie::init_config() {
             {tooie::fine_aim::Mode::HoldKey, "Hold R", "Hold key"},
             {tooie::fine_aim::Mode::Always, "Always", "Always"},
         },
-        tooie::fine_aim::Mode::Off);
+        tooie::fine_aim::Mode::HoldKey);
     qol.add_enum_option(
         tooie::fine_aim::speed_option,
         "Fine aim speed",
