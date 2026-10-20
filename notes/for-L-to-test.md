@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T481 Deep snow frame rate with a level full of prints
+- Asked: 2026-10-20 21:40 UTC
+- Build: main @ acaf08a
+- Steps:
+  1. Deep snow on, Icy Side
+  2. Walk prints over a large area
+  3. Look back over them from a distance, then stand by the cliff spot from your 25 fps screenshot
+- Look for: What frame rate and GPU ms does the overlay show there now, and do far prints still look fine?
+- Status: waiting for L
+
 ## T480 No fur over Banjo's shorts
 - Asked: 2026-10-20 20:54 UTC
 - Build: main
