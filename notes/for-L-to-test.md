@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T470 Ear jiggle
+## T472 Ear jiggle
 - Asked: 2026-10-20 19:22 UTC
 - Build: main
 - Steps:
@@ -10,7 +10,7 @@
 - Look for: Both ears wobble and flop on their own springs and stay joined to his head; the sliders change how floppy and how far they go.
 - Status: waiting for L
 
-## T469 Jiggle with HD Shadows on
+## T471 Jiggle with HD Shadows on
 - Asked: 2026-10-20 19:22 UTC
 - Build: main
 - Steps:
