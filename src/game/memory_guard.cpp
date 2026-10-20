@@ -297,6 +297,13 @@ void tooie::memory_guard::tick(uint8_t* rdram) {
     }
 }
 
+void tooie::memory_guard::forget_sites() {
+    for (Site& s : sites) {
+        s.hits = 0;
+        s.pc = 0;
+    }
+}
+
 bool tooie::memory_guard::enabled() {
     return on.load();
 }
