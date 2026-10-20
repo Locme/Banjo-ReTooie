@@ -897,7 +897,9 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
         }
     }
     const bool effects_now = !overlay && tooie::interp_tags::take_effects();
-    const bool interpolating = interpolation_on() && end > start && blend_mode != 1;
+    // Interpolation pick mode finds models by the ids given below, so they are given at Original too (L, 2026-10-19:
+    // it found nothing at the default Interpolation Original); RT64 blends nothing there, so the ids change no frame.
+    const bool interpolating = (interpolation_on() || mouse) && end > start && blend_mode != 1;
     // Without interpolation the scene is still read for the models drawn
     // without effects and for the Pick Model and Model Effects keys.
     const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now || mouse);

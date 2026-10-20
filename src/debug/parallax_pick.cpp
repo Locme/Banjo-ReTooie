@@ -744,7 +744,7 @@ namespace {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
                 "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, built-in; Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
-                    "Shift + left click default, wheel deeper (needs interpolation on)" };
+                    "Shift + left click default, wheel deeper" };
             static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
             for (int k = 0; k < 3; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
@@ -986,7 +986,7 @@ namespace {
                 }
                 std::string text;
                 if (model == 0) {
-                    // Level pieces have no model; nothing has one at the Original refresh rate (no interpolation).
+                    // Level pieces have no model.
                     text = "No model here";
                 } else {
                     char line[48];
