@@ -163,7 +163,7 @@ void tooie_mix_rate_pitch_end(uint8_t* rdram, recomp_context* ctx);
 // animation caches (hand edits in the generated code, banjotooie.us.toml).
 int tooie_more_memory(void);
 
-// DEV > Hide Vanilla Widescreen Entry in the Game Menu (src/game/hide_vanilla_widescreen.cpp): the save
+// DEV > Hide Unnecessary Settings Entry (src/game/hide_vanilla_widescreen.cpp): the save
 // select's global settings menu with only its Speaker Mode row.
 void tooie_vanilla_widescreen_rows(uint8_t* rdram, recomp_context* ctx);
 void tooie_vanilla_widescreen_loop(uint8_t* rdram, recomp_context* ctx);

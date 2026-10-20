@@ -87,9 +87,10 @@ on a controller.
   as it was. `TOOIE_TEXTURE_SEAMS=0` or `1` sets it for a headless run.
   Default: on.
 
-- **Hide Vanilla Widescreen Entry in the Game Menu** (DEV): hides Wide-screen
-  Mode and Screen Alignment in the game's global settings on the save select
-  screen (the TV), so it lists Speaker Mode only. While it is on, the game's own
+- **Hide Unnecessary Settings Entry** (DEV; first named Hide Vanilla Widescreen
+  Entry in the Game Menu): hides Wide-screen Mode and Screen Alignment in the
+  game's global settings on the save select screen (the TV), so it lists Speaker
+  Mode only. While it is on, the game's own
   widescreen mode is kept off and the picture centred, also on saves that had
   them changed. The game's widescreen squashes the picture for a stretched TV;
   this port's widescreen is Aspect Ratio in the Graphics tab. The menu change

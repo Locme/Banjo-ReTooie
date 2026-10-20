@@ -9,7 +9,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
-- The Start menu has a SETTINGS entry under Achievements. Its page has the save select TV's settings: Speaker Mode (Mono, Stereo, Headphone, Dolby Surround), and Wide-screen Mode while DEV > Hide Vanilla Widescreen Entry is off. Up and down pick a row, left, right or A change it at once; B goes back, Start closes the menu (L). Untested on PC (T454).
+- DEV > Hide Vanilla Widescreen Entry in the Game Menu is now called Hide Unnecessary Settings Entry; it covers Wide-screen Mode and Screen Alignment on the TV (L). Untested on PC (T455).
+- The Start menu has a SETTINGS entry under Achievements. Its page has the save select TV's settings: Speaker Mode (Mono, Stereo, Headphone, Dolby Surround), and Wide-screen Mode while DEV > Hide Unnecessary Settings Entry is off. Up and down pick a row, left, right or A change it at once; B goes back, Start closes the menu (L). Untested on PC (T454).
 
 - Cheats > Transformation goes back to Off by itself once the area reloads with the new form (it is saved as Off too, so the next start does not reload again). Pick Banjo-Kazooie (BK) to change back (L). Checked headless: Bee, then Stony.
 - QOL > Pause Special Menu (on by default): while the Esc menu is open during play the game is paused as if Start were pressed, with no pause menu drawn, the pause menu's music playing and the picture's effects (sky, water, grass) still moving, since the game keeps drawing with time frozen; cutscenes, map changes and the title carry on. QOL's Photo Filter section is gone (photo mode's panel has those settings, still saved). Transform anywhere is now on by default, and a saved Off turns on once (L). Checked headless (T451).
