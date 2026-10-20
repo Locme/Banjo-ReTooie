@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..f8e16e6 100644
+index 79dfc38..2d82df6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -216,7 +216,7 @@ index 79dfc38..f8e16e6 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +620,64 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +620,68 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -273,6 +273,10 @@ index 79dfc38..f8e16e6 100644
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT2XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_2X")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT4XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_4X")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT8XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_8X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRTPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT2XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_2X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT4XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_4X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneIndirectRT8XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_8X")
 +endif()
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
@@ -7051,10 +7055,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..2a350c7
+index 0000000..1429997
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2951 @@
+@@ -0,0 +1,2963 @@
 +//
 +// RT64
 +//
@@ -7322,9 +7326,15 @@ index 0000000..2a350c7
 +        }
 +    }
 +
++    // The settings as the player has them; ray tracing lifts some (RefreshReflections).
++    static float userAmbientOcclusion = 0.0f;
++    static float userSsgi = 0.0f;
++    static void RefreshReflections();
++
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.ambientOcclusion = ambientOcclusion;
++        userAmbientOcclusion = ambientOcclusion;
++        RefreshReflections();
 +        effectsSettings.ambientOcclusionRadius = radius;
 +        effectsSettings.depthAddress = depthAddress;
 +    }
@@ -7440,7 +7450,8 @@ index 0000000..2a350c7
 +
 +    void SetSceneScreenSpaceGI(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
-+        effectsSettings.screenSpaceGI = strength;
++        userSsgi = strength;
++        RefreshReflections();
 +    }
 +
 +    // Banjo-Tooie: hardware ray tracing (Graphics > Ray tracing). While it is on and the device has ray queries, the
@@ -7453,14 +7464,18 @@ index 0000000..2a350c7
 +    // effectsMutex held.
 +    static float userSunShadows = 0.0f;
 +
-+    // The settings the traced effects take over: reflections and sun shadows show at 60 at least while ray tracing is
-+    // active (the settings themselves are kept apart, and come back when it is off).
++    // The settings the traced effects take over: reflections and sun shadows show at 60 at least, ambient occlusion at 50
++    // and bounce light at 40, while ray tracing is active (the settings themselves are kept apart, and come back when it is off).
 +    static void RefreshReflections() {
 +        float strength = userReflections;
 +        effectsSettings.sunShadows = userSunShadows;
++        effectsSettings.ambientOcclusion = userAmbientOcclusion;
++        effectsSettings.screenSpaceGI = userSsgi;
 +        if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
 +            strength = std::max(strength, 0.6f);
 +            effectsSettings.sunShadows = std::max(userSunShadows, 0.6f);
++            effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, 0.5f);
++            effectsSettings.screenSpaceGI = std::max(userSsgi, 0.4f);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
@@ -9958,7 +9973,8 @@ index 0000000..2a350c7
 +            commandList->setFramebuffer(res.indirectFramebuffer.get());
 +            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
 +            commandList->setScissors(RenderRect(0, 0, indirectWidth, indirectHeight));
-+            commandList->setPipeline(shaderLibrary->sceneIndirect.pipeline.get());
++            const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
++            commandList->setPipeline(tracedIndirect ? shaderLibrary->sceneIndirectTraced.pipeline.get() : shaderLibrary->sceneIndirect.pipeline.get());
 +            commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
 +            commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
 +            commandList->setGraphicsPushConstants(0, &constants);
@@ -10489,7 +10505,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..9cc0792 100644
+index d1c5273..df11443 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -10516,7 +10532,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/GaussianFilterRGB3x3CS.hlsl.spirv.h"
  #include "shaders/BoxFilterCS.hlsl.spirv.h"
  #include "shaders/BicubicScalingCS.hlsl.spirv.h"
-@@ -40,7 +57,41 @@
+@@ -40,7 +57,45 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -10546,6 +10562,10 @@ index d1c5273..9cc0792 100644
 +#include "shaders/SceneEffectsRT2XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffectsRT4XPS.hlsl.spirv.h"
 +#include "shaders/SceneEffectsRT8XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRTPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT2XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT4XPS.hlsl.spirv.h"
++#include "shaders/SceneIndirectRT8XPS.hlsl.spirv.h"
 +#endif
 +#include "shaders/SceneIndirectPS.hlsl.spirv.h"
 +#include "shaders/SceneIndirect2XPS.hlsl.spirv.h"
@@ -10558,7 +10578,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +99,8 @@
+@@ -48,6 +103,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -10567,7 +10587,7 @@ index d1c5273..9cc0792 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +139,35 @@
+@@ -86,7 +143,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -10603,7 +10623,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +175,8 @@
+@@ -94,6 +179,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -10612,7 +10632,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +214,35 @@
+@@ -131,7 +218,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -10648,7 +10668,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +250,8 @@
+@@ -139,6 +254,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -10657,7 +10677,7 @@ index d1c5273..9cc0792 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +261,11 @@
+@@ -148,6 +265,11 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -10669,7 +10689,7 @@ index d1c5273..9cc0792 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +322,7 @@ namespace RT64 {
+@@ -204,7 +326,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -10678,7 +10698,7 @@ index d1c5273..9cc0792 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -549,6 +667,38 @@ namespace RT64 {
+@@ -549,6 +671,38 @@ namespace RT64 {
              rspWorld.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -10717,7 +10737,7 @@ index d1c5273..9cc0792 100644
          // Texture Copy.
          {
              TextureCopyDescriptorSet descriptorSet;
-@@ -569,6 +719,78 @@ namespace RT64 {
+@@ -569,6 +723,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -10796,7 +10816,7 @@ index d1c5273..9cc0792 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +805,20 @@ namespace RT64 {
+@@ -583,6 +809,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -10817,7 +10837,7 @@ index d1c5273..9cc0792 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1068,156 @@ namespace RT64 {
+@@ -832,6 +1072,183 @@ namespace RT64 {
              }
          }
  
@@ -10945,6 +10965,33 @@ index d1c5273..9cc0792 100644
 +            indirectDesc.vertexShader = fullScreenVertexShader.get();
 +            indirectDesc.pixelShader = indirectShader.get();
 +            sceneIndirect.pipeline = device->createGraphicsPipeline(indirectDesc);
++
++            // The same with the occlusion and bounce light traced, Vulkan only.
++#           ifndef __APPLE__
++            if (rayQuery && (shaderFormat == RenderShaderFormat::SPIRV)) {
++                const void *tracedBlob = SceneIndirectRTPSBlobSPIRV;
++                size_t tracedSize = sizeof(SceneIndirectRTPSBlobSPIRV);
++                switch (multisampling.sampleCount) {
++                case RenderSampleCount::COUNT_2:
++                    tracedBlob = SceneIndirectRT2XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT2XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_4:
++                    tracedBlob = SceneIndirectRT4XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT4XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_8:
++                    tracedBlob = SceneIndirectRT8XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneIndirectRT8XPSBlobSPIRV);
++                    break;
++                default:
++                    break;
++                }
++                std::unique_ptr<RenderShader> tracedIndirect = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
++                indirectDesc.pixelShader = tracedIndirect.get();
++                sceneIndirectTraced.pipeline = device->createGraphicsPipeline(indirectDesc);
++            }
++#           endif
 +        }
 +
 +        // Banjo-Tooie: the sun shadow map, the 3D world's triangles drawn from the sun into a depth map. The
@@ -10975,10 +11022,10 @@ index d1c5273..9cc0792 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..cff79b3 100644
+index 641f3ec..2525160 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -47,12 +47,44 @@ namespace RT64 {
+@@ -47,12 +47,45 @@ namespace RT64 {
          ShaderRecord rspVertexTestZ;
          ShaderRecord rspVertexTestZMS;
          ShaderRecord rspWorld;
@@ -11002,6 +11049,7 @@ index 641f3ec..cff79b3 100644
 +        ShaderRecord fireflyTable;
 +        // Banjo-Tooie: the scene effects' indirect pass, GTAO and SSGI at half size (its pipeline only; the layout is sceneEffects').
 +        ShaderRecord sceneIndirect;
++        ShaderRecord sceneIndirectTraced;
 +        // Banjo-Tooie: the sun shadow map's depth-only pass (SunShadowMapVS.hlsl).
 +        ShaderRecord sunShadowMap;
 +        // Banjo-Tooie: the scene effects' bloom passes (bright parts, blur across, blur down).
@@ -14981,10 +15029,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..71b34b4
+index 0000000..32cd6d0
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3339 @@
+@@ -0,0 +1,3415 @@
 +//
 +// RT64
 +//
@@ -15715,6 +15763,73 @@ index 0000000..71b34b4
 +    const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
 +    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
 +    return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
++}
++
++// The indirect pass's traced rays: a cosine-spread direction round the normal (ray index of 32 in a 4x4 block's
++// spiral, the same ones SSGI's march uses, so IndirectAt's gather still sees all 32), traced through gSceneBVH.
++float3 IndirectDirection(float3 normal, uint index) {
++    const float3 side = normalize(cross(normal, (abs(normal.y) < 0.99f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
++    const float3 across = cross(side, normal);
++    const float diskRadius = sqrt((float(index) + 0.5f) / 32.0f);
++    const float theta = float(index) * 2.39996323f;
++    return normalize(side * (diskRadius * cos(theta)) + across * (diskRadius * sin(theta)) + normal * sqrt(max(1.0f - diskRadius * diskRadius, 0.0f)));
++}
++
++// How far a ray goes before it hits the world (view units), or a negative number when it doesn't within the reach.
++float TraceDistance(float3 origin, float3 direction, float reach) {
++    RayDesc ray;
++    ray.Origin = ViewToWorldPoint(origin);
++    ray.Direction = ViewToWorldDirection(direction);
++    ray.TMin = 0.0f;
++    ray.TMax = reach;
++    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++    }
++    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
++}
++
++// Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
++// within the radius counts less the further away it was). Two rays a pixel, 32 over each 4x4 block.
++float TracedOcclusion(float3 center, float3 normal, uint cell) {
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float radius = gConstants.ambientOcclusion.y * 1.5f;
++    float blocked = 0.0f;
++    [unroll] for (int r = 0; r < 2; r++) {
++        const float t = TraceDistance(origin, IndirectDirection(normal, cell * 2u + uint(r)), radius);
++        if (t >= 0.0f) {
++            blocked += 1.0f - t / radius * 0.6f;
++        }
++    }
++    return 1.0f - blocked * 0.5f;
++}
++
++// Traced bounce light: the colour where each ray lands (its screen position's colour, or the nearest on the screen
++// when it is off it or hidden, trusted less), a ray that reaches nothing brings nothing.
++float3 TracedGI(float3 center, float3 normal, uint cell) {
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float rayDistance = gConstants.ambientOcclusion.y * 3.0f;
++    const float2 size = gConstants.projection.zw;
++    float3 light = 0.0f;
++    [unroll] for (int r = 0; r < 2; r++) {
++        const float3 direction = IndirectDirection(normal, cell * 2u + uint(r));
++        const float t = TraceDistance(origin, direction, rayDistance);
++        if (t < 0.0f) {
++            continue;
++        }
++        const float3 hit = origin + direction * t;
++        if (hit.z > -1.0f) {
++            continue;
++        }
++        const float2 at = ViewToPixel(hit);
++        const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
++        const bool onScreen = all(at == inside);
++        const float sampleDepth = LoadDepth(int2(inside));
++        const float thickness = max(-hit.z * 0.03f, 20.0f);
++        const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
++        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f);
++    }
++    return light * 0.5f;
 +}
 +#endif
 +
@@ -17941,12 +18056,21 @@ index 0000000..71b34b4
 +    const uint cell = IndirectCell(halfPixel);
 +    const float jitter = InterleavedNoise(halfPixel);
 +    float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
++#ifdef RAY_TRACED
++    if (AoStrength() > 0.0f) {
++        result.a = TracedOcclusion(center, normal, cell);
++    }
++    if (SsgiStrength() > 0.0f) {
++        result.rgb = TracedGI(center, normal, cell);
++    }
++#else
 +    if (AoStrength() > 0.0f) {
 +        result.a = GroundTruthOcclusion(pixel, center, normal, cell, jitter);
 +    }
 +    if (SsgiStrength() > 0.0f) {
 +        result.rgb = ScreenSpaceGI(center, normal, cell);
 +    }
++#endif
 +    return result;
 +}
 +#else
