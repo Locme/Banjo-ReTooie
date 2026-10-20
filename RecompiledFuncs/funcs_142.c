@@ -5434,6 +5434,7 @@ L_800A6548:
     MEM_W(0X10, ctx->r29) = ctx->r2;
     after_44:
 L_800A66C4:
+    tooie_player_shadow_done(rdram, ctx);
     // 0x800A66C4: jal         0x800A7180
     // 0x800A66C8: nop
 
@@ -6161,6 +6162,7 @@ L_800A69DC:
     // 0x800A69DC: lw          $ra, 0x34($sp)
     ctx->r31 = MEM_W(ctx->r29, 0X34);
 L_800A69E0:
+    tooie_player_shadow_done(rdram, ctx);
     // 0x800A69E0: ldc1        $f20, 0x28($sp)
     CHECK_FR(ctx, 20);
     ctx->f20.u64 = LD(ctx->r29, 0X28);

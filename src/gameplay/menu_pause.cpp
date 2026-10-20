@@ -15,6 +15,9 @@
 // Not during the title, the file select, letterboxed scenes or a map change, where Start doesn't pause
 // either, nor while the game's own pause menu is open (its pointer at 0x80128AF0).
 //
+// While Start can't open the pause menu (a cutscene, a map change) Esc doesn't open the ESC menu either
+// (open_allowed, asked by the frontend); the title screen and file select still open it.
+//
 // Headless: TOOIE_MENU_PAUSE_LOG=1 logs `[menu-pause]` when the pause starts and ends.
 
 #include <atomic>
@@ -46,6 +49,7 @@ namespace {
     constexpr uint32_t slot_count = 6;
 
     std::atomic<bool> menu_open{false};
+    std::atomic<bool> allowed{true};
     bool paused = false;
     // The tracks the pause faded out, to fade back in.
     std::vector<int16_t> faded;
@@ -83,7 +87,17 @@ void tooie::menu_pause::set_menu_open(bool open) {
     menu_open = open;
 }
 
+bool tooie::menu_pause::open_allowed() {
+    return allowed.load();
+}
+
 void tooie::menu_pause::tick(uint8_t* rdram, recomp_context* ctx) {
+    // Start can't open the pause menu in a cutscene or while a map loads, so the ESC menu stays shut too.
+    const bool now_allowed = !(enabled() && tooie::debug::can_warp() &&
+        (tooie::in_letterboxed_scene() || tooie::debug::map_change_busy(rdram)));
+    if (allowed.exchange(now_allowed) != now_allowed && log_on()) {
+        std::fprintf(stderr, "[menu-pause] Esc menu %s\n", now_allowed ? "allowed" : "blocked");
+    }
     const bool game_pause = read_word(rdram, game_pause_addr) != 0;
     if (game_pause) {
         // The game's own pause menu plays its music and puts it back itself.

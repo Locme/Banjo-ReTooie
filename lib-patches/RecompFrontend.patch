@@ -859,7 +859,7 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..753f713 100644
+index 38b84f5..4a8367a 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
 @@ -1,6 +1,7 @@
@@ -879,7 +879,7 @@ index 38b84f5..753f713 100644
              void toggle_fullscreen();
          }
  
-@@ -133,6 +136,40 @@ namespace recompui {
+@@ -133,10 +136,49 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -920,6 +920,15 @@ index 38b84f5..753f713 100644
          void set_tab(const std::string &id);
          void open();
          bool close();
+ 
++        // Asked when Esc or the menu button is about to open the config menu from the game; false keeps it shut.
++        // Called on the main thread. Unset means always allowed.
++        void set_open_allowed_callback(bool (*callback)());
++        bool is_open_allowed();
++
+         // Get the config modal instance. nullptr until created with init_modal() internally.
+         // Will throw an error if it hasn't been created yet.
+         recompui::TabbedModal *get_config_modal();
 diff --git a/recompui/include/recompui/recompui.h b/recompui/include/recompui/recompui.h
 index 30c463b..52bbd4c 100644
 --- a/recompui/include/recompui/recompui.h
@@ -1117,7 +1126,7 @@ index eb8833e..acd435b 100644
          void add_default_options() {
              add_start_game_or_load_rom_option();
 diff --git a/recompui/src/base/ui_state.cpp b/recompui/src/base/ui_state.cpp
-index 277a421..78c3d72 100644
+index 277a421..676066d 100644
 --- a/recompui/src/base/ui_state.cpp
 +++ b/recompui/src/base/ui_state.cpp
 @@ -244,7 +244,8 @@ public:
@@ -1296,6 +1305,15 @@ index 277a421..78c3d72 100644
                  }
              }
          }
+@@ -837,7 +913,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
+             }
+             }
+ 
+-            if (open_config) {
++            if (open_config && recompui::config::is_open_allowed()) {
+                 recompui::config::open();
+             }
+         }
 @@ -847,7 +923,7 @@ void draw_hook(plume::RenderCommandList* command_list, plume::RenderFramebuffer*
      if (latest_controller_key_pressed != SDLK_UNKNOWN) {
          clock::time_point now = clock::now();
@@ -1318,7 +1336,7 @@ index 277a421..78c3d72 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..440ca21 100644
+index 6c84c05..730fa43 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1540,6 +1558,23 @@ index 6c84c05..440ca21 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
+@@ -185,6 +368,16 @@ namespace recompui {
+         config_modal->set_selected_tab(id);
+     }
+ 
++    static bool (*open_allowed_callback)() = nullptr;
++
++    void config::set_open_allowed_callback(bool (*callback)()) {
++        open_allowed_callback = callback;
++    }
++
++    bool config::is_open_allowed() {
++        return open_allowed_callback == nullptr || open_allowed_callback();
++    }
++
+     void config::open() {
+         if (config_modal == nullptr) {
+             throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
 index 86428c9..5a44688 100644
 --- a/recompui/src/config/ui_config_option.cpp

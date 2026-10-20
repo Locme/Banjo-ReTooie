@@ -80,6 +80,16 @@ namespace {
     }
 }
 
+namespace {
+    // True from the player's shadow model pick to the end of its draws (func_800A6250), while HD
+    // Shadows draws the on-screen model there.
+    bool player_shadow_draw = false;
+}
+
+extern "C" void tooie_player_shadow_done(uint8_t* /*rdram*/, recomp_context* /*ctx*/) {
+    player_shadow_draw = false;
+}
+
 extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
     // TOOIE_SHADOW_LOG=1: the two models each time they change.
     static const bool log = std::getenv("TOOIE_SHADOW_LOG") != nullptr;
@@ -96,6 +106,7 @@ extern "C" void tooie_player_shadow_model(uint8_t* rdram, recomp_context* ctx) {
     // "HD Shadows: Banjo" Off leaves the game's shadow model and light for the player.
     if (hd_shadows_on() && direction(tooie::hd_shadows::banjo_direction_option) != tooie::hd_shadows::Direction::Off) {
         MEM_W(0x1C8, ctx->r29) = MEM_W(0x1C4, ctx->r29);
+        player_shadow_draw = true;
         // $s0 is the light direction, a vector its callers (func_800A69F0 via func_800A6B24) build on
         // their stack for every shadow. Tilt replaces the default overhead light (0, 1, 0) only, so a
         // shadow cast by a real light in the level keeps that light's direction.
@@ -422,8 +433,13 @@ namespace {
     }
 }
 
+bool tooie::hd_shadows::drawing_shadow() {
+    return in_shadow_pass || player_shadow_draw;
+}
+
 void tooie::hd_shadows::tick() {
     shadows_this_frame = 0;
+    player_shadow_draw = false;
     if (shadow_log) {
         static int frames = 0;
         if (++frames >= 60) {

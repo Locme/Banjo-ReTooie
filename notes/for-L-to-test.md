@@ -1,5 +1,36 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T469 Tessellated water retest: no crash, no facets, rings
+- Asked: 2026-10-20 19:20 UTC
+- Build: main (after b6390c2)
+- Steps:
+  1. Vulkan, Graphics: Water Modern, Water detail 50
+  2. Spiral Mountain moat: stand still, then swim through it
+  3. Look in console.log for a line starting '[shaders] The graphics driver could not build'
+  4. Repeat with Stylised
+- Look for: No crash. The water is smooth (no small flat facets or sparkly pixels), it swells slowly, and rings and a wake spread from Banjo as he moves. If the console line is there, say which pipeline it names: then the water falls back to the old flat look
+- Status: waiting for L
+
+## T472 Ear jiggle
+- Asked: 2026-10-20 19:22 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Ear jiggle
+  2. Run, turn, jump and land
+  3. Try its sliders
+- Look for: Both ears wobble and flop on their own springs and stay joined to his head; the sliders change how floppy and how far they go.
+- Status: waiting for L
+
+## T471 Jiggle with HD Shadows on
+- Asked: 2026-10-20 19:22 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn HD Shadows on
+  2. General > Jiggle: turn on Snout jiggle (and any other jiggle)
+  3. Run, turn, jump and land
+- Look for: The snout and the other jiggle parts wobble as they do with HD Shadows off, and Banjo's shadow wobbles with him.
+- Status: waiting for L
+
 ## T468 Graphics > Ray tracing switch
 - Asked: 2026-10-20 18:22 UTC
 - Build: main
@@ -144,7 +175,7 @@
   4. Left click a row, right click to go back
   5. Use a controller in the ESC menu and move the mouse over rows without clicking
 - Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
-- UNTESTED, 2026-10-20 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
+- UNTESTED, 2026-10-20 21:40: free hand now moves by how far the cursor moved each frame (L's log showed it ran away because it re-added the full offset every frame); QOL > Free hand on the save select must be on. Earlier, 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
 
 ## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
 - Asked: 2026-10-20 08:41 UTC

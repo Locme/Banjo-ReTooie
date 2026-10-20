@@ -349,6 +349,28 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, belly_option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::ears_option, "Ear jiggle",
+        "Banjo's ears wobble on springs as he runs, turns, jumps and lands, each on its own jiggle bone, with their own settings like the snout's. On Banjo's own model (not model mods). They stay mid-wobble in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(ears_stiffness_option, "Ear jiggle: stiffness",
+            "How hard the ears spring back. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 150);
+        general.add_number_option(ears_damping_option, "Ear jiggle: damping",
+            "How quickly the wobble dies out. 0 wobbles for ages.", 0, 90, 1, 0, false, 10);
+        general.add_number_option(ears_mass_option, "Ear jiggle: mass",
+            "How heavy the ears are: heavier lags further behind and swings slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(ears_squash_in_option, "Ear jiggle: max squash & stretch inwards",
+            "How far an ear may squash down into his head, as a share of its height.", 0, 95, 5, 0, true, 40);
+        general.add_number_option(ears_squash_out_option, "Ear jiggle: max squash & stretch outwards",
+            "How far an ear may stretch up, as a share of its height.", 0, 300, 5, 0, true, 40);
+        general.add_number_option(ears_squash_across_option, "Ear jiggle: max squash & stretch sideways",
+            "How far an ear may flop forwards, backwards and to the side, as a share of its height.", 0, 300, 5, 0, true, 80);
+        for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_in_option,
+                                       &ears_squash_out_option, &ears_squash_across_option }) {
+            general.add_option_hidden_dependency(*id, ears_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
         false);
@@ -450,6 +472,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
+    recompui::config::set_open_allowed_callback(tooie::menu_pause::open_allowed);
     qol.add_bool_option(
         tooie::menu_pause::option,
         "Pause Special Menu",
