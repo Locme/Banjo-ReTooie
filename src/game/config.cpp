@@ -402,7 +402,7 @@ void tooie::init_config() {
     general.add_enum_option(
         tooie::damage::aim_option,
         "Enemy aim",
-        "How far ahead the enemies that aim ahead (Klungo's potions, lava gargoyles, fantasy eyeballs) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> leads 50% further and <recomp-color primary>Sharp</recomp-color> twice as far, so running in a straight line stops working but changing direction still does.",
+        "The enemies and shots that aim ahead of you (Klungo's potions, lava gargoyles, fantasy eyeballs, balloon bombs, Gruntilda's fireballs and others) aim at where you are running to. <recomp-color primary>Original</recomp-color> is the game's own aim. <recomp-color primary>Better</recomp-color> aims half a second of your running ahead and <recomp-color primary>Sharp</recomp-color> a full second ahead, so running in a straight line stops working but changing direction still does.",
         {
             {tooie::damage::Aim::Original, "Original", "Original"},
             {tooie::damage::Aim::Better, "Better", "Better"},

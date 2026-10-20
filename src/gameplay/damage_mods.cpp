@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -142,29 +143,79 @@ extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-// func_8010D12C entry: $a2 is the lead in seconds. The game's own users are Klungo's potion, the lava
-// gargoyle's fireball and the fantasy eyeball's shot. The lead stops at 1.2 s (Klungo's flight time) unless
-// the game's own lead is already longer.
-extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
-    float factor = 1.0f;
-    try {
-        switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
-        case tooie::damage::Aim::Better: factor = 1.5f; break;
-        case tooie::damage::Aim::Sharp: factor = 2.0f; break;
-        default: break;
+// Enemy aim (second try, L's test of Sharp on Klungo showed no change): scaling the game's own lead did nothing,
+// so the aim measures the player's movement itself. aim_tick (once per frame) samples his position and keeps
+// a smoothed horizontal velocity. func_8010D12C / func_8010D09C (the two aim-ahead functions) save their out
+// pointer ($a1) at entry; at their return the out point is moved on by that velocity times 0.5 s (Better) or
+// 1.0 s (Sharp), at most 600 units. Klungo's potion flies 1.2 s, so Sharp puts it just in front of a runner.
+namespace {
+    float aim_prev[3] = {};
+    float aim_vel[2] = {};
+    bool aim_have_prev = false;
+    uint32_t aim_out = 0;
+
+    float aim_seconds() {
+        try {
+            switch (static_cast<tooie::damage::Aim>(std::get<uint32_t>(recompui::config::get_general_config().get_option_value(tooie::damage::aim_option)))) {
+            case tooie::damage::Aim::Better: return 0.5f;
+            case tooie::damage::Aim::Sharp: return 1.0f;
+            default: break;
+            }
+        } catch (...) {
         }
-    } catch (...) {
+        return 0.0f;
     }
-    if (factor == 1.0f) {
+}
+
+// Once per frame (tooie_warp_tick).
+void tooie::damage::aim_tick(uint8_t* rdram) {
+    const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
+    const uint32_t pos_ptr = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0xE4) : 0;
+    const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
+    if (!tooie::rdram::valid_ptr(pos_ptr) || !(dt > 0.0f) || dt > 0.5f) {
+        aim_have_prev = false;
+        aim_vel[0] = aim_vel[1] = 0.0f;
         return;
     }
-    uint32_t lead_bits = (uint32_t)ctx->r6;
-    float lead;
-    std::memcpy(&lead, &lead_bits, sizeof(lead));
-    if (!(lead > 0.0f)) {
+    float pos[3];
+    for (int k = 0; k < 3; k++) {
+        pos[k] = tooie::rdram::read_float(rdram, pos_ptr + 4 * k);
+    }
+    if (aim_have_prev) {
+        const float vx = (pos[0] - aim_prev[0]) / dt;
+        const float vz = (pos[2] - aim_prev[2]) / dt;
+        // A jump of position (warp, loading) is not movement.
+        if (std::fabs(vx) < 3000.0f && std::fabs(vz) < 3000.0f) {
+            aim_vel[0] += (vx - aim_vel[0]) * 0.3f;
+            aim_vel[1] += (vz - aim_vel[1]) * 0.3f;
+        } else {
+            aim_vel[0] = aim_vel[1] = 0.0f;
+        }
+    }
+    std::memcpy(aim_prev, pos, sizeof(pos));
+    aim_have_prev = true;
+}
+
+// func_8010D12C / func_8010D09C entry: $a1 is the out point.
+extern "C" void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx) {
+    aim_out = (uint32_t)ctx->r5;
+}
+
+// func_8010D12C / func_8010D09C return.
+extern "C" void tooie_enemy_aim_end(uint8_t* rdram, recomp_context* ctx) {
+    const float seconds = aim_seconds();
+    const uint32_t out = aim_out;
+    aim_out = 0;
+    if (seconds <= 0.0f || !tooie::rdram::valid_ptr(out)) {
         return;
     }
-    lead = std::min(lead * factor, std::max(1.2f, lead));
-    std::memcpy(&lead_bits, &lead, sizeof(lead_bits));
-    ctx->r6 = (gpr)(int64_t)(int32_t)lead_bits;
+    float dx = aim_vel[0] * seconds;
+    float dz = aim_vel[1] * seconds;
+    const float length = std::sqrt(dx * dx + dz * dz);
+    if (length > 600.0f) {
+        dx *= 600.0f / length;
+        dz *= 600.0f / length;
+    }
+    tooie::rdram::write_float(rdram, out, tooie::rdram::read_float(rdram, out) + dx);
+    tooie::rdram::write_float(rdram, out + 8, tooie::rdram::read_float(rdram, out + 8) + dz);
 }

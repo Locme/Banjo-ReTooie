@@ -1706,3 +1706,14 @@ text = "tooie_aim_trace(rdram, ctx, 1);"
 func = "func_8008FE68"
 before_vram = 0x8008FE68
 text = "tooie_aim_trace(rdram, ctx, 2);"
+
+# Enemy aim, second half: the out point of the two aim-ahead functions is moved on at their return.
+[[patches.hook]]
+func = "func_8010D12C"
+before_vram = 0x8010D1E0
+text = "tooie_enemy_aim_end(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_8010D09C"
+before_vram = 0x8010D124
+text = "tooie_enemy_aim_end(rdram, ctx);"
