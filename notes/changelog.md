@@ -10,6 +10,11 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- Cheats > Transformation goes back to Off by itself once the area reloads with the new form (it is saved as Off too, so the next start does not reload again). Pick Banjo-Kazooie (BK) to change back (L). Checked headless: Bee, then Stony.
+- QOL > Pause Special Menu (on by default): while the Esc menu is open during play the game is paused as if Start were pressed, with no pause menu drawn and the music still playing; cutscenes, map changes and the title carry on. QOL's Photo Filter section is gone (photo mode's panel has those settings, still saved). Transform anywhere is now on by default, and a saved Off turns on once (L). Checked headless (T451).
+- Flying: turning above 30 FPS (40, 60, 120, 175, 240, Uncapped) is as fast as in the original game; it sped up with the frame rate and kept swinging after the stick was let go (L). Checked headless at Original, 120, 240 and Uncapped (T447).
+- General > Gameplay > Enemy aim (Original / Better / Sharp, Original by default): The enemies and shots that already aim ahead (Klungo, lava gargoyles, fantasy eyeballs, balloon bombs, Gruntilda's fireballs and others) lead your movement 50% or 100% further than the game's own aim. Untested on PC (T446).
+
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).
 - Sprint dust: starting a sprint (holding Run) kicks up the same puff of dust as a quick turn, at most once every 10 seconds of game time.
 - Interpolation pick mode now finds models at Graphics > Interpolation Original (the default); before, every model said "No model here" unless Interpolation was on (L). Checked headless (T442).

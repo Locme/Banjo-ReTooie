@@ -48,6 +48,7 @@ int tooie_portrait_step_skip(uint8_t* rdram, recomp_context* ctx);
 void tooie_gravity_bias(uint8_t* rdram, recomp_context* ctx, uint32_t physics_owner);
 void tooie_current_push(uint8_t* rdram, recomp_context* ctx);
 void tooie_swim_turn(uint8_t* rdram, recomp_context* ctx);
+void tooie_fly_turn(uint8_t* rdram, recomp_context* ctx);
 void tooie_audio_list_queued(uint8_t* rdram, recomp_context* ctx);
 int tooie_blink_step_skip(uint8_t* rdram, recomp_context* ctx);
 int tooie_klungo_fade(uint8_t* rdram, recomp_context* ctx, int fade_in);
@@ -89,6 +90,7 @@ void tooie_snout_bone(uint8_t* rdram, recomp_context* ctx);
 void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
+void tooie_enemy_aim(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
 // Cheats > HONEYKING: func_80099B94 entry, and just before it sets the state in $s2.
 void tooie_player_hit_begin(uint8_t* rdram, recomp_context* ctx);

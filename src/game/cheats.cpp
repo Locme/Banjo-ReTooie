@@ -2,6 +2,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -122,6 +123,15 @@ namespace {
         }
     }
 
+    // Every cheat back to off; the master switch is left as it is.
+    void reset_cheats(recomp::config::Config& cfg) {
+        for (const Cheat& cheat : cheat_list) {
+            cfg.update_option_value(cheat.option, false);
+        }
+        tooie::transform_picker::reset(cfg);
+        tooie::replays::reset(cfg);
+    }
+
     // RDRAM halfwords are stored with the address bit 1 flipped.
     volatile uint16_t* cap_ptr(uint8_t* rdram, size_t item) {
         uint32_t addr = item_table + static_cast<uint32_t>(item) * 4 + 2;
@@ -207,18 +217,25 @@ void tooie::cheats::create_tab() {
     recompui::config::set_option_group("cheat_big_head", "Size");
     recompui::config::set_option_group("cheat_stop_n_swop", "Unlocks");
 
-    // Turning the master switch off (or loading it off) resets every cheat.
+    // Turning the master switch off resets every cheat. (Loading it off does not: the load reads the switch
+    // before the cheats, so reset_on_start does it.)
     config.add_option_change_callback(enabled_option,
         [](recomp::config::ConfigValueVariant cur, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
             if (std::holds_alternative<bool>(cur) && !std::get<bool>(cur)) {
-                recomp::config::Config& cfg = recompui::config::get_config(tab_id);
-                for (const Cheat& cheat : cheat_list) {
-                    cfg.update_option_value(cheat.option, false);
-                }
-                tooie::transform_picker::reset(cfg);
-                tooie::replays::reset(cfg);
+                reset_cheats(recompui::config::get_config(tab_id));
             }
         });
+}
+
+void tooie::cheats::reset_on_start() {
+    // Headless runs that switch cheats on in cheats.json before launching set TOOIE_KEEP_CHEATS=1.
+    if (std::getenv("TOOIE_KEEP_CHEATS") != nullptr) {
+        return;
+    }
+    recomp::config::Config& cfg = recompui::config::get_config(tab_id);
+    cfg.update_option_value(enabled_option, false);
+    reset_cheats(cfg);
+    cfg.save_config();
 }
 
 void tooie::cheats::start(uint8_t* rdram) {
@@ -226,6 +243,10 @@ void tooie::cheats::start(uint8_t* rdram) {
         // Detached: it only pokes game memory, so it can die with the process.
         std::thread(apply_loop, rdram).detach();
     });
+}
+
+recomp::config::Config& tooie::cheats::config() {
+    return recompui::config::get_config(tab_id);
 }
 
 bool tooie::cheats::enabled() {
