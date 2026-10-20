@@ -67,7 +67,7 @@ namespace RT64 {
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
-    void SetSceneScreenSpaceReflections(float strength);
+    void SetSceneScreenSpaceReflections(float strength, float glossiness);
     void SetSceneRayTracing(bool enabled);
     void SetSceneRayTracingStrength(float strength);
     void SetSceneRayTracingHitColours(bool enabled);
@@ -3975,6 +3975,7 @@ namespace {
         { &tooie::picture_filters::bounce_light_option, 0.0 },
         { &tooie::picture_filters::ssgi_option, 0.0 },
         { &tooie::picture_filters::ssr_option, 0.0 },
+        { &tooie::picture_filters::ssr_stochastic_option, 0.0 },
         { &tooie::picture_filters::water_waves_option, 0.0 },
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
@@ -4255,7 +4256,7 @@ void tooie::picture_filters::apply() {
     if (!ray_tracing) {
         ray_tracing_notified.store(false);
     }
-    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0));
+    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
@@ -4945,6 +4946,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        ssr_stochastic_option,
+        "Stochastic reflections",
+        "Makes Screen-space reflections glossy instead of mirror-sharp (a port of simeonradivoev's Compute Stochastic Reflections, MIT): each pixel sends a few rays spread over a lobe that widens with this setting, and blends what they find. The result is slightly grainy and blurrier the higher it goes. Needs Screen-space reflections above 0. Starts at 0, which keeps the mirror reflections.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         water_reflections_option,
         "Water reflections",
         "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
@@ -5242,7 +5248,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5279,6 +5285,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ssr_stochastic_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);

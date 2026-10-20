@@ -9,6 +9,17 @@
 - Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
 - Status: waiting for L
 
+## T486 Stochastic reflections
+- Asked: 2026-10-20 23:27 UTC
+- Build: main (this commit)
+- Steps:
+  1. Open Graphics > Reflections
+  2. Set Screen-space reflections to 60
+  3. Set Stochastic reflections to 30, then 70
+  4. Stand near a gold or metal shiny surface (e.g. Grunty Industries warp pad rims) and look at it from the side
+- Look for: Is the reflection blurrier and softer than the mirror one? Is the grain acceptable, and does 0 give back the old sharp reflection? Does the frame rate hold?
+- Status: waiting for L
+
 ## T484 Fur jiggle
 - Asked: 2026-10-20 23:09 UTC
 - Build: main

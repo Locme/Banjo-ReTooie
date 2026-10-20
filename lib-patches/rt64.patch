@@ -7075,10 +7075,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..b4d31bf
+index 0000000..3f3e0e7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3043 @@
+@@ -0,0 +1,3047 @@
 +//
 +// RT64
 +//
@@ -7496,6 +7496,7 @@ index 0000000..b4d31bf
 +    static std::atomic<bool> rayTracingWanted{ false };
 +    static std::atomic<int> rayTracingSupport{ 0 };
 +    static float userReflections = 0.0f;
++    static float userGlossy = 0.0f;
 +
 +    // effectsMutex held.
 +    static float userSunShadows = 0.0f;
@@ -7519,12 +7520,14 @@ index 0000000..b4d31bf
 +            effectsSettings.waterReflections = std::max(userWaterReflections, least);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
++        effectsSettings.reflectionGlossiness = userGlossy;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
 +    }
 +
-+    void SetSceneScreenSpaceReflections(float strength) {
++    void SetSceneScreenSpaceReflections(float strength, float glossiness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        userReflections = strength;
++        userGlossy = glossiness;
 +        RefreshReflections();
 +    }
 +
@@ -9333,9 +9336,10 @@ index 0000000..b4d31bf
 +        interop::SceneEffectsCB constants;
 +        constants.depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, depthScale, depthTranslate);
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
-+        // Ambient occlusion, SSGI and SSR in hundredths, packed as AO + 128 * SSGI + 16384 * SSR (IndirectPacked).
++        // Ambient occlusion, SSGI and SSR in hundredths, packed as AO + 128 * SSGI + 16384 * SSR + 2097152 * stochastic glossiness 0 to 7 (IndirectPacked).
 +        const auto hundredths = [](float strength) { return std::round(std::clamp(strength, 0.0f, 1.0f) * 100.0f); };
-+        const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections);
++        const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections) +
++            2097152.0f * std::round(std::clamp(settings.reflectionGlossiness, 0.0f, 1.0f) * 7.0f);
 +        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, std::min(settings.rimLight, 1.0f) + 2.0f * std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
@@ -10124,10 +10128,10 @@ index 0000000..b4d31bf
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..a4f3152
+index 0000000..363c8b6
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,471 @@
+@@ -0,0 +1,472 @@
 +//
 +// RT64
 +//
@@ -10193,6 +10197,7 @@ index 0000000..a4f3152
 +        // Screen-space global illumination and screen-space reflections (0 off, 1 strongest).
 +        float screenSpaceGI = 0.0f;
 +        float screenSpaceReflections = 0.0f;
++        float reflectionGlossiness = 0.0f; // Stochastic reflections: 0 the mirror ray, up to 1 the roughest lobe.
 +        float waterWaves = 0.0f;
 +        // Modern water: the game's water isn't drawn; the pass draws its own in its place.
 +        bool modernWater = false;
@@ -10335,7 +10340,7 @@ index 0000000..a4f3152
 +    // Banjo-Tooie: screen-space global illumination (light bounced off the surfaces on the screen) and screen-space
 +    // reflections (the scene reflected in every surface, more at grazing angles), each 0 off, 1 strongest.
 +    void SetSceneScreenSpaceGI(float strength);
-+    void SetSceneScreenSpaceReflections(float strength);
++    void SetSceneScreenSpaceReflections(float strength, float glossiness = 0.0f);
 +    // Banjo-Tooie: water waves on the water mask's surfaces (0 off, 1 strongest), moving at speed (1 normal).
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: Modern water (Graphics > Water): the game's water draws are left out of the 3D world and the
@@ -15168,10 +15173,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..93d9010
+index 0000000..258eab1
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3787 @@
+@@ -0,0 +1,3880 @@
 +//
 +// RT64
 +//
@@ -15639,7 +15644,7 @@ index 0000000..93d9010
 +}
 +
 +// Ambient occlusion, screen-space global illumination and screen-space reflections share ambientOcclusion.x,
-+// packed as AO + 128 * SSGI + 16384 * SSR, each in hundredths (0 to 100).
++// packed as AO + 128 * SSGI + 16384 * SSR, each in hundredths (0 to 100), + 2097152 * stochastic glossiness (0 to 7).
 +uint3 IndirectPacked() {
 +    const uint packed = uint(max(gConstants.ambientOcclusion.x, 0.0f) + 0.5f);
 +    return uint3(packed & 127u, (packed >> 7) & 127u, (packed >> 14) & 127u);
@@ -15655,6 +15660,12 @@ index 0000000..93d9010
 +
 +float SsrStrength() {
 +    return float(IndirectPacked().z) / 100.0f;
++}
++
++// Stochastic reflections' glossiness (0 off: the mirror ray; 1 to 7 the roughness in tenths).
++float SsrRoughness() {
++    const uint packed = uint(max(gConstants.ambientOcclusion.x, 0.0f) + 0.5f);
++    return float((packed >> 21) & 7u) * 0.1f;
 +}
 +
 +// A view-space depth (negative) from a depth buffer value, as ViewPosition works it out.
@@ -15875,6 +15886,92 @@ index 0000000..93d9010
 +        return 0.0f;
 +    }
 +    return float4(gColor.SampleLevel(LinearSampler, hitPixel / gConstants.projection.zw, 0).rgb, RayEdgeFade(hitPixel));
++}
++
++// Stochastic reflections, after simeonradivoev/ComputeStochasticReflections (itself after Stachowiak and Uludag,
++// "Stochastic Screen-Space Reflections", SIGGRAPH 2015), under its MIT licence:
++//
++//   MIT License
++//
++//   Copyright (c) 2018 Simeon Radivoev
++//
++//   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
++//   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
++//   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
++//   to permit persons to whom the Software is furnished to do so, subject to the following conditions:
++//
++//   The above copyright notice and this permission notice shall be included in all copies or substantial portions
++//   of the Software.
++//
++//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
++//   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++//   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
++//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++//   IN THE SOFTWARE.
++//
++// Ported from BRDFComputeLib.cginc (ImportanceSampleGGX after Karis, BRDF_Unity_Weight) and the resolve in
++// RayTraceCompute.compute: each ray takes a GGX-distributed half vector about the normal, and what the rays find is
++// averaged weighted by the BRDF over the ray's probability density. Left out: the hierarchical depth march (the
++// existing MarchRay stands in), the colour mip pyramid (the half-size scene stands in for a rough hit's blur), the
++// temporal pass and the median/bilateral blurs (the game has no history buffer here); more rays per pixel make up
++// for them, and the 4x4 block pattern spreads the samples so the noise is fine grained.
++float StochasticWeight(float3 V, float3 L, float3 N, float roughness) {
++    const float3 H = normalize(L + V);
++    const float NdotH = saturate(dot(N, H));
++    const float NdotL = saturate(dot(N, L));
++    const float NdotV = saturate(dot(N, V));
++    const float lambdaV = NdotL * (NdotV * (1.0f - roughness) + roughness);
++    const float lambdaL = NdotV * (NdotL * (1.0f - roughness) + roughness);
++    const float visibility = 0.5f / (lambdaV + lambdaL + 1e-5f);
++    const float a2 = roughness * roughness;
++    const float d = (NdotH * a2 - NdotH) * NdotH + 1.0f;
++    const float distribution = 0.31830988618f * a2 / (d * d + 1e-7f);
++    return distribution * visibility * 0.78539816f;
++}
++
++float4 StochasticReflection(int2 pixel, float3 center, float3 normal, float roughness) {
++    const float3 incoming = normalize(center);
++    const float3 V = -incoming;
++    const float3 up = (abs(normal.z) < 0.999f) ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
++    const float3 tangent = normalize(cross(up, normal));
++    const float3 bitangent = cross(normal, tangent);
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const uint cell = uint(pixel.x & 3) + 4u * uint(pixel.y & 3);
++    const float m = roughness * roughness;
++    const float m2 = m * m;
++    float3 colourSum = 0.0f;
++    float hitSum = 0.0f;
++    float totalSum = 0.0f;
++    [unroll] for (int r = 0; r < 3; r++) {
++        // The 48 samples of a 4x4 block spread over the lobe (the R2 sequence), the cells scrambled so neighbours differ.
++        const float n = float((cell * 7u) % 16u) * 3.0f + float(r);
++        const float2 xi = frac(0.5f + n * float2(0.7548776662f, 0.5698402910f));
++        const float phi = 6.28318531f * xi.x;
++        const float cosTheta = sqrt((1.0f - xi.y) / (1.0f + (m2 - 1.0f) * xi.y));
++        const float sinTheta = sqrt(max(1e-5f, 1.0f - cosTheta * cosTheta));
++        const float3 H = normalize(tangent * (sinTheta * cos(phi)) + bitangent * (sinTheta * sin(phi)) + normal * cosTheta);
++        const float d = (cosTheta * m2 - cosTheta) * cosTheta + 1.0f;
++        const float pdf = max(m2 / (3.14159265f * d * d) * cosTheta, 1e-4f);
++        const float3 direction = reflect(incoming, H);
++        if (dot(direction, normal) <= 0.0f) {
++            continue;
++        }
++        const float weight = StochasticWeight(V, direction, normal, roughness) / pdf;
++        totalSum += weight;
++        float2 hitPixel;
++        if (MarchRay(origin, direction, 3000.0f, 24, 5, frac(xi.x * 7.0f + InterleavedNoise(pixel)), hitPixel)) {
++            const float2 uv = hitPixel / gConstants.projection.zw;
++            // A rough reflection is blurry: more of the half-size scene the rougher it is.
++            const float3 colour = lerp(gColor.SampleLevel(LinearSampler, uv, 0).rgb, gColorHalf.SampleLevel(LinearSampler, uv, 0).rgb, saturate(roughness * 2.0f));
++            const float fade = RayEdgeFade(hitPixel);
++            colourSum += colour * (weight * fade);
++            hitSum += weight * fade;
++        }
++    }
++    if (hitSum <= 0.0f) {
++        return 0.0f;
++    }
++    return float4(colourSum / hitSum, saturate(hitSum / max(totalSum, 1e-5f)));
 +}
 +
 +#ifdef RAY_TRACED
@@ -18810,7 +18907,8 @@ index 0000000..93d9010
 +#ifdef RAY_TRACED
 +            const float4 reflection = TracedReflection(pixel, center, normal);
 +#else
-+            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++            const float roughness = SsrRoughness();
++            const float4 reflection = (roughness > 0.0f) ? StochasticReflection(pixel, center, normal, roughness) : ScreenSpaceReflection(pixel, center, normal);
 +#endif
 +            const float facing = saturate(dot(-normalize(center), normal));
 +            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);

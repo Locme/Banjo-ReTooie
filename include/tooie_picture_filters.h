@@ -59,6 +59,7 @@ namespace tooie::picture_filters {
     inline const std::string bounce_light_option = "bounce_light";
     inline const std::string ssgi_option = "ssgi";
     inline const std::string ssr_option = "ssr";
+    inline const std::string ssr_stochastic_option = "ssr_stochastic";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
