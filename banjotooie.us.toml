@@ -1222,6 +1222,19 @@ func = "bssplat_entrypoint_0"
 before_vram = 0x80800028
 text = "tooie_fall_damage_end(rdram, ctx);"
 
+# Cheats > HONEYKING (Take No Damage): func_80099B94 handles the player's hit events. Its entry starts
+# watching func_800A17A8 for damage; just before its bs_setState call ($s2 is the next state) the hurt or
+# knockback state is dropped while HONEYKING is on and the player is still alive.
+[[patches.hook]]
+func = "func_80099B94"
+before_vram = 0x80099B94
+text = "tooie_player_hit_begin(rdram, ctx);"
+
+[[patches.hook]]
+func = "func_80099B94"
+before_vram = 0x8009AB54
+text = "tooie_player_hit_state(rdram, ctx);"
+
 # Cheats > One-hit enemies: the damage an enemy hit handler takes from the enemy's health byte becomes 255.
 [[patches.hook]]
 func = "func_80108F08"

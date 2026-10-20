@@ -10,12 +10,24 @@
 // (glhittableDll entry 9, which the player's hits read too, so the table is left alone). One-hit enemies
 // makes that amount 255 in the three handlers that subtract it: func_80108F08, func_80800294_sucoasterhit
 // (watched on an Ugger) and func_80801108_sucoasterfly. Bosses have their own code and are not touched.
+//
+// Take No Damage (Cheato: HONEYKING, game flag 0x53C, L 2026-10-19): the game's own cheat keeps the health
+// from dropping, but Banjo still got hurt: knocked back and flung up in the air. func_80099B94 handles the
+// player's hit events; each hurt case calls func_800A17A8 with the damage and then picks the hurt state
+// (func_80099840 and friends), which it hands to bs_setState in $s2 at its end. State 0 there means "stay as
+// you are", so while HONEYKING is on, a hit event that tried to take health and left the player alive sets
+// no state. Instant deaths (health 0 after the hit) keep their state, and so does a hit that puts the player
+// back in the state he is already in (Dragunda holding him, state 152, re-enters it with each bite).
+// Headless test aid: TOOIE_DAMAGE_LOG=1 logs each damaging hit event, its state and whether it was dropped.
 
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <variant>
 
 #include "recomp.h"
+#include "funcs.h"
 #include "recompui/config.h"
 #include "tooie_cheats.h"
 #include "tooie_damage.h"
@@ -23,6 +35,25 @@
 namespace {
     // Set while bssplat_entrypoint_0 hands a fall's damage to func_800A17A8.
     bool in_fall = false;
+
+    // Set from func_80099B94's entry until its bs_setState; hit_damaged once it has called func_800A17A8
+    // with a negative change.
+    bool in_hit = false;
+    bool hit_damaged = false;
+    int32_t hit_event = 0;
+
+    constexpr int32_t honeyking_flag = 0x53C;
+
+    // Calls a game function on a copy of the hook's context, below the caller's stack frame.
+    int32_t call_game(uint8_t* rdram, recomp_context* ctx, void (*func)(uint8_t*, recomp_context*), uint32_t a0) {
+        recomp_context saved = *ctx;
+        ctx->r29 = (int32_t)((((uint32_t)ctx->r29 - 0x100) & ~0xFu));
+        ctx->r4 = (uint64_t)(int64_t)(int32_t)a0;
+        func(rdram, ctx);
+        const int32_t value = (int32_t)ctx->r2;
+        *ctx = saved;
+        return value;
+    }
 
     bool double_damage_on() {
         try {
@@ -33,9 +64,16 @@ namespace {
     }
 }
 
+bool tooie::damage::no_damage_on(uint8_t* rdram, recomp_context* ctx) {
+    return call_game(rdram, ctx, func_800DA298, honeyking_flag) != 0;
+}
+
 // func_800A17A8 entry: $a1 is the health change.
 extern "C" void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx) {
     const int32_t delta = (int32_t)ctx->r5;
+    if (in_hit && delta < 0) {
+        hit_damaged = true;
+    }
     if (in_fall || delta >= 0 || delta <= -999 || !double_damage_on()) {
         return;
     }
@@ -59,5 +97,38 @@ extern "C" void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int 
         ctx->r2 = 0xFF;
     } else if (reg == 24) {
         ctx->r24 = 0xFF;
+    }
+}
+
+// func_80099B94 entry: a player hit event is being handled.
+extern "C" void tooie_player_hit_begin(uint8_t* rdram, recomp_context* ctx) {
+    in_hit = true;
+    hit_damaged = false;
+    hit_event = call_game(rdram, ctx, func_8009E6EC, (uint32_t)ctx->r4);
+}
+
+// func_80099B94 just before bs_setState($s0, $s2).
+extern "C" void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx) {
+    static const bool log = std::getenv("TOOIE_DAMAGE_LOG") != nullptr;
+    const bool damaged = in_hit && hit_damaged;
+    in_hit = false;
+    hit_damaged = false;
+    if (!damaged || ctx->r18 == 0) {
+        return;
+    }
+    const bool cheat = tooie::damage::no_damage_on(rdram, ctx);
+    // func_800A1718(player) is the current form's health; the player's state block (+0x120) holds the current
+    // state at +4. A hit that puts the player back in the state he is in (Dragunda's hold, 152) is left alone.
+    const int32_t health = call_game(rdram, ctx, func_800A1718, (uint32_t)ctx->r16);
+    const int32_t block = MEM_W(ctx->r16, 0x120);
+    const uint32_t state = (uint32_t)MEM_W(block, 4);
+    const bool drop = cheat && health > 0 && (uint32_t)ctx->r18 != state;
+    if (log) {
+        std::printf("[damage] hit: event %d in state %u, next state %u, health %d, Take No Damage %s -> %s\n", hit_event,
+            state, (uint32_t)ctx->r18, health, cheat ? "on" : "off", drop ? "no reaction" : "state kept");
+        std::fflush(stdout);
+    }
+    if (drop) {
+        ctx->r18 = 0;
     }
 }

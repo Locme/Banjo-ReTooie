@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T444 Take No Damage: no knockback or fly-up either
+- Asked: 2026-10-20 03:49 UTC
+- Build: main
+- Steps:
+  1. Cheats on, Cheats > Cheato: HONEYKING on
+  2. Let an enemy hit Banjo (a Snapdragon, Ugger or Grublin)
+  3. Walk into a hazard that throws him up (fire, hot or electric ground)
+  4. Get grabbed by something that holds him (Dragunda)
+  5. Turn HONEYKING off and get hit again
+- Look for: With it on: no health lost, and Banjo is not knocked back or flung up; he keeps walking. A grab still holds him as the game does, just with no damage. With it off: hits knock him back and take health as normal. Checked headless: Snapdragon bite (on: no knockback; off: knocked back, one honeycomb lost) and Dragunda's hold. Not checked: hazards, flying and swimming forms, the cut Torch enemy.
+- Status: waiting for L
+
 ## T443 Sprint start dust
 - Asked: 2026-10-20 03:17 UTC
 - Build: main @ c1d6889
