@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..25f8a6b 100644
+index 79dfc38..6169fc1 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -201,7 +201,7 @@ index 79dfc38..25f8a6b 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +605,53 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +605,64 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -248,6 +248,17 @@ index 79dfc38..25f8a6b 100644
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect2XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_2X")
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect4XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_4X")
 +build_pixel_shader(rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect8XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_8X")
++
++# Banjo-Tooie: the traced variant of the scene effects (Graphics > Ray tracing): a ray query over the world's triangles
++# in place of the reflections' depth march. Vulkan only (SPIR-V), where the device has ray queries; shader model 6.5
++# for the ray query, and SPIR-V 1.5 (Vulkan 1.2) for the ray query capability.
++if (NOT APPLE)
++    set (DXC_PS_RQ_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_5" "-fspv-target-env=vulkan1.2" "-fspv-extension=SPV_KHR_ray_query")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRTPS.hlsl" "-D RAY_TRACED")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT2XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_2X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT4XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_4X")
++    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT8XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_8X")
++endif()
  build_vertex_shader( rt64 "src/shaders/FullScreenVS.hlsl")
  build_vertex_shader( rt64 "src/shaders/Im3DVS.hlsl")
 +build_vertex_shader( rt64 "src/shaders/SunShadowMapVS.hlsl")
@@ -1782,7 +1793,7 @@ index 5b70e01..d52c622 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_workload.cpp b/src/hle/rt64_workload.cpp
-index b4c85f5..1b20d37 100644
+index b4c85f5..eef161b 100644
 --- a/src/hle/rt64_workload.cpp
 +++ b/src/hle/rt64_workload.cpp
 @@ -48,6 +48,7 @@ namespace RT64 {
@@ -1793,6 +1804,24 @@ index b4c85f5..1b20d37 100644
          drawData.viewProjIndices.clear();
          drawData.worldIndices.clear();
          drawData.fogIndices.clear();
+@@ -194,7 +195,7 @@ namespace RT64 {
+     }
+     
+     void Workload::uploadDrawData(RenderWorker *worker, BufferUploader *bufferUploader) {
+-        const RenderBufferFlags rtInputFlag = worker->device->getCapabilities().raytracing ? RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT : RenderBufferFlag::NONE;
++        const RenderBufferFlags rtInputFlag = (worker->device->getCapabilities().raytracing || worker->device->getCapabilities().rayQuery) ? RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT : RenderBufferFlag::NONE;
+         bufferUploader->submit(worker, {
+             { drawData.posFloats.data(), drawRanges.posFloats, sizeof(float), RenderBufferFlag::FORMATTED, { RenderFormat::R32_FLOAT }, &drawBuffers.positionBuffer },
+             { drawData.velFloats.data(), drawRanges.velFloats, sizeof(float), RenderBufferFlag::FORMATTED, { RenderFormat::R32_FLOAT }, &drawBuffers.velocityBuffer },
+@@ -238,7 +239,7 @@ namespace RT64 {
+ 
+     void Workload::updateOutputBuffers(RenderWorker *worker) {
+         const uint32_t vertexCount = drawData.vertexCount();
+-        const RenderBufferFlags rtInputFlag = worker->device->getCapabilities().raytracing ? RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT : RenderBufferFlag::NONE;
++        const RenderBufferFlags rtInputFlag = (worker->device->getCapabilities().raytracing || worker->device->getCapabilities().rayQuery) ? RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT : RenderBufferFlag::NONE;
+         updateOutputBuffer(worker, outputBuffers.screenPosBuffer, vertexCount * sizeof(float) * 4, RenderBufferFlag::VERTEX);
+         updateOutputBuffer(worker, outputBuffers.genTexCoordBuffer, vertexCount * sizeof(float) * 2, RenderBufferFlag::VERTEX);
+         updateOutputBuffer(worker, outputBuffers.shadedColBuffer, vertexCount * sizeof(float) * 4, RenderBufferFlag::VERTEX);
 diff --git a/src/hle/rt64_workload.h b/src/hle/rt64_workload.h
 index 8ea27d5..50ebf26 100644
 --- a/src/hle/rt64_workload.h
@@ -1807,10 +1836,10 @@ index 8ea27d5..50ebf26 100644
          std::vector<uint16_t> worldIndices;
          std::vector<uint16_t> fogIndices;
 diff --git a/src/hle/rt64_workload_queue.cpp b/src/hle/rt64_workload_queue.cpp
-index 5a331aa..438ea9b 100644
+index 5a331aa..d34ce46 100644
 --- a/src/hle/rt64_workload_queue.cpp
 +++ b/src/hle/rt64_workload_queue.cpp
-@@ -4,9 +4,12 @@
+@@ -4,9 +4,13 @@
  
  #include "rt64_workload_queue.h"
  
@@ -1820,10 +1849,11 @@ index 5a331aa..438ea9b 100644
  
  #include "rt64_present_queue.h"
 +#include "render/rt64_gpu_sections.h"
++#include "render/rt64_scene_effects.h"
  
  #define ENABLE_HIGH_RESOLUTION_RENDERER 1
  
-@@ -52,9 +55,14 @@ namespace RT64 {
+@@ -52,9 +56,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a workload being used by the GPU.
          bool waitForBarrier;
@@ -1839,7 +1869,7 @@ index 5a331aa..438ea9b 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -101,6 +109,7 @@ namespace RT64 {
+@@ -101,6 +110,7 @@ namespace RT64 {
          rspProcessor = std::make_unique<RSPProcessor>(ext.device);
          vertexProcessor = std::make_unique<VertexProcessor>(ext.device);
          framebufferRenderer = std::make_unique<FramebufferRenderer>(ext.workloadGraphicsWorker, true, ext.createdGraphicsAPI, ext.shaderLibrary);
@@ -1847,7 +1877,18 @@ index 5a331aa..438ea9b 100644
          renderFramebufferManager = std::make_unique<RenderFramebufferManager>(ext.device);
          queryPool = ext.device->createQueryPool(2);
  
-@@ -701,6 +710,8 @@ namespace RT64 {
+@@ -387,7 +397,9 @@ namespace RT64 {
+                 rspProcessor->process(rspParams);
+             }
+ 
+-            const bool processWorldVertices = prevFrame.matched;
++            // Banjo-Tooie: Graphics > Ray tracing builds its structures from the world positions, so they are worked out for
++            // every frame while it is on (they were only for frames matched with the last one, for the velocities).
++            const bool processWorldVertices = prevFrame.matched || RayTracingActive();
+             if (processWorldVertices) {
+                 workload.resetWorldOutputBuffers();
+ 
+@@ -701,6 +713,8 @@ namespace RT64 {
              ext.workloadGraphicsWorker->commandList->begin();
              ext.workloadGraphicsWorker->commandList->resetQueryPool(queryPool.get(), 0, 2);
              ext.workloadGraphicsWorker->commandList->writeTimestamp(queryPool.get(), 0);
@@ -1856,7 +1897,7 @@ index 5a331aa..438ea9b 100644
              framebufferRenderer->endFramebuffers(ext.workloadGraphicsWorker, &workload.drawBuffers, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              framebufferRenderer->recordSetup(ext.workloadGraphicsWorker, bufferUploaders, processRSP ? rspProcessor.get() : nullptr, processWorldVertices ? vertexProcessor.get() : nullptr, &workload.outputBuffers, workloadConfig.raytracingEnabled);
              
-@@ -789,6 +800,11 @@ namespace RT64 {
+@@ -789,6 +803,11 @@ namespace RT64 {
                          }
                      }
                      
@@ -1868,7 +1909,7 @@ index 5a331aa..438ea9b 100644
                      framebufferRenderer->recordFramebuffer(ext.workloadGraphicsWorker, framebufferIndex++);
  
                      // Transition the render targets in case the present queue will show them so it doesn't have to perform transitions.
-@@ -837,7 +853,9 @@ namespace RT64 {
+@@ -837,7 +856,9 @@ namespace RT64 {
                      fbPair.endFbOperations, targetManager, fixedResScale, f, workload.submissionFrame);
              }
  
@@ -1878,7 +1919,7 @@ index 5a331aa..438ea9b 100644
              ext.workloadGraphicsWorker->commandList->end();
              framebufferRenderer->waitForUploaders();
              ext.workloadGraphicsWorker->execute();
-@@ -848,6 +866,8 @@ namespace RT64 {
+@@ -848,6 +869,8 @@ namespace RT64 {
              queryPool->queryResults();
              const uint64_t *frameTimestamps = queryPool->getResults();
              rendererGPUProfiler.log(double(frameTimestamps[1] - frameTimestamps[0]) / 1000000.0);
@@ -1887,7 +1928,7 @@ index 5a331aa..438ea9b 100644
  
              // Indicate to the texture cache it's safe to delete the textures if no locks are active.
              ext.textureCache->decrementLock();
-@@ -867,6 +887,7 @@ namespace RT64 {
+@@ -867,6 +890,7 @@ namespace RT64 {
      void WorkloadQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % workloads.size();
@@ -1908,7 +1949,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..5107e5d 100644
+index 69a82ac..0a6efec 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,10 @@ namespace RT64 {
@@ -1937,7 +1978,7 @@ index 69a82ac..5107e5d 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +671,103 @@ namespace RT64 {
+@@ -659,6 +671,108 @@ namespace RT64 {
          }
      };
  
@@ -1993,8 +2034,10 @@ index 69a82ac..5107e5d 100644
 +        uint32_t gFireflies;
 +        uint32_t gColorHalf;
 +        uint32_t gIndirect;
++        // The world's triangles for the traced variant (SceneEffectsPS.hlsl RAY_TRACED), only with ray queries.
++        uint32_t gSceneBVH = 0;
 +
-+        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, RenderDevice *device = nullptr) {
++        SceneEffectsDescriptorSet(const RenderSampler *linearSampler, bool rayQuery, RenderDevice *device = nullptr) {
 +            builder.begin();
 +            gInput = builder.addTexture(1);
 +            gBloom = builder.addTexture(2);
@@ -2007,6 +2050,9 @@ index 69a82ac..5107e5d 100644
 +            gFireflies = builder.addTexture(10);
 +            gColorHalf = builder.addTexture(11);
 +            gIndirect = builder.addTexture(12);
++            if (rayQuery) {
++                gSceneBVH = builder.addAccelerationStructure(13);
++            }
 +            // The sampler goes last: D3D12 turns it into a static sampler outside the table but still counts a
 +            // slot for it in the set, so a sampler before textures shifts them (the scene read an unset slot).
 +            builder.addImmutableSampler(3, linearSampler);
@@ -2042,7 +2088,7 @@ index 69a82ac..5107e5d 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..0a77e90 100644
+index 9fae0d4..a51e46f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -2492,7 +2538,7 @@ index 9fae0d4..0a77e90 100644
  
          shaderUploader = std::make_unique<BufferUploader>(worker->device);
          descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
-+        NoteRayTracingSupport(worker->device->getCapabilities().raytracing);
++        NoteRayTracingSupport(worker->device->getCapabilities().rayQuery);
  
  #   if RT_ENABLED
          if (rtSupport) {
@@ -2935,7 +2981,7 @@ index 9fae0d4..0a77e90 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2045,98 @@ namespace RT64 {
+@@ -1296,9 +2045,101 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3020,6 +3066,9 @@ index 9fae0d4..0a77e90 100644
 +                                fprintf(stderr, "[sunmap] casters %zu faces %u draws %zu\n", targetDrawCall.sunCasterInstances.size(), faces, casterRuns.size());
 +                            }
 +                        }
++                        // Graphics > Ray tracing: the structures the traced reflections trace through (a no-op unless it is on and
++                        // the device has ray queries).
++                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, casterRuns.data(), casterRuns.size());
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
 +                            depthScale, depthTranslate, sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
 +                    }
@@ -3035,7 +3084,7 @@ index 9fae0d4..0a77e90 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2188,34 @@ namespace RT64 {
+@@ -1350,10 +2191,34 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3070,7 +3119,16 @@ index 9fae0d4..0a77e90 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2270,62 @@ namespace RT64 {
+@@ -1386,6 +2251,8 @@ namespace RT64 {
+         indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
+         indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
+         indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
++        worldPosBufferRef = worldPosRes;
++        worldPosVertexCount = vertexCount;
+         rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
+         rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
+         rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
+@@ -1408,6 +2275,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3133,7 +3191,7 @@ index 9fae0d4..0a77e90 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2349,22 @@ namespace RT64 {
+@@ -1431,6 +2354,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3156,7 +3214,7 @@ index 9fae0d4..0a77e90 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2384,175 @@ namespace RT64 {
+@@ -1450,12 +2389,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3332,7 +3390,7 @@ index 9fae0d4..0a77e90 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2703,7 @@ namespace RT64 {
+@@ -1606,6 +2708,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3340,7 +3398,7 @@ index 9fae0d4..0a77e90 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2780,20 @@ namespace RT64 {
+@@ -1682,6 +2785,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3361,7 +3419,7 @@ index 9fae0d4..0a77e90 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2859,1042 @@ namespace RT64 {
+@@ -1747,24 +2864,1042 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4406,7 +4464,7 @@ index 9fae0d4..0a77e90 100644
  
  #   if RT_ENABLED
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..c87e695 100644
+index 3add9c3..745ec37 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -4575,7 +4633,17 @@ index 3add9c3..c87e695 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -87,6 +219,12 @@ namespace RT64 {
+@@ -77,6 +209,9 @@ namespace RT64 {
+         std::array<RenderVertexBufferView, 3> indexedVertexViews;
+         std::array<RenderVertexBufferView, 3> rawVertexViews;
+         RenderIndexBufferView indexBufferView;
++        // Banjo-Tooie: the world positions and how many vertices there are, for the traced reflections' structures.
++        const RenderBuffer *worldPosBufferRef = nullptr;
++        uint32_t worldPosVertexCount = 0;
+         RenderBuffer *testZIndexBuffer = nullptr;
+         RenderIndexBufferView testZIndexBufferView;
+         BufferPair renderIndicesBuffer;
+@@ -87,6 +222,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -4588,7 +4656,7 @@ index 3add9c3..c87e695 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +238,7 @@ namespace RT64 {
+@@ -100,6 +241,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -4596,7 +4664,7 @@ index 3add9c3..c87e695 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +262,10 @@ namespace RT64 {
+@@ -123,6 +265,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -4607,7 +4675,7 @@ index 3add9c3..c87e695 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +307,15 @@ namespace RT64 {
+@@ -164,7 +310,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -6280,10 +6348,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d189cff
+index 0000000..3a133fb
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2781 @@
+@@ -0,0 +1,2929 @@
 +//
 +// RT64
 +//
@@ -6384,6 +6452,20 @@ index 0000000..d189cff
 +            uint32_t indirectWidth = 0;
 +            uint32_t indirectHeight = 0;
 +            const RenderTexture *sceneSetIndirect = nullptr;
++            // Traced reflections (ray queries, Graphics > Ray tracing): the world's solid triangles as one bottom level
++            // structure (a geometry for each run of the index buffer) under a top level one, rebuilt each frame by
++            // BuildSceneBVH; bvhReady says this frame's is built. The buffers only grow.
++            std::unique_ptr<RenderBuffer> bvhBlasBuffer;
++            std::unique_ptr<RenderBuffer> bvhTlasBuffer;
++            std::unique_ptr<RenderBuffer> bvhScratchBuffer;
++            std::unique_ptr<RenderBuffer> bvhInstancesBuffer;
++            std::unique_ptr<RenderAccelerationStructure> bvhBlas;
++            std::unique_ptr<RenderAccelerationStructure> bvhTlas;
++            uint64_t bvhBlasSize = 0;
++            uint64_t bvhTlasSize = 0;
++            uint64_t bvhScratchSize = 0;
++            bool bvhReady = false;
++            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
 +            std::unique_ptr<RenderTexture> waterTexture;
@@ -6657,19 +6739,33 @@ index 0000000..d189cff
 +        effectsSettings.screenSpaceGI = strength;
 +    }
 +
-+    void SetSceneScreenSpaceReflections(float strength) {
-+        const std::scoped_lock lock(effectsMutex);
++    // Banjo-Tooie: hardware ray tracing (Graphics > Ray tracing). While it is on and the device has ray queries, the
++    // reflections are traced, and drawn at 60 at least even with Screen-space reflections at 0 (the switch alone must
++    // show something); the setting is kept apart from the strength the pass uses.
++    static std::atomic<bool> rayTracingWanted{ false };
++    static std::atomic<int> rayTracingSupport{ 0 };
++    static float userReflections = 0.0f;
++
++    // effectsMutex held.
++    static void RefreshReflections() {
++        float strength = userReflections;
++        if (rayTracingWanted.load() && (rayTracingSupport.load() == 2)) {
++            strength = std::max(strength, 0.6f);
++        }
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
 +    }
 +
-+    namespace {
-+        static std::atomic<bool> rayTracingWanted{ false };
-+        static std::atomic<int> rayTracingSupport{ 0 };
++    void SetSceneScreenSpaceReflections(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        userReflections = strength;
++        RefreshReflections();
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
++        const std::scoped_lock lock(effectsMutex);
 +        rayTracingWanted.store(enabled);
++        RefreshReflections();
 +    }
 +
 +    void NoteRayTracingSupport(bool supported) {
@@ -6678,7 +6774,9 @@ index 0000000..d189cff
 +        if ((forced != nullptr) && (forced[0] == '0')) {
 +            supported = false;
 +        }
++        const std::scoped_lock lock(effectsMutex);
 +        rayTracingSupport.store(supported ? 2 : 1);
++        RefreshReflections();
 +    }
 +
 +    int GetRayTracingSupport() {
@@ -8280,6 +8378,109 @@ index 0000000..d189cff
 +
 +    std::atomic<uint32_t> sceneEffectsRecorded{ 0 };
 +
++    // Banjo-Tooie: Graphics > Ray tracing. Builds the structures the traced reflections trace through, from the world's
++    // solid triangles: one geometry for each run of the index buffer (the sun shadow casters' runs), over the world
++    // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
++    // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
++    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
++        const std::pair<uint32_t, uint32_t> *runs, size_t runCount)
++    {
++        Resources &res = resourcesFor(worker);
++        res.bvhReady = false;
++        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery || (worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
++            return;
++        }
++        static const bool bvhLog = (getenv("TOOIE_RT_LOG") != nullptr);
++        constexpr size_t MaxGeometries = 8192;
++        thread_local std::vector<RenderBottomLevelASMesh> meshes;
++        meshes.clear();
++        for (size_t i = 0; (i < runCount) && (meshes.size() < MaxGeometries); i++) {
++            if (runs[i].second >= 3) {
++                meshes.emplace_back(RenderBufferReference(indices, uint64_t(runs[i].first) * sizeof(uint32_t)), RenderBufferReference(worldPos, 0),
++                    RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, runs[i].second - (runs[i].second % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), true);
++            }
++        }
++        if (meshes.empty()) {
++            return;
++        }
++        RenderDevice *device = worker->device;
++        RenderCommandList *commandList = worker->commandList.get();
++        RenderBottomLevelASBuildInfo blasInfo;
++        device->setBottomLevelASBuildInfo(blasInfo, meshes.data(), uint32_t(meshes.size()), true, false);
++
++        // Buffers that are too small are replaced (the old ones kept until the GPU is done with them).
++        bool instancesChanged = false;
++        if ((res.bvhBlas == nullptr) || (res.bvhBlasSize < blasInfo.accelerationStructureSize)) {
++            const uint64_t size = std::max<uint64_t>(blasInfo.accelerationStructureSize + blasInfo.accelerationStructureSize / 2, 1u << 20);
++            res.retireLater(std::move(res.bvhBlas));
++            res.retireLater(std::move(res.bvhBlasBuffer));
++            res.bvhBlasBuffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
++            res.bvhBlasBuffer->setName("Scene Effects BLAS");
++            res.bvhBlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::BOTTOM_LEVEL, RenderBufferReference(res.bvhBlasBuffer.get()), size));
++            res.bvhBlasSize = size;
++            instancesChanged = true;
++        }
++        RenderTopLevelASInstance instance(RenderBufferReference(res.bvhBlasBuffer.get()), 0, 0xFF, 0, true, RenderAffineTransform());
++        RenderTopLevelASBuildInfo tlasInfo;
++        device->setTopLevelASBuildInfo(tlasInfo, &instance, 1, true, false);
++        if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
++            const uint64_t size = std::max<uint64_t>(tlasInfo.accelerationStructureSize, 4096);
++            res.retireLater(std::move(res.bvhTlas));
++            res.retireLater(std::move(res.bvhTlasBuffer));
++            res.bvhTlasBuffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
++            res.bvhTlasBuffer->setName("Scene Effects TLAS");
++            res.bvhTlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::TOP_LEVEL, RenderBufferReference(res.bvhTlasBuffer.get()), size));
++            res.bvhTlasSize = size;
++        }
++        const uint64_t scratchNeeded = std::max(blasInfo.scratchSize, tlasInfo.scratchSize);
++        if ((res.bvhScratchBuffer == nullptr) || (res.bvhScratchSize < scratchNeeded)) {
++            const uint64_t size = std::max<uint64_t>(scratchNeeded + scratchNeeded / 2, 1u << 20);
++            res.retireLater(std::move(res.bvhScratchBuffer));
++            res.bvhScratchBuffer = device->createBuffer(RenderBufferDesc::DefaultBuffer(size, RenderBufferFlag::ACCELERATION_STRUCTURE_SCRATCH));
++            res.bvhScratchBuffer->setName("Scene Effects BVH scratch");
++            res.bvhScratchSize = size;
++        }
++        if ((res.bvhInstancesBuffer == nullptr) || instancesChanged) {
++            res.retireLater(std::move(res.bvhInstancesBuffer));
++            res.bvhInstancesBuffer = device->createBuffer(RenderBufferDesc::UploadBuffer(std::max<uint64_t>(tlasInfo.instancesBufferData.size(), 256), RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT));
++            res.bvhInstancesBuffer->setName("Scene Effects BVH instances");
++            void *mapped = res.bvhInstancesBuffer->map();
++            memcpy(mapped, tlasInfo.instancesBufferData.data(), tlasInfo.instancesBufferData.size());
++            res.bvhInstancesBuffer->unmap();
++        }
++        if ((res.bvhBlas == nullptr) || (res.bvhTlas == nullptr) || (res.bvhScratchBuffer == nullptr) || (res.bvhInstancesBuffer == nullptr)) {
++            return;
++        }
++
++        GpuCheckpoint(commandList, "ray tracing: build");
++        commandList->barriers(RenderBarrierStage::COMPUTE, {
++            RenderBufferBarrier(const_cast<RenderBuffer *>(worldPos), RenderBufferAccess::READ),
++            RenderBufferBarrier(const_cast<RenderBuffer *>(indices), RenderBufferAccess::READ),
++            RenderBufferBarrier(res.bvhBlasBuffer.get(), RenderBufferAccess::WRITE),
++            RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE)
++        });
++        commandList->buildBottomLevelAS(res.bvhBlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), blasInfo);
++        commandList->barriers(RenderBarrierStage::COMPUTE, {
++            RenderBufferBarrier(res.bvhBlasBuffer.get(), RenderBufferAccess::READ),
++            RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE),
++            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::WRITE)
++        });
++        commandList->buildTopLevelAS(res.bvhTlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), RenderBufferReference(res.bvhInstancesBuffer.get()), tlasInfo);
++        commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, {
++            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::READ)
++        });
++        GpuCheckpoint(commandList, "ray tracing: built");
++        res.bvhReady = true;
++        if (bvhLog) {
++            static auto lastLog = std::chrono::steady_clock::now();
++            if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
++                lastLog = std::chrono::steady_clock::now();
++                fprintf(stderr, "[rt] BVH built: %zu geometries, %u triangles, BLAS %llu KB, TLAS %llu KB, scratch %llu KB\n", meshes.size(), blasInfo.primitiveCount,
++                    (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024));
++            }
++        }
++    }
++
 +    void RecordSceneEffects(RenderWorker *worker, RenderTarget *colorTarget, RenderTarget *depthTarget,
 +        const interop::float4x4 &projection, const interop::float4x4 &view, const ShaderLibrary *shaderLibrary, const RenderRect &area,
 +        float depthScale, float depthTranslate, const std::function<void(RenderCommandList *)> &drawSunCasters)
@@ -8961,11 +9162,11 @@ index 0000000..d189cff
 +
 +        if ((res.sceneSet == nullptr) || (res.sceneSetIndirect != res.indirectTexture.get()) || (res.sceneSetDepth != depthTarget->texture.get()) || (res.sceneSetBloom != res.bloomTexture[4].get()) ||
 +            (res.sceneSetColor != color) || (res.sceneSetAdapted != adapted) || (res.sceneSetWater != water) || (res.sceneSetWaterColor != waterColor) ||
-+            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
++            (res.sceneSetRipples != res.rippleTexture[0].get()) || (res.sceneSetBvh != (res.bvhReady ? res.bvhTlas.get() : nullptr)) || (res.sceneSetSunMap != res.sunMapTexture.get()) || (res.sceneSetFireflies != res.fireflyTexture.get()) || (res.sceneSetHalf != res.halfTexture.get())) {
 +            if (res.sceneSet != nullptr) {
 +                res.retireLater(std::move(res.sceneSet));
 +            }
-+            res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device);
++            res.sceneSet = std::make_unique<SceneEffectsDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(), worker->device->getCapabilities().rayQuery, worker->device);
 +            res.sceneSet->setTexture(res.sceneSet->gInput, depthTarget->texture.get(), RenderTextureLayout::SHADER_READ, depthTarget->textureView.get());
 +            res.sceneSet->setTexture(res.sceneSet->gBloom, res.bloomTexture[4].get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetDepth = depthTarget->texture.get();
@@ -8989,6 +9190,11 @@ index 0000000..d189cff
 +            res.sceneSetHalf = res.halfTexture.get();
 +            res.sceneSet->setTexture(res.sceneSet->gIndirect, res.indirectTexture.get(), RenderTextureLayout::SHADER_READ);
 +            res.sceneSetIndirect = res.indirectTexture.get();
++            res.sceneSetBvh = nullptr;
++            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
++                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
++                res.sceneSetBvh = res.bvhTlas.get();
++            }
 +        }
 +
 +        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, false));
@@ -9048,7 +9254,17 @@ index 0000000..d189cff
 +            effectsArea.bottom = std::min(effectsArea.bottom, area.bottom);
 +        }
 +        commandList->setScissors(effectsArea);
-+        commandList->setPipeline(shaderLibrary->sceneEffects.pipeline.get());
++        // Traced reflections while this frame's structure is built (BuildSceneBVH), else the depth march.
++        const bool traced = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
++        {
++            static const bool tracedLog = (getenv("TOOIE_RT_LOG") != nullptr);
++            static int lastTraced = -1;
++            if (tracedLog && (lastTraced != int(traced))) {
++                lastTraced = int(traced);
++                fprintf(stderr, "[rt] scene effects pass %s\n", traced ? "traced (ray queries)" : "depth march");
++            }
++        }
++        commandList->setPipeline(traced ? shaderLibrary->sceneEffectsTraced.pipeline.get() : shaderLibrary->sceneEffects.pipeline.get());
 +        commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
 +        commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
 +        commandList->setGraphicsPushConstants(0, &constants);
@@ -9067,10 +9283,10 @@ index 0000000..d189cff
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..9e9057d
+index 0000000..21c6dba
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,443 @@
 +//
 +// RT64
 +//
@@ -9323,6 +9539,11 @@ index 0000000..9e9057d
 +    // notes whether the graphics device has ray tracing (NoteRayTracingSupport) when it is created. A traced pass
 +    // runs only when RayTracingActive() is true (setting on and device supported), so that is the one place a new
 +    // traced effect (reflections first, shadows later) checks. GetRayTracingSupport: 0 not known yet, 1 no, 2 yes.
++    // BuildSceneBVH builds the traced reflections' acceleration structures from the world's solid triangles (runs of
++    // the index buffer: first index, count; positions from the vertex processor's world position buffer); does nothing
++    // while RayTracingActive() is false.
++    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
++        const std::pair<uint32_t, uint32_t> *runs, size_t runCount);
 +    void SetSceneRayTracing(bool enabled);
 +    void NoteRayTracingSupport(bool supported);
 +    int GetRayTracingSupport();
@@ -9536,10 +9757,10 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..a814600 100644
+index d1c5273..7e65c5e 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
-@@ -40,7 +40,35 @@
+@@ -40,7 +40,41 @@
  #include "shaders/RtCopyDepthToColor4XPS.hlsl.spirv.h"
  #include "shaders/RtCopyDepthToColor8XPS.hlsl.spirv.h"
  #include "shaders/TextureCopyPS.hlsl.spirv.h"
@@ -9564,6 +9785,12 @@ index d1c5273..a814600 100644
 +#include "shaders/FireflyTable2XPS.hlsl.spirv.h"
 +#include "shaders/FireflyTable4XPS.hlsl.spirv.h"
 +#include "shaders/FireflyTable8XPS.hlsl.spirv.h"
++#ifndef __APPLE__
++#include "shaders/SceneEffectsRTPS.hlsl.spirv.h"
++#include "shaders/SceneEffectsRT2XPS.hlsl.spirv.h"
++#include "shaders/SceneEffectsRT4XPS.hlsl.spirv.h"
++#include "shaders/SceneEffectsRT8XPS.hlsl.spirv.h"
++#endif
 +#include "shaders/SceneIndirectPS.hlsl.spirv.h"
 +#include "shaders/SceneIndirect2XPS.hlsl.spirv.h"
 +#include "shaders/SceneIndirect4XPS.hlsl.spirv.h"
@@ -9575,7 +9802,7 @@ index d1c5273..a814600 100644
  #include "shaders/TextureResolveSamples2XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples4XPS.hlsl.spirv.h"
  #include "shaders/TextureResolveSamples8XPS.hlsl.spirv.h"
-@@ -48,6 +76,8 @@
+@@ -48,6 +82,8 @@
  #include "shaders/VideoInterfacePSPixel.hlsl.spirv.h"
  #include "shaders/FullScreenVS.hlsl.spirv.h"
  #include "shaders/Im3DVS.hlsl.spirv.h"
@@ -9584,7 +9811,7 @@ index d1c5273..a814600 100644
  #include "shaders/ComposePS.hlsl.spirv.h"
  #include "shaders/DebugPS.hlsl.spirv.h"
  #include "shaders/Im3DPS.hlsl.spirv.h"
-@@ -86,7 +116,35 @@
+@@ -86,7 +122,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.dxil.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.dxil.h"
  #   include "shaders/TextureCopyPS.hlsl.dxil.h"
@@ -9620,7 +9847,7 @@ index d1c5273..a814600 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.dxil.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.dxil.h"
-@@ -94,6 +152,8 @@
+@@ -94,6 +158,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.dxil.h"
  #   include "shaders/FullScreenVS.hlsl.dxil.h"
  #   include "shaders/Im3DVS.hlsl.dxil.h"
@@ -9629,7 +9856,7 @@ index d1c5273..a814600 100644
  #   include "shaders/ComposePS.hlsl.dxil.h"
  #   include "shaders/DebugPS.hlsl.dxil.h"
  #   include "shaders/Im3DPS.hlsl.dxil.h"
-@@ -131,7 +191,35 @@
+@@ -131,7 +197,35 @@
  #   include "shaders/RtCopyDepthToColor4XPS.hlsl.metal.h"
  #   include "shaders/RtCopyDepthToColor8XPS.hlsl.metal.h"
  #   include "shaders/TextureCopyPS.hlsl.metal.h"
@@ -9665,7 +9892,7 @@ index d1c5273..a814600 100644
  #   include "shaders/TextureResolveSamples2XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples4XPS.hlsl.metal.h"
  #   include "shaders/TextureResolveSamples8XPS.hlsl.metal.h"
-@@ -139,6 +227,8 @@
+@@ -139,6 +233,8 @@
  #   include "shaders/VideoInterfacePSPixel.hlsl.metal.h"
  #   include "shaders/FullScreenVS.hlsl.metal.h"
  #   include "shaders/Im3DVS.hlsl.metal.h"
@@ -9674,7 +9901,7 @@ index d1c5273..a814600 100644
  #   include "shaders/ComposePS.hlsl.metal.h"
  #   include "shaders/DebugPS.hlsl.metal.h"
  #   include "shaders/Im3DPS.hlsl.metal.h"
-@@ -148,6 +238,10 @@
+@@ -148,6 +244,10 @@
  #include "shared/rt64_fb_common.h"
  #include "shared/rt64_fb_reinterpret.h"
  #include "shared/rt64_texture_copy.h"
@@ -9685,7 +9912,7 @@ index d1c5273..a814600 100644
  #include "shared/rt64_video_interface.h"
  
  #include "rt64_descriptor_sets.h"
-@@ -204,7 +298,7 @@ namespace RT64 {
+@@ -204,7 +304,7 @@ namespace RT64 {
              samplerDesc.addressW = RenderTextureAddressMode::CLAMP;
  
              // This matches the bias used in the shader when native samplers are not used.
@@ -9694,7 +9921,7 @@ index d1c5273..a814600 100644
  
              // WRAP.
              samplerDesc.addressU = RenderTextureAddressMode::WRAP;
-@@ -569,6 +663,78 @@ namespace RT64 {
+@@ -569,6 +669,78 @@ namespace RT64 {
              textureCopy.pipeline = device->createGraphicsPipeline(pipelineDesc);
          }
  
@@ -9773,7 +10000,7 @@ index d1c5273..a814600 100644
          // Texture Decode.
          {
              TextureDecodeDescriptorSet descriptorSet;
-@@ -583,6 +749,20 @@ namespace RT64 {
+@@ -583,6 +755,20 @@ namespace RT64 {
              textureDecode.pipeline = device->createComputePipeline(pipelineDesc);
          }
  
@@ -9794,14 +10021,15 @@ index d1c5273..a814600 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1012,128 @@ namespace RT64 {
+@@ -832,6 +1018,156 @@ namespace RT64 {
              }
          }
  
 +        // Banjo-Tooie: screen-space effects over the 3D world, reading the depth target at the main targets'
 +        // sample count and blending into the color target as dst * a + rgb.
 +        {
-+            SceneEffectsDescriptorSet descriptorSet(samplerLibrary.linear.clampClamp.get());
++            const bool rayQuery = deviceCapabilities.rayQuery;
++            SceneEffectsDescriptorSet descriptorSet(samplerLibrary.linear.clampClamp.get(), rayQuery);
 +            layoutBuilder.begin();
 +            layoutBuilder.addDescriptorSet(descriptorSet);
 +            layoutBuilder.addPushConstant(0, 0, sizeof(interop::SceneEffectsCB), RenderShaderStageFlag::PIXEL);
@@ -9842,6 +10070,33 @@ index d1c5273..a814600 100644
 +            pipelineDesc.pixelShader = pixelShader.get();
 +            pipelineDesc.multisampling = multisampling;
 +            sceneEffects.pipeline = device->createGraphicsPipeline(pipelineDesc);
++
++            // The same with the reflections traced (ray queries over the world's triangles), Vulkan only.
++#           ifndef __APPLE__
++            if (rayQuery && (shaderFormat == RenderShaderFormat::SPIRV)) {
++                const void *tracedBlob = SceneEffectsRTPSBlobSPIRV;
++                size_t tracedSize = sizeof(SceneEffectsRTPSBlobSPIRV);
++                switch (multisampling.sampleCount) {
++                case RenderSampleCount::COUNT_2:
++                    tracedBlob = SceneEffectsRT2XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneEffectsRT2XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_4:
++                    tracedBlob = SceneEffectsRT4XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneEffectsRT4XPSBlobSPIRV);
++                    break;
++                case RenderSampleCount::COUNT_8:
++                    tracedBlob = SceneEffectsRT8XPSBlobSPIRV;
++                    tracedSize = sizeof(SceneEffectsRT8XPSBlobSPIRV);
++                    break;
++                default:
++                    break;
++                }
++                std::unique_ptr<RenderShader> tracedShader = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
++                pipelineDesc.pixelShader = tracedShader.get();
++                sceneEffectsTraced.pipeline = device->createGraphicsPipeline(pipelineDesc);
++            }
++#           endif
 +
 +            // The fireflies' table (SceneEffectsPS.hlsl, FIREFLY_TABLE): the same layout and constants, into a
 +            // small float target, one column a firefly; built at the depth target's sample count, as it reads it.
@@ -9924,15 +10179,18 @@ index d1c5273..a814600 100644
          {
              PostProcessDescriptorSet descriptorSet(samplerLibrary);
 diff --git a/src/render/rt64_shader_library.h b/src/render/rt64_shader_library.h
-index 641f3ec..e04e092 100644
+index 641f3ec..6c3680b 100644
 --- a/src/render/rt64_shader_library.h
 +++ b/src/render/rt64_shader_library.h
-@@ -51,8 +51,30 @@ namespace RT64 {
+@@ -51,8 +51,33 @@ namespace RT64 {
          ShaderRecord rtCopyDepthToColor;
          ShaderRecord rtCopyColorToDepthMS;
          ShaderRecord rtCopyDepthToColorMS;
 +        // Banjo-Tooie: screen-space effects over the 3D world, at the main targets' sample count.
 +        ShaderRecord sceneEffects;
++        // Banjo-Tooie: the scene effects with the reflections traced through the world's triangles (ray queries; null
++        // without them). The same layout as sceneEffects, plus the structure at t13.
++        ShaderRecord sceneEffectsTraced;
 +        // Banjo-Tooie: the fireflies' table for the scene effects (its pipeline only; the layout is sceneEffects').
 +        ShaderRecord fireflyTable;
 +        // Banjo-Tooie: the scene effects' indirect pass, GTAO and SSGI at half size (its pipeline only; the layout is sceneEffects').
@@ -13268,10 +13526,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..cd1966e
+index 0000000..b121481
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3215 @@
+@@ -0,0 +1,3279 @@
 +//
 +// RT64
 +//
@@ -13314,6 +13572,11 @@ index 0000000..cd1966e
 +Texture2D<float4> gColorHalf : register(t11);
 +// The indirect pass (INDIRECT_PASS) at half size: SSGI's light (rgb) and GTAO's visibility (a), for IndirectAt.
 +Texture2D<float4> gIndirect : register(t12);
++#ifdef RAY_TRACED
++// Banjo-Tooie: the 3D world's solid triangles in world space (Graphics > Ray tracing), rebuilt each frame; only in
++// the RAY_TRACED variant of the pass, which is used while the device has ray queries and the structure is built.
++RaytracingAccelerationStructure gSceneBVH : register(t13);
++#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
 +// black and white white (out = c * e / (1 + c * (e - 1))).
@@ -13948,6 +14211,57 @@ index 0000000..cd1966e
 +    }
 +    return float4(gColor.SampleLevel(LinearSampler, hitPixel / gConstants.projection.zw, 0).rgb, RayEdgeFade(hitPixel));
 +}
++
++#ifdef RAY_TRACED
++// View space to world space and back, through the world x, y and z terms (the view matrix's inverse: world = dot(view,
++// X) + X.w and so on, and, the view being a scaled rotation, view = X * (world.x - X.w) + Y * (world.y - Y.w) + Z * ...).
++float3 ViewToWorldPoint(float3 view) {
++    return float3(dot(view, gConstants.worldX.xyz) + gConstants.worldX.w, dot(view, gConstants.worldY.xyz) + gConstants.worldY.w,
++        dot(view, gConstants.worldZ.xyz) + gConstants.worldZ.w);
++}
++
++float3 ViewToWorldDirection(float3 view) {
++    return float3(dot(view, gConstants.worldX.xyz), dot(view, gConstants.worldY.xyz), dot(view, gConstants.worldZ.xyz));
++}
++
++// Traced reflections: the same mirror ray as ScreenSpaceReflection, but through the world's triangles (a ray query
++// over gSceneBVH, in world space) instead of marching the depth, so it finds what the depth hides (the back of a
++// pillar, what is behind the nearest surface) and misses nothing between steps. Where it lands: the scene's colour
++// there when that spot is on the screen and in view; when it is off the screen or hidden behind something nearer, the
++// colour of the nearest spot of the screen in its direction, trusted less. A ray that leaves the world brings
++// nothing (the sky is not in the structure).
++float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
++    const float3 direction = reflect(normalize(center), normal);
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float rayDistance = 3000.0f;
++    RayDesc ray;
++    ray.Origin = ViewToWorldPoint(origin);
++    ray.Direction = ViewToWorldDirection(direction);
++    ray.TMin = 0.0f;
++    // The direction keeps the view's scale, so t is in view units.
++    ray.TMax = rayDistance;
++    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++    }
++    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
++        return 0.0f;
++    }
++    const float3 hit = origin + direction * query.CommittedRayT();
++    if (hit.z > -1.0f) {
++        return 0.0f;
++    }
++    const float2 size = gConstants.projection.zw;
++    const float2 at = ViewToPixel(hit);
++    const float2 inside = clamp(at, float2(0.0f, 0.0f), size - 1.0f);
++    const bool onScreen = all(at == inside);
++    const float sampleDepth = LoadDepth(int2(inside));
++    const float thickness = max(-hit.z * 0.03f, 20.0f);
++    const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
++    const float3 colour = gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb;
++    return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
++}
++#endif
 +
 +// The indirect pass's result for a pixel: GTAO's visibility (a) and SSGI's light (rgb) from the 4x4 block of the
 +// half-size pass round it, each weighted by how near its surface lies to this pixel's plane, so the block's 16
@@ -16160,7 +16474,11 @@ index 0000000..cd1966e
 +        if (!ReflectiveAt(pixel, depth)) {
 +            return float4(dot(scene, float3(0.299f, 0.587f, 0.114f)).xxx * 0.25f, 0.0f);
 +        }
++#ifdef RAY_TRACED
++        const float4 reflection = TracedReflection(pixel, center, normal);
++#else
 +        const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++#endif
 +        return float4(lerp(float3(0.6f, 0.0f, 0.0f), reflection.rgb, reflection.a), 0.0f);
 +    }
 +
@@ -16342,7 +16660,11 @@ index 0000000..cd1966e
 +            // SSR: the reflected scene, more at grazing angles (Fresnel) and less in creases (GTAO's specular
 +            // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections). At 100 a
 +            // surface seen straight on is three quarters mirror, and fully at grazing angles.
++#ifdef RAY_TRACED
++            const float4 reflection = TracedReflection(pixel, center, normal);
++#else
 +            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++#endif
 +            const float facing = saturate(dot(-normalize(center), normal));
 +            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
 +            const float specularOcclusion = occlusion ? saturate(pow(facing + indirect.a, 0.5f) - 1.0f + indirect.a) : 1.0f;
