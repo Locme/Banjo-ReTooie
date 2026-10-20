@@ -41,6 +41,7 @@
 #include "tooie_progress_cheats.h"
 #include "tooie_transform_picker.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_menu_pause.h"
 #include "tooie_music_player.h"
 #include "tooie_classic_sounds.h"
 #include "tooie_honeycomb_glitter.h"
@@ -144,6 +145,8 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     ticked = true;
     // First, so the other ticks act on a loaded state.
     tooie::save_state::tick(rdram, ctx);
+    // Waits here while the ESC menu pauses the game; before the ticks that read this frame's delta time.
+    tooie::menu_pause::tick(rdram, ctx);
     last_map = tooie::debug::current_map(rdram);
     tooie::quick_start_tick(rdram);
     tooie::timer_save_tick(rdram, ctx);

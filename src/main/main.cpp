@@ -46,6 +46,7 @@
 #include "tooie_asset_mods.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
+#include "tooie_menu_pause.h"
 #include "tooie_photo_mode.h"
 #include "tooie_picture_filters.h"
 #include "tooie_save_state.h"
@@ -231,7 +232,9 @@ void update_gfx(void*) {
     const auto now = std::chrono::steady_clock::now();
     if (now >= next_menu_check) {
         next_menu_check = now + std::chrono::milliseconds(50);
-        RT64::SetIdleRepaint(ultramodern::is_game_started() && recompui::is_context_capturing_input());
+        const bool menu_open = recompui::is_context_capturing_input();
+        RT64::SetIdleRepaint(ultramodern::is_game_started() && menu_open);
+        tooie::menu_pause::set_menu_open(menu_open);
     }
 #ifdef __ANDROID__
     tooie::android::update_touch();

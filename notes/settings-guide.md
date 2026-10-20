@@ -110,6 +110,11 @@ framework, not from this port's code, so it is not described here.
 
 ## QOL
 
+- **Pause Special Menu** (Menu section): while this menu (Esc) is open during
+  play, the game is paused as if you pressed Start, but without the pause menu
+  or anything else drawn over it, and the music keeps playing. Cutscenes, map
+  changes, the title screen and the file select carry on as before.
+  Default: On (L, 2026-10-19).
 - **Press Start Early in Intro**: press Start during the logos and title flight to go
   straight to the file select. Default: on.
 - **Text speed**: how fast dialogue text prints: 1x, 2x, 4x or Instant (a
@@ -144,7 +149,8 @@ framework, not from this port's code, so it is not described here.
   room. Humba says her line for the form on the 1st, 3rd, 5th change. Refused,
   with a sound, in the air, swimming, while talking or in a cutscene (the
   submarine is the other way round: it changes in water only). Golden Goliath
-  and Dragon Kazooie are not part of it. Default: Off.
+  and Dragon Kazooie are not part of it. Default: On (since 2026-10-19; a
+  saved Off turns on once).
 - **Canary Mary races**: Fair, Easy or Original. In the original she speeds up
   past her normal pace whenever you lead; Fair removes that catch-up, Easy is
   Fair with her pace at 85%. She still slows down when you fall behind.

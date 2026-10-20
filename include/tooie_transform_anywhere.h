@@ -6,7 +6,8 @@
 
 #include "recomp.h"
 
-// Transform anywhere (src/gameplay/transform_anywhere.cpp, L 2026-10-15): QOL option, off by default.
+// Transform anywhere (src/gameplay/transform_anywhere.cpp, L 2026-10-15): QOL option, on by default
+// (since 2026-10-19; config.cpp turns a saved "off" on once).
 // Once Banjo has jumped in a world's Humba Wumba pool and changed at least once, the Transform key
 // changes him into that world's form where he stands, and back, with the game's own spin-up
 // transformation. Humba says her line for the form on the 1st, 3rd, 5th... change.

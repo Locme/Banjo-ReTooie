@@ -32,6 +32,7 @@
 #include "tooie_talon_trot.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_transform_anywhere.h"
+#include "tooie_menu_pause.h"
 #include "tooie_totals_checklist.h"
 #include "tooie_canary_mary.h"
 #include "tooie_game_frame_rate.h"
@@ -144,6 +145,21 @@ namespace {
         recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
         qol.set_option_value(tooie::cutscene_skip_option, true);
         qol.save_config();
+    }
+
+    // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
+    // on once; turning it off again afterwards stays.
+    void turn_on_transform_anywhere_once() {
+        const std::filesystem::path marker = recomp::get_config_path() / "transform_anywhere_on.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        recomp::config::Config& qol = recompui::config::get_config(tooie::qol_tab_id);
+        if (!std::get<bool>(qol.get_option_value(tooie::transform_anywhere::option))) {
+            qol.set_option_value(tooie::transform_anywhere::option, true);
+            qol.save_config();
+        }
+        std::ofstream{marker};
     }
 
     // Options that moved from the QOL tab to Graphics (L, 2026-10-13): carry a value saved in qol.json
@@ -408,6 +424,11 @@ void tooie::init_config() {
 
     recomp::config::Config& qol = recompui::config::create_config_tab("QOL", tooie::qol_tab_id, false);
     qol.add_bool_option(
+        tooie::menu_pause::option,
+        "Pause Special Menu",
+        "While this menu is open during play, the game is paused as if you pressed Start, without the pause menu drawn over it. The music keeps playing. Cutscenes and the title screen carry on as before.",
+        true);
+    qol.add_bool_option(
         tooie::quick_start_option,
         "Press Start Anytime In Intro",
         "Press Start during the logos and title flight to go straight to the file select.",
@@ -509,7 +530,7 @@ void tooie::init_config() {
         tooie::transform_anywhere::option,
         "Transform anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
-        false);
+        true);
     qol.add_bool_option(
         tooie::totals_checklist::option,
         "Totals checklist",
@@ -550,10 +571,10 @@ void tooie::init_config() {
         tooie::canary_mary::Mode::Fair);
 
     // Section headings in the QOL tab (the options of a group sit next to each other above).
+    recompui::config::set_option_group(tooie::menu_pause::option, "Menu");
     recompui::config::set_option_group(tooie::text_speed_option, "Speed and skipping");
     // Press Start Anytime In Intro sits at the bottom of Speed and skipping (L, 2026-10-16).
     recompui::config::set_option_display_before(tooie::quick_start_option, tooie::free_camera_option);
-    recompui::config::set_option_group(tooie::photo_mode::hide_settings_option, "Photo Filter");
     recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
@@ -754,6 +775,7 @@ void tooie::init_config() {
     show_achievements_tab();
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
+    turn_on_transform_anywhere_once();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();

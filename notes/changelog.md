@@ -10,6 +10,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Cheats and controls
 
+- QOL > Pause Special Menu (on by default): while the Esc menu is open during play the game is paused as if Start were pressed, with no pause menu drawn and the music still playing; cutscenes, map changes and the title carry on. QOL's Photo Filter section is gone (photo mode's panel has those settings, still saved). Transform anywhere is now on by default, and a saved Off turns on once (L). Checked headless (T451).
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).
 - Sprint dust: starting a sprint (holding Run) kicks up the same puff of dust as a quick turn, at most once every 10 seconds of game time.
 - Interpolation pick mode now finds models at Graphics > Interpolation Original (the default); before, every model said "No model here" unless Interpolation was on (L). Checked headless (T442).
