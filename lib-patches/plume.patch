@@ -82,11 +82,32 @@ index 2cdcf18..11a634f 100644
                  capabilities.raytracing = rtSupportOption;
                  capabilities.raytracingStateUpdate = rtStateUpdateSupportOption;
                  capabilities.sampleLocations = samplePositionsOption;
+diff --git a/plume_d3d12.h b/plume_d3d12.h
+index 4827452..fc56c21 100644
+--- a/plume_d3d12.h
++++ b/plume_d3d12.h
+@@ -400,6 +400,7 @@ namespace plume {
+ 
+         D3D12GraphicsPipeline(D3D12Device *device, const RenderGraphicsPipelineDesc &desc);
+         ~D3D12GraphicsPipeline() override;
++        bool isValid() const override { return d3d != nullptr; }
+         virtual void setName(const std::string &name) override;
+         virtual RenderPipelineProgram getProgram(const std::string &name) const override;
+     };
 diff --git a/plume_render_interface.h b/plume_render_interface.h
-index 2048557..b3adc79 100644
+index 2048557..47aab48 100644
 --- a/plume_render_interface.h
 +++ b/plume_render_interface.h
-@@ -150,6 +150,10 @@ namespace plume {
+@@ -59,6 +59,8 @@ namespace plume {
+         virtual ~RenderPipeline() { }
+         virtual void setName(const std::string &name) = 0;
+         virtual RenderPipelineProgram getProgram(const std::string &name) const = 0;
++        // Banjo-Tooie: false when the driver refused to build it (it must not be drawn with).
++        virtual bool isValid() const { return true; }
+     };
+ 
+     struct RenderPipelineLayout {
+@@ -150,6 +152,10 @@ namespace plume {
          virtual void discardTexture(const RenderTexture* texture) = 0; // D3D12 only.
          virtual void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) = 0;
          virtual void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) = 0;
@@ -1058,7 +1079,7 @@ index f1dd503..7511e44 100644
              allocator = VK_NULL_HANDLE;
          }
 diff --git a/plume_vulkan.h b/plume_vulkan.h
-index 0a1edbe..3387757 100644
+index 0a1edbe..b7fd97a 100644
 --- a/plume_vulkan.h
 +++ b/plume_vulkan.h
 @@ -42,6 +42,26 @@
@@ -1106,7 +1127,15 @@ index 0a1edbe..3387757 100644
  
          VulkanTexture() = default;
          VulkanTexture(VulkanDevice *device, VulkanPool *pool, const RenderTextureDesc &desc);
-@@ -342,6 +366,7 @@ namespace plume {
+@@ -190,6 +214,7 @@ namespace plume {
+         ~VulkanGraphicsPipeline() override;
+         void setName(const std::string &name) override;
+         RenderPipelineProgram getProgram(const std::string &name) const override;
++        bool isValid() const override { return vk != VK_NULL_HANDLE; }
+         static VkRenderPass createRenderPass(VulkanDevice *device, const VkFormat *renderTargetFormat, uint32_t renderTargetCount, VkFormat depthTargetFormat, VkSampleCountFlagBits sampleCount);
+     };
+ 
+@@ -342,6 +367,7 @@ namespace plume {
          void discardTexture(const RenderTexture* texture) override;
          void resetQueryPool(const RenderQueryPool *queryPool, uint32_t queryFirstIndex, uint32_t queryCount) override;
          void writeTimestamp(const RenderQueryPool *queryPool, uint32_t queryIndex) override;
@@ -1114,7 +1143,7 @@ index 0a1edbe..3387757 100644
          void checkActiveRenderPass();
          void endActiveRenderPass();
          void setDescriptorSet(VkPipelineBindPoint bindPoint, const VulkanPipelineLayout *pipelineLayout, const RenderDescriptorSet *descriptorSet, uint32_t setIndex);
-@@ -417,6 +442,8 @@ namespace plume {
+@@ -417,6 +443,8 @@ namespace plume {
          std::unique_ptr<RenderBuffer> nullBuffer;
          bool loadStoreOpNoneSupported = false;
          bool nullDescriptorSupported = false;

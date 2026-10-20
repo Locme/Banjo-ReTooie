@@ -39,6 +39,7 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_toast.h"
 #include "tooie_effect_pick.h"
 #include "tooie_parallax_pick.h"
 
@@ -66,6 +67,8 @@ namespace RT64 {
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength);
+    void SetSceneRayTracing(bool enabled);
+    int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
     void SetSceneOwnMist(float strength);
@@ -475,7 +478,7 @@ namespace {
         { 0x02b5cd0f24705794, 44, 201, Bumpy },
         { 0x02bd3a5b1f23e0ca, 0, 99, Metal, 7 },
         { 0x02d54ba70a8c070f, 0, 247, Metal, 7 },
-        { 0x02d8c6bdefef3e0e, 31, 232, Rounded, 15 },
+        { 0x02d8c6bdefef3e0e, 31, 232, Bumpy, 15 },
         { 0x02e0da37956bb42f, 49, 170, Smooth },
         { 0x02f4c308663b9cdd, 27, 178, Cracks },
         { 0x03025b2ebbdefdbc, 52, 132, Brick, 7 },
@@ -1467,7 +1470,7 @@ namespace {
         { 0x4de6ecc5ad0f1bc5, 15, 103 },
         { 0x4de8e78965df63f4, 31, 120, Bumpy },
         { 0x4df3a71b42f154b7, 29, 121, Metal, 7 },
-        { 0x4e034fe0740cb8ca, 7, 58, Bumpy },
+        { 0x4e034fe0740cb8ca, 7, 58, Bumpy, 15 },
         { 0x4e1d234c5b6a945c, 10, 147 },
         { 0x4e1f169bcc5f20b7, 40, 190, Bumpy },
         { 0x4e2f502bf0aad5ce, 31, 124, Metal, 7 },
@@ -1893,7 +1896,6 @@ namespace {
         { 0x6c20d50edf2fe6bc, 19, 51, Wood, 7 },
         { 0x6c30a4368d488471, 32, 156, Cracks },
         { 0x6c3dbea350dc773e, 15, 153, Brick, 7 },
-        { 0x6c6c951d36db9306, 57, 212, Tiles, 7 },
         { 0x6c7e131856a863af, 26, 71, Wood, 7 },
         { 0x6c82371ee7255f22, 0, 61 },
         { 0x6c9813f82d5b1c78, 44, 154, Cracks },
@@ -2690,7 +2692,7 @@ namespace {
         { 0xa5d67522e054a3ec, 33, 175, Metal, 7 },
         { 0xa5e2cef314e46512, 23, 175, Metal, 7 },
         { 0xa6045147e0e7a456, 41, 165, Bumpy },
-        { 0xa60e85dcf6f85f92, 40, 186, Bumpy },
+        { 0xa60e85dcf6f85f92, 40, 186, Stone },
         { 0xa61b06c88562fbad, 0, 151, Bumpy, 7 },
         { 0xa62a7a4045e244ed, 138, 195, Sand, 7 },
         { 0xa6305666423e78eb, 34, 68, Wood, 7 },
@@ -3324,6 +3326,7 @@ namespace {
         { 0xd36884bd1f2fb61a, 0, 173, Metal, 7 },
         { 0xd369f7a38d1e5251, 14, 150, Bark },
         { 0xd3721bafc0c2acd3, 18, 168 },
+        { 0xd3e61b579c35618c, 40, 190, Stone, 5 },
         { 0xd3f92553376a7758, 10, 83, Metal, 7 },
         { 0xd3fb04e8290eb89f, 46, 191, Bumpy, 7 },
         { 0xd4152d4dcb82a6d2, 18, 110, Metal, 7 },
@@ -3458,7 +3461,7 @@ namespace {
         { 0xdd73116daf40b90e, 26, 95, Brick },
         { 0xdd7ecdf83db839a0, 7, 113, Wood, 7 },
         { 0xdd899e3652968723, 44, 232, Cracks },
-        { 0xdd94be70f8e7fe2a, 37, 159, Bumpy },
+        { 0xdd94be70f8e7fe2a, 37, 159, Stone, 15 },
         { 0xdd96acc525117fe8, 0, 107 },
         { 0xdd9d4d9ad015b48e, 19, 185, Bumpy },
         { 0xddbe30be48fc0e0f, 66, 251, Metal, 7 },
@@ -3713,6 +3716,7 @@ namespace {
         { 0xf10e30d97ceabd4f, 0, 171 },
         { 0xf11d28826deadd8a, 21, 136 },
         { 0xf11fed1def3950dc, 0, 102, Bumpy },
+        { 0xf13b3cfd0e5fc100, 40, 190, Grass, 5 },
         { 0xf1434f38b2bc7204, 15, 140, Metal, 7 },
         { 0xf1483220619bb2b7, 7, 163 },
         { 0xf173be7d0b4b5078, 43, 131 },
@@ -3865,7 +3869,7 @@ namespace {
         { 0xfc113562142a1e77, 0, 84 },
         { 0xfc2a94befcacd6d7, 13, 74, Bumpy },
         { 0xfc3307662a1fe23b, 7, 70, Wood, 7 },
-        { 0xfc4dc4c800ae0c7a, 77, 150, Sand, 7 },
+        { 0xfc4dc4c800ae0c7a, 77, 150, Wood, 3 },
         { 0xfc57075b40c809cb, 22, 160, Smooth },
         { 0xfc66a03814c8a735, 52, 158, Bumpy },
         { 0xfc6747679066341a, 7, 118, Bumpy },
@@ -3930,6 +3934,10 @@ namespace {
     // True while a preset sets the effect options, so their callbacks neither save one by one nor
     // switch the preset back to Custom.
     bool applying_preset = false;
+    // Graphics > Ray tracing is on / the no-hardware notice was shown for it (tick shows it once the renderer has
+    // looked at the device, which is after the first apply).
+    std::atomic<bool> ray_tracing_on{ false };
+    std::atomic<bool> ray_tracing_notified{ false };
 
     // Every effect a preset sets, with its value for Original (everything off).
     struct PresetValue {
@@ -4229,6 +4237,15 @@ void tooie::picture_filters::apply() {
     RT64::SetTextureUpscale(upscale == (uint32_t)TextureUpscale::Quadruple ? 4 : (upscale == (uint32_t)TextureUpscale::Double ? 2 : 1));
     RT64::SetSceneBounceLight((float)(shader(value<double>(bounce_light_option, 0.0)) / 100.0));
     RT64::SetSceneScreenSpaceGI((float)(shader(value<double>(ssgi_option, 0.0)) / 100.0));
+    // Graphics > Ray tracing (L, 2026-10-20): its own switch, not one of the shader effects. Reflections are the
+    // first effect it drives. On a device without ray tracing (RT64::GetRayTracingSupport 1) the option does
+    // nothing but tell you once; the screen-space and water reflections carry on as set.
+    const bool ray_tracing = value<bool>(ray_tracing_option, false);
+    RT64::SetSceneRayTracing(ray_tracing);
+    ray_tracing_on.store(ray_tracing);
+    if (!ray_tracing) {
+        ray_tracing_notified.store(false);
+    }
     RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
@@ -4423,6 +4440,19 @@ bool tooie::picture_filters::applying_effects_preset() {
 
 void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
+    {
+        static bool logged = false;
+        const int support = RT64::GetRayTracingSupport();
+        if (!logged && support != 0) {
+            logged = true;
+            std::fprintf(stderr, "[ray-tracing] hardware ray tracing: %s (Graphics > Ray tracing is %s)\n", support == 2 ? "yes" : "no", ray_tracing_on.load() ? "on" : "off");
+        }
+    }
+    if (ray_tracing_on.load() && !ray_tracing_notified.load() && RT64::GetRayTracingSupport() == 1) {
+        ray_tracing_notified.store(true);
+        std::fprintf(stderr, "[ray-tracing] this graphics card has no hardware ray tracing; using the current effects\n");
+        tooie::toast::show("Ray tracing is not supported on this graphics card. Using the current effects.");
+    }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
         send_parallax_textures();
@@ -4859,6 +4889,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
     graphics.add_bool_option(
+        ray_tracing_option,
+        "Ray tracing",
+        "Ray traced effects, starting with reflections on the same shiny surfaces as Screen-space reflections. It is a switch of its own, apart from the shader effects. Needs a graphics card with hardware ray tracing: without one this shows a notice and the effects carry on as you have set them. Early: this build checks for the hardware but does not draw the traced reflections yet, so with it the current reflections are shown.",
+        false);
+    graphics.add_bool_option(
         reflections_section_option,
         "Reflections",
         "Shows the reflection settings below. Hiding them does not turn the reflections off.",
@@ -5151,7 +5186,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

@@ -2019,7 +2019,7 @@ index 69a82ac..5107e5d 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..270e2d1 100644
+index 9fae0d4..6b5525d 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2440,7 +2440,15 @@ index 9fae0d4..270e2d1 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +564,59 @@ namespace RT64 {
+@@ -151,6 +546,7 @@ namespace RT64 {
+ 
+         shaderUploader = std::make_unique<BufferUploader>(worker->device);
+         descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
++        NoteRayTracingSupport(worker->device->getCapabilities().raytracing);
+ 
+ #   if RT_ENABLED
+         if (rtSupport) {
+@@ -169,11 +565,59 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2500,7 +2508,7 @@ index 9fae0d4..270e2d1 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +662,7 @@ namespace RT64 {
+@@ -219,6 +663,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2508,7 +2516,7 @@ index 9fae0d4..270e2d1 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +694,7 @@ namespace RT64 {
+@@ -250,6 +695,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2516,7 +2524,7 @@ index 9fae0d4..270e2d1 100644
                  }
              }
              else {
-@@ -272,6 +717,9 @@ namespace RT64 {
+@@ -272,6 +718,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2526,7 +2534,7 @@ index 9fae0d4..270e2d1 100644
              }
          }
      }
-@@ -373,6 +821,10 @@ namespace RT64 {
+@@ -373,6 +822,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2537,7 +2545,7 @@ index 9fae0d4..270e2d1 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +895,14 @@ namespace RT64 {
+@@ -443,6 +896,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2552,7 +2560,7 @@ index 9fae0d4..270e2d1 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +925,73 @@ namespace RT64 {
+@@ -465,12 +926,73 @@ namespace RT64 {
          return true;
      }
      
@@ -2628,7 +2636,7 @@ index 9fae0d4..270e2d1 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1020,16 @@ namespace RT64 {
+@@ -499,6 +1021,16 @@ namespace RT64 {
              }
          };
  
@@ -2645,7 +2653,7 @@ index 9fae0d4..270e2d1 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1045,17 @@ namespace RT64 {
+@@ -514,6 +1046,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2663,7 +2671,7 @@ index 9fae0d4..270e2d1 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +1116,130 @@ namespace RT64 {
+@@ -574,12 +1117,130 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2795,7 +2803,7 @@ index 9fae0d4..270e2d1 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1257,7 @@ namespace RT64 {
+@@ -597,6 +1258,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -2803,7 +2811,7 @@ index 9fae0d4..270e2d1 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1277,7 @@ namespace RT64 {
+@@ -616,6 +1278,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -2811,7 +2819,7 @@ index 9fae0d4..270e2d1 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1250,6 +1912,67 @@ namespace RT64 {
+@@ -1250,6 +1913,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2879,7 +2887,7 @@ index 9fae0d4..270e2d1 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2019,98 @@ namespace RT64 {
+@@ -1296,9 +2020,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2979,7 +2987,7 @@ index 9fae0d4..270e2d1 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2162,34 @@ namespace RT64 {
+@@ -1350,10 +2163,34 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3014,7 +3022,7 @@ index 9fae0d4..270e2d1 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2244,62 @@ namespace RT64 {
+@@ -1408,6 +2245,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3077,7 +3085,7 @@ index 9fae0d4..270e2d1 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2323,22 @@ namespace RT64 {
+@@ -1431,6 +2324,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3100,7 +3108,7 @@ index 9fae0d4..270e2d1 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2358,175 @@ namespace RT64 {
+@@ -1450,12 +2359,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3276,7 +3284,7 @@ index 9fae0d4..270e2d1 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2677,7 @@ namespace RT64 {
+@@ -1606,6 +2678,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3284,7 +3292,7 @@ index 9fae0d4..270e2d1 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2754,20 @@ namespace RT64 {
+@@ -1682,6 +2755,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3305,7 +3313,7 @@ index 9fae0d4..270e2d1 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2833,1017 @@ namespace RT64 {
+@@ -1747,24 +2834,1017 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5346,7 +5354,7 @@ index 5bc3a2a..c5c88cc 100644
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..bf5485d 100644
+index 721a01e..6339821 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -5562,7 +5570,23 @@ index 721a01e..bf5485d 100644
          pipelineDesc.specConstants = c.specConstants.data();
          pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
  
-@@ -449,7 +486,12 @@ namespace RT64 {
+@@ -347,6 +384,15 @@ namespace RT64 {
+         return c.device->createGraphicsPipeline(pipelineDesc);
+     }
+     
++    std::unique_ptr<RenderPipeline> RasterShader::createBanjoPipeline(const PipelineCreation &c, const char *name) {
++        std::unique_ptr<RenderPipeline> pipeline = createPipeline(c);
++        if ((pipeline != nullptr) && !pipeline->isValid()) {
++            fprintf(stderr, "[shaders] The graphics driver could not build the %s pipeline; it is left out (the effect falls back).\n", name);
++            pipeline.reset();
++        }
++        return pipeline;
++    }
++
+     RenderMultisampling RasterShader::generateMultisamplingPattern(RenderSampleCounts sampleCount, bool sampleLocationsSupported) {
+ #   if SAMPLE_LOCATIONS_REQUIRED
+         if (!sampleLocationsSupported) {
+@@ -449,7 +495,12 @@ namespace RT64 {
          FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
          RenderPipelineLayoutBuilder layoutBuilder;
          layoutBuilder.begin(false, true);
@@ -5576,7 +5600,7 @@ index 721a01e..bf5485d 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +525,89 @@ namespace RT64 {
+@@ -483,6 +534,89 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -5601,7 +5625,7 @@ index 721a01e..bf5485d 100644
 +                grassCreation.zCmp = true;
 +                grassCreation.zUpd = true;
 +                grassCreation.cvgAdd = false;
-+                grassBladePipeline = RasterShader::createPipeline(grassCreation);
++                grassBladePipeline = RasterShader::createBanjoPipeline(grassCreation, "3D grass blades");
 +            }
 +        }
 +
@@ -5629,7 +5653,7 @@ index 721a01e..bf5485d 100644
 +                snowCreation.zCmp = true;
 +                snowCreation.zUpd = true;
 +                snowCreation.cvgAdd = false;
-+                snowTessPipeline = RasterShader::createPipeline(snowCreation);
++                snowTessPipeline = RasterShader::createBanjoPipeline(snowCreation, "tessellated deep snow");
 +            }
 +
 +            // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl), drawn into the water mask:
@@ -5657,7 +5681,7 @@ index 721a01e..bf5485d 100644
 +                waterCreation.zUpd = false;
 +                waterCreation.cvgAdd = false;
 +                waterTessThread = std::make_unique<std::thread>([this, waterCreation]() {
-+                    waterTessPipeline = RasterShader::createPipeline(waterCreation);
++                    waterTessPipeline = RasterShader::createBanjoPipeline(waterCreation, "tessellated water");
 +                    waterTessReady = waterTessPipeline.get();
 +                });
 +            }
@@ -5666,7 +5690,7 @@ index 721a01e..bf5485d 100644
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
-@@ -556,6 +681,9 @@ namespace RT64 {
+@@ -556,6 +690,9 @@ namespace RT64 {
  
      RasterShaderUber::~RasterShaderUber() {
          waitForPipelineCreation();
@@ -5677,7 +5701,7 @@ index 721a01e..bf5485d 100644
  
      void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..4a24241 100644
+index 3b991ff..c2d8947 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
 @@ -6,6 +6,7 @@
@@ -5700,7 +5724,16 @@ index 3b991ff..4a24241 100644
          bool alphaBlend;
          bool culling;
          bool NoN;
-@@ -90,6 +96,23 @@ namespace RT64 {
+@@ -71,6 +77,8 @@ namespace RT64 {
+         ~RasterShader();
+         static RasterShaderText generateShaderText(const ShaderDescription &desc, bool multisampling);
+         static std::unique_ptr<RenderPipeline> createPipeline(const PipelineCreation &c);
++        // Banjo-Tooie: as createPipeline, but null (with a line in the log) when the driver refused it.
++        static std::unique_ptr<RenderPipeline> createBanjoPipeline(const PipelineCreation &c, const char *name);
+         static RenderMultisampling generateMultisamplingPattern(uint32_t sampleCount, bool sampleLocationsSupported);
+     };
+ 
+@@ -90,6 +98,23 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -6164,10 +6197,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d7a9113
+index 0000000..bd9f08e
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2724 @@
+@@ -0,0 +1,2778 @@
 +//
 +// RT64
 +//
@@ -6544,6 +6577,32 @@ index 0000000..d7a9113
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.screenSpaceReflections = strength;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
++    }
++
++    namespace {
++        static std::atomic<bool> rayTracingWanted{ false };
++        static std::atomic<int> rayTracingSupport{ 0 };
++    }
++
++    void SetSceneRayTracing(bool enabled) {
++        rayTracingWanted.store(enabled);
++    }
++
++    void NoteRayTracingSupport(bool supported) {
++        // TOOIE_RAY_TRACING_SUPPORT=0 pretends the device has none (headless test of the fallback).
++        const char *forced = std::getenv("TOOIE_RAY_TRACING_SUPPORT");
++        if ((forced != nullptr) && (forced[0] == '0')) {
++            supported = false;
++        }
++        rayTracingSupport.store(supported ? 2 : 1);
++    }
++
++    int GetRayTracingSupport() {
++        return rayTracingSupport.load();
++    }
++
++    bool RayTracingActive() {
++        return rayTracingWanted.load() && (rayTracingSupport.load() == 2);
 +    }
 +
 +    void SetSceneWaterWaves(float strength, float speed) {
@@ -7773,6 +7832,15 @@ index 0000000..d7a9113
 +        effectsSettings.waterDetail = std::clamp(detail, 0.0f, 1.0f);
 +    }
 +
++    // Tessellated water's waves and player this frame (ComputeSceneWater), for the effects pass to light the same waves.
++    struct WaterTessShared {
++        float clock = 0.0f;
++        float push = 0.0f;
++        float velocity[2] = {};
++    };
++    static std::mutex waterTessMutex;
++    static WaterTessShared waterTessShared;
++
 +    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
 +        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
 +        interop::FrameParams &frameParams)
@@ -7811,6 +7879,7 @@ index 0000000..d7a9113
 +        frameParams.waterClipUp = { float(toClip[0][1]), float(toClip[1][1]), float(toClip[2][1]), float(toClip[3][1]) };
 +        for (int r = 0; r < 4; r++) {
 +            frameParams.waterClipToWorld[r] = { float(inverse[r][0]), float(inverse[r][1]), float(inverse[r][2]), float(inverse[r][3]) };
++            frameParams.waterWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
 +        }
 +
 +        // The camera: view space's origin in the world.
@@ -7868,7 +7937,15 @@ index 0000000..d7a9113
 +        frameParams.waterMotion = { velocity[0], velocity[1], float(clock), 3.5f };
 +        // The swell follows Water waves (half when that is 0), as the shading's waves do.
 +        const float waves = (settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f;
++        // (5 and 3.5: as SceneEffectsPS's TessellatedSlope.)
 +        frameParams.waterSwell = { 5.0f * waves, 1.0f, settings.stylisedWater ? 1.0f : 0.0f, 0.0f };
++        {
++            const std::scoped_lock lock(waterTessMutex);
++            waterTessShared.clock = float(clock);
++            waterTessShared.push = frameParams.waterPlayer.w;
++            waterTessShared.velocity[0] = velocity[0];
++            waterTessShared.velocity[1] = velocity[1];
++        }
 +        return true;
 +    }
 +
@@ -8642,6 +8719,16 @@ index 0000000..d7a9113
 +            constants.rippleX.y = RippleCellSize;
 +            constants.rippleZ.y = float(RippleCells);
 +            constants.rippleX.z = (res.rippleCornerKnown && havePlayer) ? 1.0f : 0.0f;
++            // Tessellated: no grid; the waves' clock, the player's velocity (rippleX.xy) and push (rippleZ.x) as the
++            // surface was raised with, so the light follows the same waves (TessellatedSlope).
++            if (waterTessellated) {
++                const std::scoped_lock lock(waterTessMutex);
++                constants.ambientOcclusion.z = waterTessShared.clock;
++                constants.rippleX.x = waterTessShared.velocity[0];
++                constants.rippleX.y = waterTessShared.velocity[1];
++                constants.rippleZ.x = waterTessShared.push;
++                constants.rippleX.z = havePlayer ? 1.0f : 0.0f;
++            }
 +        }
 +        // The fireflies' table, made once and cleared, so the pass can always read it (it does only at night).
 +        if (res.fireflyTexture == nullptr) {
@@ -8894,10 +8981,10 @@ index 0000000..d7a9113
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..5ff2261
+index 0000000..2b372a8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,428 @@
+@@ -0,0 +1,436 @@
 +//
 +// RT64
 +//
@@ -9144,6 +9231,14 @@ index 0000000..5ff2261
 +    void NoteSceneCamera(const interop::float4x4 &projection, const interop::float4x4 &view);
 +    // The last noted camera's world height; false until there is one.
 +    bool GetSceneCameraHeight(float *height);
++    // Banjo-Tooie: hardware ray tracing (Graphics > Ray tracing). SetSceneRayTracing is the setting; the renderer
++    // notes whether the graphics device has ray tracing (NoteRayTracingSupport) when it is created. A traced pass
++    // runs only when RayTracingActive() is true (setting on and device supported), so that is the one place a new
++    // traced effect (reflections first, shadows later) checks. GetRayTracingSupport: 0 not known yet, 1 no, 2 yes.
++    void SetSceneRayTracing(bool enabled);
++    void NoteRayTracingSupport(bool supported);
++    int GetRayTracingSupport();
++    bool RayTracingActive();
 +    // Banjo-Tooie: Banjo's world position, which the fog is measured from (valid false: from the camera).
 +    void SetScenePlayer(bool valid, float x, float y, float z, bool grounded = true);
 +    // The game frames: the id of each workload as the game hands it over, and the workload whose effects are
@@ -12906,10 +13001,10 @@ index e7895c3..bdfce66 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..8c568d0 100644
+index 74b1fa0..f40af9d 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,14 +11,55 @@
+@@ -11,16 +11,65 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -12965,8 +13060,18 @@ index 74b1fa0..8c568d0 100644
 +        }
      }
      
++    // Banjo-Tooie: Modern water drawn into the water mask while it may be tessellated: its place in the world, for the
++    // hull and domain shaders (WaterTess.hlsl), so they need neither this draw's screen scale nor its position.
++    if (((gConstants.waterMask == 1) || (gConstants.waterMask == 2)) && (FrParams.waterCamera.w > 0.0f)) {
++        const float4 world = float4(dot(FrParams.waterClipToWorld[0], ndcPos), dot(FrParams.waterClipToWorld[1], ndcPos),
++            dot(FrParams.waterClipToWorld[2], ndcPos), dot(FrParams.waterClipToWorld[3], ndcPos));
++        oFurAnchor = float4(world.xyz / ((abs(world.w) > 1e-8f) ? world.w : 1e-8f), 1.0f);
++    }
++
      // Apply screen scale and offset.
-@@ -33,6 +74,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+     ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
+     
+@@ -33,6 +82,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -12980,7 +13085,7 @@ index 74b1fa0..8c568d0 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +101,19 @@ void VSMain(
+@@ -53,17 +109,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -13024,10 +13129,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..45f53fb
+index 0000000..5f7d392
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3199 @@
+@@ -0,0 +1,3180 @@
 +//
 +// RT64
 +//
@@ -13038,6 +13143,7 @@ index 0000000..45f53fb
 +
 +#include "shared/rt64_scene_effects.h"
 +#include "SunShadowMap.hlsli"
++#include "WaterTess.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<SceneEffectsCB> gConstants : register(b0);
 +
@@ -14283,11 +14389,27 @@ index 0000000..45f53fb
 +    return h;
 +}
 +
++// Modern water's flags in water.y's eighths over 2 (or 3 with no water drawn): a quarter for Stylised (Graphics > Water
++// Stylised), an eighth when the water was drawn tessellated this frame (WaterTess.hlsl).
++uint ModernWaterBits() {
++    return (gConstants.water.y > 1.5f) ? (uint(round(frac(gConstants.water.y) * 8.0f)) & 3u) : 0u;
++}
++
++bool StylisedWaterOn() {
++    return (ModernWaterBits() & 2u) != 0u;
++}
++
++// Tessellated water: the mask holds the moving surface itself (its swell and the player's rings), so nothing is marched.
++bool TessellatedWaterOn() {
++    return (ModernWaterBits() & 1u) != 0u;
++}
++
 +// Modern water's ripples from the player at a world x and z: height (x), slope along x and z (yz) and how
 +// fast the water moves there (w, for foam). Zero away from the grid, or on water far from the player's height.
 +float4 Ripples(float2 p, float waterY) {
 +    const float playerY = gConstants.rippleAge.w;
-+    if ((gConstants.rippleX.z < 0.5f) || (playerY < -1e8f) || (waterY < playerY - 60.0f) || (waterY > playerY + 160.0f)) {
++    // (Tessellated water has its rings in its surface, and no grid.)
++    if (TessellatedWaterOn() || (gConstants.rippleX.z < 0.5f) || (playerY < -1e8f) || (waterY < playerY - 60.0f) || (waterY > playerY + 160.0f)) {
 +        return 0.0f;
 +    }
 +    const float cell = gConstants.rippleX.y;
@@ -14404,50 +14526,19 @@ index 0000000..45f53fb
 +    return (foam > 0.0f) ? foam * OriginalShoreLevel(pixel) : 0.0f;
 +}
 +
-+// Modern water's flags in water.y's eighths over 2 (or 3 with no water drawn): a quarter for Stylised (Graphics > Water
-+// Stylised), an eighth when the water was drawn tessellated this frame (WaterTess.hlsl).
-+uint ModernWaterBits() {
-+    return (gConstants.water.y > 1.5f) ? (uint(round(frac(gConstants.water.y) * 8.0f)) & 3u) : 0u;
-+}
-+
-+bool StylisedWaterOn() {
-+    return (ModernWaterBits() & 2u) != 0u;
-+}
-+
-+// Tessellated water: the mask holds the moving surface itself (its swell and the player's rings), so nothing is marched.
-+bool TessellatedWaterOn() {
-+    return (ModernWaterBits() & 1u) != 0u;
-+}
-+
-+// Tessellated water's facing, from the mask's depth a little way either side (wide enough to smooth over its small
-+// triangles). A side that jumps to another surface (an edge, or water behind) is left out.
-+float3 TessellatedNormal(int2 pixel, float3 surface) {
-+    const int k = max(1, int(gConstants.projection.w / 360.0f));
-+    const float jump = -surface.z * 0.04f + 4.0f;
-+    float3 sides[4];
-+    [unroll] for (int i = 0; i < 4; i++) {
-+        const int2 at = pixel + ((i == 0) ? int2(k, 0) : (i == 1) ? int2(-k, 0) : (i == 2) ? int2(0, k) : int2(0, -k));
-+        float d;
-+        sides[i] = surface;
-+        if (LoadWater(at, d)) {
-+            const float3 q = ViewPosition(at, d);
-+            if (abs(q.z - surface.z) < jump) {
-+                sides[i] = q;
-+            }
-+        }
-+    }
-+    const float3 px = sides[0] - sides[1];
-+    const float3 py = sides[2] - sides[3];
-+    const float3 up = normalize(gConstants.worldY.xyz);
-+    if ((dot(px, px) < 1e-6f) || (dot(py, py) < 1e-6f)) {
-+        return up;
-+    }
-+    float3 n = normalize(cross(px, py));
-+    if (dot(n, up) < 0.0f) {
-+        n = -n;
-+    }
-+    // (Never steeper than the waves can make it.)
-+    return (dot(n, up) > 0.5f) ? n : up;
++// Tessellated water's slope along the world's x and z: the same swell and player's rings as raise its surface
++// (WaterTess.hlsli, with the swell's height and rings' as ComputeSceneWater sets them), by differences.
++float2 TessellatedSlope(float3 world) {
++    const float t = gConstants.ambientOcclusion.z;
++    const float swell = 5.0f * gConstants.water.w;
++    // (In tessellated water, rippleX.xy hold the player's velocity and rippleZ.x their push: no ripple grid is read.)
++    const float4 player = float4(gConstants.rippleX.w, gConstants.rippleZ.w, gConstants.rippleAge.w, gConstants.rippleZ.x);
++    const float2 velocity = gConstants.rippleX.xy;
++    const float e = 1.5f;
++    const float h = WaterTessHeight(world, t, swell, 1.0f, player, velocity, 3.5f);
++    const float hx = WaterTessHeight(world + float3(e, 0.0f, 0.0f), t, swell, 1.0f, player, velocity, 3.5f);
++    const float hz = WaterTessHeight(world + float3(0.0f, 0.0f, e), t, swell, 1.0f, player, velocity, 3.5f);
++    return float2(hx - h, hz - h) / e;
 +}
 +
 +// Tessellated water's fine waves: two scrolling normal maps (smooth noise drifting two ways, one turned against the
@@ -14517,11 +14608,9 @@ index 0000000..45f53fb
 +    const float3 world = WorldPosition(surface);
 +    const float4 ripple = tessellated ? 0.0f : Ripples(world.xz, waterY);
 +    float fineHeight = 0.0f;
-+    const float2 slope = tessellated ? ScrollingNormals(world.xz, gConstants.ambientOcclusion.z, footprint, fineHeight) * strength :
++    // (Lit by the waves' own slope, not the surface's facing in the mask: the game's water polygons tilt as they bob.)
++    const float2 slope = tessellated ? ScrollingNormals(world.xz, gConstants.ambientOcclusion.z, footprint, fineHeight) * strength + TessellatedSlope(world) :
 +        WaveSlope(world.xz, gConstants.ambientOcclusion.z, footprint) * strength + ripple.yz;
-+    if (tessellated) {
-+        normal = TessellatedNormal(pixel, surface);
-+    }
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // Not on the player's own spot: the water there is over their body, and foam would paint it white.
 +    const float awayFromPlayer = saturate((length(world.xz - float2(gConstants.rippleX.w, gConstants.rippleZ.w)) - 30.0f) / 25.0f);
@@ -14762,10 +14851,7 @@ index 0000000..45f53fb
 +    const float4 ripple = tessellated ? 0.0f : Ripples(p, waterY);
 +    float fineHeight = 0.0f;
 +    const float3 wave = tessellated ? 0.0f : StylisedWave(p, t, footprint);
-+    const float2 slope = tessellated ? ScrollingNormals(p, t, footprint, fineHeight) * strength : wave.yz * strength + ripple.yz;
-+    if (tessellated) {
-+        normal = TessellatedNormal(pixel, surface);
-+    }
++    const float2 slope = tessellated ? ScrollingNormals(p, t, footprint, fineHeight) * strength + TessellatedSlope(world) : wave.yz * strength + ripple.yz;
 +    const float3 n = normalize(normal - normalize(gConstants.worldX.xyz) * slope.x - normalize(gConstants.worldZ.xyz) * slope.y);
 +    // How high on the waves this point is: 0 in the deepest troughs, about 0.6 on a single crest and 1 where the two
 +    // big trains' crests meet.
@@ -17252,10 +17338,10 @@ index 3f33475..7d84d10 100644
 \ No newline at end of file
 diff --git a/src/shaders/WaterTess.hlsl b/src/shaders/WaterTess.hlsl
 new file mode 100644
-index 0000000..7ff7563
+index 0000000..4e559b9
 --- /dev/null
 +++ b/src/shaders/WaterTess.hlsl
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,120 @@
 +//
 +// RT64
 +//
@@ -17275,6 +17361,7 @@ index 0000000..7ff7563
 +#include "shared/rt64_raster_params.h"
 +
 +#include "FbRendererCommon.hlsli"
++#include "WaterTess.hlsli"
 +
 +[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
 +
@@ -17291,20 +17378,10 @@ index 0000000..7ff7563
 +    float inside : SV_InsideTessFactor;
 +};
 +
-+// RasterVS's position (with the draw's screen scale and offset) back to the one before them, which waterClipToWorld takes.
-+float4 WaterUnscaled(float4 position) {
-+    float4 p = position;
-+#ifdef __spirv__
-+    p.y = -p.y;
-+#endif
-+    p.xy = (p.xy - gConstants.screenOffset * p.w) / gConstants.screenScale;
-+    return p;
-+}
-+
-+float3 WaterWorld(float4 position) {
-+    const float4 p = WaterUnscaled(position);
-+    const float4 w = float4(dot(FrParams.waterClipToWorld[0], p), dot(FrParams.waterClipToWorld[1], p), dot(FrParams.waterClipToWorld[2], p), dot(FrParams.waterClipToWorld[3], p));
-+    return w.xyz / ((abs(w.w) > 1e-8f) ? w.w : 1e-8f);
++// Where a world point lands before the draw's screen scale and offset (as RasterVS's position before them).
++float4 WaterClip(float3 world) {
++    const float4 p = float4(world, 1.0f);
++    return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
 +}
 +
 +// How finely an edge between two world points is cut: finer near the camera, only round the player, never more than
@@ -17332,15 +17409,16 @@ index 0000000..7ff7563
 +
 +WaterPatch WaterPatchConstants(InputPatch<WaterVertex, 3> patch) {
 +    WaterPatch p;
++    // The corners' places in the world, from RasterVS (furAnchor).
++    const float3 a = patch[0].furAnchor.xyz;
++    const float3 b = patch[1].furAnchor.xyz;
++    const float3 c = patch[2].furAnchor.xyz;
 +    // Off screen: left out (a factor of 0 draws nothing).
-+    if (WaterOffScreen(WaterUnscaled(patch[0].position), WaterUnscaled(patch[1].position), WaterUnscaled(patch[2].position))) {
++    if (WaterOffScreen(WaterClip(a), WaterClip(b), WaterClip(c))) {
 +        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
 +        p.inside = 0.0f;
 +        return p;
 +    }
-+    const float3 a = WaterWorld(patch[0].position);
-+    const float3 b = WaterWorld(patch[1].position);
-+    const float3 c = WaterWorld(patch[2].position);
 +    // (Edge 0 is the one across from vertex 0.)
 +    p.edges[0] = WaterEdgeFactor(b, c);
 +    p.edges[1] = WaterEdgeFactor(c, a);
@@ -17359,33 +17437,10 @@ index 0000000..7ff7563
 +    return patch[i];
 +}
 +
-+// The water's height above its flat surface at a world point (x, z; y the flat surface's height), in world units.
++// The water's height above its flat surface at a world point (WaterTess.hlsli), with this frame's waves and player.
 +float WaterHeight(float3 world) {
-+    const float t = FrParams.waterMotion.z;
-+    // The swell: two slow sines crossing, one longer and taller.
-+    const float swell = FrParams.waterSwell.x;
-+    const float speed = FrParams.waterSwell.y;
-+    float h = swell * (sin(dot(world.xz, float2(0.0219f, 0.0137f)) + t * 0.9f * speed) + 0.55f * sin(dot(world.xz, float2(-0.0153f, 0.0311f)) + t * 1.3f * speed));
-+    // The player's rings: a sine spreading out from them, fading with distance, and stretched behind them as they move
-+    // (a wake). Only on the water they are in (near their height).
-+    const float4 player = FrParams.waterPlayer;
-+    if ((player.z > -1e8f) && (player.w > 0.001f) && (world.y > player.z - 60.0f) && (world.y < player.z + 160.0f)) {
-+        const float2 v = FrParams.waterMotion.xy;
-+        const float speedNow = length(v);
-+        const float2 along = (speedNow > 1.0f) ? v / speedNow : float2(0.0f, 0.0f);
-+        float2 d = world.xz - player.xy;
-+        // Behind them the rings are drawn out (up to twice as far apart), ahead pressed together: a bow wave and a wake.
-+        const float behind = max(-dot(d, along), 0.0f);
-+        const float stretch = 1.0f + saturate(speedNow / 300.0f);
-+        d -= along * (behind * (1.0f - 1.0f / stretch));
-+        const float r = length(d);
-+        const float k = 6.2831853f / 45.0f;
-+        const float ring = sin(k * r - t * 7.0f);
-+        // Faint right on the player (their body is there), strongest a little way out, gone by about 300 units.
-+        const float fade = smoothstep(10.0f, 40.0f, r) * exp(-r / 110.0f);
-+        h += FrParams.waterMotion.w * player.w * ring * fade;
-+    }
-+    return h;
++    return WaterTessHeight(world, FrParams.waterMotion.z, FrParams.waterSwell.x, FrParams.waterSwell.y, FrParams.waterPlayer,
++        FrParams.waterMotion.xy, FrParams.waterMotion.w);
 +}
 +
 +[domain("tri")]
@@ -17398,7 +17453,7 @@ index 0000000..7ff7563
 +    v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
 +
 +    // Raised or lowered straight up in the world, then through the draw's screen scale and offset as the position was.
-+    const float height = WaterHeight(WaterWorld(v.position));
++    const float height = WaterHeight(v.furAnchor.xyz);
 +    float4 up = FrParams.waterClipUp * height;
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 +#ifdef __spirv__
@@ -17407,11 +17462,49 @@ index 0000000..7ff7563
 +    v.position += up;
 +    return v;
 +}
+diff --git a/src/shaders/WaterTess.hlsli b/src/shaders/WaterTess.hlsli
+new file mode 100644
+index 0000000..e6accce
+--- /dev/null
++++ b/src/shaders/WaterTess.hlsli
+@@ -0,0 +1,32 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: tessellated Modern and Stylised water's height above its flat surface (WaterTess.hlsl raises the surface
++// by it; SceneEffectsPS.hlsl shades the surface by its slope, so the light follows the same waves). In world units.
++//   world: the point (x, z; y the flat surface's height).
++//   t: the waves' clock in seconds. swell: the swell's height (Water waves). speed: the swell's speed.
++//   player: x, z, y (y below -1e8 when there is none), how hard they push the water (0 to 1).
++//   velocity: theirs over the water (x, z). rings: the rings' full height.
++float WaterTessHeight(float3 world, float t, float swell, float speed, float4 player, float2 velocity, float rings) {
++    // The swell: two slow sines crossing, one longer and taller.
++    float h = swell * (sin(dot(world.xz, float2(0.0219f, 0.0137f)) + t * 0.9f * speed) + 0.55f * sin(dot(world.xz, float2(-0.0153f, 0.0311f)) + t * 1.3f * speed));
++    // The player's rings: a sine spreading out from them, fading with distance, and stretched behind them as they move
++    // (a wake). Only on the water they are in (near their height).
++    if ((player.z > -1e8f) && (player.w > 0.001f) && (world.y > player.z - 60.0f) && (world.y < player.z + 160.0f)) {
++        const float speedNow = length(velocity);
++        const float2 along = (speedNow > 1.0f) ? velocity / speedNow : float2(0.0f, 0.0f);
++        float2 d = world.xz - player.xy;
++        // Behind them the rings are drawn out (up to twice as far apart): a wake.
++        const float behind = max(-dot(d, along), 0.0f);
++        const float stretch = 1.0f + saturate(speedNow / 300.0f);
++        d -= along * (behind * (1.0f - 1.0f / stretch));
++        const float r = length(d);
++        const float k = 6.2831853f / 45.0f;
++        const float ring = sin(k * r - t * 7.0f);
++        // Faint right on the player (their body is there), strongest a little way out, gone by about 300 units.
++        const float fade = smoothstep(10.0f, 40.0f, r) * exp(-r / 110.0f);
++        h += rings * player.w * ring * fade;
++    }
++    return h;
++}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..6c2ea43 100644
+index 2e62aaf..5922941 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,121 @@ namespace interop {
+@@ -13,6 +13,122 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -17516,6 +17609,7 @@ index 2e62aaf..6c2ea43 100644
 +        // grassClipToWorld).
 +        float4 waterClipUp;
 +        float4 waterClipToWorld[4];
++        float4 waterWorldToClip[4];
 +        // The camera's world x, y and z, then the Water detail setting (0 to 1; 0: not tessellated this frame).
 +        float4 waterCamera;
 +        // How finely it is cut: the most a triangle's edge is cut into (capped low), the shortest piece in world units,
