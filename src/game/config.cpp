@@ -58,6 +58,7 @@
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
 #include "tooie_damage.h"
+#include "tooie_aim_trace.h"
 
 namespace {
     void show_cheats_tab() {
@@ -757,6 +758,7 @@ void tooie::init_config() {
     tooie::interp_check::add_options(wip);
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
+    tooie::aim_trace::add_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,

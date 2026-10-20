@@ -4324,6 +4324,7 @@ RECOMP_FUNC void scinfobar_entrypoint_20(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8008FE68(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, 2);
     // 0x8008FE68: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x8008FE6C: sw          $ra, 0x14($sp)

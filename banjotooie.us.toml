@@ -1690,3 +1690,19 @@ text = "if (tooie_test_room_quiet()) { ctx->r2 = 0; return; }"
 func = "capod_entrypoint_22"
 before_vram = 0x808005C4
 text = "if (tooie_test_room_quiet()) { ctx->r2 = 0; return; }"
+
+# DEV > Aim trace (src/debug/aim_trace.cpp): counts the callers of the player-position getters.
+[[patches.hook]]
+func = "func_800F5A00"
+before_vram = 0x800F5A00
+text = "tooie_aim_trace(rdram, ctx, 0);"
+
+[[patches.hook]]
+func = "func_800F5A2C"
+before_vram = 0x800F5A2C
+text = "tooie_aim_trace(rdram, ctx, 1);"
+
+[[patches.hook]]
+func = "func_8008FE68"
+before_vram = 0x8008FE68
+text = "tooie_aim_trace(rdram, ctx, 2);"

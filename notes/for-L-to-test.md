@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T450 Aim trace: find where enemies chase from
+- Asked: 2026-10-20 10:32 UTC
+- Build: claude/project-thread-quqov9
+- Steps:
+  1. General > DEV tab: turn on Aim trace
+  2. Play a minute near ordinary enemies (Uggers, Snapdragons, anything that chases or lunges), getting chased and hit
+  3. Send me logs/aim_trace.txt (in the logs folder next to the exe)
+- Look for: The file appears and fills up (it rewrites every 5 seconds). It changes nothing in the game; turn it off afterwards.
+- Status: waiting for L
+
 ## T449 Mouse in the Start menu and the save select, and no hidden mouse effect with a controller
 - Asked: 2026-10-20 08:30 UTC
 - Build: main
