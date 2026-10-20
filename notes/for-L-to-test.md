@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T478 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
+- Asked: 2026-10-20 20:35 UTC
+- Build: main
+- Steps:
+  1. Turn on 3D grass and go to Spiral Mountain; walk the yellow road and the meadows
+  2. Settings > Graphics > 3D grass: switch Frustum culling, Occlusion culling and Chunking off and on one at a time while standing still, then while turning the camera fast
+  3. Try Pixelated 3D grass with Pixel size 0.5, and Mayahem Temple's courtyard
+  4. Compare the frame rate with all three on against all three off
+- Look for: Grass looks the same with the toggles on or off (no holes, no blades popping in at the screen edges or from behind walls when you turn); no grass on the road, path or rock; grass is full height up close, not growing as you walk nearer; no shimmer at Pixel size under 1; faster than before, most with all three on
+- Status: waiting for L
+
 ## T477 Talking heads: no white box at any frame rate
 - Asked: 2026-10-20 20:11 UTC
 - Build: main
