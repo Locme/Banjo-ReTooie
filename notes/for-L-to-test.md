@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T457 Nose jiggle: no missing triangle
+- Asked: 2026-10-20 14:08 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Snout jiggle and Nose jiggle
+  2. Walk, run and turn with the camera in front of Banjo
+  3. Squash the snout with the Squash & Stretch sliders
+- Look for: The black nose stays whole: no crack or orange sliver down its middle or at its tip, whatever the light. It also keeps its own size when the snout squashes.
+- Status: waiting for L
+
 ## T456 DEV Sound test plays sounds again
 - Asked: 2026-10-20 13:31 UTC
 - Build: main (next Windows build)
