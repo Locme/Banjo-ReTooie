@@ -740,10 +740,18 @@ index 4dce8e0..15bd9e3 100644
  endif()
  
 diff --git a/recompui/include/recompui/config.h b/recompui/include/recompui/config.h
-index 38b84f5..d6d68fa 100644
+index 38b84f5..753f713 100644
 --- a/recompui/include/recompui/config.h
 +++ b/recompui/include/recompui/config.h
-@@ -65,6 +65,8 @@ namespace recompui {
+@@ -1,6 +1,7 @@
+ #ifndef _RECOMP_UI_CONFIG_H_
+ #define _RECOMP_UI_CONFIG_H_
+ 
++#include <functional>
+ #include <vector>
+ 
+ #include "librecomp/config.hpp"
+@@ -65,6 +66,8 @@ namespace recompui {
      
              void update_msaa_supported(bool supported);
              void update_refresh_rate(uint32_t refresh_rate);
@@ -752,7 +760,7 @@ index 38b84f5..d6d68fa 100644
              void toggle_fullscreen();
          }
  
-@@ -133,6 +135,32 @@ namespace recompui {
+@@ -133,6 +136,40 @@ namespace recompui {
          // Sets a tab with the given ID to be hidden or visible. Can be used for debug tabs, or hidden configs.
          void set_tab_visible(const std::string &id, bool is_visible);
  
@@ -767,6 +775,14 @@ index 38b84f5..d6d68fa 100644
 +        // library adds in an order that doesn't fit the tab's sections. Only the display order changes.
 +        void set_option_display_before(const std::string &option_id, const std::string &before_id);
 +        const std::string *get_option_display_before(const std::string &option_id);
++        // Puts a button with this label beside the option's control (a drop-down's choice can then be acted
++        // on again and again). on_press runs on the UI thread each time it is pressed.
++        void set_option_button(const std::string &option_id, const std::string &label, std::function<void()> on_press);
++        struct OptionButton {
++            std::string label;
++            std::function<void()> on_press;
++        };
++        const OptionButton *get_option_button(const std::string &option_id);
 +        // Adds a tab that shows some of another tab's options (the ones given to it with set_option_page).
 +        // The options still belong to that tab's config, so they save and apply as before.
 +        void create_page_tab(const std::string &name, const std::string &page_id, const std::string &config_id);
@@ -1136,7 +1152,7 @@ index 277a421..4c57a49 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..3cc43e9 100644
+index 6c84c05..440ca21 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1262,7 +1278,7 @@ index 6c84c05..3cc43e9 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +222,69 @@ namespace recompui {
+@@ -121,6 +222,80 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -1286,6 +1302,17 @@ index 6c84c05..3cc43e9 100644
 +    const std::string *config::get_option_display_before(const std::string &option_id) {
 +        auto it = option_display_before.find(option_id);
 +        return it == option_display_before.end() ? nullptr : &it->second;
++    }
++
++    static std::unordered_map<std::string, config::OptionButton> option_buttons;
++
++    void config::set_option_button(const std::string &option_id, const std::string &label, std::function<void()> on_press) {
++        option_buttons[option_id] = config::OptionButton{ label, std::move(on_press) };
++    }
++
++    const config::OptionButton *config::get_option_button(const std::string &option_id) {
++        auto it = option_buttons.find(option_id);
++        return it == option_buttons.end() ? nullptr : &it->second;
 +    }
 +
 +    static std::unordered_map<std::string, std::string> option_pages;
@@ -1332,7 +1359,7 @@ index 6c84c05..3cc43e9 100644
      void config::set_tab_visible(const std::string &id, bool is_visible) {
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
-@@ -177,6 +341,14 @@ namespace recompui {
+@@ -177,6 +352,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -1348,16 +1375,18 @@ index 6c84c05..3cc43e9 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..be03db4 100644
+index 86428c9..5a44688 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,7 @@
  #include "ui_config_option.h"
 +#include "elements/ui_sidebar_style.h"
++#include "elements/ui_button.h"
++#include "recompui/config.h"
  
  namespace recompui {
  
-@@ -87,14 +88,60 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +90,60 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1419,7 +1448,7 @@ index 86428c9..be03db4 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +157,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +159,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1427,7 +1456,7 @@ index 86428c9..be03db4 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +168,42 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +170,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1454,6 +1483,12 @@ index 86428c9..be03db4 100644
 +                this->set_option_value(this->option_id, opt.options[index].value);
 +            }
 +        });
++        if (const config::OptionButton *action = config::get_option_button(option_id)) {
++            Button *button = context.create_element<Button>(wrapper, action->label, ButtonStyle::Primary, ButtonSize::Small);
++            button->set_flex_shrink(0.0f);
++            std::function<void()> on_press = action->on_press;
++            button->add_pressed_callback([on_press]() { on_press(); });
++        }
 +        details_label = context.create_element<Label>(wrapper, "", theme::Typography::LabelXS);
 +        details_label->set_color(theme::color::Primary);
 +    } else {
@@ -1487,7 +1522,7 @@ index 86428c9..be03db4 100644
      }
  
      update_value();
-@@ -153,12 +218,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +226,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1508,7 +1543,7 @@ index 86428c9..be03db4 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +247,10 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -176,6 +255,10 @@ void ConfigOptionEnum::update_enum_details() {
  
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
@@ -1519,7 +1554,7 @@ index 86428c9..be03db4 100644
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
-@@ -199,6 +274,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +282,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1527,7 +1562,7 @@ index 86428c9..be03db4 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -245,6 +321,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -245,6 +329,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1535,7 +1570,7 @@ index 86428c9..be03db4 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,6 +361,8 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,6 +369,8 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);

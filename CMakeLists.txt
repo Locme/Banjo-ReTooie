@@ -301,6 +301,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/speedup.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_spawner.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
