@@ -6197,7 +6197,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..bd9f08e
+index 0000000..69dd085
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,2778 @@
@@ -7933,11 +7933,11 @@ index 0000000..bd9f08e
 +        }
 +        const float speed = std::sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
 +        push = std::max(std::clamp(speed / 250.0f, 0.0f, 1.0f), push * std::exp(-dt / 1.5f));
-+        frameParams.waterPlayer = { settings.player[0], settings.player[2], havePlayer ? settings.player[1] : -1e9f, havePlayer ? std::max(push, 0.25f) : 0.0f };
-+        frameParams.waterMotion = { velocity[0], velocity[1], float(clock), 3.5f };
++        frameParams.waterPlayer = { settings.player[0], settings.player[2], havePlayer ? settings.player[1] : -1e9f, havePlayer ? std::max(push, 0.35f) : 0.0f };
++        frameParams.waterMotion = { velocity[0], velocity[1], float(clock), 6.0f };
 +        // The swell follows Water waves (half when that is 0), as the shading's waves do.
 +        const float waves = (settings.waterWaves > 0.0f) ? settings.waterWaves : 0.5f;
-+        // (5 and 3.5: as SceneEffectsPS's TessellatedSlope.)
++        // (5 and 6: as SceneEffectsPS's TessellatedSlope.)
 +        frameParams.waterSwell = { 5.0f * waves, 1.0f, settings.stylisedWater ? 1.0f : 0.0f, 0.0f };
 +        {
 +            const std::scoped_lock lock(waterTessMutex);
@@ -13129,7 +13129,7 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..1e1bc10
+index 0000000..1e4f2a8
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
 @@ -0,0 +1,3172 @@
@@ -14535,9 +14535,9 @@ index 0000000..1e1bc10
 +    const float4 player = float4(gConstants.rippleX.w, gConstants.rippleZ.w, gConstants.rippleAge.w, gConstants.rippleZ.x);
 +    const float2 velocity = gConstants.rippleX.xy;
 +    const float e = 1.5f;
-+    const float h = WaterTessHeight(world, t, swell, 1.0f, player, velocity, 3.5f);
-+    const float hx = WaterTessHeight(world + float3(e, 0.0f, 0.0f), t, swell, 1.0f, player, velocity, 3.5f);
-+    const float hz = WaterTessHeight(world + float3(0.0f, 0.0f, e), t, swell, 1.0f, player, velocity, 3.5f);
++    const float h = WaterTessHeight(world, t, swell, 1.0f, player, velocity, 6.0f);
++    const float hx = WaterTessHeight(world + float3(e, 0.0f, 0.0f), t, swell, 1.0f, player, velocity, 6.0f);
++    const float hz = WaterTessHeight(world + float3(0.0f, 0.0f, e), t, swell, 1.0f, player, velocity, 6.0f);
 +    return float2(hx - h, hz - h) / e;
 +}
 +
