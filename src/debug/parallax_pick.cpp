@@ -200,7 +200,8 @@ namespace {
         return (has_live && !same_pick(live->second, saved->second)) ? ", not saved" : "";
     }
 
-    // The texture's pick as it stands: its own, else the built-in list's (stone at 100% with shadows, or off).
+    // The texture's pick as it stands: its own, else the built-in list's (its shape and depth, or off), read back from
+    // the list RT64 has (SetSceneParallaxTextures' bits).
     Pick current(uint64_t hash, bool& own) {
         std::lock_guard lock{ picks_mutex };
         const auto it = picks.find(hash);
@@ -209,7 +210,14 @@ namespace {
             return it->second;
         }
         Pick pick;
-        pick.off = (RT64::SceneParallaxTexture(hash) == 0);
+        const uint32_t bits = RT64::SceneParallaxTexture(hash);
+        pick.off = (bits == 0);
+        if (!pick.off) {
+            pick.shape = uint8_t(((bits >> 17) & 0x7u) | (((bits >> 24) & 0x1u) << 3));
+            pick.depth = uint8_t((bits >> 20) & 0x7u);
+            pick.shadows = ((bits >> 23) & 0x1u) == 0;
+            pick.fine = uint8_t((bits >> 25) & 0x1Fu);
+        }
         return pick;
     }
 

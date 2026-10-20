@@ -233,8 +233,10 @@ F12 screenshots are taken before these filters, so they don't show them.
   as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
   about 150 tall). Fades out on walls seen edge on and in the distance.
   Default: 0 (off).
-- **Parallax on original textures**: the game's own textures (3,385 of them,
-  picked by eye), whose depth is worked out from how dark each part is. Off,
+- **Parallax on original textures**: the game's own textures (3,481 of them,
+  picked by eye, each with its own shape and depth: stone, brick, metal, wood,
+  bark, leaves, sand and the rest), whose depth is worked out from how dark each
+  part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.
 

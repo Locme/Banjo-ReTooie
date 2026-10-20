@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T441 Parallax shapes from the new sweep
+- Asked: 2026-10-20 02:38 UTC
+- Build: main (parallax sweep 4)
+- Steps:
+  1. Set Parallax to 100
+  2. Visit a few levels: stone and brick walls, metal in Grunty Industries, wooden planks and crates, tree bark and leaves, sandy and grassy ground
+  3. Turn on Parallax Pick Mode and hover a surface: the label shows its built-in shape
+- Look for: Do the shapes suit each surface (metal plates flat with sunk seams, wood with shallow grain, rock rough)? Name any texture that looks worse than before, or hover it and send its hash.
+- Status: waiting for L
+
 ## T440 Screen Alignment hidden from the save select TV menu
 - Asked: 2026-10-20 02:23 UTC
 - Build: main (next Windows build)
