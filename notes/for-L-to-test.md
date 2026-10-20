@@ -32,6 +32,16 @@
 - Look for: The snout and the other jiggle parts wobble as they do with HD Shadows off, and Banjo's shadow wobbles with him.
 - Status: waiting for L
 
+## T470 Heat haze only above lava and fire
+- Asked: 2026-10-20 19:28 UTC
+- Build: main @ fac564a
+- Steps:
+  1. Graphics: Heat haze 50 or more
+  2. Hailfire Peaks lava side: look across the lava pools and at the walls and sky away from them
+  3. Chilli Billi's fight and inside the volcano too
+- Look for: Shimmer only over and just above the lava and fire, fading upward; plain rock, Banjo and the sky away from lava stay still. Say if something non-hot (red rock, Kazooie) shimmers, or if lava you'd expect to shimmer doesn't
+- Status: waiting for L
+
 ## T468 Graphics > Ray tracing switch
 - Asked: 2026-10-20 18:22 UTC
 - Build: main
