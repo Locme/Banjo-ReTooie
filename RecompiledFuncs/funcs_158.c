@@ -1398,6 +1398,7 @@ RECOMP_FUNC void ncba1p_entrypoint_10(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_80800DC8_chfireicestorm(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    if (tooie_storm_spawn_skip(rdram, ctx)) { return; }
     // 0x80800DC8: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x80800DCC: sw          $ra, 0x1C($sp)

@@ -2019,7 +2019,7 @@ index 69a82ac..5107e5d 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6b5525d 100644
+index 9fae0d4..affb6f2 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -3313,7 +3313,7 @@ index 9fae0d4..6b5525d 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2834,1017 @@ namespace RT64 {
+@@ -1747,24 +2834,1026 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4308,7 +4308,16 @@ index 9fae0d4..6b5525d 100644
 +        std::pair<size_t, size_t> snowPositionsRange = { 0, 4 };
 +        if ((snowShells > 0) && (snowPositionsData != nullptr) && (snowVertexEnd > snowVertexFirst) && (size_t(snowVertexEnd) * 3 <= snowPositionsData->posFloats.size())) {
 +            // (The snow rises to its full height over three times its depth from the edge.)
++            const auto edgeStarted = std::chrono::steady_clock::now();
 +            snowGroundVertices(*snowPositionsData, snowFaceRanges, snowVertexFirst, snowVertexEnd, std::max(frameParams.snowParams.x * 3.0f, 20.0f), snowPositionsVector);
++            // TOOIE_SNOW_LOG: how long the edges took, every 2 seconds.
++            static const bool edgeLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr);
++            static auto edgeLogged = std::chrono::steady_clock::now();
++            if (edgeLog && (std::chrono::steady_clock::now() - edgeLogged > std::chrono::seconds(2))) {
++                edgeLogged = std::chrono::steady_clock::now();
++                fprintf(stderr, "[snow] edges of %u ground vertices in %.1f ms\n", snowVertexEnd - snowVertexFirst,
++                    std::chrono::duration<float, std::milli>(edgeLogged - edgeStarted).count());
++            }
 +            snowPositionsSource = snowPositionsVector.data();
 +            snowPositionsRange = { size_t(snowVertexFirst) * 4, size_t(snowVertexEnd) * 4 };
 +        }
@@ -6197,7 +6206,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..808e0a0
+index 0000000..b342968
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,2781 @@
@@ -7710,8 +7719,8 @@ index 0000000..808e0a0
 +
 +        // Snow doesn't keep the sharp outline of what pressed it: round each cell reached into, the print's walls
 +        // slope up over a few cells, rounding it off.
-+        const int32_t wallReach = std::max(int32_t(std::lround(10.0f / trail.cell)), 1);
-+        const float wallRise = 40.0f;
++        const int32_t wallReach = std::max(int32_t(std::lround(6.25f / trail.cell)), 1);
++        const float wallRise = 30.0f;
 +        // (Only from the print's edge: inside it, the walls would only land on more of the print.)
 +        auto edge = [&](uint32_t k) {
 +            const int32_t cx = int32_t(k % SnowGridSize), cz = int32_t(k / SnowGridSize);
@@ -16412,10 +16421,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..09292e4
+index 0000000..61f55b4
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,343 @@
 +//
 +// RT64
 +//
@@ -16536,6 +16545,10 @@ index 0000000..09292e4
 +    float3 trail;
 +    bool nearTrail;
 +    float cameraDistance;
++    // The trail's slope (d height / dx, dz) where SnowTessShape found it with the trail (sloped), so SnowShellShade
++    // needs no more lookups for its light.
++    float2 slope;
++    bool sloped;
 +};
 +
 +// The snow's shape at a shell's pixel at height share (0 to 1 of the snow's full height): false when the pixel is
@@ -16593,15 +16606,48 @@ index 0000000..09292e4
 +    return s.shellY <= s.height;
 +}
 +
-+// The trail at a world position smoothed over about blur world units (a 3 x 3 tent), so a surface cut no finer than
-+// that follows it without jagged spikes along the trench's walls.
-+float3 SnowTrailSmoothed(float2 xz, float groundY, float blur) {
-+    float3 sum = 4.0f * SnowTrailAt(xz, groundY);
-+    sum += 2.0f * (SnowTrailAt(xz + float2(blur, 0.0f), groundY) + SnowTrailAt(xz - float2(blur, 0.0f), groundY) +
-+        SnowTrailAt(xz + float2(0.0f, blur), groundY) + SnowTrailAt(xz - float2(0.0f, blur), groundY));
-+    sum += SnowTrailAt(xz + float2(blur, blur), groundY) + SnowTrailAt(xz + float2(-blur, blur), groundY) +
-+        SnowTrailAt(xz + float2(blur, -blur), groundY) + SnowTrailAt(xz - float2(blur, blur), groundY);
-+    return sum / 16.0f;
++// Whether a block of the trail grid holding this world position has a trail in it (FrameParams.snowBlocksLow and High).
++bool SnowBlockActive(float2 xz) {
++    const int n = int(FrParams.snowGrid.z);
++    const int2 cell = int2(floor(xz * FrParams.snowGrid.y));
++    const uint2 slot = uint2(((cell % n) + n) % n);
++    const uint2 block = min(slot / uint(n / 16), 15u);
++    const uint k = block.y * 16u + block.x;
++    const uint4 words = (k < 128u) ? FrParams.snowBlocksLow : FrParams.snowBlocksHigh;
++    const uint i = (k / 32u) & 3u;
++    const uint word = (i == 0u) ? words.x : (i == 1u) ? words.y : (i == 2u) ? words.z : words.w;
++    return ((word >> (k % 32u)) & 1u) != 0u;
++}
++
++// Whether any of the trail can reach within r world units of this position: near Banjo, in a block with a trail in it.
++// Most of the snow has none, and skips the trail's lookups.
++bool SnowTrailNear(float2 xz, float r) {
++    const float4 player = FrParams.snowPlayer;
++    if ((player.w <= 0.0f) || any(abs(xz - player.xy) >= player.w)) {
++        return false;
++    }
++    return SnowBlockActive(xz) || SnowBlockActive(xz + float2(r, r)) || SnowBlockActive(xz + float2(-r, r)) ||
++        SnowBlockActive(xz + float2(r, -r)) || SnowBlockActive(xz - float2(r, r));
++}
++
++// The snow's height over the trail at a world position smoothed over about blur world units (four blended lookups
++// blur * 0.75 apart either way, each itself blended between four cells), with its slope from the same four, so the
++// dents' walls are soft slopes in both shape and light, at a quarter of the lookups a wider filter took. The trail
++// itself (s.trail) is the four's average.
++void SnowTrailSmoothed(float2 xz, float groundY, float blur, inout SnowSample s) {
++    const float r = blur * 0.75f;
++    const float3 t00 = SnowTrailAt(xz + float2(-r, -r), groundY);
++    const float3 t10 = SnowTrailAt(xz + float2(r, -r), groundY);
++    const float3 t01 = SnowTrailAt(xz + float2(-r, r), groundY);
++    const float3 t11 = SnowTrailAt(xz + float2(r, r), groundY);
++    const float h00 = SnowHeight(s.surface, t00);
++    const float h10 = SnowHeight(s.surface, t10);
++    const float h01 = SnowHeight(s.surface, t01);
++    const float h11 = SnowHeight(s.surface, t11);
++    s.trail = (t00 + t10 + t01 + t11) * 0.25f;
++    s.height = (h00 + h10 + h01 + h11) * 0.25f;
++    s.slope = float2((h10 + h11) - (h00 + h01), (h01 + h11) - (h00 + h10)) / (4.0f * r);
++    s.sloped = true;
 +}
 +
 +// How far apart the tessellated snow's new vertices over the trail are (SnowTess.hlsl) at a distance from the camera (world units).
@@ -16615,7 +16661,7 @@ index 0000000..09292e4
 +// shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
 +// a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
 +float SnowTrailBlur(float cameraDistance) {
-+    return max(SnowTrailSegment(cameraDistance) * 0.75f, 4.0f);
++    return max(SnowTrailSegment(cameraDistance) * 0.75f, 6.0f);
 +}
 +
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with how much
@@ -16652,9 +16698,11 @@ index 0000000..09292e4
 +
 +    // Banjo's trail, near him only, on ground facing up (a steep bank keeps its snow as it is).
 +    const float4 player = FrParams.snowPlayer;
-+    s.nearTrail = !steep && (player.w > 0.0f) && all(abs(ground.xz - player.xy) < player.w);
-+    s.trail = !s.nearTrail ? 0.0f : (blur > 0.5f) ? SnowTrailSmoothed(ground.xz, ground.y, blur) : SnowTrailAt(ground.xz, ground.y);
-+    s.height = SnowHeight(s.surface, s.trail);
++    s.nearTrail = !steep && SnowTrailNear(ground.xz, blur + FrParams.snowGrid.x * 2.0f);
++    s.height = s.surface;
++    if (s.nearTrail) {
++        SnowTrailSmoothed(ground.xz, ground.y, blur, s);
++    }
 +    s.shellY = s.height;
 +    return true;
 +}
@@ -16675,7 +16723,12 @@ index 0000000..09292e4
 +
 +    // The trail's slopes light up toward the light and fall into soft blue shade away from it.
 +    float lit = 0.0f;
-+    if (s.nearTrail && ((s.trail.x > 0.003f) || (s.trail.y > 0.003f))) {
++    if (s.sloped) {
++        const float3 n = normalize(float3(-s.slope.x, 1.0f, -s.slope.y));
++        const float3 light = FrParams.snowLight.xyz;
++        lit = clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++    }
++    else if (s.nearTrail && ((s.trail.x > 0.003f) || (s.trail.y > 0.003f))) {
 +        const float e = 1.25f;
 +        const float groundY = world.y - s.shellY;
 +        const float hx0 = SnowHeight(s.surface, SnowTrailAt(world.xz - float2(e, 0.0f), groundY));
@@ -16717,10 +16770,10 @@ index 0000000..09292e4
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..d59f0dc
+index 0000000..74f03d3
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,147 @@
 +//
 +// RT64
 +//
@@ -16767,25 +16820,6 @@ index 0000000..d59f0dc
 +// How far apart the points are that look for the trail along an edge or over a triangle (half a block's width).
 +static const float SnowTessProbe = 25.0f;
 +
-+// Whether a block of the trail grid holding this world position has a trail in it (FrameParams.snowBlocksLow and High).
-+bool SnowBlockActive(float2 xz) {
-+    const int n = int(FrParams.snowGrid.z);
-+    const int2 cell = int2(floor(xz * FrParams.snowGrid.y));
-+    const uint2 slot = uint2(((cell % n) + n) % n);
-+    const uint2 block = min(slot / uint(n / 16), 15u);
-+    const uint k = block.y * 16u + block.x;
-+    const uint4 words = (k < 128u) ? FrParams.snowBlocksLow : FrParams.snowBlocksHigh;
-+    const uint i = (k / 32u) & 3u;
-+    const uint word = (i == 0u) ? words.x : (i == 1u) ? words.y : (i == 2u) ? words.z : words.w;
-+    return ((word >> (k % 32u)) & 1u) != 0u;
-+}
-+
-+// Whether the trail can show here: Banjo's trail is only looked up near him (as SnowTessShape).
-+bool SnowTrailNear(float2 xz) {
-+    const float4 player = FrParams.snowPlayer;
-+    return (player.w > 0.0f) && all(abs(xz - player.xy) < player.w) && SnowBlockActive(xz);
-+}
-+
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
 +    // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
 +    if (!trail) {
@@ -16801,7 +16835,7 @@ index 0000000..d59f0dc
 +    const uint probes = uint(clamp(ceil(edgeLength / SnowTessProbe), 1.0f, 32.0f));
 +    bool trail = false;
 +    for (uint i = 0; (i <= probes) && !trail; i++) {
-+        trail = SnowTrailNear(lerp(a.xz, b.xz, float(i) / float(probes)));
++        trail = SnowTrailNear(lerp(a.xz, b.xz, float(i) / float(probes)), 0.0f);
 +    }
 +    return SnowSegmentFactor(edgeLength, cameraDistance, trail);
 +}
@@ -16814,7 +16848,7 @@ index 0000000..d59f0dc
 +    for (uint i = 0; (i <= steps) && !trail; i++) {
 +        for (uint j = 0; (j <= steps - i) && !trail; j++) {
 +            const float2 w = float2(i, j) / float(steps);
-+            trail = SnowTrailNear(a.xz * (1.0f - w.x - w.y) + b.xz * w.x + c.xz * w.y);
++            trail = SnowTrailNear(a.xz * (1.0f - w.x - w.y) + b.xz * w.x + c.xz * w.y, 0.0f);
 +        }
 +    }
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);

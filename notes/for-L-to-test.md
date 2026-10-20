@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T476 Deep snow speed and soft dents; Icy Side crash with the game paused
+- Asked: 2026-10-20 19:56 UTC
+- Build: main @ ac2dccb
+- Steps:
+  1. Turn on Deep snow, Icy Side, same resolution as before
+  2. Walk through the snow and look at the frame rate and the dent edges
+  3. Stand near the ice storm, open the ESC menu or Photo Mode with time frozen for a minute, then carry on
+- Look for: Faster than the last build, soft dent edges, and no crash after the pause?
+- Status: waiting for L
+
 ## T473 ESC menu pauses the game; stays shut in cutscenes and loads; Photo Filter gone; Transform anywhere on
 - Asked: 2026-10-20 19:31 UTC
 - Build: main @ dd4bc20
