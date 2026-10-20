@@ -261,11 +261,18 @@ namespace {
         }
     }
 
+    // The hand's vector and spot as they were just before the game's update (tooie_select_menu): the update eases the
+    // vector back to its spot, which is what recentred the hand on the entry; the free hand carries on from these.
+    float before_vec[3] = {};
+    int before_spot = -1;
+    bool before_valid = false;
+    bool free_carry = false;                // the last frame wrote the vector, so the one before the update is ours
     int free_last_spot = -1;                // the free hand's previous frame: its spot and where the cursor was
     float free_last_x = 0.0f, free_last_y = 0.0f;
 
     void clear_steer() {
         free_last_spot = -1;
+        free_carry = false;
         steer = Steer{};
         select_target = -1;
         select_press_a = false;
@@ -344,8 +351,11 @@ namespace {
         free_last_y = sy;
 
         float v[3];
+        // Carry on from where the hand was before the update when it has stayed at its spot, so the update's easing
+        // back to the spot is thrown away.
+        const bool carry = before_valid && before_spot == spot && free_carry;
         for (int k = 0; k < 3; k++) {
-            v[k] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * k);
+            v[k] = carry ? before_vec[k] : tooie::rdram::read_float(rdram, menu + hand_vec + 4 * k);
             if (!std::isfinite(v[k])) {
                 return;
             }
@@ -443,6 +453,7 @@ namespace {
         for (int k = 0; k < 3; k++) {
             tooie::rdram::write_float(rdram, menu + hand_vec + 4 * k, v[k]);
         }
+        free_carry = true;
     }
 
     // Steering the save select's hand.
@@ -638,6 +649,16 @@ extern "C" void tooie_select_menu(uint8_t* rdram, recomp_context* ctx) {
     func_80100094(rdram, ctx);
     select_state.store((uint32_t)ctx->r2);
     *ctx = saved;
+    {
+        const uint32_t menu = (uint32_t)ctx->r16;
+        before_valid = tooie::rdram::valid_ptr(menu);
+        if (before_valid) {
+            before_spot = read_byte(rdram, menu + select_spot) >> 4;
+            for (int k = 0; k < 3; k++) {
+                before_vec[k] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * k);
+            }
+        }
+    }
     select_menu.store((uint32_t)ctx->r16);
     select_calls.fetch_add(1);
 }
