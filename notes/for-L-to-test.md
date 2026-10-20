@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
+- Asked: 2026-10-20 08:41 UTC
+- Build: main
+- Steps:
+  1. Settings > Graphics: Extended Draw Distance on
+  2. Go to Hailfire Peaks, Icy Side
+  3. Walk away from the frozen Sabreman (the icy man in the block of ice, near 4817, 3, -5403) and keep him in view, 5000 to 9000 units away
+  4. Compare with the other ice blocks round notes
+- Look for: Sabreman and the ice around him stay drawn as far away as the other ice blocks and props, instead of popping out at about 5000 units
+- Status: waiting for L
+
 ## T447 Flying: turning at 40 FPS and up matches the original game
 - Asked: 2026-10-20 07:49 UTC
 - Build: main @ 7c7f52d

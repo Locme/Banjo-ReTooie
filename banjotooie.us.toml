@@ -1171,7 +1171,7 @@ text = "tooie_gfx_model_done(rdram, ctx);"
 [[patches.hook]]
 func = "func_80101808"
 before_vram = 0x80101808
-text = "tooie_actor_draw_begin(rdram, ctx);"
+text = "tooie_actor_draw_begin(rdram, ctx); tooie_actor_draw_reach(rdram, ctx);"
 
 [[patches.hook]]
 func = "func_80101808"
