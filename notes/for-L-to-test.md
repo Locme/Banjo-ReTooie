@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T460 Cheaper 3D grass
+- Asked: 2026-10-20 16:15 UTC
+- Build: main
+- Steps:
+  1. Spiral Mountain with 3D grass on, defaults
+  2. Compare frame rate and look to the last build (Graphics > 3D grass distance now defaults to 1800, was 2500; if your saved setting is 2500 reset it)
+  3. Walk toward and away from a meadow, check far grass thins gradually without popping
+- Look for: Noticeably faster in open meadows; grass near Banjo looks the same; far grass coarsens sooner but smoothly
+- Status: waiting for L
+
 ## T459 Deep snow presses where models touch it
 - Asked: 2026-10-20 15:59 UTC
 - Build: main

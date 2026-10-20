@@ -4172,7 +4172,7 @@ void tooie::picture_filters::apply() {
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
-        (float)value<double>(grass_distance_option, 2500.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
+        (float)value<double>(grass_distance_option, 1800.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
         (float)(value<double>(grass_patches_option, 50.0) / 100.0));
     RT64::SetSceneGrassBlades((float)(value<double>(grass_thickness_option, 100.0) / 100.0),
         (float)(value<double>(grass_random_length_option, 40.0) / 100.0), value<bool>(grass_chunky_option, false),
@@ -4980,7 +4980,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         grass_distance_option,
         "3D grass distance",
         "How far from the camera the 3D grass reaches before it shrinks away, in the game's units (Banjo is about 150 tall). Further costs more.",
-        500, 6000, 250, 0, false, 2500);
+        500, 6000, 250, 0, false, 1800);
     graphics.add_number_option(
         grass_density_option,
         "3D grass density",
