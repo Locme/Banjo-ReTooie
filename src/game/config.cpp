@@ -747,6 +747,7 @@ void tooie::init_config() {
 
     move_saved_hud_placement();
     recompui::config::finalize();
+    tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
     show_wip_tab();
     move_saved_tab_options();
