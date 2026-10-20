@@ -14633,7 +14633,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..bdfce66 100644
+index e7895c3..d41d3f6 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -14648,7 +14648,7 @@ index e7895c3..bdfce66 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,77 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,90 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -14701,9 +14701,22 @@ index e7895c3..bdfce66 100644
 +        // It stands in for the ground's own draw: where no snow lies (a wall, past its reach) the ground is shaded as
 +        // it is (snowTessGround).
 +        // The ground pass (RASTER_SNOW_GROUND) is the ground as it is, left out where the trail goes down below it.
-+        const bool shaped = SnowTessShape(grassWorld, vertexFurAnchor.w, cross(grassDx, grassDy),
-+            SnowTrailBlur(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
-+        if ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) {
++        // (Its vertices packed what it needs, SnowTessPack: the ground pass the snow's height, the snow how to shade it.)
++        const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
++        bool shaped;
++        if (SnowTessPacked() && groundPass) {
++            shaped = true;
++            snowSample.height = vertexFurAnchor.w;
++        }
++        else if (SnowTessPacked()) {
++            shaped = SnowTessUnpack(vertexFurAnchor, distance(vertexFurAnchor.xz, float2(FrParams.grassWorldX.w, FrParams.grassWorldZ.w)), snowSample);
++            grassWorld = float3(vertexFurAnchor.x, 0.0f, vertexFurAnchor.z);
++        }
++        else {
++            shaped = SnowTessShape(grassWorld, vertexFurAnchor.w, cross(grassDx, grassDy),
++                SnowTrailBlur(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
++        }
++        if (groundPass) {
 +            if (shaped && (snowSample.height < -0.5f)) {
 +                return false;
 +            }
@@ -14728,7 +14741,7 @@ index e7895c3..bdfce66 100644
          return false;
      }
  #endif
-@@ -88,7 +158,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +171,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -14739,7 +14752,7 @@ index e7895c3..bdfce66 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +185,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +198,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -14764,7 +14777,7 @@ index e7895c3..bdfce66 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +233,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +246,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -14773,7 +14786,7 @@ index e7895c3..bdfce66 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +251,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +264,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -14782,7 +14795,7 @@ index e7895c3..bdfce66 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +276,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +289,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -14821,7 +14834,7 @@ index e7895c3..bdfce66 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +380,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +393,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -14945,7 +14958,7 @@ index e7895c3..bdfce66 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +504,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +517,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -14970,7 +14983,7 @@ index e7895c3..bdfce66 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +548,7 @@ void PSMain(
+@@ -287,6 +561,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -14978,7 +14991,7 @@ index e7895c3..bdfce66 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +565,7 @@ void PSMain(
+@@ -303,7 +578,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -18853,10 +18866,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..bbccdd7
+index 0000000..0e48da8
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,394 @@
 +//
 +// RT64
 +//
@@ -18981,6 +18994,10 @@ index 0000000..bbccdd7
 +    // needs no more lookups for its light.
 +    float2 slope;
 +    bool sloped;
++    // How the trail's slopes light it (-1 to 1, SnowTrailLight) where already known (lit): the tessellated snow's pixels
++    // get it from its vertices (SnowTessPacked).
++    float lit;
++    bool litKnown;
 +};
 +
 +// The snow's shape at a shell's pixel at height share (0 to 1 of the snow's full height): false when the pixel is
@@ -19142,6 +19159,49 @@ index 0000000..bbccdd7
 +    return true;
 +}
 +
++// How the trail's slope (d height / dx, dz) lights it: -1 (in shade) to 1 (toward the light).
++float SnowTrailLight(float2 slope) {
++    const float3 n = normalize(float3(-slope.x, 1.0f, -slope.y));
++    const float3 light = FrParams.snowLight.xyz;
++    return clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++}
++
++// The tessellated snow's pixels don't look the trail up again (16 lookups a pixel, at a high resolution most of the
++// snow's cost): its domain shader packs what shading needs into each vertex's anchor, blended over the pixels between
++// (its vertices are no further apart than the trail is smoothed over, SnowTrailBlur). For the snow: (x, light, z, how
++// far under the untouched surface 0 to 1, or -1 where no snow lies). For the ground pass: w the snow's height.
++// (Not with a test aid on, TOOIE_SNOW_DEBUG: those look it up as before.)
++bool SnowTessPacked() {
++    return FrParams.snowGrid.w <= 1.5f;
++}
++
++float4 SnowTessPack(float3 ground, bool shaped, SnowSample s, bool groundPass) {
++    if (groundPass) {
++        return float4(ground, shaped ? s.height : 0.0f);
++    }
++    const float lit = s.sloped ? SnowTrailLight(s.slope) : 0.0f;
++    const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
++    return float4(ground.x, lit, ground.z, shaped ? under : -1.0f);
++}
++
++// A tessellated snow pixel's sample from its packed anchor (SnowTessPack); false where no snow lies. distance: the
++// pixel's distance from the camera (across the ground: enough for the glints, SnowShellShade).
++bool SnowTessUnpack(float4 anchor, float distance, out SnowSample s) {
++    s = (SnowSample)0;
++    s.cameraDistance = distance;
++    if (anchor.w < -0.5f) {
++        return false;
++    }
++    // (Only how far under the surface matters to the shading: the surface counts as 1, the pixel that far below it.)
++    const float under = saturate(anchor.w);
++    s.surface = 1.0f;
++    s.shellY = s.height = 1.0f - under;
++    s.trail.x = under;
++    s.lit = anchor.y;
++    s.litKnown = true;
++    return true;
++}
++
 +// Shades a shell's pixel inside the snow; false when the ground under it isn't snowy (baseColor, the draw's colour).
 +// anyColor: whatever the ground's colour (the tessellated snow, which stands in for the ground's draw: its snow in
 +// shade, under the ice's cliffs, is too dark for SnowColor).
@@ -19158,10 +19218,11 @@ index 0000000..bbccdd7
 +
 +    // The trail's slopes light up toward the light and fall into soft blue shade away from it.
 +    float lit = 0.0f;
-+    if (s.sloped) {
-+        const float3 n = normalize(float3(-s.slope.x, 1.0f, -s.slope.y));
-+        const float3 light = FrParams.snowLight.xyz;
-+        lit = clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++    if (s.litKnown) {
++        lit = s.lit;
++    }
++    else if (s.sloped) {
++        lit = SnowTrailLight(s.slope);
 +    }
 +    else if (s.nearTrail && ((s.trail.x > 0.003f) || (s.trail.y > 0.003f))) {
 +        const float e = 1.25f;
@@ -19205,10 +19266,10 @@ index 0000000..bbccdd7
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..b276ada
+index 0000000..5d3f594
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,178 @@
 +//
 +// RT64
 +//
@@ -19373,8 +19434,12 @@ index 0000000..b276ada
 +        spacing = max(distance(a, b), max(distance(b, c), distance(c, a))) / p.inside;
 +    }
 +    const float blur = max(SnowTrailBlur(distance(v.furAnchor.xyz, camera)), spacing * 0.75f);
-+    SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
-+    const float height = ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) ? 0.0f : s.height;
++    const bool shaped = SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
++    const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
++    const float height = groundPass ? 0.0f : s.height;
++    if (SnowTessPacked()) {
++        v.furAnchor = SnowTessPack(v.furAnchor.xyz, shaped, s, groundPass);
++    }
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 +#ifdef __spirv__
