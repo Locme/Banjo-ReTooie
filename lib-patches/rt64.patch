@@ -7058,7 +7058,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..2e93081
+index 0000000..d023ced
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,3001 @@
@@ -7475,7 +7475,7 @@ index 0000000..2e93081
 +    static float userSunShadows = 0.0f;
 +
 +    // The settings the traced effects take over: reflections and sun shadows show at 60 at least, ambient occlusion at 50
-+    // bounce light at 40 and water reflections at 60, while ray tracing is active (the settings themselves are kept apart, and come back when it is off).
++    // bounce light at 50 and water reflections at 60, while ray tracing is active (the settings themselves are kept apart, and come back when it is off).
 +    static void RefreshReflections() {
 +        float strength = userReflections;
 +        effectsSettings.sunShadows = userSunShadows;
@@ -7486,7 +7486,7 @@ index 0000000..2e93081
 +            strength = std::max(strength, 0.6f);
 +            effectsSettings.sunShadows = std::max(userSunShadows, 0.6f);
 +            effectsSettings.ambientOcclusion = std::max(userAmbientOcclusion, 0.5f);
-+            effectsSettings.screenSpaceGI = std::max(userSsgi, 0.4f);
++            effectsSettings.screenSpaceGI = std::max(userSsgi, 0.5f);
 +            effectsSettings.waterReflections = std::max(userWaterReflections, 0.6f);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
@@ -15078,10 +15078,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..969c610
+index 0000000..b9773f6
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3533 @@
+@@ -0,0 +1,3545 @@
 +//
 +// RT64
 +//
@@ -15922,17 +15922,28 @@ index 0000000..969c610
 +    return 1.0f - blocked * 0.5f;
 +}
 +
-+// Traced bounce light: the colour where each ray lands (its screen position's colour, or the nearest on the screen
-+// when it is off it or hidden, trusted less), a ray that reaches nothing brings nothing.
++// The sky's light from a direction (world space up from the view's worldY): the horizon's haze at the horizon, bluer
++// overhead, dimmer than the sky itself so it only lifts what the game's own ambient light leaves.
++float3 SkyLight(float3 direction) {
++    const float up = saturate(dot(direction, normalize(gConstants.worldY.xyz)));
++    const float3 haze = gConstants.fogColor.rgb;
++    return lerp(haze, haze * float3(0.75f, 0.9f, 1.25f), up) * 0.35f;
++}
++
++// Traced light (path traced, a path of one or two hops: surface, what it sees, the sky): from the surface, two rays a pixel
++// (32 over a 4x4 block) over the hemisphere, far enough to leave the world. A ray that leaves it brings the sky's
++// light; one that lands brings the colour of where it lands (that spot's colour on the screen, or the nearest on
++// the screen when it is off it or hidden, trusted less), the less the further off it was.
 +float3 TracedGI(float3 center, float3 normal, uint cell) {
 +    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
-+    const float rayDistance = gConstants.ambientOcclusion.y * 3.0f;
++    const float nearReach = gConstants.ambientOcclusion.y * 3.0f;
 +    const float2 size = gConstants.projection.zw;
 +    float3 light = 0.0f;
 +    [unroll] for (int r = 0; r < 2; r++) {
 +        const float3 direction = IndirectDirection(normal, cell * 2u + uint(r));
-+        const float t = TraceDistance(origin, direction, rayDistance);
++        const float t = TraceDistance(origin, direction, 15000.0f);
 +        if (t < 0.0f) {
++            light += SkyLight(normalize(ViewToWorldDirection(direction)));
 +            continue;
 +        }
 +        const float3 hit = origin + direction * t;
@@ -15945,7 +15956,8 @@ index 0000000..969c610
 +        const float sampleDepth = LoadDepth(int2(inside));
 +        const float thickness = max(-hit.z * 0.03f, 20.0f);
 +        const bool inView = onScreen && ((sampleDepth >= 0.99999f) || (ViewZ(sampleDepth) - hit.z <= thickness));
-+        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f);
++        const float far = lerp(1.0f, 0.4f, saturate(t / (nearReach * 4.0f)));
++        light += gColorHalf.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb * (inView ? RayEdgeFade(inside) : 0.35f) * far;
 +    }
 +    return light * 0.5f;
 +}
