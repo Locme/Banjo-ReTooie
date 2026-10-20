@@ -1691,21 +1691,6 @@ func = "capod_entrypoint_22"
 before_vram = 0x808005C4
 text = "if (tooie_test_room_quiet()) { ctx->r2 = 0; return; }"
 
-# DEV > Aim trace (src/debug/aim_trace.cpp): counts the callers of the player-position getters.
-[[patches.hook]]
-func = "func_800F5A00"
-before_vram = 0x800F5A00
-text = "tooie_aim_trace(rdram, ctx, 0);"
-
-[[patches.hook]]
-func = "func_800F5A2C"
-before_vram = 0x800F5A2C
-text = "tooie_aim_trace(rdram, ctx, 1);"
-
-[[patches.hook]]
-func = "func_8008FE68"
-before_vram = 0x8008FE68
-text = "tooie_aim_trace(rdram, ctx, 2);"
 
 # Enemy aim, second half: the out point of the two aim-ahead functions is moved on at their return.
 [[patches.hook]]
@@ -1723,3 +1708,925 @@ text = "tooie_enemy_aim_end(rdram, ctx);"
 func = "func_80800204_chklungophial"
 before_vram = 0x80800204
 text = "tooie_klungo_potion_steer(rdram, ctx);"
+
+# DEV > Aim trace (src/debug/aim_trace.cpp): each function that reads the player's position counts its own calls.
+
+[[patches.hook]]
+func = "baduo_entrypoint_13"
+before_vram = 0x8080030C
+text = "tooie_aim_trace(rdram, ctx, \"baduo_entrypoint_13\");"
+
+[[patches.hook]]
+func = "ch1pfreeze_entrypoint_1"
+before_vram = 0x808003B4
+text = "tooie_aim_trace(rdram, ctx, \"ch1pfreeze_entrypoint_1\");"
+
+[[patches.hook]]
+func = "chhotwaterpoolbits_entrypoint_5"
+before_vram = 0x8080088C
+text = "tooie_aim_trace(rdram, ctx, \"chhotwaterpoolbits_entrypoint_5\");"
+
+[[patches.hook]]
+func = "chping_entrypoint_0"
+before_vram = 0x80800384
+text = "tooie_aim_trace(rdram, ctx, \"chping_entrypoint_0\");"
+
+[[patches.hook]]
+func = "chusefeather_entrypoint_0"
+before_vram = 0x80800208
+text = "tooie_aim_trace(rdram, ctx, \"chusefeather_entrypoint_0\");"
+
+[[patches.hook]]
+func = "chwandglow_entrypoint_0"
+before_vram = 0x80800334
+text = "tooie_aim_trace(rdram, ctx, \"chwandglow_entrypoint_0\");"
+
+[[patches.hook]]
+func = "func_8008D40C"
+before_vram = 0x8008D40C
+text = "tooie_aim_trace(rdram, ctx, \"func_8008D40C\");"
+
+[[patches.hook]]
+func = "func_800995B8"
+before_vram = 0x800995B8
+text = "tooie_aim_trace(rdram, ctx, \"func_800995B8\");"
+
+[[patches.hook]]
+func = "func_800A6DAC"
+before_vram = 0x800A6DAC
+text = "tooie_aim_trace(rdram, ctx, \"func_800A6DAC\");"
+
+[[patches.hook]]
+func = "func_800A6FF0"
+before_vram = 0x800A6FF0
+text = "tooie_aim_trace(rdram, ctx, \"func_800A6FF0\");"
+
+[[patches.hook]]
+func = "func_800B9170"
+before_vram = 0x800B9170
+text = "tooie_aim_trace(rdram, ctx, \"func_800B9170\");"
+
+[[patches.hook]]
+func = "func_800D7948"
+before_vram = 0x800D7948
+text = "tooie_aim_trace(rdram, ctx, \"func_800D7948\");"
+
+[[patches.hook]]
+func = "func_800EA45C"
+before_vram = 0x800EA45C
+text = "tooie_aim_trace(rdram, ctx, \"func_800EA45C\");"
+
+[[patches.hook]]
+func = "func_800EA51C"
+before_vram = 0x800EA51C
+text = "tooie_aim_trace(rdram, ctx, \"func_800EA51C\");"
+
+[[patches.hook]]
+func = "func_800F84FC"
+before_vram = 0x800F84FC
+text = "tooie_aim_trace(rdram, ctx, \"func_800F84FC\");"
+
+[[patches.hook]]
+func = "func_800F8914"
+before_vram = 0x800F8914
+text = "tooie_aim_trace(rdram, ctx, \"func_800F8914\");"
+
+[[patches.hook]]
+func = "func_800F9240"
+before_vram = 0x800F9240
+text = "tooie_aim_trace(rdram, ctx, \"func_800F9240\");"
+
+[[patches.hook]]
+func = "func_800F9488"
+before_vram = 0x800F9488
+text = "tooie_aim_trace(rdram, ctx, \"func_800F9488\");"
+
+[[patches.hook]]
+func = "func_800FDC58"
+before_vram = 0x800FDC58
+text = "tooie_aim_trace(rdram, ctx, \"func_800FDC58\");"
+
+[[patches.hook]]
+func = "func_801002C0"
+before_vram = 0x801002C0
+text = "tooie_aim_trace(rdram, ctx, \"func_801002C0\");"
+
+[[patches.hook]]
+func = "func_8010C550"
+before_vram = 0x8010C550
+text = "tooie_aim_trace(rdram, ctx, \"func_8010C550\");"
+
+[[patches.hook]]
+func = "func_8010CBD0"
+before_vram = 0x8010CBD0
+text = "tooie_aim_trace(rdram, ctx, \"func_8010CBD0\");"
+
+[[patches.hook]]
+func = "func_8010CD50"
+before_vram = 0x8010CD50
+text = "tooie_aim_trace(rdram, ctx, \"func_8010CD50\");"
+
+[[patches.hook]]
+func = "func_8010D1E8"
+before_vram = 0x8010D1E8
+text = "tooie_aim_trace(rdram, ctx, \"func_8010D1E8\");"
+
+[[patches.hook]]
+func = "func_8010D350"
+before_vram = 0x8010D350
+text = "tooie_aim_trace(rdram, ctx, \"func_8010D350\");"
+
+[[patches.hook]]
+func = "func_8010D600"
+before_vram = 0x8010D600
+text = "tooie_aim_trace(rdram, ctx, \"func_8010D600\");"
+
+[[patches.hook]]
+func = "func_8010D640"
+before_vram = 0x8010D640
+text = "tooie_aim_trace(rdram, ctx, \"func_8010D640\");"
+
+[[patches.hook]]
+func = "func_801107B0"
+before_vram = 0x801107B0
+text = "tooie_aim_trace(rdram, ctx, \"func_801107B0\");"
+
+[[patches.hook]]
+func = "func_80110970"
+before_vram = 0x80110970
+text = "tooie_aim_trace(rdram, ctx, \"func_80110970\");"
+
+[[patches.hook]]
+func = "func_80112168"
+before_vram = 0x80112168
+text = "tooie_aim_trace(rdram, ctx, \"func_80112168\");"
+
+[[patches.hook]]
+func = "func_801121D8"
+before_vram = 0x801121D8
+text = "tooie_aim_trace(rdram, ctx, \"func_801121D8\");"
+
+[[patches.hook]]
+func = "func_80800000_chcanarymarycage"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"func_80800000_chcanarymarycage\");"
+
+[[patches.hook]]
+func = "func_80800000_chfactorytrashbelt"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"func_80800000_chfactorytrashbelt\");"
+
+[[patches.hook]]
+func = "func_80800000_chsmalltrexdoor"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"func_80800000_chsmalltrexdoor\");"
+
+[[patches.hook]]
+func = "func_80800000_chwandglow"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"func_80800000_chwandglow\");"
+
+[[patches.hook]]
+func = "func_80800000_fxleaves"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"func_80800000_fxleaves\");"
+
+[[patches.hook]]
+func = "func_80800024_chlavahand"
+before_vram = 0x80800024
+text = "tooie_aim_trace(rdram, ctx, \"func_80800024_chlavahand\");"
+
+[[patches.hook]]
+func = "func_8080004C_chnewshovel"
+before_vram = 0x8080004C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080004C_chnewshovel\");"
+
+[[patches.hook]]
+func = "func_80800054_chlavagargoyle"
+before_vram = 0x80800054
+text = "tooie_aim_trace(rdram, ctx, \"func_80800054_chlavagargoyle\");"
+
+[[patches.hook]]
+func = "func_80800058_chcoderoombits"
+before_vram = 0x80800058
+text = "tooie_aim_trace(rdram, ctx, \"func_80800058_chcoderoombits\");"
+
+[[patches.hook]]
+func = "func_8080005C_chcamwaypoint"
+before_vram = 0x8080005C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080005C_chcamwaypoint\");"
+
+[[patches.hook]]
+func = "func_8080005C_chfactoryposter"
+before_vram = 0x8080005C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080005C_chfactoryposter\");"
+
+[[patches.hook]]
+func = "func_80800078_chtntmineshoot"
+before_vram = 0x80800078
+text = "tooie_aim_trace(rdram, ctx, \"func_80800078_chtntmineshoot\");"
+
+[[patches.hook]]
+func = "func_8080007C_chpotogoldbits"
+before_vram = 0x8080007C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080007C_chpotogoldbits\");"
+
+[[patches.hook]]
+func = "func_8080009C_chgoldfish"
+before_vram = 0x8080009C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080009C_chgoldfish\");"
+
+[[patches.hook]]
+func = "func_808000A4_chfantasycannon"
+before_vram = 0x808000A4
+text = "tooie_aim_trace(rdram, ctx, \"func_808000A4_chfantasycannon\");"
+
+[[patches.hook]]
+func = "func_808000BC_chtrashcompactor"
+before_vram = 0x808000BC
+text = "tooie_aim_trace(rdram, ctx, \"func_808000BC_chtrashcompactor\");"
+
+[[patches.hook]]
+func = "func_808000CC_chjigsawcollect"
+before_vram = 0x808000CC
+text = "tooie_aim_trace(rdram, ctx, \"func_808000CC_chjigsawcollect\");"
+
+[[patches.hook]]
+func = "func_808000EC_chfantasytrashcanbits"
+before_vram = 0x808000EC
+text = "tooie_aim_trace(rdram, ctx, \"func_808000EC_chfantasytrashcanbits\");"
+
+[[patches.hook]]
+func = "func_80800108_chswappy"
+before_vram = 0x80800108
+text = "tooie_aim_trace(rdram, ctx, \"func_80800108_chswappy\");"
+
+[[patches.hook]]
+func = "func_80800124_chbubbleelevator"
+before_vram = 0x80800124
+text = "tooie_aim_trace(rdram, ctx, \"func_80800124_chbubbleelevator\");"
+
+[[patches.hook]]
+func = "func_80800130_chfactorydrums"
+before_vram = 0x80800130
+text = "tooie_aim_trace(rdram, ctx, \"func_80800130_chfactorydrums\");"
+
+[[patches.hook]]
+func = "func_8080013C_chfactorysparkroom"
+before_vram = 0x8080013C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080013C_chfactorysparkroom\");"
+
+[[patches.hook]]
+func = "func_80800140_chquicksandbaddy"
+before_vram = 0x80800140
+text = "tooie_aim_trace(rdram, ctx, \"func_80800140_chquicksandbaddy\");"
+
+[[patches.hook]]
+func = "func_80800150_chsmalltrexdoor"
+before_vram = 0x80800150
+text = "tooie_aim_trace(rdram, ctx, \"func_80800150_chsmalltrexdoor\");"
+
+[[patches.hook]]
+func = "func_80800158_chwumbawigwam"
+before_vram = 0x80800158
+text = "tooie_aim_trace(rdram, ctx, \"func_80800158_chwumbawigwam\");"
+
+[[patches.hook]]
+func = "func_80800160_chbanjoctrl"
+before_vram = 0x80800160
+text = "tooie_aim_trace(rdram, ctx, \"func_80800160_chbanjoctrl\");"
+
+[[patches.hook]]
+func = "func_80800188_chtntmineshoot"
+before_vram = 0x80800188
+text = "tooie_aim_trace(rdram, ctx, \"func_80800188_chtntmineshoot\");"
+
+[[patches.hook]]
+func = "func_80800194_chkingjinjo"
+before_vram = 0x80800194
+text = "tooie_aim_trace(rdram, ctx, \"func_80800194_chkingjinjo\");"
+
+[[patches.hook]]
+func = "func_808001A8_ncpodfixpos"
+before_vram = 0x808001A8
+text = "tooie_aim_trace(rdram, ctx, \"func_808001A8_ncpodfixpos\");"
+
+[[patches.hook]]
+func = "func_808001AC_chicywind"
+before_vram = 0x808001AC
+text = "tooie_aim_trace(rdram, ctx, \"func_808001AC_chicywind\");"
+
+[[patches.hook]]
+func = "func_808001B4_chgruntyfireballbig"
+before_vram = 0x808001B4
+text = "tooie_aim_trace(rdram, ctx, \"func_808001B4_chgruntyfireballbig\");"
+
+[[patches.hook]]
+func = "func_808001B8_chping"
+before_vram = 0x808001B8
+text = "tooie_aim_trace(rdram, ctx, \"func_808001B8_chping\");"
+
+[[patches.hook]]
+func = "func_808001E0_gcgoto"
+before_vram = 0x808001E0
+text = "tooie_aim_trace(rdram, ctx, \"func_808001E0_gcgoto\");"
+
+[[patches.hook]]
+func = "func_8080021C_ncpoducam"
+before_vram = 0x8080021C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080021C_ncpoducam\");"
+
+[[patches.hook]]
+func = "func_80800224_chfactorymagnet"
+before_vram = 0x80800224
+text = "tooie_aim_trace(rdram, ctx, \"func_80800224_chfactorymagnet\");"
+
+[[patches.hook]]
+func = "func_80800228_chpodiumbankaz"
+before_vram = 0x80800228
+text = "tooie_aim_trace(rdram, ctx, \"func_80800228_chpodiumbankaz\");"
+
+[[patches.hook]]
+func = "func_80800254_chfantasyonion"
+before_vram = 0x80800254
+text = "tooie_aim_trace(rdram, ctx, \"func_80800254_chfantasyonion\");"
+
+[[patches.hook]]
+func = "func_80800264_chstinger"
+before_vram = 0x80800264
+text = "tooie_aim_trace(rdram, ctx, \"func_80800264_chstinger\");"
+
+[[patches.hook]]
+func = "func_80800280_chvandoor"
+before_vram = 0x80800280
+text = "tooie_aim_trace(rdram, ctx, \"func_80800280_chvandoor\");"
+
+[[patches.hook]]
+func = "func_808002E0_changlerboss"
+before_vram = 0x808002E0
+text = "tooie_aim_trace(rdram, ctx, \"func_808002E0_changlerboss\");"
+
+[[patches.hook]]
+func = "func_8080030C_chweldarboss"
+before_vram = 0x8080030C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080030C_chweldarboss\");"
+
+[[patches.hook]]
+func = "func_8080030C_gcdialogcamera"
+before_vram = 0x8080030C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080030C_gcdialogcamera\");"
+
+[[patches.hook]]
+func = "func_80800314_chfantasyathlete"
+before_vram = 0x80800314
+text = "tooie_aim_trace(rdram, ctx, \"func_80800314_chfantasyathlete\");"
+
+[[patches.hook]]
+func = "func_80800318_chicekeydoor"
+before_vram = 0x80800318
+text = "tooie_aim_trace(rdram, ctx, \"func_80800318_chicekeydoor\");"
+
+[[patches.hook]]
+func = "func_80800324_chfactoryprop"
+before_vram = 0x80800324
+text = "tooie_aim_trace(rdram, ctx, \"func_80800324_chfactoryprop\");"
+
+[[patches.hook]]
+func = "func_80800344_chfantasylakebits"
+before_vram = 0x80800344
+text = "tooie_aim_trace(rdram, ctx, \"func_80800344_chfantasylakebits\");"
+
+[[patches.hook]]
+func = "func_80800374_chmasterjiggy"
+before_vram = 0x80800374
+text = "tooie_aim_trace(rdram, ctx, \"func_80800374_chmasterjiggy\");"
+
+[[patches.hook]]
+func = "func_80800388_chdingpot"
+before_vram = 0x80800388
+text = "tooie_aim_trace(rdram, ctx, \"func_80800388_chdingpot\");"
+
+[[patches.hook]]
+func = "func_8080038C_chlagoonfish"
+before_vram = 0x8080038C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080038C_chlagoonfish\");"
+
+[[patches.hook]]
+func = "func_80800390_suegg"
+before_vram = 0x80800390
+text = "tooie_aim_trace(rdram, ctx, \"func_80800390_suegg\");"
+
+[[patches.hook]]
+func = "func_80800394_chlavagargoyle"
+before_vram = 0x80800394
+text = "tooie_aim_trace(rdram, ctx, \"func_80800394_chlavagargoyle\");"
+
+[[patches.hook]]
+func = "func_808003A4_changlerbossflare"
+before_vram = 0x808003A4
+text = "tooie_aim_trace(rdram, ctx, \"func_808003A4_changlerbossflare\");"
+
+[[patches.hook]]
+func = "func_8080044C_chvandoor"
+before_vram = 0x8080044C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080044C_chvandoor\");"
+
+[[patches.hook]]
+func = "func_80800480_chdinofoot"
+before_vram = 0x80800480
+text = "tooie_aim_trace(rdram, ctx, \"func_80800480_chdinofoot\");"
+
+[[patches.hook]]
+func = "func_808004A4_chdragonbrothers"
+before_vram = 0x808004A4
+text = "tooie_aim_trace(rdram, ctx, \"func_808004A4_chdragonbrothers\");"
+
+[[patches.hook]]
+func = "func_808004C0_chsilo"
+before_vram = 0x808004C0
+text = "tooie_aim_trace(rdram, ctx, \"func_808004C0_chsilo\");"
+
+[[patches.hook]]
+func = "func_80800544_chfantasycannon"
+before_vram = 0x80800544
+text = "tooie_aim_trace(rdram, ctx, \"func_80800544_chfantasycannon\");"
+
+[[patches.hook]]
+func = "func_80800590_chgruntyfireballbig"
+before_vram = 0x80800590
+text = "tooie_aim_trace(rdram, ctx, \"func_80800590_chgruntyfireballbig\");"
+
+[[patches.hook]]
+func = "func_808005C4_chdinofoot"
+before_vram = 0x808005C4
+text = "tooie_aim_trace(rdram, ctx, \"func_808005C4_chdinofoot\");"
+
+[[patches.hook]]
+func = "func_80800670_chfactorytoxicpools"
+before_vram = 0x80800670
+text = "tooie_aim_trace(rdram, ctx, \"func_80800670_chfactorytoxicpools\");"
+
+[[patches.hook]]
+func = "func_80800674_chfactoryprop"
+before_vram = 0x80800674
+text = "tooie_aim_trace(rdram, ctx, \"func_80800674_chfactoryprop\");"
+
+[[patches.hook]]
+func = "func_808006B0_chnewshovel"
+before_vram = 0x808006B0
+text = "tooie_aim_trace(rdram, ctx, \"func_808006B0_chnewshovel\");"
+
+[[patches.hook]]
+func = "func_808006C8_chdragonbrothers"
+before_vram = 0x808006C8
+text = "tooie_aim_trace(rdram, ctx, \"func_808006C8_chdragonbrothers\");"
+
+[[patches.hook]]
+func = "func_80800718_chhotwaterpoolbits"
+before_vram = 0x80800718
+text = "tooie_aim_trace(rdram, ctx, \"func_80800718_chhotwaterpoolbits\");"
+
+[[patches.hook]]
+func = "func_80800738_chfactorycrusher"
+before_vram = 0x80800738
+text = "tooie_aim_trace(rdram, ctx, \"func_80800738_chfactorycrusher\");"
+
+[[patches.hook]]
+func = "func_8080078C_susubgame"
+before_vram = 0x8080078C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080078C_susubgame\");"
+
+[[patches.hook]]
+func = "func_808007B4_chevilspirit"
+before_vram = 0x808007B4
+text = "tooie_aim_trace(rdram, ctx, \"func_808007B4_chevilspirit\");"
+
+[[patches.hook]]
+func = "func_808007D4_scradar"
+before_vram = 0x808007D4
+text = "tooie_aim_trace(rdram, ctx, \"func_808007D4_scradar\");"
+
+[[patches.hook]]
+func = "func_80800830_chtntmineshoot"
+before_vram = 0x80800830
+text = "tooie_aim_trace(rdram, ctx, \"func_80800830_chtntmineshoot\");"
+
+[[patches.hook]]
+func = "func_80800838_chfactorysparkroom"
+before_vram = 0x80800838
+text = "tooie_aim_trace(rdram, ctx, \"func_80800838_chfactorysparkroom\");"
+
+[[patches.hook]]
+func = "func_80800874_cheggproximity"
+before_vram = 0x80800874
+text = "tooie_aim_trace(rdram, ctx, \"func_80800874_cheggproximity\");"
+
+[[patches.hook]]
+func = "func_80800898_chfactorytoxicpools"
+before_vram = 0x80800898
+text = "tooie_aim_trace(rdram, ctx, \"func_80800898_chfactorytoxicpools\");"
+
+[[patches.hook]]
+func = "func_808008B0_chfantasycannon"
+before_vram = 0x808008B0
+text = "tooie_aim_trace(rdram, ctx, \"func_808008B0_chfantasycannon\");"
+
+[[patches.hook]]
+func = "func_808008C8_chdragonbrothers"
+before_vram = 0x808008C8
+text = "tooie_aim_trace(rdram, ctx, \"func_808008C8_chdragonbrothers\");"
+
+[[patches.hook]]
+func = "func_808008F0_chfactorycrusher"
+before_vram = 0x808008F0
+text = "tooie_aim_trace(rdram, ctx, \"func_808008F0_chfactorycrusher\");"
+
+[[patches.hook]]
+func = "func_8080094C_chfantasyathlete"
+before_vram = 0x8080094C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080094C_chfantasyathlete\");"
+
+[[patches.hook]]
+func = "func_80800980_chbiggafoot"
+before_vram = 0x80800980
+text = "tooie_aim_trace(rdram, ctx, \"func_80800980_chbiggafoot\");"
+
+[[patches.hook]]
+func = "func_80800988_chfactoryprop"
+before_vram = 0x80800988
+text = "tooie_aim_trace(rdram, ctx, \"func_80800988_chfactoryprop\");"
+
+[[patches.hook]]
+func = "func_80800A08_chfactoryempspell"
+before_vram = 0x80800A08
+text = "tooie_aim_trace(rdram, ctx, \"func_80800A08_chfactoryempspell\");"
+
+[[patches.hook]]
+func = "func_80800A2C_chlavagargoyle"
+before_vram = 0x80800A2C
+text = "tooie_aim_trace(rdram, ctx, \"func_80800A2C_chlavagargoyle\");"
+
+[[patches.hook]]
+func = "func_80800A58_chphlegm"
+before_vram = 0x80800A58
+text = "tooie_aim_trace(rdram, ctx, \"func_80800A58_chphlegm\");"
+
+[[patches.hook]]
+func = "func_80800AAC_chminisubgame"
+before_vram = 0x80800AAC
+text = "tooie_aim_trace(rdram, ctx, \"func_80800AAC_chminisubgame\");"
+
+[[patches.hook]]
+func = "func_80800AD8_chfactorytoxiccloud"
+before_vram = 0x80800AD8
+text = "tooie_aim_trace(rdram, ctx, \"func_80800AD8_chfactorytoxiccloud\");"
+
+[[patches.hook]]
+func = "func_80800B68_chfantasyeyeball"
+before_vram = 0x80800B68
+text = "tooie_aim_trace(rdram, ctx, \"func_80800B68_chfantasyeyeball\");"
+
+[[patches.hook]]
+func = "func_80800B80_chwaspnestgame"
+before_vram = 0x80800B80
+text = "tooie_aim_trace(rdram, ctx, \"func_80800B80_chwaspnestgame\");"
+
+[[patches.hook]]
+func = "func_80800BE4_chtoxicroombits"
+before_vram = 0x80800BE4
+text = "tooie_aim_trace(rdram, ctx, \"func_80800BE4_chtoxicroombits\");"
+
+[[patches.hook]]
+func = "func_80800BF0_chcollballcontrol"
+before_vram = 0x80800BF0
+text = "tooie_aim_trace(rdram, ctx, \"func_80800BF0_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_80800C7C_chfactoryempspell"
+before_vram = 0x80800C7C
+text = "tooie_aim_trace(rdram, ctx, \"func_80800C7C_chfactoryempspell\");"
+
+[[patches.hook]]
+func = "func_80800DB4_chstoneballcontrol"
+before_vram = 0x80800DB4
+text = "tooie_aim_trace(rdram, ctx, \"func_80800DB4_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_80800DBC_chquicksandbaddy"
+before_vram = 0x80800DBC
+text = "tooie_aim_trace(rdram, ctx, \"func_80800DBC_chquicksandbaddy\");"
+
+[[patches.hook]]
+func = "func_80800FA8_sucoasterfly"
+before_vram = 0x80800FA8
+text = "tooie_aim_trace(rdram, ctx, \"func_80800FA8_sucoasterfly\");"
+
+[[patches.hook]]
+func = "func_808010FC_chbanjoctrl"
+before_vram = 0x808010FC
+text = "tooie_aim_trace(rdram, ctx, \"func_808010FC_chbanjoctrl\");"
+
+[[patches.hook]]
+func = "func_80801260_chhumba"
+before_vram = 0x80801260
+text = "tooie_aim_trace(rdram, ctx, \"func_80801260_chhumba\");"
+
+[[patches.hook]]
+func = "func_808012C4_chfactorytoxiccloud"
+before_vram = 0x808012C4
+text = "tooie_aim_trace(rdram, ctx, \"func_808012C4_chfactorytoxiccloud\");"
+
+[[patches.hook]]
+func = "func_808012E4_chfactorymagnet"
+before_vram = 0x808012E4
+text = "tooie_aim_trace(rdram, ctx, \"func_808012E4_chfactorymagnet\");"
+
+[[patches.hook]]
+func = "func_80801318_chtntmineshoot"
+before_vram = 0x80801318
+text = "tooie_aim_trace(rdram, ctx, \"func_80801318_chtntmineshoot\");"
+
+[[patches.hook]]
+func = "func_80801364_chwaspnestgame"
+before_vram = 0x80801364
+text = "tooie_aim_trace(rdram, ctx, \"func_80801364_chwaspnestgame\");"
+
+[[patches.hook]]
+func = "func_808013C0_chdoor"
+before_vram = 0x808013C0
+text = "tooie_aim_trace(rdram, ctx, \"func_808013C0_chdoor\");"
+
+[[patches.hook]]
+func = "func_808013F8_chfantasyeyeball"
+before_vram = 0x808013F8
+text = "tooie_aim_trace(rdram, ctx, \"func_808013F8_chfantasyeyeball\");"
+
+[[patches.hook]]
+func = "func_8080146C_chtntmineshoot"
+before_vram = 0x8080146C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080146C_chtntmineshoot\");"
+
+[[patches.hook]]
+func = "func_808014B0_chfactorytwinklies"
+before_vram = 0x808014B0
+text = "tooie_aim_trace(rdram, ctx, \"func_808014B0_chfactorytwinklies\");"
+
+[[patches.hook]]
+func = "func_80801508_chfactorymagnet"
+before_vram = 0x80801508
+text = "tooie_aim_trace(rdram, ctx, \"func_80801508_chfactorymagnet\");"
+
+[[patches.hook]]
+func = "func_80801554_gcmapsects"
+before_vram = 0x80801554
+text = "tooie_aim_trace(rdram, ctx, \"func_80801554_gcmapsects\");"
+
+[[patches.hook]]
+func = "func_808015F8_sucoaster"
+before_vram = 0x808015F8
+text = "tooie_aim_trace(rdram, ctx, \"func_808015F8_sucoaster\");"
+
+[[patches.hook]]
+func = "func_80801608_chfactorytwinklies"
+before_vram = 0x80801608
+text = "tooie_aim_trace(rdram, ctx, \"func_80801608_chfactorytwinklies\");"
+
+[[patches.hook]]
+func = "func_80801804_chstatueboss"
+before_vram = 0x80801804
+text = "tooie_aim_trace(rdram, ctx, \"func_80801804_chstatueboss\");"
+
+[[patches.hook]]
+func = "func_80801A20_chcollballcontrol"
+before_vram = 0x80801A20
+text = "tooie_aim_trace(rdram, ctx, \"func_80801A20_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_80801A50_chfantasyeyeball"
+before_vram = 0x80801A50
+text = "tooie_aim_trace(rdram, ctx, \"func_80801A50_chfantasyeyeball\");"
+
+[[patches.hook]]
+func = "func_80801AB4_chhoopswoop"
+before_vram = 0x80801AB4
+text = "tooie_aim_trace(rdram, ctx, \"func_80801AB4_chhoopswoop\");"
+
+[[patches.hook]]
+func = "func_80801AF0_changlerboss"
+before_vram = 0x80801AF0
+text = "tooie_aim_trace(rdram, ctx, \"func_80801AF0_changlerboss\");"
+
+[[patches.hook]]
+func = "func_80801B2C_chfactoryempspell"
+before_vram = 0x80801B2C
+text = "tooie_aim_trace(rdram, ctx, \"func_80801B2C_chfactoryempspell\");"
+
+[[patches.hook]]
+func = "func_80801BE0_chstoneballcontrol"
+before_vram = 0x80801BE0
+text = "tooie_aim_trace(rdram, ctx, \"func_80801BE0_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_80801C00_chfactoryempspell"
+before_vram = 0x80801C00
+text = "tooie_aim_trace(rdram, ctx, \"func_80801C00_chfactoryempspell\");"
+
+[[patches.hook]]
+func = "func_80801DC8_chdinoboss"
+before_vram = 0x80801DC8
+text = "tooie_aim_trace(rdram, ctx, \"func_80801DC8_chdinoboss\");"
+
+[[patches.hook]]
+func = "func_80801E3C_changlerboss"
+before_vram = 0x80801E3C
+text = "tooie_aim_trace(rdram, ctx, \"func_80801E3C_changlerboss\");"
+
+[[patches.hook]]
+func = "func_80801FAC_chdinoboss"
+before_vram = 0x80801FAC
+text = "tooie_aim_trace(rdram, ctx, \"func_80801FAC_chdinoboss\");"
+
+[[patches.hook]]
+func = "func_8080202C_sucoaster"
+before_vram = 0x8080202C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080202C_sucoaster\");"
+
+[[patches.hook]]
+func = "func_80802060_chchuffy"
+before_vram = 0x80802060
+text = "tooie_aim_trace(rdram, ctx, \"func_80802060_chchuffy\");"
+
+[[patches.hook]]
+func = "func_8080219C_chpotogoldgame"
+before_vram = 0x8080219C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080219C_chpotogoldgame\");"
+
+[[patches.hook]]
+func = "func_808021BC_chtrashcangame"
+before_vram = 0x808021BC
+text = "tooie_aim_trace(rdram, ctx, \"func_808021BC_chtrashcangame\");"
+
+[[patches.hook]]
+func = "func_8080227C_chweldarboss"
+before_vram = 0x8080227C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080227C_chweldarboss\");"
+
+[[patches.hook]]
+func = "func_80802574_chdragonbrothers"
+before_vram = 0x80802574
+text = "tooie_aim_trace(rdram, ctx, \"func_80802574_chdragonbrothers\");"
+
+[[patches.hook]]
+func = "func_80802964_chcollballcontrol"
+before_vram = 0x80802964
+text = "tooie_aim_trace(rdram, ctx, \"func_80802964_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_8080298C_chfantasyathlete"
+before_vram = 0x8080298C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080298C_chfantasyathlete\");"
+
+[[patches.hook]]
+func = "func_80802CE0_chcollballcontrol"
+before_vram = 0x80802CE0
+text = "tooie_aim_trace(rdram, ctx, \"func_80802CE0_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_80802E30_chstoneballcontrol"
+before_vram = 0x80802E30
+text = "tooie_aim_trace(rdram, ctx, \"func_80802E30_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_80802F00_chdiggerboss"
+before_vram = 0x80802F00
+text = "tooie_aim_trace(rdram, ctx, \"func_80802F00_chdiggerboss\");"
+
+[[patches.hook]]
+func = "func_80803080_chweldarboss"
+before_vram = 0x80803080
+text = "tooie_aim_trace(rdram, ctx, \"func_80803080_chweldarboss\");"
+
+[[patches.hook]]
+func = "func_80803148_chstoneballcontrol"
+before_vram = 0x80803148
+text = "tooie_aim_trace(rdram, ctx, \"func_80803148_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_808038F8_chweldarboss"
+before_vram = 0x808038F8
+text = "tooie_aim_trace(rdram, ctx, \"func_808038F8_chweldarboss\");"
+
+[[patches.hook]]
+func = "func_80803EF4_chcollballcontrol"
+before_vram = 0x80803EF4
+text = "tooie_aim_trace(rdram, ctx, \"func_80803EF4_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_80803F4C_chdragonbrothers"
+before_vram = 0x80803F4C
+text = "tooie_aim_trace(rdram, ctx, \"func_80803F4C_chdragonbrothers\");"
+
+[[patches.hook]]
+func = "func_8080405C_chcollballcontrol"
+before_vram = 0x8080405C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080405C_chcollballcontrol\");"
+
+[[patches.hook]]
+func = "func_8080419C_chstoneballcontrol"
+before_vram = 0x8080419C
+text = "tooie_aim_trace(rdram, ctx, \"func_8080419C_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_80804304_chstoneballcontrol"
+before_vram = 0x80804304
+text = "tooie_aim_trace(rdram, ctx, \"func_80804304_chstoneballcontrol\");"
+
+[[patches.hook]]
+func = "func_80804680_chdiggerboss"
+before_vram = 0x80804680
+text = "tooie_aim_trace(rdram, ctx, \"func_80804680_chdiggerboss\");"
+
+[[patches.hook]]
+func = "func_80804AC8_chdiggerboss"
+before_vram = 0x80804AC8
+text = "tooie_aim_trace(rdram, ctx, \"func_80804AC8_chdiggerboss\");"
+
+[[patches.hook]]
+func = "func_80806B38_chdiggerboss"
+before_vram = 0x80806B38
+text = "tooie_aim_trace(rdram, ctx, \"func_80806B38_chdiggerboss\");"
+
+[[patches.hook]]
+func = "func_80808470_chdiggerboss"
+before_vram = 0x80808470
+text = "tooie_aim_trace(rdram, ctx, \"func_80808470_chdiggerboss\");"
+
+[[patches.hook]]
+func = "fxleaves_entrypoint_7"
+before_vram = 0x80800494
+text = "tooie_aim_trace(rdram, ctx, \"fxleaves_entrypoint_7\");"
+
+[[patches.hook]]
+func = "gcgoto_entrypoint_4"
+before_vram = 0x80800468
+text = "tooie_aim_trace(rdram, ctx, \"gcgoto_entrypoint_4\");"
+
+[[patches.hook]]
+func = "gcgoto_entrypoint_5"
+before_vram = 0x80800550
+text = "tooie_aim_trace(rdram, ctx, \"gcgoto_entrypoint_5\");"
+
+[[patches.hook]]
+func = "idbounce_entrypoint_5"
+before_vram = 0x80800C10
+text = "tooie_aim_trace(rdram, ctx, \"idbounce_entrypoint_5\");"
+
+[[patches.hook]]
+func = "plcamera_entrypoint_11"
+before_vram = 0x80800374
+text = "tooie_aim_trace(rdram, ctx, \"plcamera_entrypoint_11\");"
+
+[[patches.hook]]
+func = "plsu_entrypoint_0"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"plsu_entrypoint_0\");"
+
+[[patches.hook]]
+func = "scradar_entrypoint_0"
+before_vram = 0x80800938
+text = "tooie_aim_trace(rdram, ctx, \"scradar_entrypoint_0\");"
+
+[[patches.hook]]
+func = "subaddiemulti_entrypoint_6"
+before_vram = 0x808002DC
+text = "tooie_aim_trace(rdram, ctx, \"subaddiemulti_entrypoint_6\");"
+
+[[patches.hook]]
+func = "sucoaster_entrypoint_2"
+before_vram = 0x808000F0
+text = "tooie_aim_trace(rdram, ctx, \"sucoaster_entrypoint_2\");"
+
+[[patches.hook]]
+func = "sudeathmatch_entrypoint_0"
+before_vram = 0x80800000
+text = "tooie_aim_trace(rdram, ctx, \"sudeathmatch_entrypoint_0\");"
+
+[[patches.hook]]
+func = "suegg_entrypoint_9"
+before_vram = 0x80800558
+text = "tooie_aim_trace(rdram, ctx, \"suegg_entrypoint_9\");"
+
+[[patches.hook]]
+func = "sumissilehome_entrypoint_6"
+before_vram = 0x80800248
+text = "tooie_aim_trace(rdram, ctx, \"sumissilehome_entrypoint_6\");"
+
+[[patches.hook]]
+func = "sumumbofx_entrypoint_14"
+before_vram = 0x80801074
+text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_14\");"
+
+[[patches.hook]]
+func = "sumumbofx_entrypoint_9"
+before_vram = 0x80800DB0
+text = "tooie_aim_trace(rdram, ctx, \"sumumbofx_entrypoint_9\");"

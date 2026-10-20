@@ -3116,6 +3116,7 @@ L_800E4008:
 RECOMP_FUNC void subaddiemulti_entrypoint_6(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "subaddiemulti_entrypoint_6");
     // 0x808002DC: addiu       $sp, $sp, -0x60
     ctx->r29 = ADD32(ctx->r29, -0X60);
     // 0x808002E0: sdc1        $f24, 0x20($sp)

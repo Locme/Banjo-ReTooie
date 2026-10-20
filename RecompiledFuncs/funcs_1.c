@@ -286,6 +286,7 @@ RECOMP_FUNC void _sucoaster_entrypoint_5(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808001B4_chgruntyfireballbig(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808001B4_chgruntyfireballbig");
     // 0x808001B4: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x808001B8: sw          $s0, 0x18($sp)

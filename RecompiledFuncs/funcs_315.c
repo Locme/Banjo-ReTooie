@@ -640,6 +640,7 @@ RECOMP_FUNC void func_800B537C(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080094C_chfantasyathlete(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080094C_chfantasyathlete");
     // 0x8080094C: addiu       $sp, $sp, -0x68
     ctx->r29 = ADD32(ctx->r29, -0X68);
     // 0x80800950: sw          $ra, 0x24($sp)

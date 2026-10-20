@@ -441,6 +441,7 @@ RECOMP_FUNC void func_800A5630(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_808013C0_chdoor(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_808013C0_chdoor");
     // 0x808013C0: addiu       $sp, $sp, -0x68
     ctx->r29 = ADD32(ctx->r29, -0X68);
     // 0x808013C4: sw          $ra, 0x1C($sp)
@@ -2009,6 +2010,7 @@ RECOMP_FUNC void func_808001FC_chdinofamilysick(uint8_t* rdram, recomp_context* 
 RECOMP_FUNC void func_80800390_suegg(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800390_suegg");
     // 0x80800390: addiu       $sp, $sp, -0xB8
     ctx->r29 = ADD32(ctx->r29, -0XB8);
     // 0x80800394: sw          $ra, 0x5C($sp)

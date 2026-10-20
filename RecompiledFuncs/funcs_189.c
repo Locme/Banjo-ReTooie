@@ -691,6 +691,7 @@ L_8008B758:
 RECOMP_FUNC void func_8080038C_chlagoonfish(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080038C_chlagoonfish");
     // 0x8080038C: addiu       $sp, $sp, -0x98
     ctx->r29 = ADD32(ctx->r29, -0X98);
     // 0x80800390: sw          $ra, 0x44($sp)

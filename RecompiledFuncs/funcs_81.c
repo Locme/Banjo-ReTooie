@@ -4530,6 +4530,7 @@ L_80800AD8:
 RECOMP_FUNC void func_8010D1E8(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8010D1E8");
     // 0x8010D1E8: addiu       $sp, $sp, -0x18
     ctx->r29 = ADD32(ctx->r29, -0X18);
     // 0x8010D1EC: sw          $ra, 0x14($sp)
@@ -6276,6 +6277,7 @@ L_800C268C:
 RECOMP_FUNC void func_80800130_chfactorydrums(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800130_chfactorydrums");
     // 0x80800130: addiu       $sp, $sp, -0xB0
     ctx->r29 = ADD32(ctx->r29, -0XB0);
     // 0x80800134: sw          $s7, 0x3C($sp)

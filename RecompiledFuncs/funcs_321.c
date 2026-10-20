@@ -3178,6 +3178,7 @@ RECOMP_FUNC void _gcstatusDll_entrypoint_8(uint8_t* rdram, recomp_context* ctx) 
 RECOMP_FUNC void func_80800000_fxleaves(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800000_fxleaves");
     // 0x80800000: addiu       $sp, $sp, -0x80
     ctx->r29 = ADD32(ctx->r29, -0X80);
     // 0x80800004: sw          $s1, 0x28($sp)

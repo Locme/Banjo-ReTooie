@@ -2776,6 +2776,7 @@ L_800B7A88:
 RECOMP_FUNC void func_8080013C_chfactorysparkroom(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080013C_chfactorysparkroom");
     // 0x8080013C: addiu       $sp, $sp, -0xD8
     ctx->r29 = ADD32(ctx->r29, -0XD8);
     // 0x80800140: sw          $ra, 0x54($sp)

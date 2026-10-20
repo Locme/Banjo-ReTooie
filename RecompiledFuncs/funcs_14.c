@@ -4791,6 +4791,7 @@ RECOMP_FUNC void _fxtwinkle_entrypoint_1(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_8080005C_chfactoryposter(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_8080005C_chfactoryposter");
     // 0x8080005C: addiu       $sp, $sp, -0x30
     ctx->r29 = ADD32(ctx->r29, -0X30);
     // 0x80800060: sw          $ra, 0x1C($sp)

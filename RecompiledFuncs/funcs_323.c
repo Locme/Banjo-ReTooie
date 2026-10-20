@@ -2256,6 +2256,7 @@ L_80800060:
 RECOMP_FUNC void func_80800228_chpodiumbankaz(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_80800228_chpodiumbankaz");
     // 0x80800228: addiu       $sp, $sp, -0x40
     ctx->r29 = ADD32(ctx->r29, -0X40);
     // 0x8080022C: sw          $s0, 0x20($sp)

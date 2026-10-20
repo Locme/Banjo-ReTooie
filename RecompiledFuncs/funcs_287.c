@@ -1676,6 +1676,7 @@ RECOMP_FUNC void func_80801668_bsfirstp(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800F8914(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_aim_trace(rdram, ctx, "func_800F8914");
     // 0x800F8914: addiu       $sp, $sp, -0x20
     ctx->r29 = ADD32(ctx->r29, -0X20);
     // 0x800F8918: sw          $s0, 0x14($sp)
