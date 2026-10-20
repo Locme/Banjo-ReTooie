@@ -1,5 +1,24 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T463 Belly jiggle: necklace stays, strongest by the belt
+- Asked: 2026-10-20 16:36 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. General > Jiggle: Belly jiggle on
+  2. Run, jump, land and stop with the camera on his front
+- Look for: The tooth necklace never vanishes or stretches; it rides on the belly in one piece. The belly moves most just above the belt and less and less up towards the chest. Checked headless (forced swings).
+- Status: waiting for L
+
+## T462 Cheaper 3D grass
+- Asked: 2026-10-20 16:15 UTC
+- Build: main
+- Steps:
+  1. Spiral Mountain with 3D grass on, defaults
+  2. Compare frame rate and look to the last build (Graphics > 3D grass distance now defaults to 1800, was 2500; if your saved setting is 2500 reset it)
+  3. Walk toward and away from a meadow, check far grass thins gradually without popping
+- Look for: Noticeably faster in open meadows; grass near Banjo looks the same; far grass coarsens sooner but smoothly
+- Status: waiting for L
+
 ## T459 Deep snow presses where models touch it
 - Asked: 2026-10-20 15:59 UTC
 - Build: main
@@ -8,6 +27,7 @@
   2. Walk, run and stand still in the snow
   3. Jump in place and do a short hop
   4. Walk past the polar bear or other NPCs
+  5. Try Snow detail (under Snow height): 50 is the old coarser grid, 25 coarser still, for weaker graphics cards
 - Look for: The dent follows Banjo's real feet and body, a jump leaves nothing, a light touch a shallow dent, NPCs leave their own; edges finer than before; prints fill back in after a while
 - Status: waiting for L
 
@@ -82,7 +102,7 @@
   4. Left click a row, right click to go back
   5. Use a controller in the ESC menu and move the mouse over rows without clicking
 - Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
-- UNTESTED, 2026-10-20 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
+- UNTESTED, 2026-10-20 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
 
 ## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
 - Asked: 2026-10-20 08:41 UTC

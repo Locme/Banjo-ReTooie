@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <variant>
@@ -108,7 +109,7 @@ namespace {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::free_hand_option));
         } catch (...) {
-            return false;
+            return true;
         }
     }
 
@@ -281,49 +282,122 @@ namespace {
         return best;
     }
 
-    // The free hand (L, 2026-10-20: "100% dependant on the cursor"). UNTESTED: the game keeps the hand as a vector at
-    // menu + 4 that points at the spot's thing and is rewritten each update; the geometry is guessed (see below).
-    // After the update has run, the vector is slid sideways by how far the cursor is from where the spot's thing is on
-    // screen, scaled by its depth. The depth axis is taken as the largest component; the other two are right and up.
-    // TOOIE_HAND_FLIP (bit 1 flip right, 2 flip up, 4 swap the two) fixes the guess if the hand moves the wrong way.
+    // The free hand (L, 2026-10-20: "100% dependant on the cursor"). UNTESTED. The game keeps the hand as a vector
+    // at menu + 4 (pointing at the spot's thing, rewritten every update, so this runs right after it). The spots'
+    // world positions are at state + 0x60 + 12 * i (flag byte at state + 0xC0 + i; state is what func_80100094
+    // finds for the menu). A first version guessed the camera's axes and pushed the hand along the depth axis. Now
+    // the map from world to screen is fitted from the spots that are on screen (their screen places are in the
+    // table), and the hand is moved in the plane they lie in to where the cursor is, by the same amount in world
+    // units as the fit says the cursor is from the hand's spot.
     constexpr uint32_t hand_vec = 0x04;
-    constexpr float hand_fov_scale = 0.8284f;   // 2 * tan(22.5 degrees): the game's default 45 degree view
-    constexpr float frame_h = 450.0f;           // the window's height in the places' units
+    constexpr uint32_t state_spots = 0x60;
+    constexpr uint32_t state_spot_flags = 0xC0;
+    std::atomic<uint32_t> select_state = 0;
+
+    // Solves the 3x3 system m * out = rhs; false when singular.
+    bool solve3(double m[3][3], const double rhs[3], double out[3]) {
+        double a[3][4];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) a[i][j] = m[i][j];
+            a[i][3] = rhs[i];
+        }
+        for (int c = 0; c < 3; c++) {
+            int piv = c;
+            for (int r = c + 1; r < 3; r++) if (std::fabs(a[r][c]) > std::fabs(a[piv][c])) piv = r;
+            if (std::fabs(a[piv][c]) < 1e-12) return false;
+            for (int j = 0; j < 4; j++) std::swap(a[c][j], a[piv][j]);
+            for (int r = 0; r < 3; r++) {
+                if (r == c) continue;
+                const double f = a[r][c] / a[c][c];
+                for (int j = c; j < 4; j++) a[r][j] -= f * a[c][j];
+            }
+        }
+        for (int i = 0; i < 3; i++) out[i] = a[i][3] / a[i][i];
+        return true;
+    }
 
     void free_hand(uint8_t* rdram, uint32_t menu, float sx, float sy) {
+        const uint32_t state = select_state.load();
         const int spot = read_byte(rdram, menu + select_spot) >> 4;
-        if (spot < 0 || spot >= spots) {
+        if (spot < 0 || spot >= spots || !tooie::rdram::valid_ptr(state)) {
             return;
         }
+        double w[spots][3];
+        bool have[spots] = {};
+        for (int i = 0; i < spots; i++) {
+            if (read_byte(rdram, state + state_spot_flags + i) == 0) {
+                continue;
+            }
+            for (int k = 0; k < 3; k++) {
+                const float f = tooie::rdram::read_float(rdram, state + state_spots + 12 * i + 4 * k);
+                if (!std::isfinite(f)) {
+                    return;
+                }
+                w[i][k] = f;
+            }
+            const Place& p = places[spot][i];
+            have[i] = i == spot || (std::fabs(p.x) < 400.0f && std::fabs(p.y) < 225.0f);
+        }
+        if (!have[spot]) {
+            return;
+        }
+        // Screen offsets from the hand's spot against world offsets: S = D * Mt, fitted with a little ridge so the
+        // direction the spots do not vary in (their plane's normal) stays at zero.
+        double dtd[3][3] = {}, dts[3][2] = {};
+        int n = 0;
+        for (int i = 0; i < spots; i++) {
+            if (!have[i] || i == spot) continue;
+            const double d[3] = { w[i][0] - w[spot][0], w[i][1] - w[spot][1], w[i][2] - w[spot][2] };
+            const double sv[2] = { places[spot][i].x - places[spot][spot].x, places[spot][i].y - places[spot][spot].y };
+            for (int a = 0; a < 3; a++) {
+                for (int b = 0; b < 3; b++) dtd[a][b] += d[a] * d[b];
+                for (int b = 0; b < 2; b++) dts[a][b] += d[a] * sv[b];
+            }
+            n++;
+        }
+        if (n < 2) {
+            return;
+        }
+        const double ridge = 1e-6 * (dtd[0][0] + dtd[1][1] + dtd[2][2]) + 1e-9;
+        for (int a = 0; a < 3; a++) dtd[a][a] += ridge;
+        // Mt columns: world per screen unit mapping, Mt[a][b] = (dtd^-1 * dts)[a][b].
+        double mt[3][2];
+        for (int b = 0; b < 2; b++) {
+            const double rhs[3] = { dts[0][b], dts[1][b], dts[2][b] };
+            double out[3];
+            double m[3][3];
+            memcpy(m, dtd, sizeof(m));
+            if (!solve3(m, rhs, out)) return;
+            for (int a = 0; a < 3; a++) mt[a][b] = out[a];
+        }
+        // Screen = Mt^T * world offset, so the world offset for a screen offset t (least norm, in the spots' plane):
+        // dw = M^T (M M^T)^-1 t with M = Mt^T (2x3).
+        double mm[2][2] = {};
+        for (int a = 0; a < 2; a++)
+            for (int b = 0; b < 2; b++)
+                for (int k = 0; k < 3; k++) mm[a][b] += mt[k][a] * mt[k][b];
+        const double det = mm[0][0] * mm[1][1] - mm[0][1] * mm[1][0];
+        if (std::fabs(det) < 1e-12) {
+            return;
+        }
+        const double t[2] = { sx - places[spot][spot].x, sy - places[spot][spot].y };
+        const double u[2] = { (mm[1][1] * t[0] - mm[0][1] * t[1]) / det, (-mm[1][0] * t[0] + mm[0][0] * t[1]) / det };
         float v[3];
-        for (int i = 0; i < 3; i++) {
-            v[i] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * i);
-            if (!std::isfinite(v[i])) {
+        for (int k = 0; k < 3; k++) {
+            v[k] = tooie::rdram::read_float(rdram, menu + hand_vec + 4 * k);
+            if (!std::isfinite(v[k])) {
+                return;
+            }
+            v[k] += (float)(mt[k][0] * u[0] + mt[k][1] * u[1]);
+            if (!std::isfinite(v[k])) {
                 return;
             }
         }
-        int depth = 0;
-        for (int i = 1; i < 3; i++) {
-            if (std::fabs(v[i]) > std::fabs(v[depth])) {
-                depth = i;
-            }
-        }
-        int ax = (depth + 1) % 3, ay = (depth + 2) % 3;
-        static const int flip = [] { const char* e = getenv("TOOIE_HAND_FLIP"); return e ? atoi(e) : 0; }();
-        if (flip & 4) {
-            std::swap(ax, ay);
-        }
-        const float per_unit = std::fabs(v[depth]) * hand_fov_scale / frame_h;
-        const Place& at = places[spot][spot];
-        const float dx = (sx - at.x) * per_unit * ((flip & 1) ? -1.0f : 1.0f);
-        const float dy = -(sy - at.y) * per_unit * ((flip & 2) ? -1.0f : 1.0f);
-        v[ax] += dx;
-        v[ay] += dy;
         if (logging()) {
-            fprintf(stderr, "[menu-mouse] free hand spot %d vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, v[0], v[1], v[2], sx, sy);
+            fprintf(stderr, "[menu-mouse] free hand spot %d n %d vec %.1f %.1f %.1f cursor %.0f,%.0f\n", spot, n, v[0], v[1], v[2], sx, sy);
         }
-        for (int i = 0; i < 3; i++) {
-            tooie::rdram::write_float(rdram, menu + hand_vec + 4 * i, v[i]);
+        for (int k = 0; k < 3; k++) {
+            tooie::rdram::write_float(rdram, menu + hand_vec + 4 * k, v[k]);
         }
     }
 
@@ -370,8 +444,8 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(free_hand_option, "Free hand on the save select (broken, off)",
-        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", false);
+    qol.add_bool_option(free_hand_option, "Free hand on the save select (untested)",
+        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", true);
     qol.add_bool_option(enabled_option, "Mouse in the game's menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
@@ -494,7 +568,16 @@ void tooie::menu_mouse::apply_input(uint16_t* buttons, float* x, float* y) {
     *buttons |= press.load();
 }
 
-extern "C" void tooie_select_menu(uint8_t* /*rdram*/, recomp_context* ctx) {
+extern "C" void func_80100094(uint8_t* rdram, recomp_context* ctx);
+
+extern "C" void tooie_select_menu(uint8_t* rdram, recomp_context* ctx) {
+    // The state the hand's update looks up first (func_80100094(menu, 0)), called as it will be a moment later.
+    recomp_context saved = *ctx;
+    ctx->r4 = ctx->r16;
+    ctx->r5 = 0;
+    func_80100094(rdram, ctx);
+    select_state.store((uint32_t)ctx->r2);
+    *ctx = saved;
     select_menu.store((uint32_t)ctx->r16);
     select_calls.fetch_add(1);
 }

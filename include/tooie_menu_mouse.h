@@ -15,7 +15,7 @@ namespace recomp::config {
 namespace tooie::menu_mouse {
     inline const std::string enabled_option = "menu_mouse";
 
-    inline const std::string free_hand_option = "menu_mouse_free_hand_v2";
+    inline const std::string free_hand_option = "menu_mouse_free_hand_v3";
 
     void add_options(recomp::config::Config& qol);
 
