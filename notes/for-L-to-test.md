@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T456 DEV Sound test plays sounds again
+- Asked: 2026-10-20 13:31 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. Load a file and stand anywhere in a level
+  2. Esc > DEV: change Sound test with the arrows, then close the menu
+  3. Try 1432 (the Springy Step Shoes boing), then a few other numbers
+- Look for: Each number plays a sound at Banjo (some numbers are silent) and the previous one stops.
+- Status: waiting for L
+
 ## T455 DEV toggle renamed Hide Unnecessary Settings Entry
 - Asked: 2026-10-20 13:09 UTC
 - Build: main (next Windows build)

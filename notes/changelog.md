@@ -92,6 +92,8 @@ Every item below is untested on a real PC unless L's test list says otherwise
 
 ### Gameplay
 
+- DEV > Sound test now plays the sound: it set the sound up but never started it (L). Checked headless (the voice reaches its playing state); untested on PC (T456).
+- Fixed a crash at start on builds since this morning's Esc pause change (T451): it read the game's pause flag from a wrong address.
 - DEV > Sound test: plays any of the game's 2048 sound effects at Banjo by number, to pick sounds by ear (L asked for a grunt for the torch enemy). Untested on PC (T418).
 - Warp tab: new Glitter Gulch Mine place, Flooded Caves, which lands at the cave entrance (L). Untested on PC (T395).
 - New General option Cut Content: Torch enemy (off by default): the torch enemy cut from Glitter Gulch Mine is back in the Flooded Caves: two of them against the back wall of the dry chamber at the far end, where L picked. They stand still like ordinary lit torches until Banjo walks up, then open their eyes and spring at him, with a boing on every hop (the Springy Step Shoes jump sound); they light up the cave around them, chase Banjo, lunge to burn him for a honeycomb with the game's own knockback, and go out to any attack or egg (L). Untested on PC (T394).
