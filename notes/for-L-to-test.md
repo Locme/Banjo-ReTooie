@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T454 SETTINGS page in the Start menu
+- Asked: 2026-10-20 12:19 UTC
+- Build: main (next Windows build)
+- Steps:
+  1. In a level, press Start: SETTINGS is under ACHIEVEMENTS
+  2. Open it: Speaker Mode shows with its value
+  3. Press right, left or A to change it, and listen
+  4. Press B to go back, reopen it, and check the value stuck
+  5. Optional: turn DEV > Hide Vanilla Widescreen Entry off and reopen the page
+- Look for: The page shows Speaker Mode, and the value changes at once and sticks. With the DEV switch off, Wide-screen Mode shows too. Also say whether the Banjo icon on the entry is fine.
+- Status: waiting for L
+
 ## T450 Aim trace: find where enemies chase from
 - Asked: 2026-10-20 10:32 UTC
 - Build: claude/project-thread-quqov9

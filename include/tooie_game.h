@@ -5,6 +5,7 @@
 #include <string>
 #include <filesystem>
 #include <unordered_map>
+#include <vector>
 
 #include "recomp.h"
 
@@ -89,6 +90,19 @@ namespace tooie {
     inline const std::string hide_vanilla_widescreen_option = "hide_vanilla_widescreen";
     // Once a frame: keeps the game's own widescreen mode off while that switch is on.
     void vanilla_widescreen_tick(uint8_t* rdram, recomp_context* ctx);
+    // The pause menu's Settings page (src/gameplay/pause_settings.cpp opens it as a Totals sub page,
+    // src/gameplay/totals_checklist.cpp draws it): the TV's settings, read and set here
+    // (src/game/hide_vanilla_widescreen.cpp).
+    namespace game_settings {
+        constexpr uint8_t pause_sub_page = 0x7D;
+        struct Row {
+            const char* name;
+            const char* value;
+        };
+        std::vector<Row> rows(uint8_t* rdram, recomp_context* ctx);
+        // step: +1 / -1, the next or previous value of row.
+        void change(uint8_t* rdram, recomp_context* ctx, size_t row, int step);
+    }
     // Extended draw distance (src/display/draw_distance.cpp).
     inline const std::string draw_distance_option = "extended_draw_distance";
     // Field of view offsets in degrees (src/gameplay/field_of_view.cpp), QOL tab.

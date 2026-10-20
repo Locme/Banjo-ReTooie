@@ -93,7 +93,8 @@ on a controller.
   widescreen mode is kept off and the picture centred, also on saves that had
   them changed. The game's widescreen squashes the picture for a stretched TV;
   this port's widescreen is Aspect Ratio in the Graphics tab. The menu change
-  shows the next time it opens. Default: on.
+  shows the next time it opens. The Start menu's SETTINGS page follows it too:
+  with it off, that page also has Wide-screen Mode. Default: on.
 
 The DEV tab's **Additional Tabs** section shows or hides tabs:
 

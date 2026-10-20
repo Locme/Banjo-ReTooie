@@ -1,8 +1,9 @@
-// Achievements entry in the pause menu (the Start menu; L named it Settings first, then Achievements on
-// 2026-10-16). The entry shows in the main pause page and opens a page of its own titled ACHIEVEMENTS,
-// which lists the XBLA achievements (src/game/achievements.cpp) and is drawn by the Totals draw hook
-// (src/gameplay/totals_checklist.cpp). B goes back to the main page, Start closes the menu, as on the
-// Totals pages.
+// Achievements and Settings entries in the pause menu (the Start menu; L named the first Settings, then
+// Achievements on 2026-10-16; the Settings entry came 2026-10-20). Each shows in the main pause page and
+// opens a page of its own: ACHIEVEMENTS lists the XBLA achievements (src/game/achievements.cpp),
+// SETTINGS the save select TV's settings (src/game/hide_vanilla_widescreen.cpp). Both are drawn by the
+// Totals draw hook (src/gameplay/totals_checklist.cpp). B goes back to the main page, Start closes the
+// menu, as on the Totals pages.
 //
 // The pause menu (overlay gcnewpause, decomp src/overlays/gc/newpause.c) builds its main page from
 // the table D_80802070: one PauseOption per menu variant (8 bytes: text bank, first option, size,
@@ -10,11 +11,11 @@
 // options are drawn by gcnewoption, which looks each text index up in a text bank with
 // gldbstring_entrypoint_1(bank, index).
 //
-// The entry is added by pointing the table at copies of the options with one more row, kept in
-// extended RDRAM. Its text index (settings_text) is one no bank uses; the gldbstring hook returns
-// our own string for it. Picking it opens the Totals page (PageIndex 3) with a sub page of its own
-// (settings_sub_page): that page brings the title, the B button, B to go back and Start to close
-// with it. The counts the Totals pages draw are skipped on that sub page.
+// The entries are added by pointing the table at copies of the options with more rows, kept in
+// extended RDRAM. Their text indexes are ones no bank uses; the gldbstring hook returns our own
+// strings for them. Picking one opens the Totals page (PageIndex 3) with a sub page of its own: that
+// page brings the title, the B button, B to go back and Start to close with it. The counts the Totals
+// pages draw are skipped on those sub pages.
 
 #include <cstdint>
 #include <cstdio>
@@ -51,14 +52,22 @@ namespace {
 
     // Option functions 0..4 are the game's (return, totals, game over, restart, file select).
     constexpr uint8_t function_totals = 1;
-    constexpr uint8_t function_settings = 5;
+    constexpr uint8_t function_ours = 5;
 
-    // Text index and Totals sub page no bank or page uses (bank entries hold index + 0x80 in a byte,
-    // so 0x7E is never one of the game's; Totals sub pages go up to 0xD).
-    constexpr uint8_t settings_text = 0x7E;
-    constexpr uint8_t settings_sub_page = tooie::achievements::pause_sub_page;
-    // The entry's icon, a gczoomboxdata portrait id: 0xAE is King Jingaling (0xAA, used before, is Sabreman).
-    constexpr uint16_t achievements_icon = 0xAE;
+    // Our entries. Text indexes and Totals sub pages no bank or page uses (bank entries hold index +
+    // 0x80 in a byte, so 0x7D and 0x7E are never the game's; Totals sub pages go up to 0xD), each
+    // entry using the same number for both. Icons are gczoomboxdata portrait ids: 0xAE is King
+    // Jingaling (0xAA, used before, is Sabreman), 0x0C Banjo.
+    struct Entry {
+        uint8_t id;
+        uint16_t icon;
+        const char* name;
+    };
+    constexpr Entry entries[] = {
+        { tooie::achievements::pause_sub_page, 0xAE, "ACHIEVEMENTS" },
+        { tooie::game_settings::pause_sub_page, 0x0C, "SETTINGS" },
+    };
+    constexpr uint32_t entry_count = sizeof(entries) / sizeof(entries[0]);
 
     // The variants that get the entry: 0..3, the normal pause menu (+1 with items, +2 with Jinjos).
     // 4..6 are the menus of special modes (decomp func_80800534 case 1), left as they are.
@@ -72,7 +81,7 @@ namespace {
     constexpr gpr option_area = (int32_t)0x80EF1000;
     constexpr uint32_t option_area_variant = 0x80;  // room for max_options rows per variant
     constexpr gpr string_addr = (int32_t)0x80EF1200;
-    const char* const settings_string = "ACHIEVEMENTS";
+    constexpr uint32_t string_stride = 0x20;
 
     // The open pause menu's PauseState, 0 when it is closed. The game's heap moves it while it is
     // open, so it is read here each time rather than kept.
@@ -83,12 +92,28 @@ namespace {
         return log;
     }
 
-    void write_string(uint8_t* rdram) {
-        size_t i = 0;
-        for (; settings_string[i] != '\0'; i++) {
-            MEM_B(i, string_addr) = settings_string[i];
+    const Entry* entry_for(uint32_t id) {
+        for (const Entry& e : entries) {
+            if (e.id == id) {
+                return &e;
+            }
         }
-        MEM_B(i, string_addr) = 0;
+        return nullptr;
+    }
+
+    gpr string_for(const Entry& e) {
+        return string_addr + (gpr)((&e - entries) * string_stride);
+    }
+
+    void write_strings(uint8_t* rdram) {
+        for (const Entry& e : entries) {
+            const gpr addr = string_for(e);
+            size_t i = 0;
+            for (; e.name[i] != '\0'; i++) {
+                MEM_B(i, addr) = e.name[i];
+            }
+            MEM_B(i, addr) = 0;
+        }
     }
 
     void log_string(uint8_t* rdram, gpr addr) {
@@ -130,7 +155,7 @@ namespace {
         return addr >= (gpr)it->second && addr < (gpr)it->second + (gpr)size;
     }
 
-    // Points each normal variant at its copy with the Achievements row. A pointer outside the overlay is
+    // Points each normal variant at its copy with our rows. A pointer outside the overlay is
     // one of ours: the game moves the overlay with its heap and shifts every pointer in its data by
     // as much, ours included, so it is set back.
     void patch_table(uint8_t* rdram, gpr table) {
@@ -149,7 +174,7 @@ namespace {
                 }
                 continue;
             }
-            if (count + 1 > max_options) {
+            if (count + entry_count > max_options) {
                 continue;
             }
 
@@ -168,15 +193,17 @@ namespace {
             uint32_t out = 0;
             for (uint32_t i = 0; i <= count; i++) {
                 if (i == at) {
-                    // King Jingaling's talking head (L picked it; Cheato has none in gczoomboxdata's
-                    // portrait list, swept 0x00..0xD1 headless); the text and function are ours.
-                    const gpr dst = copy + out * option_size;
-                    MEM_H(option_icon, dst) = achievements_icon;
-                    MEM_B(option_text, dst) = settings_text;
-                    MEM_B(option_function, dst) = function_settings;
-                    MEM_B(4, dst) = 0;
-                    MEM_B(5, dst) = 0;
-                    out++;
+                    // Achievements has King Jingaling's talking head (L picked it; Cheato has none in
+                    // gczoomboxdata's portrait list, swept 0x00..0xD1 headless); the text and function are ours.
+                    for (const Entry& e : entries) {
+                        const gpr dst = copy + out * option_size;
+                        MEM_H(option_icon, dst) = e.icon;
+                        MEM_B(option_text, dst) = e.id;
+                        MEM_B(option_function, dst) = function_ours;
+                        MEM_B(4, dst) = 0;
+                        MEM_B(5, dst) = 0;
+                        out++;
+                    }
                 }
                 if (i == count) {
                     break;
@@ -189,7 +216,7 @@ namespace {
                 out++;
             }
             MEM_W(variant_options_offset, entry) = (int32_t)copy;
-            MEM_B(variant_count_offset, entry) = (int8_t)(count + 1);
+            MEM_B(variant_count_offset, entry) = (int8_t)(count + entry_count);
         }
     }
 }
@@ -197,7 +224,7 @@ namespace {
 // func_80800A08 (the main page's setup), with $s0 = the table D_80802070.
 extern "C" void tooie_pause_settings_setup(uint8_t* rdram, recomp_context* ctx) {
     const gpr table = ctx->r16;
-    write_string(rdram);
+    write_strings(rdram);
 
     // TOOIE_PAUSE_VARIANT=<0-3>: headless test of a menu variant ($t6 holds the variant read from $s4).
     static const char* force = std::getenv("TOOIE_PAUSE_VARIANT");
@@ -247,7 +274,7 @@ extern "C" void tooie_pause_settings_visible(uint8_t* /*rdram*/, recomp_context*
 }
 
 // Start of func_80800CE4 (an option was picked): $a0 the PauseState, $a2 the option. Returns true
-// when it was the Achievements entry (handled here).
+// when it was one of our entries (handled here).
 extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) {
     const gpr pause = ctx->r4;
     const uint32_t picked = (uint32_t)ctx->r6;
@@ -257,16 +284,19 @@ extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) 
     }
     // The table is reached the way func_80800A08 reached it: the copy lives at a fixed address.
     const gpr options = option_area + variant * option_area_variant;
-    if (picked >= max_options || MEM_BU(picked * option_size + option_function, options) != function_settings ||
-        MEM_BU(picked * option_size + option_text, options) != settings_text) {
+    if (picked >= max_options || MEM_BU(picked * option_size + option_function, options) != function_ours) {
+        return 0;
+    }
+    const Entry* e = entry_for(MEM_BU(picked * option_size + option_text, options));
+    if (e == nullptr) {
         return 0;
     }
     if (logging()) {
-        fprintf(stderr, "[pause-settings] Achievements picked (option %u)\n", picked);
+        fprintf(stderr, "[pause-settings] %s picked (option %u)\n", e->name, picked);
     }
 
     // As function 1 (open a Totals page), with our sub page and no left/right pages.
-    MEM_B(pause_sub_page, pause) = settings_sub_page;
+    MEM_B(pause_sub_page, pause) = e->id;
     MEM_B(pause_can_move_left, pause) = 0;
     MEM_B(pause_can_move_right, pause) = 0;
     recomp_context saved = *ctx;
@@ -278,10 +308,10 @@ extern "C" int tooie_pause_settings_select(uint8_t* rdram, recomp_context* ctx) 
     return 1;
 }
 
-// Start of func_80800F2C (a Totals page's counts): $a1 the sub page. Nothing to count on ours; the
-// achievements are drawn by the Totals draw hook.
+// Start of func_80800F2C (a Totals page's counts): $a1 the sub page. Nothing to count on ours; they
+// are drawn by the Totals draw hook.
 extern "C" int tooie_pause_settings_page_counts(uint8_t* /*rdram*/, recomp_context* ctx) {
-    if ((uint32_t)ctx->r5 != settings_sub_page) {
+    if (entry_for((uint32_t)ctx->r5) == nullptr) {
         return 0;
     }
     ctx->r2 = 0;
@@ -290,7 +320,8 @@ extern "C" int tooie_pause_settings_page_counts(uint8_t* /*rdram*/, recomp_conte
 
 // Start of gldbstring_entrypoint_1(bank $a0, index $a1): our string for our index in the pause menu's banks.
 extern "C" int tooie_pause_settings_text(uint8_t* rdram, recomp_context* ctx) {
-    if ((uint32_t)(ctx->r5 & 0xFFFF) != settings_text) {
+    const Entry* e = entry_for((uint32_t)(ctx->r5 & 0xFFFF));
+    if (e == nullptr) {
         return 0;
     }
     const gpr pause_menu = (gpr)(int32_t)MEM_W(0, pause_menu_addr);
@@ -301,7 +332,7 @@ extern "C" int tooie_pause_settings_text(uint8_t* rdram, recomp_context* ctx) {
     if (bank != MEM_W(pause_option_bank, pause_menu) && bank != MEM_W(pause_title_bank, pause_menu)) {
         return 0;
     }
-    ctx->r2 = string_addr;
+    ctx->r2 = string_for(*e);
     return 1;
 }
 
