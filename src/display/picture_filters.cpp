@@ -4745,11 +4745,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Screen-space global illumination: light bounced off the surfaces on screen lights what faces them, so a sunny floor brightens the wall beside it and colours rub off on each other. Heavier than Bounce light. 50 is one bounce as it is. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        ssr_option,
-        "Screen-space reflections",
-        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
         bounce_light_option,
         "Bounce light",
         "Light bounced off nearby surfaces: colourful walls and floors tint and brighten what is next to them a little. 0 is off.",
@@ -4784,16 +4779,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Underwater distortion",
         "While under water, the 3D world wobbles gently, more in the distance. 0 is off.",
         0, 100, 5, 0, false, 30);
-    graphics.add_number_option(
-        water_reflections_option,
-        "Water reflections",
-        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
-        0, 100, 5, 0, false, 0);
-    graphics.add_number_option(
-        ice_reflections_option,
-        "Ice reflections",
-        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
-        0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         water_waves_option,
         "Water waves",
@@ -4859,6 +4844,26 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on original textures",
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
+    graphics.add_bool_option(
+        reflections_section_option,
+        "Reflections",
+        "Shows the reflection settings below. Hiding them does not turn the reflections off.",
+        true);
+    graphics.add_number_option(
+        ssr_option,
+        "Screen-space reflections",
+        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        water_reflections_option,
+        "Water reflections",
+        "The game's water mirrors what is around it, with gentle ripples. Only what is on screen can be reflected, so reflections fade near the edges. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ice_reflections_option,
+        "Ice reflections",
+        "Ice mirrors what is around it: frozen water, ice floors and walls, and the blocks of ice round notes, from any camera height. Only what is on screen can be reflected. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         character_section_option,
         "Character Shaders",
@@ -5158,15 +5163,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(ambient_occlusion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(bounce_light_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(ssgi_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ssr_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(water_reflections_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(ice_reflections_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_option, lighting_section_option, false);
