@@ -70,7 +70,6 @@ namespace RT64 {
     void SetSceneRayTracing(bool enabled);
     void SetSceneRayTracingStrength(float strength);
     void SetSceneRayTracingHitColours(bool enabled);
-    void SetSceneRayTracingPaused(bool paused);
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
@@ -4691,9 +4690,6 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // The cutscene depth of field in letterboxed scenes, focused on the middle of the picture; the gameplay one
     // otherwise, focused on Banjo and gentler.
     const bool letterboxed = tooie::in_letterboxed_scene();
-    // Letterboxed cutscenes run the effects untraced (L, 2026-10-20: the Jinjo cutscene split the traced picture
-    // across the middle). Their camera doesn't match the traced pass's turn from the screen back to the world.
-    RT64::SetSceneRayTracingPaused(letterboxed);
     const int dof = (letterboxed && (cutscene_dof > 0.0f)) ? 1 : ((!letterboxed && (gameplay_dof > 0.0f)) ? 2 : 0);
     if (dof != dof_sent) {
         dof_sent = dof;
