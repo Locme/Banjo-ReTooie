@@ -466,7 +466,7 @@ namespace {
                 dwell_hit = hit;
                 dwell_frames = 0;
             }
-            if (dwell_frames >= 12) {
+            if (false && dwell_frames >= 12) {   // off: it snapped the hand to the entries (L, 2026-10-20: "bounded by the entries")
                 select_target = hit;
                 select_press_a = false;
                 dwell_frames = 0;
