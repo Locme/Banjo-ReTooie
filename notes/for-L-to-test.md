@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T480 No fur over Banjo's shorts
+- Asked: 2026-10-20 20:54 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: Banjo fur on
+  2. Stand Banjo still in Spiral Mountain and look at his shorts and the top of his legs from the front and behind (free camera or photo mode helps)
+  3. Walk, run and crouch, and watch a cutscene with him in it
+- Look for: His yellow shorts stay clean, with no brown strands hanging over them at the bottom edge or between his legs. The brown on his legs below the shorts, his body and his arms are as furry as before. Before, where the shorts' triangles reach down to his legs their yellow blends into brown, and that blend passed the fur colour test, so strands grew on the shorts there.
+- Status: waiting for L
+
 ## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
 - Asked: 2026-10-20 20:35 UTC
 - Build: main
