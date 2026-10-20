@@ -289,9 +289,9 @@ blends between game frames (snap, vertex, untagged, then default), **middle
 click** turns its screen effects off or on and **Shift + left click** puts it
 back to default. Save Pick writes the model under the cursor to `interp_tags.txt`
 in the `Dev Files` folder (the same file as the Save Tags key), and Delete Saved
-Pick takes it back out. It needs interpolation on
-(Graphics > Interpolation above Original), and level pieces such as the ground are not
-models, so they say "No model here".
+Pick takes it back out. It finds models at any Interpolation setting, but the
+blend tags only show with Graphics > Interpolation above Original. Level pieces
+such as the ground are not models, so they say "No model here".
 
 Save Pick and Delete Saved Pick work in all three modes, on whatever is under
 the cursor, and only touch that mode's file. The label beside the cursor shows

@@ -90,6 +90,9 @@ void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_begin(uint8_t* rdram, recomp_context* ctx);
 void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx);
 void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg);
+// Cheats > HONEYKING: func_80099B94 entry, and just before it sets the state in $s2.
+void tooie_player_hit_begin(uint8_t* rdram, recomp_context* ctx);
+void tooie_player_hit_state(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance (src/display/draw_distance.cpp): $v0 holds func_800D2F20's model draw distance.
 void tooie_model_draw_distance(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f20 is func_800D3104's cell gather radius, $f2 func_800D2F44's cell distance.

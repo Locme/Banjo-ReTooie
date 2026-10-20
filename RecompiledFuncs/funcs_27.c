@@ -15,6 +15,7 @@ RECOMP_FUNC void func_80800014_chlavaarchgrillswitch(uint8_t* rdram, recomp_cont
 RECOMP_FUNC void func_80099B94(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
+    tooie_player_hit_begin(rdram, ctx);
     // 0x80099B94: addiu       $sp, $sp, -0x70
     ctx->r29 = ADD32(ctx->r29, -0X70);
     // 0x80099B98: sw          $ra, 0x24($sp)
@@ -3651,6 +3652,7 @@ L_8009AB4C:
     // 0x8009AB50: or          $a1, $s1, $zero
     ctx->r5 = ctx->r17 | 0;
     after_219:
+    tooie_player_hit_state(rdram, ctx);
     // 0x8009AB54: or          $a0, $s0, $zero
     ctx->r4 = ctx->r16 | 0;
     // 0x8009AB58: jal         0x8009E5C8

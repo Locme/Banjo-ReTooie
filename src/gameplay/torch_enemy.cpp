@@ -67,6 +67,7 @@
 #include "funcs.h"
 #include "librecomp/game.hpp"
 #include "recompui/config.h"
+#include "tooie_damage.h"
 #include "tooie_debug.h"
 #include "tooie_free_camera.h"
 #include "tooie_game.h"
@@ -845,6 +846,10 @@ namespace {
         }
         else if (form == form_kazooie) {
             hurt = state_kazooie_ow;
+        }
+        // Take No Damage: no knockback either, as for the game's own enemies (damage_mods.cpp).
+        if (tooie::damage::no_damage_on(rdram, ctx)) {
+            hurt = 0;
         }
         const uint32_t hit_info = read_word(rdram, player + 0xC0);
         if (valid_ptr(block) && hurt != 0) {

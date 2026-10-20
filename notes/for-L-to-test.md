@@ -1,5 +1,38 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T444 Take No Damage: no knockback or fly-up either
+- Asked: 2026-10-20 03:49 UTC
+- Build: main
+- Steps:
+  1. Cheats on, Cheats > Cheato: HONEYKING on
+  2. Let an enemy hit Banjo (a Snapdragon, Ugger or Grublin)
+  3. Walk into a hazard that throws him up (fire, hot or electric ground)
+  4. Get grabbed by something that holds him (Dragunda)
+  5. Turn HONEYKING off and get hit again
+- Look for: With it on: no health lost, and Banjo is not knocked back or flung up; he keeps walking. A grab still holds him as the game does, just with no damage. With it off: hits knock him back and take health as normal. Checked headless: Snapdragon bite (on: no knockback; off: knocked back, one honeycomb lost) and Dragunda's hold. Not checked: hazards, flying and swimming forms, the cut Torch enemy.
+- Status: waiting for L
+
+## T443 Sprint start dust
+- Asked: 2026-10-20 03:17 UTC
+- Build: main @ c1d6889
+- Steps:
+  1. Run as Banjo-Kazooie on grass or dirt
+  2. Hold Run to start a sprint
+  3. Let go, then start another sprint within 10 seconds
+  4. Wait over 10 seconds and sprint again
+- Look for: The first sprint kicks up the same dust as a quick turn (about the same amount); the second, within 10 s, has none; the third has dust again. Not checked headless: the container's software renderer stalled before Banjo could move.
+- Status: waiting for L
+
+## T442 Interpolation pick mode finds models at Interpolation Original
+- Asked: 2026-10-20 02:51 UTC
+- Build: main
+- Steps:
+  1. Leave Graphics > Interpolation at Original (the default)
+  2. Press the Interpolation Pick Mode key and move the cursor over Banjo, Bottles and an enemy
+  3. Left click one
+- Look for: The label names a model instead of No model here, and a click steps its tag. Checked headless at Interpolation Original: Banjo's body was found (453E57C9). Known: parts of some models share one name (see the thread).
+- Status: waiting for L
+
 ## T441 Parallax shapes from the new sweep
 - Asked: 2026-10-20 02:38 UTC
 - Build: main (parallax sweep 4)
