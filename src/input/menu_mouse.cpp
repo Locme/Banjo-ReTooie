@@ -108,7 +108,7 @@ namespace {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::free_hand_option));
         } catch (...) {
-            return true;
+            return false;
         }
     }
 
@@ -237,6 +237,17 @@ namespace {
             steer.press_a = false;
             return;
         }
+        // A row that is on screen is picked at once (the stick would take a step a frame, and the game's own repeat
+        // delay on top of it); scrolling to one that is not still goes by the stick.
+        const int top = tooie::rdram::read_half(rdram, options + option_top);
+        const int visible = tooie::rdram::read_half(rdram, options + option_visible);
+        if (steer.target >= top && steer.target < top + visible) {
+            tooie::rdram::write_half(rdram, options + option_picked, (uint16_t)steer.target);
+            if (logging()) {
+                fprintf(stderr, "[menu-mouse] row %d -> %d (direct)\n", picked, steer.target);
+            }
+            return;
+        }
         // One stick push a frame, back to the middle between them: the menu steps once per push.
         if (!steer.released) {
             steer.released = true;
@@ -359,8 +370,8 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(free_hand_option, "Free hand on the save select (untested)",
-        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", true);
+    qol.add_bool_option(free_hand_option, "Free hand on the save select (broken, off)",
+        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", false);
     qol.add_bool_option(enabled_option, "Mouse in the game's menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
@@ -397,6 +408,19 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     // The mouse is in use from its first move or click until the pad is used; until then the menus are vanilla
     // (no cursor, the mouse does nothing).
     static bool mouse_in_use = false;
+    // The save select's hand moved with nothing of ours steering it: it was the pad's stick.
+    static int last_spot = -1;
+    static bool last_steered = false;
+    if (hand_active) {
+        const int spot_now = read_byte(rdram, menu + select_spot) >> 4;
+        if (last_spot >= 0 && spot_now != last_spot && !last_steered && select_target < 0) {
+            pad_used.store(true);
+        }
+        last_spot = spot_now;
+    } else {
+        last_spot = -1;
+    }
+    last_steered = stick_x.load() != 0 || stick_step.load() != 0 || select_target >= 0;
     if (pad_used.exchange(false)) {
         mouse_in_use = false;
     }

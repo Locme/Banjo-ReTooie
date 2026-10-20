@@ -25,6 +25,10 @@ namespace tooie::rdram {
         return *reinterpret_cast<int16_t*>(rdram + ((addr ^ 2) - 0x80000000u));
     }
 
+    inline void write_half(uint8_t* rdram, uint32_t addr, uint16_t value) {
+        *reinterpret_cast<uint16_t*>(rdram + ((addr ^ 2) - 0x80000000u)) = value;
+    }
+
     inline float read_float(uint8_t* rdram, uint32_t addr) {
         uint32_t bits = read_word(rdram, addr);
         float value;
