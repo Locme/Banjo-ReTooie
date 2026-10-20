@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T485 Toon shading (BotW style)
+- Asked: 2026-10-20 23:40 UTC
+- Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
+- Steps:
+  1. Graphics > Lighting: raise Toon shading (default 0 = off) to 100
+  2. Walk round Spiral Mountain in sun and in shade; try with Toon outlines and Rim light on
+- Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
+- Status: waiting for L
+
 ## T484 Fur jiggle
 - Asked: 2026-10-20 23:09 UTC
 - Build: main

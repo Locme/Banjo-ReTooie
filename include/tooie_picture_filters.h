@@ -49,6 +49,7 @@ namespace tooie::picture_filters {
     inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
+    inline const std::string toon_shading_option = "toon_shading";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";

@@ -7075,10 +7075,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..6a55bc6
+index 0000000..b4d31bf
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3038 @@
+@@ -0,0 +1,3043 @@
 +//
 +// RT64
 +//
@@ -7422,6 +7422,11 @@ index 0000000..6a55bc6
 +    void SetSceneRimLight(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.rimLight = strength;
++    }
++
++    void SetSceneToonShading(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.toonShading = strength;
 +    }
 +
 +    void SetSceneOutlines(float outlines, float thickness) {
@@ -9171,7 +9176,7 @@ index 0000000..6a55bc6
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -9331,7 +9336,7 @@ index 0000000..6a55bc6
 +        // Ambient occlusion, SSGI and SSR in hundredths, packed as AO + 128 * SSGI + 16384 * SSR (IndirectPacked).
 +        const auto hundredths = [](float strength) { return std::round(std::clamp(strength, 0.0f, 1.0f) * 100.0f); };
 +        const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections);
-+        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
++        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, std::min(settings.rimLight, 1.0f) + 2.0f * std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
 +        // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
@@ -9518,7 +9523,7 @@ index 0000000..6a55bc6
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -10119,10 +10124,10 @@ index 0000000..6a55bc6
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c6effce
+index 0000000..a4f3152
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,469 @@
+@@ -0,0 +1,471 @@
 +//
 +// RT64
 +//
@@ -10176,6 +10181,7 @@ index 0000000..c6effce
 +        bool depthOfFieldOnBanjo = false;
 +        float eyeAdaptation = 0.0f;
 +        float rimLight = 0.0f;
++        float toonShading = 0.0f;
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
@@ -10312,6 +10318,7 @@ index 0000000..c6effce
 +    void SetSceneEyeAdaptation(float strength);
 +    // Rim light (0 off, 1 strongest): a soft light along the edges of nearby characters and objects.
 +    void SetSceneRimLight(float strength);
++    void SetSceneToonShading(float strength);
 +    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
 +    void SetSceneUnderwater(float tint, float haze);
 +    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance. With warmOnly, only where heat rises:
@@ -15161,10 +15168,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..17c3818
+index 0000000..93d9010
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3759 @@
+@@ -0,0 +1,3787 @@
 +//
 +// RT64
 +//
@@ -18354,6 +18361,31 @@ index 0000000..17c3818
 +    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
 +}
 +
++// Rim light and Toon shading share ambientOcclusion.w, packed as rim light (0 to 1) + 2 * toon shading in hundredths.
++float ToonStrength() {
++    return floor(max(gConstants.ambientOcclusion.w, 0.0f) * 0.5f + 1e-4f) / 100.0f;
++}
++
++float RimStrength() {
++    return max(gConstants.ambientOcclusion.w, 0.0f) - 2.0f * floor(max(gConstants.ambientOcclusion.w, 0.0f) * 0.5f + 1e-4f);
++}
++
++// Toon shading: the lit scene's brightness is split into a few flat bands with soft steps between them (the
++// light/shadow split of BotW-style toon shaders, a smoothstep on the lighting term), the shadow side
++// taking a cool tint and the lit side a warm one, with colour kept. strength blends from the game's picture.
++float3 ToonShade(float3 scene, float strength) {
++    const float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
++    const float step1 = smoothstep(0.16f, 0.22f, luma);
++    const float step2 = smoothstep(0.42f, 0.48f, luma);
++    const float step3 = smoothstep(0.72f, 0.78f, luma);
++    const float banded = 0.2f + 0.3f * step1 + 0.3f * step2 + 0.2f * step3;
++    const float3 tint = lerp(float3(0.78f, 0.84f, 1.0f), float3(1.0f, 0.97f, 0.9f), saturate(step1 * 0.5f + step2 * 0.5f));
++    const float3 chroma = scene / max(luma, 0.02f);
++    // Colour is pulled halfway to its own average so bands read as flat paint, not as darker texture.
++    const float3 flatChroma = lerp(chroma, float3(1.0f, 1.0f, 1.0f), 0.2f);
++    return lerp(scene, min(flatChroma * banded * tint * 1.1f, 1.5f), strength);
++}
++
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
 +// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
 +// they are.
@@ -18390,7 +18422,7 @@ index 0000000..17c3818
 +    const float facing = saturate(dot(normal, normalize(-center)));
 +    const float fresnel = pow(1.0f - facing, 2.0f);
 +    const float notUp = 1.0f - saturate((normal.y - 0.45f) * 2.5f);
-+    return gConstants.ambientOcclusion.w * edge * (0.25f + 0.75f * fresnel) * notUp * near;
++    return RimStrength() * edge * (0.25f + 0.75f * fresnel) * notUp * near;
 +}
 +
 +// Banjo's distance in front of the camera (his middle, a little above his feet), or 0 when there is no Banjo:
@@ -18608,7 +18640,7 @@ index 0000000..17c3818
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -18735,7 +18767,7 @@ index 0000000..17c3818
 +
 +    // Rim light: a soft warm-white light added along the edges.
 +    float3 rim = 0.0f;
-+    if (gConstants.ambientOcclusion.w > 0.0f) {
++    if (RimStrength() > 0.0f) {
 +        rim = float3(1.0f, 0.95f, 0.85f) * (0.9f * RimLight(pixel, depth));
 +    }
 +
@@ -18910,6 +18942,9 @@ index 0000000..17c3818
 +        if (daytime) {
 +            scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
 +            rim *= dayTint;
++        }
++        if (ToonStrength() > 0.0f) {
++            scene = ToonShade(scene * (keep + lamp), ToonStrength()) / max(keep + lamp, 0.001f);
 +        }
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
