@@ -5992,7 +5992,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..cea8ac0
+index 0000000..c527783
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,2605 @@
@@ -7198,9 +7198,9 @@ index 0000000..cea8ac0
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
-+        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
++        // Real blades: the grid coarsens from 300 units away, wind noise 260 units across drifting 0.12 of that a
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
-+        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
++        frameParams.grassBlades = { 300.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
 +        // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
 +        // so each spot of her is under about two of them.
 +        const float featherLength = 5.5f * settings.featherSize * settings.featherLength;
