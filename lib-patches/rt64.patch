@@ -11759,7 +11759,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..d5ad85a 100644
+index e7895c3..14b706b 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -11938,7 +11938,7 @@ index e7895c3..d5ad85a 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +371,121 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +371,122 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -12002,10 +12002,11 @@ index e7895c3..d5ad85a 100644
 +            }
 +        }
 +    }
-+    else if (snowShell && !snowTessGround) {
-+        // (The tessellated snow keeps the ground's own colour where it isn't snowy: it stands in for the ground's draw.)
++    else if (snowShell) {
++        // (The tessellated snow keeps the ground's own colour where it isn't snowy, or no snow lies: it stands in for
++        // the ground's draw.)
 +        float3 snowColor = resultColor.rgb;
-+        if (SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, snowColor)) {
++        if (!snowTessGround && SnowShellShade(grassWorld, combinerColor.rgb, snowShare, snowSample, snowColor)) {
 +            resultColor.rgb = snowColor;
 +        }
 +        else if ((gConstants.grassShells & RASTER_SNOW_TESS) == 0) {
@@ -12060,7 +12061,7 @@ index e7895c3..d5ad85a 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +493,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +494,23 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -12084,7 +12085,7 @@ index e7895c3..d5ad85a 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +536,7 @@ void PSMain(
+@@ -287,6 +537,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -12092,7 +12093,7 @@ index e7895c3..d5ad85a 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +553,7 @@ void PSMain(
+@@ -303,7 +554,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
