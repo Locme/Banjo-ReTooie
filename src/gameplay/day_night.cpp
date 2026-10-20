@@ -94,6 +94,34 @@ namespace {
         { 1.00f, { 0.38f, 0.44f, 0.68f } },
     };
 
+    // Where the sun stands in a level while the cycle is off: a unit vector towards it. The cycle's path is turned
+    // so its noon sun stands the same way, as high. Maps not listed keep RT64's own sun (fairly low, to one side)
+    // and the cycle's usual path (rising in the east, leaning a little to the south).
+    struct MapSun {
+        uint16_t map;
+        float towards[3];
+    };
+    constexpr MapSun map_suns[] = {
+        // Spiral Mountain: high over the mountain seen from Banjo's house, so the sunlight falls on the house (L).
+        { 0xAF, { -0.56f, 0.66f, -0.50f } },
+    };
+
+    // The map's own sun, false if it has none. Test aid: TOOIE_MAP_SUN=<x>,<y>,<z> gives every map that one.
+    bool map_sun(uint16_t map, float out[3]) {
+        if (const char* v = std::getenv("TOOIE_MAP_SUN")) {
+            if (sscanf(v, "%f,%f,%f", &out[0], &out[1], &out[2]) == 3) {
+                return true;
+            }
+        }
+        for (const MapSun& s : map_suns) {
+            if (s.map == map) {
+                std::copy(std::begin(s.towards), std::end(s.towards), out);
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Held times for the fixed modes.
     constexpr float morning_time = 0.31f;
 
@@ -359,11 +387,17 @@ void tooie::day_night::tick(uint8_t* rdram) {
             active = false;
         }
         tooie::night_sounds::set(0.0f, 0.0f, 0.0f, 0.0f);
+        if (!sent_off || new_map) {
+            // The level's own sun, if it has one (for the sun shadows and the sun in the sky).
+            float held[3] = { 0.0f, 1.0f, 0.0f };
+            const bool own = map_sun(map, held);
+            normalize(held);
+            RT64::SetSceneSun(own, held[0], held[1], held[2]);
+        }
         if (!sent_off) {
             sent_off = true;
             const float none[3] = { 1.0f, 1.0f, 1.0f };
             RT64::SetSceneTimeOfDay(false, none, 1.0f, false, false, false);
-            RT64::SetSceneSun(false, 0.0f, 0.0f, 0.0f);
             RT64::SetSceneWeather(0.0f, 0.0f, false);
         }
         return;
@@ -377,16 +411,33 @@ void tooie::day_night::tick(uint8_t* rdram) {
 
     // The sun rises in the east (+x) at 0.25, stands highest at noon, sets in the west at 0.75; it leans
     // a little to the south (+z) so it is never straight overhead. At night the moon takes the opposite path.
+    // A level with its own sun (map_sun) turns the path to lean towards it instead, so noon's sun stands there.
+    float lean_dir[2] = { 0.0f, 1.0f };
+    float lean = 0.45f;
+    {
+        float own[3];
+        if (map_sun(map, own)) {
+            const float across = std::sqrt(own[0] * own[0] + own[2] * own[2]);
+            if ((across > 1e-4f) && (own[1] > 0.05f)) {
+                lean_dir[0] = own[0] / across;
+                lean_dir[1] = own[2] / across;
+                lean = across / own[1];
+            }
+        }
+    }
     const float angle = 2.0f * 3.14159265f * (t - 0.25f);
     const float height = std::sin(angle);
     // The sky (sun disc, lens flare) and the sun shadows follow where it really is, so it sets below the
-    // horizon; the moon takes over a little after.
-    float sky[3] = { std::cos(angle) * 0.85f, height, 0.45f };
+    // horizon; the moon takes over a little after. Along: from sunrise to sunset; up; the lean.
+    float along = std::cos(angle) * 0.85f;
+    float up = height;
     if (height < -0.1f) {
         // The moon keeps lower, so it is often in view.
-        sky[0] = -sky[0];
-        sky[1] = -sky[1] * 0.55f;
+        along = -along;
+        up = -up * 0.55f;
     }
+    // Sunrise is to the lean's left looking along it: (+x) for the usual lean to +z.
+    float sky[3] = { along * lean_dir[1] + lean * lean_dir[0], up, -along * lean_dir[0] + lean * lean_dir[1] };
     normalize(sky);
     // For sun_direction (HD shadows): something to cast shadows with, never lower than about 10 degrees.
     float direction[3] = { sky[0], std::max(sky[1], 0.18f), sky[2] };

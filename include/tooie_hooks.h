@@ -104,6 +104,8 @@ void tooie_cell_draw_distance(uint8_t* rdram, recomp_context* ctx);
 void tooie_jiggy_dance_init(uint8_t* rdram, recomp_context* ctx);
 // Extended draw distance: $f12 is an actor's own draw distance (func_80101970), about to be set.
 void tooie_actor_draw_distance(uint8_t* rdram, recomp_context* ctx);
+// Extended draw distance: start of func_80101808, gives actors that skip func_80101970 the extended distance.
+void tooie_actor_draw_reach(uint8_t* rdram, recomp_context* ctx);
 // Field of view (src/gameplay/field_of_view.cpp): a camera controller step, and the FOV setter func_800CA558.
 void tooie_camera_controller_step(uint8_t* rdram, recomp_context* ctx);
 void tooie_set_fov(uint8_t* rdram, recomp_context* ctx);
