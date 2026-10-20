@@ -12400,10 +12400,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..60b37d4
+index 0000000..6016572
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,2730 @@
+@@ -0,0 +1,2780 @@
 +//
 +// RT64
 +//
@@ -13692,6 +13692,40 @@ index 0000000..60b37d4
 +    return (gConstants.water.y > 1.1f) && (gConstants.water.y < 1.5f);
 +}
 +
++// How level the water mask's surface is at a pixel: the up of its facing in the world (1 lying flat, 0 upright).
++float WaterUpAt(int2 pixel) {
++    float d, dr, dd, dl, du;
++    if (!LoadAnyWater(pixel, d)) {
++        return 1.0f;
++    }
++    const float3 c = ViewPosition(pixel, d);
++    const float3 px = LoadAnyWater(pixel + int2(1, 0), dr) ? ViewPosition(pixel + int2(1, 0), dr) - c : (LoadAnyWater(pixel - int2(1, 0), dl) ? c - ViewPosition(pixel - int2(1, 0), dl) : float3(1.0f, 0.0f, 0.0f));
++    const float3 py = LoadAnyWater(pixel + int2(0, 1), dd) ? ViewPosition(pixel + int2(0, 1), dd) - c : (LoadAnyWater(pixel - int2(0, 1), du) ? c - ViewPosition(pixel - int2(0, 1), du) : float3(0.0f, 0.0f, 1.0f));
++    const float3 n = cross(px, py);
++    if (dot(n, n) < 1e-10f) {
++        return 1.0f;
++    }
++    return abs(dot(normalize(n), normalize(gConstants.worldY.xyz)));
++}
++
++// Whether the water round a pixel lies level and still (1) or runs down a slope or a waterfall (0): shore foam
++// belongs only on level water. Looks a little round the pixel (more above it, where a fall comes down from), so
++// the edges of a fall and the white water at its foot get none either.
++float OriginalShoreLevel(int2 pixel) {
++    const int reach = max(2, int(gConstants.projection.w / 180.0f));
++    float level = 1.0f;
++    [unroll] for (int i = 0; i < 8; i++) {
++        const int2 offset = (i == 0) ? int2(0, 0) : (i == 1) ? int2(reach, 0) : (i == 2) ? int2(-reach, 0) : (i == 3) ? int2(0, reach) :
++            int2(0, -reach * (i - 2));
++        float d;
++        if (LoadFall(pixel + offset, d)) {
++            return 0.0f;
++        }
++        level = min(level, saturate((WaterUpAt(pixel + offset) - 0.88f) / 0.07f));
++    }
++    return level;
++}
++
 +// Shore foam on the game's own water (Original): Modern water's broken white line where the floor comes up near the
 +// surface. The game's water doesn't write depth, so the depth under it is the floor.
 +float OriginalShoreFoam(int2 pixel, float waterDepth, float sceneDepth) {
@@ -13700,12 +13734,21 @@ index 0000000..60b37d4
 +    }
 +    const float3 surface = ViewPosition(pixel, waterDepth);
 +    const float3 surfaceWorld = WorldPosition(surface);
-+    const float floorDepth = max(surfaceWorld.y - WorldPosition(ViewPosition(pixel, sceneDepth)).y, 0.0f);
++    // From under the water there is no shore: what shows through the surface lies above it (the banks, the sky).
++    if (gConstants.worldY.w < surfaceWorld.y) {
++        return 0.0f;
++    }
++    const float below = surfaceWorld.y - WorldPosition(ViewPosition(pixel, sceneDepth)).y;
++    if (below < -4.0f) {
++        return 0.0f;
++    }
++    const float floorDepth = max(below, 0.0f);
 +    const float t = gConstants.ambientOcclusion.z;
 +    const float2 p = surfaceWorld.xz;
 +    const float pattern = WaterNoise(p / 18.0f + float2(t * 0.15f, 0.0f)) * 0.6f + WaterNoise(p / 7.0f - float2(0.0f, t * 0.3f)) * 0.4f;
 +    const float shore = saturate(1.0f - floorDepth / 16.0f);
-+    return saturate((shore * 1.2f - (1.0f - pattern)) * 2.5f) * saturate(1.5f - length(surface) / 4000.0f);
++    const float foam = saturate((shore * 1.2f - (1.0f - pattern)) * 2.5f) * saturate(1.5f - length(surface) / 4000.0f);
++    return (foam > 0.0f) ? foam * OriginalShoreLevel(pixel) : 0.0f;
 +}
 +
 +float3 ModernWater(int2 pixel, float sceneDepth, float3 surface, float3 normal, float3 scene) {
@@ -15117,7 +15160,14 @@ index 0000000..60b37d4
 +            scene = DayWorld(scene, dayTint, !wet);
 +            const float3 weather = DayWeather();
 +            scene = DayWeatherLight(scene, weather.x, weather.z, 0.3f);
-+            scene = DayMist(scene, pixel, depth, dayTint);
++            // The mist lies in front of the nearest thing at the pixel: the game's water and falls don't write depth,
++            // so behind a waterfall the depth is the cave beyond it, and the mist would show through the fall.
++            float mistDepth = depth;
++            float frontWater;
++            if ((gConstants.water.y > 0.5f) && LoadAnyWater(pixel, frontWater)) {
++                mistDepth = min(mistDepth, frontWater);
++            }
++            scene = DayMist(scene, pixel, mistDepth, dayTint);
 +            scene = DayLensDrops(scene, pixel, dayTint, weather.x);
 +            rim *= dayTint;
 +        }
