@@ -7055,10 +7055,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..1429997
+index 0000000..59c5d9b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2963 @@
+@@ -0,0 +1,2974 @@
 +//
 +// RT64
 +//
@@ -7173,6 +7173,9 @@ index 0000000..1429997
 +            uint64_t bvhTlasSize = 0;
 +            uint64_t bvhScratchSize = 0;
 +            bool bvhReady = false;
++            // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
++            // in world space, so it stays right as the camera moves).
++            bool bvhBuiltOnce = false;
 +            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
@@ -9125,7 +9128,13 @@ index 0000000..1429997
 +    {
 +        Resources &res = resourcesFor(worker);
 +        res.bvhReady = false;
-+        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery || (worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
++        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery) {
++            return;
++        }
++        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
++        // dropping to the depth march and its shadow map, which made the shadows come and go.
++        res.bvhReady = res.bvhBuiltOnce;
++        if ((worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
 +            return;
 +        }
 +        static const bool bvhLog = (getenv("TOOIE_RT_LOG") != nullptr);
@@ -9141,6 +9150,7 @@ index 0000000..1429997
 +        if (meshes.empty()) {
 +            return;
 +        }
++        res.bvhReady = false;
 +        RenderDevice *device = worker->device;
 +        RenderCommandList *commandList = worker->commandList.get();
 +        RenderBottomLevelASBuildInfo blasInfo;
@@ -9209,6 +9219,7 @@ index 0000000..1429997
 +        });
 +        GpuCheckpoint(commandList, "ray tracing: built");
 +        res.bvhReady = true;
++        res.bvhBuiltOnce = true;
 +        if (bvhLog) {
 +            static auto lastLog = std::chrono::steady_clock::now();
 +            if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
@@ -15029,10 +15040,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6360007
+index 0000000..a11268d
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3425 @@
+@@ -0,0 +1,3411 @@
 +//
 +// RT64
 +//
@@ -16052,21 +16063,13 @@ index 0000000..6360007
 +    }
 +    // Ice has Ice reflections of its own, and SSR stays off it.
 +    float maskDepth;
++#ifdef RAY_TRACED
++    // Water keeps its own reflections (Water reflections): traced from the bed's depth and normal it came out
++    // stretched, and the water's faces (falls, banks) are not all level.
++    return false;
++#else
 +    return (WaterReflectionStrength() <= 0.0f) && (gConstants.water.y < 1.5f) && LoadWater(pixel, maskDepth);
-+}
-+
-+// Where a reflection starts from: the surface itself, except water (it is drawn over what lies under it, so the
-+// scene depth and normal there are the bed's): there it is the water's own surface, facing up in the world.
-+void ReflectionSurface(int2 pixel, inout float3 center, inout float3 normal) {
-+    float waterDepth;
-+    if (LoadShiny(pixel) || (gConstants.water.y >= 1.5f) || !LoadWater(pixel, waterDepth)) {
-+        return;
-+    }
-+    center = ViewPosition(pixel, waterDepth);
-+    normal = normalize(gConstants.worldY.xyz);
-+    if (dot(normal, center) > 0.0f) {
-+        normal = -normal;
-+    }
++#endif
 +}
 +
 +// The ice's own facing at a pixel, from its depths in the mask next to it (ice is floors, walls and blocks): the
@@ -18117,13 +18120,10 @@ index 0000000..6360007
 +        if (!ReflectiveAt(pixel, depth)) {
 +            return float4(dot(scene, float3(0.299f, 0.587f, 0.114f)).xxx * 0.25f, 0.0f);
 +        }
-+        float3 reflectCenter = center;
-+        float3 reflectNormal = normal;
-+        ReflectionSurface(pixel, reflectCenter, reflectNormal);
 +#ifdef RAY_TRACED
-+        const float4 reflection = TracedReflection(pixel, reflectCenter, reflectNormal);
++        const float4 reflection = TracedReflection(pixel, center, normal);
 +#else
-+        const float4 reflection = ScreenSpaceReflection(pixel, reflectCenter, reflectNormal);
++        const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
 +#endif
 +        return float4(lerp(float3(0.6f, 0.0f, 0.0f), reflection.rgb, reflection.a), 0.0f);
 +    }
@@ -18306,15 +18306,12 @@ index 0000000..6360007
 +            // SSR: the reflected scene, more at grazing angles (Fresnel) and less in creases (GTAO's specular
 +            // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections). At 100 a
 +            // surface seen straight on is three quarters mirror, and fully at grazing angles.
-+            float3 reflectCenter = center;
-+            float3 reflectNormal = normal;
-+            ReflectionSurface(pixel, reflectCenter, reflectNormal);
 +#ifdef RAY_TRACED
-+            const float4 reflection = TracedReflection(pixel, reflectCenter, reflectNormal);
++            const float4 reflection = TracedReflection(pixel, center, normal);
 +#else
-+            const float4 reflection = ScreenSpaceReflection(pixel, reflectCenter, reflectNormal);
++            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
 +#endif
-+            const float facing = saturate(dot(-normalize(reflectCenter), reflectNormal));
++            const float facing = saturate(dot(-normalize(center), normal));
 +            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
 +            const float specularOcclusion = occlusion ? saturate(pow(facing + indirect.a, 0.5f) - 1.0f + indirect.a) : 1.0f;
 +            scene = lerp(scene, reflection.rgb, saturate(SsrStrength() * fresnel * reflection.a * specularOcclusion));

@@ -132,6 +132,7 @@ namespace {
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
     std::atomic<bool> sun_shadows{false};
+    std::atomic<float> sun_shadow_distance_set{3000.0f};
     std::atomic<float> sun_shadow_reach{0.0f};
     std::atomic<bool> kazooie_feathers{false};
     std::atomic<bool> npc_fur{false};
@@ -4255,6 +4256,7 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(sun_shadow_softness_option, 60.0) / 100.0));
     const float shadow_distance = (float)value<double>(sun_shadow_distance_option, 3000.0);
     sun_shadow_reach = sun_shadows ? shadow_distance : 0.0f;
+    sun_shadow_distance_set.store(shadow_distance);
     RT64::SetSceneSunShadowDistance(shadow_distance);
     RT64::SetSceneGrass((float)(value<double>(grass_option, 0.0) / 100.0), (float)(value<double>(grass_height_option, 100.0) / 100.0),
         (float)value<double>(grass_distance_option, 1800.0), (float)(value<double>(grass_density_option, 100.0) / 100.0),
@@ -4414,12 +4416,18 @@ bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
 }
 
+// Ray tracing shows sun shadows (traced ones) at 60 at least whatever the slider says, so the game keeps the whole
+// level and the off-screen casters drawn then too.
+static bool traced_shadows_on() {
+    return ray_tracing_on.load() && (RT64::GetRayTracingSupport() == 2);
+}
+
 bool tooie::picture_filters::sun_shadows_on() {
-    return sun_shadows;
+    return sun_shadows || traced_shadows_on();
 }
 
 float tooie::picture_filters::sun_shadow_distance() {
-    return sun_shadow_reach;
+    return traced_shadows_on() ? sun_shadow_distance_set.load() : sun_shadow_reach.load();
 }
 
 bool tooie::picture_filters::kazooie_feathers_on() {
