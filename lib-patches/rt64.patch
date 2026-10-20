@@ -7075,10 +7075,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..3f3e0e7
+index 0000000..04abe30
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3047 @@
+@@ -0,0 +1,3053 @@
 +//
 +// RT64
 +//
@@ -7359,6 +7359,7 @@ index 0000000..3f3e0e7
 +    static float userWaterReflections = 0.0f;
 +    static float rayTracingStrength = 0.6f;
 +    static std::atomic<bool> rayTracingHitColours{ false };
++    static std::atomic<float> rayTracingSmoothing{ 0.5f };
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7540,6 +7541,10 @@ index 0000000..3f3e0e7
 +
 +    void SetSceneRayTracingHitColours(bool enabled) {
 +        rayTracingHitColours.store(enabled);
++    }
++
++    void SetSceneRayTracingSmoothing(float smoothing) {
++        rayTracingSmoothing.store(std::clamp(smoothing, 0.0f, 1.0f));
 +    }
 +
 +    void SetSceneRayTracingStrength(float strength) {
@@ -9214,6 +9219,7 @@ index 0000000..3f3e0e7
 +            memset(mapped, 0, 16 * (SceneMaxLights + 1));
 +            mapped[0] = float(lightSettings.lightCount);
 +            mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
++            mapped[2] = rayTracingSmoothing.load();
 +            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
@@ -10128,10 +10134,10 @@ index 0000000..3f3e0e7
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..363c8b6
+index 0000000..9970775
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,472 @@
+@@ -0,0 +1,474 @@
 +//
 +// RT64
 +//
@@ -10409,6 +10415,8 @@ index 0000000..363c8b6
 +    // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
 +    // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
 +    void SetSceneRayTracingHitColours(bool enabled);
++    // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
++    void SetSceneRayTracingSmoothing(float smoothing);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
@@ -15173,10 +15181,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..258eab1
+index 0000000..46856f1
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3880 @@
+@@ -0,0 +1,3895 @@
 +//
 +// RT64
 +//
@@ -15991,6 +15999,16 @@ index 0000000..258eab1
 +    return asfloat(gLights.Load(4)) > 0.5f;
 +}
 +
++// Ray tracing noise smoothing, 0 (the raw rays) to 1.
++float RtSmoothing() {
++    return saturate(asfloat(gLights.Load(8)));
++}
++
++// How far round about Banjo's normal is averaged (pixels; 0 not at all).
++int BanjoSmoothRadius() {
++    return int(RtSmoothing() * 7.0f + 0.5f);
++}
++
 +uint RadianceCell(float3 world, out uint check) {
 +    const int3 cell = int3(floor(world * (1.0f / 16.0f)));
 +    const uint h = uint(cell.x) * 73856093u ^ uint(cell.y) * 19349663u ^ uint(cell.z) * 83492791u;
@@ -16331,13 +16349,14 @@ index 0000000..258eab1
 +// half-size pass round it, each weighted by how near its surface lies to this pixel's plane, so the block's 16
 +// slices and 32 rays come together without bleeding across edges (the spatial filter of the Unity GTAO's own
 +// passes; there is no temporal one, as the game has no motion vectors).
-+float4 IndirectAt(int2 pixel, float3 center, float3 normal, bool soft = false) {
++float4 IndirectAt(int2 pixel, float3 center, float3 normal, int softReach = 0) {
 +    const int2 halfSize = max(int2(gConstants.projection.zw) / 2, int2(1, 1));
 +    const int2 base = pixel / 2;
 +    const float tolerance = max(-center.z * 0.03f, 2.0f);
 +    // Soft (Banjo's fur): a wider gather by distance alone, as the fur's normals turn every pixel and the plane test
 +    // left each pixel its own two rays, which crawled.
-+    const int reach = soft ? 2 : 1;
++    const bool soft = softReach > 0;
++    const int reach = soft ? softReach : 1;
 +    float4 sum = 0.0f;
 +    float weight = 0.0f;
 +    [loop] for (int y = -reach; y <= reach + 1; y++) {
@@ -18375,8 +18394,8 @@ index 0000000..258eab1
 +        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
 +        float blocked = 0.0f;
 +        [loop] for (int k = 0; k < Rays; k++) {
-+            // Fixed on Banjo: a different turn each pixel speckled his fur.
-+            const float angle = float(k) * 2.39996323f + (onBanjo ? 0.0f : jitter * 6.28318531f);
++            // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
++            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (onBanjo ? 1.0f - RtSmoothing() : 1.0f);
 +            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
 +            const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
 +            RayDesc ray;
@@ -18628,8 +18647,8 @@ index 0000000..258eab1
 +    float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
 +#ifdef RAY_TRACED
 +    // Banjo's fur: its rays round the smoothed normal (see the main pass).
-+    if (InsideBanjo(ViewToWorldPoint(center))) {
-+        normal = SmoothedNormal(pixel, center, normal, 4);
++    if (InsideBanjo(ViewToWorldPoint(center)) && (BanjoSmoothRadius() > 0)) {
++        normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
 +    }
 +    if (AoStrength() > 0.0f) {
 +        result.a = TracedOcclusion(center, normal, cell);
@@ -18796,14 +18815,18 @@ index 0000000..258eab1
 +        // and crawled as he moved (L, 2026-10-20). There the normal is smoothed over his surface and the traced
 +        // light gathered wider, so the fur keeps its traced shading without the speckle.
 +        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
-+        if (onBanjo) {
-+            normal = SmoothedNormal(pixel, center, normal, 4);
++        if (onBanjo && (BanjoSmoothRadius() > 0)) {
++            normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
 +        }
 +#else
 +        const bool onBanjo = false;
 +#endif
 +        if (occlusion || globalIllumination) {
-+            indirect = IndirectAt(pixel, center, normal, onBanjo);
++#ifdef RAY_TRACED
++            indirect = IndirectAt(pixel, center, normal, onBanjo ? 1 + int(RtSmoothing() * 3.0f + 0.5f) : 0);
++#else
++            indirect = IndirectAt(pixel, center, normal);
++#endif
 +        }
 +        if (occlusion) {
 +            // GTAO's visibility with its multi-bounce, from the scene's brightness here when the pass has the scene
