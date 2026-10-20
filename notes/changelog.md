@@ -11,6 +11,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 ### Cheats and controls
 
 - QOL > Pause Special Menu (on by default): while the Esc menu is open during play the game is paused as if Start were pressed, with no pause menu drawn and the music still playing; cutscenes, map changes and the title carry on. QOL's Photo Filter section is gone (photo mode's panel has those settings, still saved). Transform anywhere is now on by default, and a saved Off turns on once (L). Checked headless (T451).
+- Flying: turning above 30 FPS (40, 60, 120, 175, 240, Uncapped) is as fast as in the original game; it sped up with the frame rate and kept swinging after the stick was let go (L). Checked headless at Original, 120, 240 and Uncapped (T447).
 - General > Gameplay > Enemy aim (Original / Better / Sharp, Original by default): The enemies that already aim ahead (Klungo, lava gargoyles, fantasy eyeballs) lead your movement 50% or 100% further than the game's own aim. Untested on PC (T446).
 
 - Cheats > Cheato: HONEYKING (take no damage) now also stops the hit reaction: enemies and hazards no longer knock Banjo back or fling him up while it is on. A grab that holds him (Dragunda) still holds him, with no damage (L). Checked headless on a Snapdragon and Dragunda (T444).

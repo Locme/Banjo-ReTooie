@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T447 Flying: turning at 40 FPS and up matches the original game
+- Asked: 2026-10-20 07:49 UTC
+- Build: main @ 7c7f52d
+- Steps:
+  1. Graphics > Game Frame Rate: 120 FPS (then 175, 240 and Uncapped)
+  2. Take off from a flight pad (or Cheats > Fly anywhere) and hold the stick left for a few seconds, then let go
+  3. Set Original and do the same
+- Look for: Turning speed while flying is the same in every mode (a full circle in about 4 seconds), and Banjo stops turning soon after you let go instead of swinging on. Headless: Original, 120, 240 and Uncapped all turned 90 degrees a second with the same 45-degree settle (was 360 a second at 120 and erratic at 240 before).
+- Status: waiting for L
+
 ## T446 Enemy aim: Klungo's potions lead you further (Better / Sharp)
 - Asked: 2026-10-20 07:41 UTC
 - Build: claude/project-thread-quqov9
