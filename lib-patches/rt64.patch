@@ -7061,10 +7061,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a06ec3c
+index 0000000..6a55bc6
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3030 @@
+@@ -0,0 +1,3038 @@
 +//
 +// RT64
 +//
@@ -7524,6 +7524,13 @@ index 0000000..a06ec3c
 +        const std::scoped_lock lock(effectsMutex);
 +        rayTracingStrength = std::clamp(strength, 0.0f, 1.0f);
 +        RefreshReflections();
++    }
++
++    void SetSceneFurSway(float x, float y, float z) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.furSway[0] = x;
++        effectsSettings.furSway[1] = y;
++        effectsSettings.furSway[2] = z;
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
@@ -8233,6 +8240,7 @@ index 0000000..a06ec3c
 +        // 100), the amount making them thin out more slowly (a thicker coat).
 +        const float amount = std::min(settings.fur, 1.0f);
 +        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
++        frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
 +        const float npcAmount = std::min(settings.npcFur, 1.0f);
 +        frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
 +        return true;
@@ -10097,10 +10105,10 @@ index 0000000..a06ec3c
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ce14f50
+index 0000000..c6effce
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,469 @@
 +//
 +// RT64
 +//
@@ -10237,6 +10245,8 @@ index 0000000..ce14f50
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
 +        float furNoisiness = 0.5f;
++        // Banjo's fur jiggle: the tips' lag behind his movement, world units at full length (SetSceneFurSway).
++        float furSway[3] = { 0.0f, 0.0f, 0.0f };
 +        float feathers = 0.0f;
 +        float featherSize = 1.0f;
 +        float featherLength = 1.0f;
@@ -10376,6 +10386,9 @@ index 0000000..ce14f50
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
++    // Banjo-Tooie: Banjo's fur jiggle, the tips' lag behind his movement (world x, y, z in shares of the fur's
++    // length; zeros when off). The game steps the spring (src/gameplay/snout_jiggle.cpp).
++    void SetSceneFurSway(float x, float y, float z);
 +    void NoteRayTracingSupport(bool supported);
 +    int GetRayTracingSupport();
 +    bool RayTracingActive();
@@ -15001,10 +15014,10 @@ index e7895c3..d41d3f6 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..f40af9d 100644
+index 74b1fa0..45c83b5 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,16 +11,65 @@
+@@ -11,16 +11,70 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -15055,7 +15068,12 @@ index 74b1fa0..f40af9d 100644
 +            oFurAnchor = furNormals[iVertexId * 2 + 1];
 +            const float share = float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = ((gConstants.furShells & RASTER_FUR_WHITE) != 0) ? FrParams.npcFurParams : FrParams.furParams;
-+            const float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
++            float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
++            // Banjo's fur jiggle: his strands' tips lag behind as he moves, more the further out (the square of the
++            // height), scaled by the fur's length. Not furry NPCs' fur.
++            if ((gConstants.furShells & RASTER_FUR_WHITE) == 0) {
++                offset += FrParams.furSway.xyz * (params.x * share * share);
++            }
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
 +        }
      }
@@ -15071,7 +15089,7 @@ index 74b1fa0..f40af9d 100644
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +82,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +87,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -15085,7 +15103,7 @@ index 74b1fa0..f40af9d 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +109,19 @@ void VSMain(
+@@ -53,17 +114,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -20146,10 +20164,10 @@ index 0000000..e6accce
 +    return h;
 +}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..4b24afc 100644
+index 2e62aaf..8574eb9 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,130 @@ namespace interop {
+@@ -13,6 +13,133 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -20277,6 +20295,9 @@ index 2e62aaf..4b24afc 100644
 +        float4 waterMotion;
 +        // The slow swell over all the water: its height in world units, its speed, then 1 for Stylised water.
 +        float4 waterSwell;
++        // Banjo-Tooie: Banjo's fur jiggle (RasterVS.hlsl): how far his strands' tips lag behind his movement, a world
++        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
++        float4 furSway;
      };
  #ifdef HLSL_CPU
  };

@@ -366,6 +366,23 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, ears_option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur jiggle",
+        "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(fur_stiffness_option, "Fur jiggle: stiffness",
+            "How hard the fur springs back upright. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+        general.add_number_option(fur_damping_option, "Fur jiggle: damping",
+            "How quickly the swaying dies out. 0 sways for ages.", 0, 90, 1, 0, false, 8);
+        general.add_number_option(fur_mass_option, "Fur jiggle: mass",
+            "How heavy the fur is: heavier lags further behind and sways slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(fur_sway_option, "Fur jiggle: max sway",
+            "How far the tips may lean, as a share of the strands' length.", 0, 300, 5, 0, true, 100);
+        for (const std::string* id : { &fur_stiffness_option, &fur_damping_option, &fur_mass_option, &fur_sway_option }) {
+            general.add_option_hidden_dependency(*id, fur_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
         false);

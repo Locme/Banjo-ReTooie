@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T484 Fur jiggle
+- Asked: 2026-10-20 23:09 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn Banjo fur up
+  2. General > Jiggle: turn on Fur jiggle
+  3. Run, turn, jump and land, then stop
+- Look for: The fur's strands lean back as he moves and spring upright when he stops; the roots stay on him; the sliders change how floppy it is and how far the tips lean.
+- Status: waiting for L
+
 ## T483 Deep snow frame rate: pixels reuse the dent shape
 - Asked: 2026-10-20 22:30 UTC
 - Build: main @ e02e15b
