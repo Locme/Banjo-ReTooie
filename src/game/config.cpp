@@ -415,6 +415,11 @@ void tooie::init_config() {
         "With Enemy aim on Better or Sharp, how many shots are aimed ahead of you and steered, in percent. The others fly as in the game, so the boss cannot be read as always aiming ahead.",
         0, 100, 5, 0, false, 75);
     general.add_option_hidden_dependency(tooie::damage::aim_chance_option, tooie::damage::aim_option, tooie::damage::Aim::Original);
+    general.add_number_option(
+        tooie::damage::throw_delay_option,
+        "Klungo: delayed throws",
+        "How often Klungo holds a potion back until you are in mid-air (or a second has passed), when you cannot change direction, instead of throwing at once. 0 is the game's own timing.",
+        0, 100, 5, 0, false, 0);
     // L, 2026-10-17: in General, off by default (a new id, so the old DEV value, on by default, is not carried over).
     general.add_bool_option(
         tooie::discord::presence_option,
@@ -439,6 +444,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::damage::double_damage_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_option, "Gameplay");
     recompui::config::set_option_group(tooie::damage::aim_chance_option, "Gameplay");
+    recompui::config::set_option_group(tooie::damage::throw_delay_option, "Gameplay");
     recompui::config::set_option_group(tooie::discord::presence_option, "Discord");
     recompui::config::set_option_group(tooie::wip_tab_option, "Developer");
 

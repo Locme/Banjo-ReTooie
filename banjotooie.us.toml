@@ -1723,3 +1723,9 @@ text = "tooie_enemy_aim_end(rdram, ctx);"
 func = "func_80800204_chklungophial"
 before_vram = 0x80800204
 text = "tooie_klungo_potion_steer(rdram, ctx);"
+
+# Klungo: delayed throws (src/gameplay/damage_mods.cpp): the potion throw, func_80802B84_chklungo with $a1 = 0, can be held back.
+[[patches.hook]]
+func = "func_80802B84_chklungo"
+before_vram = 0x80802B84
+text = "if (tooie_klungo_throw(rdram, ctx)) return;"
