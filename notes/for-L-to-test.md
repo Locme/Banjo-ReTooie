@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T478 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
+## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
 - Asked: 2026-10-20 20:35 UTC
 - Build: main
 - Steps:
@@ -9,6 +9,14 @@
   3. Try Pixelated 3D grass with Pixel size 0.5, and Mayahem Temple's courtyard
   4. Compare the frame rate with all three on against all three off
 - Look for: Grass looks the same with the toggles on or off (no holes, no blades popping in at the screen edges or from behind walls when you turn); no grass on the road, path or rock; grass is full height up close, not growing as you walk nearer; no shimmer at Pixel size under 1; faster than before, most with all three on
+## T478 Deep snow: speed, uncovered cliff edges, patches not cut
+- Asked: 2026-10-20 20:29 UTC
+- Build: main @ 6557e74
+- Steps:
+  1. Deep snow on, Icy Side, the same spots as your last screenshots
+  2. Walk lots of trails, near the cliff by the water too
+  3. Let Chilly Willy's balls hit the snow
+- Look for: Frame rate back near two builds ago, no holes at the cliff edge, every patch dents, ball craters smooth?
 - Status: waiting for L
 
 ## T477 Talking heads: no white box at any frame rate
