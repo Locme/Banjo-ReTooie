@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T482 Ear jiggle slider and stiffness defaults
+- Asked: 2026-10-20 21:59 UTC
+- Build: main
+- Steps:
+  1. General > Jiggle: turn on Ear jiggle
+  2. Look at its sliders (a stiffness you already changed keeps your value; new ones start at 300)
+  3. Run, turn, jump and land
+- Look for: Ear jiggle shows one max squash & stretch slider; every jiggle stiffness default is 300; the ears still wobble.
+- Status: waiting for L
+
 ## T481 Deep snow frame rate with a level full of prints
 - Asked: 2026-10-20 21:40 UTC
 - Build: main @ acaf08a
@@ -129,6 +139,7 @@
 - Also: lamps and fires cast traced shadows (the level's own lights, up to 32, each lighting what is within its range; rays from the surface to the light, so a pillar or a character blocks a lamp's light on the floor behind it). Look in a cave or at night near a torch for shadows that follow the light, and no flicker.
 - Also: water reflections are traced too (Water reflections shows at 60 at least while it is on; the same ripples, waves and tessellated water as before, the ray found through the world's triangles instead of marched across the screen). Look at the Spiral Mountain moat and river for banks and trees mirrored without stretching.
 - Also: the bounce light is now traced light: long rays (15000 units) over the hemisphere; one that leaves the world brings the sky's light (the fog colour, bluer overhead, at 35%), one that lands brings the colour where it lands. Open ground gets a little sky fill, caves and shaded corners don't. Strength is the Bounce light (SSGI) slider (shows at 50 at least). Look for: shaded sides picking up a blue-ish fill outdoors, enclosed places staying dark, nothing blown out; if it is too bright or too dim, say which and how much.
+- Also: Graphics > Ray tracing strength (default 60): the least each traced effect shows at (reflections, sun shadows, water reflections at it; AO and bounce light at 83% of it). Try 100 and 30 to see the traced effects get plain or fade; your own sliders still win when higher.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

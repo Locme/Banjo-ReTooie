@@ -175,7 +175,7 @@ namespace {
     // The sliders, read once per draw of the player's model (L, 2026-10-18: just the jiggle bone's own).
     // The snout and the nose share them.
     struct Settings {
-        float stiffness = 150.0f;   // spring, per unit of mass
+        float stiffness = 300.0f;   // spring, per unit of mass
         float damping = 12.0f;      // against the tip's velocity
         float mass = 1.0f;
         // How far the tip may move from rest, as shares of the bone's length: back along it (into the
@@ -187,7 +187,7 @@ namespace {
 
     void read_settings() {
         using namespace tooie::snout_jiggle;
-        settings.stiffness = std::clamp((float)option_number(stiffness_option, 150.0), 1.0f, 2000.0f);
+        settings.stiffness = std::clamp((float)option_number(stiffness_option, 300.0), 1.0f, 2000.0f);
         settings.damping = std::clamp((float)option_number(damping_option, 12.0), 0.0f, 200.0f);
         settings.mass = std::clamp((float)option_number(mass_option, 1.0), 0.05f, 20.0f);
         settings.inwards = std::clamp((float)option_number(squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
@@ -797,10 +797,10 @@ namespace {
     constexpr int belly_bone = 2;
     constexpr float belly_pivot[3] = { 0.0f, 66.0f, 2.0f }, belly_tip[3] = { 0.0f, 66.0f, 17.0f };
 
-    struct BellySettings { Feel feel{ 150.0f, 12.0f, 1.0f }; Limits lim{ 0.25f, 0.25f, 0.25f }; } belly_settings;
+    struct BellySettings { Feel feel{ 300.0f, 12.0f, 1.0f }; Limits lim{ 0.25f, 0.25f, 0.25f }; } belly_settings;
     void read_belly_settings() {
         using namespace tooie::snout_jiggle;
-        belly_settings.feel.stiffness = std::clamp((float)option_number(belly_stiffness_option, 150.0), 1.0f, 2000.0f);
+        belly_settings.feel.stiffness = std::clamp((float)option_number(belly_stiffness_option, 300.0), 1.0f, 2000.0f);
         belly_settings.feel.damping = std::clamp((float)option_number(belly_damping_option, 12.0), 0.0f, 200.0f);
         belly_settings.feel.mass = std::clamp((float)option_number(belly_mass_option, 1.0), 0.05f, 20.0f);
         belly_settings.lim.inwards = std::clamp((float)option_number(belly_squash_in_option, 25.0), 0.0f, 95.0f) / 100.0f;
@@ -947,15 +947,15 @@ namespace {
     // the base stays on the head and the swing grows towards the top.
     constexpr int ear_bone = 9;
 
-    struct EarSettings { Feel feel{ 150.0f, 10.0f, 1.0f }; Limits lim{ 0.4f, 0.4f, 0.8f }; } ear_settings;
+    struct EarSettings { Feel feel{ 300.0f, 10.0f, 1.0f }; Limits lim{ 0.6f, 0.6f, 0.6f }; } ear_settings;
     void read_ear_settings() {
         using namespace tooie::snout_jiggle;
-        ear_settings.feel.stiffness = std::clamp((float)option_number(ears_stiffness_option, 150.0), 1.0f, 2000.0f);
+        ear_settings.feel.stiffness = std::clamp((float)option_number(ears_stiffness_option, 300.0), 1.0f, 2000.0f);
         ear_settings.feel.damping = std::clamp((float)option_number(ears_damping_option, 10.0), 0.0f, 200.0f);
         ear_settings.feel.mass = std::clamp((float)option_number(ears_mass_option, 1.0), 0.05f, 20.0f);
-        ear_settings.lim.inwards = std::clamp((float)option_number(ears_squash_in_option, 40.0), 0.0f, 95.0f) / 100.0f;
-        ear_settings.lim.outwards = std::clamp((float)option_number(ears_squash_out_option, 40.0), 0.0f, 300.0f) / 100.0f;
-        ear_settings.lim.across = std::clamp((float)option_number(ears_squash_across_option, 80.0), 0.0f, 300.0f) / 100.0f;
+        // One slider for every direction (L, 2026-10-20); squashing in stops at 95%.
+        const float squash = std::clamp((float)option_number(ears_squash_option, 60.0), 0.0f, 300.0f) / 100.0f;
+        ear_settings.lim = { std::min(squash, 0.95f), squash, squash };
     }
 
     bool ears_on = false;
@@ -1115,10 +1115,10 @@ namespace {
         { 3, { 10, 11, 12 }, { 48, 49, 50 } },
     };
     // Her own sliders, the snout's kinds (L, 2026-10-19): the jiggle bone's spring and its limits.
-    struct FeatherSettings { Feel feel{ 150.0f, 12.0f, 1.0f }; Limits lim{ 0.5f, 0.5f, 0.5f }; } feather_settings;
+    struct FeatherSettings { Feel feel{ 300.0f, 12.0f, 1.0f }; Limits lim{ 0.5f, 0.5f, 0.5f }; } feather_settings;
     void read_feather_settings() {
         using namespace tooie::snout_jiggle;
-        feather_settings.feel.stiffness = std::clamp((float)option_number(kazooie_stiffness_option, 150.0), 1.0f, 2000.0f);
+        feather_settings.feel.stiffness = std::clamp((float)option_number(kazooie_stiffness_option, 300.0), 1.0f, 2000.0f);
         feather_settings.feel.damping = std::clamp((float)option_number(kazooie_damping_option, 12.0), 0.0f, 200.0f);
         feather_settings.feel.mass = std::clamp((float)option_number(kazooie_mass_option, 1.0), 0.05f, 20.0f);
         feather_settings.lim.inwards = std::clamp((float)option_number(kazooie_squash_in_option, 50.0), 0.0f, 95.0f) / 100.0f;
@@ -1241,11 +1241,11 @@ namespace {
     constexpr int16_t backpack_ids[] = { 60 };
     constexpr int max_body_bones = 128;
 
-    struct BodySettings { Feel feel{ 200.0f, 10.0f, 1.5f }; Limits lim{ 0.25f, 0.25f, 0.25f }; float tilt = 0.0f; } body_settings;
+    struct BodySettings { Feel feel{ 300.0f, 10.0f, 1.5f }; Limits lim{ 0.25f, 0.25f, 0.25f }; float tilt = 0.0f; } body_settings;
 
     void read_body_settings() {
         using namespace tooie::snout_jiggle;
-        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 200.0), 1.0f, 2000.0f);
+        body_settings.feel.stiffness = std::clamp((float)option_number(body_stiffness_option, 300.0), 1.0f, 2000.0f);
         body_settings.feel.damping = std::clamp((float)option_number(body_damping_option, 10.0), 0.0f, 200.0f);
         body_settings.feel.mass = std::clamp((float)option_number(body_mass_option, 1.5), 0.05f, 20.0f);
         // One squash & stretch for every direction (L, 2026-10-19).
