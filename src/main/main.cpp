@@ -44,6 +44,7 @@
 #include "recompinput/recompinput.h"
 #include "recompinput/profiles.h"
 #include "tooie_asset_mods.h"
+#include "tooie_boot_screen.h"
 #include "tooie_frame_overlay.h"
 #include "tooie_game.h"
 #include "tooie_photo_mode.h"
@@ -197,6 +198,8 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     if (window == nullptr) {
         exit_error("Failed to create window: %s\n", SDL_GetError());
     }
+
+    tooie::boot_screen::set_window(window);
 
     SDL_SysWMinfo wmInfo;
     SDL_VERSION(&wmInfo.version);
@@ -836,7 +839,12 @@ int main(int argc, char** argv) {
     tooie::init_config();
     tooie::session_log::start(version_string);
     // Zips dropped into the mods folder are unpacked before every mod scan (startup and Refresh Mods).
-    recomp::mods::set_before_scan_callback([](bool game_started) { tooie::unpack_mod_zips(game_started); });
+    // The first scan is the one at startup, before the renderer takes the window.
+    recomp::mods::set_before_scan_callback([](bool game_started) {
+        static bool at_boot = true;
+        tooie::unpack_mod_zips(game_started, at_boot);
+        at_boot = false;
+    });
 
     tooie::start_save_backups();
 

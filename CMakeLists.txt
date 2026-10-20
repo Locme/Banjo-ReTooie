@@ -274,6 +274,7 @@ endif()
 set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
+    ${CMAKE_SOURCE_DIR}/src/main/boot_screen.cpp
 
     ${CMAKE_SOURCE_DIR}/src/debug/dl_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/pad_script.cpp
