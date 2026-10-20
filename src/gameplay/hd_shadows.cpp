@@ -473,24 +473,13 @@ extern "C" void tooie_actor_draw_begin(uint8_t* /*rdram*/, recomp_context* ctx) 
     draw_callbacks.push_back((uint32_t)ctx->r5);
 }
 
-// Deep snow: where each model drawn stands (picture_filters.cpp), at the entry of the model draw
+// Each model draw for the drawing memory report (gfx_budget.cpp), at the entry of the model draw
 // func_800DE498(gfx, position, rotation, scale, ...). Every model goes through it, not only the actors
-// func_80101808 draws: attacks such as Chilly Willy's ice balls are drawn straight from their own code.
-// Also counts each model draw for the drawing memory report (gfx_budget.cpp).
-// The position's address tells one model from another from frame to frame.
+// func_80101808 draws. (Its name is from deep snow, which once placed actors' prints from it.)
 extern "C" void tooie_snow_model_drawn(uint8_t* rdram, recomp_context* ctx) {
     if (!in_shadow_pass) {
         tooie::gfx_budget::note_model(rdram, ctx);
     }
-    const uint32_t position = (uint32_t)ctx->r5;
-    if (in_shadow_pass || (position < 0x80000000u) || (position >= 0x80800000u) || ((position & 3) != 0)) {
-        return;
-    }
-    uint32_t scale_bits = (uint32_t)ctx->r7;
-    float scale;
-    std::memcpy(&scale, &scale_bits, sizeof(scale));
-    tooie::picture_filters::note_snow_actor(position, load_float(rdram, (int32_t)position), load_float(rdram, (int32_t)position + 4),
-        load_float(rdram, (int32_t)position + 8), scale);
 }
 
 extern "C" void tooie_actor_shadow(uint8_t* rdram, recomp_context* ctx) {

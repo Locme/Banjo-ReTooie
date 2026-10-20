@@ -2018,7 +2018,7 @@ index 69a82ac..eff8e99 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..d425181 100644
+index 9fae0d4..4402ac9 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,14 @@
@@ -2047,7 +2047,7 @@ index 9fae0d4..d425181 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +135,274 @@ namespace RT64 {
+@@ -125,6 +135,305 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2280,6 +2280,37 @@ index 9fae0d4..d425181 100644
 +        return true;
 +    }
 +
++    // Banjo-Tooie: hands deep snow the triangles of a model's draw near Banjo, in the world (SceneSnowTouch), so the
++    // snow is pressed down wherever they reach into it.
++    static void snowTouchDraw(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
++        const uint32_t start = call.meshDesc.faceIndicesStart;
++        const uint32_t end = start + call.callDesc.triangleCount * 3;
++        if ((end > drawData.faceIndices.size()) || (frameParams.snowPlayer.w <= 0.0f)) {
++            return;
++        }
++        const float reach = frameParams.snowPlayer.w;
++        for (uint32_t i = start; i < end; i += 3) {
++            float p[9];
++            bool valid = true;
++            for (uint32_t k = 0; (k < 3) && valid; k++) {
++                const uint32_t v = drawData.faceIndices[i + k];
++                if (((v * 3 + 2) >= drawData.posFloats.size()) || (v >= drawData.worldIndices.size()) || (drawData.worldIndices[v] >= drawData.worldTransforms.size())) {
++                    valid = false;
++                    break;
++                }
++                const float (&m)[4][4] = drawData.worldTransforms[drawData.worldIndices[v]].m;
++                const float x = drawData.posFloats[v * 3 + 0], y = drawData.posFloats[v * 3 + 1], z = drawData.posFloats[v * 3 + 2];
++                p[k * 3 + 0] = x * m[0][0] + y * m[1][0] + z * m[2][0] + m[3][0];
++                p[k * 3 + 1] = x * m[0][1] + y * m[1][1] + z * m[2][1] + m[3][1];
++                p[k * 3 + 2] = x * m[0][2] + y * m[1][2] + z * m[2][2] + m[3][2];
++                valid = std::isfinite(p[k * 3 + 0]) && std::isfinite(p[k * 3 + 1]) && std::isfinite(p[k * 3 + 2]);
++            }
++            if (valid && (std::abs(p[0] - frameParams.snowPlayer.x) < reach) && (std::abs(p[2] - frameParams.snowPlayer.y) < reach)) {
++                SceneSnowTouch(p);
++            }
++        }
++    }
++
 +    // Banjo-Tooie: the shells of deep snow a ground draw gets: by its triangles facing up nearest the camera, or 0
 +    // with none facing up within the snow's reach. Level ground has no model transform, so its positions are in the world.
 +    static uint32_t snowShellCount(const DrawData &drawData, const GameCall &call, const interop::FrameParams &frameParams) {
@@ -2322,7 +2353,7 @@ index 9fae0d4..d425181 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -169,11 +447,57 @@ namespace RT64 {
+@@ -169,11 +478,57 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2380,7 +2411,7 @@ index 9fae0d4..d425181 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +543,7 @@ namespace RT64 {
+@@ -219,6 +574,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2388,7 +2419,7 @@ index 9fae0d4..d425181 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +575,7 @@ namespace RT64 {
+@@ -250,6 +606,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2396,7 +2427,7 @@ index 9fae0d4..d425181 100644
                  }
              }
              else {
-@@ -272,6 +598,9 @@ namespace RT64 {
+@@ -272,6 +629,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2406,7 +2437,7 @@ index 9fae0d4..d425181 100644
              }
          }
      }
-@@ -373,6 +702,10 @@ namespace RT64 {
+@@ -373,6 +733,10 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2417,7 +2448,7 @@ index 9fae0d4..d425181 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +776,14 @@ namespace RT64 {
+@@ -443,6 +807,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2432,7 +2463,7 @@ index 9fae0d4..d425181 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +806,68 @@ namespace RT64 {
+@@ -465,12 +837,68 @@ namespace RT64 {
          return true;
      }
      
@@ -2503,7 +2534,7 @@ index 9fae0d4..d425181 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +896,16 @@ namespace RT64 {
+@@ -499,6 +927,16 @@ namespace RT64 {
              }
          };
  
@@ -2520,7 +2551,7 @@ index 9fae0d4..d425181 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +921,17 @@ namespace RT64 {
+@@ -514,6 +952,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2538,7 +2569,7 @@ index 9fae0d4..d425181 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +992,131 @@ namespace RT64 {
+@@ -574,12 +1023,131 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2671,7 +2702,7 @@ index 9fae0d4..d425181 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1134,7 @@ namespace RT64 {
+@@ -597,6 +1165,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -2679,7 +2710,7 @@ index 9fae0d4..d425181 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1154,7 @@ namespace RT64 {
+@@ -616,6 +1185,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -2687,7 +2718,7 @@ index 9fae0d4..d425181 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1250,6 +1789,67 @@ namespace RT64 {
+@@ -1250,6 +1820,67 @@ namespace RT64 {
  
          bool depthState = false;
          worker->commandList->setFramebuffer(targetDrawCall.fbStorage->colorDepthWrite.get());
@@ -2755,7 +2786,7 @@ index 9fae0d4..d425181 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +1896,98 @@ namespace RT64 {
+@@ -1296,9 +1927,98 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -2855,7 +2886,7 @@ index 9fae0d4..d425181 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2039,33 @@ namespace RT64 {
+@@ -1350,10 +2070,33 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -2889,7 +2920,7 @@ index 9fae0d4..d425181 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1408,6 +2120,62 @@ namespace RT64 {
+@@ -1408,6 +2151,62 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -2952,7 +2983,7 @@ index 9fae0d4..d425181 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2199,22 @@ namespace RT64 {
+@@ -1431,6 +2230,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -2975,7 +3006,7 @@ index 9fae0d4..d425181 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2234,168 @@ namespace RT64 {
+@@ -1450,12 +2265,168 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3144,7 +3175,7 @@ index 9fae0d4..d425181 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2546,7 @@ namespace RT64 {
+@@ -1606,6 +2577,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3152,7 +3183,7 @@ index 9fae0d4..d425181 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2623,20 @@ namespace RT64 {
+@@ -1682,6 +2654,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3173,7 +3204,7 @@ index 9fae0d4..d425181 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,24 +2702,1004 @@ namespace RT64 {
+@@ -1747,24 +2733,1014 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3458,6 +3489,16 @@ index 9fae0d4..d425181 100644
 +                instanceSnowVector.push_back(snowValue);
 +                instanceSnowFlatVector.resize(instanceIndex, 0);
 +                instanceSnowFlatVector.push_back(((snowValue != 0) && snowFlat) ? 1 : 0);
++                // Banjo-Tooie: a model's solid draw (Banjo, an NPC, an enemy, something thrown) presses the snow down
++                // wherever it reaches into it. Not the level's ground, nor its shadows or effects (decals, see-through).
++                if ((snowShells > 0) && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !levelGeometry(drawData, call))
++                {
++                    const interop::OtherMode tm = call.shaderDesc.otherMode;
++                    if (tm.zCmp() && tm.zUpd() && (tm.zMode() != ZMODE_DEC) && (tm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(tm)) {
++                        snowTouchDraw(drawData, call, frameParams);
++                    }
++                }
 +                if ((snowValue != 0) && (snowTessPipeline == nullptr) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    // The shells write depth whatever the ground does, so the ones further up hide those below.
 +                    ShaderDescription snowDesc = call.shaderDesc;
@@ -5954,10 +5995,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a99a4b8
+index 0000000..8ed4e6a
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2482 @@
+@@ -0,0 +1,2571 @@
 +//
 +// RT64
 +//
@@ -5966,6 +6007,7 @@ index 0000000..a99a4b8
 +#include "rt64_gpu_sections.h"
 +
 +#include <algorithm>
++#include <cfloat>
 +#include <unordered_set>
 +#include <atomic>
 +#include <cmath>
@@ -6819,18 +6861,12 @@ index 0000000..a99a4b8
 +        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
-+    void SetSceneSnow(bool on, float height, bool strictColor) {
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail) {
 +        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.snowDetail = std::clamp(detail, 0.25f, 1.0f);
 +        effectsSettings.snowStrictColor = strictColor;
 +        effectsSettings.snow = on && (height > 0.0f);
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
-+    }
-+
-+    void SetSceneSnowStamps(const float *stamps, uint32_t count) {
-+        const std::scoped_lock lock(effectsMutex);
-+        count = std::min(count, SceneEffectsSettings::MaxSnowStamps);
-+        effectsSettings.snowStampCount = count;
-+        std::copy(stamps, stamps + count * 5, effectsSettings.snowStamps);
 +    }
 +
 +    void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend) {
@@ -7158,9 +7194,9 @@ index 0000000..a99a4b8
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
 +        frameParams.grassWind = { 0.85f, 0.5f, std::fmod(now, 3600.0f), 1.0f };
-+        // Real blades: the grid coarsens from 450 units away, wind noise 260 units across drifting 0.12 of that a
++        // Real blades: the grid coarsens from 300 units away, wind noise 260 units across drifting 0.12 of that a
 +        // second, and the finest grid's cells 3 units wide at density 1 (twice the density, twice the blades).
-+        frameParams.grassBlades = { 450.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
++        frameParams.grassBlades = { 300.0f, 260.0f, 0.12f, (settings.grassChunky ? settings.grassChunkSize : 1.0f) * GrassBladeCell / std::sqrt(settings.grassDensity) };
 +        // Kazooie's feathers: about 5.5 units long and 2.4 wide at size 1 (her head is about 25 units across), packed
 +        // so each spot of her is under about two of them.
 +        const float featherLength = 5.5f * settings.featherSize * settings.featherLength;
@@ -7228,13 +7264,17 @@ index 0000000..a99a4b8
 +        return true;
 +    }
 +
-+    // Banjo-Tooie: deep snow (Snow.hlsli). Banjo's trail is kept in a grid of cells over the world's x and z that wraps
-+    // round (a cell's place is its world cell modulo the grid's size, the rest kept as a tag), so nothing has to move as
-+    // he goes. Each cell holds how far the snow was pressed down there, how far it was pushed up into a bank beside the
-+    // trail, Banjo's height when it was (so a jump leaves nothing, and the trail only shows on the ground he walked on),
-+    // when, and its tag. Snow.hlsli springs it back from then on: held a few seconds, then filling back in.
-+    static constexpr uint32_t SnowGridSize = 640;
-+    static constexpr float SnowCell = 2.5f;
++    // Banjo-Tooie: deep snow (Snow.hlsli). The snow is pushed down wherever the triangles of a model drawn this frame
++    // reach into it (SceneSnowTouch: Banjo's feet and legs, the NPCs and enemies, anything thrown or falling), the way
++    // the Batman: Arkham Origins snow is, so nothing is scripted: a jump leaves nothing, a light touch a shallow dent.
++    // It is kept in a grid of cells over the world's x and z that wraps round (a cell's place is its world cell modulo
++    // the grid's size, the rest kept as a tag), so nothing has to move as Banjo goes. Each cell holds the lowest a model
++    // reached down to there, or how far the snow was pushed up into a bank beside where one did, when, and its tag.
++    // Snow.hlsli works out from that how deep the snow is pressed over its ground, and springs it back from then on:
++    // held a few seconds, then filling back in.
++    static constexpr uint32_t SnowGridSize = 1024;
++    // A cell's size at full detail (Snow detail 100); less detail, bigger cells (2.5 at 50, the size they once were).
++    static constexpr float SnowFinestCell = 1.25f;
 +    static constexpr float SnowTicksPerSecond = 20.0f;
 +    // About ankle deep at height 1 (he wades in it at 3); the banks rise a third above it.
 +    static constexpr float SnowDepth = 12.0f;
@@ -7244,6 +7284,8 @@ index 0000000..a99a4b8
 +    // How long a print stays as it was, then how long it takes to fill back in (less while it snows).
 +    static constexpr float SnowHoldSeconds = 6.0f;
 +    static constexpr float SnowRecoverSeconds = 45.0f;
++    // How far a print's floor has risen once it has filled back in (SnowRefillRise in Snow.hlsli).
++    static constexpr float SnowRefillRise = 260.0f;
 +    // The blocks of the grid FrameParams.snowBlocksLow and High mark (SnowTess.hlsl): SnowBlocks x SnowBlocks of them.
 +    static constexpr uint32_t SnowBlocks = 16;
 +    static constexpr uint32_t SnowBlockCells = SnowGridSize / SnowBlocks;
@@ -7252,29 +7294,42 @@ index 0000000..a99a4b8
 +    // A camera zoomed in further than the game's usual one (Chilly Willy's fight watches from far back) brings the snow's
 +    // reach out with it: distances count for less by its zoom (SceneSnowZoom, SnowZoom in Snow.hlsli).
 +    static constexpr float SnowUsualFov = 2.2f;
++    // The most model triangles that press the snow in a frame (SceneSnowTouch).
++    static constexpr size_t SnowTouchMost = 60000;
 +
 +    namespace {
 +        struct SnowTrail {
 +            std::vector<uint32_t> cells = std::vector<uint32_t>(SnowGridSize * SnowGridSize * 2, 0);
 +            bool started = false;
 +            float last[3] = {};
-+            float heading[2] = { 0.0f, 1.0f };
-+            float stride = 0.0f;
-+            bool leftFoot = false;
-+            float stillSeconds = 0.0f;
-+            bool stoodPrinted = false;
++            // The cells' size (world units), by the Snow detail setting.
++            float cell = SnowFinestCell;
 +            uint32_t sweepRow = 0;
 +            // The frame each row was last pressed on (the sweep below doesn't count: renderers copy its rows in full now
 +            // and then, as the times it clears only matter once they wrap round, after 54 minutes).
 +            std::vector<uint64_t> rowPressed = std::vector<uint64_t>(SnowGridSize, 0);
 +            // When something was last pressed into each block of the grid (seconds, as `seconds`).
 +            std::vector<double> blockPressed = std::vector<double>(SnowBlocks * SnowBlocks, -1e9);
++            // This frame's touches round Banjo (a window of the grid's size centred on him): the lowest a model
++            // reached down to in each cell, and which cells that is so they can be cleared again.
++            std::vector<float> touchLowest = std::vector<float>(SnowGridSize * SnowGridSize, FLT_MAX);
++            std::vector<uint32_t> touched;
++            std::vector<float> bankMost = std::vector<float>(SnowGridSize * SnowGridSize, 0.0f);
++            std::vector<float> bankY = std::vector<float>(SnowGridSize * SnowGridSize, FLT_MAX);
++            std::vector<uint32_t> banked;
++            std::vector<uint32_t> edges;
++            // How many model triangles the last frame had (TOOIE_SNOW_LOG).
++            uint32_t lastTouches = 0;
++            float lastTouchMs = 0.0f;
 +            uint64_t frame = 0;
 +            std::chrono::steady_clock::time_point lastTime{};
 +            double seconds = 0.0;
 +        };
 +
 +        SnowTrail snowTrail;
++        // The model triangles drawn since the trail last took them (SceneSnowTouch): nine floats each, x y z three times.
++        std::mutex snowTouchMutex;
++        std::vector<float> snowTouches;
 +    }
 +
 +    static float SnowSpringBack(float age, float recover) {
@@ -7285,8 +7340,11 @@ index 0000000..a99a4b8
 +        return 1.0f - t * t * (3.0f - 2.0f * t);
 +    }
 +
-+    // Presses one cell down by depth (0 to 1) and pushes it up into a bank by bank (0 to 1), as Banjo stood at footY.
-+    static void SnowPressCell(SnowTrail &trail, int32_t worldX, int32_t worldZ, float footY, float depth, float bank, uint32_t now, float recover) {
++    // Marks one cell as reached down to y (world units) by a model now, or (with bank over 0) as snow pushed up by bank
++    // (0 to 1) beside where a model reached down to y. The cell's first uint holds the bank (bits 0 to 6), whether the
++    // cell only holds a bank (bit 7) and y in sixteenths (8 to 31, signed); the second when (0 to 15, in twentieths of
++    // a second) and which world cell it is (the tag: x in 16 to 23, z in 24 to 31).
++    static void SnowTouchCell(SnowTrail &trail, int32_t worldX, int32_t worldZ, float y, float bank, uint32_t now, float recover) {
 +        const int32_t n = int32_t(SnowGridSize);
 +        const int32_t slotX = ((worldX % n) + n) % n;
 +        const int32_t slotZ = ((worldZ % n) + n) % n;
@@ -7294,65 +7352,193 @@ index 0000000..a99a4b8
 +        const uint32_t tagZ = uint32_t((worldZ - slotZ) / n) & 0xFFu;
 +        uint32_t &a = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2];
 +        uint32_t &b = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2 + 1];
-+        float oldDepth = 0.0f;
-+        float oldBank = 0.0f;
++        const bool bankOnly = (bank > 0.0f);
 +        if ((b != 0) && (((b >> 16) & 0xFFu) == tagX) && ((b >> 24) == tagZ)) {
 +            const float age = float((now - (b & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond;
 +            const float spring = SnowSpringBack(age, recover);
-+            oldDepth = float(a & 0xFFu) / 255.0f * spring;
-+            oldBank = float((a >> 8) & 0xFFu) / 255.0f * spring;
-+            const float oldY = float(int16_t(a >> 16));
-+            if ((oldDepth > 0.01f) || (oldBank > 0.01f)) {
-+                if (footY > oldY + 15.0f) {
-+                    // In the air over an earlier print: that one stays.
-+                    return;
++            const float oldY = float(int32_t(a) >> 8) / 16.0f;
++            const bool oldBankOnly = (a & 0x80u) != 0;
++            // (A print on another floor, far above or below, is simply replaced.)
++            if (std::abs(oldY - y) < 150.0f) {
++                if (bankOnly) {
++                    // No bank in a print, nor one lower than the bank already there.
++                    if ((!oldBankOnly && (spring > 0.05f)) || (oldBankOnly && (float(a & 0x7Fu) / 127.0f * spring >= bank))) {
++                        return;
++                    }
 +                }
-+                if (footY < oldY - 15.0f) {
-+                    // Lower down than the old one, which was left in the air.
-+                    oldDepth = 0.0f;
-+                    oldBank = 0.0f;
++                else if (!oldBankOnly) {
++                    // A print that already goes deeper, as far as it has filled back in (as SnowCell): it stays.
++                    const float floorY = oldY + (1.0f - spring) * SnowRefillRise;
++                    if (floorY < y - 0.05f) {
++                        return;
++                    }
++                    // The same print again: kept held, but only marked anew now and then so its rows aren't sent again
++                    // every frame.
++                    if ((std::abs(oldY - y) < 0.1f) && (age < 1.0f)) {
++                        return;
++                    }
 +                }
 +            }
 +        }
-+        const float newDepth = std::max(oldDepth, depth);
-+        const float newBank = std::max(oldBank, bank);
-+        if ((newDepth < 0.004f) && (newBank < 0.004f)) {
-+            return;
-+        }
-+        const int32_t y = std::clamp(int32_t(std::lround(footY)), -32768, 32767);
-+        a = uint32_t(std::lround(newDepth * 255.0f)) | (uint32_t(std::lround(newBank * 255.0f)) << 8) | (uint32_t(uint16_t(int16_t(y))) << 16);
++        const int32_t fixedY = std::clamp(int32_t(std::lround(y * 16.0f)), -(1 << 23), (1 << 23) - 1);
++        a = (bankOnly ? (uint32_t(std::lround(std::min(bank, 1.0f) * 127.0f)) | 0x80u) : 0u) | (uint32_t(fixedY) << 8);
 +        // A time of 0 with tag 0 would read as an empty cell.
 +        b = (now & 0xFFFFu) | (tagX << 16) | (tagZ << 24);
-+        trail.rowPressed[slotZ] = trail.frame;
-+        trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
 +        if (b == 0) {
 +            b = 1;
 +        }
++        trail.rowPressed[slotZ] = trail.frame;
++        trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
 +    }
 +
-+    // Presses an oval into the snow round (x, z): `along` long in the direction (dirX, dirZ) and `across` wide, with a
-+    // flat floor and sloping walls, and a bank pushed up round it out to 1.7 times its size.
-+    static void SnowPressOval(SnowTrail &trail, float x, float z, float footY, float dirX, float dirZ, float along, float across, float depth, float bank,
-+        uint32_t now, float recover)
-+    {
-+        const float reach = std::max(along, across) * 1.7f;
-+        const int32_t lowX = int32_t(std::floor((x - reach) / SnowCell)), highX = int32_t(std::floor((x + reach) / SnowCell));
-+        const int32_t lowZ = int32_t(std::floor((z - reach) / SnowCell)), highZ = int32_t(std::floor((z + reach) / SnowCell));
-+        for (int32_t cz = lowZ; cz <= highZ; cz++) {
-+            for (int32_t cx = lowX; cx <= highX; cx++) {
-+                const float dx = (float(cx) + 0.5f) * SnowCell - x;
-+                const float dz = (float(cz) + 0.5f) * SnowCell - z;
-+                const float u = (dx * dirX + dz * dirZ) / along;
-+                const float v = (dz * dirX - dx * dirZ) / across;
-+                const float r = std::sqrt(u * u + v * v);
-+                if (r >= 1.7f) {
-+                    continue;
++    void SceneSnowTouch(const float *triangle) {
++        const std::scoped_lock lock(snowTouchMutex);
++        if (snowTouches.size() < SnowTouchMost * 9) {
++            snowTouches.insert(snowTouches.end(), triangle, triangle + 9);
++        }
++    }
++
++    // Presses the snow wherever this frame's model triangles reach down into it, round Banjo at (x, y, z), and banks the
++    // snow they push aside up round them. full is the snow's full height.
++    static void SnowTakeTouches(SnowTrail &trail, float x, float y, float z, float full, uint32_t now, float recover) {
++        const auto started = std::chrono::steady_clock::now();
++        std::vector<float> touches;
++        {
++            const std::scoped_lock lock(snowTouchMutex);
++            touches.swap(snowTouches);
++        }
++        trail.lastTouches = uint32_t(touches.size() / 9);
++        // The window: the grid's size, centred on Banjo, in world cells.
++        const int32_t n = int32_t(SnowGridSize);
++        const int32_t originX = int32_t(std::floor(x / trail.cell)) - n / 2;
++        const int32_t originZ = int32_t(std::floor(z / trail.cell)) - n / 2;
++        // Higher up than this, nothing reaches the snow Banjo stands in (a game's own snow layer can lie 50 above
++        // his feet, and the snow on top of it).
++        const float ceiling = y + 50.0f + full + 10.0f;
++        const float spacing = trail.cell * 0.7f;
++        auto touch = [&](float px, float py, float pz) {
++            const int32_t cx = int32_t(std::floor(px / trail.cell)) - originX;
++            const int32_t cz = int32_t(std::floor(pz / trail.cell)) - originZ;
++            if ((cx < 0) || (cz < 0) || (cx >= n) || (cz >= n)) {
++                return;
++            }
++            const uint32_t k = uint32_t(cz) * SnowGridSize + uint32_t(cx);
++            float &lowest = trail.touchLowest[k];
++            if (lowest == FLT_MAX) {
++                trail.touched.push_back(k);
++            }
++            lowest = std::min(lowest, py);
++        };
++        const float reach = float(n / 2) * trail.cell;
++        for (size_t i = 0; i + 9 <= touches.size(); i += 9) {
++            const float *p = &touches[i];
++            if ((std::min(p[1], std::min(p[4], p[7])) > ceiling) || (std::max(p[1], std::max(p[4], p[7])) < y - 400.0f) ||
++                (std::abs(p[0] - x) > reach) || (std::abs(p[2] - z) > reach))
++            {
++                continue;
++            }
++            // Points over the triangle at most spacing apart (fewer on a big one), each marking the cell under it.
++            const float e1[3] = { p[3] - p[0], p[4] - p[1], p[5] - p[2] };
++            const float e2[3] = { p[6] - p[0], p[7] - p[1], p[8] - p[2] };
++            const float longest = std::sqrt(std::max({ e1[0] * e1[0] + e1[2] * e1[2], e2[0] * e2[0] + e2[2] * e2[2],
++                (p[6] - p[3]) * (p[6] - p[3]) + (p[8] - p[5]) * (p[8] - p[5]) }));
++            const uint32_t steps = std::clamp(uint32_t(std::ceil(longest / spacing)), 1u, 96u);
++            for (uint32_t u = 0; u <= steps; u++) {
++                for (uint32_t v = 0; v <= steps - u; v++) {
++                    const float fu = float(u) / float(steps), fv = float(v) / float(steps);
++                    touch(p[0] + e1[0] * fu + e2[0] * fv, p[1] + e1[1] * fu + e2[1] * fv, p[2] + e1[2] * fu + e2[2] * fv);
 +                }
-+                const float pressed = depth * std::clamp((1.0f - r) / 0.35f, 0.0f, 1.0f);
-+                const float pushed = (r > 0.85f) ? bank * std::clamp(1.0f - std::abs(r - 1.25f) / 0.45f, 0.0f, 1.0f) : 0.0f;
-+                SnowPressCell(trail, cx, cz, footY, pressed, pushed, now, recover);
 +            }
 +        }
++
++        // Snow doesn't keep the sharp outline of what pressed it: round each cell reached into, the print's walls
++        // slope up over a few cells, rounding it off.
++        const int32_t wallReach = std::max(int32_t(std::lround(6.25f / trail.cell)), 1);
++        const float wallRise = 30.0f;
++        // (Only from the print's edge: inside it, the walls would only land on more of the print.)
++        auto edge = [&](uint32_t k) {
++            const int32_t cx = int32_t(k % SnowGridSize), cz = int32_t(k / SnowGridSize);
++            if ((cx == 0) || (cz == 0) || (cx == n - 1) || (cz == n - 1)) {
++                return true;
++            }
++            return (trail.touchLowest[k - 1] > ceiling) || (trail.touchLowest[k + 1] > ceiling) ||
++                (trail.touchLowest[k - SnowGridSize] > ceiling) || (trail.touchLowest[k + SnowGridSize] > ceiling);
++        };
++        std::vector<uint32_t> &edges = trail.edges;
++        edges.clear();
++        for (uint32_t k : trail.touched) {
++            if ((trail.touchLowest[k] <= ceiling) && edge(k)) {
++                edges.push_back(k);
++            }
++        }
++        for (uint32_t k : edges) {
++            const float lowest = trail.touchLowest[k];
++            const int32_t cx = int32_t(k % SnowGridSize), cz = int32_t(k / SnowGridSize);
++            for (int32_t dz = -wallReach; dz <= wallReach; dz++) {
++                for (int32_t dx = -wallReach; dx <= wallReach; dx++) {
++                    const int32_t wx = cx + dx, wz = cz + dz;
++                    const float d2 = float(dx * dx + dz * dz) / float(wallReach * wallReach);
++                    if (((dx == 0) && (dz == 0)) || (d2 > 1.0f) || (wx < 0) || (wz < 0) || (wx >= n) || (wz >= n)) {
++                        continue;
++                    }
++                    const uint32_t j = uint32_t(wz) * SnowGridSize + uint32_t(wx);
++                    const float wallY = lowest + d2 * wallRise;
++                    if (trail.touchLowest[j] == FLT_MAX) {
++                        trail.touched.push_back(j);
++                    }
++                    trail.touchLowest[j] = std::min(trail.touchLowest[j], wallY);
++                }
++            }
++        }
++
++        // The prints, and round each one reaching well down into the snow a bank, highest a little way out from it.
++        const int32_t bankReach = std::max(int32_t(std::ceil(6.25f / trail.cell)), 1);
++        const float bankPeak = 2.75f;
++        const float bankWidth = 3.0f;
++        for (uint32_t k : trail.touched) {
++            const int32_t cx = int32_t(k % SnowGridSize), cz = int32_t(k / SnowGridSize);
++            const float lowest = trail.touchLowest[k];
++            if (lowest > ceiling) {
++                continue;
++            }
++            SnowTouchCell(trail, originX + cx, originZ + cz, lowest, 0.0f, now, recover);
++            const float deep = std::clamp((y + full - lowest) / std::max(full, 1e-3f), 0.0f, 1.0f);
++            if ((deep <= 0.05f) || !edge(k)) {
++                continue;
++            }
++            for (int32_t dz = -bankReach; dz <= bankReach; dz++) {
++                for (int32_t dx = -bankReach; dx <= bankReach; dx++) {
++                    const int32_t bx = cx + dx, bz = cz + dz;
++                    if ((bx < 0) || (bz < 0) || (bx >= n) || (bz >= n)) {
++                        continue;
++                    }
++                    const uint32_t j = uint32_t(bz) * SnowGridSize + uint32_t(bx);
++                    const float distance = std::sqrt(float(dx * dx + dz * dz)) * trail.cell;
++                    const float bank = deep * std::clamp(1.0f - std::abs(distance - bankPeak) / bankWidth, 0.0f, 1.0f);
++                    if ((bank <= 0.01f) || (trail.touchLowest[j] <= ceiling)) {
++                        continue;
++                    }
++                    if (trail.bankMost[j] == 0.0f) {
++                        trail.banked.push_back(j);
++                    }
++                    trail.bankMost[j] = std::max(trail.bankMost[j], bank);
++                    // (Its height: that of what pushed it up, for SnowCell's test of which floor it lies on.)
++                    trail.bankY[j] = std::min(trail.bankY[j], lowest);
++                }
++            }
++        }
++        for (uint32_t j : trail.banked) {
++            const int32_t bx = int32_t(j % SnowGridSize), bz = int32_t(j / SnowGridSize);
++            SnowTouchCell(trail, originX + bx, originZ + bz, trail.bankY[j], trail.bankMost[j], now, recover);
++            trail.bankMost[j] = 0.0f;
++            trail.bankY[j] = FLT_MAX;
++        }
++        trail.banked.clear();
++        for (uint32_t k : trail.touched) {
++            trail.touchLowest[k] = FLT_MAX;
++        }
++        trail.touched.clear();
++        trail.lastTouchMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - started).count();
 +    }
 +
 +    uint32_t SceneSnowShells() {
@@ -7433,83 +7619,27 @@ index 0000000..a99a4b8
 +        const bool havePlayer = settings.player[1] > -1e8f;
 +        if (havePlayer) {
 +            const float x = settings.player[0], y = settings.player[1], z = settings.player[2];
-+            const float dx = x - trail.last[0], dz = z - trail.last[2];
-+            const float moved = std::sqrt(dx * dx + dz * dz);
-+            if (!trail.started || (moved > 400.0f) || (std::abs(y - trail.last[1]) > 400.0f)) {
++            const float cell = SnowFinestCell / std::clamp(settings.snowDetail, 0.25f, 1.0f);
++            if (cell != trail.cell) {
++                // Another size of cell: the old trail doesn't fit the grid any more.
++                trail.cell = cell;
++                trail.started = false;
++            }
++            if (!trail.started || (std::abs(x - trail.last[0]) > 400.0f) || (std::abs(z - trail.last[2]) > 400.0f) || (std::abs(y - trail.last[1]) > 400.0f)) {
 +                // A new map or a warp: the old trail is somewhere else.
 +                std::fill(trail.cells.begin(), trail.cells.end(), 0u);
 +                std::fill(trail.rowPressed.begin(), trail.rowPressed.end(), trail.frame);
 +                std::fill(trail.blockPressed.begin(), trail.blockPressed.end(), -1e9);
 +                trail.started = true;
-+                trail.last[0] = x;
-+                trail.last[1] = y;
-+                trail.last[2] = z;
-+                trail.stride = 0.0f;
-+                trail.stillSeconds = 0.0f;
-+                trail.stoodPrinted = false;
 +            }
-+            else if ((moved > 0.4f) && !settings.playerGrounded) {
-+                // In the air (a jump, a fall): nothing pressed until he lands; the next stride starts afresh.
-+                trail.stride = 0.0f;
-+                trail.stillSeconds = 0.0f;
-+            }
-+            else if (moved > 0.4f) {
-+                trail.heading[0] = dx / moved;
-+                trail.heading[1] = dz / moved;
-+                trail.stillSeconds = 0.0f;
-+                trail.stoodPrinted = false;
-+
-+                // A furrow where he wades through, deeper the deeper the snow, with the snow pushed up either side.
-+                const float furrow = std::clamp(0.8f + 0.1f * (settings.snowHeight - 1.0f), 0.7f, 0.92f);
-+                const uint32_t steps = std::max(uint32_t(std::ceil(moved / 2.0f)), 1u);
-+                for (uint32_t s = 1; s <= steps; s++) {
-+                    const float t = float(s) / float(steps);
-+                    SnowPressOval(trail, trail.last[0] + dx * t, trail.last[2] + dz * t, trail.last[1] + (y - trail.last[1]) * t,
-+                        trail.heading[0], trail.heading[1], 14.0f, 19.0f, furrow, 0.75f, now, recover);
-+                }
-+
-+                // A footprint every stride, left and right in turn, deeper than the furrow.
-+                trail.stride += moved;
-+                while (trail.stride >= 26.0f) {
-+                    trail.stride -= 26.0f;
-+                    trail.leftFoot = !trail.leftFoot;
-+                    const float side = trail.leftFoot ? 8.0f : -8.0f;
-+                    const float back = trail.stride;
-+                    const float px = x - trail.heading[0] * back - trail.heading[1] * side;
-+                    const float pz = z - trail.heading[1] * back + trail.heading[0] * side;
-+                    SnowPressOval(trail, px, pz, y, trail.heading[0], trail.heading[1], 9.0f, 5.0f, 1.0f, 0.8f, now, recover);
-+                }
-+            }
-+            else {
-+                // Standing still: both feet pressed in where he stands.
-+                trail.stillSeconds += dt;
-+                if ((trail.stillSeconds > 0.5f) && !trail.stoodPrinted && settings.playerGrounded) {
-+                    trail.stoodPrinted = true;
-+                    for (float side : { 8.0f, -8.0f }) {
-+                        SnowPressOval(trail, x - trail.heading[1] * side, z + trail.heading[0] * side, y, trail.heading[0], trail.heading[1], 9.0f, 5.0f, 1.0f, 0.8f, now, recover);
-+                    }
-+                }
-+            }
-+            // Kept from the last time he moved far enough, so many small steps (frames drawn more often than the game
-+            // moves him) still add up.
-+            if ((moved > 0.4f) || !trail.started) {
-+                trail.last[0] = x;
-+                trail.last[1] = y;
-+                trail.last[2] = z;
-+            }
++            trail.last[0] = x;
++            trail.last[1] = y;
++            trail.last[2] = z;
++            SnowTakeTouches(trail, x, y, z, full, now, recover);
 +        }
-+
-+        // The game's other actors: enemies wading through it and attacks landing in it, near Banjo only (the grid wraps
-+        // round further away).
-+        if (havePlayer && trail.started) {
-+            for (uint32_t i = 0; i < settings.snowStampCount; i++) {
-+                const float *stamp = &settings.snowStamps[i * 5];
-+                if ((std::abs(stamp[0] - settings.player[0]) > SnowGridSize * SnowCell * 0.45f) || (std::abs(stamp[2] - settings.player[2]) > SnowGridSize * SnowCell * 0.45f)) {
-+                    continue;
-+                }
-+                const float radius = std::clamp(stamp[3], 3.0f, 60.0f);
-+                SnowPressOval(trail, stamp[0], stamp[2], stamp[1], 1.0f, 0.0f, radius, radius, std::clamp(stamp[4], 0.0f, 1.0f), 0.75f, now, recover);
-+            }
++        else {
++            const std::scoped_lock lock(snowTouchMutex);
++            snowTouches.clear();
 +        }
 +
 +        // Cells long since filled back in are emptied a few rows at a time, so their times can't wrap round to new.
@@ -7558,7 +7688,7 @@ index 0000000..a99a4b8
 +        // Test aid: TOOIE_SNOW_DEBUG=1 tints the shells from blue at the ground to magenta at the top, =2 shows the trail,
 +        // =3 why the snow is left out where it is (Snow.hlsli).
 +        static const bool snowDebug = (std::getenv("TOOIE_SNOW_DEBUG") != nullptr);
-+        frameParams.snowGrid = { SnowCell, 1.0f / SnowCell, float(SnowGridSize), snowDebug ? 1.0f + float(std::max(std::atoi(std::getenv("TOOIE_SNOW_DEBUG")), 1)) : 1.0f };
++        frameParams.snowGrid = { trail.cell, 1.0f / trail.cell, float(SnowGridSize), snowDebug ? 1.0f + float(std::max(std::atoi(std::getenv("TOOIE_SNOW_DEBUG")), 1)) : 1.0f };
 +        // Test aid: TOOIE_SNOW_LOG=1 logs Banjo's place and how much of the trail is pressed, every 2 seconds.
 +        static const bool snowLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr);
 +        static double snowLogged = 0.0;
@@ -7568,14 +7698,14 @@ index 0000000..a99a4b8
 +            for (size_t i = 0; i < trail.cells.size(); i += 2) {
 +                pressed += (trail.cells[i + 1] != 0) ? 1 : 0;
 +            }
-+            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u actor stamps\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
-+                pressed, depth, recover, settings.snowStampCount);
++            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u model triangles (%.1f ms)\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
++                pressed, depth, recover, trail.lastTouches, trail.lastTouchMs);
 +        }
 +        frameParams.snowSpring = { SnowHoldSeconds, recover, SnowBank, float(now) };
 +        frameParams.snowLight = { light[0] / lightLength, light[1] / lightLength, light[2] / lightLength, 3.2f };
 +        // (w: how light it must be. The arena's bluer snow is very light, its ice's pale glints not quite.)
 +        frameParams.snowColor = settings.snowStrictColor ? interop::float4{ 0.06f, 0.25f, 0.3f, 0.45f } : interop::float4{ 0.2f, 0.45f, 0.45f, 0.72f };
-+        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * SnowCell * 0.45f : 0.0f };
++        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowGridSize * trail.cell * 0.45f : 0.0f };
 +        // The blocks with a trail still filling back in (for as long as a print can take to).
 +        uint32_t blocks[8] = {};
 +        const double lasts = SnowHoldSeconds + SnowRecoverSeconds + 2.0;
@@ -8442,10 +8572,10 @@ index 0000000..a99a4b8
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..30111df
+index 0000000..1b1c737
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,404 @@
 +//
 +// RT64
 +//
@@ -8590,11 +8720,9 @@ index 0000000..30111df
 +        bool parallaxAll = false;
 +        bool snow = false;
 +        float snowHeight = 1.0f;
++        // How fine deep snow's trail is (0.25 to 1; SetSceneSnow).
++        float snowDetail = 1.0f;
 +        bool snowStrictColor = true;
-+        // Deep snow's stamps from the game this frame (SetSceneSnowStamps): x, y, z, radius, depth for each.
-+        static constexpr uint32_t MaxSnowStamps = 48;
-+        uint32_t snowStampCount = 0;
-+        float snowStamps[MaxSnowStamps * 5] = {};
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -8739,11 +8867,12 @@ index 0000000..30111df
 +    bool SceneKazooieFeathers();
 +    // Banjo-Tooie: deep snow that Banjo leaves a trail in (Snow.hlsli), on the snowy ground of the 3D world; on is
 +    // only set on maps with snow. height: how deep it is (1 normal, about ankle deep). strictColor: only white with
-+    // hardly any blue counts as snow (a map with pale ice next to its snow); otherwise bluish white counts too.
-+    void SetSceneSnow(bool on, float height, bool strictColor);
-+    // Where the game's other actors (enemies, attacks landing) press into the snow this frame: x, y (their feet), z,
-+    // radius and depth (0 to 1) for each, count of them (at most SceneEffectsSettings::MaxSnowStamps).
-+    void SetSceneSnowStamps(const float *stamps, uint32_t count);
++    // hardly any blue counts as snow (a map with pale ice next to its snow); otherwise bluish white counts too. detail: how
++    // fine its trail is, 1 the finest (cells 1.25 units across), 0.5 half as fine, down to 0.25 (less work for the GPU).
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail);
++    // A triangle of a model drawn this frame (not the level's own ground), in the world (x y z three times): deep snow
++    // is pressed down wherever one reaches into it (ComputeSceneSnow).
++    void SceneSnowTouch(const float *triangle);
 +    // The most shells drawn over a snow draw: 0 when there is no deep snow.
 +    uint32_t SceneSnowShells();
 +    // How much nearer the snow counts as being for the camera's zoom (1 for the usual camera, less zoomed in).
@@ -12076,7 +12205,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..f3df5e0 100644
+index e7895c3..aed536f 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -12091,7 +12220,7 @@ index e7895c3..f3df5e0 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,76 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,77 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -12144,7 +12273,8 @@ index e7895c3..f3df5e0 100644
 +        // It stands in for the ground's own draw: where no snow lies (a wall, past its reach) the ground is shaded as
 +        // it is (snowTessGround).
 +        // The ground pass (RASTER_SNOW_GROUND) is the ground as it is, left out where the trail goes down below it.
-+        const bool shaped = SnowTessShape(grassWorld, cross(grassDx, grassDy), 0.0f, (gConstants.grassShells & RASTER_SNOW_FLAT) == 0, snowSample);
++        const bool shaped = SnowTessShape(grassWorld, cross(grassDx, grassDy),
++            0.5f * SnowTrailSegment(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), (gConstants.grassShells & RASTER_SNOW_FLAT) == 0, snowSample);
 +        if ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) {
 +            if (shaped && (snowSample.height < -0.5f)) {
 +                return false;
@@ -12170,7 +12300,7 @@ index e7895c3..f3df5e0 100644
          return false;
      }
  #endif
-@@ -88,7 +157,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +158,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -12181,7 +12311,7 @@ index e7895c3..f3df5e0 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +184,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +185,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -12206,7 +12336,7 @@ index e7895c3..f3df5e0 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +232,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +233,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -12215,7 +12345,7 @@ index e7895c3..f3df5e0 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +250,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +251,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -12224,7 +12354,7 @@ index e7895c3..f3df5e0 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +275,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +276,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -12263,7 +12393,7 @@ index e7895c3..f3df5e0 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +379,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +380,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -12387,7 +12517,7 @@ index e7895c3..f3df5e0 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +503,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +504,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -12412,7 +12542,7 @@ index e7895c3..f3df5e0 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +547,7 @@ void PSMain(
+@@ -287,6 +548,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -12420,7 +12550,7 @@ index e7895c3..f3df5e0 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +564,7 @@ void PSMain(
+@@ -303,7 +565,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -15692,10 +15822,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..ec4e92e
+index 0000000..8d0c879
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,278 @@
+@@ -0,0 +1,294 @@
 +//
 +// RT64
 +//
@@ -15704,10 +15834,9 @@ index 0000000..ec4e92e
 +// draws are drawn again as shells, each moved further up by its share of the snow's full height (RasterVS.hlsl); each
 +// shell keeps only where the snow reaches it, so a stack of them reads as a layer of snow lying on the ground, with
 +// soft drifts in it. Banjo presses a furrow and footprints into it as he goes, the snow he pushes aside banks up
-+// either side, and after a while it all fills back in. The trail is kept on the CPU (ComputeSceneSnow) in a grid of
-+// cells that wraps round over the world's x and z (snowTrail): each cell how far it was pressed down (bits 0 to 7),
-+// how far it was banked up (8 to 15) and Banjo's height then (16 to 31, signed), and in its second uint when (bits
-+// 0 to 15, in twentieths of a second) and which world cell it is (the tag: x in 16 to 23, z in 24 to 31).
++// either side, and after a while it all fills back in. The snow is pressed wherever a model's triangles reach into it
++// (Banjo, the NPCs and enemies, anything thrown): ComputeSceneSnow keeps the lowest each reached to in a grid of cells
++// that wraps round over the world's x and z (snowTrail, SnowTouchCell in rt64_scene_effects.cpp).
 +//
 +// The shells are drawn from the top down, so where one keeps a pixel the ones below it are hidden by the depth
 +// test before they are shaded, and SnowShellShape throws away a shell's pixels above the snow before the draw's
@@ -15732,9 +15861,14 @@ index 0000000..ec4e92e
 +// The deepest a game's own snow layer over the ground Banjo walks on is pressed through to his feet (world units).
 +static const float SnowLayerMost = 120.0f;
 +
-+// How far one cell was pressed down (x) and banked up (y) now, after springing back for as long as it has been, and
-+// how far below this ground the foot that pressed it stood, times x (z); 0 for a cell that holds another part of the
-+// world, or that was pressed with Banjo well above this ground (in the air).
++// How far a print's floor has risen once it has filled back in (SnowRefillRise in rt64_scene_effects.cpp).
++static const float SnowRefillRise = 260.0f;
++
++// How far one cell is pressed down (x, 0 to 1 of the snow's depth) and banked up (y) now, after filling back in for as
++// long as it has been, and how far below this ground the print's floor lies, times x (z); 0 for a cell that holds
++// another part of the world, or a print on another floor. A cell holds the lowest a model reached down to there
++// (ComputeSceneSnow), so the snow is pressed as far as that reaches below its top: a light touch a little, a foot down
++// to the ground, something passing over it not at all.
 +float3 SnowCell(int2 cell, float groundY) {
 +    const int n = int(FrParams.snowGrid.z);
 +    const int2 slot = ((cell % n) + n) % n;
@@ -15747,9 +15881,9 @@ index 0000000..ec4e92e
 +    const uint a = snowTrail[index];
 +    // Icy Side's own snow is drawn as a layer up to about 50 units over the ground Banjo walks on (his legs sink into
 +    // it), and the snow ground can lie a little below his feet elsewhere; a print further from the ground than that
-+    // belongs to another floor. (Prints made in the air never get here: ComputeSceneSnow presses nothing while Banjo
-+    // is off the ground.)
-+    const float above = groundY - float(int(a) >> 16);
++    // belongs to another floor.
++    const float touchY = float(int(a) >> 8) / 16.0f;
++    const float above = groundY - touchY;
 +    if ((above < -80.0f) || (above > 200.0f)) {
 +        return 0.0f;
 +    }
@@ -15757,9 +15891,16 @@ index 0000000..ec4e92e
 +    const float age = float((uint(spring.w) - (b & 0xFFFFu)) & 0xFFFFu) / 20.0f;
 +    const float t = saturate((age - spring.x) / max(spring.y, 1.0f));
 +    const float back = 1.0f - t * t * (3.0f - 2.0f * t);
-+    const float2 pressed = float2(float(a & 0xFFu), float((a >> 8) & 0xFFu)) / 255.0f * back;
++    const float bank = float(a & 0x7Fu) / 127.0f * back;
++    if ((a & 0x80u) != 0u) {
++        return float3(0.0f, bank, 0.0f);
++    }
++    // The print's floor rises as it fills back in.
++    const float floorY = touchY + (1.0f - back) * SnowRefillRise;
++    const float depth = max(FrParams.snowParams.x, 1e-3f);
++    const float pressed = saturate((groundY + depth - floorY) / depth);
 +    // (Down through such a layer to his feet: the tessellated snow's trail reaches them, RASTER_SNOW_TESS.)
-+    return float3(pressed, pressed.x * clamp(above, 0.0f, SnowLayerMost));
++    return float3(pressed, bank, pressed * clamp(groundY - floorY, 0.0f, SnowLayerMost));
 +}
 +
 +// The trail's press (x), bank (y) and depth below the ground (z, SnowCell) at a world position, blended between the
@@ -15873,13 +16014,18 @@ index 0000000..ec4e92e
 +    return sum / 16.0f;
 +}
 +
++// How far apart the tessellated snow's new vertices over the trail are (SnowTess.hlsl) at a distance from the camera (world units).
++float SnowTrailSegment(float cameraDistance) {
++    return max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f);
++}
++
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with the
 +// ground's normal there, any length) in s.height, s.shellY the same (the pixel is on the snow's surface). False where
 +// no snow lies on it: a wall, or past the snow's reach; s.height is then still how far that ground is raised with the
 +// snow round it (its untouched height there, thinning out by the reach), so the raised ground has no cracks where a
 +// wall or the snow's end meets it. Without trail (ice: RASTER_SNOW_FLAT), the untouched height everywhere. Both the
 +// domain shader (where to raise the surface to, with the trail smoothed over blur world units, as far apart as its
-+// vertices are) and the pixel shader (how to shade it, blur 0) ask.
++// vertices are) and the pixel shader (how to shade it, smoothed a little less so the cells' edges don't show) ask.
 +bool SnowTessShape(float3 ground, float3 normal, float blur, bool trail, out SnowSample s) {
 +    s = (SnowSample)0;
 +    const bool why = FrParams.snowGrid.w > 3.5f;
@@ -15976,10 +16122,10 @@ index 0000000..ec4e92e
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..9dd1189
+index 0000000..0eaee10
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,162 @@
 +//
 +// RT64
 +//
@@ -16020,7 +16166,7 @@ index 0000000..9dd1189
 +    float3 normal : NORMAL;
 +};
 +
-+// The trail's cells are SnowCell (2.5) units across: over the trail the surface is cut about that fine (coarser further
++// The trail's cells are SnowCell (1.25) units across: over the trail the surface is cut about that fine (coarser further
 +// from the camera), elsewhere only as much as the snow's thinning toward its reach needs.
 +static const float SnowTessMaxFactor = 64.0f;
 +// How far apart the points are that look for the trail along an edge or over a triangle (half a block's width).
@@ -16043,11 +16189,6 @@ index 0000000..9dd1189
 +bool SnowTrailNear(float2 xz) {
 +    const float4 player = FrParams.snowPlayer;
 +    return (player.w > 0.0f) && all(abs(xz - player.xy) < player.w) && SnowBlockActive(xz);
-+}
-+
-+// How far apart the new vertices over the trail are at a distance from the camera (world units).
-+float SnowTrailSegment(float cameraDistance) {
-+    return max(FrParams.snowGrid.x * 2.0f, cameraDistance * 0.025f);
 +}
 +
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
