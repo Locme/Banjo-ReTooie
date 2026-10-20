@@ -279,6 +279,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Icons: every achievement shows a portrait matched to its XBLA icon, small before its name and large beside the picked one, and the unlock pop-up is now drawn by the game at the top of the screen with the icon. The game draws them itself, so HD texture packs replace them too. The pause menu's Achievements row shows King Jingaling (it showed Sabreman). Untested on PC (T391).
 
 ### Stability
+- DEV > RAM dump with screenshots (off by default): each F12 screenshot also saves the game's memory as a .ram file beside it, so a stuck scene on a player's PC can be looked into (Klungo fights 2 and 3). Checked headless: two screenshots wrote two 16 MB dumps.
 
 - Fixed (guarded): the crash after warping into Hailfire Peaks' Icy Side, where one frame filled the game's whole drawing list and the end of it broke the game's memory. Such a frame now drops its last few drawing commands instead, and console.log says so ([gfx] list full). What fills the list is still unknown. Untested on PC (T382).
 - Fixed the GPU being lost (window freezes, the log fills with 0xFFFFFFFC) on NVIDIA cards since the cloud sliders were added: the screen effects' settings were too big for the driver. Untested on PC (T351).

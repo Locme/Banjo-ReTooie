@@ -27,8 +27,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <thread>
+#include <variant>
 #include <vector>
 
 #include "recomp.h"
@@ -38,6 +41,7 @@
 #include "recompinput/input_binding.h"
 #include "recompinput/input_state.h"
 #include "recompinput/profiles.h"
+#include "recompui/config.h"
 #include "tooie_mix_rate.h"
 #include "tooie_debug.h"
 #include "tooie_game.h"
@@ -188,6 +192,31 @@ namespace {
             std::fclose(f);
             fprintf(stderr, "[savestate] wrote %s\n", name);
         }
+    }
+
+    // DEV > RAM dump with screenshots: the dump a screenshot asked for, written on the game thread.
+    std::mutex dump_mutex;
+    std::filesystem::path dump_path;
+    std::atomic<bool> dump_wanted{false};
+
+    void requested_dump_tick(uint8_t* rdram) {
+        if (!dump_wanted.exchange(false)) {
+            return;
+        }
+        std::filesystem::path path;
+        {
+            std::lock_guard<std::mutex> lock(dump_mutex);
+            path = dump_path;
+        }
+        constexpr size_t ramdump_size = 0x1000000;
+        std::vector<uint8_t> words(ramdump_size);
+        for (size_t i = 0; i < ramdump_size; i += 4) {
+            const uint32_t w = (uint32_t)MEM_W(0, (gpr)(int32_t)(0x80000000u + i));
+            words[i] = w >> 24; words[i + 1] = w >> 16; words[i + 2] = w >> 8; words[i + 3] = w;
+        }
+        std::ofstream out(path, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(words.data()), (std::streamsize)words.size());
+        fprintf(stderr, "[savestate] %s %s\n", out.good() ? "wrote" : "could not write", path.string().c_str());
     }
 
     enum class Result { done, retry };
@@ -407,6 +436,30 @@ void tooie::save_state::start() {
     });
 }
 
+void tooie::save_state::add_ram_dump_option(recomp::config::Config& wip) {
+    wip.add_bool_option(
+        ram_dump_option,
+        "RAM dump with screenshots",
+        "For bug reports. Each screenshot (F12) also saves the game's memory next to it in the screenshots folder (a 16 MB .ram file), so a stuck scene can be looked into. Send the .ram file with the screenshot.",
+        false);
+}
+
+bool tooie::save_state::ram_dump_on() {
+    try {
+        return std::get<bool>(recompui::config::get_config(tooie::wip_tab_id).get_option_value(ram_dump_option));
+    } catch (...) {
+        return false;
+    }
+}
+
+void tooie::save_state::request_ram_dump(const std::filesystem::path& path) {
+    {
+        std::lock_guard<std::mutex> lock(dump_mutex);
+        dump_path = path;
+    }
+    dump_wanted = true;
+}
+
 bool tooie::save_state::freeze_on() {
     return freeze_wanted.load();
 }
@@ -422,6 +475,7 @@ bool tooie::save_state::frozen() {
 void tooie::save_state::tick(uint8_t* rdram, recomp_context* ctx) {
     test_tick();
     ram_dump_tick(rdram);
+    requested_dump_tick(rdram);
     freeze_tick(rdram, ctx);
     if (!save_requested.load() && !load_requested.load()) {
         return;

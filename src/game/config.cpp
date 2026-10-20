@@ -808,6 +808,7 @@ void tooie::init_config() {
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
     tooie::aim_trace::add_option(wip);
+    tooie::save_state::add_ram_dump_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,
