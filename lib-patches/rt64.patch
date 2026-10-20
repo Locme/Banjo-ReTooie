@@ -13134,10 +13134,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..cd1966e
+index 0000000..2bd415b
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3215 @@
+@@ -0,0 +1,3234 @@
 +//
 +// RT64
 +//
@@ -14150,6 +14150,21 @@ index 0000000..cd1966e
 +    return flat * gap;
 +}
 +
++float WaterNoise(float2 p);
++
++// The waves vary over the water so they never line up in a grid: where a point's waves are taken from is pushed
++// about by a slow, broad noise (the crests bend and wander), and each wave train's height swells and fades from
++// place to place on its own (some patches calm, some choppy).
++float2 WaveWarp(float2 p) {
++    return float2(WaterNoise(p / 420.0f) - 0.5f, WaterNoise(p / 420.0f + float2(7.3f, 2.9f)) - 0.5f) * 170.0f +
++        float2(WaterNoise(p / 150.0f + float2(3.1f, 5.7f)) - 0.5f, WaterNoise(p / 150.0f + float2(9.2f, 1.4f)) - 0.5f) * 45.0f;
++}
++
++float WaveVariation(float2 p, int i) {
++    const float n = WaterNoise(p / (260.0f + 110.0f * float(i)) + float2(float(i) * 3.7f, float(i) * 1.9f));
++    return 0.3f + 1.2f * n * n * (3.0f - 2.0f * n);
++}
++
 +// Water waves: four travelling waves over the world's x and z (in the game's units: Banjo is about 150
 +// tall). Gives the slope along x and z. Waves too small to show at this distance fade out, so far water
 +// doesn't shimmer.
@@ -14159,13 +14174,14 @@ index 0000000..cd1966e
 +    const float lengths[4] = { 230.0f, 140.0f, 83.0f, 51.0f };
 +    const float heights[4] = { 1.0f, 0.7f, 0.45f, 0.3f };
 +    float2 slope = 0.0f;
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        // Deep water: speed grows with the square root of the wavelength.
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        const float steepness = 0.2f * heights[i] * visible;
-+        slope += dirs[i] * (steepness * cos(k * dot(dirs[i], p) - omega * t));
++        const float steepness = 0.2f * heights[i] * visible * WaveVariation(p, i);
++        slope += dirs[i] * (steepness * cos(k * dot(dirs[i], q) - omega * t));
 +    }
 +    return slope;
 +}
@@ -14420,11 +14436,12 @@ index 0000000..cd1966e
 +    const float lengths[4] = { 230.0f, 140.0f, 83.0f, 51.0f };
 +    const float heights[4] = { 1.0f, 0.7f, 0.45f, 0.3f };
 +    float h = 0.0f;
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        h += (0.2f * heights[i] * visible / k) * sin(k * dot(dirs[i], p) - omega * t);
++        h += (0.2f * heights[i] * visible * WaveVariation(p, i) / k) * sin(k * dot(dirs[i], q) - omega * t);
 +    }
 +    return h;
 +}
@@ -14791,12 +14808,14 @@ index 0000000..cd1966e
 +    const float heights[4] = { 1.0f, 0.9f, 0.4f, 0.28f };
 +    const float sharpness = 2.2f;
 +    float3 wave = 0.0f;
++    // (Varied over the water as Modern water's waves are, WaveWarp.)
++    const float2 q = p + WaveWarp(p);
 +    [unroll] for (int i = 0; i < 4; i++) {
 +        const float k = 6.2831853f / lengths[i];
 +        const float omega = k * sqrt(lengths[i]) * 6.0f;
 +        const float visible = saturate(lengths[i] / (footprint * 6.0f) - 1.0f);
-+        const float amplitude = 0.2f * heights[i] * visible / k;
-+        const float phase = k * dot(dirs[i], p) - omega * t;
++        const float amplitude = 0.2f * heights[i] * visible * WaveVariation(p, i) / k;
++        const float phase = k * dot(dirs[i], q) - omega * t;
 +        const float s = sin(phase) * 0.5f + 0.5f;
 +        const float raised = pow(max(s, 1e-4f), sharpness);
 +        // Centred on 0 (the mean of s^2.2 is about 0.33), so the water's mean level stays the game's.
