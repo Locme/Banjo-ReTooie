@@ -53,9 +53,10 @@
 // 0838 (in the backpack; Smash Banjo keeps them) and 061C (alone after Split Up).
 //
 // Belly jiggle (L, 2026-10-19, its own toggle and sliders of the snout's kinds): the front of Banjo's
-// belly (the chest bone's vertices round 0,74,19 on the game's own models, with the tooth necklace)
-// is a jiggle bone from inside his middle, written into the vertex list like the muzzle; it fades out
-// towards the shorts, the fur and the chin so nothing comes apart. Not on mods with many vertices.
+// belly (the chest bone's vertices and its skin down to his belt, round 0,66,17 on the game's own
+// models) is a jiggle bone from inside his middle, written into the vertex list like the muzzle; it
+// fades out at the belt, the fur and the chest so nothing comes apart. (L, 2026-10-20: it sat up at
+// the necklace and read as a chest jiggle; it now sits just above his belt.) Not on mods with many vertices.
 //
 // Mumbo jiggle (L, 2026-10-19, its own toggle, Kazooie's sliders): the three feathers on Mumbo's
 // head (asset 0665, playable and in his skulls: bones 4-6, 7-9 and 10-12 on head bone 2) are jiggle
@@ -761,12 +762,12 @@ namespace {
     }
 
     // ---- the belly (see the top) ----
-    // The front of Banjo's belly (the game's own models: the chest bone 2's vertices, with the tooth
-    // necklace) is a jiggle bone from inside his middle to the front, its own sliders of the snout's
-    // kinds. Weights follow the bind position: full at the middle of the belly, none at its edges where
-    // it meets the shorts, the fur and the chin, so nothing comes apart.
+    // The front of Banjo's belly (the game's own models: the chest bone 2's vertices and the bone-2
+    // half of its skin down to the belt) is a jiggle bone from inside his middle to the front, its own
+    // sliders of the snout's kinds. Weights follow the bind position: full just above the belt, none
+    // at the belt itself (the skin's half on the hips), the fur and the chest, so nothing comes apart.
     constexpr int belly_bone = 2;
-    constexpr float belly_pivot[3] = { 0.0f, 72.0f, 2.0f }, belly_tip[3] = { 0.0f, 72.0f, 19.0f };
+    constexpr float belly_pivot[3] = { 0.0f, 66.0f, 2.0f }, belly_tip[3] = { 0.0f, 66.0f, 17.0f };
 
     struct BellySettings { Feel feel{ 150.0f, 12.0f, 1.0f }; Limits lim{ 0.25f, 0.25f, 0.25f }; } belly_settings;
     void read_belly_settings() {
@@ -807,11 +808,32 @@ namespace {
         belly = {};
     }
 
-    // How much of the belly a bind position is (vanilla 062A: its middle at 0,74,19; the shorts start
-    // at y 63, the chin at y 82, the fur at the sides).
+    // How much of the belly a bind position is (vanilla 062A: the belt at y 56, where the skin's hip
+    // half sits; the belly's lower edge at y 63; the necklace at y 68-76, the chest at y 80-82; the
+    // fur's skins at |x| 17 and over). Points shared with other skins (the fur's, the shoulders' and
+    // the neck's) all get weight 0, so they move alike.
     float belly_weight(Vec p) {
-        return smooth((p.z - 6.0f) / 10.0f) * smooth((p.y - 63.0f) / 6.0f) * (1.0f - smooth((p.y - 74.0f) / 7.0f)) *
-               (1.0f - smooth((std::fabs(p.x) - 6.0f) / 12.0f));
+        return smooth((p.z - 6.0f) / 10.0f) * smooth((p.y - 57.0f) / 6.0f) * (1.0f - smooth((p.y - 72.0f) / 7.0f)) *
+               (1.0f - smooth((std::fabs(p.x) - 6.0f) / 11.0f));
+    }
+
+    // The bone's own half of the skin nodes on it (the first n_child vertices; the rest are on the parent).
+    void collect_skin_child(uint8_t* rdram, uint32_t node, int bone, bool in_selector, int depth, int target, std::vector<int>& out) {
+        for (int guard = 0; guard < 4096 && depth < 32; guard++) {
+            const uint32_t cmd = read_word(rdram, node), size = read_word(rdram, node + 4);
+            if (cmd == 2) {
+                collect_skin_child(rdram, node + read_byte(rdram, node + 8), read_byte(rdram, node + 9), in_selector, depth + 1, target, out);
+            } else if (cmd == 0x0C) {
+                const int options = (uint16_t)read_half(rdram, node + 8);
+                for (int i = 0; i < options && i < 64; i++)
+                    collect_skin_child(rdram, node + read_word(rdram, node + 12 + 4 * i), bone, true, depth + 1, target, out);
+            } else if (cmd == 0x18 && bone == target && !in_selector) {
+                const int n_child = (uint16_t)read_half(rdram, node + 32), v0 = (uint16_t)read_half(rdram, node + 44);
+                for (int i = v0; i < v0 + n_child; i++) out.push_back(i);
+            }
+            if (size == 0 || size > 0x100000) return;
+            node += size;
+        }
     }
 
     bool prepare_belly(uint8_t* rdram) {
@@ -825,7 +847,9 @@ namespace {
         belly.model = current_model;
         belly.vtx = current.vtx;
         std::vector<int> all;
-        collect_bone(rdram, current_model + read_word(rdram, current_model + 4), -1, false, 0, belly_bone, all);
+        const uint32_t geo = current_model + read_word(rdram, current_model + 4);
+        collect_bone(rdram, geo, -1, false, 0, belly_bone, all);
+        collect_skin_child(rdram, geo, -1, false, 0, belly_bone, all);
         std::sort(all.begin(), all.end());
         all.erase(std::unique(all.begin(), all.end()), all.end());
         for (int i : all) {
@@ -845,8 +869,12 @@ namespace {
     float jiggle_belly(uint8_t* rdram, const float m[16]) {
         const Vec pivot{ belly_pivot[0], belly_pivot[1], belly_pivot[2] };
         const Vec tip{ belly_tip[0], belly_tip[1], belly_tip[2] };
+        // Headless: TOOIE_BELLY_FORCE=<up>,<side>[,<length>] holds the belly there, as TOOIE_SNOUT_FORCE.
+        static const char* force_env = std::getenv("TOOIE_BELLY_FORCE");
+        float force[3] = { 0.0f, 0.0f, 1.0f };
+        const bool forced = force_env != nullptr && std::sscanf(force_env, "%f,%f,%f", &force[0], &force[1], &force[2]) >= 1;
         const BoneTurn turn = jiggle_bone(belly_spring, transform(m, pivot), transform(m, tip), Vec{ m[4], m[5], m[6] },
-                                          belly_settings.feel, belly_settings.lim, nullptr);
+                                          belly_settings.feel, belly_settings.lim, forced ? force : nullptr);
         // In the vertex space: v' = pivot + (v - pivot) * M N M^-1.
         const Mat M = upper(m);
         Mat Mi;

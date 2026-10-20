@@ -61,6 +61,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
+    void SetSceneShinyTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
@@ -4068,6 +4069,15 @@ namespace {
         std::vector<uint64_t> ice_all(std::begin(ice_textures), std::end(ice_textures));
         ice_all.insert(ice_all.end(), ice_extra.begin(), ice_extra.end());
         std::vector<uint64_t> ice = build(ice_all.data(), ice_all.data() + ice_all.size(), tooie::effect_pick::effect_ice, true);
+        // Shiny surfaces for Screen-space reflections: the textures the parallax sweep (textures/sweep4) found to be
+        // metal or tiles, with Shiny Reflection picks over them.
+        std::vector<uint64_t> shiny_all;
+        for (const ParallaxTexture& texture : parallax_textures) {
+            if ((texture.shape == Metal) || (texture.shape == Tiles)) {
+                shiny_all.push_back(texture.hash);
+            }
+        }
+        std::vector<uint64_t> shiny = build(shiny_all.data(), shiny_all.data() + shiny_all.size(), tooie::effect_pick::effect_shiny, true);
         std::vector<uint64_t> snow_off;
         for (const auto& [hash, picked] : picks) {
             if (picked != tooie::effect_pick::effect_deep_snow) {
@@ -4082,6 +4092,7 @@ namespace {
         }
         RT64::SetSceneGrassTextures(grass.data(), grass.size());
         RT64::SetSceneIceTextures(ice.data(), ice.size());
+        RT64::SetSceneShinyTextures(shiny.data(), shiny.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         effects_sent_version.store(version);
@@ -4750,7 +4761,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ssr_option,
         "Screen-space reflections",
-        "Every surface reflects what is on screen, most at grazing angles, like a polished or wet floor. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
+        "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         bounce_light_option,

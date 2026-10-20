@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Belly jiggle now wobbles the belly just above his belt instead of up at his chest and necklace (L). Untested on PC (T458).
 - DEV > Hide Vanilla Widescreen Entry in the Game Menu is now called Hide Unnecessary Settings Entry; it covers Wide-screen Mode and Screen Alignment on the TV (L). Untested on PC (T455).
 - The Start menu has a SETTINGS entry under Achievements. Its page has the save select TV's settings: Speaker Mode (Mono, Stereo, Headphone, Dolby Surround), and Wide-screen Mode while DEV > Hide Unnecessary Settings Entry is off. Up and down pick a row, left, right or A change it at once; B goes back, Start closes the menu (L). Untested on PC (T454).
 
