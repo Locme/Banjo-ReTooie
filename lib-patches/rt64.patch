@@ -5954,10 +5954,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..b63620f
+index 0000000..a99a4b8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,2472 @@
+@@ -0,0 +1,2482 @@
 +//
 +// RT64
 +//
@@ -6246,10 +6246,14 @@ index 0000000..b63620f
 +        effectsSettings.heatHaze = strength;
 +    }
 +
++    // Screen-space reflections on, or their debug view: the shiny list is looked up (SceneShinyWanted).
++    static std::atomic<bool> shinyWanted{ false };
++
 +    void SetSceneEffectsView(uint32_t view, bool compare) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.view = view;
 +        effectsSettings.compare = compare;
++        shinyWanted.store((effectsSettings.screenSpaceReflections > 0.0f) || (view == SceneEffectsViewSsr));
 +    }
 +
 +    void SetSceneUnderwater(float tint, float haze) {
@@ -6318,9 +6322,6 @@ index 0000000..b63620f
 +        effectsSettings.bounceLight = strength;
 +    }
 +
-+    // Screen-space reflections on: the shiny list is looked up (SceneShinyWanted).
-+    static std::atomic<bool> shinyWanted{ false };
-+
 +    void SetSceneScreenSpaceGI(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.screenSpaceGI = strength;
@@ -6329,7 +6330,7 @@ index 0000000..b63620f
 +    void SetSceneScreenSpaceReflections(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.screenSpaceReflections = strength;
-+        shinyWanted.store(strength > 0.0f);
++        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
 +    }
 +
 +    void SetSceneWaterWaves(float strength, float speed) {
@@ -7590,7 +7591,7 @@ index 0000000..b63620f
 +
 +    bool SceneWaterWanted() {
 +        const std::scoped_lock lock(effectsMutex);
-+        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) ||
++        return (effectsSettings.waterReflections > 0.0f) || (effectsSettings.iceReflections > 0.0f) || (effectsSettings.screenSpaceReflections > 0.0f) || (effectsSettings.waterWaves > 0.0f) || effectsSettings.shoreFoam || effectsSettings.modernWater || (effectsSettings.view == 4) || (effectsSettings.view == SceneEffectsViewSsr) ||
 +            // The day and night cycle's mist gathers round water.
 +            // and the rain rings on water need it too.
 +            (effectsSettings.timeOfDay && ((effectsSettings.dayMist > 0.0f) || (effectsSettings.dayRain > 0.0f))) ||
@@ -7620,6 +7621,15 @@ index 0000000..b63620f
 +            settings = effectsSettings;
 +        }
 +        if (settings.view < SceneEffectsSoloFirst) {
++            return settings;
++        }
++        if ((settings.view >= SceneEffectsViewGtao) && (settings.view <= SceneEffectsViewSsr)) {
++            // The effect the view shows at half strength when it is off.
++            float &strength = (settings.view == SceneEffectsViewGtao) ? settings.ambientOcclusion :
++                (settings.view == SceneEffectsViewSsgi) ? settings.screenSpaceGI : settings.screenSpaceReflections;
++            if (strength <= 0.0f) {
++                strength = 0.5f;
++            }
 +            return settings;
 +        }
 +
@@ -8387,7 +8397,7 @@ index 0000000..b63620f
 +
 +        // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
 +        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it).
-+        if (((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && (settings.view < 2)) {
++        if (((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) {
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
 +            commandList->setFramebuffer(res.indirectFramebuffer.get());
 +            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
@@ -8432,10 +8442,10 @@ index 0000000..b63620f
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..b1dca39
+index 0000000..30111df
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,400 @@
+@@ -0,0 +1,405 @@
 +//
 +// RT64
 +//
@@ -8462,6 +8472,11 @@ index 0000000..b1dca39
 +    // waves, underwater tint and haze, heat haze, depth of field.
 +    constexpr uint32_t SceneEffectsSoloFirst = 5;
 +    constexpr uint32_t SceneEffectsSoloCount = 13;
++    // 18 keeps no scene effect. These show one effect's own result over the scene instead: GTAO's visibility, SSGI's
++    // light, and screen-space reflections where they show (at half strength when the effect is off).
++    constexpr uint32_t SceneEffectsViewGtao = 19;
++    constexpr uint32_t SceneEffectsViewSsgi = 20;
++    constexpr uint32_t SceneEffectsViewSsr = 21;
 +
 +    struct SceneEffectsSettings {
 +        float ambientOcclusion = 0.0f;
@@ -12531,10 +12546,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..b4768fa
+index 0000000..6be905d
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3060 @@
+@@ -0,0 +1,3083 @@
 +//
 +// RT64
 +//
@@ -15278,6 +15293,28 @@ index 0000000..b4768fa
 +        }
 +    }
 +
++    // Debug views of GTAO's visibility (white open, dark occluded), SSGI's light, and screen-space reflections: the
++    // reflection where they show (red where the ray found nothing on screen), the dimmed scene elsewhere.
++    if (gConstants.view.x > 18.5f) {
++        if (depth >= 0.99999f) {
++            return float4(0.0f, 0.0f, 0.0f, 0.0f);
++        }
++        const float3 center = ViewPosition(pixel, depth);
++        const float3 normal = ViewNormal(pixel, center);
++        if (gConstants.view.x < 19.5f) {
++            return float4(IndirectAt(pixel, center, normal).aaa, 0.0f);
++        }
++        if (gConstants.view.x < 20.5f) {
++            return float4(IndirectAt(pixel, center, normal).rgb * (SsgiStrength() * 2.0f), 0.0f);
++        }
++        const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
++        if (!ReflectiveAt(pixel, depth)) {
++            return float4(dot(scene, float3(0.299f, 0.587f, 0.114f)).xxx * 0.25f, 0.0f);
++        }
++        const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++        return float4(lerp(float3(0.6f, 0.0f, 0.0f), reflection.rgb, reflection.a), 0.0f);
++    }
++
 +    // Debug views of the depth: distance (near white, far dark, sky blue) and the normals from it.
 +    if (gConstants.view.x > 3.5f) {
 +        float3 surface, normal;
@@ -15454,10 +15491,11 @@ index 0000000..b4768fa
 +        }
 +        if (reflections) {
 +            // SSR: the reflected scene, more at grazing angles (Fresnel) and less in creases (GTAO's specular
-+            // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections).
++            // occlusion, Lagarde and de Rousiers 2014, as the Unity GTAO does for its reflections). At 100 a
++            // surface seen straight on is three quarters mirror, and fully at grazing angles.
 +            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
 +            const float facing = saturate(dot(-normalize(center), normal));
-+            const float fresnel = 0.2f + 0.8f * pow(1.0f - facing, 4.0f);
++            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
 +            const float specularOcclusion = occlusion ? saturate(pow(facing + indirect.a, 0.5f) - 1.0f + indirect.a) : 1.0f;
 +            scene = lerp(scene, reflection.rgb, saturate(SsrStrength() * fresnel * reflection.a * specularOcclusion));
 +        }

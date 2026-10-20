@@ -14,7 +14,7 @@
 // are kept or dropped by RT64 (RT64::GetSceneEffects; view 18 keeps none); the other filters are left out
 // by picture_filters, smaa, fxaa and fsr apply(), which ask isolating() and solo().
 //
-// The view starts off at each launch. Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-30> starts in that
+// The view starts off at each launch. Headless test hooks: TOOIE_SCENE_FX_VIEW=<1-33> starts in that
 // view; TOOIE_FX_COMPARE=1 starts with the compare on.
 
 #include <atomic>
@@ -54,7 +54,8 @@ namespace {
     using Solo = tooie::effect_views::Solo;
 
     constexpr auto poll_interval = 10ms;
-    // RT64's solo views run from 5 (RT64::SceneEffectsSoloFirst) to 17; 18 keeps no scene effect.
+    // RT64's solo views run from 5 (RT64::SceneEffectsSoloFirst) to 17; 18 keeps no scene effect; 19 to 21 show
+    // GTAO, SSGI and SSR on their own (RT64::SceneEffectsViewGtao on).
     constexpr uint32_t scene_solo_first = 5;
     constexpr uint32_t scene_none = 18;
 
@@ -82,6 +83,9 @@ namespace {
         { "Only: underwater tint and haze", 15, Solo::None },
         { "Only: heat haze and underwater distortion", 16, Solo::None },
         { "Only: depth of field", 17, Solo::None },
+        { "GTAO occlusion (white open, dark shaded)", 19, Solo::None },
+        { "SSGI bounced light", 20, Solo::None },
+        { "Screen-space reflections (red: nothing to reflect)", 21, Solo::None },
         { "All effects off", scene_none, Solo::None },
         { "Only: sharpening", scene_none, Solo::Sharpening },
         { "Only: contrast", scene_none, Solo::Contrast },
