@@ -163,7 +163,6 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::motion_aim::tick(rdram, ctx);
     tooie::menu_mouse::tick(rdram, ctx);
     tooie::picture_filters::tick(rdram, ctx);
-    tooie::widescreen_tick(rdram);
     tooie::vanilla_widescreen_tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);

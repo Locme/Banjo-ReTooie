@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T519 Intro: normal wide view from the first shot (replaces T403)
+- Asked: 2026-10-21 20:35 UTC
+- Build: main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave, and compare its shape with the game after it
+- Look for: The intro has the same shape as the game after it from its first shot: no zoom, nothing cut off at the top and bottom. The opening cloud shot may show the ends of its cloud backdrop at the sides (the original game built it for 4:3); tell me if that bothers you. Checked headless: builds and boots to the attract demo wide; the story intro itself could not be reached headless (the software renderer stalls before it).
+- Status: waiting for L
+
 ## T518 Displaced ground: wobble, distance, grass edging
 - Asked: 2026-10-21 17:39 UTC
 - Build: main
@@ -1150,7 +1159,8 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave
 - Look for: The opening cloud shot fills the width with no panel ends (it is zoomed in, so the top and bottom of that one shot are cut), and every shot after it, Klungo's "No good, missstress" close-up included, has normal proportions instead of looking stretched sideways. Checked headless at 3440x1417 shape and 16:9: screens/intro-stretch/before-after.png
-- Status: waiting for L
+- Status: answered 2026-10-21 20:35 UTC
+- L's result: replaced by T519: L chose the normal wide view, no zoom (2026-10-21)
 
 ## T402 Split-Up pads: no lines across the pictures (DEV Blend texture seams, on)
 - Asked: 2026-10-17 20:44 UTC

@@ -29,8 +29,6 @@ namespace tooie {
     // How much wider than 4:3 RT64 draws the picture: 1 unless Aspect Ratio is
     // Expand and the window is wider than 4:3 (widescreen.cpp).
     float widescreen_scale();
-    // Once a frame: stretches the intro's backdrop across a wide picture (widescreen.cpp).
-    void widescreen_tick(uint8_t* rdram);
 
     // Settings (config.cpp).
     void init_config();
