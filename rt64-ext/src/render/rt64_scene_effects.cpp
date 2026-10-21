@@ -136,8 +136,16 @@ namespace RT64 {
             // this pass, so its geometries match this frame's buffers (a reused one's don't: its textures aren't read).
             std::unique_ptr<RenderBuffer> rayGeometryBuffer;
             std::unique_ptr<RenderBuffer> rayDummyBuffer;
-            std::unique_ptr<SceneRayTexturesDescriptorSet> rayTexturesSet;
-            const RenderBuffer *rayTexturesSetBuffers[4] = {};
+            // A few of the sets are kept, one for each group of buffers a workload hands over, so switching between workloads
+            // doesn't make a new descriptor pool and layout every pass (thousands a minute; the NVIDIA driver crashed in
+            // the update of one after ten minutes, 2026-10-21). rayTexturesSet is the one for this pass.
+            struct RayTexturesEntry {
+                std::unique_ptr<SceneRayTexturesDescriptorSet> set;
+                const RenderBuffer *buffers[4] = {};
+                uint64_t usedPass = 0;
+            };
+            std::vector<RayTexturesEntry> rayTexturesCache;
+            SceneRayTexturesDescriptorSet *rayTexturesSet = nullptr;
             RenderDescriptorSet *rayTextureCacheSet = nullptr;
             bool rayTexturesValid = false;
             const RenderAccelerationStructure *sceneSetBvh = nullptr;
@@ -2513,17 +2521,46 @@ namespace RT64 {
             haveTextureBuffers ? textures.rdpTiles : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.gpuTiles : res.rayDummyBuffer.get()
         };
-        if ((res.rayTexturesSet == nullptr) || !std::equal(wanted, wanted + 4, res.rayTexturesSetBuffers)) {
-            if (res.rayTexturesSet != nullptr) {
-                res.retireLater(std::move(res.rayTexturesSet));
+        // Sets not used for a while are dropped: the buffers they name may have been replaced since (a new buffer at an old one's
+        // address would match).
+        constexpr uint64_t RayCacheKeepPasses = 240;
+        constexpr size_t RayCacheMax = 8;
+        for (size_t i = 0; i < res.rayTexturesCache.size();) {
+            if (res.rayTexturesCache[i].usedPass + RayCacheKeepPasses < res.passes) {
+                res.retireLater(std::move(res.rayTexturesCache[i].set));
+                res.rayTexturesCache.erase(res.rayTexturesCache.begin() + i);
             }
-            res.rayTexturesSet = std::make_unique<SceneRayTexturesDescriptorSet>(worker->device);
-            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayGeometries, res.rayGeometryBuffer.get());
-            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayIndices, wanted[0]);
-            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayTexcoords, wanted[1]);
-            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayRDPTiles, wanted[2], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::RDPTile)) : RenderBufferStructuredView(16));
-            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayGPUTiles, wanted[3], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::GPUTile)) : RenderBufferStructuredView(16));
-            std::copy(wanted, wanted + 4, res.rayTexturesSetBuffers);
+            else {
+                i++;
+            }
+        }
+        res.rayTexturesSet = nullptr;
+        for (Resources::RayTexturesEntry &entry : res.rayTexturesCache) {
+            if (std::equal(wanted, wanted + 4, entry.buffers)) {
+                entry.usedPass = res.passes;
+                res.rayTexturesSet = entry.set.get();
+                break;
+            }
+        }
+        if (res.rayTexturesSet == nullptr) {
+            if (res.rayTexturesCache.size() >= RayCacheMax) {
+                auto oldest = std::min_element(res.rayTexturesCache.begin(), res.rayTexturesCache.end(),
+                    [](const Resources::RayTexturesEntry &a, const Resources::RayTexturesEntry &b) { return a.usedPass < b.usedPass; });
+                res.retireLater(std::move(oldest->set));
+                res.rayTexturesCache.erase(oldest);
+            }
+            Resources::RayTexturesEntry entry;
+            entry.set = std::make_unique<SceneRayTexturesDescriptorSet>(worker->device);
+            SceneRayTexturesDescriptorSet *set = entry.set.get();
+            set->setBuffer(set->gRayGeometries, res.rayGeometryBuffer.get());
+            set->setBuffer(set->gRayIndices, wanted[0]);
+            set->setBuffer(set->gRayTexcoords, wanted[1]);
+            set->setBuffer(set->gRayRDPTiles, wanted[2], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::RDPTile)) : RenderBufferStructuredView(16));
+            set->setBuffer(set->gRayGPUTiles, wanted[3], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::GPUTile)) : RenderBufferStructuredView(16));
+            std::copy(wanted, wanted + 4, entry.buffers);
+            entry.usedPass = res.passes;
+            res.rayTexturesSet = set;
+            res.rayTexturesCache.push_back(std::move(entry));
         }
         const bool withGrass = building && (grass.vertices != nullptr) && (grass.vertexCount >= 3);
         // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
