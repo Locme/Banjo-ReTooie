@@ -240,6 +240,7 @@ void tooie::init_config() {
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
+    tooie::talon_trot::register_input();
     tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();
@@ -678,17 +679,6 @@ void tooie::init_config() {
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     tooie::day_night::add_options(graphics);
     graphics.add_bool_option(
-        tooie::window_beams::option,
-        "Window Light Beams",
-        "Beams of light fall from the round windows in Bottles' house onto the floor, the way they do from the windows in Mumbo's Skull. Switching it in Bottles' house reloads the room.",
-        true);
-    graphics.add_option_change_callback(tooie::window_beams::option,
-        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
-            if (context == recomp::config::OptionChangeContext::Temporary) {
-                recompui::config::get_graphics_config().save_config();
-            }
-        });
-    graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
         "Keeps characters and objects that are already loaded drawn much further away than the original.",
@@ -709,6 +699,18 @@ void tooie::init_config() {
         "Cutscene Field of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
+    // Vanilla Enhancements (L, 2026-10-21): touches to the game's own look, after the Game view group.
+    graphics.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
+        true);
+    graphics.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
@@ -747,6 +749,7 @@ void tooie::init_config() {
     // 3D grass has its own section after the colour grading (L, 2026-10-16).
     recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
+    recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-aliasing and scaling");

@@ -12,6 +12,10 @@ namespace tooie::talon_trot {
     enum class Mode : uint32_t { Hold, Toggle };
     inline const std::string mode_option = "talon_trot";
 
+    // Names the Talon Trot control (Controls tab, Movement) and binds LT + RT to it on a controller. Call
+    // before recompui::config::finalize(), which loads the controls config.
+    void register_input();
+
     // Call once per frame from the game thread (tooie_warp_tick): reads the player's state.
     void tick(uint8_t* rdram, recomp_context* ctx);
     // Applies the toggle to player 1's buttons as the game is about to read them. Safe to call more

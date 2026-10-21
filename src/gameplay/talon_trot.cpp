@@ -5,10 +5,20 @@
 #include <cstdlib>
 #include <variant>
 
+#ifdef _WIN32
+#include "SDL.h"
+#else
+#include "SDL2/SDL.h"
+#endif
+
 #include "recomp.h"
+#include "recompinput/recompinput.h"
+#include "recompinput/input_binding.h"
+#include "recompinput/profiles.h"
 #include "recompui/config.h"
 
 #include "tooie_game.h"
+#include "tooie_hotkeys.h"
 #include "tooie_talon_trot.h"
 #include "tooie_rdram.h"
 
@@ -41,6 +51,17 @@ namespace {
 
     // A state outside the trot for this long ends the toggle (a swim, a hit, a transformation).
     constexpr auto leave_time = 100ms;
+
+    constexpr auto trot_input = recompinput::GameInput::TALON_TROT;
+    // The Talon Trot control pushes Z + C-left into the pad this long, enough for the game to start the trot.
+    constexpr auto start_hold = 150ms;
+    bool chord_prev = false;
+    Clock::time_point start_until{};
+
+    // A Z press ends the toggle after this delay, unless the control (LT + RT) completes first: the first
+    // trigger of the pair is a Z press too.
+    constexpr auto z_end_delay = 80ms;
+    Clock::time_point z_end_at{};
 
     std::atomic<uint32_t> player_state{0};
 
@@ -81,6 +102,19 @@ namespace {
     }
 }
 
+void tooie::talon_trot::register_input() {
+    recompinput::set_game_input_section(trot_input, "Movement");
+    recompinput::set_game_input_name(trot_input, "Talon Trot");
+    recompinput::set_game_input_description(trot_input,
+        "Starts Kazooie's Talon Trot where Banjo stands (the same as Z + C-left). On a controller, hold LT and RT together. In Toggle mode (QOL > Talon Trot) the trot keeps going after you let go, until you press it again. In Hold mode the trot lasts while either trigger is held.");
+    recompinput::set_default_mapping_for_keyboard(trot_input, {});
+    recompinput::InputField chord = recompinput::InputField::controller_analog(SDL_CONTROLLER_AXIS_TRIGGERRIGHT, true);
+    const recompinput::InputField lt = recompinput::InputField::controller_analog(SDL_CONTROLLER_AXIS_TRIGGERLEFT, true);
+    chord.modifier_type = lt.input_type;
+    chord.modifier_id = lt.input_id;
+    recompinput::set_default_mapping_for_controller(trot_input, { chord });
+}
+
 void tooie::talon_trot::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     uint32_t player = read_word(rdram, player_table);
@@ -96,8 +130,23 @@ void tooie::talon_trot::apply(uint16_t* buttons) {
     const uint16_t pressed = raw & ~prev_raw;
     prev_raw = raw;
 
+    // The control (LT + RT by default) as a fresh press.
+    const bool chord = tooie::hotkeys::down(trot_input);
+    const bool chord_pressed = chord && !chord_prev;
+    chord_prev = chord;
+
+    if (chord_pressed && !(latched && trotting)) {
+        // Start the trot as Z + C-left would.
+        start_until = now + start_hold;
+        log_change("start (control)", state);
+    }
+    if (now < start_until) {
+        *buttons |= button_z | button_cl;
+    }
+
     if (chosen_mode(now) != Mode::Toggle) {
         latched = false;
+        z_end_at = Clock::time_point{};
         was_trotting = trotting;
         return;
     }
@@ -118,7 +167,13 @@ void tooie::talon_trot::apply(uint16_t* buttons) {
     if ((raw & button_z) == 0) {
         z_released = true;
     }
-    if ((pressed & button_cl) || ((pressed & button_z) && z_released)) {
+    if ((pressed & button_z) && z_released && z_end_at == Clock::time_point{}) {
+        z_end_at = now + z_end_delay;
+    }
+    const bool z_ends = z_end_at != Clock::time_point{} && now >= z_end_at;
+    if (chord_pressed || ((pressed & button_cl) && now >= start_until) || z_ends) {
+        start_until = Clock::time_point{};
+        z_end_at = Clock::time_point{};
         // Ended by the player: hand Z back, so letting go of it ends the trot as usual.
         latched = false;
         log_change("off (button)", state);
@@ -126,6 +181,7 @@ void tooie::talon_trot::apply(uint16_t* buttons) {
     }
     if (!trotting && now - left_trot_at > leave_time) {
         latched = false;
+        z_end_at = Clock::time_point{};
         log_change("off (left the trot)", state);
         return;
     }
