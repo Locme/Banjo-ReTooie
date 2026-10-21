@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..2256e70 100644
+index 79dfc38..566568a 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -170,19 +170,17 @@ index 79dfc38..2256e70 100644
      add_compile_definitions("PLUME_SDL_VULKAN_ENABLED")
      add_compile_definitions("RT64_SDL_WINDOW_VULKAN")
  endif()
-@@ -389,6 +447,11 @@ set (SOURCES
+@@ -389,6 +447,9 @@ set (SOURCES
      "${PROJECT_SOURCE_DIR}/src/render/rt64_transform_processor.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_upscaler.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vertex_processor.cpp"
-+    "${PROJECT_SOURCE_DIR}/src/render/rt64_smaa.cpp"
-+    "${PROJECT_SOURCE_DIR}/src/render/rt64_mirror.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_fsr.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_photo_grade.cpp"
 +    "${PROJECT_SOURCE_DIR}/src/render/rt64_scene_effects.cpp"
      "${PROJECT_SOURCE_DIR}/src/render/rt64_vi_renderer.cpp"
  
      "${PROJECT_SOURCE_DIR}/src/preset/rt64_preset.cpp"
-@@ -445,9 +508,11 @@ target_link_libraries(rt64 nfd)
+@@ -445,9 +506,11 @@ target_link_libraries(rt64 nfd)
  target_link_libraries(rt64 libzstd_static)
  target_link_libraries(rt64 plume)
  
@@ -197,7 +195,7 @@ index 79dfc38..2256e70 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -505,6 +570,19 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
+@@ -505,6 +568,19 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlatMS.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR" "-D MULTISAMPLING")
  build_vertex_shader( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSDynamic.hlsl" "-D DYNAMIC_RENDER_PARAMS")
@@ -217,7 +215,7 @@ index 79dfc38..2256e70 100644
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +621,67 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +619,54 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -228,19 +226,6 @@ index 79dfc38..2256e70 100644
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSRegular.hlsl")
  build_pixel_shader(  rt64 "src/shaders/VideoInterfacePS.hlsl" "src/shaders/VideoInterfacePSPixel.hlsl" "-D PIXEL_ANTIALIASING")
 +
-+# Banjo-Tooie: SMAA passes, built from iryoku/smaa in the game's repository (RT64_SMAA_DIR).
-+foreach(SMAA_PRESET LOW MEDIUM HIGH ULTRA)
-+    string(SUBSTRING ${SMAA_PRESET} 0 1 SMAA_PRESET_HEAD)
-+    string(SUBSTRING ${SMAA_PRESET} 1 -1 SMAA_PRESET_TAIL)
-+    string(TOLOWER ${SMAA_PRESET_TAIL} SMAA_PRESET_TAIL)
-+    set(SMAA_PRESET_NAME "${SMAA_PRESET_HEAD}${SMAA_PRESET_TAIL}")
-+    build_pixel_shader(rt64 "src/shaders/SmaaPS.hlsl" "src/shaders/SmaaEdges${SMAA_PRESET_NAME}PS.hlsl" "-I${RT64_SMAA_DIR}" "-D SMAA_PASS_EDGES" "-D SMAA_PRESET_${SMAA_PRESET}")
-+    build_pixel_shader(rt64 "src/shaders/SmaaPS.hlsl" "src/shaders/SmaaWeights${SMAA_PRESET_NAME}PS.hlsl" "-I${RT64_SMAA_DIR}" "-D SMAA_PASS_WEIGHTS" "-D SMAA_PRESET_${SMAA_PRESET}")
-+endforeach()
-+build_pixel_shader(rt64 "src/shaders/SmaaPS.hlsl" "src/shaders/SmaaBlendPS.hlsl" "-I${RT64_SMAA_DIR}" "-D SMAA_PASS_BLEND" "-D SMAA_PRESET_HIGH")
-+target_include_directories(rt64 PRIVATE ${RT64_SMAA_DIR})
-+# Banjo-Tooie: Mirror Mode.
-+build_pixel_shader(rt64 "src/shaders/MirrorPS.hlsl")
 +# Banjo-Tooie: FSR 1, built from AMD's FidelityFX FSR in the game's repository (RT64_FSR_DIR).
 +build_pixel_shader(rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrEasuPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_EASU" "-HV 2018")
 +build_pixel_shader(rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrRcasPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_RCAS" "-HV 2018")
@@ -285,7 +270,7 @@ index 79dfc38..2256e70 100644
  build_pixel_shader(  rt64 "src/shaders/ComposePS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/DebugPS.hlsl")
  build_pixel_shader(  rt64 "src/shaders/Im3DPS.hlsl")
-@@ -557,3 +689,8 @@ build_pixel_shader(  rt64 "src/shaders/PostProcessPS.hlsl")
+@@ -557,3 +674,8 @@ build_pixel_shader(  rt64 "src/shaders/PostProcessPS.hlsl")
  
  target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/src)
  
@@ -6816,145 +6801,6 @@ index 0000000..c977859
 +        }
 +    };
 +};
-diff --git a/src/render/rt64_mirror.cpp b/src/render/rt64_mirror.cpp
-new file mode 100644
-index 0000000..b29242d
---- /dev/null
-+++ b/src/render/rt64_mirror.cpp
-@@ -0,0 +1,93 @@
-+//
-+// RT64
-+//
-+
-+#include "rt64_mirror.h"
-+
-+#include <algorithm>
-+#include <atomic>
-+#include <mutex>
-+#include <unordered_set>
-+
-+#include "shared/rt64_smaa.h"
-+
-+#include "rt64_render_target.h"
-+
-+namespace RT64 {
-+    namespace {
-+        std::atomic<bool> mirrorMode{ false };
-+    }
-+
-+    namespace {
-+        std::mutex textTextureMutex;
-+        std::unordered_set<uint64_t> textTextures;
-+    }
-+
-+    void SetMirrorTextTextures(const uint64_t *hashes, size_t count) {
-+        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-+        const std::scoped_lock lock(textTextureMutex);
-+        textTextures.swap(textures);
-+    }
-+
-+    bool MirrorTextTexture(uint64_t hash) {
-+        const std::scoped_lock lock(textTextureMutex);
-+        return textTextures.count(hash) != 0;
-+    }
-+
-+    void SetMirrorMode(bool on) {
-+        mirrorMode = on;
-+    }
-+
-+    bool GetMirrorMode() {
-+        return mirrorMode.load();
-+    }
-+
-+    RenderTexture *MirrorRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height)
-+    {
-+        if (!mirrorMode.load() || (input == nullptr) || (width == 0) || (height == 0) || (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR))) {
-+            return input;
-+        }
-+
-+        if ((this->width != width) || (this->height != height) || (outputTexture == nullptr)) {
-+            outputFramebuffer.reset();
-+            outputTexture = device->createTexture(RenderTextureDesc::ColorTarget(width, height, format));
-+            outputTexture->setName("Mirror Output");
-+            const RenderTexture *output = outputTexture.get();
-+            outputFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&output, 1));
-+            this->width = width;
-+            this->height = height;
-+        }
-+
-+        if (descriptorSet == nullptr) {
-+            descriptorSet = std::make_unique<SmaaDescriptorSet>(shaderLibrary->samplerLibrary.linear.clampClamp.get(),
-+                shaderLibrary->samplerLibrary.nearest.clampClamp.get(), device);
-+        }
-+
-+        // Every slot gets a texture, the ones the pass doesn't read included.
-+        descriptorSet->setTexture(descriptorSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
-+        descriptorSet->setTexture(descriptorSet->gTexture1, input, RenderTextureLayout::SHADER_READ);
-+        descriptorSet->setTexture(descriptorSet->gTexture2, input, RenderTextureLayout::SHADER_READ);
-+
-+        interop::SmaaCB constants;
-+        constants.rtMetrics = { 1.0f / float(width), 1.0f / float(height), float(width), float(height) };
-+
-+        RenderTextureBarrier barriers[] = {
-+            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(outputTexture.get(), RenderTextureLayout::COLOR_WRITE)
-+        };
-+
-+        commandList->barriers(RenderBarrierStage::GRAPHICS, barriers, uint32_t(std::size(barriers)));
-+        const ShaderRecord &record = shaderLibrary->mirror;
-+        commandList->setFramebuffer(outputFramebuffer.get());
-+        commandList->setPipeline(record.pipeline.get());
-+        commandList->setGraphicsPipelineLayout(record.pipelineLayout.get());
-+        commandList->setGraphicsDescriptorSet(descriptorSet->get(), 0);
-+        commandList->setGraphicsPushConstants(0, &constants);
-+        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
-+        commandList->setViewports(RenderViewport(0.0f, 0.0f, float(width), float(height)));
-+        commandList->setScissors(RenderRect(0, 0, width, height));
-+        commandList->drawInstanced(3, 1, 0, 0);
-+        return outputTexture.get();
-+    }
-+};
-diff --git a/src/render/rt64_mirror.h b/src/render/rt64_mirror.h
-new file mode 100644
-index 0000000..43c79ba
---- /dev/null
-+++ b/src/render/rt64_mirror.h
-@@ -0,0 +1,34 @@
-+//
-+// RT64
-+//
-+
-+#pragma once
-+
-+#include "rt64_descriptor_sets.h"
-+#include "rt64_shader_library.h"
-+
-+namespace RT64 {
-+    // Banjo-Tooie: Mirror Mode flips the finished game image left to right, before the VI draws it. The draws after
-+    // the 3D world (HUD and text) are drawn flipped first (FramebufferRenderer::submitRasterScene), so they come
-+    // out where they were and readable.
-+    void SetMirrorMode(bool on);
-+    bool GetMirrorMode();
-+
-+    // Mirror Mode: textures with writing on them (signs), which are flipped back so they read normally on the
-+    // mirrored world (RasterPS.hlsl). Read on the render thread.
-+    void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
-+    bool MirrorTextTexture(uint64_t hash);
-+
-+    struct MirrorRenderer {
-+        std::unique_ptr<RenderTexture> outputTexture;
-+        std::unique_ptr<RenderFramebuffer> outputFramebuffer;
-+        std::unique_ptr<SmaaDescriptorSet> descriptorSet;
-+        uint32_t width = 0;
-+        uint32_t height = 0;
-+
-+        // Records the pass and returns the smoothed image, or the input itself when Mirror Mode is off or the
-+        // image is in a format the pass wasn't made for.
-+        RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height);
-+    };
-+};
 diff --git a/src/render/rt64_photo_grade.cpp b/src/render/rt64_photo_grade.cpp
 new file mode 100644
 index 0000000..ae4ef06
@@ -12964,211 +12810,6 @@ index 641f3ec..3e93392 100644
          ShaderRecord textureResolve;
          ShaderRecord videoInterfaceLinear;
          ShaderRecord videoInterfaceNearest;
-diff --git a/src/render/rt64_smaa.cpp b/src/render/rt64_smaa.cpp
-new file mode 100644
-index 0000000..a3578da
---- /dev/null
-+++ b/src/render/rt64_smaa.cpp
-@@ -0,0 +1,155 @@
-+//
-+// RT64
-+//
-+
-+#include "rt64_smaa.h"
-+
-+#include <algorithm>
-+#include <atomic>
-+#include <cstring>
-+
-+#include "AreaTex.h"
-+#include "SearchTex.h"
-+
-+#include "shared/rt64_smaa.h"
-+
-+#include "rt64_render_target.h"
-+
-+namespace RT64 {
-+    namespace {
-+        std::atomic<uint32_t> smaaQuality{ 0 };
-+
-+        // Uploads a lookup texture; the copy runs with the command list, so the upload buffer is kept.
-+        void uploadLookup(RenderDevice *device, RenderCommandList *commandList, std::unique_ptr<RenderTexture> &texture,
-+            std::unique_ptr<RenderBuffer> &upload, const unsigned char *bytes, uint32_t width, uint32_t height, RenderFormat format)
-+        {
-+            const uint32_t texelSize = RenderFormatSize(format);
-+            const uint32_t rowBytes = width * texelSize;
-+            // Rows are padded to 256 bytes, as D3D12 requires.
-+            const uint32_t alignedRowBytes = (rowBytes + 255) & ~255U;
-+            texture = device->createTexture(RenderTextureDesc::Texture2D(width, height, 1, format));
-+            upload = device->createBuffer(RenderBufferDesc::UploadBuffer(uint64_t(alignedRowBytes) * height));
-+            uint8_t *dst = reinterpret_cast<uint8_t *>(upload->map());
-+            for (uint32_t y = 0; y < height; y++) {
-+                std::memcpy(dst + uint64_t(y) * alignedRowBytes, bytes + uint64_t(y) * rowBytes, rowBytes);
-+            }
-+
-+            upload->unmap();
-+            commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(texture.get(), RenderTextureLayout::COPY_DEST));
-+            commandList->copyTextureRegion(RenderTextureCopyLocation::Subresource(texture.get()),
-+                RenderTextureCopyLocation::PlacedFootprint(upload.get(), format, width, height, 1, alignedRowBytes / texelSize));
-+        }
-+    }
-+
-+    void SetSmaaQuality(uint32_t quality) {
-+        smaaQuality = std::min(quality, 4U);
-+    }
-+
-+    uint32_t GetSmaaQuality() {
-+        return smaaQuality.load();
-+    }
-+
-+    RenderTexture *SmaaRenderer::apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+        RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height)
-+    {
-+        const uint32_t quality = smaaQuality.load();
-+        if ((quality == 0) || (input == nullptr) || (width == 0) || (height == 0) || (format != RenderTarget::colorBufferFormat(shaderLibrary->usesHDR))) {
-+            return input;
-+        }
-+
-+        if (areaTexture == nullptr) {
-+            uploadLookup(device, commandList, areaTexture, areaUpload, areaTexBytes, AREATEX_WIDTH, AREATEX_HEIGHT, RenderFormat::R8G8_UNORM);
-+            uploadLookup(device, commandList, searchTexture, searchUpload, searchTexBytes, SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, RenderFormat::R8_UNORM);
-+            RenderTextureBarrier lookupBarriers[] = {
-+                RenderTextureBarrier(areaTexture.get(), RenderTextureLayout::SHADER_READ),
-+                RenderTextureBarrier(searchTexture.get(), RenderTextureLayout::SHADER_READ)
-+            };
-+
-+            commandList->barriers(RenderBarrierStage::GRAPHICS, lookupBarriers, uint32_t(std::size(lookupBarriers)));
-+        }
-+
-+        if ((this->width != width) || (this->height != height) || (outputTexture == nullptr)) {
-+            const RenderTexture *edges;
-+            const RenderTexture *weights;
-+            const RenderTexture *output;
-+            edgesFramebuffer.reset();
-+            weightsFramebuffer.reset();
-+            outputFramebuffer.reset();
-+            edgesTexture = device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R8G8_UNORM));
-+            weightsTexture = device->createTexture(RenderTextureDesc::ColorTarget(width, height, RenderFormat::R8G8B8A8_UNORM));
-+            outputTexture = device->createTexture(RenderTextureDesc::ColorTarget(width, height, format));
-+            edgesTexture->setName("SMAA Edges");
-+            weightsTexture->setName("SMAA Weights");
-+            outputTexture->setName("SMAA Output");
-+            edges = edgesTexture.get();
-+            weights = weightsTexture.get();
-+            output = outputTexture.get();
-+            edgesFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&edges, 1));
-+            weightsFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&weights, 1));
-+            outputFramebuffer = device->createFramebuffer(RenderFramebufferDesc(&output, 1));
-+            this->width = width;
-+            this->height = height;
-+        }
-+
-+        if (edgesSet == nullptr) {
-+            const RenderSampler *linearSampler = shaderLibrary->samplerLibrary.linear.clampClamp.get();
-+            const RenderSampler *pointSampler = shaderLibrary->samplerLibrary.nearest.clampClamp.get();
-+            edgesSet = std::make_unique<SmaaDescriptorSet>(linearSampler, pointSampler, device);
-+            weightsSet = std::make_unique<SmaaDescriptorSet>(linearSampler, pointSampler, device);
-+            blendSet = std::make_unique<SmaaDescriptorSet>(linearSampler, pointSampler, device);
-+        }
-+
-+        // Every slot gets a texture, the ones a pass doesn't read included.
-+        edgesSet->setTexture(edgesSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
-+        edgesSet->setTexture(edgesSet->gTexture1, areaTexture.get(), RenderTextureLayout::SHADER_READ);
-+        edgesSet->setTexture(edgesSet->gTexture2, searchTexture.get(), RenderTextureLayout::SHADER_READ);
-+        weightsSet->setTexture(weightsSet->gTexture0, edgesTexture.get(), RenderTextureLayout::SHADER_READ);
-+        weightsSet->setTexture(weightsSet->gTexture1, areaTexture.get(), RenderTextureLayout::SHADER_READ);
-+        weightsSet->setTexture(weightsSet->gTexture2, searchTexture.get(), RenderTextureLayout::SHADER_READ);
-+        blendSet->setTexture(blendSet->gTexture0, input, RenderTextureLayout::SHADER_READ);
-+        blendSet->setTexture(blendSet->gTexture1, weightsTexture.get(), RenderTextureLayout::SHADER_READ);
-+        blendSet->setTexture(blendSet->gTexture2, searchTexture.get(), RenderTextureLayout::SHADER_READ);
-+
-+        interop::SmaaCB constants;
-+        constants.rtMetrics = { 1.0f / float(width), 1.0f / float(height), float(width), float(height) };
-+
-+        auto drawPass = [&](const ShaderRecord &record, const RenderFramebuffer *framebuffer, const SmaaDescriptorSet *set) {
-+            commandList->setFramebuffer(framebuffer);
-+            commandList->clearColor(0, RenderColor(0.0f, 0.0f, 0.0f, 0.0f));
-+            commandList->setPipeline(record.pipeline.get());
-+            commandList->setGraphicsPipelineLayout(record.pipelineLayout.get());
-+            commandList->setGraphicsDescriptorSet(set->get(), 0);
-+            commandList->setGraphicsPushConstants(0, &constants);
-+            commandList->setVertexBuffers(0, nullptr, 0, nullptr);
-+            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(width), float(height)));
-+            commandList->setScissors(RenderRect(0, 0, width, height));
-+            commandList->drawInstanced(3, 1, 0, 0);
-+        };
-+
-+        const uint32_t preset = quality - 1;
-+        RenderTextureBarrier edgesBarriers[] = {
-+            RenderTextureBarrier(input, RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(edgesTexture.get(), RenderTextureLayout::COLOR_WRITE)
-+        };
-+
-+        commandList->barriers(RenderBarrierStage::GRAPHICS, edgesBarriers, uint32_t(std::size(edgesBarriers)));
-+        drawPass(shaderLibrary->smaaEdges[preset], edgesFramebuffer.get(), edgesSet.get());
-+
-+        RenderTextureBarrier weightsBarriers[] = {
-+            RenderTextureBarrier(edgesTexture.get(), RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(weightsTexture.get(), RenderTextureLayout::COLOR_WRITE)
-+        };
-+
-+        commandList->barriers(RenderBarrierStage::GRAPHICS, weightsBarriers, uint32_t(std::size(weightsBarriers)));
-+        drawPass(shaderLibrary->smaaWeights[preset], weightsFramebuffer.get(), weightsSet.get());
-+
-+        RenderTextureBarrier blendBarriers[] = {
-+            RenderTextureBarrier(weightsTexture.get(), RenderTextureLayout::SHADER_READ),
-+            RenderTextureBarrier(outputTexture.get(), RenderTextureLayout::COLOR_WRITE)
-+        };
-+
-+        commandList->barriers(RenderBarrierStage::GRAPHICS, blendBarriers, uint32_t(std::size(blendBarriers)));
-+        drawPass(shaderLibrary->smaaBlend, outputFramebuffer.get(), blendSet.get());
-+        return outputTexture.get();
-+    }
-+};
-diff --git a/src/render/rt64_smaa.h b/src/render/rt64_smaa.h
-new file mode 100644
-index 0000000..4cf5377
---- /dev/null
-+++ b/src/render/rt64_smaa.h
-@@ -0,0 +1,38 @@
-+//
-+// RT64
-+//
-+
-+#pragma once
-+
-+#include "rt64_descriptor_sets.h"
-+#include "rt64_shader_library.h"
-+
-+namespace RT64 {
-+    // Banjo-Tooie: SMAA 1x (iryoku/smaa) on the finished game image, before the VI draws it, so it works
-+    // the same with or without MSAA. Quality: 0 off, 1 low, 2 medium, 3 high, 4 ultra.
-+    void SetSmaaQuality(uint32_t quality);
-+    uint32_t GetSmaaQuality();
-+
-+    struct SmaaRenderer {
-+        std::unique_ptr<RenderTexture> areaTexture;
-+        std::unique_ptr<RenderTexture> searchTexture;
-+        std::unique_ptr<RenderBuffer> areaUpload;
-+        std::unique_ptr<RenderBuffer> searchUpload;
-+        std::unique_ptr<RenderTexture> edgesTexture;
-+        std::unique_ptr<RenderTexture> weightsTexture;
-+        std::unique_ptr<RenderTexture> outputTexture;
-+        std::unique_ptr<RenderFramebuffer> edgesFramebuffer;
-+        std::unique_ptr<RenderFramebuffer> weightsFramebuffer;
-+        std::unique_ptr<RenderFramebuffer> outputFramebuffer;
-+        std::unique_ptr<SmaaDescriptorSet> edgesSet;
-+        std::unique_ptr<SmaaDescriptorSet> weightsSet;
-+        std::unique_ptr<SmaaDescriptorSet> blendSet;
-+        uint32_t width = 0;
-+        uint32_t height = 0;
-+
-+        // Records the three passes and returns the smoothed image, or the input itself when SMAA is off
-+        // or the image is in a format the passes weren't made for.
-+        RenderTexture *apply(RenderDevice *device, RenderCommandList *commandList, const ShaderLibrary *shaderLibrary,
-+            RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height);
-+    };
-+};
 diff --git a/src/render/rt64_texture.h b/src/render/rt64_texture.h
 index 95618bc..f298779 100644
 --- a/src/render/rt64_texture.h
@@ -15970,31 +15611,6 @@ index 0000000..3862635
 +    }
 +    v.furAnchor.w = wall ? -1.0f : depthAt;
 +    return v;
-+}
-diff --git a/src/shaders/MirrorPS.hlsl b/src/shaders/MirrorPS.hlsl
-new file mode 100644
-index 0000000..8214694
---- /dev/null
-+++ b/src/shaders/MirrorPS.hlsl
-@@ -0,0 +1,19 @@
-+//
-+// RT64
-+//
-+
-+// Banjo-Tooie: Mirror Mode. Copies the finished game image flipped left to right.
-+
-+#include "shared/rt64_smaa.h"
-+
-+[[vk::push_constant]] ConstantBuffer<SmaaCB> gConstants : register(b0);
-+
-+Texture2D<float4> gTexture0 : register(t1);
-+Texture2D<float4> gTexture1 : register(t2);
-+Texture2D<float4> gTexture2 : register(t3);
-+SamplerState LinearSampler : register(s4);
-+SamplerState PointSampler : register(s5);
-+
-+float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
-+    return gTexture0.SampleLevel(PointSampler, float2(1.0f - uv.x, uv.y), 0);
 +}
 diff --git a/src/shaders/Parallax.hlsli b/src/shaders/Parallax.hlsli
 new file mode 100644
@@ -21790,63 +21406,6 @@ index 0000000..72220a2
 +    return float4(rim * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
 +}
 +#endif
-diff --git a/src/shaders/SmaaPS.hlsl b/src/shaders/SmaaPS.hlsl
-new file mode 100644
-index 0000000..d6b151f
---- /dev/null
-+++ b/src/shaders/SmaaPS.hlsl
-@@ -0,0 +1,51 @@
-+//
-+// RT64
-+//
-+
-+// Banjo-Tooie: SMAA 1x on the finished game image, before the VI draws it. SMAA.hlsl, AreaTex.h and
-+// SearchTex.h are iryoku/smaa (MIT), kept in the game's repository under lib/smaa. One of SMAA_PASS_EDGES,
-+// SMAA_PASS_WEIGHTS or SMAA_PASS_BLEND picks the pass, and SMAA_PRESET_* the quality.
-+
-+#include "shared/rt64_smaa.h"
-+
-+[[vk::push_constant]] ConstantBuffer<SmaaCB> gConstants : register(b0);
-+
-+// Edges: colour. Weights: edges, area, search. Blend: colour, weights.
-+Texture2D<float4> gTexture0 : register(t1);
-+Texture2D<float4> gTexture1 : register(t2);
-+Texture2D<float4> gTexture2 : register(t3);
-+SamplerState LinearSampler : register(s4);
-+SamplerState PointSampler : register(s5);
-+
-+#define SMAA_RT_METRICS gConstants.rtMetrics
-+#define SMAA_CUSTOM_SL
-+#define SMAATexture2D(tex) Texture2D tex
-+#define SMAATexturePass2D(tex) tex
-+#define SMAASampleLevelZero(tex, coord) tex.SampleLevel(LinearSampler, coord, 0)
-+#define SMAASampleLevelZeroPoint(tex, coord) tex.SampleLevel(PointSampler, coord, 0)
-+#define SMAASampleLevelZeroOffset(tex, coord, offset) tex.SampleLevel(LinearSampler, coord, 0, offset)
-+#define SMAASample(tex, coord) tex.Sample(LinearSampler, coord)
-+#define SMAASamplePoint(tex, coord) tex.Sample(PointSampler, coord)
-+#define SMAASampleOffset(tex, coord, offset) tex.Sample(LinearSampler, coord, offset)
-+#define SMAA_FLATTEN [flatten]
-+#define SMAA_BRANCH [branch]
-+
-+#include "SMAA.hlsl"
-+
-+float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
-+    // SMAA's vertex shader parts only offset the coordinates, so they run here.
-+#if defined(SMAA_PASS_EDGES)
-+    float4 offset[3];
-+    SMAAEdgeDetectionVS(uv, offset);
-+    return float4(SMAALumaEdgeDetectionPS(uv, offset, gTexture0), 0.0f, 0.0f);
-+#elif defined(SMAA_PASS_WEIGHTS)
-+    float2 pixcoord;
-+    float4 offset[3];
-+    SMAABlendingWeightCalculationVS(uv, pixcoord, offset);
-+    return SMAABlendingWeightCalculationPS(uv, pixcoord, offset, gTexture0, gTexture1, gTexture2, float4(0.0f, 0.0f, 0.0f, 0.0f));
-+#else
-+    float4 offset;
-+    SMAANeighborhoodBlendingVS(uv, offset);
-+    return SMAANeighborhoodBlendingPS(uv, offset, gTexture0, gTexture1);
-+#endif
-+}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
 index 0000000..15a6637
@@ -23862,30 +23421,6 @@ index 0000000..757dc97
 +        float4 params;
 +        float4 waterSim;
 +        float4 waterPush;
-+    };
-+#ifdef HLSL_CPU
-+};
-+#endif
-diff --git a/src/shared/rt64_smaa.h b/src/shared/rt64_smaa.h
-new file mode 100644
-index 0000000..1b86320
---- /dev/null
-+++ b/src/shared/rt64_smaa.h
-@@ -0,0 +1,18 @@
-+//
-+// RT64
-+//
-+
-+#pragma once
-+
-+#include "shared/rt64_hlsl.h"
-+
-+#ifdef HLSL_CPU
-+namespace interop {
-+#endif
-+    struct SmaaCB {
-+        // 1 / width, 1 / height, width, height of the game image.
-+        float4 rtMetrics;
 +    };
 +#ifdef HLSL_CPU
 +};

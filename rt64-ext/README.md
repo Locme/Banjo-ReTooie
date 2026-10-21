@@ -23,13 +23,13 @@ resets `lib/rt64` doesn't touch it.
 | Files | Feature |
 |---|---|
 | `src/render/rt64_fxaa.cpp`, `.h`, `src/shaders/FxaaPS.hlsl` | FXAA (`RT64::SetFxaaMode`) |
+| `src/render/rt64_smaa.cpp`, `.h`, `src/shared/rt64_smaa.h`, `src/shaders/SmaaPS.hlsl` | SMAA (`RT64::SetSmaaQuality`) |
+| `src/render/rt64_mirror.cpp`, `.h`, `src/shaders/MirrorPS.hlsl` | Mirror Mode |
 
 **Can move here next (new files, verbatim; owner noted)**
 
 | Files | Feature | Owner / condition |
 |---|---|---|
-| `src/render/rt64_smaa.cpp`, `.h`, `src/shared/rt64_smaa.h`, `src/shaders/SmaaPS.hlsl` | SMAA | none |
-| `src/render/rt64_mirror.cpp`, `.h`, `src/shaders/MirrorPS.hlsl` | Mirror Mode | none |
 | `src/render/rt64_fsr.cpp`, `.h`, `src/shared/rt64_fsr.h`, `src/shaders/FsrPS.hlsl` | FSR 1 | none |
 | `src/render/rt64_photo_grade.cpp`, `.h`, `src/shared/rt64_photo_grade.h`, `src/shaders/PhotoGradePS.hlsl` | Photo mode filters, sharpening | none |
 | `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling | none |
@@ -41,7 +41,14 @@ resets `lib/rt64` doesn't touch it.
 | `src/tools/file_to_c/file_to_c.cmake` | Android build | none; RT64's CMakeLists names it, so its hunk stays |
 
 `.hlsli` files that RT64's own `RasterPS.hlsl` / `RasterVS.hlsl` include need `rt64-ext/src/shaders` on
-the shader include path first (an added `-I`; the output stays the same).
+the shader include path first (an added `-I`; the output stays the same). Shaders built with
+`rt64_ext_shader` already get `-Irt64-ext/src` after RT64's own `-I`; with SMAA's that changed no binary.
+
+**Checking a move:** hash every `build-cmake/src/shaders/*.spv` and `*.spirv.c` before and after
+(all must match), and `llvm-dis` the old and new object of each moved `.cpp` (the build is LTO, so they
+are LLVM bitcode): apart from the first two lines (file path) and the `^` summary lines, they must be
+the same. After a move, delete the old untracked copies in `lib/rt64` before any `git -C lib/rt64 add -N .`,
+or they go back into the patch.
 
 **Needs an RT64 hook before it can leave the patch** (changed RT64 files that call our passes)
 
