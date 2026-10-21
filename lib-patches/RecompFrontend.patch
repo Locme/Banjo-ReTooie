@@ -44,7 +44,7 @@ index f39ad89..3d7e354 100644
      }
  }
 diff --git a/recompinput/include/recompinput/input_state.h b/recompinput/include/recompinput/input_state.h
-index 1961e29..3547656 100644
+index 1961e29..e4b14fa 100644
 --- a/recompinput/include/recompinput/input_state.h
 +++ b/recompinput/include/recompinput/input_state.h
 @@ -35,11 +35,18 @@ namespace recompinput {
@@ -66,7 +66,7 @@ index 1961e29..3547656 100644
      bool game_input_disabled();
      bool all_input_disabled();
      ControllerState &get_controller_state(SDL_JoystickID joystick_id);
-@@ -49,4 +56,22 @@ namespace recompinput {
+@@ -49,4 +56,24 @@ namespace recompinput {
      void add_rotation_deltas(SDL_JoystickID joystick_id, float rot_x, float rot_y);
      void add_mouse_deltas(float delta_x, float delta_y);
      void add_mouse_wheel_delta(int32_t delta);
@@ -88,6 +88,8 @@ index 1961e29..3547656 100644
 +    bool get_game_mouse_position(int* x, int* y, int* w, int* h);
 +    uint32_t get_game_mouse_moves();
 +    uint32_t get_game_mouse_clicks(int button);
++    // The wheel's total notches (up is positive), counted only while no menu of this program has the input.
++    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
 index f5ed6c0..3b3dd29 100644
@@ -363,7 +365,7 @@ index 45d55a7..b7c867d 100644
              profiles::get_input_profile_for_player(BindingState.player_index, BindingState.device),
              BindingState.game_input,
 diff --git a/recompinput/src/input_events.cpp b/recompinput/src/input_events.cpp
-index c76a1dc..6b04513 100644
+index c76a1dc..a2c79fc 100644
 --- a/recompinput/src/input_events.cpp
 +++ b/recompinput/src/input_events.cpp
 @@ -1,10 +1,14 @@
@@ -381,7 +383,7 @@ index c76a1dc..6b04513 100644
  static struct {
      std::list<std::filesystem::path> files_dropped;
  } DropState;
-@@ -38,6 +42,50 @@ void purge_deferred_controller_profiles() {
+@@ -38,6 +42,55 @@ void purge_deferred_controller_profiles() {
      deferred_controller_profiles.clear();
  }
  
@@ -391,6 +393,7 @@ index c76a1dc..6b04513 100644
 +static int game_mouse_pos[4] = { -1, -1, 0, 0 };   // x, y, window width, height
 +static std::atomic_uint32_t game_mouse_moves = 0;
 +static std::atomic_uint32_t game_mouse_clicks[8] = {};
++static std::atomic_int32_t game_mouse_wheel = 0;
 +// The motion SDL sends for the warp to the window's middle (update_cursor_lock) is not the player's.
 +static std::chrono::steady_clock::time_point warp_time{};
 +static int warp_x = -1;
@@ -425,6 +428,10 @@ index c76a1dc..6b04513 100644
 +    return game_mouse_moves.load();
 +}
 +
++int32_t get_game_mouse_wheel() {
++    return game_mouse_wheel.load();
++}
++
 +uint32_t get_game_mouse_clicks(int button) {
 +    return (button >= 0 && button < 8) ? game_mouse_clicks[button].load() : 0;
 +}
@@ -432,7 +439,7 @@ index c76a1dc..6b04513 100644
  bool sdl_event_filter(void* userdata, SDL_Event* event) {
      switch (event->type) {
      case SDL_EventType::SDL_KEYDOWN:
-@@ -79,6 +127,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -79,6 +132,7 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              printf("  Instance ID: %d\n", SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)));
              printf("  Path: %s\n", SDL_JoystickPath(SDL_GameControllerGetJoystick(controller)));
              recompinput::add_controller_state(SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller)), controller);
@@ -440,7 +447,17 @@ index c76a1dc..6b04513 100644
  
              if (SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_GYRO) && SDL_GameControllerHasSensor(controller, SDL_SensorType::SDL_SENSOR_ACCEL)) {
                  SDL_GameControllerSetSensorEnabled(controller, SDL_SensorType::SDL_SENSOR_GYRO, SDL_TRUE);
-@@ -151,6 +200,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -118,6 +172,9 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+     {
+         SDL_MouseWheelEvent* wheel_event = &event->wheel;
+         recompinput::add_mouse_wheel_delta(wheel_event->y * (wheel_event->direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1));
++        if (!recompinput::game_input_disabled()) {
++            game_mouse_wheel.fetch_add(wheel_event->y * (wheel_event->direction == SDL_MOUSEWHEEL_FLIPPED ? -1 : 1));
++        }
+     }
+     queue_if_enabled(event);
+     break;
+@@ -151,6 +208,22 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              queue_if_enabled(event);
          }
          break;
@@ -463,7 +480,7 @@ index c76a1dc..6b04513 100644
      case SDL_EventType::SDL_CONTROLLERAXISMOTION:
          if (binding::is_controller_being_bound(event->caxis.which)) {
              GameInput scanning_game_input = binding::get_scanning_game_input();
-@@ -208,20 +273,41 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -208,20 +281,41 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
              ControllerState& state = recompinput::get_controller_state(event->csensor.which);
              uint64_t cur_timestamp = event->csensor.timestamp;
              uint32_t delta_ms = cur_timestamp - state.prev_gyro_timestamp;
@@ -508,7 +525,7 @@ index c76a1dc..6b04513 100644
          queue_if_enabled(event);
          break;
      case SDL_EventType::SDL_DROPBEGIN:
-@@ -246,26 +332,73 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+@@ -246,26 +340,73 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
      return false;
  }
  

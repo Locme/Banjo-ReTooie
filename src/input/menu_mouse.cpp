@@ -120,6 +120,7 @@ namespace {
     // What the pad reads get this frame (set by tick, read by apply_input on the pad thread).
     std::atomic<int> stick_step = 0;            // -1 down, 1 up
     std::atomic<int> stick_x = 0;               // -1 left, 1 right
+    std::atomic<bool> pad_up = false;           // the stick or Up was pushed up since the last tick (an edge)
     std::atomic<bool> pad_used = false;         // a controller or key was used since the last tick
     int select_target = -1;                     // the spot being steered to
     bool select_press_a = false;                // press A there
@@ -536,6 +537,45 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
         return;
     }
 
+    // The Start menu's rows, for the wrap and the wheel (L, 2026-10-21): Up at the top goes to the bottom row, and the
+    // wheel moves the highlight a row a notch. The highlight is written straight into the menu with its first row kept
+    // in view, as for a hover.
+    static int32_t wheel_seen = recompinput::get_game_mouse_wheel();
+    const int32_t wheel_now = recompinput::get_game_mouse_wheel();
+    const int wheel_notches = (int)(wheel_now - wheel_seen);
+    wheel_seen = wheel_now;
+    const bool wrap = pad_up.exchange(false);
+    if (pause_open && read_byte(rdram, pause + pause_page) == page_main && read_byte(rdram, pause + pause_confirm) == 0) {
+        const uint32_t options = pause + pause_options;
+        const int count = tooie::rdram::read_half(rdram, options + option_count);
+        const int visible = tooie::rdram::read_half(rdram, options + option_visible);
+        const int picked = tooie::rdram::read_half(rdram, options + option_picked);
+        // Only when the row was already the first one a frame ago: a push that moved 1 to 0 must stop there.
+        static int last_picked = -1;
+        const bool was_first = last_picked == 0;
+        last_picked = picked;
+        int target = picked;
+        if (wrap && picked == 0 && was_first && count > 1) {
+            target = count - 1;
+        } else if (wheel_notches != 0 && count > 0) {
+            target = std::clamp(picked - wheel_notches, 0, count - 1);
+        }
+        if (target != picked) {
+            int top = tooie::rdram::read_half(rdram, options + option_top);
+            if (target < top) {
+                top = target;
+            } else if (target >= top + visible) {
+                top = target - visible + 1;
+            }
+            tooie::rdram::write_half(rdram, options + option_top, (uint16_t)std::max(top, 0));
+            tooie::rdram::write_half(rdram, options + option_picked, (uint16_t)target);
+            last_picked = target;
+            if (logging()) {
+                fprintf(stderr, "[menu-mouse] row %d -> %d (%s)\n", picked, target, wrap ? "wrap" : "wheel");
+            }
+        }
+    }
+
     const MouseUse use = take_mouse_use(false);
     // The mouse is in use from its first move or click until the pad is used; until then the menus are vanilla
     // (no cursor, the mouse does nothing).
@@ -612,6 +652,12 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
 void tooie::menu_mouse::apply_input(uint16_t* buttons, float* x, float* y) {
     // What the player's own controller or keys do (before the mouse's presses are added): a press or a pushed
     // stick hands the menus back to the pad, as in the vanilla game.
+    static bool was_up = false;
+    const bool up_now = *y > 0.4f;
+    if (up_now && !was_up) {
+        pad_up.store(true);
+    }
+    was_up = up_now;
     if (*buttons != 0 || std::fabs(*x) > 0.4f || std::fabs(*y) > 0.4f) {
         pad_used.store(true);
     }
