@@ -2451,7 +2451,10 @@ namespace RT64 {
             memset(res.rayDummyBuffer->map(), 0, 256);
             res.rayDummyBuffer->unmap();
         }
-        const bool haveTextureBuffers = (textures.indices != nullptr) && (textures.texcoords != nullptr) && (textures.rdpTiles != nullptr) && (textures.gpuTiles != nullptr);
+        const bool building = (worldPos != nullptr) && (indices != nullptr) && (worldPosVertexCount != 0) && (drawCount != 0);
+        // Only a pass that builds binds its texture buffers: a pass with nothing drawn (warping from Photo mode) can hand
+        // over buffers not yet made for this frame, and binding one crashed the driver in setBuffer (L, 2026-10-21).
+        const bool haveTextureBuffers = building && (textures.indices != nullptr) && (textures.texcoords != nullptr) && (textures.rdpTiles != nullptr) && (textures.gpuTiles != nullptr);
         const RenderBuffer *wanted[4] = {
             haveTextureBuffers ? textures.indices : res.rayDummyBuffer.get(),
             haveTextureBuffers ? textures.texcoords : res.rayDummyBuffer.get(),
@@ -2470,7 +2473,6 @@ namespace RT64 {
             res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayGPUTiles, wanted[3], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::GPUTile)) : RenderBufferStructuredView(16));
             std::copy(wanted, wanted + 4, res.rayTexturesSetBuffers);
         }
-        const bool building = (worldPos != nullptr) && (indices != nullptr) && (worldPosVertexCount != 0) && (drawCount != 0);
         const bool withGrass = building && (grass.vertices != nullptr) && (grass.vertexCount >= 3);
         // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
         // dropping to the depth march and its shadow map, which made the shadows come and go.

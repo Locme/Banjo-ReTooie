@@ -1147,10 +1147,11 @@ float MaterialShine(float3 center, float otherwise) {
 }
 
 // Whether a pixel is seen through a clear part of a cut-out (a grate's holes): the eye's ray to it meets a cut-out first
-// whose texel there is see-through, up to and including the pixel's own surface (a grate drawn with its alpha as the
-// coverage writes its depth over the holes too). The shiny mask and the material are the grate's over its whole draw,
-// holes included, so the shine of a metal grate covered what lies behind it (L, 2026-10-21). Only with the textures read
-// (otherwise a hole can't be told).
+// whose texel there is see-through, in front of the pixel's own surface (its holes leave no depth, so what shows there
+// lies behind). The shiny mask and the material are the grate's over its whole draw, holes included, so the shine of
+// a metal grate covered what lies behind it (L, 2026-10-21). The pixel's own surface isn't tested: a texture with faint
+// spots of its own (a metal statue) came out in shiny and dull squares. Only with the textures read (otherwise a hole
+// can't be told).
 bool SeenThroughCutout(float3 center) {
     const float distance = length(center);
     if (!RayTexturesOn() || (distance < 20.0f)) {
@@ -1160,7 +1161,7 @@ bool SeenThroughCutout(float3 center) {
     ray.Origin = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
     ray.Direction = ViewToWorldDirection(center / distance);
     ray.TMin = 0.0f;
-    ray.TMax = distance + 4.0f;
+    ray.TMax = distance - 8.0f;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
     bool clear = false;
