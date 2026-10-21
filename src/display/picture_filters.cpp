@@ -4708,9 +4708,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // Deep snow on the maps with snow only.
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
-        // (Elsewhere tessellated sand, through the same: about a third of the snow's ankle depth, on sand only.)
+        // (Elsewhere tessellated sand, through the same: most of the snow's ankle depth (a third was too shallow to
+        // see a footprint), on sand only.)
         const bool sand = tessellated_sand && !(deep_snow && snowy_map(map));
-        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : (sand ? 0.35f : 0.0f);
+        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : (sand ? 0.8f : 0.0f);
         // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
         const bool strict = (map == 0x128);
         static bool strict_sent = true;

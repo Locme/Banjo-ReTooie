@@ -2171,7 +2171,7 @@ index 69a82ac..3d5b165 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..12b4cf9 100644
+index 9fae0d4..1a9b48a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -2867,7 +2867,7 @@ index 9fae0d4..12b4cf9 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -574,12 +1161,147 @@ namespace RT64 {
+@@ -574,12 +1161,149 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2942,8 +2942,10 @@ index 9fae0d4..12b4cf9 100644
 +                    previousPipeline = snowTessPipeline;
 +                    // First the ground where it is (with holes where the trail goes down below it), then the raised snow:
 +                    // the ground shows through any crack the raised surface leaves where it meets other draws.
++                    // (Not the ground for sand: a print never goes below it, and drawn at the same height as the sand's edge
++                    // the two fought there, a striped outline.)
 +                    rasterParams.grassShell = 1;
-+                    for (uint32_t snowPass = 0; snowPass < 2; snowPass++) {
++                    for (uint32_t snowPass = (frameParams.snowLod.w > 0.5f) ? 1 : 0; snowPass < 2; snowPass++) {
 +                        rasterParams.grassShells = 1 | RASTER_SNOW_SHELLS | RASTER_SNOW_TESS | ((snowPass == 0) ? RASTER_SNOW_GROUND : 0);
 +                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                        drawCallTriangles(drawCall);
@@ -3016,7 +3018,7 @@ index 9fae0d4..12b4cf9 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1319,7 @@ namespace RT64 {
+@@ -597,6 +1321,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3024,7 +3026,7 @@ index 9fae0d4..12b4cf9 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1339,7 @@ namespace RT64 {
+@@ -616,6 +1341,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3032,7 +3034,7 @@ index 9fae0d4..12b4cf9 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +1970,76 @@ namespace RT64 {
+@@ -1246,10 +1972,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3109,7 +3111,7 @@ index 9fae0d4..12b4cf9 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2086,119 @@ namespace RT64 {
+@@ -1296,9 +2088,119 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3230,7 +3232,7 @@ index 9fae0d4..12b4cf9 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2250,38 @@ namespace RT64 {
+@@ -1350,10 +2252,38 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3269,7 +3271,7 @@ index 9fae0d4..12b4cf9 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2314,8 @@ namespace RT64 {
+@@ -1386,6 +2316,8 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3278,7 +3280,7 @@ index 9fae0d4..12b4cf9 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2338,63 @@ namespace RT64 {
+@@ -1408,6 +2340,63 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3342,7 +3344,7 @@ index 9fae0d4..12b4cf9 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2418,22 @@ namespace RT64 {
+@@ -1431,6 +2420,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3365,7 +3367,7 @@ index 9fae0d4..12b4cf9 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2453,175 @@ namespace RT64 {
+@@ -1450,12 +2455,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3541,7 +3543,7 @@ index 9fae0d4..12b4cf9 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2772,7 @@ namespace RT64 {
+@@ -1606,6 +2774,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3549,7 +3551,7 @@ index 9fae0d4..12b4cf9 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2849,20 @@ namespace RT64 {
+@@ -1682,6 +2851,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3570,7 +3572,7 @@ index 9fae0d4..12b4cf9 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,10 +2928,682 @@ namespace RT64 {
+@@ -1747,10 +2930,682 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4256,7 +4258,7 @@ index 9fae0d4..12b4cf9 100644
              }
          }
  
-@@ -1758,14 +3611,831 @@ namespace RT64 {
+@@ -1758,14 +3613,831 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -19456,10 +19458,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..d6e07c2
+index 0000000..2e74167
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,458 @@
 +//
 +// RT64
 +//
@@ -19501,23 +19503,36 @@ index 0000000..d6e07c2
 +    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
 +}
 +
-+// The slope (d height / dx, dz) of the ripples the wind leaves in sand at a world position: low ridges about 9 units
-+// apart across the wind, bent and broken up by noise, stronger in some patches than others, fading out by distance
-+// before they are finer than the pixels.
++// One set of wind ripples' slope: ridges across wind, spacing wavelength (varying from place to place), bent along
++// their length by warp.
++float2 SandRippleSet(float2 xz, float2 wind, float wavelength, float warp) {
++    const float theta = (dot(xz, wind) + warp) / wavelength * 6.2831853f;
++    // (A ridge gentle up the windward side, steeper down the lee: sin + a quarter of its second harmonic.)
++    const float rise = cos(theta) + 0.5f * cos(2.0f * theta);
++    return wind * (rise * 6.2831853f / wavelength);
++}
++
++// The slope (d height / dx, dz) of the ripples the wind leaves in sand at a world position: two sets of low ridges
++// from winds a little apart, their spacing (7 to 13 units) and strength changing from place to place, bent and with
++// their crests broken off here and there, so no stretch repeats; fading out by distance before they are finer than the
++// pixels.
 +float2 SandRippleSlope(float2 xz, float cameraDistance) {
 +    const float fade = saturate(1.0f - cameraDistance / 900.0f);
 +    if (fade <= 0.0f) {
 +        return 0.0f;
 +    }
-+    const float2 wind = float2(0.8f, 0.6f);
-+    const float wavelength = 9.0f;
-+    const float along = dot(xz, wind) + 7.0f * SnowNoise(xz / 45.0f) + 2.0f * SnowNoise(xz / 14.0f + 31.0f);
-+    const float theta = along / wavelength * 6.2831853f;
-+    // (A ridge: gentle up the windward side, steeper down the lee, sin + a quarter of its second harmonic.)
-+    const float rise = cos(theta) + 0.5f * cos(2.0f * theta);
-+    const float patch = lerp(0.35f, 1.0f, smoothstep(0.3f, 0.7f, SnowNoise(xz / 70.0f + 11.0f)));
++    const float warp = 14.0f * SnowNoise(xz / 60.0f) + 5.0f * SnowNoise(xz / 19.0f + 5.0f) + 1.5f * SnowNoise(xz / 6.0f + 9.0f);
++    const float wavelengthA = lerp(7.0f, 13.0f, SnowNoise(xz / 90.0f + 3.0f));
++    const float wavelengthB = lerp(6.0f, 11.0f, SnowNoise(xz / 75.0f + 17.0f));
++    // Which wind shaped which stretch, and stretches the wind left nearly smooth.
++    const float mix = smoothstep(0.3f, 0.7f, SnowNoise(xz / 55.0f + 23.0f));
++    const float strength = smoothstep(0.2f, 0.75f, SnowNoise(xz / 40.0f + 11.0f));
++    // Crests broken off along their length.
++    const float broken = lerp(0.25f, 1.0f, smoothstep(0.25f, 0.75f, SnowNoise(xz / 8.0f + 41.0f)));
++    const float2 slope = SandRippleSet(xz, float2(0.8f, 0.6f), wavelengthA, warp) * (1.0f - mix) +
++        SandRippleSet(xz, float2(0.34f, 0.94f), wavelengthB, warp * 0.7f + 3.0f) * mix;
 +    const float amplitude = 0.35f;
-+    return wind * (amplitude * rise * 6.2831853f / wavelength * patch * fade);
++    return slope * (amplitude * lerp(0.15f, 1.0f, strength) * broken * fade);
 +}
 +
 +bool SnowColor(float3 baseColor) {
@@ -19875,7 +19890,7 @@ index 0000000..d6e07c2
 +        // Sand: rippled by the wind where no foot has flattened it, a footprint a little darker (packed down), and its
 +        // shaded slopes warm, not blue. No glints.
 +        lit = clamp(lit + SnowTrailLight(SandRippleSlope(world.xz, s.cameraDistance) * (1.0f - under)), -1.0f, 1.0f);
-+        float3 sand = color * lerp(1.03f, 0.86f, under) * (1.0f + 0.22f * max(lit, 0.0f));
++        float3 sand = color * lerp(1.03f, 0.76f, under) * (1.0f + 0.25f * max(lit, 0.0f));
 +        sand = lerp(sand, sand * float3(0.8f, 0.75f, 0.68f), saturate(-lit) * 0.85f);
 +        color = sand;
 +        return true;

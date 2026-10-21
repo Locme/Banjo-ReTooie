@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T493 Tessellated sand: deeper footprints, no edge outline, varied ripples
+- Asked: 2026-10-21 08:18 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Walk around Mayahem Temple or Jolly Roger's sand
+  3. Walk to the edge of a sand patch
+- Look for: Banjo leaves visible footprints in the sand; no striped outline along the sand's edge; ripples change direction and spacing instead of repeating
+- Status: waiting for L
+
 ## T492 Noclip 5x faster while running
 - Asked: 2026-10-21 08:00 UTC
 - Build: main @ a5114b0
