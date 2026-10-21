@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T489 Talon Trot on LT + RT (controller)
+- Asked: 2026-10-21 07:30 UTC
+- Build: main (not built or run here: the submodules were not available, so this was written but not compiled)
+- Steps:
+  1. Controls tab > Movement: find "Talon Trot" (new). On a controller it should show LT + RT by default
+  2. QOL > Talon Trot = Toggle. Hold LT and RT together: Banjo should start the trot. Let go of both triggers: the trot keeps going
+  3. Press LT + RT again: the trot ends. Pressing just one trigger should also end it (after a blink)
+  4. Set QOL > Talon Trot = Hold. Hold LT + RT: the trot starts. Let go of one trigger and keep the other: the trot continues. Let go of both: it ends
+  5. Unbind or rebind the control in the Controls tab and check it follows
+- Look for: The trot starting every time LT + RT go down, no trot starting from a single trigger on its own (that is still the crouch), and Toggle not ending by itself. If you meant that Hold mode should start the trot from either trigger alone with no chord, say so.
+- Status: waiting for L
+
 ## T488 Enemy damage timing log (enemies taking damage late)
 - Asked: 2026-10-21 06:57 UTC
 - Build: main

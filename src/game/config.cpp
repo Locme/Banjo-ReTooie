@@ -240,6 +240,7 @@ void tooie::init_config() {
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
+    tooie::talon_trot::register_input();
     tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();
