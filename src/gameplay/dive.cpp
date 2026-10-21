@@ -1,0 +1,222 @@
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <variant>
+
+#include "recomp.h"
+#include "recompui/config.h"
+
+#include "tooie_dive.h"
+#include "tooie_game.h"
+#include "tooie_hold_to_run.h"
+#include "tooie_rdram.h"
+
+namespace {
+    using namespace std::chrono_literals;
+    using Clock = std::chrono::steady_clock;
+    using tooie::rdram::read_float;
+    using tooie::rdram::read_word;
+    using tooie::rdram::valid_ptr;
+    using tooie::rdram::write_float;
+
+    // Player 0's PlayerState and the blocks the other features read (player_cheats.cpp, torch_enemy.cpp).
+    constexpr uint32_t player_table = 0x80135490;
+    constexpr uint32_t physics_offset = 0xC8;  // PlayerState -> physics block
+    constexpr uint32_t vel_x_offset = 0x10;    // physics block -> velocity (f32 x, y, z)
+    constexpr uint32_t vel_y_offset = 0x14;
+    constexpr uint32_t vel_z_offset = 0x18;
+    constexpr uint32_t state_offset = 0x120;   // PlayerState -> state block
+    constexpr uint32_t state_current = 0x4;    // state block -> current state id
+    constexpr uint32_t yaw_ptr_offset = 0xF8;  // PlayerState -> pointer to Banjo's yaw (degrees, 0 faces +z)
+    constexpr uint32_t form_addr = 0x8012704C; // 1 Banjo-Kazooie (hold_to_run.cpp)
+    constexpr uint8_t form_banjo_kazooie = 1;
+
+    constexpr uint16_t button_b = 0x4000;
+
+    // Player states measured by the other features (player_cheats.cpp, hold_to_run.cpp): jump 5, the
+    // Feathery Flap 16, the Flap Flip 0x12, falling 47 and Bill Drill 0xB6, Banjo-Kazooie's ground pound.
+    // The Feathery Flap is the double jump, so a dive works after it, and in the ground pound.
+    bool in_air_state(uint32_t s) {
+        return s == 5 || s == 16 || s == 0x12 || s == 47 || s == 0xB6;
+    }
+    // Standing, walking, running and landing: where the dive's slide plays out.
+    bool slide_state(uint32_t s) {
+        return s == 1 || s == 2 || s == 3 || s == 4 || s == 7 || s == 0x20;
+    }
+
+    // Tuning (units per second, like the game's run speed of 500; see notes/settings-guide.md).
+    // The lunge starts at burst_speed, settles to glide_speed over burst_time, and the pop is the small lift
+    // that keeps the dive from reading as a plain fall. Banjo-Kazooie's jump takes off at about 665.
+    constexpr float burst_speed = 850.0f;  // 1.7x the run
+    constexpr float glide_speed = 700.0f;  // 1.4x the run, held to the ground
+    constexpr float burst_time = 0.25f;
+    constexpr float pop_speed = 150.0f;
+    // Falling faster than this during the dive is held back, so the lunge flies on instead of dropping.
+    constexpr float max_fall = -450.0f;
+    // After landing, the slide runs the speed from slide_speed down to nothing over slide_time.
+    constexpr float slide_speed = 600.0f;
+    constexpr float slide_time = 0.4f;
+
+    enum class Phase { Idle, Air, Slide };
+    Phase phase = Phase::Idle;
+    float phase_time = 0.0f;
+    float heading_x = 0.0f, heading_z = 0.0f; // unit vector of the dive, fixed at the start
+    bool dived_this_jump = false;
+    bool run_prev = false;
+    Clock::time_point last_tick{};
+
+    // The pad hook (another thread) reads these.
+    std::atomic<bool> can_dive{false};
+    std::atomic<bool> diving{false};
+
+    // QOL > Dive, read a few times a second rather than on every pad read.
+    bool enabled(Clock::time_point now) {
+        static bool cached = false;
+        static Clock::time_point cached_at{};
+        if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
+            cached_at = now;
+            try {
+                cached = std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::dive::option));
+            } catch (...) {
+                cached = false;
+            }
+        }
+        return cached;
+    }
+
+    bool log_on() {
+        static const bool on = std::getenv("TOOIE_DIVE_LOG") != nullptr;
+        return on;
+    }
+
+    // TOOIE_DIVE_PRESS=<from ms>:<to ms> acts as the Run button pressed in that window (after the first tick),
+    // for headless runs.
+    bool test_press(Clock::time_point now) {
+        static const char* spec = std::getenv("TOOIE_DIVE_PRESS");
+        static const Clock::time_point begin = Clock::now();
+        if (spec == nullptr) {
+            return false;
+        }
+        int from = 0, to = 0;
+        if (std::sscanf(spec, "%d:%d", &from, &to) != 2) {
+            return false;
+        }
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - begin).count();
+        return ms >= from && ms < to;
+    }
+
+    void set_speed(uint8_t* rdram, uint32_t physics, float speed) {
+        write_float(rdram, physics + vel_x_offset, heading_x * speed);
+        write_float(rdram, physics + vel_z_offset, heading_z * speed);
+    }
+
+    void end(const char* why) {
+        if (log_on() && phase != Phase::Idle) {
+            std::printf("[dive] end (%s)\n", why);
+            std::fflush(stdout);
+        }
+        phase = Phase::Idle;
+        diving = false;
+    }
+}
+
+void tooie::dive::apply(uint16_t* buttons) {
+    // B is the Run button on a controller, and in the air also the game's own B. While a dive can start
+    // (in the air, none yet this jump) or is under way, the game doesn't see it.
+    if (can_dive.load() || diving.load()) {
+        *buttons &= (uint16_t)~button_b;
+    }
+}
+
+void tooie::dive::tick(uint8_t* rdram, recomp_context* ctx) {
+    (void)ctx;
+    const auto now = Clock::now();
+    const float dt = last_tick == Clock::time_point{} ? 0.0f
+        : std::min(std::chrono::duration<float>(now - last_tick).count(), 0.1f);
+    last_tick = now;
+
+    // The Run button as a fresh press (it also starts the dive, as the example's Action press does).
+    const bool run = tooie::hold_to_run::held() || test_press(now);
+    const bool pressed = run && !run_prev;
+    run_prev = run;
+
+    const uint32_t player = read_word(rdram, player_table);
+    const uint32_t physics = valid_ptr(player) ? read_word(rdram, player + physics_offset) : 0;
+    const uint32_t block = valid_ptr(player) ? read_word(rdram, player + state_offset) : 0;
+    if (!valid_ptr(physics) || !valid_ptr(block) || !enabled(now)
+        || rdram[(form_addr - 0x80000000u) ^ 3u] != form_banjo_kazooie) {
+        can_dive = false;
+        end("off");
+        dived_this_jump = false;
+        return;
+    }
+    const uint32_t cur = read_word(rdram, block + state_current);
+    const bool in_air = in_air_state(cur);
+
+    // One dive per jump: touching the ground (a state outside the air and the slide) gives it back.
+    if (!in_air && phase == Phase::Idle) {
+        dived_this_jump = false;
+    }
+    can_dive = in_air && !dived_this_jump && phase == Phase::Idle;
+
+    if (phase == Phase::Idle) {
+        if (!(pressed && in_air && !dived_this_jump)) {
+            return;
+        }
+        // The lunge goes the way Banjo faces, which is the heading the game turns him to.
+        const uint32_t yaw_ptr = read_word(rdram, player + yaw_ptr_offset);
+        const float yaw = valid_ptr(yaw_ptr) ? read_float(rdram, yaw_ptr) : 0.0f;
+        const float rad = yaw * 3.14159265f / 180.0f;
+        heading_x = std::sin(rad);
+        heading_z = std::cos(rad);
+        phase = Phase::Air;
+        phase_time = 0.0f;
+        dived_this_jump = true;
+        diving = true;
+        can_dive = false;
+        // The vertical speed is replaced with a small lift, as the lunge's start.
+        write_float(rdram, physics + vel_y_offset, pop_speed);
+        if (log_on()) {
+            std::printf("[dive] start from state %u yaw %.0f\n", cur, yaw);
+            std::fflush(stdout);
+        }
+    }
+
+    phase_time += dt;
+    if (phase == Phase::Air) {
+        if (!in_air) {
+            // Landed: slide out. A state that isn't a ground state (swim, hit, climb, talk) just ends it.
+            if (!slide_state(cur)) {
+                end("left the air");
+                return;
+            }
+            phase = Phase::Slide;
+            phase_time = 0.0f;
+            if (log_on()) {
+                std::printf("[dive] land in state %u\n", cur);
+                std::fflush(stdout);
+            }
+        } else {
+            // Burst, then glide: the speed eases from burst_speed to glide_speed over burst_time.
+            const float t = std::clamp(phase_time / burst_time, 0.0f, 1.0f);
+            set_speed(rdram, physics, burst_speed + (glide_speed - burst_speed) * t);
+            if (read_float(rdram, physics + vel_y_offset) < max_fall) {
+                write_float(rdram, physics + vel_y_offset, max_fall);
+            }
+            return;
+        }
+    }
+    if (phase == Phase::Slide) {
+        // A jump (or anything that leaves the ground states) ends the slide early; the dive is spent.
+        if (!slide_state(cur) || phase_time >= slide_time) {
+            end(slide_state(cur) ? "slide over" : "left the ground");
+            return;
+        }
+        const float t = phase_time / slide_time;
+        set_speed(rdram, physics, slide_speed * (1.0f - t) * (1.0f - t));
+    }
+}

@@ -33,6 +33,7 @@
 #include "tooie_talon_trot.h"
 #include "tooie_player_cheats.h"
 #include "tooie_hold_to_run.h"
+#include "tooie_dive.h"
 #include "tooie_transform_anywhere.h"
 #include "tooie_menu_pause.h"
 #include "tooie_totals_checklist.h"
@@ -625,6 +626,11 @@ void tooie::init_config() {
         "Hold the Run key (Controls tab, Movement; not bound by default) to run faster as Banjo-Kazooie, Banjo or Kazooie. Off turns running off.",
         true);
     qol.add_bool_option(
+        tooie::dive::option,
+        "Dive",
+        "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge that ends in a short slide. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
+        false);
+    qol.add_bool_option(
         tooie::transform_anywhere::option,
         "Transform anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
@@ -677,6 +683,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
+    recompui::config::set_option_group(tooie::dive::option, "Moves and aiming");
 
     recomp::config::Config& graphics = recompui::config::create_graphics_tab();
     tooie::picture_filters::add_options(graphics);

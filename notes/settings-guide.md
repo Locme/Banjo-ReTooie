@@ -124,6 +124,14 @@ framework, not from this port's code, so it is not described here.
 - **Level transitions**: how fast the screen wipe plays when you go to another
   area: Original, Fast (4x) or Instant (16x). Cutscene fades are not affected.
   Default: Original.
+- **Dive** (off by default): press the Run key (B on a controller) in the air as
+  Banjo-Kazooie for a fast forward lunge, then a short belly-slide on landing. Works from a
+  jump, after the Feathery Flap and in the ground pound (Bill Drill), once per jump; Banjo
+  alone, Kazooie alone and the transformations are unchanged. While it is on, B in the air
+  belongs to the dive. Tuning (src/gameplay/dive.cpp, units per second; the run is 500):
+  starts at 850 (1.7x), settles to 700 (1.4x) over 0.25 s, a 150 lift at the start, falling
+  held to 450, then a 0.4 s slide from 600 to nothing. Not tested in game yet, and the dive
+  pose (Banjo diving, Kazooie's wings swept back) is not made yet.
 - **Talon Trot**: Toggle or Hold. With Toggle, once Z + C-left starts the trot,
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).

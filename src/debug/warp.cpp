@@ -39,6 +39,7 @@
 #include "tooie_damage.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
+#include "tooie_dive.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_fine_aim.h"
 #include "tooie_progress_cheats.h"
@@ -155,6 +156,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::player_cheats::tick(rdram, ctx);
     tooie::talon_trot::tick(rdram, ctx);
     tooie::hold_to_run::tick(rdram, ctx);
+    tooie::dive::tick(rdram, ctx);
     tooie::damage::aim_tick(rdram);
     tooie::fine_aim::tick(rdram, ctx);
     tooie::motion_aim::tick(rdram, ctx);
