@@ -179,8 +179,10 @@ framework, not from this port's code, so it is not described here.
 ## WIP
 
 Features still being worked on, in the WIP tab's WIP section. When one is done it
-moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus
-back to QOL).
+moves back to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's
+menus to QOL, Grass to Graphics after the colour grading). The tab is a page of Graphics
+options: all of them save in graphics.json. The Grass toggle and the 3D grass settings
+under it are described in the Graphics sections.
 
 - **Mouse in the game's menus** (on by default): the pause menu and the save select follow
   the mouse; the row under the cursor is picked and a left click presses A, a right click B.

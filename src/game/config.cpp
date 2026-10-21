@@ -154,37 +154,34 @@ namespace {
         qol.save_config();
     }
 
-    // The Dive and Mouse in the game's menus moved from QOL to the WIP tab (L, 2026-10-21): carry values
-    // saved in qol.json over once, while the WIP tab's file doesn't have them yet.
+    // The Dive and Mouse in the game's menus moved from QOL to the WIP tab (L, 2026-10-21), which shows
+    // Graphics options (graphics.json): carry a value saved in qol.json (or work_in_progress.json, the
+    // first WIP tab's own file) over once, while graphics.json doesn't have it yet.
     void move_saved_options_to_wip() {
         const std::filesystem::path dir = recomp::get_config_path();
-        nlohmann::json wip_json;
-        {
-            std::ifstream wip_file(dir / (tooie::work_in_progress_tab_id + ".json"));
-            if (wip_file) {
-                wip_json = nlohmann::json::parse(wip_file, nullptr, false);
-            }
-        }
-        std::ifstream qol_file(dir / "qol.json");
-        if (!qol_file) {
-            return;
-        }
-        nlohmann::json qol_json = nlohmann::json::parse(qol_file, nullptr, false);
-        if (!qol_json.is_object()) {
-            return;
-        }
-        recomp::config::Config& work_in_progress = recompui::config::get_config(tooie::work_in_progress_tab_id);
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        const nlohmann::json graphics_json = load("graphics.json");
+        const nlohmann::json sources[] = { load(tooie::work_in_progress_tab_id + ".json"), load("qol.json") };
+        recomp::config::Config& graphics = recompui::config::get_config(recompui::config::graphics::id);
         bool changed = false;
         for (const std::string& option : {tooie::dive::option, tooie::menu_mouse::enabled_option}) {
-            if ((wip_json.is_object() && wip_json.contains(option)) || !qol_json.contains(option) ||
-                !qol_json[option].is_boolean()) {
+            if (graphics_json.contains(option)) {
                 continue;
             }
-            work_in_progress.set_option_value(option, qol_json[option].get<bool>());
-            changed = true;
+            for (const nlohmann::json& source : sources) {
+                if (source.contains(option) && source[option].is_boolean()) {
+                    graphics.set_option_value(option, source[option].get<bool>());
+                    changed = true;
+                    break;
+                }
+            }
         }
         if (changed) {
-            work_in_progress.save_config();
+            graphics.save_config();
         }
     }
 
@@ -714,20 +711,36 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
 
     // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
-    // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL).
-    recomp::config::Config& work_in_progress =
-        recompui::config::create_config_tab("WIP", tooie::work_in_progress_tab_id, false);
-    work_in_progress.add_bool_option(
+    // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL, the
+    // Grass section back to Graphics). The tab is a page of Graphics options, so they all save to
+    // graphics.json and the grass keeps its live preview; the options are added below with the graphics ones.
+    recompui::config::create_page_tab("WIP", tooie::work_in_progress_tab_id, recompui::config::graphics::id);
+
+    recomp::config::Config& graphics = recompui::config::create_graphics_tab();
+    tooie::picture_filters::add_options(graphics);
+    graphics.add_bool_option(
         tooie::dive::option,
         "Dive",
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
-    tooie::menu_mouse::add_options(work_in_progress);
-    recompui::config::set_option_group(tooie::dive::option, "WIP");
-    recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "WIP");
-
-    recomp::config::Config& graphics = recompui::config::create_graphics_tab();
-    tooie::picture_filters::add_options(graphics);
+    tooie::menu_mouse::add_options(graphics);
+    {
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option, &pf::grass_section_option,
+                &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
+                &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
+                &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
+                &pf::grass_pixelated_option, &pf::grass_pixel_size_option, &pf::grass_edges_option,
+                &pf::grass_frustum_cull_option, &pf::grass_occlusion_cull_option, &pf::grass_chunking_option,
+                &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        // Dive and Mouse in the game's menus first, then the Grass toggle and its settings, all under one
+        // WIP heading.
+        recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
+        recompui::config::set_option_group(tooie::dive::option, "WIP");
+    }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
         "Always High-Detail Models",
@@ -828,8 +841,8 @@ void tooie::init_config() {
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
-    // 3D grass has its own section after the colour grading (L, 2026-10-16).
-    recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
+    // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
+    // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
     // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
     for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
                                        &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,

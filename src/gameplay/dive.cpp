@@ -121,7 +121,7 @@ namespace {
         if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
             cached_at = now;
             try {
-                cached = std::get<bool>(recompui::config::get_config(tooie::work_in_progress_tab_id).get_option_value(tooie::dive::option));
+                cached = std::get<bool>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(tooie::dive::option));
             } catch (...) {
                 cached = false;
             }
