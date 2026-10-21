@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T490 Tessellated sand
+- Asked: 2026-10-21 07:19 UTC
+- Build: main @ 7bc2450
+- Steps:
+  1. Graphics > Tessellated sand on
+  2. Go to Jolly Roger's Lagoon's beach (or any sandy ground)
+  3. Walk, run and stand around on the sand; look at it in sun and shade
+- Look for: Detailed shallow footprints, wind ripples that don't look smooth, and any sand that's missing or ground that shouldn't be sand?
+- Status: waiting for L
+
 ## T489 Talon Trot on LT + RT (controller)
 - Asked: 2026-10-21 07:30 UTC
 - Build: main (not built or run here: the submodules were not available, so this was written but not compiled)
