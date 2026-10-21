@@ -126,13 +126,16 @@ framework, not from this port's code, so it is not described here.
   Default: Original.
 - **Dive** (off by default): press the Run key (B on a controller) in the air as
   Banjo-Kazooie for a fast forward lunge, then a short belly-slide on landing. Works from a
-  jump, after the Feathery Flap and in the ground pound (Bill Drill), once per jump; Banjo
-  alone, Kazooie alone and the transformations are unchanged. While it is on, B in the air
-  belongs to the dive. Tuning (src/gameplay/dive.cpp, units per second; the run is 500):
-  starts at 850 (1.7x), settles to 700 (1.4x) over 0.25 s, a 150 lift at the start, falling
-  held to 450, then a 0.4 s slide from 600 to nothing. Not tested in game yet. The dive pose is a first guess (body flat, limbs still; rules in
-  src/gameplay/hold_to_run.cpp, `TOOIE_DIVE_POSE_TUNE=<file>` replaces them, lines
-  `<bone> <type> <scale> <offset degrees>`); Kazooie's wings are not in it yet (bone ids unknown).
+  jump, after the Feathery Flap and in the ground pound (Bill Drill), once per jump (a jump
+  out of the slide is a new jump); a wall ends it. Banjo alone, Kazooie alone and the
+  transformations are unchanged. While it is on and Run is held, B in the air belongs to the
+  dive (not in the pause menu, and not when Run is on another key). Tuning
+  (src/gameplay/dive.cpp, units per second; the run is 500): starts at 850 (1.7x), settles to
+  700 (1.4x) over 0.25 s, a 150 lift at the start, falling held to 450, then a 0.4 s slide
+  from 600 to nothing. Pose (rules in src/gameplay/hold_to_run.cpp, eased in over 0.1 s):
+  Banjo flat with arms forward and legs trailing, Kazooie out of the pack with her wings
+  swept back. `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
+  `<bone> <type> <scale> <offset degrees> [set]`.
 - **Talon Trot**: Toggle or Hold. With Toggle, once Z + C-left starts the trot,
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).

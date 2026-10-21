@@ -250,6 +250,8 @@ namespace {
         uint8_t type;   // 0-2 rotation x/y/z, 3-5 scale, 6-8 translation
         float scale;    // swing about the track's average
         float offset;   // added to every key (rotations: degrees)
+        // Set instead: every key moves to offset, scale of the way (1 = all of it), whatever the animation had.
+        bool set = false;
     };
 
     struct Key {
@@ -411,8 +413,10 @@ namespace {
                 if (r.offset == 0.0f) {
                     continue;
                 }
-                // A track the run does not move: one key holding the offset (frame flags as the game's own).
-                tracks.push_back({ r.bone, r.type, { Key{ (uint16_t)(0xC000 | start), 0 } } });
+                // A track the run does not move: one key at the rest value (scales 64, the rest 0; frame flags
+                // as the game's own), which the rule then moves.
+                const int16_t rest = r.type >= 3 && r.type <= 5 ? 64 : 0;
+                tracks.push_back({ r.bone, r.type, { Key{ (uint16_t)(0xC000 | start), rest } } });
                 track = &tracks.back();
             }
             double mean = 0;
@@ -421,7 +425,14 @@ namespace {
             }
             mean /= (double)track->keys.size();
             for (Key& k : track->keys) {
-                const double v = mean + (k.value - mean) * r.scale + r.offset * rotation_units(r.type);
+                double target = r.offset * rotation_units(r.type);
+                if (r.set && r.type <= 2) {
+                    // The same angle nearest the key's, so a part of the way doesn't spin the long way round
+                    // (180 and -180 degrees are the same turn).
+                    target += std::round((k.value - target) / (360.0 * 64.0)) * (360.0 * 64.0);
+                }
+                const double v = r.set ? k.value + (target - k.value) * r.scale
+                                       : mean + (k.value - mean) * r.scale + target;
                 k.value = (int16_t)std::clamp(v, -32768.0, 32767.0);
             }
         }
@@ -510,16 +521,63 @@ namespace {
     // --- The dive pose ----------------------------------------------------------------------------
     //
     // While Banjo-Kazooie dives (src/gameplay/dive.cpp) the animation he is already playing in the air is
-    // replaced by a copy with these rules: body flat along the lunge, arms and legs held still behind it.
-    // First guess made without seeing the game; TOOIE_DIVE_POSE_TUNE=<file> replaces it, one rule a line,
-    // "<bone> <type> <scale> <offset degrees>", so it can be tuned on a PC without a rebuild. Kazooie's
-    // wings are not in it yet: her wing bone ids are not known (the model's bone list is needed).
+    // replaced by a copy holding the dive pose of L's reference picture (2026-10-21): body flat along the
+    // lunge, head up, both arms stretched forward, legs straight out behind, and Kazooie out of the pack with
+    // her wings swept back along his body.
+    //
+    // Bone ids and rest positions come from the Banjo-Kazooie model 0x062A's bone table (in the rest pose
+    // Banjo's arms and legs stick straight out sideways and Kazooie's wings sideways from her neck). Each
+    // bone turns about x, then y, then z, right-handed, about its rest position: the run animation's right
+    // arm hangs at z -41 to -67 and its right hip at z -92. The pose was checked by drawing the skeleton
+    // offline from the ROM's animations (the same pose comes out of the run and of a Kazooie-out flap).
+    //   Banjo: root 43 (everything hangs from it), spine 3, chest 1, head 18; right arm 14 shoulder, 8 elbow,
+    //   16 hand; left arm 28, 22, 30; right leg 10 hip, 12 knee, 6 ankle; left leg 24, 26, 20.
+    //   Pack: 59 and 60, lid 44-46. Kazooie: 106 and 107 (her body, turned 180 degrees about y; its scale
+    //   hides her in the pack, 64 being full size), head 108, wings 103-105 and 100-102 (root to tip).
+    // Every value here is set, not added, so the pose is the same whatever animation it replaces.
+    // TOOIE_DIVE_POSE_TUNE=<file> replaces the rules, one a line: "<bone> <type> <scale> <offset degrees>",
+    // with "set" at the end to set the value (scale then the share, 1 = all) instead of adding to it, so the
+    // pose can be tuned on a PC without a rebuild.
+    constexpr Rule set_to(uint16_t bone, uint8_t type, float value) {
+        return Rule{ bone, type, 1.0f, value, true };
+    }
     const std::vector<Rule> dive_rules_default = {
-        { 3, 0, 0.2f, 75.0f },                                  // body leant flat
-        { 6, 0, 0.2f, 0.0f }, { 8, 0, 0.2f, 0.0f }, { 10, 0, 0.2f, 0.0f },     // legs hang still
-        { 20, 0, 0.2f, 0.0f }, { 22, 0, 0.2f, 0.0f }, { 24, 0, 0.2f, 0.0f },
-        { 12, 0, 0.3f, 0.0f }, { 14, 0, 0.3f, 0.0f }, { 16, 0, 0.3f, 0.0f },   // arms flail less
-        { 26, 0, 0.3f, 0.0f }, { 28, 0, 0.3f, 0.0f }, { 30, 0, 0.3f, 0.0f },
+        // The whole body tipped flat from the root; spine and chest straight, head raised to look ahead.
+        set_to(43, 0, 80.0f), set_to(43, 1, 0.0f), set_to(43, 2, 0.0f),
+        set_to(3, 0, 0.0f), set_to(3, 1, 0.0f), set_to(3, 2, 0.0f),
+        set_to(3, 6, 0.0f), set_to(3, 7, 0.0f), set_to(3, 8, 0.0f),
+        set_to(1, 0, 0.0f), set_to(1, 1, 0.0f), set_to(1, 2, 0.0f),
+        set_to(18, 0, -45.0f),
+        // Arms stretched forward along the body (z +-88 from straight out), elbows nearly straight.
+        set_to(14, 0, 0.0f), set_to(14, 1, -10.0f), set_to(14, 2, 88.0f),
+        set_to(8, 0, 0.0f), set_to(8, 1, -10.0f), set_to(8, 2, 0.0f),
+        set_to(16, 0, 0.0f), set_to(16, 1, 0.0f), set_to(16, 2, 0.0f),
+        set_to(28, 0, 0.0f), set_to(28, 1, 10.0f), set_to(28, 2, -88.0f),
+        set_to(22, 0, 0.0f), set_to(22, 1, 10.0f), set_to(22, 2, 0.0f),
+        set_to(30, 0, 0.0f), set_to(30, 1, 0.0f), set_to(30, 2, 0.0f),
+        // Legs straight down the body (z -+90), so they trail behind; knees a little bent, no stride.
+        set_to(10, 0, 0.0f), set_to(10, 1, 0.0f), set_to(10, 2, -90.0f),
+        set_to(12, 1, 20.0f), set_to(6, 1, 0.0f),
+        set_to(24, 0, 0.0f), set_to(24, 1, 0.0f), set_to(24, 2, 90.0f),
+        set_to(26, 1, -20.0f), set_to(20, 1, 0.0f),
+        // The pack at rest with its lid open, and Kazooie out at full size, as the game's own flap has her
+        // (lid 154, 7 and 50 degrees; her body pitched 8.6, raised 10).
+        set_to(59, 0, 0.0f), set_to(59, 1, 0.0f), set_to(59, 2, 0.0f),
+        set_to(59, 6, 0.0f), set_to(59, 7, 0.0f), set_to(59, 8, 0.0f),
+        set_to(60, 0, 0.0f), set_to(60, 1, 0.0f), set_to(60, 2, 0.0f),
+        set_to(60, 6, 0.0f), set_to(60, 7, 0.0f), set_to(60, 8, 0.0f),
+        set_to(44, 0, 154.0f), set_to(45, 0, 7.0f), set_to(46, 0, 50.0f),
+        set_to(106, 0, 0.0f), set_to(106, 1, 0.0f), set_to(106, 2, 0.0f),
+        set_to(106, 6, 0.0f), set_to(106, 7, 0.0f), set_to(106, 8, 0.0f),
+        set_to(107, 0, 8.6f), set_to(107, 1, 180.0f), set_to(107, 2, 0.0f),
+        set_to(107, 3, 64.0f), set_to(107, 4, 64.0f), set_to(107, 5, 64.0f),
+        set_to(107, 6, 0.0f), set_to(107, 7, 10.0f), set_to(107, 8, -1.0f),
+        set_to(108, 0, 32.0f),
+        // Kazooie's wings swept back along Banjo's body, level, tips trailing past his hips; feathers in line.
+        set_to(103, 0, 0.0f), set_to(103, 1, -10.0f), set_to(103, 2, -75.0f),
+        set_to(104, 2, 0.0f), set_to(105, 2, 0.0f),
+        set_to(100, 0, 0.0f), set_to(100, 1, 10.0f), set_to(100, 2, 75.0f),
+        set_to(101, 2, 0.0f), set_to(102, 2, 0.0f),
     };
 
     const std::vector<Rule>& dive_rules() {
@@ -532,8 +590,10 @@ namespace {
                     while (std::fgets(line, sizeof(line), f)) {
                         unsigned bone = 0, type = 0;
                         float scale = 1, offset = 0;
-                        if (line[0] != '#' && std::sscanf(line, "%u %u %f %f", &bone, &type, &scale, &offset) == 4) {
-                            r.push_back(Rule{ (uint16_t)bone, (uint8_t)type, scale, offset });
+                        char mode[8] = {};
+                        const int got = std::sscanf(line, "%u %u %f %f %7s", &bone, &type, &scale, &offset, mode);
+                        if (line[0] != '#' && got >= 4) {
+                            r.push_back(Rule{ (uint16_t)bone, (uint8_t)type, scale, offset, got == 5 && std::string(mode) == "set" });
                         }
                     }
                     std::fclose(f);
@@ -544,16 +604,24 @@ namespace {
         return rules;
     }
 
-    // The animation struct and the animation index the dive pose replaces, while it is on.
+    // The animation struct and the animation index the dive pose replaces, while it is on, and how much of
+    // the pose shows (1 to dive_levels).
+    constexpr int dive_levels = 4;
     std::atomic<uint32_t> pose_struct{0};
     std::atomic<uint32_t> pose_source{0};
+    std::atomic<int> pose_level{0};
 
-    // The dive file for animation `index`, made from the file at `file` the first time.
-    uint32_t dive_file(uint8_t* rdram, uint32_t index, uint32_t file) {
-        static std::vector<std::pair<uint32_t, uint32_t>> built;
-        for (const auto& [i, vram] : built) {
-            if (i == index) {
-                return vram;
+    // The dive file for animation `index` at `level`, made from the file at `file` the first time.
+    uint32_t dive_file(uint8_t* rdram, uint32_t index, uint32_t file, int level) {
+        struct DiveBuilt {
+            uint32_t index;
+            int level;
+            uint32_t vram;
+        };
+        static std::vector<DiveBuilt> built;
+        for (const DiveBuilt& b : built) {
+            if (b.index == index && b.level == level) {
+                return b.vram;
             }
         }
         uint16_t start = 0, end = 0;
@@ -561,7 +629,17 @@ namespace {
         if (read_anim(rdram, file, &start, &end, &tracks) == 0) {
             return 0;
         }
-        apply_rules(tracks, dive_rules(), start);
+        const float w = (float)level / dive_levels;
+        std::vector<Rule> rules = dive_rules();
+        for (Rule& r : rules) {
+            if (r.set) {
+                r.scale *= w;
+            } else {
+                r.scale = 1.0f + (r.scale - 1.0f) * w;
+                r.offset *= w;
+            }
+        }
+        apply_rules(tracks, rules, start);
         uint32_t size = 8;
         for (const Track& t : tracks) {
             size += 4 + 4 * (uint32_t)t.keys.size();
@@ -586,9 +664,9 @@ namespace {
                 at += 4;
             }
         }
-        built.emplace_back(index, vram);
+        built.push_back({ index, level, vram });
         if (log_on()) {
-            std::printf("[dive] pose animation made from 0x%X: %zu tracks, at 0x%08X\n", index, tracks.size(), vram);
+            std::printf("[dive] pose animation made from 0x%X (level %d/%d): %zu tracks, at 0x%08X\n", index, level, dive_levels, tracks.size(), vram);
             std::fflush(stdout);
         }
         return vram;
@@ -901,8 +979,8 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t index = (uint32_t)(uint16_t)MEM_H(0x18, (gpr)(int32_t)anim);
     dump_anim(rdram, index, file);
     reload_tune();
-    if (anim == pose_struct.load() && index == pose_source.load()) {
-        const uint32_t dive = dive_file(rdram, index, file);
+    if (anim == pose_struct.load() && index == pose_source.load() && pose_level.load() > 0) {
+        const uint32_t dive = dive_file(rdram, index, file, pose_level.load());
         if (dive != 0) {
             ctx->r2 = (gpr)(int32_t)dive;
         }
@@ -923,9 +1001,11 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     }
 }
 
-void tooie::hold_to_run::set_dive_pose(uint8_t* rdram, recomp_context* ctx, bool on) {
+void tooie::hold_to_run::set_dive_pose(uint8_t* rdram, recomp_context* ctx, float weight) {
+    const int level = (int)std::lround(std::clamp(weight, 0.0f, 1.0f) * dive_levels);
+    pose_level = level;
     const uint32_t player = read_word(rdram, player_table);
-    const uint32_t ctrl = on && valid_ptr(player) ? anim_ctrl(rdram, ctx, player) : 0;
+    const uint32_t ctrl = level > 0 && valid_ptr(player) ? anim_ctrl(rdram, ctx, player) : 0;
     pose_struct = ctrl != 0 ? ctrl + anctrl_animation : 0;
     pose_source = ctrl != 0 ? anim_index(rdram, ctx, ctrl) : 0;
 }

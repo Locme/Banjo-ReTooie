@@ -61,6 +61,13 @@ namespace {
     // After landing, the slide runs the speed from slide_speed down to nothing over slide_time.
     constexpr float slide_speed = 600.0f;
     constexpr float slide_time = 0.4f;
+    // The pose eases in over this long, so the lunge reads as a push rather than a snap.
+    constexpr float pose_in_time = 0.1f;
+    // Moving less than this share of the lunge's speed for a frame, after the first wall_grace seconds,
+    // means a wall is in the way: the dive ends there instead of pushing into it.
+    constexpr float wall_share = 0.3f;
+    constexpr float wall_grace = 0.1f;
+    constexpr uint32_t pos_ptr_offset = 0xE4;  // PlayerState -> pointer to the position (f32 x, y, z)
 
     enum class Phase { Idle, Air, Slide };
     Phase phase = Phase::Idle;
@@ -71,9 +78,29 @@ namespace {
     uint32_t last_game_ms = 0;
     bool have_last = false;
 
-    // The pad hook (another thread) reads these.
+    // Where Banjo was last tick, to see a wall stop the lunge.
+    float last_x = 0.0f, last_z = 0.0f;
+    float last_speed = 0.0f;
+
+    // The pad hook (another thread) reads these. last_tick_at is when the game last ran a state update:
+    // in the pause menu it doesn't, and B must reach the menu.
     std::atomic<bool> can_dive{false};
     std::atomic<bool> diving{false};
+    std::atomic<int64_t> last_tick_at{0};
+
+    int64_t now_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
+    }
+
+    bool read_pos(uint8_t* rdram, uint32_t player, float* x, float* z) {
+        const uint32_t pos = read_word(rdram, player + pos_ptr_offset);
+        if (!valid_ptr(pos)) {
+            return false;
+        }
+        *x = read_float(rdram, pos);
+        *z = read_float(rdram, pos + 8);
+        return true;
+    }
 
     // QOL > Dive, read a few times a second rather than on every pad read.
     bool enabled(Clock::time_point now) {
@@ -133,8 +160,11 @@ namespace {
 
 void tooie::dive::apply(uint16_t* buttons) {
     // B is the Run button on a controller, and in the air also the game's own B. While a dive can start
-    // (in the air, none yet this jump) or is under way, the game doesn't see it.
-    if (can_dive.load() || diving.load()) {
+    // (in the air, none yet this jump) or is under way and Run is held, the game doesn't see B, so its own
+    // B move doesn't fire with the dive. With Run on another key B is left alone, and so it is whenever the
+    // game has stopped updating (the pause menu), where B goes back.
+    const bool fresh = now_ms() - last_tick_at.load() < 150;
+    if (fresh && (can_dive.load() || diving.load()) && tooie::hold_to_run::held()) {
         *buttons &= (uint16_t)~button_b;
     }
 }
@@ -142,9 +172,11 @@ void tooie::dive::apply(uint16_t* buttons) {
 static void tick_inner(uint8_t* rdram, recomp_context* ctx);
 
 void tooie::dive::tick(uint8_t* rdram, recomp_context* ctx) {
+    last_tick_at = now_ms();
     tick_inner(rdram, ctx);
-    // The pose plays while the lunge is in the air.
-    tooie::hold_to_run::set_dive_pose(rdram, ctx, phase == Phase::Air);
+    // The pose plays while the lunge is in the air, easing in over pose_in_time.
+    const float weight = phase == Phase::Air ? std::clamp(phase_time / pose_in_time, 0.0f, 1.0f) : 0.0f;
+    tooie::hold_to_run::set_dive_pose(rdram, ctx, weight);
 }
 
 static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
@@ -155,7 +187,7 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
     last_game_ms = game_ms;
     have_last = true;
 
-    // The Run button as a fresh press (it also starts the dive, as the example's Action press does).
+    // The Run button as a fresh press.
     const bool run = tooie::hold_to_run::held() || test_press(now);
     const bool pressed = run && !run_prev;
     run_prev = run;
@@ -196,6 +228,8 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
         can_dive = false;
         // The vertical speed is replaced with a small lift, as the lunge's start.
         write_float(rdram, physics + vel_y_offset, pop_speed);
+        read_pos(rdram, player, &last_x, &last_z);
+        last_speed = 0.0f;
         if (log_on()) {
             std::printf("[dive] start from state %u yaw %.0f\n", cur, yaw);
             std::fflush(stdout);
@@ -217,9 +251,23 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
                 std::fflush(stdout);
             }
         } else {
+            // A wall in the way: last tick's speed moved Banjo far less than it should have.
+            float x = 0.0f, z = 0.0f;
+            if (dt > 0.0f && read_pos(rdram, player, &x, &z)) {
+                const float moved = std::sqrt((x - last_x) * (x - last_x) + (z - last_z) * (z - last_z));
+                last_x = x;
+                last_z = z;
+                if (phase_time > wall_grace && last_speed > 0.0f && moved < last_speed * dt * wall_share) {
+                    write_float(rdram, physics + vel_x_offset, 0.0f);
+                    write_float(rdram, physics + vel_z_offset, 0.0f);
+                    end("hit a wall");
+                    return;
+                }
+            }
             // Burst, then glide: the speed eases from burst_speed to glide_speed over burst_time.
             const float t = std::clamp(phase_time / burst_time, 0.0f, 1.0f);
-            set_speed(rdram, physics, burst_speed + (glide_speed - burst_speed) * t);
+            last_speed = burst_speed + (glide_speed - burst_speed) * t;
+            set_speed(rdram, physics, last_speed);
             if (read_float(rdram, physics + vel_y_offset) < max_fall) {
                 write_float(rdram, physics + vel_y_offset, max_fall);
             }
@@ -227,9 +275,11 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     if (phase == Phase::Slide) {
-        // A jump (or anything that leaves the ground states) ends the slide early; the dive is spent.
+        // A jump (or anything that leaves the ground states) ends the slide early. A jump out of the slide
+        // is a new jump, so it may dive again.
         if (!slide_state(cur) || phase_time >= slide_time) {
             end(slide_state(cur) ? "slide over" : "left the ground");
+            dived_this_jump = false;
             return;
         }
         const float t = phase_time / slide_time;

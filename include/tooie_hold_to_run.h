@@ -25,9 +25,10 @@ namespace tooie::hold_to_run {
     // and the stick is tilted, the tilt is made full so the game runs. Safe to call more than once per frame.
     void apply(float* x, float* y);
 
-    // While on, the animation the player is playing is drawn with the dive pose (body flat, limbs still;
-    // src/gameplay/dive.cpp). Call once per frame from the game thread.
-    void set_dive_pose(uint8_t* rdram, recomp_context* ctx, bool on);
+    // While weight is above 0, the animation the player is playing is drawn with that much of the dive pose
+    // (body flat, arms forward, Kazooie's wings swept; src/gameplay/dive.cpp), 1 being all of it. Call once
+    // per frame from the game thread.
+    void set_dive_pose(uint8_t* rdram, recomp_context* ctx, float weight);
 
     // Whether the Run control is held right now (noclip moves 5x faster while it is).
     bool held();
