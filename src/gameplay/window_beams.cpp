@@ -31,6 +31,7 @@
 
 #include "recomp.h"
 #include "recompui/config.h"
+#include "tooie_picture_filters.h"
 #include "tooie_window_beams.h"
 
 namespace {
@@ -295,6 +296,10 @@ namespace {
 }
 
 bool tooie::window_beams::enabled() {
+    // The traced light beams take over (L, 2026-10-21): the drawn tubes would double them.
+    if (tooie::picture_filters::traced_beams_on()) {
+        return false;
+    }
     try {
         return std::get<bool>(recompui::config::get_graphics_config().get_option_value(option));
     } catch (...) {
@@ -304,6 +309,31 @@ bool tooie::window_beams::enabled() {
 
 bool tooie::window_beams::has_beams(uint16_t map) {
     return std::any_of(rooms.begin(), rooms.end(), [map](const Room& room) { return has_map(room, map); });
+}
+
+bool tooie::window_beams::room_light(uint16_t map, float direction[3]) {
+    for (const Room& room : rooms) {
+        if (!has_map(room, map) || room.windows.empty()) {
+            continue;
+        }
+        const float drop = drop_degrees * 3.14159265f / 180.0f;
+        float x = 0.0f, z = 0.0f;
+        for (const Window& w : room.windows) {
+            x -= w.nx;
+            z -= w.nz;
+        }
+        const float level = std::sqrt(x * x + z * z);
+        if (level < 1e-3f) {
+            // Windows facing every way: straight down from above.
+            direction[0] = 0.0f; direction[1] = 1.0f; direction[2] = 0.0f;
+            return true;
+        }
+        direction[0] = x / level * std::cos(drop);
+        direction[1] = std::sin(drop);
+        direction[2] = z / level * std::cos(drop);
+        return true;
+    }
+    return false;
 }
 
 void tooie::window_beams::note_map(uint16_t map) {

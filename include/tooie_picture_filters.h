@@ -67,6 +67,7 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
+    inline const std::string traced_beams_option = "traced_light_beams";
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";
@@ -148,6 +149,8 @@ namespace tooie::picture_filters {
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).
     bool ray_tracing_active();
+    // Ray tracing on with Traced light beams above 0: they stand in for Window Light Beams' drawn ones.
+    bool traced_beams_on();
     // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).
     float sun_shadow_distance();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.

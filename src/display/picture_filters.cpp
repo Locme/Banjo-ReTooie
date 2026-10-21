@@ -39,6 +39,8 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_debug.h"
+#include "tooie_window_beams.h"
 #include "tooie_toast.h"
 #include "tooie_effect_pick.h"
 #include "tooie_parallax_pick.h"
@@ -73,6 +75,7 @@ namespace RT64 {
     void SetSceneRayTracingHitColours(bool enabled);
     void SetSceneRayTracingSmoothing(float smoothing);
     void SetScenePathTracing(uint32_t bounces);
+    void SetSceneTracedBeams(float strength, const float *direction);
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
@@ -4438,6 +4441,10 @@ bool tooie::picture_filters::ray_tracing_active() {
     return traced_shadows_on();
 }
 
+bool tooie::picture_filters::traced_beams_on() {
+    return ray_tracing_active() && (value<double>(traced_beams_option, 60.0) > 0.0);
+}
+
 bool tooie::picture_filters::sun_shadows_on() {
     return sun_shadows || traced_shadows_on();
 }
@@ -4480,6 +4487,19 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         ray_tracing_notified.store(true);
         std::fprintf(stderr, "[ray-tracing] no ray queries on this device or renderer; using the current effects\n");
         tooie::toast::show("Ray tracing needs the Vulkan renderer and a graphics card with ray tracing. Using the current effects.");
+    }
+    // Traced light beams: their strength, and in a room Window Light Beams knows, the way its windows' light comes in.
+    {
+        static float beams_sent = -1.0f;
+        static uint16_t beams_map_sent = 0xFFFF;
+        const float beams = traced_beams_on() ? (float)(value<double>(traced_beams_option, 60.0) / 100.0) : 0.0f;
+        const uint16_t map = tooie::debug::current_map(rdram);
+        if ((beams != beams_sent) || (map != beams_map_sent)) {
+            beams_sent = beams;
+            beams_map_sent = map;
+            float direction[3];
+            RT64::SetSceneTracedBeams(beams, tooie::window_beams::room_light(map, direction) ? direction : nullptr);
+        }
     }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
@@ -4954,6 +4974,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Path tracing bounces",
         "How many more times light bounces with Path tracing on, after the first. More reaches further into shadowed places but costs more. 2 is the default.",
         1, 4, 1, 0, false, 2);
+    graphics.add_number_option(
+        traced_beams_option,
+        "Traced light beams",
+        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. In the rooms Window Light Beams covers they take the place of its drawn beams. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
+        0, 100, 5, 0, false, 60);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,
         "Ray tracing hit colours",
@@ -5272,7 +5297,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5308,7 +5333,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
     // Graphics > Shaders > Ray Tracing (L, 2026-10-20): its own section under Shaders.
     graphics.add_option_hidden_dependency(ray_tracing_section_option, lighting_section_option, false);
-    for (const std::string *id : { &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &ray_tracing_hit_colours_option }) {
+    for (const std::string *id : { &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option }) {
         graphics.add_option_hidden_dependency(*id, ray_tracing_section_option, false);
     }
     graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);

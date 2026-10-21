@@ -24,6 +24,10 @@ namespace tooie::window_beams {
     // The map whose models the game looked up last (the map table hook), for the rooms that have no
     // see-through model of their own.
     void note_map(uint16_t map);
+
+    // The way the light comes in at a beam room's windows (world, towards the light: the beams' fall reversed,
+    // averaged over its windows), for the traced light beams. False for any other map.
+    bool room_light(uint16_t map, float direction[3]);
 }
 
 #endif

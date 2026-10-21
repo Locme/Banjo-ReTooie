@@ -7076,10 +7076,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d537490
+index 0000000..32b6f87
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3059 @@
+@@ -0,0 +1,3077 @@
 +//
 +// RT64
 +//
@@ -7362,6 +7362,8 @@ index 0000000..d537490
 +    static std::atomic<bool> rayTracingHitColours{ false };
 +    static std::atomic<float> rayTracingSmoothing{ 0.5f };
 +    static std::atomic<uint32_t> pathTracingBounces{ 0 };
++    // Traced light beams: strength, then the room's light direction (world, towards it), or 0 for the sun.
++    static float tracedBeams[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7547,6 +7549,14 @@ index 0000000..d537490
 +
 +    void SetSceneRayTracingSmoothing(float smoothing) {
 +        rayTracingSmoothing.store(std::clamp(smoothing, 0.0f, 1.0f));
++    }
++
++    void SetSceneTracedBeams(float strength, const float *direction) {
++        const std::scoped_lock lock(effectsMutex);
++        tracedBeams[0] = std::clamp(strength, 0.0f, 1.0f);
++        for (int i = 0; i < 3; i++) {
++            tracedBeams[i + 1] = (direction != nullptr) ? direction[i] : 0.0f;
++        }
 +    }
 +
 +    void SetScenePathTracing(uint32_t bounces) {
@@ -9212,7 +9222,7 @@ index 0000000..d537490
 +        // dropping to the depth march and its shadow map, which made the shadows come and go.
 +        // The lights are written every pass, whatever the casters.
 +        if (res.lightsBuffer == nullptr) {
-+            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 1)));
++            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 2)));
 +            res.lightsBuffer->setName("Scene Effects lights");
 +        }
 +        if (res.radianceBuffer == nullptr) {
@@ -9222,12 +9232,20 @@ index 0000000..d537490
 +        if (res.lightsBuffer != nullptr) {
 +            const SceneEffectsSettings lightSettings = GetSceneEffects();
 +            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
-+            memset(mapped, 0, 16 * (SceneMaxLights + 1));
++            memset(mapped, 0, 16 * (SceneMaxLights + 2));
 +            mapped[0] = float(lightSettings.lightCount);
 +            mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
 +            mapped[2] = rayTracingSmoothing.load();
 +            mapped[3] = float(pathTracingBounces.load());
-+            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
++            // Traced light beams: strength, then the room's light direction (world, towards the light; 0 for the sun).
++            {
++                const std::scoped_lock beamLock(effectsMutex);
++                mapped[4] = tracedBeams[0];
++                mapped[5] = tracedBeams[1];
++                mapped[6] = tracedBeams[2];
++                mapped[7] = tracedBeams[3];
++            }
++            memcpy(mapped + 8, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
 +        res.bvhReady = res.bvhBuiltOnce;
@@ -10042,7 +10060,7 @@ index 0000000..d537490
 +            res.sceneSetBvh = nullptr;
 +            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
 +                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
-+                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 1));
++                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 2));
 +                res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
 +                res.sceneSetBvh = res.bvhTlas.get();
 +            }
@@ -10141,10 +10159,10 @@ index 0000000..d537490
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..f4978be
+index 0000000..ebee27b
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,476 @@
+@@ -0,0 +1,479 @@
 +//
 +// RT64
 +//
@@ -10426,6 +10444,9 @@ index 0000000..f4978be
 +    void SetSceneRayTracingSmoothing(float smoothing);
 +    // Banjo-Tooie: Path tracing, its bounces after the first (0 off, up to 4).
 +    void SetScenePathTracing(uint32_t bounces);
++    // Banjo-Tooie: Traced light beams, 0 off to 1; direction (world, towards the light) for a room whose light comes
++    // in at its windows from a known way, or null for the sun.
++    void SetSceneTracedBeams(float strength, const float *direction);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
@@ -15190,10 +15211,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..f7f4a23
+index 0000000..57ff67a
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3966 @@
+@@ -0,0 +1,4023 @@
 +//
 +// RT64
 +//
@@ -16064,6 +16085,57 @@ index 0000000..f7f4a23
 +    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 +}
 +
++// Traced light beams: the light's shafts through the air, where the sun (or a room's window light) reaches. Along the
++// eye's ray to the surface, a dozen points (spaced on a 4x4 pattern so the gaps fill in across neighbours), each tested
++// with a ray towards the light through the world's triangles: the lit ones glow, more looking towards the light. In
++// a room the light only gets in at the windows, so the beams have the windows' shapes, and anything in them (Banjo
++// too) cuts its shadow through them. Outdoors it is a thin haze with shafts between trees and under arches.
++float3 TracedBeams(int2 pixel, float depth) {
++    const float strength = asfloat(gLights.Load(16));
++    if (strength <= 0.0f) {
++        return 0.0f;
++    }
++    const float3 roomLight = asfloat(gLights.Load3(20));
++    const bool room = dot(roomLight, roomLight) > 0.25f;
++    float3 toLight;
++    if (room) {
++        toLight = normalize(roomLight);
++    }
++    else {
++        if (dot(gConstants.sun.xyz, gConstants.sun.xyz) < 0.25f) {
++            return 0.0f;
++        }
++        toLight = normalize(ViewToWorldDirection(gConstants.sun.xyz));
++        // The sun under the horizon lights no air.
++        if (toLight.y < 0.05f) {
++            return 0.0f;
++        }
++    }
++    const float3 surface = (depth >= 0.99999f) ? normalize(ViewPosition(pixel, 0.5f)) * 4000.0f : ViewPosition(pixel, depth);
++    const float reach = min(length(surface), 4000.0f);
++    const float3 look = surface / max(length(surface), 1e-3f);
++    const int Samples = 12;
++    const float step = reach / float(Samples);
++    const int2 cell = pixel & 3;
++    const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
++    const float offset = (bayer[cell.y * 4 + cell.x] + 0.5f) / 16.0f;
++    float lit = 0.0f;
++    [loop] for (int i = 0; i < Samples; i++) {
++        const float t = (float(i) + offset) * step;
++        RayDesc ray;
++        ray.Origin = ViewToWorldPoint(look * t);
++        ray.Direction = toLight;
++        ray.TMin = 0.0f;
++        ray.TMax = 20000.0f;
++        lit += TraceOccluded(ray, 0u) ? 0.0f : step;
++    }
++    // Brighter looking towards the light (forward scattering).
++    const float toward = saturate(dot(normalize(ViewToWorldDirection(look)), toLight));
++    const float phase = 0.45f + 1.4f * toward * toward * toward;
++    const float density = room ? 0.0006f : 0.00008f;
++    return float3(1.0f, 0.93f, 0.78f) * (strength * density * phase * lit);
++}
++
 +bool RadianceLoad(float3 world, out float3 colour) {
 +    uint check;
 +    const uint at = RadianceCell(world, check);
@@ -16169,7 +16241,7 @@ index 0000000..f7f4a23
 +    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
 +    float influence = 0.0f;
 +    [loop] for (uint i = 0u; i < count; i++) {
-+        const float4 light = asfloat(gLights.Load4(16u * (i + 1u)));
++        const float4 light = asfloat(gLights.Load4(16u * (i + 2u)));
 +        const float3 toLight = light.xyz - start;
 +        const float distance = length(toLight);
 +        if ((distance < 30.0f) || (distance > light.w)) {
@@ -18970,6 +19042,12 @@ index 0000000..f7f4a23
 +    if (RimStrength() > 0.0f) {
 +        rim = float3(1.0f, 0.95f, 0.85f) * (0.9f * RimLight(pixel, depth));
 +    }
++#ifdef RAY_TRACED
++    // Traced light beams, added like the rim light (the fog still covers them).
++    if (gConstants.view.x < 1.5f) {
++        rim += TracedBeams(pixel, depth);
++    }
++#endif
 +
 +    // Fog thickens with distance from Banjo (from the camera when there is no Banjo) past its start,
 +    // approaching its strength, so moving the camera doesn't change how fogged things are.
