@@ -2192,7 +2192,7 @@ index 69a82ac..1939ed1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..d77c884 100644
+index 9fae0d4..b3ab927 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2776,7 +2776,7 @@ index 9fae0d4..d77c884 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +720,85 @@ namespace RT64 {
+@@ -169,11 +720,90 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2813,6 +2813,11 @@ index 9fae0d4..d77c884 100644
 +        frameParams.snowGrid.w = 0.0f;
 +        waterTessOn = false;
 +        groundTessOn = false;
++        groundVertexFirst = UINT32_MAX;
++        groundVertexEnd = 0;
++        groundPositionsData = nullptr;
++        groundFaceRanges.clear();
++        groundLayerRanges.clear();
 +        frameParams.waterCamera.w = 0.0f;
 +        instanceFurVector.clear();
 +        instanceFenceVector.clear();
@@ -2862,7 +2867,7 @@ index 9fae0d4..d77c884 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +844,7 @@ namespace RT64 {
+@@ -219,6 +849,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2870,7 +2875,7 @@ index 9fae0d4..d77c884 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +876,7 @@ namespace RT64 {
+@@ -250,6 +881,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2878,7 +2883,7 @@ index 9fae0d4..d77c884 100644
                  }
              }
              else {
-@@ -272,6 +899,9 @@ namespace RT64 {
+@@ -272,6 +904,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2888,7 +2893,7 @@ index 9fae0d4..d77c884 100644
              }
          }
      }
-@@ -373,6 +1003,19 @@ namespace RT64 {
+@@ -373,6 +1008,19 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2908,7 +2913,7 @@ index 9fae0d4..d77c884 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1086,14 @@ namespace RT64 {
+@@ -443,6 +1091,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2923,7 +2928,7 @@ index 9fae0d4..d77c884 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1116,85 @@ namespace RT64 {
+@@ -465,12 +1121,85 @@ namespace RT64 {
          return true;
      }
      
@@ -3011,7 +3016,7 @@ index 9fae0d4..d77c884 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1223,16 @@ namespace RT64 {
+@@ -499,6 +1228,16 @@ namespace RT64 {
              }
          };
  
@@ -3028,7 +3033,7 @@ index 9fae0d4..d77c884 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1248,17 @@ namespace RT64 {
+@@ -514,6 +1253,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3046,7 +3051,7 @@ index 9fae0d4..d77c884 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1306,16 @@ namespace RT64 {
+@@ -561,8 +1311,16 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -3065,7 +3070,7 @@ index 9fae0d4..d77c884 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1327,210 @@ namespace RT64 {
+@@ -574,12 +1332,210 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3277,7 +3282,7 @@ index 9fae0d4..d77c884 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1548,7 @@ namespace RT64 {
+@@ -597,6 +1553,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3285,7 +3290,7 @@ index 9fae0d4..d77c884 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1568,7 @@ namespace RT64 {
+@@ -616,6 +1573,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3293,7 +3298,7 @@ index 9fae0d4..d77c884 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2199,82 @@ namespace RT64 {
+@@ -1246,10 +2204,82 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3376,7 +3381,7 @@ index 9fae0d4..d77c884 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,34 +2321,182 @@ namespace RT64 {
+@@ -1296,34 +2326,182 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3585,7 +3590,7 @@ index 9fae0d4..d77c884 100644
          fbParams.horizontalMisalignment = p.horizontalMisalignment;
          framebufferCount++;
  
-@@ -1350,10 +2523,43 @@ namespace RT64 {
+@@ -1350,10 +2528,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3629,7 +3634,7 @@ index 9fae0d4..d77c884 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2592,11 @@ namespace RT64 {
+@@ -1386,6 +2597,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3641,7 +3646,7 @@ index 9fae0d4..d77c884 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2619,68 @@ namespace RT64 {
+@@ -1408,6 +2624,68 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3710,7 +3715,7 @@ index 9fae0d4..d77c884 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2704,22 @@ namespace RT64 {
+@@ -1431,6 +2709,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3733,7 +3738,7 @@ index 9fae0d4..d77c884 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2739,181 @@ namespace RT64 {
+@@ -1450,12 +2744,181 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3915,7 +3920,7 @@ index 9fae0d4..d77c884 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3064,7 @@ namespace RT64 {
+@@ -1606,6 +3069,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3923,7 +3928,7 @@ index 9fae0d4..d77c884 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3141,20 @@ namespace RT64 {
+@@ -1682,6 +3146,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3944,7 +3949,7 @@ index 9fae0d4..d77c884 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3220,2090 @@ namespace RT64 {
+@@ -1747,25 +3225,2157 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4678,8 +4683,24 @@ index 9fae0d4..d77c884 100644
 +                    if (((0xA63Fu >> shape) & 1u) && !grassDraw && gm.zCmp() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        (gm.cycleType() != G_CYC_FILL) && !interop::Blender::usesAlphaBlend(gm))
 +                    {
-+                        groundValue = 1;
++                        // (One draw's vertices a frame: their positions go to the GPU by vertex index.)
++                        if ((groundPositionsData == nullptr) || (groundPositionsData == &drawData)) {
++                            groundValue = 1;
++                            groundPositionsData = &drawData;
++                            groundFaceRanges.push_back({ call.meshDesc.faceIndicesStart, call.callDesc.triangleCount });
++                            for (uint32_t k = call.meshDesc.faceIndicesStart; k < call.meshDesc.faceIndicesStart + call.callDesc.triangleCount * 3; k++) {
++                                groundVertexFirst = std::min(groundVertexFirst, drawData.faceIndices[k]);
++                                groundVertexEnd = std::max(groundVertexEnd, drawData.faceIndices[k] + 1);
++                            }
++                        }
 +                    }
++                }
++                // (Other level draws lying on the ground: where one does, the ground stays where it is under it.)
++                if (groundTessOn && (groundValue == 0) && !excluded && worldOpen && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0) && levelGeometry(drawData, call) &&
++                    call.shaderDesc.otherMode.zCmp() && (call.shaderDesc.otherMode.cycleType() != G_CYC_COPY) && (call.shaderDesc.otherMode.cycleType() != G_CYC_FILL))
++                {
++                    groundLayerRanges.push_back({ &drawData, { call.meshDesc.faceIndicesStart, call.callDesc.triangleCount } });
 +                }
 +                instanceGroundVector.resize(instanceIndex, 0);
 +                instanceGroundVector.push_back(groundValue);
@@ -5989,6 +6010,57 @@ index 9fae0d4..d77c884 100644
 +            snowPositionsSource = ground->positions.data();
 +            snowPositionsRange = { size_t(snowVertexFirst) * 4, size_t(snowVertexEnd) * 4 };
 +        }
++        // Banjo-Tooie: displaced ground's vertices (groundVertexFirst), added to the same buffer. Without them (or when
++        // deep snow's come from another draw's vertices) the ground's vertex shader works its place out from the camera
++        // and leaves the dips everywhere (groundParams.z below 0, GroundTess.hlsl).
++        if ((frameParams.groundParams.x > 0.0f) && (groundPositionsData != nullptr) && (groundVertexEnd > groundVertexFirst) &&
++            (size_t(groundVertexEnd) * 3 <= groundPositionsData->posFloats.size()) &&
++            ((snowPositionsSource == snowPositionsFallback) || (snowPositionsData == groundPositionsData)))
++        {
++            std::vector<std::pair<uint32_t, uint32_t>> layers;
++            for (const auto &[data, range] : groundLayerRanges) {
++                if (data == groundPositionsData) {
++                    layers.push_back(range);
++                }
++            }
++            const float groundRamp = 32.0f;
++            const uint64_t groundKey = snowGroundKey(*groundPositionsData, groundFaceRanges, layers, groundVertexFirst, groundVertexEnd, groundRamp);
++            SnowGround *cover = nullptr;
++            for (SnowGround &cached : groundCovers) {
++                if ((cached.key == groundKey) && (cached.positions.size() >= size_t(groundVertexEnd) * 4)) {
++                    cover = &cached;
++                    break;
++                }
++            }
++            if (cover == nullptr) {
++                cover = &groundCovers[groundCoverNext];
++                groundCoverNext = (groundCoverNext + 1) % uint32_t(groundCovers.size());
++                snowGroundVertices(*groundPositionsData, groundFaceRanges, layers, groundVertexFirst, groundVertexEnd, groundRamp, cover->positions);
++                cover->key = groundKey;
++            }
++            if (snowPositionsSource == snowPositionsFallback) {
++                snowPositionsSource = cover->positions.data();
++                snowPositionsRange = { size_t(groundVertexFirst) * 4, size_t(groundVertexEnd) * 4 };
++            }
++            else {
++                // (Both: the snow's span, then the ground's own vertices over it.)
++                const size_t first = std::min(snowPositionsRange.first, size_t(groundVertexFirst) * 4);
++                const size_t end = std::max(snowPositionsRange.second, size_t(groundVertexEnd) * 4);
++                sharedPositions.resize(end);
++                std::copy(snowPositionsSource + snowPositionsRange.first, snowPositionsSource + snowPositionsRange.second, sharedPositions.begin() + snowPositionsRange.first);
++                for (const auto &[start, triangles] : groundFaceRanges) {
++                    for (uint32_t k = start; k < start + triangles * 3; k++) {
++                        const size_t v = size_t(groundPositionsData->faceIndices[k]) * 4;
++                        std::copy(cover->positions.begin() + v, cover->positions.begin() + v + 4, sharedPositions.begin() + v);
++                    }
++                }
++                snowPositionsSource = sharedPositions.data();
++                snowPositionsRange = { first, end };
++            }
++        }
++        else if (frameParams.groundParams.x > 0.0f) {
++            frameParams.groundParams.z = -std::abs(frameParams.groundParams.z);
++        }
 +        // TOOIE_GRASS_LOG: twice a second, the road grid's box and how much of it went to the GPU.
 +        static const bool grassMaskLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
 +        if (grassMaskLog) {
@@ -6048,7 +6120,7 @@ index 9fae0d4..d77c884 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..86980e5 100644
+index 3add9c3..f67aeaa 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -6133,7 +6205,7 @@ index 3add9c3..86980e5 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +115,232 @@ namespace RT64 {
+@@ -62,11 +115,244 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -6186,6 +6258,18 @@ index 3add9c3..86980e5 100644
 +        uint32_t snowGroundNext = 0;
 +        float snowPositionsFallback[4] = {};
 +        BufferPair snowPositionsBuffer;
++        // Banjo-Tooie: displaced ground's vertices this frame, in the same buffer as deep snow's (their draws never share
++        // vertices): world x, y, z, then how much of the dips may show there, 0 on the edge of the displaced ground and
++        // where another draw lies over it (the grass edging the game paints over dirt), so the ground doesn't sink away
++        // from it (snowGroundVertices). Other ground's faces for that come from groundLayerRanges.
++        uint32_t groundVertexFirst = UINT32_MAX;
++        uint32_t groundVertexEnd = 0;
++        const DrawData *groundPositionsData = nullptr;
++        std::vector<std::pair<uint32_t, uint32_t>> groundFaceRanges;
++        std::vector<std::pair<const DrawData *, std::pair<uint32_t, uint32_t>>> groundLayerRanges;
++        std::array<SnowGround, 2> groundCovers;
++        uint32_t groundCoverNext = 0;
++        std::vector<float> sharedPositions;
 +        // Banjo-Tooie: the tessellated snow's (and sand's) occlusion culling (SnowTess.hlsl), on the grass's depth
 +        // pyramid: the framebuffer its draws are in this frame, whether the pyramid was built from it last frame, and
 +        // the camera it was built with.
@@ -6366,7 +6450,7 @@ index 3add9c3..86980e5 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +351,13 @@ namespace RT64 {
+@@ -77,6 +363,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -6380,7 +6464,7 @@ index 3add9c3..86980e5 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +368,14 @@ namespace RT64 {
+@@ -87,6 +380,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -6395,7 +6479,7 @@ index 3add9c3..86980e5 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +389,7 @@ namespace RT64 {
+@@ -100,6 +401,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -6403,7 +6487,7 @@ index 3add9c3..86980e5 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +413,10 @@ namespace RT64 {
+@@ -123,6 +425,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -6414,7 +6498,7 @@ index 3add9c3..86980e5 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +458,15 @@ namespace RT64 {
+@@ -164,7 +470,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -7526,10 +7610,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..e91dd69
+index 0000000..30e40ff
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3519 @@
+@@ -0,0 +1,3520 @@
 +//
 +// RT64
 +//
@@ -9560,9 +9644,10 @@ index 0000000..e91dd69
 +    static std::mutex waterTessMutex;
 +    static WaterTessShared waterTessShared;
 +
-+    void SetSceneGroundDisplacement(float amount) {
++    void SetSceneGroundDisplacement(float amount, float reach) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
++        effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
 +    }
 +
 +    float SceneGroundDisplacement() {
@@ -9638,7 +9723,7 @@ index 0000000..e91dd69
 +        // Displaced ground: the deepest part of a texture is pushed down by up to 16 units at the full setting, cut into at
 +        // most 16 pieces an edge no shorter than 12 units, fading out over 1400 to 2800 units from the camera.
 +        if (ground) {
-+            frameParams.groundParams = { 16.0f * settings.groundDisplacement, 16.0f, 12.0f, 2800.0f };
++            frameParams.groundParams = { 16.0f * settings.groundDisplacement, 16.0f, 12.0f, settings.groundReach };
 +        }
 +        if (!water) {
 +            return 2;
@@ -11051,10 +11136,10 @@ index 0000000..e91dd69
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..5de8ad3
+index 0000000..d8ae3c1
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,573 @@
+@@ -0,0 +1,574 @@
 +//
 +// RT64
 +//
@@ -11135,6 +11220,7 @@ index 0000000..5de8ad3
 +        float waterDetail = 0.0f;
 +        // Displaced ground (0 to 1; 0 off).
 +        float groundDisplacement = 0.0f;
++        float groundReach = 8000.0f;
 +        // Modern water under the water: how far into the underwater look (0 to 1), the water's surface height and
 +        // whether the whole level is under water (Atlantis, the Sea Bottom).
 +        float modernUnderwater = 0.0f;
@@ -11520,7 +11606,7 @@ index 0000000..5de8ad3
 +    void SetSceneWaterDetail(float detail);
 +    // Banjo-Tooie: Graphics > Displaced ground (0 to 1, 0 off): level ground with a parallax texture drawn as a tessellated,
 +    // displaced surface (GroundTess.hlsl).
-+    void SetSceneGroundDisplacement(float amount);
++    void SetSceneGroundDisplacement(float amount, float reach);
 +    float SceneGroundDisplacement();
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
@@ -13480,10 +13566,10 @@ index e7895c3..d9ea037 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..3f0c600 100644
+index 74b1fa0..3bb87c7 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,16 +11,74 @@
+@@ -11,16 +11,83 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -13554,12 +13640,21 @@ index 74b1fa0..3f0c600 100644
 +        const float4 world = float4(dot(FrParams.waterClipToWorld[0], ndcPos), dot(FrParams.waterClipToWorld[1], ndcPos),
 +            dot(FrParams.waterClipToWorld[2], ndcPos), dot(FrParams.waterClipToWorld[3], ndcPos));
 +        oFurAnchor = float4(world.xyz / ((abs(world.w) > 1e-8f) ? world.w : 1e-8f), 1.0f);
++        // (Displaced ground: its vertex's place and how much of the dips may show there, when the frame has them,
++        // rt64_framebuffer_renderer.cpp; level ground's positions are the world's.)
++        if (((gConstants.groundDisplace & RASTER_GROUND_DISPLACE) != 0) && (FrParams.groundParams.z > 0.0f)) {
++            uint positionCount, positionStride;
++            snowPositions.GetDimensions(positionCount, positionStride);
++            if ((iVertexId * 4 + 3) < positionCount) {
++                oFurAnchor = float4(snowPositions[iVertexId * 4], snowPositions[iVertexId * 4 + 1], snowPositions[iVertexId * 4 + 2], snowPositions[iVertexId * 4 + 3]);
++            }
++        }
 +    }
 +
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +91,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +100,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -13573,7 +13668,7 @@ index 74b1fa0..3f0c600 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +118,19 @@ void VSMain(
+@@ -53,17 +127,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR

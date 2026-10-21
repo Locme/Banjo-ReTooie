@@ -131,6 +131,7 @@ namespace tooie::picture_filters {
     inline const std::string parallax_option = "parallax";
     inline const std::string fence_thickness_option = "fence_thickness";
     inline const std::string ground_displacement_option = "ground_displacement";
+    inline const std::string ground_displacement_distance_option = "ground_displacement_distance";
     inline const std::string parallax_original_option = "parallax_original";
     // Banjo's fur: shells of strands over his brown fur (rt64-ext/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";

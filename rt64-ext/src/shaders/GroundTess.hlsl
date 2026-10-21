@@ -48,14 +48,18 @@ float4 GroundClip(float3 world) {
     return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
 }
 
-// How finely an edge between two world points is cut: finer near the camera, never more than the cap, and no finer than
-// the shortest piece. By the edge alone, so the triangles either side of it cut it the same way and no cracks open.
+// How finely an edge between two world points is cut: by its length alone (one piece per few units, never more than the
+// cap), so the new vertices stay put in the world as the camera moves and the ground doesn't swim; uncut past the reach,
+// where the dips have faded out. By the edge alone, so the triangles either side of it cut it the same way and no cracks
+// open. (The camera's distance is to the nearest point on the edge, so a big triangle under the camera is still cut.)
 float GroundEdgeFactor(float3 a, float3 b) {
     const float4 params = FrParams.groundParams;
-    const float cameraDistance = distance((a + b) * 0.5f, FrParams.waterCamera.xyz);
-    const float near = 1.0f - smoothstep(params.w * 0.15f, params.w * 0.6f, cameraDistance);
-    const float wanted = 1.0f + (params.y - 1.0f) * near;
-    return clamp(min(wanted, distance(a, b) / params.z), 1.0f, params.y);
+    const float3 ab = b - a;
+    const float t = saturate(dot(FrParams.waterCamera.xyz - a, ab) / max(dot(ab, ab), 1e-4f));
+    if (distance(a + ab * t, FrParams.waterCamera.xyz) > params.w) {
+        return 1.0f;
+    }
+    return clamp(length(ab) / abs(params.z), 1.0f, params.y);
 }
 
 // Whether all three corners lie past one side of the screen (with room for the dips to reach back in).
@@ -113,6 +117,9 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
     v.smoothColor = patch[0].smoothColor * w.x + patch[1].smoothColor * w.y + patch[2].smoothColor * w.z;
     v.flatColor = patch[0].flatColor;
     v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
+    // (How much of the dips may show here: 0 on the edge of the displaced ground and where another draw lies over it,
+    // the vertex shader's anchor w.)
+    const float dipShare = saturate(v.furAnchor.w);
     v.furAnchor.w = 0.0f;
 
     const float3 a = patch[0].furAnchor.xyz;
@@ -123,7 +130,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
     const float3 world = v.furAnchor.xyz;
     const float cameraDistance = distance(world, FrParams.waterCamera.xyz);
     // Left as it is on a wall or a sliver, far off, and (below) at the triangle's own edges.
-    float fade = 1.0f - smoothstep(FrParams.groundParams.w * 0.5f, FrParams.groundParams.w, cameraDistance);
+    float fade = 1.0f - smoothstep(FrParams.groundParams.w * 0.75f, FrParams.groundParams.w, cameraDistance);
     if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || (FrParams.groundParams.x <= 0.0f)) {
         fade = 0.0f;
     }
@@ -136,6 +143,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
         const float d1 = w.y * normalLength / max(length(a - c), 1e-4f);
         const float d2 = w.z * normalLength / max(length(b - a), 1e-4f);
         fade *= smoothstep(0.0f, GroundEdgeMargin, min(d0, min(d1, d2)));
+        fade *= dipShare;
     }
     if (fade > 0.0f) {
         // The draw's first texture, as the pixel shader finds it (the ubershader's tile lookups, RasterPS.hlsl).
@@ -159,11 +167,13 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
         const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
         const float2 range = float2((bits >> 8) & 0xFF, (bits >> 16) & 0xFF) / 255.0f;
 
-        // The texture's depth, averaged over about the spacing of the new vertices (five taps), so a thin crack the
-        // vertices would step over doesn't pop in and out as they move.
+        // The texture's depth, blurred over the spacing of the new vertices (a mip level that wide, and five taps), so
+        // a vertex never lands on detail finer than the mesh can show: fine cracks between vertices would make the ground
+        // jagged and noisy.
         const float3 span = max(float3(length(b - a), length(c - b), length(a - c)), 1e-3f);
         const float2 uvPerUnit = max(abs(patch[1].uv - patch[0].uv) / span.x, max(abs(patch[2].uv - patch[1].uv) / span.y, abs(patch[0].uv - patch[2].uv) / span.z));
-        const float2 radius = uvPerUnit * (FrParams.groundParams.z * 0.5f);
+        const float spacing = max(max(span.x, max(span.y, span.z)) / max(p.inside, 1.0f), abs(FrParams.groundParams.z));
+        const float2 radius = uvPerUnit * (spacing * 0.5f);
         const float2 ddxUV = float2(radius.x * 2.0f, 0.0f);
         const float2 ddyUV = float2(0.0f, radius.y * 2.0f);
         // (A loop, not five copies: the texture lookup is a big function.)

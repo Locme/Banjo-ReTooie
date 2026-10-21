@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T518 Displaced ground: wobble, distance, grass edging
+- Asked: 2026-10-21 17:39 UTC
+- Build: main
+- Steps:
+  1. Pull main and build; keep Parallax on original textures on and Displaced ground at 60
+  2. Walk and turn the camera on Spiral Mountain's dirt and stone floors, the spot from your screenshot (the eggs by the dirt slope)
+  3. Try Graphics > Shaders > Displaced ground distance at 8000 (default), 4000 and 16000
+- Look for: The ground no longer wobbles as the camera moves; the grass edging over the dirt shows in full again (the dirt stays flat under it); the dips reach much further off and fade out gently. Say how the frame rate changes with the distance.
+- Status: waiting for L
+
 ## T517 Mirror Mode: transitions not mirrored
 - Asked: 2026-10-21 15:59 UTC
 - Build: main, next push (untested)
