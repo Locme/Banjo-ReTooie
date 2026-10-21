@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T511 Faint line on top of fences with texture upscaling
+- Asked: 2026-10-21 13:06 UTC
+- Build: main
+- Steps:
+  1. Turn Texture upscaling on (2x or 4x)
+  2. Look at a fence's top edge
+  3. Compare with upscaling off
+- Look for: Is the faint line along the top edge of the fence gone? If it stays with upscaling off too, say so: then it is the game's own texture
+- Status: waiting for L
+
 ## T510 Dump sounds (DEV)
 - Asked: 2026-10-21 12:38 UTC
 - Build: main @ cbfad44

@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Texture upscaling no longer draws a faint line along the top edge of fences and other cut-out textures: past the texture's edge it wrapped round to the far side even where that side was nothing like the edge (the fence's bottom bled into its top). It now repeats the edge pixel there; tiling textures wrap as before. Untested on PC.
 - See-through textures no longer look solid with the screen effects on: the nearly clear parts of a see-through 3D quad (under about 20% opaque) wrote depth, so ambient occlusion, fog and outlines treated the clear quad as a wall and showed its straight edge on the floor behind it. Those pixels now leave no depth, and the look with the effects off is unchanged. Untested on PC (T503).
 - Replaying Klungo's second or third fight no longer gets stuck after he drinks. With saves that hadn't seen his potions in the story, the replay gave him no potion, so he stood still with the letterbox up and no bottle; he now gets a random potion order, as outside a replay (L). Checked headless with fresh saves (fights 2 and 3).
 - Belly jiggle: the tooth necklace no longer vanishes as the belly swings (it moves in one piece), and the belly moves most just above the belt, less and less up to the chest (L). Untested on PC (T463).
