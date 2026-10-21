@@ -51,7 +51,10 @@ namespace tooie::picture_filters {
     inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
-    inline const std::string toon_shading_option = "toon_shading";
+    // Toon shading apart for the level and for characters (the old single "toon_shading" is carried over to both once, see
+    // split_saved_toon_shading in src/game/config.cpp).
+    inline const std::string toon_world_option = "toon_shading_world";
+    inline const std::string toon_characters_option = "toon_shading_characters";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";

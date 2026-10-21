@@ -230,6 +230,36 @@ namespace {
     }
 }
 
+namespace {
+    // Toon shading became two sliders, Characters and World (L, 2026-10-21). A value saved under the old single
+    // "toon_shading" is carried to both once, unless graphics.json already has either of the new ones. Done on the
+    // file before the configs load.
+    void split_saved_toon_shading() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        const std::filesystem::path marker = dir / "toon_shading_split.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        const std::filesystem::path path = dir / "graphics.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (json.is_object() && json.contains("toon_shading")) {
+            if (json["toon_shading"].is_number() && !json.contains(tooie::picture_filters::toon_world_option) &&
+                !json.contains(tooie::picture_filters::toon_characters_option))
+            {
+                json[tooie::picture_filters::toon_world_option] = json["toon_shading"];
+                json[tooie::picture_filters::toon_characters_option] = json["toon_shading"];
+            }
+            json.erase("toon_shading");
+            std::ofstream file(path, std::ios::trunc);
+            file << json.dump(4);
+        }
+        std::ofstream{marker};
+    }
+}
+
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
@@ -847,6 +877,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
+    split_saved_toon_shading();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();

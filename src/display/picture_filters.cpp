@@ -60,7 +60,7 @@ namespace RT64 {
     void SetSceneDepthOfField(float strength, bool onBanjo);
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
-    void SetSceneToonShading(float strength);
+    void SetSceneToonShading(float world, float characters);
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength, bool warmOnly);
     void SetSceneWaterReflections(float strength);
@@ -3975,7 +3975,8 @@ namespace {
         { &tooie::picture_filters::gameplay_dof_option, 0.0 },
         { &tooie::picture_filters::eye_adaptation_option, 0.0 },
         { &tooie::picture_filters::rim_light_option, 0.0 },
-        { &tooie::picture_filters::toon_shading_option, 0.0 },
+        { &tooie::picture_filters::toon_world_option, 0.0 },
+        { &tooie::picture_filters::toon_characters_option, 0.0 },
         { &tooie::picture_filters::underwater_tint_option, 0.0 },
         { &tooie::picture_filters::underwater_haze_option, 0.0 },
         { &tooie::picture_filters::heat_haze_option, 0.0 },
@@ -4425,7 +4426,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneIceReflections((float)(shader(value<double>(ice_reflections_option, 0.0)) / 100.0));
     water_settings_changed = true;
     RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
-    RT64::SetSceneToonShading((float)(shader(value<double>(toon_shading_option, 0.0)) / 100.0));
+    RT64::SetSceneToonShading((float)(shader(value<double>(toon_world_option, 0.0)) / 100.0), (float)(shader(value<double>(toon_characters_option, 0.0)) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
@@ -4901,9 +4902,14 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
-        toon_shading_option,
-        "Toon shading",
-        "Breath of the Wild style cel shading: the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
+        toon_characters_option,
+        "Toon shading: Characters",
+        "Cel shading for Banjo, Kazooie and the game's other characters, enemies and objects: the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        toon_world_option,
+        "Toon shading: World",
+        "The same cel shading for the level itself: the ground, walls, buildings and sky. Set it apart from the characters' to have one without the other. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         underwater_tint_option,
@@ -5348,7 +5354,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5377,7 +5383,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(toon_shading_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(toon_characters_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(toon_world_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);

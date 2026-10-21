@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T497 Toon shading split: Characters and World
+- Asked: 2026-10-21 09:35 UTC
+- Build: main (this commit; not built or run in the container)
+- Steps:
+  1. Graphics > Lighting: set Toon shading: Characters to 100 and Toon shading: World to 0
+  2. Walk round Spiral Mountain, look at Banjo, Kazooie and any enemy
+  3. Swap them: Characters 0, World 100
+  4. Both 100, then both 0
+  5. If you had Toon shading raised before, check both sliders start at that value
+- Look for: Characters 100 alone flattens only Banjo, Kazooie, enemies and objects, leaving the ground and walls as the game drew them. World 100 alone flattens the level and leaves characters alone. Both at 0 look exactly like before. Tell me if a character edge shows a halo, if characters in water or behind water are wrong, or if water, reflections or shiny metal look different with Characters raised. Note: gold or metal characters count as shiny and may follow the World slider.
+- Status: waiting for L
+
 ## T496 Tessellated sand: edges, tire tracks, sharper footprints
 - Asked: 2026-10-21 08:59 UTC
 - Build: main
@@ -102,11 +114,11 @@
 - Look for: (Updated 2026-10-21 after L's first look: beams now take each window's shape, round, hexagonal or tall, and end in a lit patch of that shape on the floor.) See-through white beams fall from each window down onto the floor and light a patch of it, with the same streaky look as the beams in Mumbo's Skull; they don't flicker, cut off or show through walls, and Banjo walking through them looks right. Off gives the rooms back as before. Checked offline (the game's models drawn with its own textures): screens/window-beams/ in project files. Headless the game loaded the beams' models in all three rooms with no error, but the container could not draw a picture, so how they look in the game is untested. Too bright, too faint, too long or too short?
 - Status: waiting for L
 
-## T485 Toon shading (BotW style)
+## T485 Toon shading (now two sliders, see the newest test)
 - Asked: 2026-10-20 23:40 UTC
 - Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
 - Steps:
-  1. Graphics > Lighting: raise Toon shading (default 0 = off) to 100
+  1. Graphics > Lighting: raise Toon shading: World and Characters (default 0 = off) to 100
   2. Walk round Spiral Mountain in sun and in shade; try with Toon outlines and Rim light on
 - Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
 - Status: waiting for L
