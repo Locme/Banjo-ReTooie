@@ -353,8 +353,8 @@ their texture is drawn.
   distance, whether on screen or not, so shadows don't come and go as the camera
   turns. Past 6000 shadows get a little blurrier, and higher costs more. Applies
   at once. Default: 3000.
-- **Window Light Beams**: see-through beams of light fall from the windows onto
-  the floor in Bottles' house, Banjo's house and King Jingaling's throne room,
+- **Window Light Beams**: see-through beams of light, shaped like their windows,
+  fall from the windows and light a patch of the floor in Bottles' house, Banjo's house and King Jingaling's throne room,
   like the beams under the windows in Mumbo's Skull. Switching it in one of
   those rooms reloads the room. Default: on.
 - **Day and Night**: a day and night cycle in the levels that are daytime under

@@ -4,7 +4,9 @@
 // and 0x1D02) lights its two window eyes with beams the game draws in the room's see-through model
 // 0x1D02: an eight-sided tube from each window down to the floor, white, faded from alpha 153 at the
 // window to 0 at the floor, textured with the streaky light texture 0xF2 (64x64 IA8). Other rooms
-// with bright windows have no beams. When the option is on, they get the same tubes:
+// with bright windows have no beams. When the option is on, they get the same tubes, and a pool of
+// light on the floor where each lands (Mumbo's Skull has its pools baked into the floor's shading,
+// so these are laid over the floor of the room's solid model instead):
 // - Bottles' house (maps 0x143, 0x169, 0x191, 0x192; models 0x1DD0 and 0x1DD3): its two round
 //   windows either side of the doorway to the stairs. Its see-through model 0x1DD3 (the lamps'
 //   glows) is loaded with the beams added.
@@ -35,38 +37,68 @@
 #include "tooie_window_beams.h"
 
 namespace {
+    using Outline = std::vector<std::array<float, 2>>;
     struct Window {
         float x, y, z;              // the middle of the window, on the room side
         float nx, nz;               // the way it faces into the room (level)
-        float half_w, half_h;       // the tube's size there, across and up
+        const Outline* shape;       // the glass's corners round the middle, across and up, in order
         float floor_y;              // the floor where its beam lands
     };
+
+    // The windows' shapes, read off their glass in the solid models. Bottles' are round (the glass
+    // an octagon of radius 97 behind a round frame; ten corners keep the vertices in one load).
+    Outline round(float radius, int corners) {
+        Outline out;
+        for (int i = 0; i < corners; i++) {
+            const float a = (i + 0.5f) * 2.0f * 3.14159265f / corners;
+            out.push_back({ radius * std::cos(a), radius * std::sin(a) });
+        }
+        return out;
+    }
+    const Outline bottles_window = round(100.0f, 10);
+    const Outline banjo_window = {      // hexagonal, its glass texture 0x113
+        { 76.0f, 11.0f }, { 36.0f, 63.0f }, { -36.0f, 63.0f }, { -76.0f, 11.0f }, { -50.0f, -62.0f }, { 50.0f, -62.0f },
+    };
+    const Outline throne_window = {     // tall and square, 300 by 800
+        { 150.0f, 400.0f }, { -150.0f, 400.0f }, { -150.0f, -400.0f }, { 150.0f, -400.0f },
+    };
+
     struct Room {
         std::array<uint16_t, 4> maps;
+        uint32_t solid;             // its solid model, for the floor under the pools of light
         uint32_t model;             // its see-through model, or the stand-in id when it has none
         bool stand_in;
         std::vector<Window> windows;
     };
     const std::array<Room, 3> rooms = {{
-        { { 0x143, 0x169, 0x191, 0x192 }, 0x1DD3, false, {
-            { 529.0f, 443.0f, -2137.0f, -0.162f, 0.987f, 110.0f, 110.0f, 262.0f },   // right of the doorway (from inside)
-            { -553.0f, 422.0f, -2155.0f, 0.215f, 0.977f, 110.0f, 110.0f, 282.0f },   // left of the doorway
+        { { 0x143, 0x169, 0x191, 0x192 }, 0x1DD0, 0x1DD3, false, {
+            { 529.0f, 443.0f, -2137.0f, -0.162f, 0.987f, &bottles_window, 262.0f },   // right of the doorway (from inside)
+            { -553.0f, 422.0f, -2155.0f, 0.215f, 0.977f, &bottles_window, 282.0f },   // left of the doorway
         } },
-        { { 0x173, 0x173, 0x173, 0x173 }, 0x1D49, true, {
-            { 250.0f, 116.0f, 304.0f, 0.0f, -1.0f, 66.0f, 54.0f, 0.0f },             // either side of the door
-            { -250.0f, 116.0f, 304.0f, 0.0f, -1.0f, 66.0f, 54.0f, 0.0f },
-            { -456.0f, 116.0f, -131.0f, 1.0f, 0.0f, 66.0f, 54.0f, 0.0f },            // by the fireplace
+        { { 0x173, 0x173, 0x173, 0x173 }, 0x1D08, 0x1D49, true, {
+            { 250.0f, 116.0f, 304.0f, 0.0f, -1.0f, &banjo_window, 0.0f },             // either side of the door
+            { -250.0f, 116.0f, 304.0f, 0.0f, -1.0f, &banjo_window, 0.0f },
+            { -456.0f, 116.0f, -131.0f, 1.0f, 0.0f, &banjo_window, 0.0f },            // by the fireplace
         } },
-        { { 0x144, 0x199, 0x199, 0x199 }, 0x1D97, true, {
-            { 1496.0f, -100.0f, -2350.0f, -1.0f, 0.0f, 140.0f, 390.0f, -650.0f },
-            { 1496.0f, -100.0f, -1650.0f, -1.0f, 0.0f, 140.0f, 390.0f, -650.0f },
+        { { 0x144, 0x199, 0x199, 0x199 }, 0x1DD1, 0x1D97, true, {
+            { 1496.0f, -100.0f, -2350.0f, -1.0f, 0.0f, &throne_window, -650.0f },
+            { 1496.0f, -100.0f, -1650.0f, -1.0f, 0.0f, &throne_window, -650.0f },
         } },
     }};
     constexpr float drop_degrees = 35.0f;     // how steeply the light falls into the room
-    constexpr int sides = 8;                  // as Mumbo's
     constexpr uint8_t top_alpha = 153;        // Mumbo's, at the window; 0 at the floor
     constexpr uint32_t light_texture = 0xF2;  // Mumbo's beams' streaks
     constexpr uint32_t ia8_type = 0x10, ia8_size = 64 * 64;
+    // The pool of light where a beam lands: rings round the middle of the beam's foot (scaled from
+    // the foot's corners), their alpha, all on one bright texel of the light texture (16, 22) so the
+    // streaks don't show on the floor. The pool has the window's shape, with a narrow soft edge.
+    // Mumbo's Skull has its pools baked into the floor's shading.
+    constexpr std::array<float, 4> pool_rings = { 0.0f, 0.5f, 1.0f, 1.1f };
+    constexpr std::array<uint8_t, 4> pool_alpha = { 90, 90, 80, 0 };
+    constexpr std::array<uint8_t, 3> pool_colour = { 255, 238, 200 };   // a little warm, as sunlight on the floor
+    constexpr int16_t pool_s = 16 * 32 + 16, pool_t = 22 * 32 + 16;
+    constexpr float pool_lift = 2.0f;         // above the floor, so it doesn't fight it
+    constexpr float floor_reach = 80.0f;      // how far from the beam's floor height a floor may be
 
     std::atomic<uint16_t> looked_up_map{ 0 };
 
@@ -102,6 +134,7 @@ namespace {
     struct Vertex {
         int16_t x, y, z, s, t;
         uint8_t a;
+        bool pool = false;
     };
 
     // One window's tube: a ring of corners round the window, the same ring where the light meets
@@ -112,11 +145,13 @@ namespace {
         // Across the window (level) and up it.
         const float ax = -w.nz, az = w.nx;
         for (int ring = 0; ring < 2; ring++) {
+            const Outline& shape = *w.shape;
+            const int sides = int(shape.size());
             for (int i = 0; i <= sides; i++) {
-                const float a = (i + 0.5f) * 2.0f * 3.14159265f / sides;
-                float x = w.x + w.half_w * std::cos(a) * ax;
-                float y = w.y + w.half_h * std::sin(a);
-                float z = w.z + w.half_w * std::cos(a) * az;
+                const auto& [across, up] = shape[i % sides];
+                float x = w.x + across * ax;
+                float y = w.y + up;
+                float z = w.z + across * az;
                 if (ring == 1) {
                     const float along = (y - w.floor_y) / -dy;
                     x += dx * along; y = w.floor_y; z += dz * along;
@@ -128,9 +163,107 @@ namespace {
         }
     }
 
+    // The solid model's triangles that face up, for the floor's height under the pools.
+    struct Triangle {
+        std::array<std::array<float, 3>, 3> p;
+    };
+    std::vector<Triangle> floor_triangles(const std::vector<uint8_t>& solid) {
+        std::vector<Triangle> out;
+        if (solid.size() < 0x58 || rd32(solid, 0) != 0x0B) {
+            return out;
+        }
+        const uint32_t dl_at = rd32(solid, 0x0C), vtx_at = rd32(solid, 0x10);
+        const uint32_t ncmd = rd32(solid, dl_at), nv = rd16(solid, vtx_at + 0x16) / 2;
+        if (dl_at + 8 + 8 * uint64_t(ncmd) > solid.size() || vtx_at + 0x18 + 16 * uint64_t(nv) > solid.size()) {
+            return out;
+        }
+        std::array<uint32_t, 64> slots{};
+        auto point = [&](uint32_t slot) {
+            const size_t o = vtx_at + 0x18 + 16 * std::min(slots[slot & 63], nv - 1);
+            return std::array<float, 3>{ float(int16_t(rd16(solid, o))), float(int16_t(rd16(solid, o + 2))), float(int16_t(rd16(solid, o + 4))) };
+        };
+        auto add = [&](uint32_t word) {
+            Triangle t{ { point(((word >> 16) & 0xFF) / 2), point(((word >> 8) & 0xFF) / 2), point((word & 0xFF) / 2) } };
+            const float ux = t.p[1][0] - t.p[0][0], uz = t.p[1][2] - t.p[0][2];
+            const float vx = t.p[2][0] - t.p[0][0], vz = t.p[2][2] - t.p[0][2];
+            if (std::abs(ux * vz - uz * vx) > 1.0f) {
+                out.push_back(t);
+            }
+        };
+        for (uint32_t k = 0; k < ncmd && nv != 0; k++) {
+            const uint32_t w0 = rd32(solid, dl_at + 8 + 8 * k), w1 = rd32(solid, dl_at + 12 + 8 * k);
+            switch (w0 >> 24) {
+            case 0x01: {    // G_VTX
+                const uint32_t count = (w0 >> 12) & 0xFF, end = (w0 & 0xFF) / 2, first = (w1 & 0xFFFFFF) / 16;
+                for (uint32_t j = 0; j < count && end >= count; j++) {
+                    slots[(end - count + j) & 63] = first + j;
+                }
+                break;
+            }
+            case 0x05:      // G_TRI1
+                add(w0);
+                break;
+            case 0x06:      // G_TRI2
+                add(w0);
+                add(w1);
+                break;
+            }
+        }
+        return out;
+    }
+
+    // The floor's height at (x, z): the triangle under it nearest the height the beam lands at.
+    float floor_at(const std::vector<Triangle>& floor, float x, float z, float near_y) {
+        float best = near_y;
+        float best_gap = floor_reach;
+        for (const Triangle& t : floor) {
+            const auto& a = t.p[0];
+            const auto& b = t.p[1];
+            const auto& c = t.p[2];
+            const float den = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+            const float l0 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / den;
+            const float l1 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / den;
+            const float l2 = 1.0f - l0 - l1;
+            if (l0 < 0.0f || l1 < 0.0f || l2 < 0.0f) {
+                continue;
+            }
+            const float y = l0 * a[1] + l1 * b[1] + l2 * c[1];
+            if (std::abs(y - near_y) < best_gap) {
+                best_gap = std::abs(y - near_y);
+                best = y;
+            }
+        }
+        return best;
+    }
+
+    // One window's pool of light: a middle vertex, then rings of corners round it, each laid on
+    // the floor. Uses the tube's floor ring (the vertices just added by add_tube).
+    void add_pool(std::vector<Vertex>& out, const Window& w, const std::vector<Triangle>& floor) {
+        const int sides = int(w.shape->size());
+        const Vertex* foot = &out[out.size() - (sides + 1)];
+        float cx = 0.0f, cz = 0.0f;
+        for (int i = 0; i < sides; i++) {
+            cx += foot[i].x;
+            cz += foot[i].z;
+        }
+        cx /= sides;
+        cz /= sides;
+        Outline corner(sides);
+        for (int i = 0; i < sides; i++) {
+            corner[i] = { foot[i].x - cx, foot[i].z - cz };
+        }
+        for (size_t ring = 0; ring < pool_rings.size(); ring++) {
+            for (int i = 0; i < (ring == 0 ? 1 : sides); i++) {
+                const float x = cx + corner[i][0] * pool_rings[ring], z = cz + corner[i][1] * pool_rings[ring];
+                const float y = floor_at(floor, x, z, w.floor_y) + pool_lift;
+                out.push_back({ int16_t(std::lround(x)), int16_t(std::lround(y)), int16_t(std::lround(z)), pool_s, pool_t, pool_alpha[ring], true });
+            }
+        }
+    }
+
     // The room's see-through model with the beams: base is its own (decompressed), or empty for a
     // model holding only the beams. Empty when base is not what is expected.
-    std::vector<uint8_t> build(const std::vector<uint8_t>& base, const Room& room) {
+    std::vector<uint8_t> build(const std::vector<uint8_t>& base, const std::vector<uint8_t>& solid, const Room& room) {
         std::vector<uint8_t> out;
         uint32_t geo_at = 0, ncmd = 0, nv = 0, dl_at = 0, vtx_at = 0, ntex = 0;
         if (!base.empty()) {
@@ -151,9 +284,12 @@ namespace {
         // Where the light texture goes in segment 2: after the model's own textures.
         const uint32_t light_at = base.empty() ? 0 : rd32(base, 0x50);
 
+        // Each window's tube, then its pool.
+        const std::vector<Triangle> floor = floor_triangles(solid);
         std::vector<Vertex> tubes;
         for (const Window& w : room.windows) {
             add_tube(tubes, w);
+            add_pool(tubes, w, floor);
         }
 
         // The beams' draw, with Mumbo's commands (0x1D02's draws).
@@ -164,10 +300,11 @@ namespace {
             { 0xF2000000, 0x000FC0FC }, { 0xE7000000, 0x00000000 }, { 0xFC129804, 0x3F15FFFF },
             { 0xDE000000, 0x03000020 },
         };
-        const uint32_t per_tube = 2 * (sides + 1);
-        uint32_t ntri = 0;
-        for (uint32_t t = 0; t < room.windows.size(); t++) {
-            beams.push_back({ 0x01000000 | (per_tube << 12) | (per_tube * 2), 0x01000000 + (nv + t * per_tube) * 16 });
+        uint32_t ntri = 0, first = nv;
+        for (const Window& w : room.windows) {
+            const uint32_t sides = uint32_t(w.shape->size());
+            const uint32_t per_tube = 2 * (sides + 1), per_pool = 1 + sides * (uint32_t(pool_rings.size()) - 1);
+            beams.push_back({ 0x01000000 | (per_tube << 12) | (per_tube * 2), 0x01000000 + first * 16 });
             auto tri = [](uint32_t a, uint32_t b, uint32_t c) { return (a * 2 << 16) | (b * 2 << 8) | (c * 2); };
             for (uint32_t i = 0; i < sides; i++) {
                 const uint32_t t0 = i, t1 = i + 1, b0 = sides + 1 + i, b1 = sides + 2 + i;
@@ -176,6 +313,23 @@ namespace {
                 beams.push_back({ 0x06000000 | tri(t0, b0, b1), tri(b1, t1, t0) });
                 ntri += 4;
             }
+            // The pool, loaded in the tube's place (more than 32 vertices don't fit at once): a fan
+            // round the middle, then a band between each ring and the next.
+            beams.push_back({ 0x01000000 | (per_pool << 12) | (per_pool * 2), 0x01000000 + (first + per_tube) * 16 });
+            for (uint32_t i = 0; i < sides; i++) {
+                const uint32_t m = 0, a = 1 + i, b = 1 + (i + 1) % sides;
+                beams.push_back({ 0x05000000 | tri(m, a, b), 0 });
+                ntri += 1;
+            }
+            for (uint32_t ring = 1; ring + 1 < pool_rings.size(); ring++) {
+                const uint32_t in = 1 + (ring - 1) * sides, out = in + sides;
+                for (uint32_t i = 0; i < sides; i++) {
+                    const uint32_t j = (i + 1) % sides;
+                    beams.push_back({ 0x06000000 | tri(in + i, out + i, out + j), tri(out + j, in + j, in + i) });
+                    ntri += 2;
+                }
+            }
+            first += per_tube + per_pool;
         }
         beams.push_back({ 0xDF000000, 0x00000000 });
 
@@ -230,7 +384,8 @@ namespace {
         for (const Vertex& v : tubes) {
             push16(vtx, uint16_t(v.x)); push16(vtx, uint16_t(v.y)); push16(vtx, uint16_t(v.z)); push16(vtx, 0);
             push16(vtx, uint16_t(v.s)); push16(vtx, uint16_t(v.t));
-            vtx.push_back(255); vtx.push_back(255); vtx.push_back(255); vtx.push_back(v.a);
+            for (int k = 0; k < 3; k++) vtx.push_back(v.pool ? pool_colour[k] : 255);
+            vtx.push_back(v.a);
         }
 
         // Geometry list: the model's own, with a draw node for the beams after its last top-level node.
@@ -355,7 +510,7 @@ std::vector<uint8_t> tooie::window_beams::model_for(uint32_t id, std::vector<uin
         static std::array<std::vector<uint8_t>, rooms.size()> built;
         std::lock_guard lock{ built_mutex };
         if (built[r].empty()) {
-            built[r] = build(room.stand_in ? std::vector<uint8_t>() : rom_asset(room.model), room);
+            built[r] = build(room.stand_in ? std::vector<uint8_t>() : rom_asset(room.model), rom_asset(room.solid), room);
             if (built[r].empty()) {
                 fprintf(stderr, "[assets] Window light beams: model 0x%04X is not as expected, no beams\n", room.model);
             }
