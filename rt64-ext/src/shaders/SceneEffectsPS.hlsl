@@ -1146,41 +1146,6 @@ float MaterialShine(float3 center, float otherwise) {
         (material == 16u) ? float(packed >> 16) / 100.0f : otherwise;
 }
 
-// Whether a pixel is seen through a clear part of a cut-out (a grate's holes): the eye's ray to it meets a cut-out first
-// whose texel there is see-through, in front of the pixel's own surface (its holes leave no depth, so what shows there
-// lies behind). The shiny mask and the material are the grate's over its whole draw, holes included, so the shine of
-// a metal grate covered what lies behind it (L, 2026-10-21). The pixel's own surface isn't tested: a texture with faint
-// spots of its own (a metal statue) came out in shiny and dull squares. Only with the textures read (otherwise a hole
-// can't be told).
-bool SeenThroughCutout(float3 center) {
-    const float distance = length(center);
-    if (!RayTexturesOn() || (distance < 20.0f)) {
-        return false;
-    }
-    RayDesc ray;
-    ray.Origin = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
-    ray.Direction = ViewToWorldDirection(center / distance);
-    ray.TMin = 0.0f;
-    ray.TMax = distance - 8.0f;
-    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
-    bool clear = false;
-    while (query.Proceed()) {
-        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            continue;
-        }
-        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-        if ((geometry == RayGrassGeometry) || ((RayGeometryFlags(geometry) & 1u) == 0u)) {
-            continue;
-        }
-        if (!RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
-            clear = true;
-            query.Abort();
-        }
-    }
-    return clear;
-}
-
 float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
     const float3 direction = reflect(normalize(center), normal);
     const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
@@ -4233,7 +4198,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         }
         const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
 #ifdef RAY_TRACED
-        if ((!ReflectiveAt(pixel, depth) && (MaterialShine(center, 0.0f) <= 0.0f)) || SeenThroughCutout(center)) {
+        if (!ReflectiveAt(pixel, depth) && (MaterialShine(center, 0.0f) <= 0.0f)) {
 #else
         if (!ReflectiveAt(pixel, depth)) {
 #endif
@@ -4337,13 +4302,10 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #ifdef RAY_TRACED
     // Traced, the surfaces Parallax marks metal, tiles or smooth reflect too, as much as their material does.
     const bool reflectionsWanted = (SsrStrength() > 0.0f) && redraw && (depth < 0.99999f);
-    // Not through a grate's holes: there it is what lies behind that shows.
-    // (One ray, and only where something could shine: the shiny mask, or a material that reflects in the scene.)
-    const bool maskedAny = reflectionsWanted && ReflectiveAt(pixel, depth);
-    const bool throughCutout = (maskedAny || (reflectionsWanted && (asfloat(gLights.Load(44)) > 0.5f))) && SeenThroughCutout(ViewPosition(pixel, depth));
-    const bool masked = maskedAny && !throughCutout;
+    // (A grate's holes are left out of the shiny mask where it is drawn: RasterPS.)
+    const bool masked = reflectionsWanted && ReflectiveAt(pixel, depth);
     // A shiny-list texture with no material of its own reflects fully.
-    const float shine = (reflectionsWanted && !throughCutout) ? MaterialShine(ViewPosition(pixel, depth), masked ? 1.0f : 0.0f) : (throughCutout ? 0.0f : 1.0f);
+    const float shine = reflectionsWanted ? MaterialShine(ViewPosition(pixel, depth), masked ? 1.0f : 0.0f) : 1.0f;
     const bool reflections = reflectionsWanted && (masked || (shine > 0.0f));
 #else
     const float shine = 1.0f;

@@ -8228,7 +8228,7 @@ index bc250a2..ef32981 100644
 +
 +#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..d9ea037 100644
+index e7895c3..8d33fe7 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -8597,7 +8597,7 @@ index e7895c3..d9ea037 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +554,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +554,29 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -8611,6 +8611,11 @@ index e7895c3..d9ea037 100644
 +    // Banjo-Tooie: redrawn into the water mask, the surface's depth (24 bits over rgb) instead of its colour, and
 +    // in alpha what it is: 1 for flat water, a quarter for Modern water's steep draws (waterMask 3, waterfalls).
 +    if (gConstants.waterMask != 0) {
++        // A shiny cut-out's holes (a metal grate's) aren't shiny: what lies behind shows there, and the mask over them
++        // put the grate's sheen across its holes (L, 2026-10-21).
++        if ((gConstants.waterMask == 5) && (resultColor.a < 0.05f)) {
++            return false;
++        }
 +        const uint depthBits = uint(saturate(vertexPosition.z) * 16777215.0f);
 +        // Ice (4) a sixteenth, shiny surfaces for screen-space reflections (5) 4 / 255, characters for Toon shading (6) 1 / 255.
 +        const float kind = (gConstants.waterMask == 3) ? 64.0f : ((gConstants.waterMask == 4) ? 16.0f : ((gConstants.waterMask == 5) ? 4.0f : ((gConstants.waterMask == 6) ? 1.0f : 255.0f)));
@@ -8622,7 +8627,7 @@ index e7895c3..d9ea037 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +598,7 @@ void PSMain(
+@@ -287,6 +603,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -8630,7 +8635,7 @@ index e7895c3..d9ea037 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +615,7 @@ void PSMain(
+@@ -303,7 +620,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
