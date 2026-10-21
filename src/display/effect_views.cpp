@@ -44,7 +44,7 @@
 #include "tooie_toast.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h and rt64_photo_grade.h (from lib-patches/rt64.patch).
+    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch) and rt64-ext/src/render/rt64_photo_grade.h.
     void SetSceneEffectsView(uint32_t view, bool compare);
     void SetPhotoGradeCompare(bool compare);
 }

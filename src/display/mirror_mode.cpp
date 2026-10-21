@@ -1,6 +1,6 @@
 // Mirror Mode: the whole picture flipped left to right, as a mirror would show it.
 //
-// RT64 flips the finished game image just before the VI draws it (lib-patches/rt64.patch, src/render/rt64_mirror.cpp),
+// RT64 flips the finished game image just before the VI draws it (rt64-ext/src/render/rt64_mirror.cpp, called from lib-patches/rt64.patch),
 // so every effect, the water and the shadows stay consistent with the world. The draws after the 3D world (the HUD,
 // counters, dialogue and menu text) go in flipped across the middle first, so the flip puts them back in place and
 // readable (FramebufferRenderer::submitRasterScene). Textures with text on the 3D world's own surfaces (signs) are
@@ -15,7 +15,7 @@
 #include "tooie_mirror_mode.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_mirror.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorMode(bool on);
 }
 

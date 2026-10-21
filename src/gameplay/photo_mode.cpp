@@ -94,7 +94,7 @@
 #include "tooie_hotkeys.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_photo_grade.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetPhotoFrame(float cropAspect, bool grid);
     void SetPhotoDepthOfField(float strength, uint32_t depthAddress);

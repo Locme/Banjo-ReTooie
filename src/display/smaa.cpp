@@ -17,7 +17,7 @@
 #include "tooie_smaa.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_smaa.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_smaa.h.
     void SetSmaaQuality(uint32_t quality);
 }
 

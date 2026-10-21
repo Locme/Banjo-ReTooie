@@ -49,7 +49,7 @@
 namespace RT64 {
     // lib/rt64/src/render/rt64_vi_renderer.h (from lib-patches/rt64.patch).
     void SetPictureFilters(int brightness, bool brightnessPattern, uint32_t colourblindMode, float colourblindStrength, bool crt, uint32_t dither16, bool threePointFiltering);
-    // lib/rt64/src/render/rt64_photo_grade.h.
+    // rt64-ext/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetSharpening(float strength);
     // lib/rt64/src/render/rt64_scene_effects.h.
@@ -67,7 +67,7 @@ namespace RT64 {
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
     void SetSceneShinyTextures(const uint64_t *hashes, size_t count);
-    // lib/rt64/src/render/rt64_mirror.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);

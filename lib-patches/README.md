@@ -228,23 +228,21 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   that frame is timed against it. Used by the frame rate overlay
   (`src/game/frame_overlay.cpp`).
 
-* **SMAA** (`src/render/rt64_smaa.cpp`, `.h`, `src/shaders/SmaaPS.hlsl`,
-  `src/shared/rt64_smaa.h`, `src/render/rt64_shader_library.cpp`, `.h`,
-  `src/render/rt64_descriptor_sets.h`, `src/hle/rt64_present_queue.cpp`, `.h`,
-  `CMakeLists.txt`): adds `RT64::SetSmaaQuality(...)`. Before the VI pass, SMAA
+* **SMAA** (`src/render/rt64_shader_library.cpp`, `.h`, `src/render/rt64_descriptor_sets.h`,
+  `src/hle/rt64_present_queue.cpp`, `.h`; the pass itself, `rt64_smaa.cpp`, `.h`, `shared/rt64_smaa.h`
+  and `SmaaPS.hlsl`, is in `rt64-ext/`, as is Mirror Mode's `rt64_mirror.cpp`, `.h` and `MirrorPS.hlsl`): adds `RT64::SetSmaaQuality(...)`. Before the VI pass, SMAA
   1x (edges, blend weights, neighbourhood blending) runs on the game image, so
   it works with MSAA and screenshots show it. The shader and lookup textures
   are iryoku/smaa in `lib/smaa` (MIT); the top-level `CMakeLists.txt` points
-  `RT64_SMAA_DIR` at it. Because this patch changes RT64's `CMakeLists.txt`,
-  the patches are applied before `add_subdirectory(lib/rt64)`.
+  `RT64_SMAA_DIR` at it (used by `rt64-ext/rt64_ext.cmake`). Because this patch changes RT64's
+  `CMakeLists.txt`, the patches are applied before `add_subdirectory(lib/rt64)`.
   `src/display/smaa.cpp` sets the quality.
 * **FXAA** (`src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`;
   the pass itself, `rt64_fxaa.cpp`, `.h` and `FxaaPS.hlsl`, is in `rt64-ext/`): adds `RT64::SetFxaaMode(...)`. After SMAA, one FXAA pass
   (written for this port) smooths the game image; Extreme searches further along
   edges. `src/display/fxaa.cpp` sets the mode.
-* **FSR 1** (`src/render/rt64_fsr.cpp`, `.h`, `src/shaders/FsrPS.hlsl`,
-  `src/shared/rt64_fsr.h`, `src/render/rt64_shader_library.cpp`, `.h`,
-  `src/hle/rt64_present_queue.cpp`, `.h`, `CMakeLists.txt`): adds
+* **FSR 1** (`src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`;
+  the pass itself, `rt64_fsr.cpp`, `.h`, `shared/rt64_fsr.h` and `FsrPS.hlsl`, is in `rt64-ext/`): adds
   `RT64::SetFsrMode(...)`. Just before the VI pass (after screenshots and photo
   effects), when the game renders below the window's height, EASU upscales the
   image to it and RCAS sharpens it; the VI gets a matching resolution scale.
@@ -252,9 +250,9 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   through `RT64_FSR_DIR`, built with `-HV 2018`; EASU reads its 2x2 texels with
   point samples instead of Gather, which came out grey on lavapipe.
   `src/display/fsr.cpp` sets the mode.
-* **Photo mode filters** (`src/render/rt64_photo_grade.cpp`, `.h`, `src/shaders/PhotoGradePS.hlsl`,
-  `src/shared/rt64_photo_grade.h`, `src/render/rt64_shader_library.cpp`, `.h`,
-  `src/hle/rt64_present_queue.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetPhotoGrade(...)`. After SMAA
+* **Photo mode filters** (`src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`;
+  the pass itself, `rt64_photo_grade.cpp`, `.h`, `shared/rt64_photo_grade.h` and `PhotoGradePS.hlsl`, is in
+  `rt64-ext/`): adds `RT64::SetPhotoGrade(...)`. After SMAA
   and before the VI pass, one pass applies a look (sepia, black and white, ...), exposure, contrast,
   saturation, warmth, vignette and film grain, so screenshots show them. `src/gameplay/photo_mode.cpp`
   turns it on only while photo mode is on. `RT64::SetPhotoFrame(...)` adds the crop frame and grid, and
@@ -270,12 +268,12 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   draws a full-screen pass there (ambient occlusion, fog and toon outlines from the depth target, `RT64::SetSceneFog(...)`,
   `RT64::SetSceneOutlines(...)`; bloom from a resolve of the scene so far, `RT64::SetSceneBloom(...)`,
   `src/shaders/BloomPS.hlsl`; depth of field from the same scene copy, `RT64::SetSceneDepthOfField(...)`; eye adaptation from a 1x1 luminance measured and eased each frame, `RT64::SetSceneEyeAdaptation(...)`; rim light from the depth, `RT64::SetSceneRimLight(...)`; the underwater tint and haze, `RT64::SetSceneUnderwater(...)`; heat haze, `RT64::SetSceneHeatHaze(...)`; water reflections from a water mask the framebuffer renderer redraws (`submitWaterMask`, `RasterParams.waterMask` in RasterPS.hlsl), `RT64::SetSceneWaterReflections(...)`; bounce light, `RT64::SetSceneBounceLight(...)`; the day and night cycle's tint of the 3D world, night sky and moving sun, `RT64::SetSceneTimeOfDay(...)` with `RT64::SetSceneSun(...)` (the tint is packed in `SceneEffectsCB.shadows.z`); water waves on the water mask from world x and z (the view matrix's inverse in the pass constants), `RT64::SetSceneWaterWaves(...)`; Modern water (Graphics > Water), `RT64::SetSceneModernWater(...)` (water draws must also lie mostly flat in the world, `flatInWorld`, so light beams aren't taken for water; steep level draws that pass the same test go to `fallInstances`, drawn into the mask with alpha 64/255 by `RasterParams.waterMask` 3, and SceneEffectsPS `ModernFall()` keeps the game's own animated fall, a little thicker, with soft world-space streaks, sun sparkles and mist at its foot, and boiling foam where it lands; the falls go into the mask with either water so the night's lights pass over them, `DayWorld(..., glow)`; see-through flat level decals on the icy maps (`RT64::SetSceneIcyLevel(...)`) and anything drawn with an ice texture (`RT64::SetSceneIceTextures(...)`, solid or see-through) go into the mask too (`iceInstances`, waterMask 4, alpha 16/255, drawn a hair nearer in RasterVS so solid ice passes the depth test against itself; RasterPS skips its decal depth check there and SceneEffectsPS `IceAt()` keeps ice lying on or in front of the picture's own surface) and reflect with Ice reflections (`RT64::SetSceneIceReflections(...)`, packed into `SceneEffectsCB.water.x` as twice its hundredths over Water reflections), facing the way the mask's depths say, with rays that would head back past the camera bent into the picture so ice reflects from above too, kept as the game draws them; `TOOIE_ICE_LOG=1` prints each 3D world texture combination once (`[ice-tex]`) to find ice textures; a part of the picture that writes no depth after a draw to another buffer (an HD shadow) carries on the earlier part's world (`continuedWorld`), so its water still counts as water; Graphics > Shore foam puts Modern's shore foam on the game's own water (`RT64::SetSceneShoreFoam(...)`, `SceneEffectsCB.water.y` 1.25); draws need only a fifth of their area flat to count as water, so a pool drawn with its falls stays water, and the shader sorts flat from steep per pixel; the water is lit as level, not by the game's bobbing triangles, so it doesn't look blocky; non-watery colours such as light beams are put back as drawn): the framebuffer renderer leaves the game's water draws out of the shown picture (`instanceWaterSkipVector`, also in an earlier part of the same picture whose water went to a later part's effects, `waterHandedOn`; a `[modern water]` console line says when it stops or starts replacing and why) and also redraws them into a water colours target (`RasterParams.waterMask` 2: their own colour and blending alpha), and SceneEffectsPS `ModernWater()` draws the new water on flat water while putting back anything else as the game drew it; the player's ripples are a wave-equation grid round them (256 cells of 3 units, BloomPS pass 7 with `BloomCB.waterSim`/`waterPush`, stepped at 120 a second into `gWaterRipples`), and the surface is raised and lowered by the waves and ripples by stepping each pixel's ray through them; from under the water the surface shows Snell's window (`ModernWaterBelow`), and caustics light what faces up below it (`RT64::SetSceneModernUnderwater(...)` gives the surface height and how far under); F6 debug views and the F8 half-and-half compare, `RT64::SetSceneEffectsView(...)` and `RT64::SetPhotoGradeCompare(...)`),
-  live texture upscaling in the texture cache (`src/shaders/TextureUpscaleCS.hlsl`, an own edge-directed 2x from the published xBR rule, upscales stored as each texture's replacement; `RT64::SetTextureUpscale(1|2|4)`),
+  live texture upscaling in the texture cache (`TextureUpscaleCS.hlsl`, in `rt64-ext/`, an own edge-directed 2x from the published xBR rule, upscales stored as each texture's replacement; `RT64::SetTextureUpscale(1|2|4)`),
   so the HUD drawn after it is left alone.
 
 * **Frame stats for the frame rate overlay** (`src/hle/rt64_present_queue.cpp/.h`, `RT64::TakeFrameStats`): present
   intervals, GPU time, input latency, shader compiles, and the GPU time of each extra pass
-  (`src/render/rt64_gpu_sections.h`: timestamps around the water mask, eye adaptation, bloom, sun shadow map, indirect (AO and bounce light),
+  (`rt64_gpu_sections.h`, in `rt64-ext/src/render`: timestamps around the water mask, eye adaptation, bloom, sun shadow map, indirect (AO and bounce light),
   ray tracing build and effects passes, the last as traced effects while it traces, and
   around SMAA, FXAA, photo filters, FSR, the output and the UI).
 * **Shader list** (`src/render/rt64_raster_shader_cache.cpp/.h`, `RT64::SetShaderListPath`): every shader description
