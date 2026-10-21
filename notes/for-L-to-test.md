@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T512 Mirror Mode: Start menu readable
+- Asked: 2026-10-21 13:11 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Press Start in the world
+  3. Read the menu rows and the Jiggy/Note counters
+- Look for: The Start menu text and icons are not mirrored (they sit where they do with Mirror Mode off); the world behind is mirrored. Not built or run.
+- Status: waiting for L
+
 ## T511 Faint line on top of fences with texture upscaling
 - Asked: 2026-10-21 13:06 UTC
 - Build: main
