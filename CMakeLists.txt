@@ -589,7 +589,7 @@ set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
 # recompui lists RT64's include folders itself; RT64's headers also include files from rt64-ext/.
-target_include_directories(recompui PRIVATE ${CMAKE_SOURCE_DIR}/rt64-ext/src)
+target_include_directories(recompui PRIVATE ${CMAKE_SOURCE_DIR}/rt64-ext/src ${CMAKE_SOURCE_DIR}/rt64-ext/src/render)
 
 if (ANDROID)
     # SDL copies its headers into its build folder while building; these include them without linking SDL.

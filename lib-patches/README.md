@@ -261,8 +261,8 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   game's depth buffer at that address, copies it to colour (`copyFromTarget`) and the photo pass reads it.
   `RT64::SetSharpening(strength)` adds a contrast-adaptive sharpen to the same pass, kept apart from the
   filters so it applies in and out of photo mode; with the filters off the pass runs for it alone.
-* **Scene effects** (`src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`,
-  `src/shaders/SceneEffectsPS.hlsl`, `src/render/rt64_framebuffer_renderer.cpp`, `.h`,
+* **Scene effects** (in `rt64-ext/`: `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`,
+  `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap*`; in the patch: `src/render/rt64_framebuffer_renderer.cpp`, `.h`,
   `src/render/rt64_shader_library.cpp`, `.h`, `CMakeLists.txt`): adds `RT64::SetSceneEffects(ao, radius,
   depthAddress)`. The framebuffer renderer splits its raster scenes at the first projection that isn't a
   perspective one after the 3D world, and in the framebuffer whose depth target is at `depthAddress` it
@@ -287,7 +287,7 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   the shader compiler (DXC) is picked by the build machine; the native file dialogs and the texture tools are
   left out; the SDL window path (`RT64_SDL_WINDOW_VULKAN`) is used on Android instead of a stub that stopped
   the build.
-* **Ray traced reflections** (Graphics > Ray tracing; `rt64_scene_effects.cpp/.h`, `SceneEffectsPS.hlsl` built with
+* **Ray traced reflections** (Graphics > Ray tracing; `rt64_scene_effects.cpp/.h` and `SceneEffectsPS.hlsl` in `rt64-ext/`, built with
   `-D RAY_TRACED` as `SceneEffectsRT{,2X,4X,8X}PS` (SPIR-V only, shader model 6.5), `rt64_shader_library.cpp`,
   `rt64_framebuffer_renderer.cpp`, `rt64_workload_queue.cpp`): `SetSceneRayTracing`, `NoteRayTracingSupport`
   (from the device's `rayQuery` capability; `TOOIE_RAY_TRACING_SUPPORT=0` pretends none), `RayTracingActive()`.

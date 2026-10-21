@@ -27,7 +27,7 @@
 #include "tooie_picture_filters.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h.
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);

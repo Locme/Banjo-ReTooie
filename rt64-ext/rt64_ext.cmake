@@ -96,3 +96,44 @@ rt64_ext_grass_shader("src/shaders/GrassCullCS.hlsl" DXC_CS_OPTS "src/shaders/Gr
 rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS)
 rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZMSCS.hlsl" "-D MULTISAMPLING")
 rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZCoarseCS.hlsl" "-D COARSE_PASS")
+
+# Scene effects over the 3D world (ambient occlusion, SSGI, reflections, bloom, fireflies, sun shadows).
+target_sources(rt64 PRIVATE ${RT64_EXT_DIR}/src/render/rt64_scene_effects.cpp)
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/BloomPS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects2XPS.hlsl" "-D SAMPLES_2X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects4XPS.hlsl" "-D SAMPLES_4X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneEffects8XPS.hlsl" "-D SAMPLES_8X")
+# The fireflies' table, worked out once a frame for the scene effects pass.
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTablePS.hlsl" "-D FIREFLY_TABLE")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable2XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_2X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable4XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_4X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/FireflyTable8XPS.hlsl" "-D FIREFLY_TABLE" "-D SAMPLES_8X")
+# The indirect pass (GTAO and SSGI at half size) for the scene effects pass.
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirectPS.hlsl" "-D INDIRECT_PASS")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect2XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_2X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect4XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_4X")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SceneEffectsPS.hlsl" "src/shaders/SceneIndirect8XPS.hlsl" "-D INDIRECT_PASS" "-D SAMPLES_8X")
+# The sun shadow map pass.
+rt64_ext_shader(build_vertex_shader rt64 "src/shaders/SunShadowMapVS.hlsl")
+rt64_ext_shader(build_pixel_shader rt64 "src/shaders/SunShadowMapPS.hlsl")
+
+# The traced variant of the scene effects (Graphics > Ray tracing): a ray query over the world's triangles in
+# place of the reflections' depth march. Vulkan only (SPIR-V), where the device has ray queries; shader model 6.5
+# for the ray query, and SPIR-V 1.5 (Vulkan 1.2) for the ray query capability. build_shader_spirv takes its
+# options as one list, so these go through a wrapper as the grass shaders do.
+if (NOT APPLE)
+    set(DXC_PS_RQ_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_5" "-fspv-target-env=vulkan1.2" "-fspv-extension=SPV_KHR_ray_query" "-fspv-extension=SPV_EXT_descriptor_indexing" "-I${RT64_EXT_DIR}/src" "-I${RT64_EXT_RT64_SHADERS}")
+    function(rt64_ext_traced_shader OUTNAME)
+        set(PROJECT_SOURCE_DIR ${RT64_EXT_DIR})
+        build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" ${OUTNAME} ${ARGN})
+    endfunction()
+    rt64_ext_traced_shader("src/shaders/SceneEffectsRTPS.hlsl" "-D RAY_TRACED")
+    rt64_ext_traced_shader("src/shaders/SceneEffectsRT2XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_2X")
+    rt64_ext_traced_shader("src/shaders/SceneEffectsRT4XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_4X")
+    rt64_ext_traced_shader("src/shaders/SceneEffectsRT8XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_8X")
+    rt64_ext_traced_shader("src/shaders/SceneIndirectRTPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED")
+    rt64_ext_traced_shader("src/shaders/SceneIndirectRT2XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_2X")
+    rt64_ext_traced_shader("src/shaders/SceneIndirectRT4XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_4X")
+    rt64_ext_traced_shader("src/shaders/SceneIndirectRT8XPS.hlsl" "-D INDIRECT_PASS" "-D RAY_TRACED" "-D SAMPLES_8X")
+endif()

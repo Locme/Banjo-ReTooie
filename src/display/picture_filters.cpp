@@ -52,7 +52,7 @@ namespace RT64 {
     // rt64-ext/src/render/rt64_photo_grade.h.
     void SetPhotoGrade(bool enabled, uint32_t look, float exposure, float contrast, float saturation, float warmth, float vignette, float grain);
     void SetSharpening(float strength);
-    // lib/rt64/src/render/rt64_scene_effects.h.
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress);
     void SetSceneFog(float fog, float start, float length, float red, float green, float blue);
     void SetSceneOutlines(float outlines, float thickness);

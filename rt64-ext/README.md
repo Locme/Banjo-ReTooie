@@ -16,7 +16,7 @@ A file here keeps its path under `src/` (`rt64-ext/src/render/rt64_fxaa.cpp` was
 To change one, edit it here; there is no patch to regenerate for it, and a CMake configure that
 resets `lib/rt64` doesn't touch it.
 
-## Every file in rt64.patch, sorted (2026-10-21, main eb732c7)
+## Every file in rt64.patch, sorted (2026-10-21)
 
 **Moved here**
 
@@ -37,13 +37,13 @@ resets `lib/rt64` doesn't touch it.
 | `src/hle/rt64_present_queue_ext.cpp`, `.h` (new) | The present queue's additions: present backlog (`WaitForPresentBacklog`), menu repaint (`SetIdleRepaint`, `PresentQueue::threadRepaint`), screenshots' state and read-back, frame statistics and input latency. `rt64_present_queue.cpp` keeps the calls in its present loop and reaches the shared state through `RT64::presentext` |
 | `src/render/rt64_texture_cache_ext.cpp` (new) | Texture cache additions moved whole: `TextureMap::setHeight`/`useHeight`, `TextureCache::recordUpscale`/`refreshUpscaled` (live texture upscaling). The calls stay in `rt64_texture_cache.cpp` |
 | `src/render/rt64_raster_shader_cache_ext.cpp`, `.h` (new) | The shader list: `SetShaderListPath`, `GetShaderListProgress`, the binary load/save helpers and `RasterShaderCache::loadShaderList`. Shared state through `RT64::shaderlistext` |
+| `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects (AO, SSGI, reflections, bloom, fireflies, sun shadows) and the traced variants for Ray tracing (built with `rt64_ext_traced_shader`, the same ray query options) |
 | `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h` | 3D grass with GPU instancing |
 
 **Can move here next (new files, verbatim; owner noted)**
 
 | Files | Feature | Owner / condition |
 |---|---|---|
-| `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects, ray tracing | Ray tracing: OK, but message it just before and wait for its OK. Fences: not until L's fence test T506 is back |
 | `src/tools/file_to_c/file_to_c.cmake` | Android build | none; RT64's CMakeLists names it, so its hunk stays |
 
 RT64's own shaders find `.hlsli` files here: with `RT64_EXTENSION_SOURCE_DIR` set (top-level

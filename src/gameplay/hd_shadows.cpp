@@ -41,7 +41,7 @@
 #include "tooie_picture_filters.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneLights(const float* xyzr, uint32_t count);
 }
 

@@ -93,7 +93,7 @@
 #include "tooie_rdram.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneFurSway(float x, float y, float z);
 }
 
