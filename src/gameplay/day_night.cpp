@@ -104,6 +104,8 @@ namespace {
     constexpr MapSun map_suns[] = {
         // Spiral Mountain: high over the mountain seen from Banjo's house, so the sunlight falls on the house (L).
         { 0xAF, { -0.56f, 0.66f, -0.50f } },
+        // Jinjo Village: high up, so the sun and its shadows reach as much of the level as possible (L).
+        { 0x142, { -0.25f, 0.90f, -0.35f } },
     };
 
     // The map's own sun, false if it has none. Test aid: TOOIE_MAP_SUN=<x>,<y>,<z> gives every map that one.
