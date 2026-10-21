@@ -2910,7 +2910,7 @@
 - Checked headless: Stony in Mayahem Temple and the Daddy T-Rex in Terrydactyland, both ways; the line on the 1st change only; refused when not unlocked, in the air, while the caveman talks, and with the T-Rex against a wall. Not checked headless: the submarine, bee, van, washer, snowball, detonator and baby T-Rex (same game call), and how the refusal sound sounds.
 - Status: waiting for L
 
-## T183 3D grass, Breath of the Wild style (roadmap 4.47)
+## T183 3D grass, tufted field style (roadmap 4.47)
 - Asked: 2026-10-15 20:55 UTC
 - Build: main (pull and build)
 - Steps:

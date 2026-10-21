@@ -13099,7 +13099,7 @@ index 0000000..5f2f131
 +// RT64
 +//
 +
-+// Banjo-Tooie: 3D grass, in the style of Breath of the Wild's fields. The level's ground draws are drawn
++// Banjo-Tooie: 3D grass, in the style of stylised open-field grass. The level's ground draws are drawn
 +// again as shells, each moved further up by its share of the blade height (RasterVS.hlsl); each shell keeps
 +// only where a blade crosses it, so a stack of them reads as a field of blades. The blades grow in tufts,
 +// one tuft per cell of a grid over the world's x and z: five thin, flat blades that arc out from the middle and
