@@ -58,11 +58,15 @@ namespace {
     constexpr float pop_speed = 150.0f;
     // Falling faster than this during the dive is held back, so the lunge flies on instead of dropping.
     constexpr float max_fall = -450.0f;
-    // After landing, the slide runs the speed from slide_speed down to nothing over slide_time.
+    // After landing, the belly slide runs the speed from slide_speed down to nothing over slide_time; Banjo
+    // then stays on his belly until a jump.
     constexpr float slide_speed = 600.0f;
     constexpr float slide_time = 0.4f;
     // The pose eases in over this long, so the lunge reads as a push rather than a snap.
-    constexpr float pose_in_time = 0.1f;
+    constexpr float pose_in_time = 0.16f;
+    // The wings beat and the legs kick once this often in the air (and the legs while sliding).
+    constexpr float beat_time = 0.45f;
+    constexpr float pose_out_time = 0.15f;
     // Moving less than this share of the lunge's speed for a frame, after the first wall_grace seconds,
     // means a wall is in the way: the dive ends there instead of pushing into it.
     constexpr float wall_share = 0.3f;
@@ -76,6 +80,9 @@ namespace {
     bool dived_this_jump = false;
     bool run_prev = false;
     uint32_t last_game_ms = 0;
+    float last_dt = 0.0f;
+    // The flat pose fades from this as Banjo gets up off his belly.
+    float getup = 0.0f;
     bool have_last = false;
 
     // Where Banjo was last tick, to see a wall stop the lunge.
@@ -174,9 +181,24 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx);
 void tooie::dive::tick(uint8_t* rdram, recomp_context* ctx) {
     last_tick_at = now_ms();
     tick_inner(rdram, ctx);
-    // The pose plays while the lunge is in the air, easing in over pose_in_time.
-    const float weight = phase == Phase::Air ? std::clamp(phase_time / pose_in_time, 0.0f, 1.0f) : 0.0f;
-    tooie::hold_to_run::set_dive_pose(rdram, ctx, weight);
+    // The pose eases in over pose_in_time as the lunge starts and beats once every beat_time through the
+    // air. On the belly it holds, the legs fluttering while he still slides, and when he jumps up it
+    // fades over pose_out_time into the jump.
+    float weight = 0.0f;
+    float beat = 0.0f;
+    if (phase == Phase::Air) {
+        weight = std::clamp(phase_time / pose_in_time, 0.0f, 1.0f);
+        beat = std::max(0.0f, phase_time - pose_in_time) / beat_time;
+    } else if (phase == Phase::Slide) {
+        weight = 1.0f;
+        getup = 1.0f;
+        // Any beat above 0 means still sliding; 0 is lying still.
+        beat = phase_time < slide_time ? phase_time / beat_time + 0.001f : 0.0f;
+    } else if (getup > 0.0f) {
+        getup = std::max(0.0f, getup - last_dt / pose_out_time);
+        weight = getup;
+    }
+    tooie::hold_to_run::set_dive_pose(rdram, ctx, weight, beat, phase == Phase::Slide);
 }
 
 static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
@@ -184,6 +206,7 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
     // Game time, not real time, so the dive lasts the same however fast the game runs.
     const uint32_t game_ms = tooie::game_frame_rate::game_ms();
     const float dt = have_last ? std::min((game_ms - last_game_ms) / 1000.0f, 0.1f) : 0.0f;
+    last_dt = dt;
     last_game_ms = game_ms;
     have_last = true;
 
@@ -199,6 +222,7 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
         || rdram[(form_addr - 0x80000000u) ^ 3u] != form_banjo_kazooie) {
         can_dive = false;
         end("off");
+        getup = 0.0f;
         dived_this_jump = false;
         return;
     }
@@ -275,14 +299,15 @@ static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     if (phase == Phase::Slide) {
-        // A jump (or anything that leaves the ground states) ends the slide early. A jump out of the slide
-        // is a new jump, so it may dive again.
-        if (!slide_state(cur) || phase_time >= slide_time) {
-            end(slide_state(cur) ? "slide over" : "left the ground");
+        // Banjo slides, then lies on his belly until a jump (or anything else that leaves the ground states:
+        // a hit, water, a cutscene). A jump off the belly is a new jump, so it may dive again.
+        if (!slide_state(cur)) {
+            end("got up");
             dived_this_jump = false;
             return;
         }
-        const float t = phase_time / slide_time;
+        // The speed is held even once he has stopped, so the stick turns him but doesn't walk him off.
+        const float t = std::min(phase_time / slide_time, 1.0f);
         set_speed(rdram, physics, slide_speed * (1.0f - t) * (1.0f - t));
     }
 }
