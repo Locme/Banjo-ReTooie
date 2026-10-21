@@ -65,6 +65,8 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
+    inline const std::string path_tracing_option = "path_tracing";
+    inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";
