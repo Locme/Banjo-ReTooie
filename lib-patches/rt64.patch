@@ -15238,10 +15238,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..1420272
+index 0000000..227938c
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4105 @@
+@@ -0,0 +1,4109 @@
 +//
 +// RT64
 +//
@@ -16039,7 +16039,6 @@ index 0000000..1420272
 +    return float4(colourSum / hitSum, saturate(hitSum / max(totalSum, 1e-5f)));
 +}
 +
-+#ifdef RAY_TRACED
 +// View space to world space and back, through the world x, y and z terms (the view matrix's inverse: world = dot(view,
 +// X) + X.w and so on, and, the view being a scaled rotation, view = X * (world.x - X.w) + Y * (world.y - Y.w) + Z * ...).
 +float3 ViewToWorldPoint(float3 view) {
@@ -16051,6 +16050,15 @@ index 0000000..1420272
 +    return float3(dot(view, gConstants.worldX.xyz), dot(view, gConstants.worldY.xyz), dot(view, gConstants.worldZ.xyz));
 +}
 +
++// Inside a capsule round Banjo (world space): what the sun shadows leave out when they leave him out, and all
++// his contact shadow counts.
++bool InsideBanjo(float3 world) {
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++    const float2 across = world.xz - banjo.xz;
++    return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
++}
++
++#ifdef RAY_TRACED
 +// The radiance cache (see gRadianceCache): on when lights word 1 says so (Graphics > Ray tracing hit colours).
 +bool HitColoursOn() {
 +    return asfloat(gLights.Load(4)) > 0.5f;
@@ -16078,14 +16086,6 @@ index 0000000..1420272
 +    const uint at = RadianceCell(world, check);
 +    const uint3 c = uint3(saturate(colour) * 255.0f + 0.5f);
 +    gRadianceCache.Store2(at, uint2(check, c.r | (c.g << 8) | (c.b << 16)));
-+}
-+
-+// Inside a capsule round Banjo (world space): what the sun shadows leave out when they leave him out, and all
-+// his contact shadow counts.
-+bool InsideBanjo(float3 world) {
-+    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
-+    const float2 across = world.xz - banjo.xz;
-+    return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
 +}
 +
 +// Whether a ray (world space) meets anything: mode 0 anything, 1 anything but Banjo (the ray goes on past him to what
@@ -19093,7 +19093,11 @@ index 0000000..1420272
 +            // GTAO's visibility with its multi-bounce, from the scene's brightness here when the pass has the scene
 +            // (a mid grey otherwise). 50 is GTAO as it is; above that it is deepened, below it lightened.
 +            const float albedo = redraw ? saturate(dot(gColor.Load(int3(pixel, 0)).rgb, float3(0.299f, 0.587f, 0.114f))) : 0.5f;
-+            keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * 2.0f);
++            // On Banjo himself (above his feet, so the ground round them keeps its contact shading) a quarter as
++            // much: his fur and limbs crowd each other, and full GTAO blackened him (L, 2026-10-21).
++            const float3 world = ViewToWorldPoint(center);
++            const bool banjoBody = InsideBanjo(world) && (world.y > gConstants.rippleAge.w + 8.0f);
++            keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
 +        }
 +        if (sunShadows) {
 +            keep *= SunShadow(pixel, center, normal);
