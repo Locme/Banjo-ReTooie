@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T515 3D grass speed (road map cached)
+- Asked: 2026-10-21 15:01 UTC
+- Build: main
+- Steps:
+  1. Turn on Graphics > 3D grass with your usual settings
+  2. Walk and run around Spiral Mountain and Jinjo Village, turning the camera
+  3. Watch the frame rate and the overlay's CPU time
+- Look for: Is the frame rate much better than before? Do roads and paths still stay clear of grass, with no grass popping onto a road as you move?
+- Status: waiting for L
+
 ## T514 Tessellated sand: occlusion culling and props fix (Terrydactyland speed)
 - Asked: 2026-10-21 14:40 UTC
 - Build: main
