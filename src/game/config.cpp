@@ -790,6 +790,17 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
     // 3D grass has its own section after the colour grading (L, 2026-10-16).
     recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
+    // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
+    for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
+                                       &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
+                                       &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
+                                       &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
+                                       &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
+                                       &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
+                                       &tooie::picture_filters::ray_tracing_hit_colours_option }) {
+        recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
+    }
+    recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
     recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
