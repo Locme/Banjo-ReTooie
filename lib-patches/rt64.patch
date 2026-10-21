@@ -2213,7 +2213,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..448c4f6 100644
+index 9fae0d4..ca16620 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -4248,7 +4248,7 @@ index 9fae0d4..448c4f6 100644
 +                    if (fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY)) {
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (fenceValue == 0); t++) {
 +                            if (SceneFenceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID)) {
-+                                fenceValue = uint8_t(FenceLayers);
++                                fenceValue = uint8_t(std::clamp(frameParams.fenceParams.y, 1.0f, 24.0f));
 +                            }
 +                        }
 +                    }
@@ -5659,7 +5659,7 @@ index 9fae0d4..448c4f6 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..4937301 100644
+index 3add9c3..4cb72a4 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5741,7 +5741,7 @@ index 3add9c3..4937301 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +112,194 @@ namespace RT64 {
+@@ -62,11 +112,193 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5898,9 +5898,8 @@ index 3add9c3..4937301 100644
 +        bool nightLights = false;
 +        // Banjo-Tooie: parallax mapping this frame (ComputeSceneParallax).
 +        bool parallaxOn = false;
-+        // Banjo-Tooie: fences this frame (ComputeSceneFence), and how many layers each is redrawn in.
++        // Banjo-Tooie: fences this frame (ComputeSceneFence), and how many layers each is redrawn in (frameParams.fenceParams.y).
 +        bool fenceOn = false;
-+        static constexpr uint32_t FenceLayers = 6;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t furShells = 0;
 +        // Each vertex's normal for the fur (world space, by vertex index; zero where there is no fur), summed from
@@ -5936,7 +5935,7 @@ index 3add9c3..4937301 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +310,13 @@ namespace RT64 {
+@@ -77,6 +309,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5950,7 +5949,7 @@ index 3add9c3..4937301 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +327,12 @@ namespace RT64 {
+@@ -87,6 +326,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5963,7 +5962,7 @@ index 3add9c3..4937301 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +346,7 @@ namespace RT64 {
+@@ -100,6 +345,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5971,7 +5970,7 @@ index 3add9c3..4937301 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +370,10 @@ namespace RT64 {
+@@ -123,6 +369,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5982,7 +5981,7 @@ index 3add9c3..4937301 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +415,15 @@ namespace RT64 {
+@@ -164,7 +414,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -7844,10 +7843,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..7f2dbae
+index 0000000..ce74db2
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3315 @@
+@@ -0,0 +1,3317 @@
 +//
 +// RT64
 +//
@@ -8707,7 +8706,9 @@ index 0000000..7f2dbae
 +        }
 +        // At the full setting the layers spread over 12 world units (Banjo is about 150 tall, a fence post 5 to 10
 +        // across); past 1800 units away the thickness can't be seen and a fence is drawn as it is.
-+        frameParams.fenceParams = { 12.0f * thickness, 0.0f, 1800.0f, 0.0f };
++        // Layers about half a unit apart, so from the side they run together into a solid slab (6 to 24).
++        const float layers = std::clamp(std::ceil(12.0f * thickness / 0.5f), 6.0f, 24.0f);
++        frameParams.fenceParams = { 12.0f * thickness, layers, 1800.0f, 0.0f };
 +        return thickness > 0.0f;
 +    }
 +
@@ -14582,7 +14583,7 @@ index 0000000..85905a9
 +#endif
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..93d2254
+index 0000000..99ff368
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
 @@ -0,0 +1,657 @@
@@ -14983,7 +14984,7 @@ index 0000000..93d2254
 +    }
 +    normal /= normalLength;
 +
-+    // Far off the thickness can't be seen: only the original draw. Halfway there, every other layer.
++    // Far off the thickness can't be seen: only the original draw. Halfway there, every other layer (the rest still run together at that range).
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
 +    const float cameraDistance = distance(center, camera);
@@ -15001,7 +15002,7 @@ index 0000000..93d2254
 +        GrassVertex o = input[v];
 +        o.position = GrassRescale(clip[v] + shift);
 +        // (The layer's shade, for the pixel shader.)
-+        o.furAnchor = float4(lerp(1.0f, 0.6f, back), 0.0f, 0.0f, 0.0f);
++        o.furAnchor = float4(lerp(1.0f, 0.78f, back), 0.0f, 0.0f, 0.0f);
 +        stream.Append(o);
 +    }
 +    stream.RestartStrip();
@@ -15914,7 +15915,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ec57544 100644
+index e7895c3..957ae83 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -16132,7 +16133,7 @@ index e7895c3..ec57544 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +403,134 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +403,139 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -16199,6 +16200,11 @@ index e7895c3..ec57544 100644
 +    else if (fenceShell) {
 +        // A layer of a fence: a part cut out by its texture's alpha (blended) keeps only its solid parts, drawn solid,
 +        // and the layers away from the camera are darker (the shade is in the fur anchor).
++        // (Any alpha under a half goes, blended or not: the faint edge pixels of a cut-out, at the top row of the texture
++        // where it wraps, made a thin line along every layer.)
++        if (combinerColor.a < 0.5f) {
++            return false;
++        }
 +        if (alphaBlend) {
 +            if (resultAlpha.a < 0.5f) {
 +                return false;
@@ -16267,7 +16273,7 @@ index e7895c3..ec57544 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +538,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +543,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -16292,7 +16298,7 @@ index e7895c3..ec57544 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +582,7 @@ void PSMain(
+@@ -287,6 +587,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -16300,7 +16306,7 @@ index e7895c3..ec57544 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +599,7 @@ void PSMain(
+@@ -303,7 +604,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
