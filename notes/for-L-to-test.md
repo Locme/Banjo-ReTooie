@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T507 3D grass in ray tracing
+- Asked: 2026-10-21 12:14 UTC
+- Build: main
+- Steps:
+  1. Turn on Ray tracing and 3D grass, leave 3D grass in ray tracing on (Graphics > 3D grass)
+  2. Stand in Spiral Mountain's grass in sunlight and walk through it
+  3. Look at the grass shadows on Banjo and the ground, then turn 3D grass in ray tracing off and on again and compare the frame rate
+- Look for: The grass casts shadows on Banjo's legs and on the ground beside it, and nothing flickers or goes black. Say how much slower it is with it on. Send console.log if the game crashes.
+- Status: waiting for L
+
 ## T506 Fence thickness (layers on flat cut-out textures)
 - Asked: 2026-10-21 11:22 UTC
 - Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)
