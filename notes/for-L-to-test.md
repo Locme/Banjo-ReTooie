@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T496 Tessellated sand: edges, tire tracks, sharper footprints
+- Asked: 2026-10-21 08:59 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Walk to where the sand meets grass
+  3. Go to Klungo's second fight and look at the tire tracks
+  4. Walk on the sand
+- Look for: No jagged outline where sand meets grass; tire tracks lie flat with no glitching; footprints look sharper and a little deeper
+- Status: waiting for L
+
 ## T495 Sprint dust like Talon Trot
 - Asked: 2026-10-21 08:57 UTC
 - Build: main
