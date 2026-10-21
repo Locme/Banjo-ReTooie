@@ -4470,6 +4470,10 @@ void tooie::picture_filters::set_preset(Preset preset) {
     graphics_config().save_config();
 }
 
+bool tooie::picture_filters::toon_characters_on() {
+    return value<double>(toon_characters_option, 0.0) > 0.0;
+}
+
 bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
 }
@@ -4906,12 +4910,12 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         toon_characters_option,
         "Toon shading: Characters",
-        "Cel shading for Banjo, Kazooie and the game's other characters, enemies and objects: the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
+        "Cel shading for Banjo, Kazooie and the game's other characters and enemies (not rocks or other objects, which follow World): the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         toon_world_option,
         "Toon shading: World",
-        "The same cel shading for the level itself: the ground, walls, buildings and sky. Set it apart from the characters' to have one without the other. 0 is off.",
+        "The same cel shading for everything that isn't a character: the ground, walls, buildings, rocks, other objects and the sky. Set it apart from the characters' to have one without the other. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         underwater_tint_option,

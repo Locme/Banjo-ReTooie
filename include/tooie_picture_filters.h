@@ -151,6 +151,8 @@ namespace tooie::picture_filters {
     // DEV tab, on by default (L, 2026-10-17): blends the seams of clamped textures, such as the lines between the
     // pieces of the title's logo (a vanilla issue that shows at high resolutions).
     inline const std::string texture_seams_option = "blend_texture_seams";
+    // Whether Toon shading: Characters is above 0, so the model tagging marks the characters' draws.
+    bool toon_characters_on();
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.

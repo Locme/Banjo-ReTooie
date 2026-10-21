@@ -63,7 +63,7 @@
   3. Swap them: Characters 0, World 100
   4. Both 100, then both 0
   5. If you had Toon shading raised before, check both sliders start at that value
-- Look for: Characters 100 alone flattens only Banjo, Kazooie, enemies and objects, leaving the ground and walls as the game drew them. World 100 alone flattens the level and leaves characters alone. Both at 0 look exactly like before. Tell me if a character edge shows a halo, if characters in water or behind water are wrong, or if water, reflections or shiny metal look different with Characters raised. Note: gold or metal characters count as shiny and may follow the World slider.
+- Look for: (Updated 2026-10-21 after L: rocks and other props now follow World; Characters is only models with several bones, so Banjo, Kazooie, NPCs and enemies. Tell me if a prop still follows Characters or a character is missed.) Characters 100 alone flattens only Banjo, Kazooie and enemies, leaving the ground, walls and rocks as the game drew them. World 100 alone flattens the level and props and leaves characters alone. Both at 0 look exactly like before. Tell me if a character edge shows a halo, if characters in water or behind water are wrong, or if water, reflections or shiny metal look different with Characters raised. Note: gold or metal characters count as shiny and may follow the World slider.
 - Status: waiting for L
 
 ## T496 Tessellated sand: edges, tire tracks, sharper footprints
