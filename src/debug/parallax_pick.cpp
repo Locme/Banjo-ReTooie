@@ -41,7 +41,7 @@ namespace RT64 {
     void ScenePickResult(uint64_t &hash, uint32_t &layers);
     uint32_t SceneParallaxTexture(uint64_t hash);
     uint32_t SceneGrassTexture(uint64_t hash);
-    bool SceneIceTexture(uint64_t hash);
+    uint32_t SceneIceTexture(uint64_t hash);
     bool SceneShinyTexture(uint64_t hash);
     bool SceneFenceTexture(uint64_t hash);
 }
@@ -378,7 +378,7 @@ namespace {
         if (grass == 2) {
             return "Grass along edges";
         }
-        if (RT64::SceneIceTexture(hash)) {
+        if (RT64::SceneIceTexture(hash) != 0u) {
             return "Ice Reflection";
         }
         if (RT64::SceneFenceTexture(hash)) {
