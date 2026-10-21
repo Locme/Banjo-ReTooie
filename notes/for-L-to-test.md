@@ -142,13 +142,13 @@
 - Status: waiting for L
 
 ## T480 No fur over Banjo's shorts
-- Asked: 2026-10-20 20:54 UTC; second fix 2026-10-21 (L 22:25: "still fur on the shorts")
+- Asked: 2026-10-20 20:54 UTC; second fix 2026-10-21 00:00; third 2026-10-21 08:50 (L 08:25: "Hair still coming out of his pants")
 - Build: main (pull and build again)
 - Steps:
   1. Graphics > Character Shaders: Banjo fur on
-  2. Stand Banjo still in Spiral Mountain and look at his shorts and the top of his legs from the front and behind (free camera or photo mode helps)
-  3. Walk, run and crouch, and watch a cutscene with him in it
-- Look for: His yellow shorts stay clean: no brown strands on the creases, at the bottom edge or between his legs. The brown on his legs below the shorts, his body and his arms are as furry as before. Cause (second look, from his model in the ROM): the shorts' texture is yellow with orange creases painted in, and the fur test took those creases for fur; the dark shading at the crotch and hems also uses the fur's own brown colours. Both are now marked no-fur. The first fix (the blend at the shorts' edge) was not the cause. Not seen in the game here: the software renderer stalled before Banjo appeared.
+  2. Stand Banjo still and look at his shorts close up from the front, behind and the sides (free camera or photo mode helps), especially the bottom hems and the waistband
+  3. Walk, run, crouch and jump, and watch a cutscene with him in it
+- Look for: No fur on the yellow and none sticking out over the hems or the waistband. Just below the hems his legs' fur starts short and grows to full length a little lower down; same above the belt. The rest of his fur is as before. Fixes so far: the creases painted on the shorts' texture no longer count as fur (second fix, L confirmed the yellow is clean); now the fur next to the shorts is cut short, measured in his pose every frame, because his legs' and belly's fur starts under the shorts' edges and stood out through them. If it still pokes out, say where (hem, waistband, front or back) and in which pose. Not seen in the game here.
 - Status: waiting for L
 ## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
 - Asked: 2026-10-20 20:35 UTC
