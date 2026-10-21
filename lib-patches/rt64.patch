@@ -8182,10 +8182,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d373f0b
+index 0000000..fb21211
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3446 @@
+@@ -0,0 +1,3458 @@
 +//
 +// RT64
 +//
@@ -8489,6 +8489,10 @@ index 0000000..d373f0b
 +    static float rayTracingReflections = 0.6f;
 +    static float rayTracingWaterReflections = 0.6f;
 +    static std::atomic<float> rayTracingMaterials[3] = { 1.0f, 0.6f, 0.35f };
++    // What the last traced scene held, so the traced pass skips rays that can find nothing: any draw whose Parallax
++    // material reflects (MaterialShine), and any level cut-out (SunThroughCutout).
++    static std::atomic<bool> rayScenesShine{ true };
++    static std::atomic<bool> rayScenesLevelCutouts{ true };
 +    static std::atomic<bool> rayTracingHitColours{ false };
 +    static std::atomic<bool> rayTracingPlayerShadows{ true };
 +    static std::atomic<float> rayTracingSmoothing{ 0.5f };
@@ -10615,7 +10619,8 @@ index 0000000..d373f0b
 +            }
 +            // Whether the rays can read the textures of what they meet this pass (the structure is built from this frame's
 +            // draws and its buffers are all there).
-+            mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? 1.0f : 0.0f;
++            // 3 when the scene also has a level cut-out (SunThroughCutout has something to find).
++            mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? (rayScenesLevelCutouts.load() ? 3.0f : 1.0f) : 0.0f;
 +            // Whether the player casts traced shadows (Traced shadows of the player).
 +            mapped[9] = rayTracingPlayerShadows.load() ? 0.0f : 1.0f;
 +            // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
@@ -10624,7 +10629,7 @@ index 0000000..d373f0b
 +            mapped[10] = withGrass ? 54.0f * lightSettings.grassHeight : 0.0f;
 +            // How much the Parallax materials reflect (Graphics > Ray Tracing's sliders), in hundredths packed together: Metal,
 +            // then Tiles times 256, then Smooth times 65536.
-+            mapped[11] = std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
++            mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
 +                std::round(rayTracingMaterials[2].load() * 100.0f) * 65536.0f;
 +            memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            // The lit lamps after the level's lights.
@@ -10645,6 +10650,8 @@ index 0000000..d373f0b
 +        // draws opaque, cut-outs not (the rays that read textures test them; the rest pass them by).
 +        thread_local std::vector<RenderBottomLevelASMesh> meshes;
 +        meshes.clear();
++        bool sceneShine = false;
++        bool sceneLevelCutouts = false;
 +        uint32_t *geometryTable = reinterpret_cast<uint32_t *>(res.rayGeometryBuffer->map());
 +        for (size_t i = 0; (i < drawCount) && (meshes.size() < MaxGeometries); i++) {
 +            const SceneRayDraw &draw = draws[i];
@@ -10652,6 +10659,9 @@ index 0000000..d373f0b
 +                continue;
 +            }
 +            const bool cutout = (draw.flags & SceneRayDrawCutout) != 0;
++            const uint32_t material = draw.flags >> SceneRayDrawMaterialShift;
++            sceneShine = sceneShine || (material == 12) || (material == 14) || (material == 16);
++            sceneLevelCutouts = sceneLevelCutouts || ((draw.flags & (SceneRayDrawCutout | SceneRayDrawModel)) == SceneRayDrawCutout);
 +            uint32_t *entry = geometryTable + meshes.size() * 4;
 +            entry[0] = draw.indexStart;
 +            entry[1] = draw.tileIndex;
@@ -10661,6 +10671,8 @@ index 0000000..d373f0b
 +                RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, draw.indexCount - (draw.indexCount % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), !cutout);
 +        }
 +        res.rayGeometryBuffer->unmap();
++        rayScenesShine.store(sceneShine);
++        rayScenesLevelCutouts.store(sceneLevelCutouts);
 +        if (meshes.empty()) {
 +            return;
 +        }
@@ -17149,10 +17161,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..2552510
+index 0000000..72220a2
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4572 @@
+@@ -0,0 +1,4591 @@
 +//
 +// RT64
 +//
@@ -18231,7 +18243,9 @@ index 0000000..2552510
 +    const float3 surface = (depth >= 0.99999f) ? normalize(ViewPosition(pixel, 0.5f)) * 4000.0f : ViewPosition(pixel, depth);
 +    const float reach = min(length(surface), 4000.0f);
 +    const float3 look = surface / max(length(surface), 1e-3f);
-+    const int Samples = 12;
++    // Fewer steps outdoors, where the haze is thin and the shafts soft (the beams were over half the traced pass's time,
++    // L 2026-10-21: performance very bad); the Bayer offsets below spread the steps between neighbouring pixels.
++    const int Samples = room ? 8 : 4;
 +    const float step = reach / float(Samples);
 +    const int2 cell = pixel & 3;
 +    const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
@@ -18271,8 +18285,11 @@ index 0000000..2552510
 +// front of it: metal, glazed tiles and smooth surfaces as their sliders say (fully, 60% and 35% by default); otherwise for anything else (L, 2026-10-21:
 +// ray tracing took no notice of the material list).
 +float MaterialShine(float3 center, float otherwise) {
++    // Graphics > Ray Tracing's Metal, Tiles and Smooth reflection sliders (gLights 11, packed; 0 when nothing in the
++    // scene has a material that reflects, and no ray is needed).
++    const uint packed = uint(asfloat(gLights.Load(44)) + 0.5f);
 +    const float distance = length(center);
-+    if (distance < 10.0f) {
++    if ((packed == 0u) || (distance < 10.0f)) {
 +        return otherwise;
 +    }
 +    RayDesc ray;
@@ -18287,8 +18304,6 @@ index 0000000..2552510
 +        return otherwise;
 +    }
 +    const uint material = RayGeometryMaterial(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()));
-+    // Graphics > Ray Tracing's Metal, Tiles and Smooth reflection sliders (gLights 11, packed).
-+    const uint packed = uint(asfloat(gLights.Load(44)) + 0.5f);
 +    return (material == 12u) ? float(packed & 0xFFu) / 100.0f : (material == 14u) ? float((packed >> 8) & 0xFFu) / 100.0f :
 +        (material == 16u) ? float(packed >> 16) / 100.0f : otherwise;
 +}
@@ -18541,14 +18556,18 @@ index 0000000..2552510
 +    const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.002f + 1.0f, 2.0f));
 +    const float reach = 400.0f;
 +    float shade = 0.0f;
-+    [unroll] for (int k = 0; k < 3; k++) {
-+        const float angle = float(k) * 2.0943951f;
++    // Two rays, turned a different way each pixel (the noise smoothing evens them out).
++    const float turn = frac(52.9829189f * frac(dot(center.xy, float2(0.06711056f, 0.00583715f)) * 37.0f)) * 3.14159265f;
++    [unroll] for (int k = 0; k < 2; k++) {
++        const float angle = float(k) * 3.14159265f + turn;
 +        RayDesc ray;
 +        ray.Origin = start;
 +        ray.Direction = normalize(float3(cos(angle) * 0.08f, 1.0f, sin(angle) * 0.08f));
 +        ray.TMin = 0.0f;
 +        ray.TMax = reach;
-+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++        // Solid triangles are taken as they come (the nearest wins without a look at each); only cut-outs and the grass
++        // are looked at one by one.
++        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
 +        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +        while (query.Proceed()) {
 +            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
@@ -18559,9 +18578,8 @@ index 0000000..2552510
 +                continue;
 +            }
 +            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-+            const uint flags = RayGeometryFlags(geometry);
 +            // The first thing above decides: a model shades, the level (a roof, a ledge) stops the ray.
-+            if (((flags & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
++            if (!RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
 +                continue;
 +            }
 +            query.CommitNonOpaqueTriangleHit();
@@ -18570,7 +18588,7 @@ index 0000000..2552510
 +            const float t = query.CommittedRayT();
 +            const bool model = (RayGeometryFlags(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex())) & 4u) != 0u;
 +            if (model && !(PlayerShadowsOff() && BanjoHit(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), ray.Origin + ray.Direction * t))) {
-+                shade += (1.0f / 3.0f) * (1.0f - t / reach);
++                shade += 0.5f * (1.0f - t / reach);
 +            }
 +        }
 +    }
@@ -18603,8 +18621,14 @@ index 0000000..2552510
 +
 +// Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
 +// within the radius counts less the further away it was). Two rays a pixel, 32 over each 4x4 block.
++// How far the indirect pass's rays start off the surface: clear of a second layer the game draws just over some ground
++// (Spiral Mountain's open grass came out fully occluded and black with the rays starting a unit off it).
++float IndirectLift(float3 center) {
++    return max(-center.z * 0.003f, 8.0f);
++}
++
 +float TracedOcclusion(float3 center, float3 normal, uint cell) {
-+    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float3 origin = center + normal * IndirectLift(center);
 +    const float radius = gConstants.ambientOcclusion.y * 1.5f;
 +    float blocked = 0.0f;
 +    [unroll] for (int r = 0; r < 2; r++) {
@@ -18730,7 +18754,7 @@ index 0000000..2552510
 +// direction, and brings what it meets (sky or a surface's colour) tinted by the colours along the way, so light
 +// carries round corners and into rooms. The directions are fixed per pixel, so the light holds still from frame to frame.
 +float3 TracedGI(float3 center, float3 normal, uint cell) {
-+    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const float3 origin = center + normal * IndirectLift(center);
 +    const float nearReach = gConstants.ambientOcclusion.y * 3.0f;
 +    const uint bounces = PathBounces();
 +    float3 light = 0.0f;
@@ -20822,7 +20846,8 @@ index 0000000..2552510
 +// shade, so the sun's light coming through is added, throwing the grate's pattern (L, 2026-10-21). A wall under eaves or
 +// the floor round an object's lip isn't lit through a cut-out, so it gets nothing (King Jingaling's house, the Jiggy shrine).
 +bool SunThroughCutout(float3 worldStart, float3 worldSun) {
-+    if (!RayTexturesOn()) {
++    // gLights 8 is 3 when the scene has a level cut-out at all.
++    if (asfloat(gLights.Load(32)) < 2.5f) {
 +        return false;
 +    }
 +    {
@@ -20916,7 +20941,13 @@ index 0000000..2552510
 +        const int Rays = 4;
 +        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
 +        float blocked = 0.0f;
++        // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
++        int traced = 0;
 +        [loop] for (int k = 0; k < Rays; k++) {
++            if ((k == 2) && ((blocked == 0.0f) || (blocked == 2.0f))) {
++                break;
++            }
++            traced++;
 +            // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
 +            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (onBanjo ? 1.0f - RtSmoothing() : 1.0f);
 +            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
@@ -20930,7 +20961,7 @@ index 0000000..2552510
 +            // Under ray tracing, Traced shadows of the player decides (not Sun shadows on Banjo).
 +            blocked += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 1.0f : 0.0f;
 +        }
-+        shadow = blocked / float(Rays);
++        shadow = blocked / float(traced);
 +        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
 +            return 1.0f;
 +        }

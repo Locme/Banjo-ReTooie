@@ -353,6 +353,13 @@ namespace {
     constexpr uint64_t lamp_textures[] = {
         // Bottles' house: the lantern's lit pane (the game gives it no light of its own).
         0x861bfb5c8890c6e0,
+        // Picked by eye on 2026-10-21 from the 7,259-texture dump (textures/banjo-tooie-textures.zip), warm and bright
+        // ones first (L: a sweep to add light sources). The glow round Jinjo Village's lanterns.
+        0xe18f96f57e5f4241,
+        // Torch and candle flames.
+        0xcec58574a22efd1f, 0x6c297cad1c8edbbf, 0x2ccf00e0c31ed884, 0x910453acfb90f339, 0x2a0bcff2df52fe7e,
+        // Strip and ceiling lamps.
+        0xfe7ebd28c377b54f, 0x6f59260c143a2e31, 0xfbbb2214e197d33e,
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
