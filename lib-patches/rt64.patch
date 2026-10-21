@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..2d82df6 100644
+index 79dfc38..748b991 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -268,7 +268,7 @@ index 79dfc38..2d82df6 100644
 +# in place of the reflections' depth march. Vulkan only (SPIR-V), where the device has ray queries; shader model 6.5
 +# for the ray query, and SPIR-V 1.5 (Vulkan 1.2) for the ray query capability.
 +if (NOT APPLE)
-+    set (DXC_PS_RQ_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_5" "-fspv-target-env=vulkan1.2" "-fspv-extension=SPV_KHR_ray_query")
++    set (DXC_PS_RQ_OPTS "${DXC_COMMON_OPTS}" "-E" "PSMain" "-T ps_6_5" "-fspv-target-env=vulkan1.2" "-fspv-extension=SPV_KHR_ray_query" "-fspv-extension=SPV_EXT_descriptor_indexing")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRTPS.hlsl" "-D RAY_TRACED")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT2XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_2X")
 +    build_shader_spirv(rt64 "src/shaders/SceneEffectsPS.hlsl" "${DXC_PS_RQ_OPTS}" "src/shaders/SceneEffectsRT4XPS.hlsl" "-D RAY_TRACED" "-D SAMPLES_4X")
@@ -1968,7 +1968,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..3d5b165 100644
+index 69a82ac..769c4bd 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -2004,7 +2004,7 @@ index 69a82ac..3d5b165 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,165 @@ namespace RT64 {
+@@ -659,6 +678,190 @@ namespace RT64 {
          }
      };
  
@@ -2096,6 +2096,31 @@ index 69a82ac..3d5b165 100644
 +        }
 +    };
 +
++    // Banjo-Tooie: what the traced effects read the textures of the triangles they meet with (SceneEffectsPS.hlsl
++    // RAY_TRACED, space1; the texture cache's set goes at space2): the traced scene's geometries (first index, tile,
++    // flags), the frame's index buffer and texture coordinates, and its tiles.
++    struct SceneRayTexturesDescriptorSet : RenderDescriptorSetBase {
++        uint32_t gRayGeometries;
++        uint32_t gRayIndices;
++        uint32_t gRayTexcoords;
++        uint32_t gRayRDPTiles;
++        uint32_t gRayGPUTiles;
++
++        SceneRayTexturesDescriptorSet(RenderDevice *device = nullptr) {
++            builder.begin();
++            gRayGeometries = builder.addByteAddressBuffer(0);
++            gRayIndices = builder.addByteAddressBuffer(1);
++            gRayTexcoords = builder.addByteAddressBuffer(2);
++            gRayRDPTiles = builder.addStructuredBuffer(3);
++            gRayGPUTiles = builder.addStructuredBuffer(4);
++            builder.end();
++
++            if (device != nullptr) {
++                create(device);
++            }
++        }
++    };
++
 +    // Banjo-Tooie: the sun shadow map's pass: the game's vertices, their model transforms' indices and the
 +    // model transforms, as RSPWorldCS reads them.
 +    struct SunShadowMapDescriptorSet : RenderDescriptorSetBase {
@@ -2171,7 +2196,7 @@ index 69a82ac..3d5b165 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..1a9b48a 100644
+index 9fae0d4..453af70 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -3111,7 +3136,7 @@ index 9fae0d4..1a9b48a 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2088,119 @@ namespace RT64 {
+@@ -1296,9 +2088,134 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3211,7 +3236,22 @@ index 9fae0d4..1a9b48a 100644
 +                        }
 +                        // Graphics > Ray tracing: the structures the traced reflections trace through (a no-op unless it is on and
 +                        // the device has ray queries).
-+                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, casterRuns.data(), casterRuns.size());
++                        // Each traced draw on its own (the rays find its texture from it), with its indices.
++                        thread_local std::vector<SceneRayDraw> rayDraws;
++                        rayDraws.clear();
++                        for (const RenderTargetDrawCall::RayDraw &rayDraw : targetDrawCall.rayDraws) {
++                            const auto &triangles = instanceDrawCallVector[rayDraw.instanceIndex].triangles;
++                            if (triangles.faceCount > 0) {
++                                rayDraws.push_back({ triangles.indexStart, triangles.faceCount * 3, rayDraw.tileIndex, rayDraw.flags });
++                            }
++                        }
++                        SceneRayTextures rayTextures;
++                        rayTextures.indices = indexBufferView.buffer.ref;
++                        rayTextures.texcoords = rayTexcoordBufferRef;
++                        rayTextures.rdpTiles = rayRDPTilesBufferRef;
++                        rayTextures.gpuTiles = rayGPUTilesBufferRef;
++                        rayTextures.textureSet = (descTextureSet != nullptr) ? descTextureSet->get() : nullptr;
++                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, rayDraws.data(), rayDraws.size(), rayTextures);
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
 +                            depthScale, depthTranslate, sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
 +                    }
@@ -3232,7 +3272,7 @@ index 9fae0d4..1a9b48a 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2252,38 @@ namespace RT64 {
+@@ -1350,10 +2267,38 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3271,16 +3311,19 @@ index 9fae0d4..1a9b48a 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2316,8 @@ namespace RT64 {
+@@ -1386,6 +2331,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
 +        worldPosBufferRef = worldPosRes;
++        rayTexcoordBufferRef = tcRes;
++        rayRDPTilesBufferRef = drawBuffers.rdpTilesBuffer.get();
++        rayGPUTilesBufferRef = drawBuffers.gpuTilesBuffer.get();
 +        worldPosVertexCount = vertexCount;
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2340,63 @@ namespace RT64 {
+@@ -1408,6 +2358,64 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3292,6 +3335,7 @@ index 9fae0d4..1a9b48a 100644
 +        targetDrawCall.shinyInstances.clear();
 +        targetDrawCall.waterHandedOn.clear();
 +        targetDrawCall.sunCasterInstances.clear();
++        targetDrawCall.rayDraws.clear();
 +        targetDrawCall.waterLeftOutClosed = 0;
 +        targetDrawCall.waterLeftOutSmall = 0;
 +        targetDrawCall.hasExcludedInstances = false;
@@ -3344,7 +3388,7 @@ index 9fae0d4..1a9b48a 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2420,22 @@ namespace RT64 {
+@@ -1431,6 +2439,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3367,7 +3411,7 @@ index 9fae0d4..1a9b48a 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2455,175 @@ namespace RT64 {
+@@ -1450,12 +2474,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3543,7 +3587,7 @@ index 9fae0d4..1a9b48a 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2774,7 @@ namespace RT64 {
+@@ -1606,6 +2793,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3551,7 +3595,7 @@ index 9fae0d4..1a9b48a 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2851,20 @@ namespace RT64 {
+@@ -1682,6 +2870,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3572,14 +3616,12 @@ index 9fae0d4..1a9b48a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,10 +2930,682 @@ namespace RT64 {
+@@ -1747,25 +2949,1525 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
 -                }
- 
--                instanceDrawCallVector.push_back(instanceDrawCall);
--                globalCallIndex++;
++
 +                    // Banjo-Tooie: water is a translucent surface of the 3D world (alpha blended, depth tested,
 +                    // no depth write, not a decal) made of several triangles lying flat; the shader keeps only
 +                    // surfaces lying over something further down.
@@ -3680,6 +3722,15 @@ index 9fae0d4..1a9b48a 100644
 +                        !interop::Blender::usesAlphaBlend(sm) && (sm.alphaCompare() == G_AC_NONE) && !sm.cvgXAlpha() && !sm.alphaCvgSel())
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
++                        targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, (call.callDesc.tileCount > 0) ? SceneRayDrawTextured : 0u });
++                    }
++                    // The cut-outs and see-through draws that write depth, for the traced effects only: the rays read their
++                    // texture where they meet them and go on through where it is see-through (L, 2026-10-21).
++                    else if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
++                        (call.callDesc.triangleCount > 0) && (call.callDesc.tileCount > 0) && sm.zCmp() && sm.zUpd() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY))
++                    {
++                        targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, SceneRayDrawCutout | SceneRayDrawTextured });
 +                    }
 +                }
 +
@@ -4138,12 +4189,12 @@ index 9fae0d4..1a9b48a 100644
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
 +                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
-+
-+                instanceDrawCallVector.push_back(instanceDrawCall);
-+                globalCallIndex++;
-+            }
-+        }
-+
+ 
+                 instanceDrawCallVector.push_back(instanceDrawCall);
+                 globalCallIndex++;
+             }
+         }
+ 
 +        // Banjo-Tooie: Blend texture seams: a piece's neighbour along an edge has at least two points of its opposite edge in
 +        // the same places as this one's (on the screen and at the same depth), at the same texels along the edge.
 +        if (seamPieces.size() > 1) {
@@ -4255,10 +4306,10 @@ index 9fae0d4..1a9b48a 100644
 +                    fprintf(stdout, "[seam] %zu pieces, %u joined edges\n", seamPieces.size(), joined);
 +                    fflush(stdout);
 +                }
-             }
-         }
- 
-@@ -1758,14 +3613,831 @@ namespace RT64 {
++            }
++        }
++
+ #   if RT_ENABLED
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -4281,7 +4332,9 @@ index 9fae0d4..1a9b48a 100644
 +                    targetDrawCall.iceInstances.insert(targetDrawCall.iceInstances.begin(), earlier.iceInstances.begin(), earlier.iceInstances.end());
 +                    targetDrawCall.shinyInstances.insert(targetDrawCall.shinyInstances.begin(), earlier.shinyInstances.begin(), earlier.shinyInstances.end());
 +                    targetDrawCall.sunCasterInstances.insert(targetDrawCall.sunCasterInstances.begin(), earlier.sunCasterInstances.begin(), earlier.sunCasterInstances.end());
++                    targetDrawCall.rayDraws.insert(targetDrawCall.rayDraws.begin(), earlier.rayDraws.begin(), earlier.rayDraws.end());
 +                    earlier.sunCasterInstances.clear();
++                    earlier.rayDraws.clear();
 +                    targetDrawCall.waterLeftOutClosed += earlier.waterLeftOutClosed;
 +                    targetDrawCall.waterLeftOutSmall += earlier.waterLeftOutSmall;
 +                    earlier.waterHandedOn = std::move(earlier.waterInstances);
@@ -5092,7 +5145,7 @@ index 9fae0d4..1a9b48a 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..437cbeb 100644
+index 3add9c3..3c9ec86 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5123,7 +5176,7 @@ index 3add9c3..437cbeb 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +54,40 @@ namespace RT64 {
+@@ -48,6 +54,49 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -5148,6 +5201,15 @@ index 3add9c3..437cbeb 100644
 +        std::vector<uint32_t> waterHandedOn;
 +        // Banjo-Tooie: the 3D world's solid draws, drawn again from the sun into the sun shadow map.
 +        std::vector<uint32_t> sunCasterInstances;
++        // Banjo-Tooie: the draws the ray traced effects trace through (Graphics > Ray tracing): the sun's casters and
++        // the cut-outs and see-through draws that write depth, with their first texture tile, so the rays can read
++        // the texture they meet (a grate's holes, a lantern's bars). flags: SceneRayDrawCutout, SceneRayDrawTextured.
++        struct RayDraw {
++            uint32_t instanceIndex;
++            uint32_t tileIndex;
++            uint32_t flags;
++        };
++        std::vector<RayDraw> rayDraws;
 +        // Draws that looked like water but were left out: drawn while the 3D world was closed, or too small.
 +        uint32_t waterLeftOutClosed = 0;
 +        uint32_t waterLeftOutSmall = 0;
@@ -5164,7 +5226,7 @@ index 3add9c3..437cbeb 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +102,162 @@ namespace RT64 {
+@@ -62,11 +111,162 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5327,17 +5389,21 @@ index 3add9c3..437cbeb 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +268,9 @@ namespace RT64 {
+@@ -77,6 +277,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
 +        // Banjo-Tooie: the world positions and how many vertices there are, for the traced reflections' structures.
 +        const RenderBuffer *worldPosBufferRef = nullptr;
++        // Banjo-Tooie: what the traced effects read the textures of what they meet from (SceneRayTextures).
++        const RenderBuffer *rayTexcoordBufferRef = nullptr;
++        const RenderBuffer *rayRDPTilesBufferRef = nullptr;
++        const RenderBuffer *rayGPUTilesBufferRef = nullptr;
 +        uint32_t worldPosVertexCount = 0;
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +281,12 @@ namespace RT64 {
+@@ -87,6 +294,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5350,7 +5416,7 @@ index 3add9c3..437cbeb 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +300,7 @@ namespace RT64 {
+@@ -100,6 +313,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5358,7 +5424,7 @@ index 3add9c3..437cbeb 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +324,10 @@ namespace RT64 {
+@@ -123,6 +337,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5369,7 +5435,7 @@ index 3add9c3..437cbeb 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +369,15 @@ namespace RT64 {
+@@ -164,7 +382,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -7092,16 +7158,18 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..8af2108
+index 0000000..67d3a3f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3105 @@
+@@ -0,0 +1,3171 @@
 +//
 +// RT64
 +//
 +
 +#include "rt64_scene_effects.h"
 +#include "shared/rt64_grass_instances.h"
++#include "shared/rt64_gpu_tile.h"
++#include "shared/rt64_rdp_tile.h"
 +#include "rt64_gpu_sections.h"
 +
 +#include <algorithm>
@@ -7217,6 +7285,16 @@ index 0000000..8af2108
 +            std::unique_ptr<RenderBuffer> lightsBuffer;
 +            // The world radiance cache: a hash table of 16-unit cells (check word, colour), 1 M entries.
 +            std::unique_ptr<RenderBuffer> radianceBuffer;
++            // The traced scene's geometries (first index, tile, flags, 0: 16 bytes each, in the structure's order) and the
++            // set the rays read the textures of what they meet through (SceneRayTexturesDescriptorSet), with the frame's
++            // buffers it holds; a set of empty stand-ins until there are some. rayTexturesValid: the structure was built
++            // this pass, so its geometries match this frame's buffers (a reused one's don't: its textures aren't read).
++            std::unique_ptr<RenderBuffer> rayGeometryBuffer;
++            std::unique_ptr<RenderBuffer> rayDummyBuffer;
++            std::unique_ptr<SceneRayTexturesDescriptorSet> rayTexturesSet;
++            const RenderBuffer *rayTexturesSetBuffers[4] = {};
++            RenderDescriptorSet *rayTextureCacheSet = nullptr;
++            bool rayTexturesValid = false;
 +            const RenderAccelerationStructure *sceneSetBvh = nullptr;
 +            // Water reflections: the water's own depth (24 bits over rgb, a = 1 on water), redrawn by the
 +            // framebuffer renderer into this target, at the scene's size and sample count.
@@ -9243,18 +9321,52 @@ index 0000000..8af2108
 +    // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
 +    // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-+        const std::pair<uint32_t, uint32_t> *runs, size_t runCount)
++        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures)
 +    {
 +        Resources &res = resourcesFor(worker);
 +        res.bvhReady = false;
++        res.rayTexturesValid = false;
 +        if (!RayTracingActive() || !worker->device->getCapabilities().rayQuery) {
 +            return;
 +        }
++        constexpr size_t MaxGeometries = 8192;
++        // The set the rays read textures through: this frame's buffers when it has them all, else empty stand-ins.
++        res.rayTextureCacheSet = textures.textureSet;
++        if (res.rayGeometryBuffer == nullptr) {
++            res.rayGeometryBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * MaxGeometries));
++            res.rayGeometryBuffer->setName("Scene Effects ray geometries");
++        }
++        if (res.rayDummyBuffer == nullptr) {
++            res.rayDummyBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(256));
++            res.rayDummyBuffer->setName("Scene Effects ray stand-in");
++            memset(res.rayDummyBuffer->map(), 0, 256);
++            res.rayDummyBuffer->unmap();
++        }
++        const bool haveTextureBuffers = (textures.indices != nullptr) && (textures.texcoords != nullptr) && (textures.rdpTiles != nullptr) && (textures.gpuTiles != nullptr);
++        const RenderBuffer *wanted[4] = {
++            haveTextureBuffers ? textures.indices : res.rayDummyBuffer.get(),
++            haveTextureBuffers ? textures.texcoords : res.rayDummyBuffer.get(),
++            haveTextureBuffers ? textures.rdpTiles : res.rayDummyBuffer.get(),
++            haveTextureBuffers ? textures.gpuTiles : res.rayDummyBuffer.get()
++        };
++        if ((res.rayTexturesSet == nullptr) || !std::equal(wanted, wanted + 4, res.rayTexturesSetBuffers)) {
++            if (res.rayTexturesSet != nullptr) {
++                res.retireLater(std::move(res.rayTexturesSet));
++            }
++            res.rayTexturesSet = std::make_unique<SceneRayTexturesDescriptorSet>(worker->device);
++            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayGeometries, res.rayGeometryBuffer.get());
++            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayIndices, wanted[0]);
++            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayTexcoords, wanted[1]);
++            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayRDPTiles, wanted[2], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::RDPTile)) : RenderBufferStructuredView(16));
++            res.rayTexturesSet->setBuffer(res.rayTexturesSet->gRayGPUTiles, wanted[3], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::GPUTile)) : RenderBufferStructuredView(16));
++            std::copy(wanted, wanted + 4, res.rayTexturesSetBuffers);
++        }
++        const bool building = (worldPos != nullptr) && (indices != nullptr) && (worldPosVertexCount != 0) && (drawCount != 0);
 +        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
 +        // dropping to the depth march and its shadow map, which made the shadows come and go.
 +        // The lights are written every pass, whatever the casters.
 +        if (res.lightsBuffer == nullptr) {
-+            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 2)));
++            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 3)));
 +            res.lightsBuffer->setName("Scene Effects lights");
 +        }
 +        if (res.radianceBuffer == nullptr) {
@@ -9264,7 +9376,7 @@ index 0000000..8af2108
 +        if (res.lightsBuffer != nullptr) {
 +            const SceneEffectsSettings lightSettings = GetSceneEffects();
 +            float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
-+            memset(mapped, 0, 16 * (SceneMaxLights + 2));
++            memset(mapped, 0, 16 * (SceneMaxLights + 3));
 +            mapped[0] = float(lightSettings.lightCount);
 +            mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
 +            mapped[2] = rayTracingSmoothing.load();
@@ -9277,23 +9389,37 @@ index 0000000..8af2108
 +                mapped[6] = tracedBeams[2];
 +                mapped[7] = tracedBeams[3];
 +            }
-+            memcpy(mapped + 8, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
++            // Whether the rays can read the textures of what they meet this pass (the structure is built from this frame's
++            // draws and its buffers are all there).
++            mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? 1.0f : 0.0f;
++            memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
 +        res.bvhReady = res.bvhBuiltOnce;
-+        if ((worldPos == nullptr) || (indices == nullptr) || (worldPosVertexCount == 0) || (runCount == 0)) {
++        if (!building) {
 +            return;
 +        }
 +        static const bool bvhLog = (getenv("TOOIE_RT_LOG") != nullptr);
-+        constexpr size_t MaxGeometries = 8192;
++        // One geometry a draw (so a ray's geometry index finds the draw, its tile and its texture coordinates): solid
++        // draws opaque, cut-outs not (the rays that read textures test them; the rest pass them by).
 +        thread_local std::vector<RenderBottomLevelASMesh> meshes;
 +        meshes.clear();
-+        for (size_t i = 0; (i < runCount) && (meshes.size() < MaxGeometries); i++) {
-+            if (runs[i].second >= 3) {
-+                meshes.emplace_back(RenderBufferReference(indices, uint64_t(runs[i].first) * sizeof(uint32_t)), RenderBufferReference(worldPos, 0),
-+                    RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, runs[i].second - (runs[i].second % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), true);
++        uint32_t *geometryTable = reinterpret_cast<uint32_t *>(res.rayGeometryBuffer->map());
++        for (size_t i = 0; (i < drawCount) && (meshes.size() < MaxGeometries); i++) {
++            const SceneRayDraw &draw = draws[i];
++            if (draw.indexCount < 3) {
++                continue;
 +            }
++            const bool cutout = (draw.flags & SceneRayDrawCutout) != 0;
++            uint32_t *entry = geometryTable + meshes.size() * 4;
++            entry[0] = draw.indexStart;
++            entry[1] = draw.tileIndex;
++            entry[2] = draw.flags;
++            entry[3] = 0;
++            meshes.emplace_back(RenderBufferReference(indices, uint64_t(draw.indexStart) * sizeof(uint32_t)), RenderBufferReference(worldPos, 0),
++                RenderFormat::R32_UINT, RenderFormat::R32G32B32_FLOAT, draw.indexCount - (draw.indexCount % 3), worldPosVertexCount, uint32_t(sizeof(float) * 4), !cutout);
 +        }
++        res.rayGeometryBuffer->unmap();
 +        if (meshes.empty()) {
 +            return;
 +        }
@@ -9369,6 +9495,7 @@ index 0000000..8af2108
 +        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::RayTracingBuild, true));
 +        res.bvhReady = true;
 +        res.bvhBuiltOnce = true;
++        res.rayTexturesValid = haveTextureBuffers && (res.rayTextureCacheSet != nullptr);
 +        if (bvhLog) {
 +            static auto lastLog = std::chrono::steady_clock::now();
 +            if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
@@ -10094,7 +10221,7 @@ index 0000000..8af2108
 +            res.sceneSetBvh = nullptr;
 +            if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
 +                res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
-+                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 2));
++                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 3));
 +                res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
 +                res.sceneSetBvh = res.bvhTlas.get();
 +            }
@@ -10173,7 +10300,8 @@ index 0000000..8af2108
 +        }
 +        commandList->setScissors(effectsArea);
 +        // Traced reflections while this frame's structure is built (BuildSceneBVH), else the depth march.
-+        const bool traced = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
++        const bool traced = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
++            (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
 +        {
 +            static const bool tracedLog = (getenv("TOOIE_RT_LOG") != nullptr);
 +            static int lastTraced = -1;
@@ -10185,8 +10313,12 @@ index 0000000..8af2108
 +        // Timed as the traced effects while the pass traces (reflections, shadows, light beams, path tracing).
 +        const int mainSpan = WorkloadGpuSections().start(traced ? GpuSection::TracedEffects : GpuSection::SceneEffects, commandList);
 +        commandList->setPipeline(traced ? shaderLibrary->sceneEffectsTraced.pipeline.get() : shaderLibrary->sceneEffects.pipeline.get());
-+        commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
++        commandList->setGraphicsPipelineLayout(traced ? shaderLibrary->sceneEffectsTraced.pipelineLayout.get() : shaderLibrary->sceneEffects.pipelineLayout.get());
 +        commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
++        if (traced) {
++            commandList->setGraphicsDescriptorSet(res.rayTexturesSet->get(), 1);
++            commandList->setGraphicsDescriptorSet(res.rayTextureCacheSet, 2);
++        }
 +        commandList->setGraphicsPushConstants(0, &constants);
 +        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +        commandList->drawInstanced(3, 1, 0, 0);
@@ -10203,10 +10335,10 @@ index 0000000..8af2108
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..bfd9a60
+index 0000000..1194a17
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,487 @@
+@@ -0,0 +1,507 @@
 +//
 +// RT64
 +//
@@ -10480,8 +10612,28 @@ index 0000000..bfd9a60
 +    // BuildSceneBVH builds the traced reflections' acceleration structures from the world's solid triangles (runs of
 +    // the index buffer: first index, count; positions from the vertex processor's world position buffer); does nothing
 +    // while RayTracingActive() is false.
++    // Banjo-Tooie: a draw the traced effects trace through: its indices, its first texture tile (into the frame's tiles) and
++    // what it is: SceneRayDrawCutout (a cut-out or see-through draw: the rays read its texture's alpha and go through where
++    // it is see-through), SceneRayDrawTextured (it has a texture to read; a lamp's casing lets light out where it is bright).
++    struct SceneRayDraw {
++        uint32_t indexStart;
++        uint32_t indexCount;
++        uint32_t tileIndex;
++        uint32_t flags;
++    };
++    constexpr uint32_t SceneRayDrawCutout = 1;
++    constexpr uint32_t SceneRayDrawTextured = 2;
++    // The frame's buffers the traced effects read the textures of what they meet from: its index buffer, texture coordinates
++    // (two floats a vertex), RDP and GPU tiles, and the texture cache's descriptor set.
++    struct SceneRayTextures {
++        const RenderBuffer *indices = nullptr;
++        const RenderBuffer *texcoords = nullptr;
++        const RenderBuffer *rdpTiles = nullptr;
++        const RenderBuffer *gpuTiles = nullptr;
++        RenderDescriptorSet *textureSet = nullptr;
++    };
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-+        const std::pair<uint32_t, uint32_t> *runs, size_t runCount);
++        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures);
 +    void SetSceneRayTracing(bool enabled);
 +    // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
 +    // ray tracing is active (see RefreshReflections).
@@ -10721,7 +10873,7 @@ index 7bbb9d7..c16abb7 100644
          void maskUnusedParameters();
          uint64_t hash() const;
 diff --git a/src/render/rt64_shader_library.cpp b/src/render/rt64_shader_library.cpp
-index d1c5273..df11443 100644
+index d1c5273..c766695 100644
 --- a/src/render/rt64_shader_library.cpp
 +++ b/src/render/rt64_shader_library.cpp
 @@ -17,6 +17,23 @@
@@ -11053,7 +11205,7 @@ index d1c5273..df11443 100644
          // Video Interface.
          {
              std::unique_ptr<RenderShader> regularShader = device->createShader(CREATE_SHADER_INPUTS(VideoInterfacePSRegularBlobDXIL, VideoInterfacePSRegularBlobSPIRV, VideoInterfacePSRegularBlobMSL, "PSMain", shaderFormat));
-@@ -832,6 +1072,183 @@ namespace RT64 {
+@@ -832,6 +1072,199 @@ namespace RT64 {
              }
          }
  
@@ -11125,8 +11277,24 @@ index d1c5273..df11443 100644
 +                    break;
 +                }
 +                std::unique_ptr<RenderShader> tracedShader = device->createShader(tracedBlob, tracedSize, "PSMain", shaderFormat);
-+                pipelineDesc.pixelShader = tracedShader.get();
-+                sceneEffectsTraced.pipeline = device->createGraphicsPipeline(pipelineDesc);
++                // Its own layout: the rays read the textures of what they meet (the ray textures' set, then the texture
++                // cache's, SceneEffectsPS.hlsl RAY_TRACED).
++                {
++                    SceneEffectsDescriptorSet tracedSet(samplerLibrary.linear.clampClamp.get(), rayQuery);
++                    SceneRayTexturesDescriptorSet rayTexturesSet;
++                    FramebufferRendererDescriptorTextureSet textureSet;
++                    layoutBuilder.begin();
++                    layoutBuilder.addDescriptorSet(tracedSet);
++                    layoutBuilder.addDescriptorSet(rayTexturesSet);
++                    layoutBuilder.addDescriptorSet(textureSet);
++                    layoutBuilder.addPushConstant(0, 0, sizeof(interop::SceneEffectsCB), RenderShaderStageFlag::PIXEL);
++                    layoutBuilder.end();
++                    sceneEffectsTraced.pipelineLayout = layoutBuilder.create(device);
++                }
++                RenderGraphicsPipelineDesc tracedDesc = pipelineDesc;
++                tracedDesc.pipelineLayout = sceneEffectsTraced.pipelineLayout.get();
++                tracedDesc.pixelShader = tracedShader.get();
++                sceneEffectsTraced.pipeline = device->createGraphicsPipeline(tracedDesc);
 +            }
 +#           endif
 +
@@ -15263,10 +15431,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..6fef50c
+index 0000000..fc4ada1
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4132 @@
+@@ -0,0 +1,4234 @@
 +//
 +// RT64
 +//
@@ -15276,6 +15444,10 @@ index 0000000..6fef50c
 +// Built with INDIRECT_PASS it is the indirect pass instead: GTAO and SSGI at half size, which this pass reads.
 +
 +#include "shared/rt64_scene_effects.h"
++#ifdef RAY_TRACED
++#include "shared/rt64_gpu_tile.h"
++#include "shared/rt64_rdp_tile.h"
++#endif
 +#include "SunShadowMap.hlsli"
 +#include "WaterTess.hlsli"
 +
@@ -15319,6 +15491,15 @@ index 0000000..6fef50c
 +// 16-unit cells (a hash of the cell, then the colour), so a ray that lands where the picture can't see it still finds
 +// the colour the surface had when it was last on screen.
 +RWByteAddressBuffer gRadianceCache : register(u15);
++// What the rays read the textures of the triangles they meet with (SceneRayTexturesDescriptorSet, then the texture cache
++// at space2): the traced scene's geometries (first index, tile, flags (1 cut-out, 2 textured), 0), the frame's index
++// buffer, texture coordinates (two floats a vertex) and tiles.
++ByteAddressBuffer gRayGeometries : register(t0, space1);
++ByteAddressBuffer gRayIndices : register(t1, space1);
++ByteAddressBuffer gRayTexcoords : register(t2, space1);
++StructuredBuffer<RDPTile> gRayRDPTiles : register(t3, space1);
++StructuredBuffer<GPUTile> gRayGPUTiles : register(t4, space1);
++Texture2D<float4> gRayTextures[8192] : register(t0, space2);
 +#endif
 +
 +// Eye adaptation: brightens a dark scene and tones down a bright one around a middle key, keeping black
@@ -16113,13 +16294,81 @@ index 0000000..6fef50c
 +    gRadianceCache.Store2(at, uint2(check, c.r | (c.g << 8) | (c.b << 16)));
 +}
 +
++// Whether the rays can read the textures of what they meet this pass (the lights buffer's header, BuildSceneBVH).
++bool RayTexturesOn() {
++    return asfloat(gLights.Load(32)) > 0.5f;
++}
++
++// A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture.
++uint RayGeometryFlags(uint geometry) {
++    return gRayGeometries.Load(geometry * 16u + 8u);
++}
++
++int RayWrap(int texel, int mask, bool mirror) {
++    if (mask <= 0) {
++        return texel;
++    }
++    const int wrapped = texel - mask * int(floor(float(texel) / float(mask)));
++    if (mirror) {
++        const int twice = texel - 2 * mask * int(floor(float(texel) / float(2 * mask)));
++        return (twice >= mask) ? (mask - 1 - wrapped) : wrapped;
++    }
++    return wrapped;
++}
++
++// The texel of a traced draw where a ray met it (geometry, triangle, barycentrics), as the draw samples its first tile
++// (TextureSampler.hlsli's sampleTexture, one texel, no filtering); white where it can't be read (a texture decoded from
++// TMEM as it is drawn).
++float4 RayTexel(uint geometry, uint primitive, float2 barycentrics) {
++    const uint4 entry = gRayGeometries.Load4(geometry * 16u);
++    const uint base = (entry.x + primitive * 3u) * 4u;
++    const uint3 v = uint3(gRayIndices.Load(base), gRayIndices.Load(base + 4u), gRayIndices.Load(base + 8u));
++    const float2 uv = asfloat(gRayTexcoords.Load2(v.x * 8u)) * (1.0f - barycentrics.x - barycentrics.y) +
++        asfloat(gRayTexcoords.Load2(v.y * 8u)) * barycentrics.x + asfloat(gRayTexcoords.Load2(v.z * 8u)) * barycentrics.y;
++    const RDPTile tile = gRayRDPTiles[entry.y];
++    const GPUTile gpuTile = gRayGPUTiles[entry.y];
++    if (gpuTileFlagRawTMEM(gpuTile.flags)) {
++        return 1.0f;
++    }
++    float2 coord = uv * float2(tile.shifts, tile.shiftt);
++    if (gpuTileFlagShiftedByHalf(gpuTile.flags)) {
++        coord += 0.5f;
++    }
++    coord *= gpuTile.tcScale;
++    coord -= (float2(tile.uls, tile.ult) * gpuTile.ulScale) / 4.0f;
++    int2 texel = int2(floor(coord));
++    const float2 tcScale = gpuTile.tcScale;
++    // Clamp (2), mirror (1) and wrap by the tile's masks, as clampWrapMirrorSample does.
++    if ((tile.cms & 2) != 0) {
++        texel.x = clamp(texel.x, 0, int((round(tcScale.x * tile.lrs) / 4) - (round(tcScale.x * tile.uls) / 4) + round(tcScale.x - 1.0f)));
++    }
++    if ((tile.cmt & 2) != 0) {
++        texel.y = clamp(texel.y, 0, int((round(tcScale.y * tile.lrt) / 4) - (round(tcScale.y * tile.ult) / 4) + round(tcScale.y - 1.0f)));
++    }
++    texel.x = RayWrap(texel.x, int(round(tile.masks * tcScale.x)), (tile.cms & 1) != 0);
++    texel.y = RayWrap(texel.y, int(round(tile.maskt * tcScale.y)), (tile.cmt & 1) != 0);
++    texel = int2((uint2(texel) & gpuTile.texelMask) + gpuTile.texelShift);
++    return gRayTextures[NonUniformResourceIndex(gpuTile.textureIndex)].Load(int3(texel, 0));
++}
++
++// Whether a cut-out's triangle a ray met is solid there (its texture's alpha); see-through where it can't be read.
++bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
++    return RayTexturesOn() && (RayTexel(geometry, primitive, barycentrics).a >= 0.5f);
++}
++
 +// Whether a ray (world space) meets anything: mode 0 anything, 1 anything but Banjo (the ray goes on past him to what
-+// is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo.
++// is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo. A cut-out (a grate, a fence,
++// leaves) counts only where its texture is solid, so light goes through its holes (L, 2026-10-21).
 +bool TraceOccluded(RayDesc ray, uint mode) {
 +    if (mode == 0u) {
-+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, RayTexturesOn() ? RAY_FLAG_NONE : RAY_FLAG_CULL_NON_OPAQUE, 0xFFu, ray);
 +        while (query.Proceed()) {
++            if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) &&
++                RayCutoutSolid(query.CandidateGeometryIndex(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
++            {
++                query.CommitNonOpaqueTriangleHit();
++            }
 +        }
 +        return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 +    }
@@ -16127,6 +16376,10 @@ index 0000000..6fef50c
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
++            const uint geometry = query.CandidateGeometryIndex();
++            if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
++                continue;
++            }
 +            const bool banjo = InsideBanjo(ray.Origin + ray.Direction * query.CandidateTriangleRayT());
 +            if ((mode == 1u) != banjo) {
 +                query.CommitNonOpaqueTriangleHit();
@@ -16135,6 +16388,44 @@ index 0000000..6fef50c
 +        }
 +    }
 +    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
++}
++
++// How much of a light gets along a ray (world space) towards it (0 to 1). What lies within 60 units of the light is its
++// fitting (a lantern's casing): there the light gets out where the texture is bright (lit panes) and is held back where
++// it is dark (the frame and bars), so a lantern throws its bars' pattern (L, 2026-10-21); a fitting whose texture can't
++// be read lets it all out. Anything further off blocks it (a cut-out only where solid).
++float TraceLampVisible(RayDesc ray, float3 light) {
++    const bool textures = RayTexturesOn();
++    float through = 1.0f;
++    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
++            continue;
++        }
++        const uint geometry = query.CandidateGeometryIndex();
++        const uint primitive = query.CandidatePrimitiveIndex();
++        const float2 barycentrics = query.CandidateTriangleBarycentrics();
++        const uint flags = RayGeometryFlags(geometry);
++        if (((flags & 1u) != 0u) && !RayCutoutSolid(geometry, primitive, barycentrics)) {
++            continue;
++        }
++        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
++        if (length(at - light) < 60.0f) {
++            if (textures && ((flags & 2u) != 0u)) {
++                const float3 texel = RayTexel(geometry, primitive, barycentrics).rgb;
++                through *= saturate((dot(texel, float3(0.299f, 0.587f, 0.114f)) - 0.25f) / 0.35f);
++                if (through < 0.02f) {
++                    query.CommitNonOpaqueTriangleHit();
++                    query.Abort();
++                }
++            }
++            continue;
++        }
++        query.CommitNonOpaqueTriangleHit();
++        query.Abort();
++    }
++    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.0f : through;
 +}
 +
 +// Traced light beams: the light's shafts through the air, where the sun (or a room's window light) reaches. Along the
@@ -16212,7 +16503,7 @@ index 0000000..6fef50c
 +    ray.TMin = 0.0f;
 +    // The direction keeps the view's scale, so t is in view units.
 +    ray.TMax = rayDistance;
-+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +    }
@@ -16274,22 +16565,6 @@ index 0000000..6fef50c
 +    return true;
 +}
 +
-+// Whether a light sits inside a solid casing: of six rays out from it (up, down and four ways round), five or more
-+// meet something within 60 units. Its light then can't be traced from the flame itself.
-+bool LampCased(float3 light) {
-+    const float3 directions[6] = { float3(0.0f, 1.0f, 0.0f), float3(0.0f, -1.0f, 0.0f), float3(1.0f, 0.0f, 0.0f), float3(-1.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 1.0f), float3(0.0f, 0.0f, -1.0f) };
-+    int closed = 0;
-+    [loop] for (int k = 0; k < 6; k++) {
-+        RayDesc ray;
-+        ray.Origin = light;
-+        ray.Direction = directions[k];
-+        ray.TMin = 0.5f;
-+        ray.TMax = 60.0f;
-+        closed += TraceOccluded(ray, 1u) ? 1 : 0;
-+    }
-+    return closed >= 5;
-+}
-+
 +// The level's lights glowing in the air (with Traced light beams): along the eye's ray where it passes a light, six
 +// points each traced to the flame; the lit ones glow warm, brighter nearer it. A lantern's bars cut dark streaks
 +// through the glow, and anything between stands out against it.
@@ -16307,7 +16582,7 @@ index 0000000..6fef50c
 +    const float offset = (bayer[cell.y * 4 + cell.x] + 0.5f) / 16.0f;
 +    float3 glow = 0.0f;
 +    [loop] for (uint i = 0u; i < count; i++) {
-+        const float4 light = asfloat(gLights.Load4(16u * (i + 2u)));
++        const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
 +        const float radius = min(light.w * 0.35f, 450.0f);
 +        // Where the eye's ray passes through the glow's sphere.
 +        const float along = dot(light.xyz - eyeWorld, lookWorld);
@@ -16322,8 +16597,7 @@ index 0000000..6fef50c
 +        if (to <= from) {
 +            continue;
 +        }
-+        const bool cased = LampCased(light.xyz);
-+        const float stopShort = cased ? 30.0f : 3.0f;
++        const float stopShort = 3.0f;
 +        const int Samples = 6;
 +        const float step = (to - from) / float(Samples);
 +        [loop] for (int k = 0; k < Samples; k++) {
@@ -16334,18 +16608,16 @@ index 0000000..6fef50c
 +            if (near <= 0.0f) {
 +                continue;
 +            }
-+            bool blocked = false;
++            float visible = 1.0f;
 +            if (d > stopShort + 1.0f) {
 +                RayDesc ray;
 +                ray.Origin = p;
 +                ray.Direction = toLight / d;
 +                ray.TMin = 0.0f;
 +                ray.TMax = d - stopShort;
-+                blocked = TraceOccluded(ray, 0u);
++                visible = TraceLampVisible(ray, light.xyz);
 +            }
-+            if (!blocked) {
-+                glow += float3(1.0f, 0.75f, 0.45f) * (near * near * step);
-+            }
++            glow += float3(1.0f, 0.75f, 0.45f) * (near * near * step * visible);
 +        }
 +    }
 +    return glow * (strength * 0.0025f);
@@ -16370,7 +16642,7 @@ index 0000000..6fef50c
 +    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
 +    float influence = 0.0f;
 +    [loop] for (uint i = 0u; i < count; i++) {
-+        const float4 light = asfloat(gLights.Load4(16u * (i + 2u)));
++        const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
 +        const float3 toLight = light.xyz - start;
 +        const float distance = length(toLight);
 +        if ((distance < 30.0f) || (distance > light.w)) {
@@ -16384,12 +16656,10 @@ index 0000000..6fef50c
 +        if (facing <= 0.0f) {
 +            continue;
 +        }
-+        // Four points on a small disc round the light. The rays go right up to the flame, so a lantern's frame and
-+        // bars throw their pattern (its glass is see-through, so not in the traced scene) (L, 2026-10-21); a light
-+        // shut in a solid casing (LampCased) keeps the old way, stopping short of it, or it would light nothing.
-+        const bool cased = LampCased(light.xyz);
-+        const float stopShort = cased ? 30.0f : 3.0f;
-+        const float discRadius = cased ? 14.0f : 3.0f;
++        // Four points on a small disc round the light. The rays go right up to the flame, through its fitting where the
++        // fitting's texture is bright (TraceLampVisible), so a lantern's frame and bars throw their pattern.
++        const float stopShort = 3.0f;
++        const float discRadius = 3.0f;
 +        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
 +        const float3 across = cross(direction, side);
 +        float visible = 0.0f;
@@ -16408,7 +16678,7 @@ index 0000000..6fef50c
 +            ray.TMin = 0.0f;
 +            ray.TMax = reach;
 +            // Banjo casts his shadow from the lamps too.
-+            visible += TraceOccluded(ray, 0u) ? 0.0f : 0.25f;
++            visible += 0.25f * TraceLampVisible(ray, light.xyz);
 +        }
 +        lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
 +    }
@@ -16468,7 +16738,7 @@ index 0000000..6fef50c
 +    ray.Direction = ViewToWorldDirection(direction);
 +    ray.TMin = 0.0f;
 +    ray.TMax = reach;
-+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +    }
