@@ -63,7 +63,7 @@ namespace {
         { "cheato_getjiggy", "Cheato: GETJIGGY", "Switches on the signs in Jiggywiggy's Temple, so you can start his Jiggy puzzles without finding the signs first.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_superbanjo", "Cheato: SUPERBANJO", "Banjo and Kazooie move faster: walking, running and swimming speed all go up.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_superbaddy", "Cheato: SUPERBADDY", "Enemies move and attack faster than normal. This makes the game harder.", { -1, -1, -1, -1, -1, -1 } },
-        { "cheato_honeyking", "Cheato: HONEYKING", "You take no damage from enemies and hazards, so your health never drops.", { -1, -1, -1, -1, -1, -1 } },
+        { "cheato_honeyking", "Take no damage (Cheato: HONEYKING)", "You take no damage from enemies and hazards, so your health never drops.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_nestking", "Cheato: NESTKING", "Your eggs and feathers never run out, so you can fire eggs and fly without limit.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_homing", "Cheato: HOMING", "Eggs you fire steer towards the nearest enemy instead of flying straight.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_one_hit", "One-hit enemies",

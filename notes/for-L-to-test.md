@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T499 Take no damage cheat is listed again
+- Asked: 2026-10-21 09:59 UTC
+- Build: main, next push
+- Steps:
+  1. Open Settings > Cheats and turn the master switch on
+  2. Find 'Take no damage (Cheato: HONEYKING)' in the list (it sits after SUPERBADDY)
+  3. Turn it on and get hit by an enemy
+- Look for: The cheat shows under its plain name and your health does not drop.
+- Status: waiting for L
+
 ## T498 Hold Speed-Up 3 s to skip a cutscene
 - Asked: 2026-10-21 09:48 UTC
 - Build: main (not built or run in the container)
@@ -503,7 +513,7 @@
 - Asked: 2026-10-20 03:49 UTC
 - Build: main
 - Steps:
-  1. Cheats on, Cheats > Cheato: HONEYKING on
+  1. Cheats on, Cheats > Take no damage (Cheato: HONEYKING) on
   2. Let an enemy hit Banjo (a Snapdragon, Ugger or Grublin)
   3. Walk into a hazard that throws him up (fire, hot or electric ground)
   4. Get grabbed by something that holds him (Dragunda)
