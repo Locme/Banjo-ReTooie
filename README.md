@@ -87,7 +87,9 @@ MIT (`lib/smaa/LICENSE.txt`), and AMD FidelityFX FSR 1 in `lib/fsr/` is MIT
 randomizer's Banjo-Tooie world, MIT (licence text at the top of that file). The SSGI and screen-space
 reflections' ray march (in RT64's `SceneEffectsPS.hlsl`, through
 `lib-patches/rt64.patch`) is ported from 0beqz's realism-effects, MIT (licence
-text beside that code). The ambient occlusion is Ground Truth Ambient
+text beside that code). The Stochastic reflections setting (GGX-sampled rays weighted by
+the BRDF) is ported from Simeon Radivoev's ComputeStochasticReflections, MIT (licence text beside that code in
+`SceneEffectsPS.hlsl`). The ambient occlusion is Ground Truth Ambient
 Occlusion written from Jimenez et al.'s 2016 paper; no code is copied from
 MaxwellGengYF's Unity GTAO, which has no licence.
 

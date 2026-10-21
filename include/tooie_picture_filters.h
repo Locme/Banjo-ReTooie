@@ -26,6 +26,7 @@ namespace tooie::picture_filters {
     inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
+    inline const std::string ray_tracing_section_option = "ray_tracing_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -49,6 +50,7 @@ namespace tooie::picture_filters {
     inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
+    inline const std::string toon_shading_option = "toon_shading";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";
@@ -58,9 +60,11 @@ namespace tooie::picture_filters {
     inline const std::string bounce_light_option = "bounce_light";
     inline const std::string ssgi_option = "ssgi";
     inline const std::string ssr_option = "ssr";
+    inline const std::string ssr_stochastic_option = "ssr_stochastic";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
+    inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";

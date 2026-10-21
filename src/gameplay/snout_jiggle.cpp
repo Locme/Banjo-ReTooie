@@ -62,6 +62,10 @@
 // (six head-bone vertices each on the game's own models) are jiggle bones from their base to their
 // top, written into the vertex list like the belly; the base stays on his head. Not on mods.
 //
+// Fur jiggle (L, 2026-10-20, its own toggle and sliders): Banjo's fur shader's strands lean behind him as he
+// moves and spring back: one spring at his middle, its lag sent to RT64 as the tips' sway (the shells move by the
+// square of their height, so the roots stay put). Needs Banjo's fur on (Graphics).
+//
 // Mumbo jiggle (L, 2026-10-19, its own toggle, Kazooie's sliders): the three feathers on Mumbo's
 // head (asset 0665, playable and in his skulls: bones 4-6, 7-9 and 10-12 on head bone 2) are jiggle
 // bones the same way.
@@ -87,6 +91,11 @@
 #include "tooie_photo_mode.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_rdram.h"
+
+namespace RT64 {
+    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch).
+    void SetSceneFurSway(float x, float y, float z);
+}
 
 namespace {
     constexpr uint32_t matrix_copy = 0x80EF8000;
@@ -1090,6 +1099,44 @@ namespace {
         return angle;
     }
 
+    // ---- the fur (see the top) ----
+    // One spring point at his middle: how far it lags behind the real one is how far his strands' tips lean
+    // (RT64 SetSceneFurSway, RasterVS.hlsl), a share of their length per fur_reach units of lag, at most the
+    // max sway slider. The shells move by the square of their height, so the roots stay put.
+    constexpr float fur_middle[3] = { 0.0f, 72.0f, 0.0f };
+    constexpr float fur_reach = 3.0f;
+    Jiggle fur_spring;
+    bool fur_sent = false;
+
+    void jiggle_fur() {
+        using namespace tooie::snout_jiggle;
+        const Feel feel{ std::clamp((float)option_number(fur_stiffness_option, 300.0), 1.0f, 2000.0f),
+                         std::clamp((float)option_number(fur_damping_option, 8.0), 0.0f, 200.0f),
+                         std::clamp((float)option_number(fur_mass_option, 1.0), 0.05f, 20.0f) };
+        const float most = std::clamp((float)option_number(fur_sway_option, 100.0), 0.0f, 300.0f) / 100.0f;
+        const Vec middle = to_world(Vec{ fur_middle[0], fur_middle[1], fur_middle[2] });
+        update_jiggle(fur_spring, middle, feel);
+        Vec lag = (fur_spring.point - middle) * (1.0f / (fur_reach * model_scale));
+        // Headless: TOOIE_FUR_FORCE=<x>,<y>,<z> holds the tips leaning that way (world, shares of their length).
+        static const char* force_env = std::getenv("TOOIE_FUR_FORCE");
+        if (force_env != nullptr) {
+            float f[3] = { 0.0f, 0.0f, 0.0f };
+            if (std::sscanf(force_env, "%f,%f,%f", &f[0], &f[1], &f[2]) >= 1) lag = Vec{ f[0], f[1], f[2] };
+        } else {
+            const float l = length(lag);
+            if (l > most) lag = lag * (most / l);
+        }
+        RT64::SetSceneFurSway(lag.x, lag.y, lag.z);
+        fur_sent = true;
+        if (logging()) {
+            static int n = 0;
+            if (++n % 15 == 0) {
+                printf("[fur] sway %.2f,%.2f,%.2f\n", lag.x, lag.y, lag.z);
+                fflush(stdout);
+            }
+        }
+    }
+
     // ---- Kazooie's feathers ----
     // Chains of bones, root first: bone indices and the ids that confirm them.
     struct Chain { int count; int bone[4]; int16_t id[4]; };
@@ -1400,10 +1447,16 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     const bool mumbo_on = option_bool(tooie::snout_jiggle::mumbo_option);
     const bool belly_option = option_bool(tooie::snout_jiggle::belly_option);
     const bool ears_option = option_bool(tooie::snout_jiggle::ears_option);
+    const bool fur_option = option_bool(tooie::snout_jiggle::fur_option);
+    if (!fur_option && fur_sent) {
+        RT64::SetSceneFurSway(0.0f, 0.0f, 0.0f);
+        fur_sent = false;
+        fur_spring = {};
+    }
     body.active = false;
     belly_on = false;
     ears_on = false;
-    if (!on && !feathers_on && !body_on && !mumbo_on && !belly_option && !ears_option && muzzle.model == 0 && nose.model == 0 && belly.model == 0 &&
+    if (!on && !feathers_on && !body_on && !mumbo_on && !belly_option && !ears_option && !fur_option && muzzle.model == 0 && nose.model == 0 && belly.model == 0 &&
         ears.model == 0) {
         return;
     }
@@ -1449,7 +1502,8 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
         bent_from = bending ? (model & 0x1FFFFFFF) : 0;
         bent_to = bending ? ((current.vtx + 0x18 + 16 * current.vertices) & 0x1FFFFFFF) : 0;
     }
-    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on && !ears_on) {
+    const bool fur_now = fur_option && info.player && !tooie::hd_shadows::drawing_shadow();
+    if (!drawing_player && feathers.chains == 0 && !body.active && !belly_on && !ears_on && !fur_now) {
         return;
     }
     model_pos = { read_float(rdram, sp + 0xE0), read_float(rdram, sp + 0xE4), read_float(rdram, sp + 0xE8) };
@@ -1457,6 +1511,9 @@ extern "C" void tooie_snout_model(uint8_t* rdram, recomp_context* ctx) {
     model_yaw = valid_ptr(rot) ? read_float(rdram, rot + 4) : 0.0f;
     const float scale = read_float(rdram, sp + 0x104);
     model_scale = (scale > 0.01f && scale < 100.0f) ? scale : 1.0f;
+    if (fur_now) {
+        jiggle_fur();
+    }
 }
 
 static void snout_bone_node(uint8_t* rdram, recomp_context* ctx);

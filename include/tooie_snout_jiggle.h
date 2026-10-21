@@ -37,6 +37,12 @@ namespace tooie::snout_jiggle {
     inline const std::string ears_damping_option = "ear_jiggle_damping";
     inline const std::string ears_mass_option = "ear_jiggle_mass";
     inline const std::string ears_squash_option = "ear_jiggle_squash";          // % of its height, every direction
+    // Fur jiggle (L, 2026-10-20): the fur shader's strands lean behind Banjo as he moves.
+    inline const std::string fur_option = "fur_jiggle";
+    inline const std::string fur_stiffness_option = "fur_jiggle_stiffness";
+    inline const std::string fur_damping_option = "fur_jiggle_damping";
+    inline const std::string fur_mass_option = "fur_jiggle_mass";
+    inline const std::string fur_sway_option = "fur_jiggle_sway";              // % of the strands' length
     inline const std::string kazooie_option = "kazooie_jiggle";               // her crest and tail feathers
     inline const std::string mumbo_option = "mumbo_jiggle";                   // the feathers on Mumbo's head, her sliders
     // Her feathers are jiggle bones too, with the snout's kinds of slider (L, 2026-10-19).

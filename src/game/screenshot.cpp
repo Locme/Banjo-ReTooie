@@ -44,6 +44,7 @@
 #include "tooie_game_frame_rate.h"
 #include "tooie_hotkeys.h"
 #include "tooie_photo_mode.h"
+#include "tooie_save_state.h"
 #include "tooie_screenshot.h"
 #include "tooie_toast.h"
 
@@ -316,6 +317,15 @@ namespace {
 }
 
 void tooie::screenshot::take() {
+    // DEV > RAM dump with screenshots: the game's memory goes next to the picture, under the same time stamp.
+    if (tooie::save_state::ram_dump_on()) {
+        fs::path folder = recomp::get_config_path() / "screenshots";
+        std::error_code ec;
+        fs::create_directories(folder, ec);
+        fs::path path = next_path(folder);
+        path.replace_extension(".ram");
+        tooie::save_state::request_ram_dump(path);
+    }
     // Photo mode's crop: keep only the frame, the largest rectangle of that shape in the middle.
     const float crop = tooie::photo_mode::crop_aspect();
     RT64::RequestScreenshot([crop](uint32_t width, uint32_t height, std::vector<uint8_t>&& rgba) {

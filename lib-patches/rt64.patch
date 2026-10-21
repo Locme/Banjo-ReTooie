@@ -2171,7 +2171,7 @@ index 69a82ac..3d5b165 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..af21112 100644
+index 9fae0d4..396c2d8 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -3109,7 +3109,7 @@ index 9fae0d4..af21112 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2086,106 @@ namespace RT64 {
+@@ -1296,9 +2086,119 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3157,6 +3157,19 @@ index 9fae0d4..af21112 100644
 +                        const bool hasViewport = (effectsIndex < effectsData->rspViewports.size());
 +                        const float depthScale = hasViewport ? effectsData->rspViewports[effectsIndex].scale.z : 0.5f;
 +                        const float depthTranslate = hasViewport ? effectsData->rspViewports[effectsIndex].translate.z : 0.5f;
++                        // Letterboxed cutscenes draw the world in a viewport shorter than the target, and the effects turn a
++                        // pixel back into the view (and the world, for the traced pass) over the whole target height. So
++                        // the projection's y scale is narrowed to what it is over the whole target: without it the
++                        // traced picture split across the middle (L, 2026-10-20, the Jinjo cutscene).
++                        if (hasViewport && (colorTarget != nullptr) && (colorTarget->height > 0)) {
++                            const float halfHeight = std::abs(effectsData->rspViewports[effectsIndex].scale.y) * targetDrawCall.sceneEffectsResScaleY;
++                            const float ratio = halfHeight / (float(colorTarget->height) * 0.5f);
++                            if ((ratio > 0.3f) && (ratio < 0.98f)) {
++                                for (int r = 0; r < 4; r++) {
++                                    effectsProjection.m[r][1] *= ratio;
++                                }
++                            }
++                        }
 +                        // The sun shadow map's casters, drawn from the sun (the scene effects set up the map and the pass).
 +                        // Casters whose indices follow on from the last one's are drawn together, as one draw: with the whole
 +                        // level kept for the sun there are a thousand or more of them, mostly in runs.
@@ -3217,7 +3230,7 @@ index 9fae0d4..af21112 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2237,38 @@ namespace RT64 {
+@@ -1350,10 +2250,38 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3256,7 +3269,7 @@ index 9fae0d4..af21112 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2301,8 @@ namespace RT64 {
+@@ -1386,6 +2314,8 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3265,7 +3278,7 @@ index 9fae0d4..af21112 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2325,62 @@ namespace RT64 {
+@@ -1408,6 +2338,63 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3282,6 +3295,7 @@ index 9fae0d4..af21112 100644
 +        targetDrawCall.hasExcludedInstances = false;
 +        targetDrawCall.submissionFrame = p.submissionFrame;
 +        targetDrawCall.sceneEffectsArea = RenderRect(0, 0, 0, 0);
++        targetDrawCall.sceneEffectsResScaleY = p.resolutionScale.y;
 +        // The 3D world is open from its first perspective projection to the next projection that isn't one; it
 +        // opens again for later perspective draws with the world's own projection (Bottles' ghost, drawn after
 +        // his 2D glow), so the effects go after the last of them, not before the HUD's 3D models.
@@ -3328,7 +3342,7 @@ index 9fae0d4..af21112 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2404,22 @@ namespace RT64 {
+@@ -1431,6 +2418,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3351,7 +3365,7 @@ index 9fae0d4..af21112 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2439,175 @@ namespace RT64 {
+@@ -1450,12 +2453,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3527,7 +3541,7 @@ index 9fae0d4..af21112 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2758,7 @@ namespace RT64 {
+@@ -1606,6 +2772,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3535,7 +3549,7 @@ index 9fae0d4..af21112 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +2835,20 @@ namespace RT64 {
+@@ -1682,6 +2849,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3556,7 +3570,7 @@ index 9fae0d4..af21112 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +2914,1507 @@ namespace RT64 {
+@@ -1747,10 +2928,675 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3564,8 +3578,6 @@ index 9fae0d4..af21112 100644
  
 -                instanceDrawCallVector.push_back(instanceDrawCall);
 -                globalCallIndex++;
--            }
--        }
 +                    // Banjo-Tooie: water is a translucent surface of the 3D world (alpha blended, depth tested,
 +                    // no depth write, not a decal) made of several triangles lying flat; the shader keeps only
 +                    // surfaces lying over something further down.
@@ -4234,10 +4246,10 @@ index 9fae0d4..af21112 100644
 +                    fprintf(stdout, "[seam] %zu pieces, %u joined edges\n", seamPieces.size(), joined);
 +                    fflush(stdout);
 +                }
-+            }
-+        }
+             }
+         }
  
- #   if RT_ENABLED
+@@ -1758,14 +3604,831 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -5071,7 +5083,7 @@ index 9fae0d4..af21112 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..6b72071 100644
+index 3add9c3..437cbeb 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5102,7 +5114,7 @@ index 3add9c3..6b72071 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +54,38 @@ namespace RT64 {
+@@ -48,6 +54,40 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -5136,12 +5148,14 @@ index 3add9c3..6b72071 100644
 +        // Banjo-Tooie: the screen area the 3D world's depth-writing draws cover (their scissors together). The
 +        // effects stay inside it, so the letterbox bars of a cutscene, outside the world, stay black.
 +        RenderRect sceneEffectsArea = RenderRect(0, 0, 0, 0);
++        // The native-to-target vertical scale, for the effects' viewport height (letterboxed cutscenes).
++        float sceneEffectsResScaleY = 1.0f;
 +        // The workload these draws come from.
 +        uint64_t submissionFrame = 0;
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +100,162 @@ namespace RT64 {
+@@ -62,11 +102,162 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5304,7 +5318,7 @@ index 3add9c3..6b72071 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +266,9 @@ namespace RT64 {
+@@ -77,6 +268,9 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5314,7 +5328,7 @@ index 3add9c3..6b72071 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +279,12 @@ namespace RT64 {
+@@ -87,6 +281,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5327,7 +5341,7 @@ index 3add9c3..6b72071 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +298,7 @@ namespace RT64 {
+@@ -100,6 +300,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5335,7 +5349,7 @@ index 3add9c3..6b72071 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +322,10 @@ namespace RT64 {
+@@ -123,6 +324,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5346,7 +5360,7 @@ index 3add9c3..6b72071 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +367,15 @@ namespace RT64 {
+@@ -164,7 +369,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -7061,10 +7075,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a06ec3c
+index 0000000..04abe30
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3030 @@
+@@ -0,0 +1,3053 @@
 +//
 +// RT64
 +//
@@ -7345,6 +7359,7 @@ index 0000000..a06ec3c
 +    static float userWaterReflections = 0.0f;
 +    static float rayTracingStrength = 0.6f;
 +    static std::atomic<bool> rayTracingHitColours{ false };
++    static std::atomic<float> rayTracingSmoothing{ 0.5f };
 +    static void RefreshReflections();
 +
 +    void SetSceneEffects(float ambientOcclusion, float radius, uint32_t depthAddress) {
@@ -7408,6 +7423,11 @@ index 0000000..a06ec3c
 +    void SetSceneRimLight(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.rimLight = strength;
++    }
++
++    void SetSceneToonShading(float strength) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.toonShading = strength;
 +    }
 +
 +    void SetSceneOutlines(float outlines, float thickness) {
@@ -7477,6 +7497,7 @@ index 0000000..a06ec3c
 +    static std::atomic<bool> rayTracingWanted{ false };
 +    static std::atomic<int> rayTracingSupport{ 0 };
 +    static float userReflections = 0.0f;
++    static float userGlossy = 0.0f;
 +
 +    // effectsMutex held.
 +    static float userSunShadows = 0.0f;
@@ -7500,12 +7521,14 @@ index 0000000..a06ec3c
 +            effectsSettings.waterReflections = std::max(userWaterReflections, least);
 +        }
 +        effectsSettings.screenSpaceReflections = strength;
++        effectsSettings.reflectionGlossiness = userGlossy;
 +        shinyWanted.store((strength > 0.0f) || (effectsSettings.view == SceneEffectsViewSsr));
 +    }
 +
-+    void SetSceneScreenSpaceReflections(float strength) {
++    void SetSceneScreenSpaceReflections(float strength, float glossiness) {
 +        const std::scoped_lock lock(effectsMutex);
 +        userReflections = strength;
++        userGlossy = glossiness;
 +        RefreshReflections();
 +    }
 +
@@ -7520,10 +7543,21 @@ index 0000000..a06ec3c
 +        rayTracingHitColours.store(enabled);
 +    }
 +
++    void SetSceneRayTracingSmoothing(float smoothing) {
++        rayTracingSmoothing.store(std::clamp(smoothing, 0.0f, 1.0f));
++    }
++
 +    void SetSceneRayTracingStrength(float strength) {
 +        const std::scoped_lock lock(effectsMutex);
 +        rayTracingStrength = std::clamp(strength, 0.0f, 1.0f);
 +        RefreshReflections();
++    }
++
++    void SetSceneFurSway(float x, float y, float z) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.furSway[0] = x;
++        effectsSettings.furSway[1] = y;
++        effectsSettings.furSway[2] = z;
 +    }
 +
 +    void SetSceneRayTracing(bool enabled) {
@@ -8233,6 +8267,7 @@ index 0000000..a06ec3c
 +        // 100), the amount making them thin out more slowly (a thicker coat).
 +        const float amount = std::min(settings.fur, 1.0f);
 +        frameParams.furParams = { 2.5f * std::max(settings.furLength, 0.1f), 2.4f * settings.furDensity, 0.6f - 0.3f * amount, settings.furNoisiness };
++        frameParams.furSway = { settings.furSway[0], settings.furSway[1], settings.furSway[2], 0.0f };
 +        const float npcAmount = std::min(settings.npcFur, 1.0f);
 +        frameParams.npcFurParams = { 2.5f * std::max(settings.npcFurLength, 0.1f), 2.4f * settings.npcFurDensity, 0.6f - 0.3f * npcAmount, settings.npcFurNoisiness };
 +        return true;
@@ -9149,7 +9184,7 @@ index 0000000..a06ec3c
 +        const SceneEffectsSettings settings = GetSceneEffects();
 +        return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
 +            (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
++            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0) && (depthTarget != nullptr) &&
 +            (depthTarget->addressForName == settings.depthAddress);
 +    }
 +
@@ -9184,6 +9219,7 @@ index 0000000..a06ec3c
 +            memset(mapped, 0, 16 * (SceneMaxLights + 1));
 +            mapped[0] = float(lightSettings.lightCount);
 +            mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
++            mapped[2] = rayTracingSmoothing.load();
 +            memcpy(mapped + 4, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
@@ -9306,10 +9342,11 @@ index 0000000..a06ec3c
 +        interop::SceneEffectsCB constants;
 +        constants.depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, depthScale, depthTranslate);
 +        constants.projection = { m[0][0], m[1][1], float(colorTarget->width), float(colorTarget->height) };
-+        // Ambient occlusion, SSGI and SSR in hundredths, packed as AO + 128 * SSGI + 16384 * SSR (IndirectPacked).
++        // Ambient occlusion, SSGI and SSR in hundredths, packed as AO + 128 * SSGI + 16384 * SSR + 2097152 * stochastic glossiness 0 to 7 (IndirectPacked).
 +        const auto hundredths = [](float strength) { return std::round(std::clamp(strength, 0.0f, 1.0f) * 100.0f); };
-+        const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections);
-+        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, settings.rimLight };
++        const float indirectPacked = hundredths(settings.ambientOcclusion) + 128.0f * hundredths(settings.screenSpaceGI) + 16384.0f * hundredths(settings.screenSpaceReflections) +
++            2097152.0f * std::round(std::clamp(settings.reflectionGlossiness, 0.0f, 1.0f) * 7.0f);
++        constants.ambientOcclusion = { indirectPacked, settings.ambientOcclusionRadius, 0.0f, std::min(settings.rimLight, 1.0f) + 2.0f * std::round(std::clamp(settings.toonShading, 0.0f, 1.0f) * 100.0f) };
 +        static const auto startTime = std::chrono::steady_clock::now();
 +        const float seconds = std::fmod(std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count(), 3600.0f);
 +        // Heat haze only above warm surfaces is sent as 2 + its strength (see HeatHaze in SceneEffectsPS).
@@ -9496,7 +9533,7 @@ index 0000000..a06ec3c
 +        }
 +
 +        RenderTexture *source = nullptr;
-+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
++        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
 +            // The scene so far, without multisampling: the target's resolve, or a copy of the target.
 +            const RenderTextureView *sourceView = nullptr;
 +            if (colorTarget->usesResolve()) {
@@ -10097,10 +10134,10 @@ index 0000000..a06ec3c
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ce14f50
+index 0000000..9970775
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,474 @@
 +//
 +// RT64
 +//
@@ -10154,6 +10191,7 @@ index 0000000..ce14f50
 +        bool depthOfFieldOnBanjo = false;
 +        float eyeAdaptation = 0.0f;
 +        float rimLight = 0.0f;
++        float toonShading = 0.0f;
 +        float underwaterTint = 0.0f;
 +        float underwaterHaze = 0.0f;
 +        float heatHaze = 0.0f;
@@ -10165,6 +10203,7 @@ index 0000000..ce14f50
 +        // Screen-space global illumination and screen-space reflections (0 off, 1 strongest).
 +        float screenSpaceGI = 0.0f;
 +        float screenSpaceReflections = 0.0f;
++        float reflectionGlossiness = 0.0f; // Stochastic reflections: 0 the mirror ray, up to 1 the roughest lobe.
 +        float waterWaves = 0.0f;
 +        // Modern water: the game's water isn't drawn; the pass draws its own in its place.
 +        bool modernWater = false;
@@ -10237,6 +10276,8 @@ index 0000000..ce14f50
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
 +        float furNoisiness = 0.5f;
++        // Banjo's fur jiggle: the tips' lag behind his movement, world units at full length (SetSceneFurSway).
++        float furSway[3] = { 0.0f, 0.0f, 0.0f };
 +        float feathers = 0.0f;
 +        float featherSize = 1.0f;
 +        float featherLength = 1.0f;
@@ -10288,6 +10329,7 @@ index 0000000..ce14f50
 +    void SetSceneEyeAdaptation(float strength);
 +    // Rim light (0 off, 1 strongest): a soft light along the edges of nearby characters and objects.
 +    void SetSceneRimLight(float strength);
++    void SetSceneToonShading(float strength);
 +    // Underwater look while the camera is under water: tint (0 off, 1 strongest) and distance haze (0 to 1).
 +    void SetSceneUnderwater(float tint, float haze);
 +    // Heat haze (0 off, 1 strongest): the 3D world shimmers, more with distance. With warmOnly, only where heat rises:
@@ -10304,7 +10346,7 @@ index 0000000..ce14f50
 +    // Banjo-Tooie: screen-space global illumination (light bounced off the surfaces on the screen) and screen-space
 +    // reflections (the scene reflected in every surface, more at grazing angles), each 0 off, 1 strongest.
 +    void SetSceneScreenSpaceGI(float strength);
-+    void SetSceneScreenSpaceReflections(float strength);
++    void SetSceneScreenSpaceReflections(float strength, float glossiness = 0.0f);
 +    // Banjo-Tooie: water waves on the water mask's surfaces (0 off, 1 strongest), moving at speed (1 normal).
 +    void SetSceneWaterWaves(float strength, float speed);
 +    // Banjo-Tooie: Modern water (Graphics > Water): the game's water draws are left out of the 3D world and the
@@ -10373,9 +10415,14 @@ index 0000000..ce14f50
 +    // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
 +    // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
 +    void SetSceneRayTracingHitColours(bool enabled);
++    // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
++    void SetSceneRayTracingSmoothing(float smoothing);
 +    // Banjo-Tooie: the level's lights, count of them (up to SceneMaxLights), four floats each: world x, y, z, outer range.
 +    // The traced pass shadows what each one lights (its rays go from the surface to the light).
 +    void SetSceneLights(const float *xyzr, uint32_t count);
++    // Banjo-Tooie: Banjo's fur jiggle, the tips' lag behind his movement (world x, y, z in shares of the fur's
++    // length; zeros when off). The game steps the spring (src/gameplay/snout_jiggle.cpp).
++    void SetSceneFurSway(float x, float y, float z);
 +    void NoteRayTracingSupport(bool supported);
 +    int GetRayTracingSupport();
 +    bool RayTracingActive();
@@ -14633,7 +14680,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..bdfce66 100644
+index e7895c3..d41d3f6 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -14648,7 +14695,7 @@ index e7895c3..bdfce66 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,77 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,90 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -14701,9 +14748,22 @@ index e7895c3..bdfce66 100644
 +        // It stands in for the ground's own draw: where no snow lies (a wall, past its reach) the ground is shaded as
 +        // it is (snowTessGround).
 +        // The ground pass (RASTER_SNOW_GROUND) is the ground as it is, left out where the trail goes down below it.
-+        const bool shaped = SnowTessShape(grassWorld, vertexFurAnchor.w, cross(grassDx, grassDy),
-+            SnowTrailBlur(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
-+        if ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) {
++        // (Its vertices packed what it needs, SnowTessPack: the ground pass the snow's height, the snow how to shade it.)
++        const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
++        bool shaped;
++        if (SnowTessPacked() && groundPass) {
++            shaped = true;
++            snowSample.height = vertexFurAnchor.w;
++        }
++        else if (SnowTessPacked()) {
++            shaped = SnowTessUnpack(vertexFurAnchor, distance(vertexFurAnchor.xz, float2(FrParams.grassWorldX.w, FrParams.grassWorldZ.w)), snowSample);
++            grassWorld = float3(vertexFurAnchor.x, 0.0f, vertexFurAnchor.z);
++        }
++        else {
++            shaped = SnowTessShape(grassWorld, vertexFurAnchor.w, cross(grassDx, grassDy),
++                SnowTrailBlur(distance(grassWorld, float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w))), snowSample);
++        }
++        if (groundPass) {
 +            if (shaped && (snowSample.height < -0.5f)) {
 +                return false;
 +            }
@@ -14728,7 +14788,7 @@ index e7895c3..bdfce66 100644
          return false;
      }
  #endif
-@@ -88,7 +158,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +171,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -14739,7 +14799,7 @@ index e7895c3..bdfce66 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +185,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +198,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -14764,7 +14824,7 @@ index e7895c3..bdfce66 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +233,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +246,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -14773,7 +14833,7 @@ index e7895c3..bdfce66 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +251,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +264,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -14782,7 +14842,7 @@ index e7895c3..bdfce66 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +276,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +289,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -14821,7 +14881,7 @@ index e7895c3..bdfce66 100644
      
  #if 0
      // Alpha dither.
-@@ -254,6 +380,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +393,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -14945,7 +15005,7 @@ index e7895c3..bdfce66 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +504,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +517,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -14970,7 +15030,7 @@ index e7895c3..bdfce66 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +548,7 @@ void PSMain(
+@@ -287,6 +561,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -14978,7 +15038,7 @@ index e7895c3..bdfce66 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +565,7 @@ void PSMain(
+@@ -303,7 +578,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -14988,10 +15048,10 @@ index e7895c3..bdfce66 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..f40af9d 100644
+index 74b1fa0..45c83b5 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,16 +11,65 @@
+@@ -11,16 +11,70 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -15042,7 +15102,12 @@ index 74b1fa0..f40af9d 100644
 +            oFurAnchor = furNormals[iVertexId * 2 + 1];
 +            const float share = float(furShell) / float(gConstants.furShells & RASTER_SHELL_COUNT_MASK);
 +            const float4 params = ((gConstants.furShells & RASTER_FUR_WHITE) != 0) ? FrParams.npcFurParams : FrParams.furParams;
-+            const float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
++            float3 offset = normal * (params.x * share) - float3(0.0f, 0.5f * params.x * share * share * share, 0.0f);
++            // Banjo's fur jiggle: his strands' tips lag behind as he moves, more the further out (the square of the
++            // height), scaled by the fur's length. Not furry NPCs' fur.
++            if ((gConstants.furShells & RASTER_FUR_WHITE) == 0) {
++                offset += FrParams.furSway.xyz * (params.x * share * share);
++            }
 +            ndcPos += FrParams.furClipX * offset.x + FrParams.furClipY * offset.y + FrParams.furClipZ * offset.z;
 +        }
      }
@@ -15058,7 +15123,7 @@ index 74b1fa0..f40af9d 100644
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +82,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +87,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -15072,7 +15137,7 @@ index 74b1fa0..f40af9d 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +109,19 @@ void VSMain(
+@@ -53,17 +114,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -15116,10 +15181,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..d0aeb6d
+index 0000000..46856f1
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,3674 @@
+@@ -0,0 +1,3895 @@
 +//
 +// RT64
 +//
@@ -15569,8 +15634,25 @@ index 0000000..d0aeb6d
 +    return normal;
 +}
 +
++// The normal averaged over a few pixels round about (eight taps r pixels out), only where the depth says it is the
++// same surface: rounded over a furry or low-poly character, whose own normal turns pixel to pixel.
++float3 SmoothedNormal(int2 pixel, float3 center, float3 normal, int r) {
++    const int2 offsets[8] = { int2(-r, 0), int2(r, 0), int2(0, -r), int2(0, r), int2(-r, -r), int2(r, r), int2(r, -r), int2(-r, r) };
++    const float tolerance = 8.0f - center.z * 0.02f * float(r);
++    float3 sum = normal;
++    [unroll] for (int k = 0; k < 8; k++) {
++        const int2 at = clamp(pixel + offsets[k], int2(1, 1), int2(gConstants.projection.zw) - 2);
++        const float3 there = ViewPositionAt(at);
++        if (abs(there.z - center.z) < tolerance) {
++            sum += ViewNormal(at, there);
++        }
++    }
++    const float3 smoothed = normalize(sum);
++    return (dot(smoothed, -center) < 0.0f) ? normal : smoothed;
++}
++
 +// Ambient occlusion, screen-space global illumination and screen-space reflections share ambientOcclusion.x,
-+// packed as AO + 128 * SSGI + 16384 * SSR, each in hundredths (0 to 100).
++// packed as AO + 128 * SSGI + 16384 * SSR, each in hundredths (0 to 100), + 2097152 * stochastic glossiness (0 to 7).
 +uint3 IndirectPacked() {
 +    const uint packed = uint(max(gConstants.ambientOcclusion.x, 0.0f) + 0.5f);
 +    return uint3(packed & 127u, (packed >> 7) & 127u, (packed >> 14) & 127u);
@@ -15586,6 +15668,12 @@ index 0000000..d0aeb6d
 +
 +float SsrStrength() {
 +    return float(IndirectPacked().z) / 100.0f;
++}
++
++// Stochastic reflections' glossiness (0 off: the mirror ray; 1 to 7 the roughness in tenths).
++float SsrRoughness() {
++    const uint packed = uint(max(gConstants.ambientOcclusion.x, 0.0f) + 0.5f);
++    return float((packed >> 21) & 7u) * 0.1f;
 +}
 +
 +// A view-space depth (negative) from a depth buffer value, as ViewPosition works it out.
@@ -15808,6 +15896,92 @@ index 0000000..d0aeb6d
 +    return float4(gColor.SampleLevel(LinearSampler, hitPixel / gConstants.projection.zw, 0).rgb, RayEdgeFade(hitPixel));
 +}
 +
++// Stochastic reflections, after simeonradivoev/ComputeStochasticReflections (itself after Stachowiak and Uludag,
++// "Stochastic Screen-Space Reflections", SIGGRAPH 2015), under its MIT licence:
++//
++//   MIT License
++//
++//   Copyright (c) 2018 Simeon Radivoev
++//
++//   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
++//   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
++//   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
++//   to permit persons to whom the Software is furnished to do so, subject to the following conditions:
++//
++//   The above copyright notice and this permission notice shall be included in all copies or substantial portions
++//   of the Software.
++//
++//   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
++//   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++//   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
++//   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
++//   IN THE SOFTWARE.
++//
++// Ported from BRDFComputeLib.cginc (ImportanceSampleGGX after Karis, BRDF_Unity_Weight) and the resolve in
++// RayTraceCompute.compute: each ray takes a GGX-distributed half vector about the normal, and what the rays find is
++// averaged weighted by the BRDF over the ray's probability density. Left out: the hierarchical depth march (the
++// existing MarchRay stands in), the colour mip pyramid (the half-size scene stands in for a rough hit's blur), the
++// temporal pass and the median/bilateral blurs (the game has no history buffer here); more rays per pixel make up
++// for them, and the 4x4 block pattern spreads the samples so the noise is fine grained.
++float StochasticWeight(float3 V, float3 L, float3 N, float roughness) {
++    const float3 H = normalize(L + V);
++    const float NdotH = saturate(dot(N, H));
++    const float NdotL = saturate(dot(N, L));
++    const float NdotV = saturate(dot(N, V));
++    const float lambdaV = NdotL * (NdotV * (1.0f - roughness) + roughness);
++    const float lambdaL = NdotV * (NdotL * (1.0f - roughness) + roughness);
++    const float visibility = 0.5f / (lambdaV + lambdaL + 1e-5f);
++    const float a2 = roughness * roughness;
++    const float d = (NdotH * a2 - NdotH) * NdotH + 1.0f;
++    const float distribution = 0.31830988618f * a2 / (d * d + 1e-7f);
++    return distribution * visibility * 0.78539816f;
++}
++
++float4 StochasticReflection(int2 pixel, float3 center, float3 normal, float roughness) {
++    const float3 incoming = normalize(center);
++    const float3 V = -incoming;
++    const float3 up = (abs(normal.z) < 0.999f) ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
++    const float3 tangent = normalize(cross(up, normal));
++    const float3 bitangent = cross(normal, tangent);
++    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
++    const uint cell = uint(pixel.x & 3) + 4u * uint(pixel.y & 3);
++    const float m = roughness * roughness;
++    const float m2 = m * m;
++    float3 colourSum = 0.0f;
++    float hitSum = 0.0f;
++    float totalSum = 0.0f;
++    [unroll] for (int r = 0; r < 3; r++) {
++        // The 48 samples of a 4x4 block spread over the lobe (the R2 sequence), the cells scrambled so neighbours differ.
++        const float n = float((cell * 7u) % 16u) * 3.0f + float(r);
++        const float2 xi = frac(0.5f + n * float2(0.7548776662f, 0.5698402910f));
++        const float phi = 6.28318531f * xi.x;
++        const float cosTheta = sqrt((1.0f - xi.y) / (1.0f + (m2 - 1.0f) * xi.y));
++        const float sinTheta = sqrt(max(1e-5f, 1.0f - cosTheta * cosTheta));
++        const float3 H = normalize(tangent * (sinTheta * cos(phi)) + bitangent * (sinTheta * sin(phi)) + normal * cosTheta);
++        const float d = (cosTheta * m2 - cosTheta) * cosTheta + 1.0f;
++        const float pdf = max(m2 / (3.14159265f * d * d) * cosTheta, 1e-4f);
++        const float3 direction = reflect(incoming, H);
++        if (dot(direction, normal) <= 0.0f) {
++            continue;
++        }
++        const float weight = StochasticWeight(V, direction, normal, roughness) / pdf;
++        totalSum += weight;
++        float2 hitPixel;
++        if (MarchRay(origin, direction, 3000.0f, 24, 5, frac(xi.x * 7.0f + InterleavedNoise(pixel)), hitPixel)) {
++            const float2 uv = hitPixel / gConstants.projection.zw;
++            // A rough reflection is blurry: more of the half-size scene the rougher it is.
++            const float3 colour = lerp(gColor.SampleLevel(LinearSampler, uv, 0).rgb, gColorHalf.SampleLevel(LinearSampler, uv, 0).rgb, saturate(roughness * 2.0f));
++            const float fade = RayEdgeFade(hitPixel);
++            colourSum += colour * (weight * fade);
++            hitSum += weight * fade;
++        }
++    }
++    if (hitSum <= 0.0f) {
++        return 0.0f;
++    }
++    return float4(colourSum / hitSum, saturate(hitSum / max(totalSum, 1e-5f)));
++}
++
 +#ifdef RAY_TRACED
 +// View space to world space and back, through the world x, y and z terms (the view matrix's inverse: world = dot(view,
 +// X) + X.w and so on, and, the view being a scaled rotation, view = X * (world.x - X.w) + Y * (world.y - Y.w) + Z * ...).
@@ -15825,6 +15999,16 @@ index 0000000..d0aeb6d
 +    return asfloat(gLights.Load(4)) > 0.5f;
 +}
 +
++// Ray tracing noise smoothing, 0 (the raw rays) to 1.
++float RtSmoothing() {
++    return saturate(asfloat(gLights.Load(8)));
++}
++
++// How far round about Banjo's normal is averaged (pixels; 0 not at all).
++int BanjoSmoothRadius() {
++    return int(RtSmoothing() * 7.0f + 0.5f);
++}
++
 +uint RadianceCell(float3 world, out uint check) {
 +    const int3 cell = int3(floor(world * (1.0f / 16.0f)));
 +    const uint h = uint(cell.x) * 73856093u ^ uint(cell.y) * 19349663u ^ uint(cell.z) * 83492791u;
@@ -15839,6 +16023,38 @@ index 0000000..d0aeb6d
 +    gRadianceCache.Store2(at, uint2(check, c.r | (c.g << 8) | (c.b << 16)));
 +}
 +
++// Inside a capsule round Banjo (world space): what the sun shadows leave out when they leave him out, and all
++// his contact shadow counts.
++bool InsideBanjo(float3 world) {
++    const float3 banjo = float3(gConstants.rippleX.w, gConstants.rippleAge.w, gConstants.rippleZ.w);
++    const float2 across = world.xz - banjo.xz;
++    return (gConstants.rippleAge.w > -1e8f) && (dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f);
++}
++
++// Whether a ray (world space) meets anything: mode 0 anything, 1 anything but Banjo (the ray goes on past him to what
++// is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo.
++bool TraceOccluded(RayDesc ray, uint mode) {
++    if (mode == 0u) {
++        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        while (query.Proceed()) {
++        }
++        return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
++    }
++    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    while (query.Proceed()) {
++        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
++            const bool banjo = InsideBanjo(ray.Origin + ray.Direction * query.CandidateTriangleRayT());
++            if ((mode == 1u) != banjo) {
++                query.CommitNonOpaqueTriangleHit();
++                query.Abort();
++            }
++        }
++    }
++    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
++}
++
 +bool RadianceLoad(float3 world, out float3 colour) {
 +    uint check;
 +    const uint at = RadianceCell(world, check);
@@ -15851,8 +16067,8 @@ index 0000000..d0aeb6d
 +// over gSceneBVH, in world space) instead of marching the depth, so it finds what the depth hides (the back of a
 +// pillar, what is behind the nearest surface) and misses nothing between steps. Where it lands: the scene's colour
 +// there when that spot is on the screen and in view; when it is off the screen or hidden behind something nearer, the
-+// colour of the nearest spot of the screen in its direction, trusted less. A ray that leaves the world brings
-+// nothing (the sky is not in the structure).
++// colour of the nearest spot of the screen in its direction, trusted less (or, with Ray tracing hit colours, the
++// colour that spot had when last seen). A ray that leaves the world brings the sky.
 +float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
 +    const float3 direction = reflect(normalize(center), normal);
 +    const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
@@ -15906,7 +16122,32 @@ index 0000000..d0aeb6d
 +// through the world's triangles; blocked, the surface is darker the closer the light and the more it faces it. A
 +// couple of rays over a small disc at the light, so the edge has a penumbra. The light's own fitting (a lamp's
 +// shade) doesn't count: the ray stops short of it.
-+float LightShadows(float3 center, float3 normal) {
++// Whether a spot is shut in (a room, a cave): straight up and four ways up at a slant all meet something. The sun
++// doesn't reach in there, and the game's own lighting is already right, so the traced sun shadows leave it alone
++// (otherwise the roof shadowed the whole room, and its walls facing away from the sun darkened too).
++bool Enclosed(float3 worldStart) {
++    const float3 directions[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
++    [loop] for (int k = 0; k < 5; k++) {
++        RayDesc ray;
++        ray.Origin = worldStart;
++        ray.Direction = directions[k];
++        ray.TMin = 0.0f;
++        ray.TMax = 6000.0f;
++        // Banjo standing over the spot doesn't make it a room.
++        if (!TraceOccluded(ray, 1u)) {
++            return false;
++        }
++    }
++    return true;
++}
++
++// The level's lights (lamps, fires), traced: each lights what it can see and leaves the rest in the dark. Within a
++// light's reach the room's own light is dimmed (keep, returned) and the light's own added back (lamp, rgb) only where
++// rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
++// what stands between (four rays over a small disc at the light, a soft edge), not just a glow over the room
++// (L, 2026-10-20: "they don't emit ray traced light").
++float LightShadows(float3 center, float3 normal, out float3 lamp) {
++    lamp = 0.0f;
 +    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
 +    if (count == 0u) {
 +        return 1.0f;
@@ -15917,7 +16158,7 @@ index 0000000..d0aeb6d
 +    }
 +    const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.003f + 2.0f, 2.0f));
 +    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
-+    float keep = 1.0f;
++    float influence = 0.0f;
 +    [loop] for (uint i = 0u; i < count; i++) {
 +        const float4 light = asfloat(gLights.Load4(16u * (i + 1u)));
 +        const float3 toLight = light.xyz - start;
@@ -15925,22 +16166,25 @@ index 0000000..d0aeb6d
 +        if ((distance < 30.0f) || (distance > light.w)) {
 +            continue;
 +        }
++        const float falloff = saturate(1.0f - distance / light.w);
++        const float reachHere = falloff * falloff;
++        influence = max(influence, reachHere);
 +        const float3 direction = toLight / distance;
 +        const float facing = dot(worldNormal, direction);
-+        if (facing <= 0.05f) {
++        if (facing <= 0.0f) {
 +            continue;
 +        }
-+        const float weight = saturate(1.0f - distance / light.w) * saturate(facing * 2.0f);
-+        // Two points on a small disc round the light.
++        // Four points on a small disc round the light.
 +        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
 +        const float3 across = cross(direction, side);
-+        float blocked = 0.0f;
-+        [unroll] for (int k = 0; k < 2; k++) {
-+            const float angle = float(k) * 3.14159265f;
-+            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 18.0f;
++        float visible = 0.0f;
++        [unroll] for (int k = 0; k < 4; k++) {
++            const float angle = float(k) * 1.5707963f + 0.785398f;
++            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 14.0f;
 +            const float3 toTarget = target - start;
 +            const float reach = length(toTarget) - 30.0f;
 +            if (reach <= 1.0f) {
++                visible += 0.25f;
 +                continue;
 +            }
 +            RayDesc ray;
@@ -15948,15 +16192,13 @@ index 0000000..d0aeb6d
 +            ray.Direction = toTarget / (reach + 30.0f);
 +            ray.TMin = 0.0f;
 +            ray.TMax = reach;
-+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+            while (query.Proceed()) {
-+            }
-+            blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.5f : 0.0f;
++            // Banjo casts his shadow from the lamps too.
++            visible += TraceOccluded(ray, 0u) ? 0.0f : 0.25f;
 +        }
-+        keep *= 1.0f - 0.5f * weight * blocked;
++        lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
 +    }
-+    return lerp(1.0f, keep, distanceFade);
++    lamp *= distanceFade;
++    return lerp(1.0f, 1.0f - 0.55f * influence, distanceFade);
 +}
 +
 +// Banjo's contact shadow, traced: while the sun shadows leave him out (the HD shadows give him one), the ground and
@@ -15987,11 +16229,8 @@ index 0000000..d0aeb6d
 +        ray.Direction = direction;
 +        ray.TMin = 0.0f;
 +        ray.TMax = 320.0f;
-+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+        while (query.Proceed()) {
-+        }
-+        blocked += (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? (1.0f / 3.0f) : 0.0f;
++        // Only Banjo himself counts: a roof or branch overhead would put a dark disc round him wherever he went.
++        blocked += TraceOccluded(ray, 2u) ? (1.0f / 3.0f) : 0.0f;
 +    }
 +    // The shadow fades out towards its edge.
 +    return 1.0f - 0.45f * blocked * saturate(1.0f - horizontal / reach);
@@ -16110,20 +16349,25 @@ index 0000000..d0aeb6d
 +// half-size pass round it, each weighted by how near its surface lies to this pixel's plane, so the block's 16
 +// slices and 32 rays come together without bleeding across edges (the spatial filter of the Unity GTAO's own
 +// passes; there is no temporal one, as the game has no motion vectors).
-+float4 IndirectAt(int2 pixel, float3 center, float3 normal) {
++float4 IndirectAt(int2 pixel, float3 center, float3 normal, int softReach = 0) {
 +    const int2 halfSize = max(int2(gConstants.projection.zw) / 2, int2(1, 1));
 +    const int2 base = pixel / 2;
 +    const float tolerance = max(-center.z * 0.03f, 2.0f);
++    // Soft (Banjo's fur): a wider gather by distance alone, as the fur's normals turn every pixel and the plane test
++    // left each pixel its own two rays, which crawled.
++    const bool soft = softReach > 0;
++    const int reach = soft ? softReach : 1;
 +    float4 sum = 0.0f;
 +    float weight = 0.0f;
-+    [unroll] for (int y = -1; y <= 2; y++) {
-+        [unroll] for (int x = -1; x <= 2; x++) {
++    [loop] for (int y = -reach; y <= reach + 1; y++) {
++        [loop] for (int x = -reach; x <= reach + 1; x++) {
 +            const int2 q = clamp(base + int2(x, y), int2(0, 0), halfSize - 1);
 +            const float sampleDepth = LoadDepth(q * 2);
 +            if (sampleDepth >= 0.99999f) {
 +                continue;
 +            }
-+            const float planeDistance = abs(dot(ViewPosition(q * 2, sampleDepth) - center, normal));
++            const float3 offset = ViewPosition(q * 2, sampleDepth) - center;
++            const float planeDistance = soft ? length(offset) * 0.25f : abs(dot(offset, normal));
 +            const float w = saturate(1.0f - planeDistance / tolerance);
 +            sum += gIndirect.Load(int3(q, 0)) * w;
 +            weight += w;
@@ -18147,9 +18391,11 @@ index 0000000..d0aeb6d
 +        const float3 up = cross(sunDirection, side);
 +        const float spread = lerp(0.006f, 0.04f, softness);
 +        const int Rays = 4;
++        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
 +        float blocked = 0.0f;
 +        [loop] for (int k = 0; k < Rays; k++) {
-+            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f;
++            // Steadier on Banjo with the noise smoothing: a different turn each pixel speckled his fur.
++            const float angle = float(k) * 2.39996323f + jitter * 6.28318531f * (onBanjo ? 1.0f - RtSmoothing() : 1.0f);
 +            const float radius = sqrt((float(k) + 0.5f) / float(Rays)) * spread;
 +            const float3 direction = normalize(sunDirection + (side * cos(angle) + up * sin(angle)) * radius);
 +            RayDesc ray;
@@ -18157,23 +18403,13 @@ index 0000000..d0aeb6d
 +            ray.Direction = ViewToWorldDirection(direction);
 +            ray.TMin = 0.0f;
 +            ray.TMax = 20000.0f;
-+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+            query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-+            while (query.Proceed()) {
-+            }
-+            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-+                continue;
-+            }
-+            if (skipBanjo) {
-+                const float3 world = ViewToWorldPoint(start + direction * query.CommittedRayT());
-+                const float2 across = world.xz - banjo.xz;
-+                if ((dot(across, across) < 80.0f * 80.0f) && (world.y > banjo.y - 5.0f) && (world.y < banjo.y + 180.0f)) {
-+                    continue;
-+                }
-+            }
-+            blocked += 1.0f;
++            // Leaving Banjo out, a ray that meets him goes on to what lies beyond (a cliff's shadow he stands in).
++            blocked += TraceOccluded(ray, skipBanjo ? 1u : 0u) ? 1.0f : 0.0f;
 +        }
 +        shadow = blocked / float(Rays);
++        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
++            return 1.0f;
++        }
 +    }
 +#else
 +    const int Steps = 24;
@@ -18241,6 +18477,31 @@ index 0000000..d0aeb6d
 +    return 1.0f - gConstants.shadows.x * 0.55f * near * max(shadow, turnedAway);
 +}
 +
++// Rim light and Toon shading share ambientOcclusion.w, packed as rim light (0 to 1) + 2 * toon shading in hundredths.
++float ToonStrength() {
++    return floor(max(gConstants.ambientOcclusion.w, 0.0f) * 0.5f + 1e-4f) / 100.0f;
++}
++
++float RimStrength() {
++    return max(gConstants.ambientOcclusion.w, 0.0f) - 2.0f * floor(max(gConstants.ambientOcclusion.w, 0.0f) * 0.5f + 1e-4f);
++}
++
++// Toon shading: the lit scene's brightness is split into a few flat bands with soft steps between them (the
++// light/shadow split of BotW-style toon shaders, a smoothstep on the lighting term), the shadow side
++// taking a cool tint and the lit side a warm one, with colour kept. strength blends from the game's picture.
++float3 ToonShade(float3 scene, float strength) {
++    const float luma = dot(scene, float3(0.299f, 0.587f, 0.114f));
++    const float step1 = smoothstep(0.16f, 0.22f, luma);
++    const float step2 = smoothstep(0.42f, 0.48f, luma);
++    const float step3 = smoothstep(0.72f, 0.78f, luma);
++    const float banded = 0.2f + 0.3f * step1 + 0.3f * step2 + 0.2f * step3;
++    const float3 tint = lerp(float3(0.78f, 0.84f, 1.0f), float3(1.0f, 0.97f, 0.9f), saturate(step1 * 0.5f + step2 * 0.5f));
++    const float3 chroma = scene / max(luma, 0.02f);
++    // Colour is pulled halfway to its own average so bands read as flat paint, not as darker texture.
++    const float3 flatChroma = lerp(chroma, float3(1.0f, 1.0f, 1.0f), 0.2f);
++    return lerp(scene, min(flatChroma * banded * tint * 1.1f, 1.5f), strength);
++}
++
 +// Rim light: near the edge of something in front of what's behind it, the more the surface turns away
 +// from the camera the more it is lit, fading out with distance so far hills and the skyline stay as
 +// they are.
@@ -18277,7 +18538,7 @@ index 0000000..d0aeb6d
 +    const float facing = saturate(dot(normal, normalize(-center)));
 +    const float fresnel = pow(1.0f - facing, 2.0f);
 +    const float notUp = 1.0f - saturate((normal.y - 0.45f) * 2.5f);
-+    return gConstants.ambientOcclusion.w * edge * (0.25f + 0.75f * fresnel) * notUp * near;
++    return RimStrength() * edge * (0.25f + 0.75f * fresnel) * notUp * near;
 +}
 +
 +// Banjo's distance in front of the camera (his middle, a little above his feet), or 0 when there is no Banjo:
@@ -18380,11 +18641,15 @@ index 0000000..d0aeb6d
 +        return float4(0.0f, 0.0f, 0.0f, 1.0f);
 +    }
 +    const float3 center = ViewPosition(pixel, depth);
-+    const float3 normal = ViewNormal(pixel, center);
++    float3 normal = ViewNormal(pixel, center);
 +    const uint cell = IndirectCell(halfPixel);
 +    const float jitter = InterleavedNoise(halfPixel);
 +    float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
 +#ifdef RAY_TRACED
++    // Banjo's fur: its rays round the smoothed normal (see the main pass).
++    if (InsideBanjo(ViewToWorldPoint(center)) && (BanjoSmoothRadius() > 0)) {
++        normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
++    }
 +    if (AoStrength() > 0.0f) {
 +        result.a = TracedOcclusion(center, normal, cell);
 +    }
@@ -18491,7 +18756,7 @@ index 0000000..d0aeb6d
 +    // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
 +    const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
 +    // Eye adaptation also draws the scene itself.
-+    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
++    const bool redraw = (blur || (gConstants.bloom.z > 0.0f) || (gConstants.fog.w > 0.0f) || (gConstants.view.w > 0.0f) || (gConstants.water.x > 0.0f) || (gConstants.water.y > 1.1f) || (gConstants.water.z > 0.0f) || (gConstants.water.w > 0.0f) || daytime || (DayMistSetting().x > 0.0f) || (SsgiStrength() > 0.0f) || (SsrStrength() > 0.0f) || (ToonStrength() > 0.0f)) && (gConstants.view.x < 0.5f);
 +
 +    if (depth >= 0.99999f) {
 +        // The sky takes most of the fog, so it meets the fogged scenery without a hard edge.
@@ -18526,6 +18791,8 @@ index 0000000..d0aeb6d
 +    }
 +#endif
 +    float keep = 1.0f;
++    // Light the level's lamps add (traced: LightShadows), on the scene's own colour.
++    float3 lamp = 0.0f;
 +    const bool occlusion = AoStrength() > 0.0f;
 +    const bool globalIllumination = (SsgiStrength() > 0.0f) && redraw;
 +    const bool reflections = (SsrStrength() > 0.0f) && redraw && ReflectiveAt(pixel, depth);
@@ -18543,8 +18810,23 @@ index 0000000..d0aeb6d
 +    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
 +        center = ViewPosition(pixel, depth);
 +        normal = ViewNormal(pixel, center);
++#ifdef RAY_TRACED
++        // Banjo's fur: its tufts' normals turn every pixel, so the traced rays on him were a different few a pixel
++        // and crawled as he moved (L, 2026-10-20). There the normal is smoothed over his surface and the traced
++        // light gathered wider, so the fur keeps its traced shading without the speckle.
++        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
++        if (onBanjo && (BanjoSmoothRadius() > 0)) {
++            normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
++        }
++#else
++        const bool onBanjo = false;
++#endif
 +        if (occlusion || globalIllumination) {
++#ifdef RAY_TRACED
++            indirect = IndirectAt(pixel, center, normal, onBanjo ? 1 + int(RtSmoothing() * 3.0f + 0.5f) : 0);
++#else
 +            indirect = IndirectAt(pixel, center, normal);
++#endif
 +        }
 +        if (occlusion) {
 +            // GTAO's visibility with its multi-bounce, from the scene's brightness here when the pass has the scene
@@ -18558,9 +18840,9 @@ index 0000000..d0aeb6d
 +#ifdef RAY_TRACED
 +        // Not tied to the sun: lamps and fires cast their own in caves and at night.
 +        if (lightShadows) {
-+            keep *= LightShadows(center, normal);
++            keep *= LightShadows(center, normal, lamp);
 +            const float flags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
-+            if (flags > 1.5f) {
++            if ((flags > 1.5f) && !onBanjo) {
 +                keep *= BanjoContactShadow(center, normal);
 +            }
 +        }
@@ -18605,7 +18887,7 @@ index 0000000..d0aeb6d
 +
 +    // Rim light: a soft warm-white light added along the edges.
 +    float3 rim = 0.0f;
-+    if (gConstants.ambientOcclusion.w > 0.0f) {
++    if (RimStrength() > 0.0f) {
 +        rim = float3(1.0f, 0.95f, 0.85f) * (0.9f * RimLight(pixel, depth));
 +    }
 +
@@ -18648,7 +18930,8 @@ index 0000000..d0aeb6d
 +#ifdef RAY_TRACED
 +            const float4 reflection = TracedReflection(pixel, center, normal);
 +#else
-+            const float4 reflection = ScreenSpaceReflection(pixel, center, normal);
++            const float roughness = SsrRoughness();
++            const float4 reflection = (roughness > 0.0f) ? StochasticReflection(pixel, center, normal, roughness) : ScreenSpaceReflection(pixel, center, normal);
 +#endif
 +            const float facing = saturate(dot(-normalize(center), normal));
 +            const float fresnel = 0.75f + 0.75f * pow(1.0f - facing, 2.0f);
@@ -18781,14 +19064,17 @@ index 0000000..d0aeb6d
 +            scene = DayLensDrops(scene, pixel, dayTint, DayWeather().x);
 +            rim *= dayTint;
 +        }
++        if (ToonStrength() > 0.0f) {
++            scene = ToonShade(scene * (keep + lamp), ToonStrength()) / max(keep + lamp, 0.001f);
++        }
 +        if (gConstants.bloom.z > 0.0f) {
 +            scene = Adapt(scene);
 +        }
 +        if (gConstants.fog.w > 0.0f) {
-+            scene = Underwater(scene * keep + rim, length(ViewPosition(pixel, depth)));
++            scene = Underwater(scene * (keep + lamp) + rim, length(ViewPosition(pixel, depth)));
 +            return float4(scene * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +        }
-+        return float4((scene * keep + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
++        return float4((scene * (keep + lamp) + rim) * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, 0.0f);
 +    }
 +
 +    return float4(rim * (1.0f - fog) + gConstants.fogColor.rgb * fog + bloom, keep * (1.0f - fog));
@@ -18853,10 +19139,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..bbccdd7
+index 0000000..0e48da8
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,394 @@
 +//
 +// RT64
 +//
@@ -18981,6 +19267,10 @@ index 0000000..bbccdd7
 +    // needs no more lookups for its light.
 +    float2 slope;
 +    bool sloped;
++    // How the trail's slopes light it (-1 to 1, SnowTrailLight) where already known (lit): the tessellated snow's pixels
++    // get it from its vertices (SnowTessPacked).
++    float lit;
++    bool litKnown;
 +};
 +
 +// The snow's shape at a shell's pixel at height share (0 to 1 of the snow's full height): false when the pixel is
@@ -19142,6 +19432,49 @@ index 0000000..bbccdd7
 +    return true;
 +}
 +
++// How the trail's slope (d height / dx, dz) lights it: -1 (in shade) to 1 (toward the light).
++float SnowTrailLight(float2 slope) {
++    const float3 n = normalize(float3(-slope.x, 1.0f, -slope.y));
++    const float3 light = FrParams.snowLight.xyz;
++    return clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++}
++
++// The tessellated snow's pixels don't look the trail up again (16 lookups a pixel, at a high resolution most of the
++// snow's cost): its domain shader packs what shading needs into each vertex's anchor, blended over the pixels between
++// (its vertices are no further apart than the trail is smoothed over, SnowTrailBlur). For the snow: (x, light, z, how
++// far under the untouched surface 0 to 1, or -1 where no snow lies). For the ground pass: w the snow's height.
++// (Not with a test aid on, TOOIE_SNOW_DEBUG: those look it up as before.)
++bool SnowTessPacked() {
++    return FrParams.snowGrid.w <= 1.5f;
++}
++
++float4 SnowTessPack(float3 ground, bool shaped, SnowSample s, bool groundPass) {
++    if (groundPass) {
++        return float4(ground, shaped ? s.height : 0.0f);
++    }
++    const float lit = s.sloped ? SnowTrailLight(s.slope) : 0.0f;
++    const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
++    return float4(ground.x, lit, ground.z, shaped ? under : -1.0f);
++}
++
++// A tessellated snow pixel's sample from its packed anchor (SnowTessPack); false where no snow lies. distance: the
++// pixel's distance from the camera (across the ground: enough for the glints, SnowShellShade).
++bool SnowTessUnpack(float4 anchor, float distance, out SnowSample s) {
++    s = (SnowSample)0;
++    s.cameraDistance = distance;
++    if (anchor.w < -0.5f) {
++        return false;
++    }
++    // (Only how far under the surface matters to the shading: the surface counts as 1, the pixel that far below it.)
++    const float under = saturate(anchor.w);
++    s.surface = 1.0f;
++    s.shellY = s.height = 1.0f - under;
++    s.trail.x = under;
++    s.lit = anchor.y;
++    s.litKnown = true;
++    return true;
++}
++
 +// Shades a shell's pixel inside the snow; false when the ground under it isn't snowy (baseColor, the draw's colour).
 +// anyColor: whatever the ground's colour (the tessellated snow, which stands in for the ground's draw: its snow in
 +// shade, under the ice's cliffs, is too dark for SnowColor).
@@ -19158,10 +19491,11 @@ index 0000000..bbccdd7
 +
 +    // The trail's slopes light up toward the light and fall into soft blue shade away from it.
 +    float lit = 0.0f;
-+    if (s.sloped) {
-+        const float3 n = normalize(float3(-s.slope.x, 1.0f, -s.slope.y));
-+        const float3 light = FrParams.snowLight.xyz;
-+        lit = clamp(FrParams.snowLight.w * (dot(n, light) - light.y), -1.0f, 1.0f);
++    if (s.litKnown) {
++        lit = s.lit;
++    }
++    else if (s.sloped) {
++        lit = SnowTrailLight(s.slope);
 +    }
 +    else if (s.nearTrail && ((s.trail.x > 0.003f) || (s.trail.y > 0.003f))) {
 +        const float e = 1.25f;
@@ -19205,10 +19539,10 @@ index 0000000..bbccdd7
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..b276ada
+index 0000000..5d3f594
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,178 @@
 +//
 +// RT64
 +//
@@ -19373,8 +19707,12 @@ index 0000000..b276ada
 +        spacing = max(distance(a, b), max(distance(b, c), distance(c, a))) / p.inside;
 +    }
 +    const float blur = max(SnowTrailBlur(distance(v.furAnchor.xyz, camera)), spacing * 0.75f);
-+    SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
-+    const float height = ((gConstants.grassShells & RASTER_SNOW_GROUND) != 0) ? 0.0f : s.height;
++    const bool shaped = SnowTessShape(v.furAnchor.xyz, v.furAnchor.w, p.normal, blur, s);
++    const bool groundPass = (gConstants.grassShells & RASTER_SNOW_GROUND) != 0;
++    const float height = groundPass ? 0.0f : s.height;
++    if (SnowTessPacked()) {
++        v.furAnchor = SnowTessPack(v.furAnchor.xyz, shaped, s, groundPass);
++    }
 +    float4 up = FrParams.snowClipUp * (height / max(FrParams.snowParams.y, 1e-3f));
 +    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 +#ifdef __spirv__
@@ -20037,10 +20375,10 @@ index 0000000..e6accce
 +    return h;
 +}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..4b24afc 100644
+index 2e62aaf..8574eb9 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,130 @@ namespace interop {
+@@ -13,6 +13,133 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -20168,6 +20506,9 @@ index 2e62aaf..4b24afc 100644
 +        float4 waterMotion;
 +        // The slow swell over all the water: its height in world units, its speed, then 1 for Stylised water.
 +        float4 waterSwell;
++        // Banjo-Tooie: Banjo's fur jiggle (RasterVS.hlsl): how far his strands' tips lag behind his movement, a world
++        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
++        float4 furSway;
      };
  #ifdef HLSL_CPU
  };

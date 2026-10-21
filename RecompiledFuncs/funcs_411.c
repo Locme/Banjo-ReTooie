@@ -6361,6 +6361,7 @@ L_80800020:
     // 0x80800024: lh          $v0, 0xE($v1)
     ctx->r2 = MEM_H(ctx->r3, 0XE);
     skip_1:
+    tooie_window_beams_map_entry(rdram, ctx);
     // 0x80800028: jr          $ra
     // 0x8080002C: or          $v0, $v1, $zero
     ctx->r2 = ctx->r3 | 0;

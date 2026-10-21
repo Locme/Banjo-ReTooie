@@ -19,6 +19,7 @@
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
+#include "tooie_window_beams.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
@@ -366,6 +367,23 @@ void tooie::init_config() {
             general.add_option_hidden_dependency(*id, ears_option, false);
         }
     }
+    general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur jiggle",
+        "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(fur_stiffness_option, "Fur jiggle: stiffness",
+            "How hard the fur springs back upright. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+        general.add_number_option(fur_damping_option, "Fur jiggle: damping",
+            "How quickly the swaying dies out. 0 sways for ages.", 0, 90, 1, 0, false, 8);
+        general.add_number_option(fur_mass_option, "Fur jiggle: mass",
+            "How heavy the fur is: heavier lags further behind and sways slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(fur_sway_option, "Fur jiggle: max sway",
+            "How far the tips may lean, as a share of the strands' length.", 0, 300, 5, 0, true, 100);
+        for (const std::string* id : { &fur_stiffness_option, &fur_damping_option, &fur_mass_option, &fur_sway_option }) {
+            general.add_option_hidden_dependency(*id, fur_option, false);
+        }
+    }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
         "Banjo's backpack swings on a spring as he moves, carrying Kazooie with it, so the pack bounces when he runs, jumps and lands and settles when he stops. Separate from Snout jiggle and Kazooie jiggle, with its own settings. It stays mid-swing in Photo Mode.",
         false);
@@ -660,6 +678,17 @@ void tooie::init_config() {
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     tooie::day_night::add_options(graphics);
     graphics.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light fall from the round windows in Bottles' house onto the floor, the way they do from the windows in Mumbo's Skull. Switching it in Bottles' house reloads the room.",
+        true);
+    graphics.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
+    graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
         "Keeps characters and objects that are already loaded drawn much further away than the original.",
@@ -791,6 +820,7 @@ void tooie::init_config() {
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
     tooie::aim_trace::add_option(wip);
+    tooie::save_state::add_ram_dump_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,

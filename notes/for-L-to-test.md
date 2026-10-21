@@ -1,5 +1,55 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T487 Window Light Beams (Bottles' house, Banjo's house, Jingaling's throne room)
+- Asked: 2026-10-20 23:57 UTC
+- Build: main
+- Steps:
+  1. Graphics > Window Light Beams is on by default; go into Bottles' house in Jinjo Village and look at the two round windows either side of the doorway
+  2. Go into Banjo's house in Spiral Mountain (two windows by the door, one by the fireplace) and King Jingaling's throne room (the two bright windows)
+  3. Switch Window Light Beams off and on while in one of those rooms (the room reloads)
+- Look for: See-through white beams fall from each window down onto the floor, faded at the floor, with the same streaky look as the beams in Mumbo's Skull; they don't flicker, cut off or show through walls, and Banjo walking through them looks right. Off gives the rooms back as before. Checked offline (the game's models drawn with its own textures): screens/window-beams/ in project files. Headless the game loaded the beams' models in all three rooms with no error, but the container could not draw a picture, so how they look in the game is untested. Too bright, too faint, too long or too short?
+- Status: waiting for L
+
+## T485 Toon shading (BotW style)
+- Asked: 2026-10-20 23:40 UTC
+- Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
+- Steps:
+  1. Graphics > Lighting: raise Toon shading (default 0 = off) to 100
+  2. Walk round Spiral Mountain in sun and in shade; try with Toon outlines and Rim light on
+- Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
+- Status: waiting for L
+
+## T486 Stochastic reflections
+- Asked: 2026-10-20 23:27 UTC
+- Build: main (this commit)
+- Steps:
+  1. Open Graphics > Reflections
+  2. Set Screen-space reflections to 60
+  3. Set Stochastic reflections to 30, then 70
+  4. Stand near a gold or metal shiny surface (e.g. Grunty Industries warp pad rims) and look at it from the side
+- Look for: Is the reflection blurrier and softer than the mirror one? Is the grain acceptable, and does 0 give back the old sharp reflection? Does the frame rate hold?
+- Status: waiting for L
+
+## T484 Fur jiggle
+- Asked: 2026-10-20 23:09 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn Banjo fur up
+  2. General > Jiggle: turn on Fur jiggle
+  3. Run, turn, jump and land, then stop
+- Look for: The fur's strands lean back as he moves and spring upright when he stops; the roots stay on him; the sliders change how floppy it is and how far the tips lean.
+- Status: waiting for L
+
+## T483 Deep snow frame rate: pixels reuse the dent shape
+- Asked: 2026-10-20 22:30 UTC
+- Build: main @ e02e15b
+- Steps:
+  1. Deep snow on, Icy Side, 6x resolution as before
+  2. Walk lots of prints, look at them near and far
+  3. Stand at your 25 fps cliff spot
+- Look for: Frame rate and GPU ms there, and do the dents look the same as the last build (soft walls, shading)?
+- Status: waiting for L
+
 ## T482 Ear jiggle slider and stiffness defaults
 - Asked: 2026-10-20 21:59 UTC
 - Build: main
@@ -142,6 +192,10 @@
 - Also: Graphics > Ray tracing strength (default 60): the least each traced effect shows at (reflections, sun shadows, water reflections at it; AO and bounce light at 83% of it). Try 100 and 30 to see the traced effects get plain or fade; your own sliders still win when higher.
 - Also: Modern and Stylised water refract with a traced ray (what shows through the water is what the bent ray meets on the floor, so it shifts with depth and waves properly); and while Sun shadows leave Banjo out (Graphics > Sun shadows on Banjo off), a traced contact shadow of him falls on the ground and low things within about 170 units of him, straight overhead. Look at the Modern water on the Spiral Mountain moat (stones under it shouldn't smear or sit wrong) and under Banjo.
 - Also, experimental, off by default: Graphics > Ray tracing hit colours. Switch it on with Ray tracing on. A reflection, water reflection or bounce ray that lands where the picture can't see (off screen or hidden) then uses the colour that spot had when it was last on screen (a world cache of 16-unit cells, written from about 1 pixel in 8 each frame) instead of the nearest screen colour. Look for: reflections of things behind you or off to the side showing their real colour after you have looked at them, with no flicker, no wrong-coloured patches, no crash or stall. If anything is off, switch it off and tell me what you saw. Cells are 16 units wide, so reflected detail is coarse, and a thin wall shares its two sides' colour.
+- Fixed after L's 22:29 report: Ray tracing strength shows a whole number; with Sun shadows leaving Banjo out, a traced sun ray that meets Banjo goes on past him (his outline no longer leaves a lit patch in a shadow he stands in), and his contact shadow only counts Banjo himself (no dark disc under roofs or branches). Look at Banjo standing in a cliff's or tree's shadow.
+- Fixed after L's 22:34 report (indoors too dark, lamps doing nothing): traced sun shadows leave shut-in places alone (a spot where straight up and four slanted-up rays all meet something: rooms, caves), and the level's lamps and fires now add a warm light where they reach and aren't blocked, as well as casting shadows. Look in Jinjo Village houses and the Spiral Mountain cave: no darker than without Ray tracing, lamps brightening what's near them, shadows of furniture away from the lamp.
+- Fixed after L's 22:59-23:06 reports: (a) letterboxed cutscenes (the Jinjo one) stay traced; the traced pass now turns pixels back into the world over the cutscene's shorter picture, which split it across the middle; (b) the white Banjo-shaped patch: the "shut-in" check no longer counts Banjo overhead; (c) Banjo's fur keeps its traced shading with less noise: smoothed normals on him, a wider gather of the traced light, and steady sun rays; (d) lamps rework: inside a lamp's reach the room is dimmer and the lamp lights only what its rays reach and what faces it, so furniture throws clear shadows away from it. Check Bottles' house, a Jinjo cutscene, and Banjo's fur while running.
+- New (L 23:20): Graphics > Shaders now has its own "Ray Tracing" section holding Ray tracing, strength, the new "Ray tracing noise smoothing" slider (0 raw rays, 50 default, 100 calmest; mostly Banjo's fur) and hit colours. Try 0 / 50 / 100 on Banjo running in sunlight.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

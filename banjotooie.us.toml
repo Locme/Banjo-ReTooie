@@ -1524,6 +1524,14 @@ func = "func_800D5B34"
 before_vram = 0x800D5BF4
 text = "if (tooie_asset_replace(rdram, ctx)) goto L_800D5D0C;"
 
+# Window light beams (src/gameplay/window_beams.cpp): func_80800000_gcmapDll finds a map's entry in the
+# map table (14 bytes a map: map, solid model, see-through model, ...); where it returns the entry
+# ($v1, the map in $a0), rooms with no see-through model get one for the beams.
+[[patches.hook]]
+func = "func_80800000_gcmapDll"
+before_vram = 0x80800028
+text = "tooie_window_beams_map_entry(rdram, ctx);"
+
 # --- Save select: the mouse (src/input/menu_mouse.cpp) ---
 # The hand's update (chgameselect func_80800E24): $s0 = the menu, its hand's spot at 0x79 >> 4.
 [[patches.hook]]
