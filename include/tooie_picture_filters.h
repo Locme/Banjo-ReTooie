@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "librecomp/config.hpp"
 #include "recomp.h"
@@ -26,6 +27,7 @@ namespace tooie::picture_filters {
     inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
+    inline const std::string ray_tracing_section_option = "ray_tracing_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -49,6 +51,7 @@ namespace tooie::picture_filters {
     inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
+    inline const std::string toon_shading_option = "toon_shading";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";
@@ -58,9 +61,14 @@ namespace tooie::picture_filters {
     inline const std::string bounce_light_option = "bounce_light";
     inline const std::string ssgi_option = "ssgi";
     inline const std::string ssr_option = "ssr";
+    inline const std::string ssr_stochastic_option = "ssr_stochastic";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
+    inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
+    inline const std::string path_tracing_option = "path_tracing";
+    inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
+    inline const std::string traced_beams_option = "traced_light_beams";
     inline const std::string texture_upscale_option = "texture_upscale";
     inline const std::string water_waves_option = "water_waves";
     inline const std::string light_shafts_option = "light_shafts";
@@ -99,6 +107,7 @@ namespace tooie::picture_filters {
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
+    inline const std::string tessellated_sand_option = "tessellated_sand";
     inline const std::string snow_height_option = "deep_snow_height";
     inline const std::string snow_detail_option = "deep_snow_detail";
     inline const std::string snow_refill_option = "deep_snow_refill_seconds";
@@ -142,6 +151,8 @@ namespace tooie::picture_filters {
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).
     bool ray_tracing_active();
+    // Ray tracing on with Traced light beams above 0: they stand in for Window Light Beams' drawn ones.
+    bool traced_beams_on();
     // Graphics > Sun shadow distance, in world units (0 while sun shadows are off).
     float sun_shadow_distance();
     // Whether Kazooie's feathers are on, for the model tagging to mark her draws.
@@ -171,6 +182,18 @@ namespace tooie::picture_filters {
     // Hands the current settings to RT64 (the contrast, saturation, vignette and grain only while photo
     // mode is off).
     void apply();
+
+    // The Effect Cost Check key (src/game/frame_overlay.cpp): the effects that are on now, each with its
+    // name in the Graphics tab and the value that turns it off. Ray tracing comes with its own effects.
+    struct CostEffect {
+        const std::string* id;
+        std::string name;
+        recomp::config::ConfigValueVariant off;
+    };
+    std::vector<CostEffect> cost_effects();
+    // Turns one effect off for the cost check without touching the saved setting (nullptr: none), and
+    // applies it.
+    void set_cost_override(const CostEffect* effect);
 }
 
 #endif

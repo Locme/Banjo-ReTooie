@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -39,6 +40,8 @@
 #include "tooie_fxaa.h"
 #include "tooie_smaa.h"
 #include "tooie_picture_filters.h"
+#include "tooie_debug.h"
+#include "tooie_window_beams.h"
 #include "tooie_toast.h"
 #include "tooie_effect_pick.h"
 #include "tooie_parallax_pick.h"
@@ -57,6 +60,7 @@ namespace RT64 {
     void SetSceneDepthOfField(float strength, bool onBanjo);
     void SetSceneEyeAdaptation(float strength);
     void SetSceneRimLight(float strength);
+    void SetSceneToonShading(float strength);
     void SetSceneUnderwater(float tint, float haze);
     void SetSceneHeatHaze(float strength, bool warmOnly);
     void SetSceneWaterReflections(float strength);
@@ -66,10 +70,13 @@ namespace RT64 {
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
-    void SetSceneScreenSpaceReflections(float strength);
+    void SetSceneScreenSpaceReflections(float strength, float glossiness);
     void SetSceneRayTracing(bool enabled);
     void SetSceneRayTracingStrength(float strength);
     void SetSceneRayTracingHitColours(bool enabled);
+    void SetSceneRayTracingSmoothing(float smoothing);
+    void SetScenePathTracing(uint32_t bounces);
+    void SetSceneTracedBeams(float strength, const float *direction);
     int GetRayTracingSupport();
     void SetSceneWaterWaves(float strength, float speed);
     void SetSceneShoreFoam(bool enabled);
@@ -90,7 +97,8 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
+    void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -141,6 +149,9 @@ namespace {
     std::atomic<bool> npc_feathers{false};
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
+    // Graphics > Tessellated sand: deep snow's footprints, shallow, on sand textures (parallax shape Sand) on any map
+    // without deep snow.
+    std::atomic<bool> tessellated_sand{false};
     std::atomic<float> snow_height{1.0f};
     std::atomic<float> snow_detail{1.0f};
     std::atomic<float> snow_refill{0.0f};
@@ -3964,6 +3975,7 @@ namespace {
         { &tooie::picture_filters::gameplay_dof_option, 0.0 },
         { &tooie::picture_filters::eye_adaptation_option, 0.0 },
         { &tooie::picture_filters::rim_light_option, 0.0 },
+        { &tooie::picture_filters::toon_shading_option, 0.0 },
         { &tooie::picture_filters::underwater_tint_option, 0.0 },
         { &tooie::picture_filters::underwater_haze_option, 0.0 },
         { &tooie::picture_filters::heat_haze_option, 0.0 },
@@ -3973,11 +3985,13 @@ namespace {
         { &tooie::picture_filters::bounce_light_option, 0.0 },
         { &tooie::picture_filters::ssgi_option, 0.0 },
         { &tooie::picture_filters::ssr_option, 0.0 },
+        { &tooie::picture_filters::ssr_stochastic_option, 0.0 },
         { &tooie::picture_filters::water_waves_option, 0.0 },
         { &tooie::picture_filters::light_shafts_option, 0.0 },
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
         { &tooie::picture_filters::deep_snow_option, false },
+        { &tooie::picture_filters::tessellated_sand_option, false },
         { &tooie::picture_filters::parallax_option, 0.0 },
         { &tooie::picture_filters::parallax_original_option, true },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
@@ -4026,9 +4040,21 @@ namespace {
         applying_preset = false;
     }
 
+    // The Effect Cost Check key's effect turned off for now (set_cost_override), read in place of its setting.
+    std::mutex cost_mutex;
+    std::atomic<bool> cost_override_on{ false };
+    const std::string* cost_override_id = nullptr;
+    recomp::config::ConfigValueVariant cost_override_value;
+
     template <typename T>
     T value(const std::string& id, T fallback) {
         try {
+            if (cost_override_on.load(std::memory_order_relaxed)) {
+                std::lock_guard lock{ cost_mutex };
+                if ((cost_override_id != nullptr) && (*cost_override_id == id)) {
+                    return std::get<T>(cost_override_value);
+                }
+            }
             return std::get<T>(graphics_config().get_option_value(id));
         } catch (...) {
             return fallback;
@@ -4142,12 +4168,16 @@ namespace {
         std::vector<uint8_t> styles;
         hashes.reserve(std::size(parallax_textures) + picks.size());
         std::vector<uint8_t> fines;
+        // (The sand ones are where Tessellated sand lies.)
+        std::vector<uint64_t> sand;
         auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest, uint8_t shape, uint8_t fine) {
             const auto pick = picks.find(hash);
+            uint8_t final_shape = shape;
             if (pick != picks.end()) {
                 const bool off = pick->second.off;
                 const uint8_t style = pick->second.style();
                 const uint8_t fine = pick->second.fine;
+                final_shape = pick->second.shape;
                 picks.erase(pick);
                 if (off) {
                     return;
@@ -4163,6 +4193,9 @@ namespace {
             hashes.push_back(hash);
             ranges.push_back(darkest);
             ranges.push_back(lightest);
+            if (final_shape == tooie::parallax_pick::shape_sand) {
+                sand.push_back(hash);
+            }
         };
         for (const ParallaxTexture& texture : parallax_textures) {
             if (std::find(skip.begin(), skip.end(), texture.hash) == skip.end()) {
@@ -4174,6 +4207,7 @@ namespace {
             add(hash, 40, 190, tooie::parallax_pick::shape_stone, 0);
         }
         RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data(), fines.data());
+        RT64::SetSceneSandTextures(sand.data(), sand.size());
         parallax_sent_version = version;
     }
 }
@@ -4249,11 +4283,13 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneRayTracing(ray_tracing);
     RT64::SetSceneRayTracingStrength((float)(value<double>(ray_tracing_strength_option, 60.0) / 100.0));
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
+    RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
+    RT64::SetScenePathTracing(value<bool>(path_tracing_option, false) ? (uint32_t)value<double>(path_tracing_bounces_option, 2.0) : 0u);
     ray_tracing_on.store(ray_tracing);
     if (!ray_tracing) {
         ray_tracing_notified.store(false);
     }
-    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0));
+    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
@@ -4315,6 +4351,11 @@ void tooie::picture_filters::apply() {
         snow = std::atoi(forced) != 0;
     }
     deep_snow = snow;
+    bool sand = shaders && value<bool>(tessellated_sand_option, false);
+    if (const char* forced = std::getenv("TOOIE_SAND")) {
+        sand = std::atoi(forced) != 0;
+    }
+    tessellated_sand = sand;
     snow_height = (float)(value<double>(snow_height_option, 100.0) / 100.0);
     if (const char* forced = std::getenv("TOOIE_SNOW_HEIGHT")) {
         snow_height = (float)(std::atof(forced) / 100.0);
@@ -4375,6 +4416,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneIceReflections((float)(shader(value<double>(ice_reflections_option, 0.0)) / 100.0));
     water_settings_changed = true;
     RT64::SetSceneRimLight((float)(shader(value<double>(rim_light_option, 0.0)) / 100.0));
+    RT64::SetSceneToonShading((float)(shader(value<double>(toon_shading_option, 0.0)) / 100.0));
     RT64::SetSceneEyeAdaptation((float)(value<double>(eye_adaptation_option, 0.0) / 100.0));
     RT64::SetSceneBloom((float)(value<double>(bloom_option, 0.0) / 100.0), bloom_threshold);
 
@@ -4430,6 +4472,10 @@ bool tooie::picture_filters::ray_tracing_active() {
     return traced_shadows_on();
 }
 
+bool tooie::picture_filters::traced_beams_on() {
+    return ray_tracing_active() && (value<double>(traced_beams_option, 60.0) > 0.0);
+}
+
 bool tooie::picture_filters::sun_shadows_on() {
     return sun_shadows || traced_shadows_on();
 }
@@ -4472,6 +4518,19 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         ray_tracing_notified.store(true);
         std::fprintf(stderr, "[ray-tracing] no ray queries on this device or renderer; using the current effects\n");
         tooie::toast::show("Ray tracing needs the Vulkan renderer and a graphics card with ray tracing. Using the current effects.");
+    }
+    // Traced light beams: their strength, and in a room Window Light Beams knows, the way its windows' light comes in.
+    {
+        static float beams_sent = -1.0f;
+        static uint16_t beams_map_sent = 0xFFFF;
+        const float beams = traced_beams_on() ? (float)(value<double>(traced_beams_option, 60.0) / 100.0) : 0.0f;
+        const uint16_t map = tooie::debug::current_map(rdram);
+        if ((beams != beams_sent) || (map != beams_map_sent)) {
+            beams_sent = beams;
+            beams_map_sent = map;
+            float direction[3];
+            RT64::SetSceneTracedBeams(beams, tooie::window_beams::room_light(map, direction) ? direction : nullptr);
+        }
     }
     // A pick made in parallax pick mode shows at once.
     if (tooie::parallax_pick::version() != parallax_sent_version.load()) {
@@ -4649,7 +4708,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // Deep snow on the maps with snow only.
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
-        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : 0.0f;
+        // (Elsewhere tessellated sand, through the same: most of the snow's ankle depth (a third was too shallow to
+        // see a footprint), on sand only.)
+        const bool sand = tessellated_sand && !(deep_snow && snowy_map(map));
+        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : (sand ? 1.0f : 0.0f);
         // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
@@ -4660,14 +4722,17 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const float detail = snow_detail.load();
         const float refill = snow_refill.load();
         const float lod = snow_lod_distance.load();
-        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent)) {
+        static bool sand_sent = false;
+        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent) ||
+            (sand != sand_sent)) {
+            sand_sent = sand;
             snow_sent = snow;
             strict_sent = strict;
             detail_sent = detail;
             refill_sent = refill;
             lod_sent = lod;
             map_sent = map;
-            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map);
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map, sand);
         }
     }
     // The fog is measured from Banjo.
@@ -4827,6 +4892,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "A soft light along the edges of nearby characters and objects, so they stand out from what is behind them. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
+        toon_shading_option,
+        "Toon shading",
+        "Breath of the Wild style cel shading: the lit picture is split into a few flat bands of light and shadow with soft steps between them, shadows cool and lit parts warm. Works well with the toon outlines and Rim light. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
         underwater_tint_option,
         "Underwater tint",
         "While under water, the 3D world turns light blue. The HUD isn't changed. 0 is off, 100 strongest.",
@@ -4881,6 +4951,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Deep snow",
         "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
         false);
+    graphics.add_bool_option(
+        tessellated_sand_option,
+        "Tessellated sand",
+        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Deep snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
+        false);
     graphics.add_number_option(
         snow_height_option,
         "Snow height",
@@ -4912,6 +4987,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
     graphics.add_bool_option(
+        ray_tracing_section_option,
+        "Ray Tracing",
+        "Shows the ray tracing settings below. Hiding them does not turn ray tracing off.",
+        true);
+    graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
         "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
@@ -4920,7 +5000,27 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         ray_tracing_strength_option,
         "Ray tracing strength",
         "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (reflections, sun shadows and water reflections at this, ambient occlusion and bounce light a little under it). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
-        0, 100, 5, 60, false, 60);
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_smoothing_option,
+        "Ray tracing noise smoothing",
+        "How much the ray traced light and shadows are smoothed out where they get grainy, mostly on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). Higher is calmer but softer; 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
+        0, 100, 5, 0, false, 50);
+    graphics.add_bool_option(
+        path_tracing_option,
+        "Path tracing",
+        "The traced bounce light goes on bouncing: a ray that lands on a surface turns off it and carries on, picking up the colours along the way, so light reaches round corners and deeper into rooms and caves. Needs Ray tracing on and the bounce light showing (Ray tracing strength above 0 or Screen-space GI on). Heavy on the graphics card: each bounce traces three more rays a pixel.",
+        false);
+    graphics.add_number_option(
+        path_tracing_bounces_option,
+        "Path tracing bounces",
+        "How many more times light bounces with Path tracing on, after the first. More reaches further into shadowed places but costs more. 2 is the default.",
+        1, 4, 1, 0, false, 2);
+    graphics.add_number_option(
+        traced_beams_option,
+        "Traced light beams",
+        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. In the rooms Window Light Beams covers they take the place of its drawn beams. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
+        0, 100, 5, 0, false, 60);
     graphics.add_bool_option(
         ray_tracing_hit_colours_option,
         "Ray tracing hit colours",
@@ -4935,6 +5035,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         ssr_option,
         "Screen-space reflections",
         "Shiny surfaces (metal and tiles, and water and ice when their own reflections are off) reflect what is on screen, most at grazing angles. Only what is on screen can be reflected, so reflections fade out near the edges of the picture. 0 is off.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ssr_stochastic_option,
+        "Stochastic reflections",
+        "Makes Screen-space reflections glossy instead of mirror-sharp (a port of simeonradivoev's Compute Stochastic Reflections, MIT): each pixel sends a few rays spread over a lobe that widens with this setting, and blends what they find. The result is slightly grainy and blurrier the higher it goes. Needs Screen-space reflections above 0. Starts at 0, which keeps the mirror reflections.",
         0, 100, 5, 0, false, 0);
     graphics.add_number_option(
         water_reflections_option,
@@ -5234,7 +5339,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5263,13 +5368,20 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(outlines_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(outline_thickness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(rim_light_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(toon_shading_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_tint_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
+    // Graphics > Shaders > Ray Tracing (L, 2026-10-20): its own section under Shaders.
+    graphics.add_option_hidden_dependency(ray_tracing_section_option, lighting_section_option, false);
+    for (const std::string *id : { &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option }) {
+        graphics.add_option_hidden_dependency(*id, ray_tracing_section_option, false);
+    }
     graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);
+    graphics.add_option_hidden_dependency(ssr_stochastic_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(water_waves_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(wave_speed_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(water_detail_option, lighting_section_option, false);
@@ -5293,6 +5405,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_occlusion_cull_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(tessellated_sand_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_refill_option, lighting_section_option, false);
@@ -5316,4 +5429,53 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(fog_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(fog_start_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(fog_colour_option, lighting_section_option, false);
+}
+
+std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_effects() {
+    std::vector<CostEffect> effects;
+    if (!created) {
+        return effects;
+    }
+    auto add = [&](const std::string* id, recomp::config::ConfigValueVariant off) {
+        try {
+            if (graphics_config().get_option_value(*id) != off) {
+                effects.push_back({ id, graphics_config().get_option(*id).name, off });
+            }
+        } catch (...) {
+        }
+    };
+    for (const PresetValue& preset : preset_values) {
+        // SMAA, FXAA and FSR read their own settings (and have their own lines in the overlay); the
+        // sub-settings that only change how an effect looks are left as they are.
+        if ((preset.id == &tooie::smaa::option) || (preset.id == &tooie::fxaa::option) || (preset.id == &tooie::fsr::option) ||
+            (preset.id == &three_point_option) || (preset.id == &parallax_original_option) || (preset.id == &ssr_stochastic_option)) {
+            continue;
+        }
+        // The underwater ones only draw under water.
+        if (((preset.id == &underwater_tint_option) || (preset.id == &underwater_haze_option) || (preset.id == &underwater_distortion_option)) &&
+            (underwater() <= 0.0f)) {
+            continue;
+        }
+        add(preset.id, preset.off);
+    }
+    // Ray tracing as a whole (its effects fall back to their screen-space forms), then its own extras.
+    add(&ray_tracing_option, false);
+    if (ray_tracing_active()) {
+        add(&path_tracing_option, false);
+        add(&traced_beams_option, 0.0);
+        add(&ray_tracing_hit_colours_option, false);
+    }
+    return effects;
+}
+
+void tooie::picture_filters::set_cost_override(const CostEffect* effect) {
+    {
+        std::lock_guard lock{ cost_mutex };
+        cost_override_id = (effect != nullptr) ? effect->id : nullptr;
+        if (effect != nullptr) {
+            cost_override_value = effect->off;
+        }
+        cost_override_on.store(effect != nullptr, std::memory_order_relaxed);
+    }
+    apply();
 }

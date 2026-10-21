@@ -86,6 +86,7 @@ namespace {
         { "GTAO occlusion (white open, dark shaded)", 19, Solo::None },
         { "SSGI bounced light", 20, Solo::None },
         { "Screen-space reflections (red: nothing to reflect)", 21, Solo::None },
+        { "Ray traced scene (green traced, blue light passes through, red blocked in front)", 22, Solo::None },
         { "All effects off", scene_none, Solo::None },
         { "Only: sharpening", scene_none, Solo::Sharpening },
         { "Only: contrast", scene_none, Solo::Contrast },

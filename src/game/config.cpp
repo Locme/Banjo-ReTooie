@@ -19,6 +19,7 @@
 #include "tooie_honeycomb_glitter.h"
 #include "tooie_snout_jiggle.h"
 #include "tooie_original_honeycomb.h"
+#include "tooie_window_beams.h"
 #include "tooie_jiggy_dance.h"
 #include "recompui/config.h"
 #include "recompinput/recompinput.h"
@@ -239,6 +240,7 @@ void tooie::init_config() {
     tooie::photo_mode::register_input();
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
+    tooie::talon_trot::register_input();
     tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();
@@ -364,6 +366,23 @@ void tooie::init_config() {
             "How far an ear may squash down, stretch up and flop forwards, backwards and to the side, as a share of its height (squashing stops at 95%).", 0, 300, 5, 0, true, 60);
         for (const std::string* id : { &ears_stiffness_option, &ears_damping_option, &ears_mass_option, &ears_squash_option }) {
             general.add_option_hidden_dependency(*id, ears_option, false);
+        }
+    }
+    general.add_bool_option(tooie::snout_jiggle::fur_option, "Fur jiggle",
+        "The strands of Banjo's fur (the Banjo fur shader, in Character Shaders) lean back as he runs, turns, jumps and lands, and spring upright again when he stops. Its own settings like the snout's. It stays mid-sway in Photo Mode.",
+        false);
+    {
+        using namespace tooie::snout_jiggle;
+        general.add_number_option(fur_stiffness_option, "Fur jiggle: stiffness",
+            "How hard the fur springs back upright. Lower is floppier and slower, higher is quicker and tighter.", 10, 900, 10, 0, false, 300);
+        general.add_number_option(fur_damping_option, "Fur jiggle: damping",
+            "How quickly the swaying dies out. 0 sways for ages.", 0, 90, 1, 0, false, 8);
+        general.add_number_option(fur_mass_option, "Fur jiggle: mass",
+            "How heavy the fur is: heavier lags further behind and sways slower.", 0.1, 7.5, 0.1, 1, false, 1);
+        general.add_number_option(fur_sway_option, "Fur jiggle: max sway",
+            "How far the tips may lean, as a share of the strands' length.", 0, 300, 5, 0, true, 100);
+        for (const std::string* id : { &fur_stiffness_option, &fur_damping_option, &fur_mass_option, &fur_sway_option }) {
+            general.add_option_hidden_dependency(*id, fur_option, false);
         }
     }
     general.add_bool_option(tooie::snout_jiggle::body_option, "Backpack jiggle",
@@ -680,6 +699,18 @@ void tooie::init_config() {
         "Cutscene Field of View",
         "Degrees added to the field of view in cutscenes and the game's fixed cameras (bosses, some puzzles).",
         -10, 20, 1, 0, false, 0);
+    // Vanilla Enhancements (L, 2026-10-21): touches to the game's own look, after the Game view group.
+    graphics.add_bool_option(
+        tooie::window_beams::option,
+        "Window Light Beams",
+        "Beams of light, shaped like their windows, fall from the windows onto the floor and light a patch of it, the way they do in Mumbo's Skull: in Bottles' house, Banjo's house and King Jingaling's throne room. Switching it in one of those rooms reloads the room.",
+        true);
+    graphics.add_option_change_callback(tooie::window_beams::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+            if (context == recomp::config::OptionChangeContext::Temporary) {
+                recompui::config::get_graphics_config().save_config();
+            }
+        });
     tooie::smaa::add_option(graphics);
     tooie::fxaa::add_option(graphics);
     tooie::api_restart::add_prompt(graphics);
@@ -718,6 +749,7 @@ void tooie::init_config() {
     // 3D grass has its own section after the colour grading (L, 2026-10-16).
     recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
+    recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
     recompui::config::set_option_display_before(recompui::config::graphics::options::msaa_option, tooie::smaa::option);
     recompui::config::set_option_group(recompui::config::graphics::options::msaa_option, "Anti-aliasing and scaling");
@@ -791,6 +823,7 @@ void tooie::init_config() {
     tooie::texture_slide::add_option(wip);
     tooie::debug::add_heap_check_option(wip);
     tooie::aim_trace::add_option(wip);
+    tooie::save_state::add_ram_dump_option(wip);
     // Additional Tabs (L, 2026-10-16): switches for the tabs that are hidden or shown as wanted.
     wip.add_bool_option(
         tooie::achievements_tab_option,

@@ -12,6 +12,7 @@
 #include "tooie_cheats.h"
 #include "tooie_debug.h"
 #include "tooie_player_cheats.h"
+#include "tooie_hold_to_run.h"
 #include "tooie_hooks.h"
 #include "tooie_rdram.h"
 
@@ -117,6 +118,8 @@ namespace {
     constexpr uint32_t vel_x_offset = 0x10;
     constexpr uint32_t vel_z_offset = 0x18;
     constexpr float noclip_vertical_speed = 600.0f;
+    // Noclip moves this many times faster while the Run control is held.
+    constexpr float noclip_run_multiplier = 5.0f;
     // States where the game moves the player itself: door walk-ins and loading zones (0x98), and the
     // locked states for signposts, talking and cutscenes.
     bool noclip_paused_state(uint32_t s) {
@@ -326,10 +329,11 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
             float vx, vz;
             std::memcpy(&vx, &vx_bits, 4);
             std::memcpy(&vz, &vz_bits, 4);
-            anchor[0] += vx * dt;
-            anchor[2] += vz * dt;
+            const float run_mult = tooie::hold_to_run::held() ? noclip_run_multiplier : 1.0f;
+            anchor[0] += vx * dt * run_mult;
+            anchor[2] += vz * dt * run_mult;
             const float rise = ((raw & button_r) ? 1.0f : 0.0f) - ((raw & button_z) ? 1.0f : 0.0f);
-            anchor[1] += rise * noclip_vertical_speed * dt;
+            anchor[1] += rise * noclip_vertical_speed * dt * run_mult;
             for (int k = 0; k < 3; k++) {
                 write_float(rdram, physics + pos_offset + 4 * k, anchor[k]);
                 write_float(rdram, pos2 + 4 * k, anchor[k]);

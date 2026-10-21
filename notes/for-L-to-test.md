@@ -1,5 +1,147 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T496 Tessellated sand: edges, tire tracks, sharper footprints
+- Asked: 2026-10-21 08:59 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Walk to where the sand meets grass
+  3. Go to Klungo's second fight and look at the tire tracks
+  4. Walk on the sand
+- Look for: No jagged outline where sand meets grass; tire tracks lie flat with no glitching; footprints look sharper and a little deeper
+- Status: waiting for L
+
+## T495 Sprint dust like Talon Trot
+- Asked: 2026-10-21 08:57 UTC
+- Build: main
+- Steps:
+  1. Start the game with Running on
+  2. Hold Run and sprint along open ground
+  3. Compare with Talon Trot (Kazooie, Z + C-left)
+- Look for: Does the sprint kick up the same foot dust as the Talon Trot, for as long as you sprint, with no gap between bursts?
+- Status: waiting for L
+
+## T494 Jinjo Village sun position
+- Asked: 2026-10-21 08:31 UTC
+- Build: main
+- Steps:
+  1. Start Jinjo Village (map 142) with Sun shadows on
+  2. Look up at the sky and at the ground shadows
+- Look for: Is the sun high, with the level mostly lit and shadows short? Tell me which way to move it if not (it is one table line, map_suns).
+- Status: waiting for L
+
+## T493 Tessellated sand: deeper footprints, no edge outline, varied ripples
+- Asked: 2026-10-21 08:18 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Walk around Mayahem Temple or Jolly Roger's sand
+  3. Walk to the edge of a sand patch
+- Look for: Banjo leaves visible footprints in the sand; no striped outline along the sand's edge; ripples change direction and spacing instead of repeating
+- Status: waiting for L
+
+## T492 Noclip 5x faster while running
+- Asked: 2026-10-21 08:00 UTC
+- Build: main @ a5114b0
+- Steps:
+  1. Turn on the Noclip cheat
+  2. Move with the stick, then hold Run (B on a pad, your Run key) while moving
+  3. Hold Run with Z / R to go down / up
+- Look for: Is movement about 5x faster with Run held, sideways and up/down, and unchanged without it?
+- Status: waiting for L
+
+## T491 Effect Cost Check key and ray tracing GPU lines
+- Asked: 2026-10-21 07:29 UTC
+- Build: main
+- Steps:
+  1. Controls tab > Hotkeys: bind Effect Cost Check to a key
+  2. Turn on a few effects (3D grass, sun shadows, AO, bloom, Ray tracing if your GPU has it), stand still in Spiral Mountain and press the key
+  3. Wait for the list (about 3 s per effect), then open benchmarks\effect_cost_<date>.txt next to the exe
+  4. Set the frame rate overlay to Full with Ray tracing on
+- Look for: The overlay counts down through each effect, then lists them heaviest first with ms and %; your settings are the same afterwards. With Ray tracing on, a GPU ray tracing line shows the build and traced effects. Headless (software GPU, so the ms are not real-PC figures) Spiral Mountain gave sun shadows 63 ms (58%), AO 7 ms, bloom 1 ms, fog 0.
+## T490 Tessellated sand
+- Asked: 2026-10-21 07:19 UTC
+- Build: main @ 7bc2450
+- Steps:
+  1. Graphics > Tessellated sand on
+  2. Go to Jolly Roger's Lagoon's beach (or any sandy ground)
+  3. Walk, run and stand around on the sand; look at it in sun and shade
+- Look for: Detailed shallow footprints, wind ripples that don't look smooth, and any sand that's missing or ground that shouldn't be sand?
+- Status: waiting for L
+
+## T489 Talon Trot on LT + RT (controller)
+- Asked: 2026-10-21 07:30 UTC
+- Build: main (not built or run here: the submodules were not available, so this was written but not compiled)
+- Steps:
+  1. Controls tab > Movement: find "Talon Trot" (new). On a controller it should show LT + RT by default
+  2. QOL > Talon Trot = Toggle. Hold LT and RT together: Banjo should start the trot. Let go of both triggers: the trot keeps going
+  3. Press LT + RT again: the trot ends. Pressing just one trigger should also end it (after a blink)
+  4. Set QOL > Talon Trot = Hold. Hold LT + RT: the trot starts. Let go of one trigger and keep the other: the trot continues. Let go of both: it ends
+  5. Unbind or rebind the control in the Controls tab and check it follows
+- Look for: The trot starting every time LT + RT go down, no trot starting from a single trigger on its own (that is still the crouch), and Toggle not ending by itself. If you meant that Hold mode should start the trot from either trigger alone with no chord, say so.
+- Status: waiting for L
+
+## T488 Enemy damage timing log (enemies taking damage late)
+- Asked: 2026-10-21 06:57 UTC
+- Build: main
+- Steps:
+  1. Play at Game Frame Rate 175 as you did, fight Spiral Mountain enemies until a hit lands late again
+  2. Note roughly when it happened (what you hit, and that it was late)
+  3. Close the game and send logs/console.log from the game folder
+- Look for: Nothing changes in the game. The log now has [hits] lines with the time of each attack state and each enemy hit; they show whether the game registered the hit late or registered it on time and the enemy reacted late. In my tests (175 FPS falling to 50, 30 and lower frame steps, Uggers in Quagmire, which are Spiral Mountain's enemies too) every claw swipe hit landed the moment the Ugger was in reach, so I need your log of a late one.
+- Status: waiting for L
+
+## T487 Window Light Beams (Bottles' house, Banjo's house, Jingaling's throne room)
+- Update 2026-10-21: the option moved to Graphics > Vanilla Enhancements (a new group there, its first option).
+- Asked: 2026-10-20 23:57 UTC
+- Build: main
+- Steps:
+  1. Graphics > Window Light Beams is on by default; go into Bottles' house in Jinjo Village and look at the two round windows either side of the doorway
+  2. Go into Banjo's house in Spiral Mountain (two windows by the door, one by the fireplace) and King Jingaling's throne room (the two bright windows)
+  3. Switch Window Light Beams off and on while in one of those rooms (the room reloads)
+- Look for: (Updated 2026-10-21 after L's first look: beams now take each window's shape, round, hexagonal or tall, and end in a lit patch of that shape on the floor.) See-through white beams fall from each window down onto the floor and light a patch of it, with the same streaky look as the beams in Mumbo's Skull; they don't flicker, cut off or show through walls, and Banjo walking through them looks right. Off gives the rooms back as before. Checked offline (the game's models drawn with its own textures): screens/window-beams/ in project files. Headless the game loaded the beams' models in all three rooms with no error, but the container could not draw a picture, so how they look in the game is untested. Too bright, too faint, too long or too short?
+- Status: waiting for L
+
+## T485 Toon shading (BotW style)
+- Asked: 2026-10-20 23:40 UTC
+- Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
+- Steps:
+  1. Graphics > Lighting: raise Toon shading (default 0 = off) to 100
+  2. Walk round Spiral Mountain in sun and in shade; try with Toon outlines and Rim light on
+- Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
+- Status: waiting for L
+
+## T486 Stochastic reflections
+- Asked: 2026-10-20 23:27 UTC
+- Build: main (this commit)
+- Steps:
+  1. Open Graphics > Reflections
+  2. Set Screen-space reflections to 60
+  3. Set Stochastic reflections to 30, then 70
+  4. Stand near a gold or metal shiny surface (e.g. Grunty Industries warp pad rims) and look at it from the side
+- Look for: Is the reflection blurrier and softer than the mirror one? Is the grain acceptable, and does 0 give back the old sharp reflection? Does the frame rate hold?
+- Status: waiting for L
+
+## T484 Fur jiggle
+- Asked: 2026-10-20 23:09 UTC
+- Build: main
+- Steps:
+  1. Graphics > Character Shaders: turn Banjo fur up
+  2. General > Jiggle: turn on Fur jiggle
+  3. Run, turn, jump and land, then stop
+- Look for: The fur's strands lean back as he moves and spring upright when he stops; the roots stay on him; the sliders change how floppy it is and how far the tips lean.
+- Status: waiting for L
+
+## T483 Deep snow frame rate: pixels reuse the dent shape
+- Asked: 2026-10-20 22:30 UTC
+- Build: main @ e02e15b
+- Steps:
+  1. Deep snow on, Icy Side, 6x resolution as before
+  2. Walk lots of prints, look at them near and far
+  3. Stand at your 25 fps cliff spot
+- Look for: Frame rate and GPU ms there, and do the dents look the same as the last build (soft walls, shading)?
+- Status: waiting for L
+
 ## T482 Ear jiggle slider and stiffness defaults
 - Asked: 2026-10-20 21:59 UTC
 - Build: main
@@ -21,15 +163,14 @@
 - Status: waiting for L
 
 ## T480 No fur over Banjo's shorts
-- Asked: 2026-10-20 20:54 UTC
-- Build: main
+- Asked: 2026-10-20 20:54 UTC; second fix 2026-10-21 00:00; third 2026-10-21 08:50 (L 08:25: "Hair still coming out of his pants")
+- Build: main (pull and build again)
 - Steps:
   1. Graphics > Character Shaders: Banjo fur on
-  2. Stand Banjo still in Spiral Mountain and look at his shorts and the top of his legs from the front and behind (free camera or photo mode helps)
-  3. Walk, run and crouch, and watch a cutscene with him in it
-- Look for: His yellow shorts stay clean, with no brown strands hanging over them at the bottom edge or between his legs. The brown on his legs below the shorts, his body and his arms are as furry as before. Before, where the shorts' triangles reach down to his legs their yellow blends into brown, and that blend passed the fur colour test, so strands grew on the shorts there.
+  2. Stand Banjo still and look at his shorts close up from the front, behind and the sides (free camera or photo mode helps), especially the bottom hems and the waistband
+  3. Walk, run, crouch and jump, and watch a cutscene with him in it
+- Look for: No fur on the yellow and none sticking out over the hems or the waistband. Just below the hems his legs' fur starts short and grows to full length a little lower down; same above the belt. The rest of his fur is as before. Fixes so far: the creases painted on the shorts' texture no longer count as fur (second fix, L confirmed the yellow is clean); now the fur next to the shorts is cut short, measured in his pose every frame, because his legs' and belly's fur starts under the shorts' edges and stood out through them. If it still pokes out, say where (hem, waistband, front or back) and in which pose. Not seen in the game here.
 - Status: waiting for L
-
 ## T479 3D grass remade with GPU instancing (Frustum culling, Occlusion culling, Chunking)
 - Asked: 2026-10-20 20:35 UTC
 - Build: main
@@ -142,6 +283,16 @@
 - Also: Graphics > Ray tracing strength (default 60): the least each traced effect shows at (reflections, sun shadows, water reflections at it; AO and bounce light at 83% of it). Try 100 and 30 to see the traced effects get plain or fade; your own sliders still win when higher.
 - Also: Modern and Stylised water refract with a traced ray (what shows through the water is what the bent ray meets on the floor, so it shifts with depth and waves properly); and while Sun shadows leave Banjo out (Graphics > Sun shadows on Banjo off), a traced contact shadow of him falls on the ground and low things within about 170 units of him, straight overhead. Look at the Modern water on the Spiral Mountain moat (stones under it shouldn't smear or sit wrong) and under Banjo.
 - Also, experimental, off by default: Graphics > Ray tracing hit colours. Switch it on with Ray tracing on. A reflection, water reflection or bounce ray that lands where the picture can't see (off screen or hidden) then uses the colour that spot had when it was last on screen (a world cache of 16-unit cells, written from about 1 pixel in 8 each frame) instead of the nearest screen colour. Look for: reflections of things behind you or off to the side showing their real colour after you have looked at them, with no flicker, no wrong-coloured patches, no crash or stall. If anything is off, switch it off and tell me what you saw. Cells are 16 units wide, so reflected detail is coarse, and a thin wall shares its two sides' colour.
+- Fixed after L's 22:29 report: Ray tracing strength shows a whole number; with Sun shadows leaving Banjo out, a traced sun ray that meets Banjo goes on past him (his outline no longer leaves a lit patch in a shadow he stands in), and his contact shadow only counts Banjo himself (no dark disc under roofs or branches). Look at Banjo standing in a cliff's or tree's shadow.
+- Fixed after L's 22:34 report (indoors too dark, lamps doing nothing): traced sun shadows leave shut-in places alone (a spot where straight up and four slanted-up rays all meet something: rooms, caves), and the level's lamps and fires now add a warm light where they reach and aren't blocked, as well as casting shadows. Look in Jinjo Village houses and the Spiral Mountain cave: no darker than without Ray tracing, lamps brightening what's near them, shadows of furniture away from the lamp.
+- Fixed after L's 22:59-23:06 reports: (a) letterboxed cutscenes (the Jinjo one) stay traced; the traced pass now turns pixels back into the world over the cutscene's shorter picture, which split it across the middle; (b) the white Banjo-shaped patch: the "shut-in" check no longer counts Banjo overhead; (c) Banjo's fur keeps its traced shading with less noise: smoothed normals on him, a wider gather of the traced light, and steady sun rays; (d) lamps rework: inside a lamp's reach the room is dimmer and the lamp lights only what its rays reach and what faces it, so furniture throws clear shadows away from it. Check Bottles' house, a Jinjo cutscene, and Banjo's fur while running.
+- New (L 23:20): Graphics > Shaders now has its own "Ray Tracing" section holding Ray tracing, strength, the new "Ray tracing noise smoothing" slider (0 raw rays, 50 default, 100 calmest; mostly Banjo's fur) and hit colours. Try 0 / 50 / 100 on Banjo running in sunlight.
+- New (L 06:02, 2026-10-21): Ray Tracing section has "Path tracing" (off by default) and "Path tracing bounces" (1-4, default 2): the traced bounce light keeps bouncing off what it lands on, picking up colours, so light reaches round corners and deeper into rooms. Compare a room or cave with it off, 1 and 4; watch the frame rate.
+- Fixed (L 06:05, 2026-10-21): draws cut out by using the texture's alpha as coverage (alpha-coverage select) no longer block rays or the sun map, so light should pass through the holes of Spiral Mountain's grate. Not confirmed the grate is that kind; if it still blocks, say so.
+- New (L 06:31, 2026-10-21): Ray Tracing section "Traced light beams" (0-100, default 60): shafts of light through the air traced towards the light. In Bottles' house, Banjo's house and the throne room the light comes in at the windows (Window Light Beams' drawn tubes are hidden while this is on, the room reloads); elsewhere it follows the sun as a thin haze with shafts. Mumbo's Skull still has the game's own drawn beams. Check Bottles' house: beams in the windows' shape, Banjo's shadow through them; watch the frame rate.
+- New (L 06:42, 2026-10-21): every level light's rays now go right up to the flame, so lantern frames and bars throw their pattern on walls and floor (a light inside a solid casing keeps the old way, or it would go dark). With Traced light beams above 0, every light also glows in the air, with the bars and anything in between cutting dark streaks through the glow. Check Bottles' house lanterns; tell me any lamp that went dark.
+- New debug view (L 07:58, grate still blocks light): F6 or Graphics > Debug > Effect debug view > "Ray traced scene": green where the traced rays meet the surface, blue where the surface isn't in the traced scene (light passes through it), red where something traced stands in front of it. Screenshot it over the Spiral Mountain grate.
+- Fixed (L 08:10 grate, L lantern red bars, 2026-10-21): rays now read the texture where they hit. Where a cut-out or see-through texture is clear (the Spiral Mountain grate holes, fences, leaves), shadow, lamp and reflection rays go through; where it is solid they stop. A lamp's light is also dimmed by dark texels of its own casing within 60 units of the flame, so the bars painted on the lantern texture cut dark streaks into the light and glow. Check the grate in sunlight and Bottles' house lanterns; if the grate still blocks, send the "Ray traced scene" view; tell me any lamp that went dark.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 

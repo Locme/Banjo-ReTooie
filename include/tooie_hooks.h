@@ -37,6 +37,8 @@ int tooie_null_guard(uint8_t* rdram, recomp_context* ctx, const char* where);
 void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx);
 // Asset replacement (src/game/asset_mods.cpp): in func_800D5B34 before it fetches an asset; 1 when a mod file was loaded instead.
 int tooie_asset_replace(uint8_t* rdram, recomp_context* ctx);
+// Window light beams (src/gameplay/window_beams.cpp): in func_80800000_gcmapDll where it returns a map's entry in the map table.
+void tooie_window_beams_map_entry(uint8_t* rdram, recomp_context* ctx);
 // Game frame rate (src/game/game_frame_rate.cpp): the wait between frames in func_800151BC, and the time step in func_800D8FA0.
 void tooie_frame_wait(uint8_t* rdram, recomp_context* ctx);
 void tooie_frame_swapped(uint8_t* rdram, recomp_context* ctx);
