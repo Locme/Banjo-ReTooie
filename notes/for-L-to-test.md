@@ -150,17 +150,6 @@
 - Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
 - Status: waiting for L
 
-## T506 Fence thickness (a filled slab behind the fence's face)
-- Asked: 2026-10-21 UTC (reworked 2026-10-21 after L: "two faces, blended in between, skipping transparent parts, not a stack")
-- Build: main, next push (built and run headless in Spiral Mountain: no crash; not seen on a real fence)
-- Steps:
-  1. Settings > Graphics > Shaders: set Fence thickness to 60 (it is 0, off, by default)
-  2. Bind Shader Effects Pick Mode (Controls, Pick Modes), press it next to a fence, grate or picket
-  3. Left click the fence texture until it reads Fence (after Shiny Reflection and Text)
-  4. Walk round it, look from the side and at a slant; raise and lower Fence thickness
-- Look for: no extra layers any more: the fence is one draw. Where the face is see-through, the picture follows the view ray through a slab behind it and shows the first solid part, so the pickets' sides and back show between the two faces and the see-through gaps stay clear. Darker the deeper. Tell me which world and textures (Save Pick writes shader_effect_tags.txt) so I can list them as built-in. Seen at a slant or from the side the face covers almost nothing, so there the fence is also drawn as closely spaced layers (none face on, more the more slanted), darker at the back. Fence thickness now goes to 300 (100 is about 12 units). Known limit: the slab is not drawn outside the original face's outline. Yellow picket fence in Spiral Mountain is texture 806c8869cd6bb488.
-- Status: waiting for L
-
 ## T505 Mirror Mode: signs readable, Text pick
 - Asked: 2026-10-21 10:55 UTC
 - Build: main, next push (untested)

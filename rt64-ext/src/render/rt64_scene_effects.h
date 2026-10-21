@@ -172,8 +172,6 @@ namespace RT64 {
         float npcFeatherNoisiness = 0.5f;
         float npcFeatherTransparency = 0.0f;
         float parallax = 0.0f;
-        // Fence thickness (0 off, 1 the thickest; SetSceneFence).
-        float fence = 0.0f;
         bool parallaxOriginal = true;
         bool parallaxAll = false;
         bool snow = false;
@@ -510,15 +508,6 @@ namespace RT64 {
     // original on, the game's own textures listed (RT64 hashes), by their brightness; all lets it on every textured
     // draw of the 3D world instead, to look for textures that suit it.
     void SetSceneParallax(float depth, bool original, bool all);
-    // Banjo-Tooie: fences (and other flat textures cut out by their alpha that stand for something solid): the draws
-    // with one of the textures listed (SetSceneFenceTextures, RT64 hashes) are seen through a slab behind their face
-    // (the pixel shader follows the view ray through it and shows the first solid part of the texture), so they have
-    // thickness seen from the side. thickness: 0 off, 1 the thickest.
-    void SetSceneFence(float thickness);
-    void SetSceneFenceTextures(const uint64_t *hashes, size_t count);
-    bool SceneFenceTexture(uint64_t hash);
-    // Fills the frame's fence terms (after ComputeSceneGrass filled the camera's). False when they are off.
-    bool ComputeSceneFence(interop::FrameParams &frameParams);
     // Banjo-Tooie: blends the seams of clamped textures, such as the lines between the pieces of the title's logo (DEV
     // option, on by default).
     void SetSceneTextureSeams(bool blend);

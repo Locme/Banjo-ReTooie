@@ -129,7 +129,6 @@ namespace tooie::picture_filters {
     // Parallax mapping on the stone textures listed in picture_filters.cpp (rt64-ext/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
-    inline const std::string fence_thickness_option = "fence_thickness";
     inline const std::string ground_displacement_option = "ground_displacement";
     inline const std::string ground_displacement_distance_option = "ground_displacement_distance";
     inline const std::string parallax_original_option = "parallax_original";

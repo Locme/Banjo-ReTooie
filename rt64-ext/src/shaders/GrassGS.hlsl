@@ -369,66 +369,9 @@ void FeatherCards(triangle GrassVertex input[3], uint primitive, uint instance, 
     }
 }
 
-// Banjo-Tooie: a fence seen at a slant. Face on, the slab traced in the pixel shader (Parallax.hlsli FenceSlabOffset)
-// shows its thickness; seen edge on, the face covers almost no pixels, so there each triangle is drawn again as layers
-// across the thickness, pushed along its own normal and cut out by the texture's alpha (RasterPS.hlsl): none face on,
-// more the more slanted, the layers darker towards the back.
-void FenceShells(triangle GrassVertex input[3], uint instance, inout TriangleStream<GrassVertex> stream) {
-    if (instance != 0) {
-        return;
-    }
-    const uint pass = gConstants.grassShell - 1;
-    const uint passes = max(gConstants.grassShells & GRASS_PASS_MASK, 1u);
-
-    float4 clip[3];
-    float3 world[3];
-    for (int k = 0; k < 3; k++) {
-        clip[k] = GrassUnscale(input[k].position);
-        world[k] = GrassToWorld(clip[k]);
-    }
-
-    float3 normal = cross(world[1] - world[0], world[2] - world[0]);
-    const float normalLength = length(normal);
-    if (normalLength <= 1e-4f) {
-        return;
-    }
-    normal /= normalLength;
-
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
-    const float3 toCamera = camera - center;
-    const float cameraDistance = length(toCamera);
-    if (cameraDistance > FrParams.fenceParams.z) {
-        return;
-    }
-    const float facing = dot(normal, toCamera) / max(cameraDistance, 1e-4f);
-    const float slant = 1.0f - smoothstep(0.1f, 0.5f, abs(facing));
-    const uint active = uint(ceil(float(passes) * slant));
-    if (pass >= active) {
-        return;
-    }
-
-    // This layer's place across the thickness (-0.5 to 0.5 along the normal), and how far back it lies from the camera.
-    const float place = (float(pass) + 0.5f) / float(active) - 0.5f;
-    const float side = (facing >= 0.0f) ? 1.0f : -1.0f;
-    const float back = saturate(0.5f - place * side);
-    const float4 shift = GrassDirToClip(normal * (place * FrParams.fenceParams.x));
-    for (int v = 0; v < 3; v++) {
-        GrassVertex o = input[v];
-        o.position = GrassRescale(clip[v] + shift);
-        o.furAnchor = float4(lerp(1.0f, 0.78f, back), 0.0f, 0.0f, 0.0f);
-        stream.Append(o);
-    }
-    stream.RestartStrip();
-}
-
 [maxvertexcount(GRASS_BLADES_PER_INVOCATION * 5)]
 [instance(GRASS_INVOCATIONS)]
 void GSMain(triangle GrassVertex input[3], uint instance : SV_GSInstanceID, uint primitive : SV_PrimitiveID, inout TriangleStream<GrassVertex> stream) {
-    if ((gConstants.grassShells & RASTER_FENCE) != 0) {
-        FenceShells(input, instance, stream);
-        return;
-    }
     if ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0) {
         FeatherCards(input, primitive, instance, stream);
         return;

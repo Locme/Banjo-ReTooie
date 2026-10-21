@@ -886,39 +886,6 @@ namespace RT64 {
         effectsSettings.parallaxAll = all;
     }
 
-    void SetSceneFence(float thickness) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.fence = std::clamp(thickness, 0.0f, 3.0f);
-    }
-
-    static std::mutex fenceMutex;
-    static std::unordered_set<uint64_t> fenceTextures;
-
-    void SetSceneFenceTextures(const uint64_t *hashes, size_t count) {
-        std::unordered_set<uint64_t> textures(hashes, hashes + count);
-        const std::scoped_lock lock(fenceMutex);
-        fenceTextures.swap(textures);
-    }
-
-    bool SceneFenceTexture(uint64_t hash) {
-        const std::scoped_lock lock(fenceMutex);
-        return fenceTextures.count(hash) != 0;
-    }
-
-    bool ComputeSceneFence(interop::FrameParams &frameParams) {
-        float thickness = 0.0f;
-        {
-            const std::scoped_lock lock(effectsMutex);
-            thickness = effectsSettings.fence;
-        }
-        // At the full setting the slab is 12 world units thick (Banjo is about 150 tall, a fence post 5 to 10 across);
-        // it fades out from 900 to 1800 units away, where the thickness can't be seen.
-        // (Layers for slanted views: about half a unit apart, 6 to 24.)
-        const float layers = std::clamp(std::ceil(12.0f * thickness / 0.5f), 6.0f, 24.0f);
-        frameParams.fenceParams = { 12.0f * thickness, layers, 1800.0f, 0.0f };
-        return thickness > 0.0f;
-    }
-
     static std::atomic<bool> textureSeamsBlend = true;
 
     void SetSceneTextureSeams(bool blend) {
@@ -1456,7 +1423,7 @@ namespace RT64 {
     {
         SceneEffectsSettings settings = GetSceneEffects();
         // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.fence <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
             return false;
         }
         UsePlayerFrame(settings, workloadId);

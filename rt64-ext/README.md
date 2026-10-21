@@ -29,7 +29,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/render/rt64_photo_grade.cpp`, `.h`, `src/shared/rt64_photo_grade.h`, `src/shaders/PhotoGradePS.hlsl` | Photo mode filters, sharpening |
 | `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling |
 | `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay (included by the framebuffer renderer and scene effects, unchanged) |
-| `src/shaders/Parallax.hlsli`, `GrassGS.hlsl` | Parallax and fences (included by RasterPS and GroundTess), grass blades |
+| `src/shaders/Parallax.hlsli`, `GrassGS.hlsl` | Parallax (included by RasterPS and GroundTess), grass blades |
 | `src/shaders/GroundTess.hlsl` | Displaced ground |
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |

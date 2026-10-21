@@ -4,7 +4,7 @@
 // Shader Effects pick mode (src/debug/parallax_pick.cpp, beside parallax pick mode): the Shader Effects Pick Mode key
 // frees the mouse as a crosshair and the texture under it is highlighted. A texture can hold several effects at once:
 // right click chooses an effect (Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
-// back so it reads normally), Fence, Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it)) and left click
+// back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it)) and left click
 // turns it on or off for that texture; Disable turns the others off, and Shift + left click goes back to the built-in
 // choice. The picks
 // are kept in shader_effect_tags.txt in the Dev Files folder and override the built-in lists (grass_textures[],
@@ -20,11 +20,8 @@ namespace tooie::effect_pick {
         effect_ice = 3,
         effect_shiny = 4,
         effect_text = 5,
-        // A flat texture cut out by its alpha that stands for something solid (a fence): drawn as a few layers
-        // pushed out along its normal, so it has thickness (the Fence thickness setting; off at 0).
-        effect_fence = 6,
-        effect_lamp = 7,
-        effect_count = 8
+        effect_lamp = 6,
+        effect_count = 7
     };
 
     // A texture's effects, one bit each (1 << Effect). A picked texture gets exactly these, none of its built-in ones.

@@ -109,8 +109,6 @@ namespace RT64 {
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     void SetSceneLampTextures(const uint64_t *hashes, size_t count);
     void SetSceneParallax(float depth, bool original, bool all);
-    void SetSceneFence(float thickness);
-    void SetSceneFenceTextures(const uint64_t *hashes, size_t count);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
     void SetSceneWaterRipples(const float x[3], const float z[3], const float age[3]);
@@ -4046,7 +4044,6 @@ namespace {
         { &tooie::picture_filters::deep_snow_option, false },
         { &tooie::picture_filters::tessellated_sand_option, false },
         { &tooie::picture_filters::parallax_option, 0.0 },
-        { &tooie::picture_filters::fence_thickness_option, 0.0 },
         { &tooie::picture_filters::ground_displacement_option, 0.0 },
         { &tooie::picture_filters::ground_displacement_distance_option, 8000.0 },
         { &tooie::picture_filters::parallax_original_option, true },
@@ -4142,21 +4139,6 @@ namespace {
             }
             return list;
         }();
-        static const std::vector<uint64_t> fence_extra = [] {
-            std::vector<uint64_t> list;
-            if (const char* extra = std::getenv("TOOIE_FENCE_TEXTURES")) {
-                for (const char* p = extra; *p != '\0';) {
-                    char* end = nullptr;
-                    const unsigned long long h = std::strtoull(p, &end, 16);
-                    if (end == p) {
-                        break;
-                    }
-                    list.push_back((uint64_t)h);
-                    p = (*end == ',') ? end + 1 : end;
-                }
-            }
-            return list;
-        }();
         const uint32_t version = effect_textures_version();
         std::unordered_map<uint64_t, tooie::effect_pick::Effects> picks;
         tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effects effects) {
@@ -4225,13 +4207,6 @@ namespace {
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
-        std::vector<uint64_t> fences = fence_extra;
-        for (const auto& [hash, picked] : picks) {
-            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_fence)) {
-                fences.push_back(hash);
-            }
-        }
-        RT64::SetSceneFenceTextures(fences.data(), fences.size());
         effects_sent_version.store(version);
     }
 
@@ -4485,13 +4460,6 @@ void tooie::picture_filters::apply() {
     }
     const char* parallax_all = std::getenv("TOOIE_PARALLAX_ALL");
     RT64::SetSceneParallax((float)(parallax / 100.0), parallax_original, (parallax_all != nullptr) && (std::atoi(parallax_all) != 0));
-    // Fences: the flat textures picked as Fence (Shader Effects pick mode) get thickness; TOOIE_FENCE=<0-100> sets it
-    // instead and TOOIE_FENCE_TEXTURES=<hex hash>,... lists textures for a headless run.
-    double fence = shader(value<double>(fence_thickness_option, 0.0));
-    if (const char* forced = std::getenv("TOOIE_FENCE")) {
-        fence = std::atof(forced);
-    }
-    RT64::SetSceneFence((float)(fence / 100.0));
     send_parallax_textures();
     // Displaced ground (0-100); TOOIE_GROUND_DISPLACE=<0-100> sets it instead.
     double ground_displacement = shader(value<double>(ground_displacement_option, 0.0));
@@ -5117,11 +5085,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Parallax on the game's own stone, brick and rock textures, whose depth is worked out from how dark each part is. Off, only a texture pack's textures that come with a height map get parallax (a pack's \"wall.png\" with \"wall_height.png\" beside it, white high and black deep).",
         true);
     graphics.add_number_option(
-        fence_thickness_option,
-        "Fence thickness",
-        "Fences, and other flat textures cut out by their alpha that stand for something solid, get real thickness. Face on, the picture looks through a slab behind the face and shows the sides and back of the pickets; at a slant or from the side they are also drawn as a few closely spaced layers. Only the textures picked as Fence in Shader Effects pick mode get it (left click steps to Fence). 100 is about a dozen units thick, 300 chunky. Drawn up close, fading out with distance. 0 is off.",
-        0, 300, 5, 0, false, 0);
-    graphics.add_number_option(
         ground_displacement_option,
         "Displaced ground",
         "The ground's cracks, gaps and grooves become real dips: floors with a Parallax texture (cracked flagstones, cobbles, paving, dirt) are cut into fine triangles near the camera and the dark parts of the texture pushed down, so the surface has a real outline and depth, not only a painted-on look. Higher numbers are deeper. Walls are left alone, and so is the ground near the edge of each piece. Uses Parallax's list of textures and their shapes and depths (Parallax on original textures must be on). Needs a graphics card with tessellation. Drawn on the picture, so nothing in the game changes. 0 is off.",
@@ -5524,7 +5487,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &fence_thickness_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5596,7 +5559,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(snow_lod_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(parallax_original_option, lighting_section_option, false);
-    graphics.add_option_hidden_dependency(fence_thickness_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(ground_displacement_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(ground_displacement_distance_option, lighting_section_option, false);
     // Banjo's fur and Kazooie's feathers sit in their own Character Shaders section (L, 2026-10-16).

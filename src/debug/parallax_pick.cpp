@@ -43,7 +43,6 @@ namespace RT64 {
     uint32_t SceneGrassTexture(uint64_t hash);
     uint32_t SceneIceTexture(uint64_t hash);
     bool SceneShinyTexture(uint64_t hash);
-    bool SceneFenceTexture(uint64_t hash);
     bool SceneLampTexture(uint64_t hash);
 }
 
@@ -263,8 +262,8 @@ namespace {
     std::map<uint64_t, Effects> effects;
     std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "fence", "lamp" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Fence", "Lamp (ray traced light)" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
@@ -292,7 +291,7 @@ namespace {
         return text.empty() ? (names ? "disable" : "None") : text;
     }
 
-    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text fence lamp (lines
+    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp (lines
     // from before several effects a texture have just one).
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
@@ -329,7 +328,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, fence, lamp). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -400,7 +399,7 @@ namespace {
         return (has_live && (live->second != saved->second)) ? ", not saved" : "";
     }
 
-    // The built-in choice: grass, ice, shiny, fence and lamp from the lists (grass along an edge is not in the set,
+    // The built-in choice: grass, ice, shiny and lamp from the lists (grass along an edge is not in the set,
     // edges_only says so). Shiny shows only while Screen-space reflections are on, as the list is looked up only then.
     Effects built_in_effects(uint64_t hash, bool& edges_only) {
         Effects set = 0;
@@ -409,7 +408,6 @@ namespace {
         set |= (grass == 1) ? bit(tooie::effect_pick::effect_grass) : 0;
         set |= (RT64::SceneIceTexture(hash) != 0u) ? bit(tooie::effect_pick::effect_ice) : 0;
         set |= RT64::SceneShinyTexture(hash) ? bit(tooie::effect_pick::effect_shiny) : 0;
-        set |= RT64::SceneFenceTexture(hash) ? bit(tooie::effect_pick::effect_fence) : 0;
         set |= RT64::SceneLampTexture(hash) ? bit(tooie::effect_pick::effect_lamp) : 0;
         return set;
     }

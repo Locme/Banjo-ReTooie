@@ -275,20 +275,6 @@ F12 screenshots are taken before these filters, so they don't show them.
   only texture pack textures that come with a height map get parallax.
   Default: on.
 
-## Graphics: Fence thickness
-
-- **Fence thickness** (under Shaders): 0 to 300. Fences and other flat
-  textures cut out by their alpha (chain link, pickets, grates) that stand for
-  something solid get thickness: where the face is see-through, the picture
-  follows the view ray through a slab behind it and shows the first solid part
-  of the texture, so the sides and back of the pickets show between the two
-  faces and the gaps stay clear. No extra draws. Darker the deeper. 100 is a
-  slab of about 12 world units. Only for the textures picked as **Fence** in
-  Shader Effects pick mode (right click chooses Fence, left click turns it on);
-  nothing is built in yet. Seen at a slant or from the side (where a flat face
-  covers almost nothing) it is also drawn as closely spaced layers, more the more
-  slanted. Goes up to 300. Fades out toward 1800 units away. Default: 0 (off).
-
 ### Displaced ground
 
 - **Displaced ground** (under Shaders): 0 to 100. The ground's cracks, gaps and
@@ -348,7 +334,7 @@ result. Press the key again for the normal mouse.
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
 you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
-Ice Reflection, Shiny Reflection, Text, Fence, Lamp; **Shift + right click**
+Ice Reflection, Shiny Reflection, Text, Lamp; **Shift + right click**
 goes back one) and **left click** turns it on or off for the texture under the
 cursor. The first left click starts from the built-in effects, so adding Ice
 to built-in grass keeps the grass. Disable (no texture effect on it) turns the
