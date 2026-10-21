@@ -2214,7 +2214,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..8c8bffc 100644
+index 9fae0d4..01bc80e 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2247,7 +2247,7 @@ index 9fae0d4..8c8bffc 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +139,516 @@ namespace RT64 {
+@@ -125,6 +139,519 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2489,6 +2489,8 @@ index 9fae0d4..8c8bffc 100644
 +            return;
 +        }
 +        const float reach = frameParams.snowLod.z;
++        thread_local std::vector<float> triangles;
++        triangles.clear();
 +        for (uint32_t i = start; i < end; i += 3) {
 +            float p[9];
 +            bool valid = true;
@@ -2506,9 +2508,10 @@ index 9fae0d4..8c8bffc 100644
 +                valid = std::isfinite(p[k * 3 + 0]) && std::isfinite(p[k * 3 + 1]) && std::isfinite(p[k * 3 + 2]);
 +            }
 +            if (valid && (std::abs(p[0] - frameParams.snowPlayer.x) < reach) && (std::abs(p[2] - frameParams.snowPlayer.y) < reach)) {
-+                SceneSnowTouch(p);
++                triangles.insert(triangles.end(), p, p + 9);
 +            }
 +        }
++        SceneSnowTouchDraw(triangles.data(), triangles.size() / 9);
 +    }
 +
 +    // Banjo-Tooie: a fingerprint of deep snow's ground (its vertices' places, its faces and the edge ramp), for
@@ -2764,7 +2767,7 @@ index 9fae0d4..8c8bffc 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -151,6 +675,7 @@ namespace RT64 {
+@@ -151,6 +678,7 @@ namespace RT64 {
  
          shaderUploader = std::make_unique<BufferUploader>(worker->device);
          descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
@@ -2772,7 +2775,7 @@ index 9fae0d4..8c8bffc 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +694,84 @@ namespace RT64 {
+@@ -169,11 +697,84 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2857,7 +2860,7 @@ index 9fae0d4..8c8bffc 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +817,7 @@ namespace RT64 {
+@@ -219,6 +820,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2865,7 +2868,7 @@ index 9fae0d4..8c8bffc 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +849,7 @@ namespace RT64 {
+@@ -250,6 +852,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2873,7 +2876,7 @@ index 9fae0d4..8c8bffc 100644
                  }
              }
              else {
-@@ -272,6 +872,9 @@ namespace RT64 {
+@@ -272,6 +875,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2883,7 +2886,7 @@ index 9fae0d4..8c8bffc 100644
              }
          }
      }
-@@ -373,6 +976,15 @@ namespace RT64 {
+@@ -373,6 +979,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2899,7 +2902,7 @@ index 9fae0d4..8c8bffc 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1055,14 @@ namespace RT64 {
+@@ -443,6 +1058,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2914,7 +2917,7 @@ index 9fae0d4..8c8bffc 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1085,85 @@ namespace RT64 {
+@@ -465,12 +1088,85 @@ namespace RT64 {
          return true;
      }
      
@@ -3002,7 +3005,7 @@ index 9fae0d4..8c8bffc 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1192,16 @@ namespace RT64 {
+@@ -499,6 +1195,16 @@ namespace RT64 {
              }
          };
  
@@ -3019,7 +3022,7 @@ index 9fae0d4..8c8bffc 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1217,17 @@ namespace RT64 {
+@@ -514,6 +1220,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3037,7 +3040,7 @@ index 9fae0d4..8c8bffc 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1275,16 @@ namespace RT64 {
+@@ -561,8 +1278,16 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -3056,7 +3059,7 @@ index 9fae0d4..8c8bffc 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1296,210 @@ namespace RT64 {
+@@ -574,12 +1299,210 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3268,7 +3271,7 @@ index 9fae0d4..8c8bffc 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1517,7 @@ namespace RT64 {
+@@ -597,6 +1520,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3276,7 +3279,7 @@ index 9fae0d4..8c8bffc 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1537,7 @@ namespace RT64 {
+@@ -616,6 +1540,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3284,7 +3287,7 @@ index 9fae0d4..8c8bffc 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2168,76 @@ namespace RT64 {
+@@ -1246,10 +2171,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3361,7 +3364,7 @@ index 9fae0d4..8c8bffc 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2284,144 @@ namespace RT64 {
+@@ -1296,9 +2287,144 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3507,7 +3510,7 @@ index 9fae0d4..8c8bffc 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2473,43 @@ namespace RT64 {
+@@ -1350,10 +2476,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3551,7 +3554,7 @@ index 9fae0d4..8c8bffc 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2542,11 @@ namespace RT64 {
+@@ -1386,6 +2545,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3563,7 +3566,7 @@ index 9fae0d4..8c8bffc 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,12 +2569,73 @@ namespace RT64 {
+@@ -1408,12 +2572,73 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3643,7 +3646,7 @@ index 9fae0d4..8c8bffc 100644
                  targetDrawCall.rtScenes.push_back(rtScene);
                  targetDrawCall.sceneIndices.push_back({ sceneIndex, true });
                  rtScene.instanceIndices.clear();
-@@ -1431,6 +2653,22 @@ namespace RT64 {
+@@ -1431,6 +2656,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3666,7 +3669,7 @@ index 9fae0d4..8c8bffc 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2688,179 @@ namespace RT64 {
+@@ -1450,12 +2691,179 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3846,7 +3849,7 @@ index 9fae0d4..8c8bffc 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3011,7 @@ namespace RT64 {
+@@ -1606,6 +3014,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3854,7 +3857,7 @@ index 9fae0d4..8c8bffc 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3088,20 @@ namespace RT64 {
+@@ -1682,6 +3091,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3875,7 +3878,7 @@ index 9fae0d4..8c8bffc 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3167,1844 @@ namespace RT64 {
+@@ -1747,25 +3170,1844 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -7983,10 +7986,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..307858d
+index 0000000..5abe4d8
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3343 @@
+@@ -0,0 +1,3384 @@
 +//
 +// RT64
 +//
@@ -8003,6 +8006,7 @@ index 0000000..307858d
 +#include <atomic>
 +#include <cmath>
 +#include <cstdio>
++#include <cstring>
 +#include <cstdlib>
 +#include <deque>
 +#include <iterator>
@@ -9613,6 +9617,18 @@ index 0000000..307858d
 +        // The model triangles drawn since the trail last took them (SceneSnowTouch): nine floats each, x y z three times.
 +        std::mutex snowTouchMutex;
 +        std::vector<float> snowTouches;
++        // By draw (SceneSnowTouchDraw), each with a fingerprint of where its triangles are: this frame's so far, and the
++        // last frame's, held back a frame. A draw found in the same place in the frames either side of it is standing
++        // still (the level's props drawn as models: rocks, plants, a nest in the sand), and its triangles press nothing,
++        // or every one of them keeps the trail's blocks under it cut finely forever (Terrydactyland, L: unusable).
++        struct SnowTouchDraws {
++            std::vector<float> triangles;
++            std::vector<std::pair<uint64_t, std::pair<size_t, size_t>>> draws;
++            std::unordered_set<uint64_t> places;
++            void clear() { triangles.clear(); draws.clear(); places.clear(); }
++        };
++        SnowTouchDraws snowTouchNow, snowTouchHeld;
++        std::unordered_set<uint64_t> snowTouchBefore;
 +    }
 +
 +    static float SnowSpringBack(float age, float hold, float recover) {
@@ -9678,6 +9694,25 @@ index 0000000..307858d
 +        trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
 +    }
 +
++    void SceneSnowTouchDraw(const float *triangles, size_t count) {
++        if (count == 0) {
++            return;
++        }
++        uint64_t h = 0xCBF29CE484222325ull;
++        for (size_t i = 0; i < count * 9; i++) {
++            uint32_t bits;
++            std::memcpy(&bits, &triangles[i], sizeof(bits));
++            h = (h ^ bits) * 0x100000001B3ull;
++        }
++        const std::scoped_lock lock(snowTouchMutex);
++        if (snowTouchNow.triangles.size() + count * 9 > SnowTouchMost * 9) {
++            return;
++        }
++        snowTouchNow.draws.push_back({ h, { snowTouchNow.triangles.size(), count * 9 } });
++        snowTouchNow.triangles.insert(snowTouchNow.triangles.end(), triangles, triangles + count * 9);
++        snowTouchNow.places.insert(h);
++    }
++
 +    void SceneSnowTouch(const float *triangle) {
 +        const std::scoped_lock lock(snowTouchMutex);
 +        if (snowTouches.size() < SnowTouchMost * 9) {
@@ -9694,6 +9729,15 @@ index 0000000..307858d
 +        {
 +            const std::scoped_lock lock(snowTouchMutex);
 +            touches.swap(snowTouches);
++            // Last frame's draws, less those standing still (in the same place this frame or the frame before).
++            for (const auto &[place, range] : snowTouchHeld.draws) {
++                if ((snowTouchNow.places.count(place) == 0) && (snowTouchBefore.count(place) == 0)) {
++                    touches.insert(touches.end(), snowTouchHeld.triangles.begin() + range.first, snowTouchHeld.triangles.begin() + range.first + range.second);
++                }
++            }
++            snowTouchBefore.swap(snowTouchHeld.places);
++            std::swap(snowTouchHeld, snowTouchNow);
++            snowTouchNow.clear();
 +        }
 +        trail.lastTouches = uint32_t(touches.size() / 9);
 +        // The window: the grid's size, centred on Banjo, in world cells.
@@ -11332,10 +11376,10 @@ index 0000000..307858d
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..753628f
+index 0000000..a2df09f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,554 @@
+@@ -0,0 +1,557 @@
 +//
 +// RT64
 +//
@@ -11757,6 +11801,9 @@ index 0000000..753628f
 +    // A triangle of a model drawn this frame (not the level's own ground), in the world (x y z three times): deep snow
 +    // is pressed down wherever one reaches into it (ComputeSceneSnow).
 +    void SceneSnowTouch(const float *triangle);
++    // One model draw's triangles (count of them, nine floats each) that may press the snow: held back a frame, and left
++    // out if the draw stands still.
++    void SceneSnowTouchDraw(const float *triangles, size_t count);
 +    // The most shells drawn over a snow draw: 0 when there is no deep snow.
 +    uint32_t SceneSnowShells();
 +    // How much nearer the snow counts as being for the camera's zoom (1 for the usual camera, less zoomed in).
