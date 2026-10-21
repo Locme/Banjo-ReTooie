@@ -206,7 +206,8 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   it with an empty path. Each texture dumped the first time is also handed to the
   callback with TMEM and its tile, so the game can save it as a PNG
   (`src/game/texture_sweep.cpp`).
-* **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`): adds
+* **Screenshots** (`src/hle/rt64_present_queue.cpp`, `.h`, with the state and read-back in
+  `rt64-ext/src/hle/rt64_present_queue_ext.cpp`): adds
   `RT64::RequestScreenshot(callback)`. The next presented frame's game image is
   copied to a read-back buffer before the UI is drawn over it, converted to
   RGBA8 and handed to the callback (handoff 4.83, `src/game/screenshot.cpp`).
@@ -218,7 +219,7 @@ RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which bui
   N64 3-point texture filter can be switched to bilinear live (handoff 4.25,
   4.40, 4.41, `src/display/picture_filters.cpp`). Screenshots are taken before
   this pass, so they don't show these filters.
-* **Frame statistics** (`src/hle/rt64_present_queue.cpp`, `.h`,
+* **Frame statistics** (`src/hle/rt64_present_queue.cpp`, `.h`, `rt64-ext/src/hle/rt64_present_queue_ext.cpp`,
   `src/hle/rt64_workload_queue.cpp`): adds `RT64::TakeFrameStats()`, which
   returns the presented frames, their total and worst interval (from
   `presentProfiler`) and the GPU time per game frame (from the renderer's

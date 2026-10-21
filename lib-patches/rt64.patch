@@ -663,10 +663,10 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..80310d3 100644
+index 3227ab1..0930ba0 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
-@@ -4,12 +4,171 @@
+@@ -4,10 +4,17 @@
  
  #include "rt64_present_queue.h"
  
@@ -683,162 +683,8 @@ index 3227ab1..80310d3 100644
 +#include "rt64_vi.h"
  
  namespace RT64 {
-+    namespace {
-+        // Banjo-Tooie: presents queued and presents shown or skipped, for WaitForPresentBacklog.
-+        std::mutex backlogMutex;
-+        std::condition_variable backlogCondition;
-+        uint64_t presentsQueued = 0;
-+        uint64_t presentsDone = 0;
-+
-+        // Banjo-Tooie: the frontend's UI (the Esc menu) is drawn, and reads its input, only when a frame is
-+        // presented, and frames are only presented when the game sends one. While the game sends none (a
-+        // map change, a load, a long stall) an open menu froze and ignored every button. While a menu is
-+        // open (SetIdleRepaint), the last frame is drawn again with the menu over it whenever the game has
-+        // sent nothing for idleRepaintAfter, every idleRepaintInterval.
-+        std::atomic<bool> idleRepaintWanted = false;
-+        constexpr auto idleRepaintAfter = std::chrono::milliseconds(100);
-+        constexpr auto idleRepaintInterval = std::chrono::milliseconds(16);
-+
-+        void countPresentDone() {
-+            {
-+                std::scoped_lock lock(backlogMutex);
-+                presentsDone = std::min(presentsDone + 1, presentsQueued);
-+            }
-+            backlogCondition.notify_all();
-+        }
-+    }
-+
-+    void SetIdleRepaint(bool enabled) {
-+        idleRepaintWanted = enabled;
-+    }
-+
-+    bool WaitForPresentBacklog(uint32_t maxBacklog, uint32_t timeoutMs) {
-+        std::unique_lock lock(backlogMutex);
-+        return backlogCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [&]() {
-+            return (presentsQueued - presentsDone) <= maxBacklog;
-+        });
-+    }
-+
-+    namespace {
-+        std::mutex screenshotMutex;
-+        ScreenshotCallback screenshotCallback;
-+
-+        struct ScreenshotReadback {
-+            std::unique_ptr<RenderBuffer> buffer;
-+            ScreenshotCallback callback;
-+            RenderFormat format = RenderFormat::UNKNOWN;
-+            uint32_t width = 0;
-+            uint32_t height = 0;
-+            uint32_t rowWidth = 0;
-+        };
-+
-+        bool screenshotFormatSupported(RenderFormat format) {
-+            return (format == RenderFormat::R8G8B8A8_UNORM) || (format == RenderFormat::B8G8R8A8_UNORM) || (format == RenderFormat::R16G16B16A16_UNORM);
-+        }
-+
-+        // Converts the read-back rows to packed RGBA8 and calls the callback.
-+        void finishScreenshot(ScreenshotReadback &readback) {
-+            const uint32_t texelSize = RenderFormatSize(readback.format);
-+            const uint8_t *src = reinterpret_cast<const uint8_t *>(readback.buffer->map());
-+            std::vector<uint8_t> rgba(size_t(readback.width) * readback.height * 4);
-+            for (uint32_t y = 0; y < readback.height; y++) {
-+                const uint8_t *row = src + size_t(y) * readback.rowWidth * texelSize;
-+                uint8_t *out = rgba.data() + size_t(y) * readback.width * 4;
-+                for (uint32_t x = 0; x < readback.width; x++) {
-+                    const uint8_t *texel = row + size_t(x) * texelSize;
-+                    if (readback.format == RenderFormat::R16G16B16A16_UNORM) {
-+                        const uint16_t *wide = reinterpret_cast<const uint16_t *>(texel);
-+                        out[x * 4 + 0] = uint8_t(wide[0] >> 8);
-+                        out[x * 4 + 1] = uint8_t(wide[1] >> 8);
-+                        out[x * 4 + 2] = uint8_t(wide[2] >> 8);
-+                    }
-+                    else if (readback.format == RenderFormat::B8G8R8A8_UNORM) {
-+                        out[x * 4 + 0] = texel[2];
-+                        out[x * 4 + 1] = texel[1];
-+                        out[x * 4 + 2] = texel[0];
-+                    }
-+                    else {
-+                        out[x * 4 + 0] = texel[0];
-+                        out[x * 4 + 1] = texel[1];
-+                        out[x * 4 + 2] = texel[2];
-+                    }
-+
-+                    out[x * 4 + 3] = 0xFF;
-+                }
-+            }
-+
-+            readback.buffer->unmap();
-+            readback.callback(readback.width, readback.height, std::move(rgba));
-+        }
-+    }
-+
-+    namespace {
-+        std::mutex frameStatsMutex;
-+        FrameStats frameStats;
-+    }
-+
-+    FrameStats TakeFrameStats() {
-+        const std::scoped_lock lock(frameStatsMutex);
-+        FrameStats taken = std::move(frameStats);
-+        frameStats = FrameStats();
-+        return taken;
-+    }
-+
-+    namespace {
-+        std::atomic<int64_t> pendingInputNs{0};
-+    }
-+
-+    void NoteInputRead(int64_t steadyNs) {
-+        pendingInputNs.store(steadyNs, std::memory_order_relaxed);
-+    }
-+
-+    int64_t TakeInputRead() {
-+        return pendingInputNs.exchange(0, std::memory_order_relaxed);
-+    }
-+
-+    void RecordGpuFrameTime(double ms) {
-+        const std::scoped_lock lock(frameStatsMutex);
-+        frameStats.gpuFrames++;
-+        frameStats.gpuMs += ms;
-+    }
-+
-+    void RecordGpuSectionTime(GpuSection section, double ms) {
-+        const std::scoped_lock lock(frameStatsMutex);
-+        frameStats.sectionMs[uint32_t(section)] += ms;
-+        frameStats.sectionCount[uint32_t(section)]++;
-+    }
-+
-+    namespace {
-+        std::atomic<bool> gpuSectionTiming{false};
-+    }
-+
-+    void SetGpuSectionTiming(bool wanted) {
-+        gpuSectionTiming.store(wanted, std::memory_order_relaxed);
-+    }
-+
-+    bool GpuSectionTimingWanted() {
-+        return gpuSectionTiming.load(std::memory_order_relaxed);
-+    }
-+
-+    GpuSectionTimer &WorkloadGpuSections() {
-+        static GpuSectionTimer timer;
-+        return timer;
-+    }
-+
-+    void RecordShaderCompiled() {
-+        const std::scoped_lock lock(frameStatsMutex);
-+        frameStats.shaderCompiles++;
-+    }
-+
-+    void RequestScreenshot(ScreenshotCallback callback) {
-+        const std::scoped_lock lock(screenshotMutex);
-+        screenshotCallback = std::move(callback);
-+    }
-+
      // PresentQueue
- 
-     PresentQueue::PresentQueue() {
-@@ -40,9 +199,14 @@ namespace RT64 {
+@@ -40,9 +47,14 @@ namespace RT64 {
  
          // Stall the thread until the barrier is lifted if we're trying to write on a present being used by the GPU.
          bool waitForBarrier;
@@ -854,7 +700,7 @@ index 3227ab1..80310d3 100644
          } while (waitForBarrier);
  
          // Modify the cursor and notify anything waiting on the queue.
-@@ -51,6 +215,11 @@ namespace RT64 {
+@@ -51,6 +63,11 @@ namespace RT64 {
              writeCursor = nextWriteCursor;
          }
  
@@ -866,7 +712,7 @@ index 3227ab1..80310d3 100644
          cursorCondition.notify_all();
      }
  
-@@ -87,6 +256,11 @@ namespace RT64 {
+@@ -87,6 +104,11 @@ namespace RT64 {
          this->ext = ext;
  
          viRenderer = std::make_unique<VIRenderer>();
@@ -878,7 +724,7 @@ index 3227ab1..80310d3 100644
  
          presentThreadRunning = true;
          presentThread = new std::thread(&PresentQueue::threadLoop, this);
-@@ -115,6 +289,7 @@ namespace RT64 {
+@@ -115,6 +137,7 @@ namespace RT64 {
          }
  
          RenderTarget *colorTarget = nullptr;
@@ -886,7 +732,7 @@ index 3227ab1..80310d3 100644
          int32_t framesToPresent = 1;
          bool lockedWorkloadMutex = false;
          InterpolatedFrameCounters &frameCounters = ext.sharedResources->interpolatedFrames[ext.sharedResources->interpolatedFramesIndex];
-@@ -135,10 +310,18 @@ namespace RT64 {
+@@ -135,10 +158,18 @@ namespace RT64 {
              }
          }
  
@@ -906,7 +752,7 @@ index 3227ab1..80310d3 100644
              Framebuffer *viFb = nullptr;
              if (!viewRDRAM) {
                  viFb = fbManager.find(present.screenVI.fbAddress());
-@@ -155,7 +338,13 @@ namespace RT64 {
+@@ -155,7 +186,13 @@ namespace RT64 {
              }
              
              if ((presentFb != nullptr) && (viFb != nullptr)) {
@@ -920,7 +766,7 @@ index 3227ab1..80310d3 100644
                      Framebuffer *colorFb = fbManager.find(colorAddress);
                      if (colorFb == nullptr) {
                          continue;
-@@ -186,10 +375,10 @@ namespace RT64 {
+@@ -186,10 +223,10 @@ namespace RT64 {
                      }
                  }
  
@@ -933,7 +779,7 @@ index 3227ab1..80310d3 100644
                      lockedWorkloadMutex = true;
                      ext.sharedResources->workloadMutex.lock();
                  }
-@@ -212,11 +401,36 @@ namespace RT64 {
+@@ -212,11 +249,36 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
  
@@ -971,7 +817,7 @@ index 3227ab1..80310d3 100644
                  uint32_t fbAddress = present.screenVI.fbAddress();
  
                  // Use a scratch framebuffer to upload the RAM to the render target.
-@@ -266,6 +480,8 @@ namespace RT64 {
+@@ -266,6 +328,8 @@ namespace RT64 {
              }
          }
          
@@ -980,7 +826,7 @@ index 3227ab1..80310d3 100644
          for (int32_t i = 0; i < framesToPresent; i++) {
              uint32_t frameCountersNextPresented = 0;
              if ((framesToPresent > 1) && (usingMSAA || (i > 0))) {
-@@ -293,7 +509,7 @@ namespace RT64 {
+@@ -293,7 +357,7 @@ namespace RT64 {
                      colorTarget = nullptr;
                  }
              }
@@ -989,7 +835,7 @@ index 3227ab1..80310d3 100644
                  frameCountersNextPresented = frameCounters.count;
              }
  
-@@ -310,6 +526,8 @@ namespace RT64 {
+@@ -310,6 +374,8 @@ namespace RT64 {
                  RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                  commandList->begin();
                  commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COLOR_WRITE));
@@ -998,7 +844,7 @@ index 3227ab1..80310d3 100644
                  
                  VIRenderer::RenderParams renderParams;
                  if (colorTarget != nullptr) {
-@@ -339,17 +557,115 @@ namespace RT64 {
+@@ -339,17 +405,115 @@ namespace RT64 {
                          renderParams.textureHeight = colorTarget->height;
                      }
                  }
@@ -1114,7 +960,7 @@ index 3227ab1..80310d3 100644
                      drawHook(commandList, swapChainFramebuffer);
                  }
  
-@@ -360,12 +676,18 @@ namespace RT64 {
+@@ -360,12 +524,18 @@ namespace RT64 {
                      }
                      
                      commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
@@ -1133,7 +979,7 @@ index 3227ab1..80310d3 100644
                  }
              }
  
-@@ -384,7 +706,7 @@ namespace RT64 {
+@@ -384,7 +554,7 @@ namespace RT64 {
              }
  
              // As soon as we're done with the first render target, we notify the workload queue it can proceed.
@@ -1142,7 +988,7 @@ index 3227ab1..80310d3 100644
                  notifyPresentId(present);
              }
  
-@@ -401,11 +723,58 @@ namespace RT64 {
+@@ -401,7 +571,44 @@ namespace RT64 {
                  RenderCommandSemaphore *waitSemaphore = drawSemaphores[swapChainIndex].get();
                  presentTimestamp = Timer::current();
                  swapChainValid = ext.swapChain->present(swapChainIndex, &waitSemaphore, 1);
@@ -1188,21 +1034,7 @@ index 3227ab1..80310d3 100644
              }
          }
      }
- 
-+    void PresentQueue::threadRepaint(bool &swapChainValid) {
-+        if (!swapChainValid || ext.swapChain->isEmpty() || ext.swapChain->needsResize()) {
-+            return;
-+        }
-+
-+        repainting = true;
-+        threadPresent(lastPresent, swapChainValid);
-+        repainting = false;
-+    }
-+
-     void PresentQueue::skipInterpolation() {
-         {
-             std::unique_lock<std::mutex> interpolatedLock(ext.sharedResources->interpolatedMutex);
-@@ -428,6 +797,7 @@ namespace RT64 {
+@@ -428,6 +635,7 @@ namespace RT64 {
      void PresentQueue::threadAdvanceBarrier() {
          std::scoped_lock<std::mutex> cursorLock(cursorMutex);
          barrierCursor = (barrierCursor + 1) % presents.size();
@@ -1210,7 +1042,7 @@ index 3227ab1..80310d3 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +819,55 @@ namespace RT64 {
+@@ -449,22 +657,55 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1269,7 +1101,7 @@ index 3227ab1..80310d3 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -518,6 +921,15 @@ namespace RT64 {
+@@ -518,6 +759,15 @@ namespace RT64 {
                      threadPresent(present, swapChainValid);
                  }
  
@@ -1285,7 +1117,7 @@ index 3227ab1..80310d3 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +940,7 @@ namespace RT64 {
+@@ -528,6 +778,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  
@@ -1294,76 +1126,24 @@ index 3227ab1..80310d3 100644
              }
          }
 diff --git a/src/hle/rt64_present_queue.h b/src/hle/rt64_present_queue.h
-index e08b02c..1f23e46 100644
+index e08b02c..b8b2a67 100644
 --- a/src/hle/rt64_present_queue.h
 +++ b/src/hle/rt64_present_queue.h
-@@ -4,8 +4,18 @@
+@@ -4,9 +4,13 @@
  
  #pragma once
  
 +#include <chrono>
-+#include <functional>
-+#include <vector>
 +
  #include "common/rt64_profiling_timer.h"
  #include "gui/rt64_inspector.h"
-+#include "render/rt64_smaa.h"
-+#include "render/rt64_fxaa.h"
-+#include "render/rt64_mirror.h"
-+#include "render/rt64_gpu_sections.h"
-+#include "render/rt64_fsr.h"
-+#include "render/rt64_photo_grade.h"
  #include "render/rt64_vi_renderer.h"
++// Banjo-Tooie: the present queue's additions (screenshots, frame stats, the extra passes), from rt64-ext/.
++#include "hle/rt64_present_queue_ext.h"
  
  #include "rt64_application_window.h"
-@@ -17,6 +27,46 @@
- namespace RT64 {
-     struct WorkloadQueue;
- 
-+    // Screenshots: the next presented frame's game image (before any UI is drawn over it)
-+    // is read back and handed to the callback as tightly packed 8-bit RGBA rows, on the
-+    // present thread. Only one request is kept; a newer one replaces it.
-+    typedef std::function<void(uint32_t width, uint32_t height, std::vector<uint8_t> &&rgba)> ScreenshotCallback;
-+    void RequestScreenshot(ScreenshotCallback callback);
-+
-+    // Frame statistics for the Banjo-Tooie frame rate overlay, taken from the timings RT64
-+    // already keeps (presentProfiler and rendererGPUProfiler). Each read returns the totals
-+    // since the last read and starts them again from zero.
-+    struct FrameStats {
-+        uint32_t presents = 0;
-+        double presentMs = 0.0;
-+        double worstPresentMs = 0.0;
-+        uint32_t gpuFrames = 0;
-+        double gpuMs = 0.0;
-+        // Each present interval in ms, oldest first (at most 4096 kept between reads).
-+        std::vector<float> intervals;
-+        // Input latency: from the controller read a game frame was made from to the
-+        // first present that shows it.
-+        uint32_t latencyFrames = 0;
-+        double latencyMs = 0.0;
-+        double worstLatencyMs = 0.0;
-+        // Shaders compiled for a new combination of render settings. The ubershader draws
-+        // while one compiles, so the game keeps going, but more slowly.
-+        uint32_t shaderCompiles = 0;
-+        // GPU time of each of the port's extra passes (GpuSection), and how many times each ran.
-+        double sectionMs[uint32_t(GpuSection::Count)] = {};
-+        uint32_t sectionCount[uint32_t(GpuSection::Count)] = {};
-+    };
-+
-+    FrameStats TakeFrameStats();
-+    // Turns the per-pass GPU timers (FrameStats::sectionMs) on or off; off by default.
-+    void SetGpuSectionTiming(bool wanted);
-+    void RecordGpuFrameTime(double ms);
-+    void RecordShaderCompiled();
-+    // The game read the controller at this steady_clock time (ns). The next game frame
-+    // handed to RT64 takes the latest such time with it.
-+    void NoteInputRead(int64_t steadyNs);
-+    int64_t TakeInputRead();
-+
-     struct PresentQueue {
-         struct External {
-             ApplicationWindow *appWindow = nullptr;
-@@ -36,6 +86,7 @@ namespace RT64 {
+ #include "rt64_present.h"
+@@ -36,6 +40,7 @@ namespace RT64 {
          int barrierCursor;
          std::mutex cursorMutex;
          std::condition_variable cursorCondition;
@@ -1371,7 +1151,7 @@ index e08b02c..1f23e46 100644
          uint64_t presentId;
          std::mutex presentIdMutex;
          std::condition_variable presentIdCondition;
-@@ -52,10 +103,23 @@ namespace RT64 {
+@@ -52,10 +57,23 @@ namespace RT64 {
          std::unique_ptr<RenderCommandSemaphore> acquiredSemaphore;
          std::vector<std::unique_ptr<RenderCommandSemaphore>> drawSemaphores;
          std::unique_ptr<VIRenderer> viRenderer;
@@ -1395,7 +1175,7 @@ index e08b02c..1f23e46 100644
          bool presentWaitEnabled = false;
  
          PresentQueue();
-@@ -68,6 +132,7 @@ namespace RT64 {
+@@ -68,6 +86,7 @@ namespace RT64 {
          void waitForPresentId(uint64_t waitId);
          void setup(const External &ext);
          void threadPresent(const Present &present, bool &swapChainValid);

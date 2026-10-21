@@ -34,6 +34,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |
 | `src/shaders/Snow.hlsli`, `SnowTess.hlsl` | Deep snow and tessellated sand (Snow.hlsli is included by RasterPS) |
+| `src/hle/rt64_present_queue_ext.cpp`, `.h` (new) | The present queue's additions: present backlog (`WaitForPresentBacklog`), menu repaint (`SetIdleRepaint`, `PresentQueue::threadRepaint`), screenshots' state and read-back, frame statistics and input latency. `rt64_present_queue.cpp` keeps the calls in its present loop and reaches the shared state through `RT64::presentext` |
 | `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h` | 3D grass with GPU instancing |
 
 **Can move here next (new files, verbatim; owner noted)**
@@ -65,7 +66,7 @@ or they go back into the patch.
 
 | Files | What they hold |
 |---|---|
-| `src/hle/rt64_present_queue.cpp`, `.h` | SMAA, FXAA, FSR, photo grade, mirror calls; screenshots; frame stats; fake vsync. A post-pass hook (a list of passes run on the game image before the VI pass) would take the pass calls out. |
+| `src/hle/rt64_present_queue.cpp`, `.h` | SMAA, FXAA, FSR, photo grade, mirror calls; the screenshot copy; frame stats per present; fake vsync; the repaint and vsync switches in the present loop. A post-pass hook (a list of passes run on the game image before the VI pass) would take the pass calls out. |
 | `src/render/rt64_framebuffer_renderer.cpp`, `.h`, `rt64_framebuffer_renderer_call.h` | Scene effects split, water mask, grass, snow, ground tessellation, mirror. Needs a scene-pass hook; the largest part of the patch. |
 | `src/render/rt64_shader_library.cpp`, `.h`, `rt64_descriptor_sets.h` | Pipelines and descriptor sets for every new pass. Would go with a pass hook that lets a pass own its pipelines. |
 | `src/render/rt64_raster_shader.cpp`, `.h`, `rt64_raster_shader_cache.cpp`, `.h` | Grass, tessellation pipelines, shader list. |

@@ -11,14 +11,16 @@ set(RT64_EXT_DIR ${CMAKE_CURRENT_LIST_DIR})
 target_include_directories(rt64 PUBLIC
     ${RT64_EXT_DIR}/src
     ${RT64_EXT_DIR}/src/render
-    ${PROJECT_SOURCE_DIR}/src/render)
+    ${PROJECT_SOURCE_DIR}/src/render
+    ${PROJECT_SOURCE_DIR}/src/hle)
 
 target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_smaa.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fxaa.cpp
     ${RT64_EXT_DIR}/src/render/rt64_mirror.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
-    ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp)
+    ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
+    ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp)
 
 # iryoku/smaa (lib/smaa, MIT): SMAA.hlsl for the shaders, AreaTex.h and SearchTex.h for rt64_smaa.cpp.
 target_include_directories(rt64 PRIVATE ${RT64_SMAA_DIR})
