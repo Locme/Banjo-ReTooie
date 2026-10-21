@@ -13,6 +13,10 @@ namespace tooie::mirror_mode {
 
     void add_option(recomp::config::Config& general);
 
+    // Whether Mirror Mode is on (any thread). The controls are flipped with the picture: left on the stick moves
+    // towards the screen's left, and the camera buttons turn the way they look.
+    bool active();
+
     // Sends the saved setting to RT64.
     void apply();
 }
