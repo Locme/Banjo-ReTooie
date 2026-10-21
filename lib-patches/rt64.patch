@@ -3788,9 +3788,9 @@ index 9fae0d4..00e11d8 100644
 -                globalCallIndex++;
 -            }
 -        }
-+                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game, or a texture picked as Ignore). Only
++                // Banjo-Tooie: a draw marked to be left out of the scene effects (a model picked in the game). Only
 +                // plain triangles and rects can move after the effects; a vertex Z test's index buffer is gone by then.
-+                bool excluded = (call.callDesc.extendedFlags.sceneEffectsExclude || SceneIgnoreTiles(drawData.callTiles, call.callDesc.tileIndex, call.callDesc.tileCount)) && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
++                bool excluded = call.callDesc.extendedFlags.sceneEffectsExclude && (instanceDrawCall.type != InstanceDrawCall::Type::VertexTestZ) &&
 +                    (instanceDrawCall.type != InstanceDrawCall::Type::FillRect) && (instanceDrawCall.type != InstanceDrawCall::Type::Raytracing) &&
 +                    !((instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && instanceDrawCall.triangles.vertexTestZ);
 +                instanceExcludedVector.resize(instanceIndex, 0);

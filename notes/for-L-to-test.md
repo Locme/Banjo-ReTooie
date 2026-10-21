@@ -10,17 +10,16 @@
 - Look for: Do the pickets and rails now have a thick side view, with the same front look as before? Any holes, wrong colours on the sides, or a big frame rate drop? (about 20,000 extra triangles; the fence is 12 units thick)
 - Status: waiting for L
 
-## T520 Several shader effects on one texture, and Ignore
+## T520 Several shader effects on one texture
 - Asked: 2026-10-21 21:12 UTC
 - Build: main (next build)
 - Steps:
   1. Bind Controls > Pick Modes > Shader Effects Pick Mode and turn it on
   2. Point at a grass texture: the label lists its built-in effects and the chosen effect
   3. Right click until Ice Reflection is chosen, left click: the label shows Grass + Ice Reflection and both show in game
-  4. Right click to Ignore, left click on a wall or floor: no AO, outlines, fog, grass, parallax or ray tracing on it, plain N64 look
-  5. Left click Ignore again: back to built-in. Give a texture Grass + Ice, Save Pick, restart: both come back from Dev Files/shader_effect_tags.txt
-  6. An old shader_effect_tags.txt (one effect a line) still loads
-- Look for: Can one texture hold several effects, and does Ignore make it pass through every shader?
+  4. Give a texture Grass + Ice, Save Pick, restart: both come back from Dev Files/shader_effect_tags.txt
+  5. An old shader_effect_tags.txt (one effect a line) still loads
+- Look for: Can one texture hold several effects? (Ignore was removed 2026-10-21 at L's word: it broke things.)
 - Status: waiting for L
 
 ## T519 Intro: normal wide view from the first shot (replaces T403)

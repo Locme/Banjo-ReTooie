@@ -499,24 +499,6 @@ namespace RT64 {
     // Banjo-Tooie: textures deep snow never covers (Shader Effects pick mode's picks other than Deep Snow).
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     bool SceneSnowOffTexture(uint64_t hash);
-    // Banjo-Tooie: textures no shader touches (Shader Effects pick mode's Ignore): every texture list reads them as
-    // not listed, and a draw with one is left out of the scene effects and drawn after them, like a model the game
-    // marks (sceneEffectsExclude).
-    void SetSceneIgnoreTextures(const uint64_t *hashes, size_t count);
-    bool SceneIgnoreTexture(uint64_t hash);
-    bool SceneIgnoreAny();
-    template <typename Tiles>
-    bool SceneIgnoreTiles(const Tiles &tiles, uint32_t index, uint32_t count) {
-        if (!SceneIgnoreAny()) {
-            return false;
-        }
-        for (uint32_t t = 0; t < count; t++) {
-            if (SceneIgnoreTexture(tiles[index + t].tmemHashOrID)) {
-                return true;
-            }
-        }
-        return false;
-    }
     // Banjo-Tooie: the sand textures tessellated sand lies on (SetSceneSnow's sand).
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     bool SceneSandTexture(uint64_t hash);

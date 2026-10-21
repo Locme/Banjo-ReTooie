@@ -348,17 +348,12 @@ result. Press the key again for the normal mouse.
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
 you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
-Ice Reflection, Shiny Reflection, Text, Fence, Lamp, Ignore; **Shift + right
-click** goes back one) and **left click** turns it on or off for the texture
-under the cursor. The first left click starts from the built-in effects, so
-adding Ice to built-in grass keeps the grass. Disable (no texture effect on it)
-and Ignore turn the others off, and any other effect turns them off; turning
-the last effect off leaves Disable, and turning Disable or Ignore off puts the
-built-in choice back. **Ignore** lets the texture pass through every shader: it
-is off every texture list (parallax, sand, night lights, snow and the effects
-above) and its draws are left out of the screen effects (ambient occlusion,
-outlines, fog and the rest) and ray tracing, so it looks as the N64 drew it.
-Whole-picture filters (colour, anti-aliasing) still apply. **Shift + left
+Ice Reflection, Shiny Reflection, Text, Fence, Lamp; **Shift + right click**
+goes back one) and **left click** turns it on or off for the texture under the
+cursor. The first left click starts from the built-in effects, so adding Ice
+to built-in grass keeps the grass. Disable (no texture effect on it) turns the
+others off, and any other effect turns Disable off; turning the last effect off
+leaves Disable, and turning Disable off puts the built-in choice back. **Shift + left
 click** puts the built-in choice back at once and the **mouse wheel** picks the
 surface behind. Deep Snow is only recorded for now, as deep snow goes by level
 and colour, not texture. Save Pick writes the texture under the cursor to

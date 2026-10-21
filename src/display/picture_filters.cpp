@@ -71,7 +71,6 @@ namespace RT64 {
     // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
-    void SetSceneIgnoreTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -4233,9 +4232,6 @@ namespace {
             }
         }
         RT64::SetSceneFenceTextures(fences.data(), fences.size());
-        // Ignore: no shader at all, the screen effects included (RT64 reads every texture list as not listing these).
-        std::vector<uint64_t> ignored = build(nullptr, nullptr, tooie::effect_pick::effect_ignore, true);
-        RT64::SetSceneIgnoreTextures(ignored.data(), ignored.size());
         effects_sent_version.store(version);
     }
 

@@ -263,8 +263,8 @@ namespace {
     std::map<uint64_t, Effects> effects;
     std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "fence", "lamp", "ignore" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Fence", "Lamp (ray traced light)", "Ignore (no shader touches it)" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "fence", "lamp" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Fence", "Lamp (ray traced light)" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
@@ -274,11 +274,10 @@ namespace {
         return Effects(1) << effect;
     }
 
-    // Disable and Ignore go with nothing else (Ignore wins).
-    constexpr Effects solo_effects = bit(tooie::effect_pick::effect_disable) | bit(tooie::effect_pick::effect_ignore);
+    // Disable goes with nothing else.
+    constexpr Effects solo_effects = bit(tooie::effect_pick::effect_disable);
     constexpr Effects alone(Effects set) {
-        return tooie::effect_pick::has(set, tooie::effect_pick::effect_ignore) ? bit(tooie::effect_pick::effect_ignore) :
-            (tooie::effect_pick::has(set, tooie::effect_pick::effect_disable) ? bit(tooie::effect_pick::effect_disable) : set);
+        return tooie::effect_pick::has(set, tooie::effect_pick::effect_disable) ? bit(tooie::effect_pick::effect_disable) : set;
     }
 
     // The effects, joined with " + " (labels) or spaces (names, as in the file).
@@ -293,7 +292,7 @@ namespace {
         return text.empty() ? (names ? "disable" : "None") : text;
     }
 
-    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text fence lamp ignore (lines
+    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text fence lamp (lines
     // from before several effects a texture have just one).
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
@@ -313,6 +312,7 @@ namespace {
                     }
                 }
             }
+            // A line with no known effect (the removed "ignore") is left out: that texture is built-in again.
             if (set != 0) {
                 effects[std::strtoull(hash_text.c_str(), nullptr, 16)] = alone(set);
             }
@@ -329,7 +329,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, fence, lamp, ignore). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, fence, lamp). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -486,9 +486,9 @@ namespace {
         return true;
     }
 
-    // Left click: the chosen effect on or off, starting from the built-in effects. Disable or Ignore turns the others
-    // off and any other turns them off; turning the last one off leaves Disable, and Disable or Ignore off is the
-    // built-in choice again. Shift + left click (reset): built-in.
+    // Left click: the chosen effect on or off, starting from the built-in effects. Disable turns the others off and
+    // any other turns Disable off; turning the last one off leaves Disable, and Disable off is the built-in choice
+    // again. Shift + left click (reset): built-in.
     void toggle_effect(uint64_t hash, bool reset) {
         bool edges_only = false;
         const Effects built_in = reset ? 0 : built_in_effects(hash, edges_only);
