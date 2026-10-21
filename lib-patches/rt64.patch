@@ -15211,10 +15211,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..57ff67a
+index 0000000..1420272
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4023 @@
+@@ -0,0 +1,4105 @@
 +//
 +// RT64
 +//
@@ -16222,6 +16222,83 @@ index 0000000..57ff67a
 +    return true;
 +}
 +
++// Whether a light sits inside a solid casing: of six rays out from it (up, down and four ways round), five or more
++// meet something within 60 units. Its light then can't be traced from the flame itself.
++bool LampCased(float3 light) {
++    const float3 directions[6] = { float3(0.0f, 1.0f, 0.0f), float3(0.0f, -1.0f, 0.0f), float3(1.0f, 0.0f, 0.0f), float3(-1.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 1.0f), float3(0.0f, 0.0f, -1.0f) };
++    int closed = 0;
++    [loop] for (int k = 0; k < 6; k++) {
++        RayDesc ray;
++        ray.Origin = light;
++        ray.Direction = directions[k];
++        ray.TMin = 0.5f;
++        ray.TMax = 60.0f;
++        closed += TraceOccluded(ray, 1u) ? 1 : 0;
++    }
++    return closed >= 5;
++}
++
++// The level's lights glowing in the air (with Traced light beams): along the eye's ray where it passes a light, six
++// points each traced to the flame; the lit ones glow warm, brighter nearer it. A lantern's bars cut dark streaks
++// through the glow, and anything between stands out against it.
++float3 LampGlow(int2 pixel, float depth, float strength) {
++    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
++    if ((count == 0u) || (strength <= 0.0f)) {
++        return 0.0f;
++    }
++    const float3 surface = (depth >= 0.99999f) ? normalize(ViewPosition(pixel, 0.5f)) * 8000.0f : ViewPosition(pixel, depth);
++    const float surfaceDistance = length(surface);
++    const float3 eyeWorld = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
++    const float3 lookWorld = normalize(ViewToWorldPoint(surface) - eyeWorld);
++    const int2 cell = pixel & 3;
++    const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
++    const float offset = (bayer[cell.y * 4 + cell.x] + 0.5f) / 16.0f;
++    float3 glow = 0.0f;
++    [loop] for (uint i = 0u; i < count; i++) {
++        const float4 light = asfloat(gLights.Load4(16u * (i + 2u)));
++        const float radius = min(light.w * 0.35f, 450.0f);
++        // Where the eye's ray passes through the glow's sphere.
++        const float along = dot(light.xyz - eyeWorld, lookWorld);
++        const float3 nearest = eyeWorld + lookWorld * along;
++        const float miss = length(light.xyz - nearest);
++        if (miss >= radius) {
++            continue;
++        }
++        const float halfChord = sqrt(radius * radius - miss * miss);
++        const float from = max(along - halfChord, 0.0f);
++        const float to = min(along + halfChord, surfaceDistance);
++        if (to <= from) {
++            continue;
++        }
++        const bool cased = LampCased(light.xyz);
++        const float stopShort = cased ? 30.0f : 3.0f;
++        const int Samples = 6;
++        const float step = (to - from) / float(Samples);
++        [loop] for (int k = 0; k < Samples; k++) {
++            const float3 p = eyeWorld + lookWorld * (from + (float(k) + offset) * step);
++            const float3 toLight = light.xyz - p;
++            const float d = length(toLight);
++            const float near = saturate(1.0f - d / radius);
++            if (near <= 0.0f) {
++                continue;
++            }
++            bool blocked = false;
++            if (d > stopShort + 1.0f) {
++                RayDesc ray;
++                ray.Origin = p;
++                ray.Direction = toLight / d;
++                ray.TMin = 0.0f;
++                ray.TMax = d - stopShort;
++                blocked = TraceOccluded(ray, 0u);
++            }
++            if (!blocked) {
++                glow += float3(1.0f, 0.75f, 0.45f) * (near * near * step);
++            }
++        }
++    }
++    return glow * (strength * 0.0025f);
++}
++
 +// The level's lights (lamps, fires), traced: each lights what it can see and leaves the rest in the dark. Within a
 +// light's reach the room's own light is dimmed (keep, returned) and the light's own added back (lamp, rgb) only where
 +// rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
@@ -16255,22 +16332,27 @@ index 0000000..57ff67a
 +        if (facing <= 0.0f) {
 +            continue;
 +        }
-+        // Four points on a small disc round the light.
++        // Four points on a small disc round the light. The rays go right up to the flame, so a lantern's frame and
++        // bars throw their pattern (its glass is see-through, so not in the traced scene) (L, 2026-10-21); a light
++        // shut in a solid casing (LampCased) keeps the old way, stopping short of it, or it would light nothing.
++        const bool cased = LampCased(light.xyz);
++        const float stopShort = cased ? 30.0f : 3.0f;
++        const float discRadius = cased ? 14.0f : 3.0f;
 +        const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
 +        const float3 across = cross(direction, side);
 +        float visible = 0.0f;
 +        [unroll] for (int k = 0; k < 4; k++) {
 +            const float angle = float(k) * 1.5707963f + 0.785398f;
-+            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * 14.0f;
++            const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * discRadius;
 +            const float3 toTarget = target - start;
-+            const float reach = length(toTarget) - 30.0f;
++            const float reach = length(toTarget) - stopShort;
 +            if (reach <= 1.0f) {
 +                visible += 0.25f;
 +                continue;
 +            }
 +            RayDesc ray;
 +            ray.Origin = start;
-+            ray.Direction = toTarget / (reach + 30.0f);
++            ray.Direction = toTarget / (reach + stopShort);
 +            ray.TMin = 0.0f;
 +            ray.TMax = reach;
 +            // Banjo casts his shadow from the lamps too.
@@ -19045,7 +19127,7 @@ index 0000000..57ff67a
 +#ifdef RAY_TRACED
 +    // Traced light beams, added like the rim light (the fog still covers them).
 +    if (gConstants.view.x < 1.5f) {
-+        rim += TracedBeams(pixel, depth);
++        rim += TracedBeams(pixel, depth) + LampGlow(pixel, depth, asfloat(gLights.Load(16)));
 +    }
 +#endif
 +
