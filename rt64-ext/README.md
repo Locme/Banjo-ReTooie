@@ -35,6 +35,8 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |
 | `src/shaders/Snow.hlsli`, `SnowTess.hlsl` | Deep snow and tessellated sand (Snow.hlsli is included by RasterPS) |
 | `src/hle/rt64_present_queue_ext.cpp`, `.h` (new) | The present queue's additions: present backlog (`WaitForPresentBacklog`), menu repaint (`SetIdleRepaint`, `PresentQueue::threadRepaint`), screenshots' state and read-back, frame statistics and input latency. `rt64_present_queue.cpp` keeps the calls in its present loop and reaches the shared state through `RT64::presentext` |
+| `src/render/rt64_texture_cache_ext.cpp` (new) | Texture cache additions moved whole: `TextureMap::setHeight`/`useHeight`, `TextureCache::recordUpscale`/`refreshUpscaled` (live texture upscaling). The calls stay in `rt64_texture_cache.cpp` |
+| `src/render/rt64_raster_shader_cache_ext.cpp`, `.h` (new) | The shader list: `SetShaderListPath`, `GetShaderListProgress`, the binary load/save helpers and `RasterShaderCache::loadShaderList`. Shared state through `RT64::shaderlistext` |
 | `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h` | 3D grass with GPU instancing |
 
 **Can move here next (new files, verbatim; owner noted)**

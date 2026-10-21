@@ -6951,10 +6951,10 @@ index 3b991ff..48b0986 100644
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
 diff --git a/src/render/rt64_raster_shader_cache.cpp b/src/render/rt64_raster_shader_cache.cpp
-index bf7b669..e6c83a3 100644
+index bf7b669..4cab260 100644
 --- a/src/render/rt64_raster_shader_cache.cpp
 +++ b/src/render/rt64_raster_shader_cache.cpp
-@@ -4,17 +4,136 @@
+@@ -4,17 +4,26 @@
  
  #include "rt64_raster_shader_cache.h"
  
@@ -6965,122 +6965,12 @@ index bf7b669..e6c83a3 100644
 +
  #include "common/rt64_thread.h"
 +#include "hle/rt64_present_queue.h"
++// Banjo-Tooie: the shader list and the saved shaders (rt64-ext/).
++#include "render/rt64_raster_shader_cache_ext.h"
  
  #define ENABLE_OPTIMIZED_SHADER_GENERATION
  
  namespace RT64 {
-+    namespace {
-+        std::mutex shaderListMutex;
-+        std::filesystem::path shaderListPath;
-+
-+        // "BTSL", then the format version and the size of a ShaderDescription; a list written by a
-+        // build whose descriptions differ is started over.
-+        constexpr uint32_t ShaderListMagic = 0x4C535442;
-+        constexpr uint32_t ShaderListVersion = 1;
-+        // Far more than a full playthrough meets; past it, nothing more is added.
-+        constexpr uint32_t ShaderListLimit = 50000;
-+
-+        std::atomic<uint32_t> listProgressDone = 0;
-+        std::atomic<uint32_t> listProgressTotal = 0;
-+
-+        // "BTSB", the format version, the key, then the two sizes and the two shaders.
-+        constexpr uint32_t ShaderBinaryMagic = 0x42535442;
-+        constexpr uint32_t ShaderBinaryVersion = 1;
-+        // Larger than any real shader; a bigger size means a damaged file.
-+        constexpr uint32_t ShaderBinaryMaxSize = 16 * 1024 * 1024;
-+
-+        std::filesystem::path shaderBinaryPath(uint64_t key) {
-+            std::filesystem::path listPath;
-+            {
-+                const std::scoped_lock lock(shaderListMutex);
-+                listPath = shaderListPath;
-+            }
-+
-+            if (listPath.empty()) {
-+                return {};
-+            }
-+
-+            char name[32];
-+            snprintf(name, sizeof(name), "%016llx.bin", (unsigned long long)(key));
-+            return listPath.parent_path() / "shaders" / name;
-+        }
-+    }
-+
-+    void SetShaderListPath(const std::filesystem::path &path) {
-+        const std::scoped_lock lock(shaderListMutex);
-+        shaderListPath = path;
-+    }
-+
-+    void GetShaderListProgress(uint32_t &done, uint32_t &total) {
-+        total = listProgressTotal.load();
-+        done = std::min(listProgressDone.load(), total);
-+    }
-+
-+    bool LoadShaderBinary(uint64_t key, std::vector<uint8_t> &vertexShader, std::vector<uint8_t> &pixelShader) {
-+        const std::filesystem::path path = shaderBinaryPath(key);
-+        if (path.empty()) {
-+            return false;
-+        }
-+
-+        std::ifstream in(path, std::ios::binary);
-+        if (!in.is_open()) {
-+            return false;
-+        }
-+
-+        uint32_t header[2] = {};
-+        uint64_t fileKey = 0;
-+        uint32_t sizes[2] = {};
-+        if (!in.read(reinterpret_cast<char *>(header), sizeof(header)) || (header[0] != ShaderBinaryMagic) || (header[1] != ShaderBinaryVersion) ||
-+            !in.read(reinterpret_cast<char *>(&fileKey), sizeof(fileKey)) || (fileKey != key) ||
-+            !in.read(reinterpret_cast<char *>(sizes), sizeof(sizes)) || (sizes[0] == 0) || (sizes[1] == 0) ||
-+            (sizes[0] > ShaderBinaryMaxSize) || (sizes[1] > ShaderBinaryMaxSize))
-+        {
-+            return false;
-+        }
-+
-+        vertexShader.resize(sizes[0]);
-+        pixelShader.resize(sizes[1]);
-+        return in.read(reinterpret_cast<char *>(vertexShader.data()), sizes[0]) && in.read(reinterpret_cast<char *>(pixelShader.data()), sizes[1]);
-+    }
-+
-+    void SaveShaderBinary(uint64_t key, const void *vertexShader, size_t vertexShaderSize, const void *pixelShader, size_t pixelShaderSize) {
-+        const std::filesystem::path path = shaderBinaryPath(key);
-+        if (path.empty() || (vertexShaderSize == 0) || (pixelShaderSize == 0) || (vertexShaderSize > ShaderBinaryMaxSize) || (pixelShaderSize > ShaderBinaryMaxSize)) {
-+            return;
-+        }
-+
-+        std::error_code ec;
-+        std::filesystem::create_directories(path.parent_path(), ec);
-+
-+        // Written under another name and renamed when complete, so a crash never leaves half a file under the real name.
-+        std::filesystem::path tempPath = path;
-+        tempPath += ".tmp";
-+        {
-+            std::ofstream out(tempPath, std::ios::binary | std::ios::trunc);
-+            if (!out.is_open()) {
-+                return;
-+            }
-+
-+            const uint32_t header[2] = { ShaderBinaryMagic, ShaderBinaryVersion };
-+            const uint32_t sizes[2] = { uint32_t(vertexShaderSize), uint32_t(pixelShaderSize) };
-+            out.write(reinterpret_cast<const char *>(header), sizeof(header));
-+            out.write(reinterpret_cast<const char *>(&key), sizeof(key));
-+            out.write(reinterpret_cast<const char *>(sizes), sizeof(sizes));
-+            out.write(reinterpret_cast<const char *>(vertexShader), std::streamsize(vertexShaderSize));
-+            out.write(reinterpret_cast<const char *>(pixelShader), std::streamsize(pixelShaderSize));
-+            if (!out.good()) {
-+                out.close();
-+                std::filesystem::remove(tempPath, ec);
-+                return;
-+            }
-+        }
-+
-+        std::filesystem::rename(tempPath, path, ec);
-+        if (ec) {
-+            std::filesystem::remove(tempPath, ec);
-+        }
-+    }
-+
      // RasterShaderCache::CompilationThread
      
 -    RasterShaderCache::CompilationThread::CompilationThread(RasterShaderCache *shaderCache) {
@@ -7092,7 +6982,7 @@ index bf7b669..e6c83a3 100644
  
          thread = std::make_unique<std::thread>(&CompilationThread::loop, this);
          threadRunning = false;
-@@ -38,13 +157,14 @@ namespace RT64 {
+@@ -38,13 +47,14 @@ namespace RT64 {
          while (threadRunning) {
              ShaderDescription shaderDesc;
              bool fromPriorityQueue = false;
@@ -7108,7 +6998,7 @@ index bf7b669..e6c83a3 100644
                  });
  
                  shaderCache->descQueueActiveCount++;
-@@ -53,6 +173,17 @@ namespace RT64 {
+@@ -53,6 +63,17 @@ namespace RT64 {
                      shaderCache->descQueue.pop();
                      fromPriorityQueue = true;
                  }
@@ -7126,7 +7016,7 @@ index bf7b669..e6c83a3 100644
              }
              
              // Compile the shader at the top of the queue.
-@@ -66,6 +197,11 @@ namespace RT64 {
+@@ -66,6 +87,11 @@ namespace RT64 {
                      const std::unique_lock<std::mutex> lock(shaderCache->GPUShadersMutex);
                      shaderCache->GPUShaders[shaderDesc.hash()] = std::move(newShader);
                  }
@@ -7138,7 +7028,7 @@ index bf7b669..e6c83a3 100644
              }
          }
      }
-@@ -85,8 +221,13 @@ namespace RT64 {
+@@ -85,8 +111,13 @@ namespace RT64 {
  
          descQueueActiveCount = threadCount;
  
@@ -7153,90 +7043,16 @@ index bf7b669..e6c83a3 100644
          }
  #endif
      }
-@@ -109,6 +250,82 @@ namespace RT64 {
+@@ -109,6 +140,8 @@ namespace RT64 {
          if (shaderFormat == RenderShaderFormat::SPIRV) {
              optimizerCacheSPIRV.initialize();
          }
 +
 +        loadShaderList();
-+    }
-+
-+    void RasterShaderCache::loadShaderList() {
-+        std::filesystem::path path;
-+        {
-+            const std::scoped_lock lock(shaderListMutex);
-+            path = shaderListPath;
-+        }
-+
-+        if (path.empty()) {
-+            return;
-+        }
-+
-+        std::vector<ShaderDescription> descs;
-+        bool valid = false;
-+        {
-+            std::ifstream in(path, std::ios::binary);
-+            uint32_t header[3] = {};
-+            if (in.read(reinterpret_cast<char *>(header), sizeof(header)) &&
-+                (header[0] == ShaderListMagic) && (header[1] == ShaderListVersion) && (header[2] == sizeof(ShaderDescription)))
-+            {
-+                valid = true;
-+                ShaderDescription desc;
-+                while ((descs.size() < ShaderListLimit) && in.read(reinterpret_cast<char *>(&desc), sizeof(desc))) {
-+                    descs.push_back(desc);
-+                }
-+            }
-+        }
-+
-+        {
-+            const std::unique_lock<std::mutex> queueLock(submissionMutex);
-+            listedHashes.clear();
-+            for (const ShaderDescription &desc : descs) {
-+                listedHashes[desc.hash()] = true;
-+            }
-+
-+            listCount = uint32_t(descs.size());
-+            listFile.close();
-+            if (valid) {
-+                listFile.open(path, std::ios::binary | std::ios::app);
-+            }
-+            else {
-+                std::error_code ec;
-+                std::filesystem::create_directories(path.parent_path(), ec);
-+                listFile.open(path, std::ios::binary | std::ios::trunc);
-+                const uint32_t header[3] = { ShaderListMagic, ShaderListVersion, uint32_t(sizeof(ShaderDescription)) };
-+                listFile.write(reinterpret_cast<const char *>(header), sizeof(header));
-+                listFile.flush();
-+            }
-+        }
-+
-+        uint32_t queued = 0;
-+        {
-+            const std::unique_lock<std::mutex> queueLock(submissionMutex);
-+            const std::unique_lock<std::mutex> descLock(descQueueMutex);
-+            listPromoted.clear();
-+            for (const ShaderDescription &desc : descs) {
-+                bool &found = shaderHashes[desc.hash()];
-+                if (!found) {
-+                    found = true;
-+                    listQueue.push(desc);
-+                    listPending.insert(desc.hash());
-+                    queued++;
-+                }
-+            }
-+        }
-+
-+        listProgressDone = 0;
-+        listProgressTotal = queued;
-+        descQueueChanged.notify_all();
-+
-+        if (queued > 0) {
-+            fprintf(stdout, "[shaders] compiling %u shaders from the shader list in the background\n", queued);
-+        }
      }
  
      void RasterShaderCache::submit(const ShaderDescription &desc) {
-@@ -119,10 +336,35 @@ namespace RT64 {
+@@ -119,10 +152,35 @@ namespace RT64 {
              const uint64_t shaderHash = desc.hash();
              bool &found = shaderHashes[shaderHash];
              if (found) {
@@ -7272,7 +7088,7 @@ index bf7b669..e6c83a3 100644
          }
  
          // Push a new shader compilation to the queue.
-@@ -138,6 +380,9 @@ namespace RT64 {
+@@ -138,6 +196,9 @@ namespace RT64 {
          {
              std::unique_lock<std::mutex> queueLock(descQueueMutex);
              descQueue = std::queue<ShaderDescription>();
@@ -12143,7 +11959,7 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..7095706 100644
+index 0848f3e..878d817 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -20,6 +20,8 @@
@@ -12155,14 +11971,13 @@ index 0848f3e..7095706 100644
  #define ONLY_USE_LOW_MIP_CACHE 0
  
  namespace RT64 {
-@@ -29,6 +31,36 @@ namespace RT64 {
+@@ -29,6 +31,35 @@ namespace RT64 {
      static const uint32_t TextureDataPitchAlignment = 256;
      static const uint32_t TextureDataPlacementAlignment = 512;
  
 +    // Banjo-Tooie: live texture upscaling. The upload thread notices a new generation and refreshes the cache.
 +    static std::atomic<uint32_t> TextureUpscaleFactor = 1;
 +    static std::atomic<uint32_t> TextureUpscaleGeneration = 0;
-+    static const uint32_t TextureUpscaleMaxSize = 4096;
 +
 +    void SetTextureUpscale(uint32_t factor) {
 +        factor = (factor >= 4) ? 4 : ((factor >= 2) ? 2 : 1);
@@ -12192,7 +12007,7 @@ index 0848f3e..7095706 100644
      ReplacementMap::ReplacementMap() {
          // Empty constructor.
      }
-@@ -66,7 +98,9 @@ namespace RT64 {
+@@ -66,7 +97,9 @@ namespace RT64 {
      }
  
      void ReplacementMap::evict(std::vector<Texture *> &evictedTextures) {
@@ -12203,7 +12018,7 @@ index 0848f3e..7095706 100644
              // Push texture to the eviction list.
              Texture *lastUnusedTexture = unusedTextureList.back();
              evictedTextures.emplace_back(lastUnusedTexture);
-@@ -81,6 +115,8 @@ namespace RT64 {
+@@ -81,6 +114,8 @@ namespace RT64 {
              unusedTextureList.pop_back();
              cachedTexturePoolSize -= lastUnusedTexture->memorySize;
          }
@@ -12212,7 +12027,7 @@ index 0848f3e..7095706 100644
      }
  
      bool ReplacementMap::saveDatabase(std::ostream &stream) {
-@@ -211,6 +247,9 @@ namespace RT64 {
+@@ -211,6 +246,9 @@ namespace RT64 {
              }
          }
  
@@ -12222,50 +12037,7 @@ index 0848f3e..7095706 100644
          globalVersion++;
      }
  
-@@ -288,6 +327,42 @@ namespace RT64 {
-         }
-     }
- 
-+    void TextureMap::setHeight(uint64_t hash, uint64_t creationFrame, Texture *texture) {
-+        const uint64_t heightHash = hash ^ HeightHashSalt;
-+        const auto it = hashMap.find(heightHash);
-+        if (it == hashMap.end()) {
-+            add(heightHash, creationFrame, texture);
-+        }
-+        else {
-+            // One from a texture pack used before: freed as an evicted texture is.
-+            evictedTextures.emplace_back(textures[it->second]);
-+            textures[it->second] = texture;
-+            cachedTextureDimensions[it->second] = interop::float3(float(texture->width), float(texture->height), 1.0f);
-+            versions[it->second]++;
-+            globalVersion++;
-+        }
-+
-+        heightBases.insert(hash);
-+    }
-+
-+    bool TextureMap::useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions) {
-+        if (!replacementMapEnabled || (heightBases.find(hash) == heightBases.end())) {
-+            return false;
-+        }
-+
-+        interop::float2 textureScale;
-+        interop::float3 dimensions;
-+        bool textureReplaced = false;
-+        bool hasMipmaps = false;
-+        bool shiftedByHalf = false;
-+        if (!use(hash ^ HeightHashSalt, submissionFrame, textureIndex, textureScale, dimensions, textureReplaced, hasMipmaps, shiftedByHalf)) {
-+            return false;
-+        }
-+
-+        textureDimensions = interop::float2(dimensions.x, dimensions.y);
-+        return true;
-+    }
-+
-     bool TextureMap::use(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf) {
-         textureScale = IdentityScale;
-         hasMipmaps = false;
-@@ -314,8 +389,10 @@ namespace RT64 {
+@@ -314,8 +352,10 @@ namespace RT64 {
          }
  
          // Remove the existing entry from the list if it exists.
@@ -12276,7 +12048,7 @@ index 0848f3e..7095706 100644
              accessList.erase(listIt);
          }
  
-@@ -325,6 +402,30 @@ namespace RT64 {
+@@ -325,6 +365,30 @@ namespace RT64 {
          return true;
      }
  
@@ -12307,7 +12079,7 @@ index 0848f3e..7095706 100644
      bool TextureMap::evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes) {
          evictedHashes.clear();
  
-@@ -352,6 +453,7 @@ namespace RT64 {
+@@ -352,6 +416,7 @@ namespace RT64 {
                  listIterators[textureIndex] = accessList.end();
                  hashMap.erase(textureHash);
                  evictedHashes.push_back(textureHash);
@@ -12315,7 +12087,7 @@ index 0848f3e..7095706 100644
                  it = decltype(it)(accessList.erase(std::next(it).base()));
  
                  // If a texture replacement was used for this texture, decrease the reference in the map.
-@@ -976,12 +1078,22 @@ namespace RT64 {
+@@ -976,12 +1041,22 @@ namespace RT64 {
          std::vector<StreamResult> streamResultQueueCopy;
          std::vector<TextureMapAddition> textureMapAdditions;
          std::vector<ReplacementMapAddition> replacementMapAdditions;
@@ -12338,7 +12110,7 @@ index 0848f3e..7095706 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1103,15 @@ namespace RT64 {
+@@ -991,10 +1066,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -12356,7 +12128,7 @@ index 0848f3e..7095706 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1174,6 +1291,50 @@ namespace RT64 {
+@@ -1174,6 +1254,50 @@ namespace RT64 {
                          bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
                          replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
                      }
@@ -12407,7 +12179,7 @@ index 0848f3e..7095706 100644
                  }
                  
                  // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
-@@ -1222,6 +1383,24 @@ namespace RT64 {
+@@ -1222,6 +1346,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -12432,7 +12204,7 @@ index 0848f3e..7095706 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1409,7 @@ namespace RT64 {
+@@ -1230,6 +1372,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -12440,7 +12212,7 @@ index 0848f3e..7095706 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1242,6 +1422,14 @@ namespace RT64 {
+@@ -1242,6 +1385,14 @@ namespace RT64 {
                          textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
                      }
  
@@ -12455,118 +12227,7 @@ index 0848f3e..7095706 100644
                      textureMap.replacementMap.evict(textureMap.evictedTextures);
                  }
  
-@@ -1258,6 +1446,110 @@ namespace RT64 {
-         }
-     }
- 
-+    bool TextureCache::recordUpscale(RenderCommandList *commandList, Texture *texture, uint32_t factor) {
-+        if ((texture->texture == nullptr) || (texture->width == 0) || (texture->height == 0) || ((texture->width * factor) > TextureUpscaleMaxSize) || ((texture->height * factor) > TextureUpscaleMaxSize)) {
-+            return false;
-+        }
-+
-+        const ShaderRecord &textureUpscale = shaderLibrary->textureUpscale;
-+        commandList->setPipeline(textureUpscale.pipeline.get());
-+        commandList->setComputePipelineLayout(textureUpscale.pipelineLayout.get());
-+
-+        // Each pass doubles the size: once for 2x, twice for 4x (through a half-way texture).
-+        RenderTexture *input = texture->texture.get();
-+        uint32_t width = texture->width;
-+        uint32_t height = texture->height;
-+        std::unique_ptr<Texture> upscaled = std::make_unique<Texture>();
-+        for (uint32_t scale = 2; scale <= factor; scale *= 2) {
-+            const bool lastPass = (scale * 2) > factor;
-+            std::unique_ptr<RenderTexture> output = directWorker->device->createTexture(RenderTextureDesc::Texture2D(width * 2, height * 2, 1, RenderFormat::R8G8B8A8_UNORM, RenderTextureFlag::STORAGE | RenderTextureFlag::UNORDERED_ACCESS));
-+            output->setName("Texture Cache Upscaled");
-+            if (upscaleDescriptorsUsed >= upscaleDescriptorSets.size()) {
-+                upscaleDescriptorSets.emplace_back(std::make_unique<TextureUpscaleDescriptorSet>(directWorker->device));
-+            }
-+
-+            TextureUpscaleDescriptorSet *descSet = upscaleDescriptorSets[upscaleDescriptorsUsed++].get();
-+            descSet->setTexture(descSet->gInput, input, RenderTextureLayout::SHADER_READ);
-+            descSet->setTexture(descSet->gOutput, output.get(), RenderTextureLayout::GENERAL);
-+            commandList->barriers(RenderBarrierStage::COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::GENERAL));
-+
-+            const uint32_t upscaleCB[4] = { width, height, 0, 0 };
-+            const uint32_t ThreadGroupSize = 8;
-+            commandList->setComputePushConstants(0, upscaleCB);
-+            commandList->setComputeDescriptorSet(descSet->get(), 0);
-+            commandList->dispatch((width * 2 + ThreadGroupSize - 1) / ThreadGroupSize, (height * 2 + ThreadGroupSize - 1) / ThreadGroupSize, 1);
-+            commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, RenderTextureBarrier(output.get(), RenderTextureLayout::SHADER_READ));
-+
-+            width *= 2;
-+            height *= 2;
-+            input = output.get();
-+            if (lastPass) {
-+                upscaled->texture = std::move(output);
-+            }
-+            else {
-+                upscaleSteps.emplace_back(std::move(output));
-+            }
-+        }
-+
-+        upscaled->creationFrame = texture->creationFrame;
-+        upscaled->format = RenderFormat::R8G8B8A8_UNORM;
-+        upscaled->width = width;
-+        upscaled->height = height;
-+        upscaled->mipmaps = 1;
-+        upscaled->memorySize = uint64_t(width) * height * 4;
-+        texture->upscaled = std::move(upscaled);
-+        return true;
-+    }
-+
-+    void TextureCache::refreshUpscaled(uint32_t factor) {
-+        std::unique_lock lock(textureMapMutex);
-+
-+        // Take off the upscales made with the old setting. Frames in flight may still use them, so they're
-+        // freed with the evicted textures.
-+        for (size_t i = 0; i < textureMap.textures.size(); i++) {
-+            Texture *texture = textureMap.textures[i];
-+            if ((texture == nullptr) || (texture->upscaled == nullptr)) {
-+                continue;
-+            }
-+
-+            if (textureMap.textureReplacements[i] == texture->upscaled.get()) {
-+                textureMap.textureReplacements[i] = nullptr;
-+                textureMap.textureReplacementShiftedByHalf[i] = false;
-+                textureMap.textureReplacementReferenceCounted[i] = false;
-+                textureMap.textureScales[i] = IdentityScale;
-+                textureMap.versions[i]++;
-+            }
-+
-+            textureMap.evictedTextures.emplace_back(texture->upscaled.release());
-+        }
-+
-+        textureMap.globalVersion++;
-+        if (factor <= 1) {
-+            return;
-+        }
-+
-+        // Upscale every decoded texture that nothing else replaces.
-+        std::vector<uint32_t> upscaledIndices;
-+        directWorker->commandList->begin();
-+        upscaleDescriptorsUsed = 0;
-+        for (size_t i = 0; i < textureMap.textures.size(); i++) {
-+            Texture *texture = textureMap.textures[i];
-+            if ((texture != nullptr) && texture->decodeTMEM && (textureMap.textureReplacements[i] == nullptr) && recordUpscale(directWorker->commandList.get(), texture, factor)) {
-+                upscaledIndices.emplace_back(uint32_t(i));
-+            }
-+        }
-+
-+        directWorker->commandList->end();
-+        const RenderCommandList *directCommandList = directWorker->commandList.get();
-+        directWorker->commandQueue->executeCommandLists(&directCommandList, 1, nullptr, 0, nullptr, 0, directWorker->commandFence.get());
-+        directWorker->wait();
-+        upscaleSteps.clear();
-+
-+        for (uint32_t i : upscaledIndices) {
-+            textureMap.replace(textureMap.hashes[i], textureMap.textures[i]->upscaled.get(), false, false);
-+        }
-+    }
-+
-     void TextureCache::queueGPUUploadTMEM(uint64_t hash, uint64_t creationFrame, const uint8_t *bytes, int bytesCount, int width, int height, uint32_t tlut, const LoadTile &loadTile, bool decodeTMEM) {
-         assert(!decodeTMEM || ((width > 0) && (height > 0)));
- 
-@@ -1317,6 +1609,16 @@ namespace RT64 {
+@@ -1317,6 +1468,16 @@ namespace RT64 {
          return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
      }
  
