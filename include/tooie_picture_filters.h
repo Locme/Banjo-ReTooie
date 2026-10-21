@@ -106,6 +106,7 @@ namespace tooie::picture_filters {
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
+    inline const std::string tessellated_sand_option = "tessellated_sand";
     inline const std::string snow_height_option = "deep_snow_height";
     inline const std::string snow_detail_option = "deep_snow_detail";
     inline const std::string snow_refill_option = "deep_snow_refill_seconds";

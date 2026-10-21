@@ -96,7 +96,8 @@ namespace RT64 {
     void SetSceneKazooieFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneNpcFur(float amount, float length, float density, float noisiness);
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
-    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map);
+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
+    void SetSceneSandTextures(const uint64_t *hashes, size_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneTextureSeams(bool blend);
     void SetSceneParallaxTextures(const uint64_t *hashes, const uint8_t *ranges, size_t count, const uint8_t *styles, const uint8_t *fineDepths);
@@ -147,6 +148,9 @@ namespace {
     std::atomic<bool> npc_feathers{false};
     // Graphics > Deep snow and its height (1 normal); sent to RT64 only on a map with snow.
     std::atomic<bool> deep_snow{false};
+    // Graphics > Tessellated sand: deep snow's footprints, shallow, on sand textures (parallax shape Sand) on any map
+    // without deep snow.
+    std::atomic<bool> tessellated_sand{false};
     std::atomic<float> snow_height{1.0f};
     std::atomic<float> snow_detail{1.0f};
     std::atomic<float> snow_refill{0.0f};
@@ -3986,6 +3990,7 @@ namespace {
         { &tooie::picture_filters::sun_shadows_option, 0.0 },
         { &tooie::picture_filters::grass_option, 0.0 },
         { &tooie::picture_filters::deep_snow_option, false },
+        { &tooie::picture_filters::tessellated_sand_option, false },
         { &tooie::picture_filters::parallax_option, 0.0 },
         { &tooie::picture_filters::parallax_original_option, true },
         { &tooie::picture_filters::banjo_fur_option, 0.0 },
@@ -4150,12 +4155,16 @@ namespace {
         std::vector<uint8_t> styles;
         hashes.reserve(std::size(parallax_textures) + picks.size());
         std::vector<uint8_t> fines;
+        // (The sand ones are where Tessellated sand lies.)
+        std::vector<uint64_t> sand;
         auto add = [&](uint64_t hash, uint8_t darkest, uint8_t lightest, uint8_t shape, uint8_t fine) {
             const auto pick = picks.find(hash);
+            uint8_t final_shape = shape;
             if (pick != picks.end()) {
                 const bool off = pick->second.off;
                 const uint8_t style = pick->second.style();
                 const uint8_t fine = pick->second.fine;
+                final_shape = pick->second.shape;
                 picks.erase(pick);
                 if (off) {
                     return;
@@ -4171,6 +4180,9 @@ namespace {
             hashes.push_back(hash);
             ranges.push_back(darkest);
             ranges.push_back(lightest);
+            if (final_shape == tooie::parallax_pick::shape_sand) {
+                sand.push_back(hash);
+            }
         };
         for (const ParallaxTexture& texture : parallax_textures) {
             if (std::find(skip.begin(), skip.end(), texture.hash) == skip.end()) {
@@ -4182,6 +4194,7 @@ namespace {
             add(hash, 40, 190, tooie::parallax_pick::shape_stone, 0);
         }
         RT64::SetSceneParallaxTextures(hashes.data(), ranges.data(), hashes.size(), styles.data(), fines.data());
+        RT64::SetSceneSandTextures(sand.data(), sand.size());
         parallax_sent_version = version;
     }
 }
@@ -4325,6 +4338,11 @@ void tooie::picture_filters::apply() {
         snow = std::atoi(forced) != 0;
     }
     deep_snow = snow;
+    bool sand = shaders && value<bool>(tessellated_sand_option, false);
+    if (const char* forced = std::getenv("TOOIE_SAND")) {
+        sand = std::atoi(forced) != 0;
+    }
+    tessellated_sand = sand;
     snow_height = (float)(value<double>(snow_height_option, 100.0) / 100.0);
     if (const char* forced = std::getenv("TOOIE_SNOW_HEIGHT")) {
         snow_height = (float)(std::atof(forced) / 100.0);
@@ -4677,7 +4695,9 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     // Deep snow on the maps with snow only.
     {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
-        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : 0.0f;
+        // (Elsewhere tessellated sand, through the same: about a third of the snow's ankle depth, on sand only.)
+        const bool sand = tessellated_sand && !(deep_snow && snowy_map(map));
+        const float snow = (deep_snow && snowy_map(map)) ? snow_height.load() : (sand ? 0.35f : 0.0f);
         // Icy Side has pale ice beside its snow; elsewhere the snow is bluer.
         const bool strict = (map == 0x128);
         static bool strict_sent = true;
@@ -4688,14 +4708,17 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         const float detail = snow_detail.load();
         const float refill = snow_refill.load();
         const float lod = snow_lod_distance.load();
-        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent)) {
+        static bool sand_sent = false;
+        if ((snow != snow_sent.load()) || (strict != strict_sent) || (detail != detail_sent) || (refill != refill_sent) || (lod != lod_sent) || (map != map_sent) ||
+            (sand != sand_sent)) {
+            sand_sent = sand;
             snow_sent = snow;
             strict_sent = strict;
             detail_sent = detail;
             refill_sent = refill;
             lod_sent = lod;
             map_sent = map;
-            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map);
+            RT64::SetSceneSnow(snow > 0.0f, snow, strict, detail, refill, lod, map, sand);
         }
     }
     // The fog is measured from Banjo.
@@ -4913,6 +4936,11 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         deep_snow_option,
         "Deep snow",
         "The snow on the ground lies deep, as a real layer of snow (Hailfire Peaks' Icy Side): Banjo, the NPCs and the enemies press it down wherever they touch it, with the snow banked up round the dents, and the dents stay (or fill back in, with Snow fills back in). Drawn on the picture, so nothing in the game changes.",
+        false);
+    graphics.add_bool_option(
+        tessellated_sand_option,
+        "Tessellated sand",
+        "Sandy ground takes footprints: Banjo, the NPCs and the enemies press shallow, detailed prints into it wherever they touch it, and the wind has left low ripples over it. As Deep snow, with its detail, fills back in and distance settings. Needs a graphics card with tessellation.",
         false);
     graphics.add_number_option(
         snow_height_option,
@@ -5297,7 +5325,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_shading_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5363,6 +5391,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_occlusion_cull_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
+    graphics.add_option_hidden_dependency(tessellated_sand_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_detail_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_refill_option, lighting_section_option, false);

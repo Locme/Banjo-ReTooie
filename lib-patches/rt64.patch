@@ -2171,7 +2171,7 @@ index 69a82ac..3d5b165 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..932881a 100644
+index 9fae0d4..12b4cf9 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -3570,7 +3570,7 @@ index 9fae0d4..932881a 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,10 +2928,676 @@ namespace RT64 {
+@@ -1747,10 +2928,682 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3851,11 +3851,17 @@ index 9fae0d4..932881a 100644
 +                    // Nor on a texture picked for no snow.
 +                    bool iceGround = false;
 +                    bool snowOff = false;
++                    // Tessellated sand only on sand textures.
++                    const bool sand = frameParams.snowLod.w > 0.5f;
++                    bool sandGround = false;
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !snowOff; t++) {
 +                        const uint64_t hash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
 +                        iceGround = iceGround || SceneIceTexture(hash);
 +                        snowOff = SceneSnowOffTexture(hash);
++                        sandGround = sandGround || (sand && SceneSandTexture(hash));
 +                    }
++                    // (And only tessellated: shells are snow-only.)
++                    snowOff = snowOff || (sand && (!sandGround || (snowTessPipeline == nullptr)));
 +                    if (!snowOff && !iceGround && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
 +                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams, snowTessPipeline != nullptr), 255u));
 +                        if (snowValue != 0) {
@@ -4250,7 +4256,7 @@ index 9fae0d4..932881a 100644
              }
          }
  
-@@ -1758,14 +3605,831 @@ namespace RT64 {
+@@ -1758,14 +3611,831 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
@@ -7076,10 +7082,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..32b6f87
+index 0000000..2079de0
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3077 @@
+@@ -0,0 +1,3093 @@
 +//
 +// RT64
 +//
@@ -7824,6 +7830,19 @@ index 0000000..32b6f87
 +        return snowOffTextures.count(hash) != 0;
 +    }
 +
++    static std::unordered_set<uint64_t> sandTextures;
++
++    void SetSceneSandTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(snowOffTextureMutex);
++        sandTextures.swap(textures);
++    }
++
++    bool SceneSandTexture(uint64_t hash) {
++        const std::scoped_lock lock(snowOffTextureMutex);
++        return sandTextures.count(hash) != 0;
++    }
++
 +    static std::mutex nightLightMutex;
 +    static std::unordered_set<uint64_t> nightLightTextures;
 +
@@ -8093,7 +8112,7 @@ index 0000000..32b6f87
 +        effectsSettings.grassPatches = std::clamp(patches, 0.0f, 1.0f);
 +    }
 +
-+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map) {
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand) {
 +        const std::scoped_lock lock(effectsMutex);
 +        effectsSettings.snowRefillAfter = std::max(refillAfter, 0.0f);
 +        effectsSettings.snowLodDistance = std::clamp(lodDistance, 100.0f, 20000.0f);
@@ -8104,6 +8123,7 @@ index 0000000..32b6f87
 +        }
 +        effectsSettings.snowDetail = std::clamp(detail, 0.25f, 1.0f);
 +        effectsSettings.snowStrictColor = strictColor;
++        effectsSettings.snowSand = sand;
 +        effectsSettings.snow = on && (height > 0.0f);
 +        effectsSettings.snowHeight = std::clamp(height, 0.0f, 3.0f);
 +    }
@@ -9098,14 +9118,16 @@ index 0000000..32b6f87
 +            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u model triangles (%.1f ms)\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
 +                pressed, depth, recover, trail.lastTouches, trail.lastTouchMs);
 +        }
-+        frameParams.snowSpring = { trail.hold, recover, SnowBank, float(now) };
++        // (Sand banks up less round a print than snow.)
++        frameParams.snowSpring = { trail.hold, recover, settings.snowSand ? SnowBank * 0.6f : SnowBank, float(now) };
 +        frameParams.snowLight = { light[0] / lightLength, light[1] / lightLength, light[2] / lightLength, 3.2f };
 +        // (w: how light it must be. The arena's bluer snow is very light, its ice's pale glints not quite.)
 +        frameParams.snowColor = settings.snowStrictColor ? interop::float4{ 0.06f, 0.25f, 0.3f, 0.45f } : interop::float4{ 0.2f, 0.45f, 0.45f, 0.72f };
 +        frameParams.snowPlayer = { settings.player[0], settings.player[2], settings.player[1], havePlayer ? SnowTessReach : 0.0f };
 +        // (The trail's cells tell one world cell from another, so it can be looked up as far off as the snow goes; it is
 +        // only pressed in round Banjo, snowLod.z.)
-+        frameParams.snowLod = { settings.snowLodDistance, SnowTessReach, SnowGridSize * trail.cell * 0.45f, 0.0f };
++        // (w: 1 for tessellated sand, Snow.hlsli SnowSand.)
++        frameParams.snowLod = { settings.snowLodDistance, SnowTessReach, SnowGridSize * trail.cell * 0.45f, settings.snowSand ? 1.0f : 0.0f };
 +        // The blocks with a trail still filling back in (for as long as a print can take to).
 +        uint32_t blocks[8] = {};
 +        const double lasts = double(trail.hold) + SnowRecoverSeconds + 2.0;
@@ -10159,10 +10181,10 @@ index 0000000..32b6f87
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..ebee27b
+index 0000000..d172dc9
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,484 @@
 +//
 +// RT64
 +//
@@ -10335,6 +10357,8 @@ index 0000000..ebee27b
 +        uint32_t snowMap = 0;
 +        uint32_t snowMapVisit = 0;
 +        bool snowStrictColor = true;
++        // Tessellated sand instead of snow: shallow, only on sand textures (SetSceneSandTextures), shaded as sand.
++        bool snowSand = false;
 +        uint32_t view = 0;
 +        bool compare = false;
 +    };
@@ -10523,7 +10547,7 @@ index 0000000..ebee27b
 +    // refillAfter: seconds prints stay before filling back in (less work: the snow is cut finely only where prints
 +    // still show); 0, they stay until the map changes. lodDistance: the camera distance the snow is cut coarser from. map: the
 +    // game's map (a new one clears the trail).
-+    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map);
++    void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
 +    // A triangle of a model drawn this frame (not the level's own ground), in the world (x y z three times): deep snow
 +    // is pressed down wherever one reaches into it (ComputeSceneSnow).
 +    void SceneSnowTouch(const float *triangle);
@@ -10578,6 +10602,9 @@ index 0000000..ebee27b
 +    // Banjo-Tooie: textures deep snow never covers (Shader Effects pick mode's picks other than Deep Snow).
 +    void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
 +    bool SceneSnowOffTexture(uint64_t hash);
++    // Banjo-Tooie: the sand textures tessellated sand lies on (SetSceneSnow's sand).
++    void SetSceneSandTextures(const uint64_t *hashes, size_t count);
++    bool SceneSandTexture(uint64_t hash);
 +    // Fills the frame's night light terms. False when nothing lights up this frame (day, or the cycle is off).
 +    bool ComputeSceneNightLights(interop::FrameParams &frameParams);
 +    // Whether a texture lights up at night (only meaningful after ComputeSceneNightLights returned true).
@@ -19379,10 +19406,10 @@ index 0000000..d6b151f
 +}
 diff --git a/src/shaders/Snow.hlsli b/src/shaders/Snow.hlsli
 new file mode 100644
-index 0000000..0e48da8
+index 0000000..d6e07c2
 --- /dev/null
 +++ b/src/shaders/Snow.hlsli
-@@ -0,0 +1,394 @@
+@@ -0,0 +1,445 @@
 +//
 +// RT64
 +//
@@ -19407,6 +19434,42 @@ index 0000000..0e48da8
 +// Snowy ground: light and not very colourful (white, lilac or a little warm in the sun). On Icy Side not the ice's
 +// cyan (its pale streaks are as light as snow, but greener and bluer than red); in Chilly Willy's arena the snow
 +// itself is bluish white (snowColor, from the map).
++// Tessellated sand instead of deep snow (SetSceneSnow's sand): shallow, shaded as sand, rippled by the wind.
++bool SnowSand() {
++    return FrParams.snowLod.w > 0.5f;
++}
++
++// Smooth value noise (0 to 1).
++float SnowNoise(float2 p) {
++    const float2 i = floor(p);
++    const float2 f = frac(p);
++    const float2 u = f * f * (3.0f - 2.0f * f);
++    const float a = GrassHash(i).x;
++    const float b = GrassHash(i + float2(1.0f, 0.0f)).x;
++    const float c = GrassHash(i + float2(0.0f, 1.0f)).x;
++    const float d = GrassHash(i + float2(1.0f, 1.0f)).x;
++    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
++}
++
++// The slope (d height / dx, dz) of the ripples the wind leaves in sand at a world position: low ridges about 9 units
++// apart across the wind, bent and broken up by noise, stronger in some patches than others, fading out by distance
++// before they are finer than the pixels.
++float2 SandRippleSlope(float2 xz, float cameraDistance) {
++    const float fade = saturate(1.0f - cameraDistance / 900.0f);
++    if (fade <= 0.0f) {
++        return 0.0f;
++    }
++    const float2 wind = float2(0.8f, 0.6f);
++    const float wavelength = 9.0f;
++    const float along = dot(xz, wind) + 7.0f * SnowNoise(xz / 45.0f) + 2.0f * SnowNoise(xz / 14.0f + 31.0f);
++    const float theta = along / wavelength * 6.2831853f;
++    // (A ridge: gentle up the windward side, steeper down the lee, sin + a quarter of its second harmonic.)
++    const float rise = cos(theta) + 0.5f * cos(2.0f * theta);
++    const float patch = lerp(0.35f, 1.0f, smoothstep(0.3f, 0.7f, SnowNoise(xz / 70.0f + 11.0f)));
++    const float amplitude = 0.35f;
++    return wind * (amplitude * rise * 6.2831853f / wavelength * patch * fade);
++}
++
 +bool SnowColor(float3 baseColor) {
 +    const float brightest = max(baseColor.r, max(baseColor.g, baseColor.b));
 +    const float darkest = min(baseColor.r, min(baseColor.g, baseColor.b));
@@ -19457,7 +19520,8 @@ index 0000000..0e48da8
 +    const float depth = max(FrParams.snowParams.x, 1e-3f);
 +    const float pressed = saturate((groundY + depth - floorY) / depth);
 +    // (Down through such a layer to his feet: the tessellated snow's trail reaches them, RASTER_SNOW_TESS.)
-+    return float3(pressed, bank, pressed * clamp(groundY - floorY, 0.0f, SnowLayerMost));
++    // (Sand lies on the ground itself: nothing to go down through.)
++    return float3(pressed, bank, SnowSand() ? 0.0f : pressed * clamp(groundY - floorY, 0.0f, SnowLayerMost));
 +}
 +
 +// The trail's press (x), bank (y) and depth below the ground (z, SnowCell) at a world position, blended between the
@@ -19618,15 +19682,20 @@ index 0000000..0e48da8
 +// Two cells up to the Snow LOD distance, then coarser and coarser (smoother, and cheaper) the further away.
 +float SnowTrailSegment(float cameraDistance) {
 +    const float start = max(FrParams.snowLod.x, 1.0f);
-+    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.)
-+    return max(FrParams.snowGrid.x * 2.0f, 4.0f) * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
++    // (No finer than 4 units: the trail is smoothed over 6, SnowTrailBlur, so finer points cost without showing more.
++    // Sand, shallow, keeps its footprints' detail: two cells. Further off, coarser with the distance as a point covers
++    // fewer pixels, about as many pixels apart everywhere: finely cut prints all over the level, held until the map
++    // changes, cost the most of a frame.)
++    const float finest = SnowSand() ? FrParams.snowGrid.x * 2.0f : max(FrParams.snowGrid.x * 2.0f, 4.0f);
++    const float closest = max(finest, cameraDistance * 0.008f);
++    return closest * (1.0f + max(cameraDistance - start, 0.0f) / (start * 0.25f));
 +}
 +
 +// How far the tessellated snow's trail is smoothed over at a distance from the camera (world units): by the domain
 +// shader where to raise the surface to, and the pixel shader alike, so the shading matches the shape. Never less than
 +// a few cells, so the dents' walls slope as soft snow does instead of standing as steps and spikes between the cells.
 +float SnowTrailBlur(float cameraDistance) {
-+    return max(SnowTrailSegment(cameraDistance) * 0.75f, 6.0f);
++    return max(SnowTrailSegment(cameraDistance) * 0.75f, SnowSand() ? 2.5f : 6.0f);
 +}
 +
 +// The tessellated snow (RASTER_SNOW_TESS, SnowTess.hlsl): its height over a point of the ground (ground, with how much
@@ -19752,6 +19821,15 @@ index 0000000..0e48da8
 +    // Deeper under the snow's untouched surface (the floor and walls of the trail) it is packed down and in shade:
 +    // greyer and bluer. The top is a little brighter than the ground below it.
 +    const float under = saturate((s.surface - s.shellY) / max(s.surface, 1.0f));
++    if (SnowSand()) {
++        // Sand: rippled by the wind where no foot has flattened it, a footprint a little darker (packed down), and its
++        // shaded slopes warm, not blue. No glints.
++        lit = clamp(lit + SnowTrailLight(SandRippleSlope(world.xz, s.cameraDistance) * (1.0f - under)), -1.0f, 1.0f);
++        float3 sand = color * lerp(1.03f, 0.86f, under) * (1.0f + 0.22f * max(lit, 0.0f));
++        sand = lerp(sand, sand * float3(0.8f, 0.75f, 0.68f), saturate(-lit) * 0.85f);
++        color = sand;
++        return true;
++    }
 +    float3 shade = color * lerp(1.06f, 0.84f, under) * (1.0f + 0.3f * max(lit, 0.0f));
 +    shade = lerp(shade, shade * float3(0.62f, 0.68f, 0.86f), saturate(-lit));
 +    shade = lerp(shade, shade * float3(0.8f, 0.84f, 0.94f), saturate(under * s.trail.x * 1.5f));
