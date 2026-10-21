@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T494 Jinjo Village sun position
+- Asked: 2026-10-21 08:31 UTC
+- Build: main
+- Steps:
+  1. Start Jinjo Village (map 142) with Sun shadows on
+  2. Look up at the sky and at the ground shadows
+- Look for: Is the sun high, with the level mostly lit and shadows short? Tell me which way to move it if not (it is one table line, map_suns).
+- Status: waiting for L
+
 ## T493 Tessellated sand: deeper footprints, no edge outline, varied ripples
 - Asked: 2026-10-21 08:18 UTC
 - Build: main
