@@ -2211,7 +2211,7 @@ index 69a82ac..769c4bd 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..6773bff 100644
+index 9fae0d4..bd9dd07 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2769,7 +2769,7 @@ index 9fae0d4..6773bff 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +694,78 @@ namespace RT64 {
+@@ -169,11 +694,79 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2808,6 +2808,7 @@ index 9fae0d4..6773bff 100644
 +        instanceNightLightVector.clear();
 +        instanceSeeThroughVector.clear();
 +        instanceSeamVector.clear();
++        instanceMirrorTextVector.clear();
 +        // Banjo-Tooie: picks among last frame's surfaces under the pick mode cursor.
 +        FinishScenePick();
 +        nightLightsChecked = false;
@@ -2848,7 +2849,7 @@ index 9fae0d4..6773bff 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +811,7 @@ namespace RT64 {
+@@ -219,6 +812,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2856,7 +2857,7 @@ index 9fae0d4..6773bff 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +843,7 @@ namespace RT64 {
+@@ -250,6 +844,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2864,7 +2865,7 @@ index 9fae0d4..6773bff 100644
                  }
              }
              else {
-@@ -272,6 +866,9 @@ namespace RT64 {
+@@ -272,6 +867,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2874,7 +2875,7 @@ index 9fae0d4..6773bff 100644
              }
          }
      }
-@@ -373,6 +970,15 @@ namespace RT64 {
+@@ -373,6 +971,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2890,7 +2891,7 @@ index 9fae0d4..6773bff 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1049,14 @@ namespace RT64 {
+@@ -443,6 +1050,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2905,7 +2906,7 @@ index 9fae0d4..6773bff 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1079,82 @@ namespace RT64 {
+@@ -465,12 +1080,82 @@ namespace RT64 {
          return true;
      }
      
@@ -2990,7 +2991,7 @@ index 9fae0d4..6773bff 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1183,16 @@ namespace RT64 {
+@@ -499,6 +1184,16 @@ namespace RT64 {
              }
          };
  
@@ -3007,7 +3008,7 @@ index 9fae0d4..6773bff 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1208,17 @@ namespace RT64 {
+@@ -514,6 +1209,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3025,7 +3026,7 @@ index 9fae0d4..6773bff 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -562,7 +1267,13 @@ namespace RT64 {
+@@ -562,7 +1268,13 @@ namespace RT64 {
                  }
  
                  if (previousScissor != triangles.scissor) {
@@ -3040,7 +3041,7 @@ index 9fae0d4..6773bff 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1285,162 @@ namespace RT64 {
+@@ -574,12 +1286,165 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3050,6 +3051,9 @@ index 9fae0d4..6773bff 100644
 +                }
 +                rasterParams.nightLight = (i < instanceNightLightVector.size()) ? instanceNightLightVector[i] : 0;
 +                rasterParams.seeThrough = (i < instanceSeeThroughVector.size()) ? instanceSeeThroughVector[i] : 0;
++                if ((i < instanceMirrorTextVector.size()) && (instanceMirrorTextVector[i] != 0)) {
++                    rasterParams.seeThrough |= RASTER_MIRROR_TEXT;
++                }
 +                rasterParams.seamTiles = (i < instanceSeamVector.size()) ? instanceSeamVector[i] : interop::uint4(RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE, RASTER_SEAM_NONE);
                  worker->commandList->setGraphicsPushConstants(0, &rasterParams);
  
@@ -3204,7 +3208,7 @@ index 9fae0d4..6773bff 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1458,7 @@ namespace RT64 {
+@@ -597,6 +1462,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3212,7 +3216,7 @@ index 9fae0d4..6773bff 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1478,7 @@ namespace RT64 {
+@@ -616,6 +1482,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3220,7 +3224,7 @@ index 9fae0d4..6773bff 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2109,76 @@ namespace RT64 {
+@@ -1246,10 +2113,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3297,7 +3301,7 @@ index 9fae0d4..6773bff 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2225,136 @@ namespace RT64 {
+@@ -1296,9 +2229,136 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3435,7 +3439,7 @@ index 9fae0d4..6773bff 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2406,38 @@ namespace RT64 {
+@@ -1350,10 +2410,38 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3474,7 +3478,7 @@ index 9fae0d4..6773bff 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2470,11 @@ namespace RT64 {
+@@ -1386,6 +2474,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3486,7 +3490,7 @@ index 9fae0d4..6773bff 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2497,65 @@ namespace RT64 {
+@@ -1408,6 +2501,65 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3552,10 +3556,14 @@ index 9fae0d4..6773bff 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2579,22 @@ namespace RT64 {
+@@ -1431,10 +2583,26 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
+-        const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
+-        const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
+-        const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
+-        const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
 +        // Banjo-Tooie: after a draw to another buffer (a shadow), the rest of the 3D world can come back in a part
 +        // that writes no depth, only see-through draws (Icy Side's water). It carries on the earlier part's world:
 +        // its draws with the world's projection open the world again, so their water goes in the mask and the
@@ -3572,10 +3580,14 @@ index 9fae0d4..6773bff 100644
 +            }
 +        }
 +
-         const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
-         const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
-         const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2614,175 @@ namespace RT64 {
++        const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
++        const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
++        const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
++        const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
+         InstanceDrawCall instanceDrawCall;
+         interop::RenderIndices renderIndices;
+         uint32_t globalCallIndex = 0;
+@@ -1450,12 +2618,175 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3751,7 +3763,7 @@ index 9fae0d4..6773bff 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2933,7 @@ namespace RT64 {
+@@ -1606,6 +2937,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3759,7 +3771,7 @@ index 9fae0d4..6773bff 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3010,20 @@ namespace RT64 {
+@@ -1682,6 +3014,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3780,7 +3792,7 @@ index 9fae0d4..6773bff 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3089,1751 @@ namespace RT64 {
+@@ -1747,25 +3093,1761 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4138,8 +4150,8 @@ index 9fae0d4..6773bff 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -4362,6 +4374,16 @@ index 9fae0d4..6773bff 100644
 +                        }
 +                    }
 +                }
++                {
++                    bool mirrorText = false;
++                    if (GetMirrorMode() && worldOpen && (proj.type == Projection::Type::Perspective)) {
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !mirrorText; t++) {
++                            mirrorText = MirrorTextTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        }
++                    }
++                    instanceMirrorTextVector.resize(instanceIndex, 0);
++                    instanceMirrorTextVector.push_back(mirrorText ? 1 : 0);
++                }
 +                instanceNightLightVector.resize(instanceIndex, 0);
 +                instanceNightLightVector.push_back((nightLight ? RASTER_NIGHT_LIGHT : 0) | ((parallax != 0) ? (RASTER_PARALLAX | (parallax << 8) | ((parallax >> 22) & RASTER_PARALLAX_SHAPE_HIGH) |
 +                    (((parallax >> 25) << RASTER_PARALLAX_FINE_DEPTH_SHIFT) & RASTER_PARALLAX_FINE_DEPTH)) : 0));
@@ -4374,9 +4396,9 @@ index 9fae0d4..6773bff 100644
 +                        (tm.cycleType() != G_CYC_COPY) && (tm.cycleType() != G_CYC_FILL) && interop::Blender::usesAlphaBlend(tm) && SceneEffectsAnyOn();
 +                    instanceSeeThroughVector.resize(instanceIndex, 0);
 +                    instanceSeeThroughVector.push_back(seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0);
-                 }
++                }
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
- 
++
                  instanceDrawCallVector.push_back(instanceDrawCall);
                  globalCallIndex++;
              }
@@ -5534,7 +5556,7 @@ index 9fae0d4..6773bff 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..cf49162 100644
+index 3add9c3..c357c8e 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5616,7 +5638,7 @@ index 3add9c3..cf49162 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +112,179 @@ namespace RT64 {
+@@ -62,11 +112,181 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5757,6 +5779,8 @@ index 3add9c3..cf49162 100644
 +        // Banjo-Tooie: Blend texture seams, per instance: the tiles (global indices) of the pieces drawn right of, below,
 +        // left of and above it, for a picture drawn in clamped pieces (the title's logo); RASTER_SEAM_NONE for none.
 +        std::vector<interop::uint4> instanceSeamVector;
++        // Banjo-Tooie: Mirror Mode, per instance: 1 for a draw of the 3D world whose texture has writing on it.
++        std::vector<uint8_t> instanceMirrorTextVector;
 +        bool nightLightsChecked = false;
 +        bool nightLights = false;
 +        // Banjo-Tooie: parallax mapping this frame (ComputeSceneParallax).
@@ -5796,7 +5820,7 @@ index 3add9c3..cf49162 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +295,13 @@ namespace RT64 {
+@@ -77,6 +297,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5810,7 +5834,7 @@ index 3add9c3..cf49162 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +312,12 @@ namespace RT64 {
+@@ -87,6 +314,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5823,7 +5847,7 @@ index 3add9c3..cf49162 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +331,7 @@ namespace RT64 {
+@@ -100,6 +333,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5831,7 +5855,7 @@ index 3add9c3..cf49162 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +355,10 @@ namespace RT64 {
+@@ -123,6 +357,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5842,7 +5866,7 @@ index 3add9c3..cf49162 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +400,15 @@ namespace RT64 {
+@@ -164,7 +402,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -6329,10 +6353,10 @@ index 0000000..c977859
 +};
 diff --git a/src/render/rt64_mirror.cpp b/src/render/rt64_mirror.cpp
 new file mode 100644
-index 0000000..fc49290
+index 0000000..b29242d
 --- /dev/null
 +++ b/src/render/rt64_mirror.cpp
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,93 @@
 +//
 +// RT64
 +//
@@ -6341,6 +6365,8 @@ index 0000000..fc49290
 +
 +#include <algorithm>
 +#include <atomic>
++#include <mutex>
++#include <unordered_set>
 +
 +#include "shared/rt64_smaa.h"
 +
@@ -6349,6 +6375,22 @@ index 0000000..fc49290
 +namespace RT64 {
 +    namespace {
 +        std::atomic<bool> mirrorMode{ false };
++    }
++
++    namespace {
++        std::mutex textTextureMutex;
++        std::unordered_set<uint64_t> textTextures;
++    }
++
++    void SetMirrorTextTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(textTextureMutex);
++        textTextures.swap(textures);
++    }
++
++    bool MirrorTextTexture(uint64_t hash) {
++        const std::scoped_lock lock(textTextureMutex);
++        return textTextures.count(hash) != 0;
 +    }
 +
 +    void SetMirrorMode(bool on) {
@@ -6410,10 +6452,10 @@ index 0000000..fc49290
 +};
 diff --git a/src/render/rt64_mirror.h b/src/render/rt64_mirror.h
 new file mode 100644
-index 0000000..944f950
+index 0000000..43c79ba
 --- /dev/null
 +++ b/src/render/rt64_mirror.h
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,34 @@
 +//
 +// RT64
 +//
@@ -6429,6 +6471,11 @@ index 0000000..944f950
 +    // out where they were and readable.
 +    void SetMirrorMode(bool on);
 +    bool GetMirrorMode();
++
++    // Mirror Mode: textures with writing on them (signs), which are flipped back so they read normally on the
++    // mirrored world (RasterPS.hlsl). Read on the render thread.
++    void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
++    bool MirrorTextTexture(uint64_t hash);
 +
 +    struct MirrorRenderer {
 +        std::unique_ptr<RenderTexture> outputTexture;
@@ -15522,7 +15569,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..a89e51a 100644
+index e7895c3..2c51eaa 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -15666,25 +15713,27 @@ index e7895c3..a89e51a 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +246,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +246,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
 +        // Banjo-Tooie: the pieces beside this one, for Blend texture seams (only for the draw's first tile).
++        gMirrorText = (tileIndex0 == 0) && ((gConstants.seeThrough & RASTER_MIRROR_TEXT) != 0);
 +        gSeamTiles = (tileIndex0 == 0) ? uint4(gConstants.seamTiles.x, gConstants.seamTiles.y, gConstants.seamTiles.z, gConstants.seamTiles.w) : SeamTilesNone;
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +264,8 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +265,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
++        gMirrorText = (globalTileIndex == instanceRenderIndices[gConstants.renderIndex].rdpTileIndex) && ((gConstants.seeThrough & RASTER_MIRROR_TEXT) != 0);
 +        gSeamTiles = (globalTileIndex == instanceRenderIndices[gConstants.renderIndex].rdpTileIndex) ?
 +            uint4(gConstants.seamTiles.x, gConstants.seamTiles.y, gConstants.seamTiles.z, gConstants.seamTiles.w) : SeamTilesNone;
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +289,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +291,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -15723,7 +15772,7 @@ index e7895c3..a89e51a 100644
      
  #if 0
      // Alpha dither.
-@@ -237,6 +376,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -237,6 +378,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultAlpha.a = resultColor.a;
      }
      
@@ -15736,7 +15785,7 @@ index e7895c3..a89e51a 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +399,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +401,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -15860,7 +15909,7 @@ index e7895c3..a89e51a 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +523,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +525,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -15885,7 +15934,7 @@ index e7895c3..a89e51a 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +567,7 @@ void PSMain(
+@@ -287,6 +569,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -15893,7 +15942,7 @@ index e7895c3..a89e51a 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +584,7 @@ void PSMain(
+@@ -303,7 +586,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -21300,10 +21349,10 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..11e9af8 100644
+index 1ceb2ce..192714b 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
-@@ -139,7 +139,18 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
+@@ -139,7 +139,20 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
      }
  }
  
@@ -21312,6 +21361,8 @@ index 1ceb2ce..11e9af8 100644
 +// the one being sampled (RasterParams.seamTiles, set by RasterPS before each sampleTexture), or RASTER_SEAM_NONE.
 +static const uint4 SeamTilesNone = uint4(0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu);
 +static uint4 gSeamTiles = SeamTilesNone;
++// Banjo-Tooie: Mirror Mode: the texture has writing on it, so it is read flipped across its width, undoing the mirror.
++static bool gMirrorText = false;
 +
 +// The last texel along s and t of a tile (scaled as the texture is stored).
 +int2 seamEdge(const RDPTile rdpTile, float2 tcScale) {
@@ -21323,7 +21374,7 @@ index 1ceb2ce..11e9af8 100644
      float2 tcScale = gpuTile.tcScale;
      float mipScale = float(1U << mipLevel);
      uvCoord /= mipScale;
-@@ -186,6 +197,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
+@@ -186,6 +199,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
  #endif
      }
      
@@ -21370,7 +21421,18 @@ index 1ceb2ce..11e9af8 100644
      float4 sample00 = samples[0];
      if (filtering) {
          float2 fracPart = uvCoord - texelBaseInt;
-@@ -278,7 +329,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -243,6 +296,10 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+     
+     uvCoord *= gpuTile.tcScale;
+     uvCoord -= (float2(rdpTile.uls, rdpTile.ult) * gpuTile.ulScale) / 4.0f;
++    if (gMirrorText) {
++        // The tile's width in texels as stored: (lrs - uls) / 4 + 1, scaled.
++        uvCoord.x = ((rdpTile.lrs - rdpTile.uls) / 4.0f + 1.0f) * gpuTile.tcScale.x - uvCoord.x;
++    }
+     
+     const uint filter = otherMode.textFilt();
+     const uint cycleType = otherMode.cycleType();
+@@ -278,7 +335,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
              float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
              float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
              float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
@@ -21379,7 +21441,7 @@ index 1ceb2ce..11e9af8 100644
              mip = 0.5 * log2(ddMax) + mipBias;
              float maxMip = float(gpuTile.textureDimensions.z - 1);
              RDPMipLevels[0] = min(floor(mip), maxMip);
-@@ -326,13 +377,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -326,13 +383,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
  #if USE_FOR_LOOPS
      [unroll]
      for (uint i = 0; i < numRDPSamples; i++) {
@@ -22107,10 +22169,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..411e22b 100644
+index 0a5c332..a9a0bde 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,75 @@
+@@ -9,11 +9,78 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -22157,6 +22219,9 @@ index 0a5c332..411e22b 100644
 +    // Banjo-Tooie: RasterParams.seeThrough: the draw's pixels that are nearly clear (blend factor under 0.2) leave no
 +    // depth, so the screen effects (ambient occlusion, fog, outlines) don't take a clear quad for a wall.
 +#define RASTER_SEE_THROUGH_DEPTH 0x1u
++    // Banjo-Tooie: Mirror Mode: also in RasterParams.seeThrough, set when the draw's texture has writing on it, which is
++    // read flipped across its width to undo the mirror (TextureSampler.hlsli).
++#define RASTER_MIRROR_TEXT 0x2u
 +
      struct RasterParams {
          uint renderIndex;

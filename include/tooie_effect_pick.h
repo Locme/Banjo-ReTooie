@@ -3,7 +3,7 @@
 
 // Shader Effects pick mode (src/debug/parallax_pick.cpp, beside parallax pick mode): the Shader Effects Pick Mode key
 // frees the mouse as a crosshair, the texture under it is highlighted, and left clicks step the shader effect that
-// texture gets: Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, then back to the built-in choice. The picks
+// texture gets: Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it back so it reads normally), then back to the built-in choice. The picks
 // are kept in shader_effect_tags.txt in the Dev Files folder and override the built-in lists (grass_textures[],
 // ice_textures[], and the shiny list from parallax_textures[] in picture_filters.cpp), which they can be folded into.
 #include <cstdint>
@@ -16,7 +16,8 @@ namespace tooie::effect_pick {
         effect_deep_snow = 2,
         effect_ice = 3,
         effect_shiny = 4,
-        effect_count = 5
+        effect_text = 5,
+        effect_count = 6
     };
 
     // Bumped each time a pick changes, so the texture lists are rebuilt.

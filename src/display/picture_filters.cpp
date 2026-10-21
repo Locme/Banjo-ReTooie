@@ -67,6 +67,8 @@ namespace RT64 {
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
     void SetSceneShinyTextures(const uint64_t *hashes, size_t count);
+    // lib/rt64/src/render/rt64_mirror.h (from lib-patches/rt64.patch).
+    void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
@@ -4146,6 +4148,9 @@ namespace {
         RT64::SetSceneGrassTextures(grass.data(), grass.size());
         RT64::SetSceneIceTextures(ice.data(), ice.size());
         RT64::SetSceneShinyTextures(shiny.data(), shiny.size());
+        // Mirror Mode: textures picked as Text are flipped back on the mirrored world.
+        std::vector<uint64_t> mirror_text = build(nullptr, nullptr, tooie::effect_pick::effect_text, true);
+        RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         effects_sent_version.store(version);

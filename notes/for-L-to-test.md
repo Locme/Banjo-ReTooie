@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T505 Mirror Mode: signs readable, Text pick
+- Asked: 2026-10-21 10:55 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on (T504)
+  2. Find a sign (Spiral Mountain), press the Shader Effects Pick Mode key, click its writing until the label says Text
+  3. Look at the sign again
+  4. Walk to other signs and pick any whose writing is still mirrored
+- Look for: Text-picked textures read normally on the mirrored world while the sign's shape is mirrored. Send shader_effect_tags.txt from the Dev Files folder so I can build the picks into the default list. The list starts empty, so nothing is flipped back until you pick. Not built or run.
+- Status: waiting for L
+
 ## T504 General: Mirror Mode
 - Asked: 2026-10-21 10:51 UTC
 - Build: main, next push (untested)
