@@ -1268,18 +1268,18 @@ float3 LampGlow(int2 pixel, float depth, float strength) {
             const float3 toLight = light.xyz - p;
             const float d = length(toLight);
             const float near = saturate(1.0f - d / radius);
-            if (near <= 0.0f) {
+            // Not inside the lamp's fitting (within 90, as TraceLampVisible): the points there, brightest and seen
+            // without a ray, drew a glowing ball at the light, through the lamp itself (L, 2026-10-21: the balls
+            // should be invisible). The glow is only in the air the light reaches.
+            if ((near <= 0.0f) || (d < 90.0f)) {
                 continue;
             }
-            float visible = 1.0f;
-            if (d > stopShort + 1.0f) {
-                RayDesc ray;
-                ray.Origin = p;
-                ray.Direction = toLight / d;
-                ray.TMin = 0.0f;
-                ray.TMax = d - stopShort;
-                visible = TraceLampVisible(ray, light.xyz);
-            }
+            RayDesc ray;
+            ray.Origin = p;
+            ray.Direction = toLight / d;
+            ray.TMin = 0.0f;
+            ray.TMax = d - stopShort;
+            const float visible = TraceLampVisible(ray, light.xyz);
             glow += float3(1.0f, 0.75f, 0.45f) * (near * near * step * visible);
         }
     }
