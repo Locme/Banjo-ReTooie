@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -43,6 +44,7 @@
 #include "tooie_cheats.h"
 #include "tooie_damage.h"
 #include "tooie_rdram.h"
+#include "tooie_game_frame_rate.h"
 
 namespace {
     // Set while bssplat_entrypoint_0 hands a fall's damage to func_800A17A8.
@@ -100,8 +102,22 @@ extern "C" void tooie_fall_damage_end(uint8_t* rdram, recomp_context* ctx) {
     in_fall = false;
 }
 
+namespace {
+    // Hit timing log (L, 2026-10-20: enemies sometimes take damage 1-2 s after the hit, at 175 FPS running
+    // at 30-77). Always on and small: each player state change and each enemy hit, with game and real time,
+    // so a console.log from a PC where it happens shows whether the hit itself came late. Not reproduced
+    // headless (claw swipes on Uggers landed as soon as they were in reach at every frame rate tried).
+    const auto hit_log_start = std::chrono::steady_clock::now();
+    void hit_log_line(const char* what, int value) {
+        const double real = std::chrono::duration<double>(std::chrono::steady_clock::now() - hit_log_start).count();
+        std::printf("[hits] game %.3f s, real %.3f s: %s %d\n", tooie::game_frame_rate::game_seconds(), real, what, value);
+        std::fflush(stdout);
+    }
+}
+
 // An enemy hit handler just before it takes the damage (in register reg) from the enemy's health.
 extern "C" void tooie_enemy_hit_damage(uint8_t* rdram, recomp_context* ctx, int reg) {
+    hit_log_line("enemy hit, damage", (int)(reg == 2 ? ctx->r2 : ctx->r24));
     if (!tooie::cheats::is_on("cheat_one_hit")) {
         return;
     }
@@ -188,6 +204,16 @@ namespace {
 // Once per frame (tooie_warp_tick).
 void tooie::damage::aim_tick(uint8_t* rdram) {
     const uint32_t player = tooie::rdram::read_word(rdram, 0x80135490u);
+    {
+        // The player's state (state block +0x120, current state at +4) for the hit timing log.
+        static uint32_t last_state = 0;
+        const uint32_t block = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0x120) : 0;
+        const uint32_t state = tooie::rdram::valid_ptr(block) ? tooie::rdram::read_word(rdram, block + 4) : 0;
+        if (state != last_state && state != 0) {
+            hit_log_line("player state", (int)state);
+        }
+        last_state = state;
+    }
     const uint32_t pos_ptr = tooie::rdram::valid_ptr(player) ? tooie::rdram::read_word(rdram, player + 0xE4) : 0;
     const float dt = tooie::rdram::read_float(rdram, 0x8012C760u);
     if (!tooie::rdram::valid_ptr(pos_ptr) || !(dt > 0.0f) || dt > 0.5f) {

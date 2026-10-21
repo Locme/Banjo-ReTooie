@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T488 Enemy damage timing log (enemies taking damage late)
+- Asked: 2026-10-21 06:57 UTC
+- Build: main
+- Steps:
+  1. Play at Game Frame Rate 175 as you did, fight Spiral Mountain enemies until a hit lands late again
+  2. Note roughly when it happened (what you hit, and that it was late)
+  3. Close the game and send logs/console.log from the game folder
+- Look for: Nothing changes in the game. The log now has [hits] lines with the time of each attack state and each enemy hit; they show whether the game registered the hit late or registered it on time and the enemy reacted late. In my tests (175 FPS falling to 50, 30 and lower frame steps, Uggers in Quagmire, which are Spiral Mountain's enemies too) every claw swipe hit landed the moment the Ugger was in reach, so I need your log of a late one.
+- Status: waiting for L
+
 ## T487 Window Light Beams (Bottles' house, Banjo's house, Jingaling's throne room)
 - Update 2026-10-21: the option moved to Graphics > Vanilla Enhancements (a new group there, its first option).
 - Asked: 2026-10-20 23:57 UTC
