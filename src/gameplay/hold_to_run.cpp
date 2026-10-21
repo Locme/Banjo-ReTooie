@@ -691,6 +691,12 @@ void tooie::hold_to_run::apply(float* x, float* y) {
     run_held = on;
 }
 
+bool tooie::hold_to_run::held() {
+    bool h = false;
+    read_run(&h);
+    return h;
+}
+
 void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t player = read_word(rdram, player_table);
     if (!valid_ptr(player)) {

@@ -24,6 +24,9 @@ namespace tooie::hold_to_run {
     // Applies the Run control to player 1's stick as the game is about to read it: while Run is held
     // and the stick is tilted, the tilt is made full so the game runs. Safe to call more than once per frame.
     void apply(float* x, float* y);
+
+    // Whether the Run control is held right now (noclip moves 5x faster while it is).
+    bool held();
 }
 
 #endif
