@@ -996,13 +996,9 @@ bool TraceOccluded(RayDesc ray, uint mode) {
     return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
 
-// How much of a light gets along a ray (world space) towards it (0 to 1). What lies within 90 units of the light is its
-// fitting (a lantern's casing): there the light gets out where the texture is lit yellow (the panes) and is held back
-// elsewhere (the frame, bars and roof), so a lantern throws its windows' pattern (L, 2026-10-21); a fitting whose texture can't
-// be read lets it all out. Anything further off blocks it (a cut-out only where solid).
+// A lamp's light, traced from a surface towards it: blocked by anything solid on the way (a cut-out only where
+// solid). The lamp's own fitting (within 90 units of the light) lets it all out, so the lamp lights up as normal.
 float TraceLampVisible(RayDesc ray, float3 light) {
-    const bool textures = RayTexturesOn();
-    float through = 1.0f;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     while (query.Proceed()) {
@@ -1013,49 +1009,22 @@ float TraceLampVisible(RayDesc ray, float3 light) {
         if ((geometry == RayGrassGeometry) && !RayGrassStops(ray, query.CandidateTriangleRayT())) {
             continue;
         }
-        const uint primitive = query.CandidatePrimitiveIndex();
-        const float2 barycentrics = query.CandidateTriangleBarycentrics();
         const uint flags = RayGeometryFlags(geometry);
-        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
-        const bool fitting = length(at - light) < 90.0f;
-        // A see-through part lets the light by, except the lamp's own fitting, whose panes are often drawn see-through:
-        // there the colour decides below.
-        if (!(fitting && textures && ((flags & 2u) != 0u)) && ((flags & 1u) != 0u) && !RayCutoutSolid(geometry, primitive, barycentrics)) {
+        if (((flags & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
             continue;
         }
+        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
         // With the player's traced shadows off, the light goes on through Banjo.
         if (PlayerShadowsOff() && BanjoHit(geometry, at)) {
             continue;
         }
-        if (fitting) {
-            if (textures && ((flags & 2u) != 0u)) {
-                // Only through the lit, yellow parts (a lantern's panes): its dark frame and bars and its grey roof hold the
-                // light back, so the light falls in the shape of its windows (L, 2026-10-21: a window effect). (Near-white
-                // counts too, for the white-hot strip lamps.)
-                const float3 texel = RayTexel(geometry, primitive, barycentrics).rgb;
-                const float luma = dot(texel, float3(0.299f, 0.587f, 0.114f));
-                // The panes are pale yellow to white with red and green equal (ffff8c, efef5a, f7f7de); the frame round them
-                // is ochre and gold, red well above green (efc642, ce9c31, a57b29), and must hold the light back too, or
-                // the light left by the whole side and no window pattern showed (L, 2026-10-21).
-                const float pale = saturate(1.0f - (texel.r - texel.g - 0.03f) / 0.05f);
-                through *= pale * saturate((luma - 0.75f) / 0.1f);
-                if (through < 0.02f) {
-                    query.CommitNonOpaqueTriangleHit();
-                    query.Abort();
-                }
-                continue;
-            }
-            // An untextured part of the fitting (a lantern's frame and bars) is solid.
-            if ((flags & 2u) == 0u) {
-                query.CommitNonOpaqueTriangleHit();
-                query.Abort();
-            }
+        if (length(at - light) < 90.0f) {
             continue;
         }
         query.CommitNonOpaqueTriangleHit();
         query.Abort();
     }
-    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.0f : through;
+    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.0f : 1.0f;
 }
 
 // Traced light beams: the light's shafts through the air, where the sun (or a room's window light) reaches. Along the
@@ -1229,8 +1198,7 @@ bool Enclosed(float3 worldStart) {
 }
 
 // The level's lights glowing in the air (with Traced light beams): along the eye's ray where it passes a light, six
-// points each traced to the flame; the lit ones glow warm, brighter nearer it. A lantern's bars cut dark streaks
-// through the glow, and anything between stands out against it.
+// points each traced to the flame; the lit ones glow warm, brighter nearer it. Anything between stands out against it.
 float3 LampGlow(int2 pixel, float depth, float strength) {
     const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
     if ((count == 0u) || (strength <= 0.0f)) {
@@ -1319,8 +1287,8 @@ float LightShadows(float3 center, float3 normal, out float3 lamp) {
         if (facing <= 0.0f) {
             continue;
         }
-        // Four points on a small disc round the light. The rays go right up to the flame, through its fitting where the
-        // fitting's texture is bright (TraceLampVisible), so a lantern's frame and bars throw their pattern.
+        // Four points on a small disc round the light. The rays go right up to the flame, through its fitting
+        // (TraceLampVisible).
         const float stopShort = 3.0f;
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
@@ -4140,7 +4108,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         const float tolerance = max(distance * 0.02f, 8.0f);
         // The ray reads the textures as the shadow rays do: a cut-out's clear texels let it through (blue there), its
         // solid ones show yellow; solid draws green. With the textures readable, the tint is shaded by the texel's
-        // brightness, so a grate's holes and a lantern's bars show as the rays see them.
+        // brightness, so a grate's holes show as the rays see them.
         RayDesc ray;
         ray.Origin = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
         ray.Direction = ViewToWorldDirection(surface / distance);
