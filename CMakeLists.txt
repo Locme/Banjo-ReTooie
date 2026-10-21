@@ -228,7 +228,7 @@ set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
 set(RT64_FSR_DIR ${CMAKE_SOURCE_DIR}/lib/fsr)
 # Our additions to RT64 that live in this repository, not in rt64.patch (rt64-ext/README.md).
 set(RT64_EXTENSION_CMAKE ${CMAKE_SOURCE_DIR}/rt64-ext/rt64_ext.cmake)
-set(RT64_EXTENSION_SHADER_DIR ${CMAKE_SOURCE_DIR}/rt64-ext/src/shaders)
+set(RT64_EXTENSION_SOURCE_DIR ${CMAKE_SOURCE_DIR}/rt64-ext/src)
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)

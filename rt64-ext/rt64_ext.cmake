@@ -72,3 +72,20 @@ rt64_ext_shader(build_geometry_shader rt64 "src/shaders/GrassGS.hlsl")
 
 # Displaced ground: floors tessellated and pushed down (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")
+
+# Tessellated water (hull and domain shaders; D3D12 and Vulkan only).
+rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/WaterTess.hlsl" "src/shaders/WaterTessHS.hlsl" "src/shaders/WaterTessDS.hlsl")
+
+# 3D grass with GPU instancing: the culling passes, the depth pyramid and the blades (D3D12 and Vulkan only).
+# build_grass_shader takes its options as one list, which rt64_ext_shader's ARGN would split, so this
+# passes the options variable's name instead.
+function(rt64_ext_grass_shader SHADERNAME OPTIONS_VAR)
+    set(PROJECT_SOURCE_DIR ${RT64_EXT_DIR})
+    build_grass_shader(rt64 ${SHADERNAME} "${${OPTIONS_VAR}}" ${ARGN})
+endfunction()
+rt64_ext_grass_shader("src/shaders/GrassBladeVS.hlsl" DXC_VS_OPTS)
+rt64_ext_grass_shader("src/shaders/GrassCullCS.hlsl" DXC_CS_OPTS)
+rt64_ext_grass_shader("src/shaders/GrassCullCS.hlsl" DXC_CS_OPTS "src/shaders/GrassChunkCullCS.hlsl" "-D CHUNK_PASS")
+rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS)
+rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZMSCS.hlsl" "-D MULTISAMPLING")
+rt64_ext_grass_shader("src/shaders/GrassHiZCS.hlsl" DXC_CS_OPTS "src/shaders/GrassHiZCoarseCS.hlsl" "-D COARSE_PASS")
