@@ -7544,10 +7544,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..c2fbe41
+index 0000000..e91dd69
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3505 @@
+@@ -0,0 +1,3519 @@
 +//
 +// RT64
 +//
@@ -9372,6 +9372,19 @@ index 0000000..c2fbe41
 +            for (const auto &[place, range] : snowTouchHeld.draws) {
 +                if (!SnowTouchFound(snowTouchNow.draws, place) && !SnowTouchFound(snowTouchBefore, place)) {
 +                    touches.insert(touches.end(), snowTouchHeld.triangles.begin() + range.first, snowTouchHeld.triangles.begin() + range.first + range.second);
++                    // TOOIE_SNOW_LOG=2: the moving draws now and then (how many triangles, where, and the nearest draw
++                    // of as many triangles the frame after).
++                    static const bool movingLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr) && (std::getenv("TOOIE_SNOW_LOG")[0] == '2');
++                    static uint32_t movingLogged = 0;
++                    if (movingLog && ((movingLogged++ % 997) < 12)) {
++                        float nearest = 1e30f;
++                        for (const auto &[q, r] : snowTouchNow.draws) {
++                            if (q.count == place.count) {
++                                nearest = std::min(nearest, std::max({ std::abs(q.x - place.x), std::abs(q.y - place.y), std::abs(q.z - place.z) }));
++                            }
++                        }
++                        fprintf(stderr, "[snow] moving draw: %u triangles at %.1f %.1f %.1f, nearest the frame after %.2f\n", place.count, place.x, place.y, place.z, nearest);
++                    }
 +                }
 +                else {
 +                    still++;
@@ -9392,8 +9405,9 @@ index 0000000..c2fbe41
 +        const int32_t originX = int32_t(std::floor(x / trail.cell)) - n / 2;
 +        const int32_t originZ = int32_t(std::floor(z / trail.cell)) - n / 2;
 +        // Higher up than this, nothing reaches the snow Banjo stands in (a game's own snow layer can lie 50 above
-+        // his feet, and the snow on top of it).
-+        const float ceiling = y + 50.0f + full + 10.0f;
++        // his feet, and the snow on top of it). Sand has no layer of its own: only a little over its height (for the
++        // slopes round him), or every creature walking or flying about near him marks the trail (Terrydactyland).
++        const float ceiling = effectsSettings.snowSand ? (y + full + 20.0f) : (y + 50.0f + full + 10.0f);
 +        const float spacing = trail.cell;
 +        auto touch = [&](float px, float py, float pz) {
 +            const int32_t cx = int32_t(std::floor(px / trail.cell)) - originX;
