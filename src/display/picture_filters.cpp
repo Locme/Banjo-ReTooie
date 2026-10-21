@@ -5097,7 +5097,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         ground_displacement_distance_option,
         "Displaced ground distance",
         "How far from the camera the ground is displaced, in the game's units. The dips fade out over the last quarter. Further costs more: every displaced floor in reach is cut into fine triangles.",
-        2000, 20000, 1000, 8000, false, 0);
+        2000, 20000, 500, 0, false, 8000);
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
