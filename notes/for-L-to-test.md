@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T511 Displaced ground (floors)
+## T513 Displaced ground (floors)
 - Asked: 2026-10-21 12:39 UTC
 - Build: claude/project-thread-zaob1b
 - Steps:
@@ -8,6 +8,26 @@
   2. Go to Spiral Mountain and Mumbo's Mountain and walk over stone, brick, cracked and dirt floors
   3. Look at the ground from a low angle and from far away, then set Displaced ground back to 0 and compare the frame rate
 - Look for: Cracks, gaps and grooves in floors are real dips (they change the outline of the ground and hide what is behind them), the deeper parts are a little darker, and walls keep their old parallax. No holes or cracks between pieces of ground, nothing flickers. Say how much slower it is on your GPU. Send console.log if a message says the graphics driver could not build the pipeline.
+- Status: waiting for L
+
+## T512 Mirror Mode: Start menu readable
+- Asked: 2026-10-21 13:11 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Press Start in the world
+  3. Read the menu rows and the Jiggy/Note counters
+- Look for: The Start menu text and icons are not mirrored (they sit where they do with Mirror Mode off); the world behind is mirrored. Not built or run.
+- Status: waiting for L
+
+## T511 Faint line on top of fences with texture upscaling
+- Asked: 2026-10-21 13:06 UTC
+- Build: main
+- Steps:
+  1. Turn Texture upscaling on (2x or 4x)
+  2. Look at a fence's top edge
+  3. Compare with upscaling off
+- Look for: Is the faint line along the top edge of the fence gone? If it stays with upscaling off too, say so: then it is the game's own texture
 - Status: waiting for L
 
 ## T510 Dump sounds (DEV)
