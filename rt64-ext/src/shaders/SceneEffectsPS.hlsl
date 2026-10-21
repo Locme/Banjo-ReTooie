@@ -2126,13 +2126,19 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
 #else
     const bool bend = bendBack;
 #endif
-    if (bend && (r.z > -0.3f)) {
+    // Bent in over a band of angles rather than at one (r.z from -0.45 to -0.3): switched at one, the reflection cut
+    // off along a straight line across the ice wherever the angle passed it (L, 2026-10-21, Icy Side).
+    float4 unbent = 0.0f;
+    float bendIn = 1.0f;
+    if (bend && (r.z > -0.45f)) {
         // The true ray first: one heading back towards the camera still meets what stands on the ice (Banjo's front),
         // so he keeps one real reflection under him at every camera height instead of it cutting out past 45 degrees.
         const float4 real = WaterReflectionMarch(surface, r, 0.0f, hit);
         if (hit) {
             return real;
         }
+        unbent = real;
+        bendIn = smoothstep(-0.45f, -0.3f, r.z);
         // Along the picture the way the ray was going (or up the picture, the way level ground runs away, when it
         // came almost straight back), and a fixed way into it.
         float2 across = r.xy;
@@ -2156,7 +2162,7 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
     const float nearest = (made < 1.0f) ? max(-surface.z * 2.0f, -surface.z + 800.0f) : 0.0f;
     float4 reflection = WaterReflectionMarch(surface, r, nearest, hit);
     reflection.a *= made;
-    return reflection;
+    return (bendIn < 1.0f) ? lerp(unbent, reflection, bendIn) : reflection;
 }
 
 // The reflection along a ray from a surface (view space): see WaterReflection. Things nearer the camera than

@@ -577,6 +577,7 @@
 - Fixed (L 21:50, 2026-10-21): no more glowing balls at Lamp picks and lamp textures: the air glow (Traced light beams) leaves out the inside of the lamp (within 90 units), where it was drawn without a ray, through the lamp itself. Not checked headless.
 - Changed (L 22:18, 2026-10-21): the lantern window-pattern attempts are removed. Lamps light up as normal: nothing within the lamp's own fitting blocks its light, and the lamp panes are no longer added to the traced scene. Not checked headless.
 - Fixed (L 23:07-23:10, 2026-10-21): (a) blocky traced ice/water reflections: the reflected colour is now sampled between pixels (a point load gave squares up close), and remembered hit colours blend the 8 nearest 16-unit cells instead of one; (b) the glow round lights in the air (Traced light beams) is removed: it showed as balls round every light. Not checked headless.
+- Fixed (L 23:15, 2026-10-21, Ice reflections without ray tracing): the reflection no longer cuts off along a straight line across the ice: where the ray turns back towards the camera it now changes over a band of angles instead of at one. Check: Icy Side ice at the spot of your screenshot, camera tilted up and down. Not checked headless.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 
