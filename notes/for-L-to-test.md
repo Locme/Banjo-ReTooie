@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T503 See-through textures look solid with shaders
+- Asked: 2026-10-21 10:49 UTC
+- Build: main
+- Steps:
+  1. Turn on the shaders (ambient occlusion, fog, outlines)
+  2. Go to the cave in your photo (the dark sheet with the straight edge on the floor)
+  3. Compare with the shaders off
+- Look for: Does the dark sheet and its straight edge now read as see-through? Nearly clear parts of see-through quads (under about 20% opaque) no longer leave depth for the effects; if the sheet is still there, say so and send a photo
+- Status: waiting for L
+
 ## T502 Klungo fights 2 and 3 replay
 - Asked: 2026-10-21 10:24 UTC
 - Build: main

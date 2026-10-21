@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- See-through textures no longer look solid with the screen effects on: the nearly clear parts of a see-through 3D quad (under about 20% opaque) wrote depth, so ambient occlusion, fog and outlines treated the clear quad as a wall and showed its straight edge on the floor behind it. Those pixels now leave no depth, and the look with the effects off is unchanged. Untested on PC (T489).
 - Replaying Klungo's second or third fight no longer gets stuck after he drinks. With saves that hadn't seen his potions in the story, the replay gave him no potion, so he stood still with the letterbox up and no bottle; he now gets a random potion order, as outside a replay (L). Checked headless with fresh saves (fights 2 and 3).
 - Belly jiggle: the tooth necklace no longer vanishes as the belly swings (it moves in one piece), and the belly moves most just above the belt, less and less up to the chest (L). Untested on PC (T463).
 - Belly jiggle now wobbles the belly just above his belt instead of up at his chest and necklace (L). Untested on PC (T458).
