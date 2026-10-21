@@ -139,8 +139,15 @@ void tooie::dive::apply(uint16_t* buttons) {
     }
 }
 
+static void tick_inner(uint8_t* rdram, recomp_context* ctx);
+
 void tooie::dive::tick(uint8_t* rdram, recomp_context* ctx) {
-    (void)ctx;
+    tick_inner(rdram, ctx);
+    // The pose plays while the lunge is in the air.
+    tooie::hold_to_run::set_dive_pose(rdram, ctx, phase == Phase::Air);
+}
+
+static void tick_inner(uint8_t* rdram, recomp_context* ctx) {
     const auto now = Clock::now();
     // Game time, not real time, so the dive lasts the same however fast the game runs.
     const uint32_t game_ms = tooie::game_frame_rate::game_ms();

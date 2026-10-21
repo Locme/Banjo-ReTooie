@@ -507,6 +507,93 @@ namespace {
         return vram;
     }
 
+    // --- The dive pose ----------------------------------------------------------------------------
+    //
+    // While Banjo-Kazooie dives (src/gameplay/dive.cpp) the animation he is already playing in the air is
+    // replaced by a copy with these rules: body flat along the lunge, arms and legs held still behind it.
+    // First guess made without seeing the game; TOOIE_DIVE_POSE_TUNE=<file> replaces it, one rule a line,
+    // "<bone> <type> <scale> <offset degrees>", so it can be tuned on a PC without a rebuild. Kazooie's
+    // wings are not in it yet: her wing bone ids are not known (the model's bone list is needed).
+    const std::vector<Rule> dive_rules_default = {
+        { 3, 0, 0.2f, 75.0f },                                  // body leant flat
+        { 6, 0, 0.2f, 0.0f }, { 8, 0, 0.2f, 0.0f }, { 10, 0, 0.2f, 0.0f },     // legs hang still
+        { 20, 0, 0.2f, 0.0f }, { 22, 0, 0.2f, 0.0f }, { 24, 0, 0.2f, 0.0f },
+        { 12, 0, 0.3f, 0.0f }, { 14, 0, 0.3f, 0.0f }, { 16, 0, 0.3f, 0.0f },   // arms flail less
+        { 26, 0, 0.3f, 0.0f }, { 28, 0, 0.3f, 0.0f }, { 30, 0, 0.3f, 0.0f },
+    };
+
+    const std::vector<Rule>& dive_rules() {
+        static std::vector<Rule> rules = [] {
+            std::vector<Rule> r = dive_rules_default;
+            if (const char* path = std::getenv("TOOIE_DIVE_POSE_TUNE")) {
+                r.clear();
+                if (FILE* f = std::fopen(path, "r")) {
+                    char line[256];
+                    while (std::fgets(line, sizeof(line), f)) {
+                        unsigned bone = 0, type = 0;
+                        float scale = 1, offset = 0;
+                        if (line[0] != '#' && std::sscanf(line, "%u %u %f %f", &bone, &type, &scale, &offset) == 4) {
+                            r.push_back(Rule{ (uint16_t)bone, (uint8_t)type, scale, offset });
+                        }
+                    }
+                    std::fclose(f);
+                }
+            }
+            return r;
+        }();
+        return rules;
+    }
+
+    // The animation struct and the animation index the dive pose replaces, while it is on.
+    std::atomic<uint32_t> pose_struct{0};
+    std::atomic<uint32_t> pose_source{0};
+
+    // The dive file for animation `index`, made from the file at `file` the first time.
+    uint32_t dive_file(uint8_t* rdram, uint32_t index, uint32_t file) {
+        static std::vector<std::pair<uint32_t, uint32_t>> built;
+        for (const auto& [i, vram] : built) {
+            if (i == index) {
+                return vram;
+            }
+        }
+        uint16_t start = 0, end = 0;
+        std::vector<Track> tracks;
+        if (read_anim(rdram, file, &start, &end, &tracks) == 0) {
+            return 0;
+        }
+        apply_rules(tracks, dive_rules(), start);
+        uint32_t size = 8;
+        for (const Track& t : tracks) {
+            size += 4 + 4 * (uint32_t)t.keys.size();
+        }
+        void* mem = recomp::alloc(rdram, size + 16);
+        if (mem == nullptr) {
+            return 0;
+        }
+        const uint32_t vram = ((uint32_t)(static_cast<uint8_t*>(mem) - rdram) + 0x80000000u + 15u) & ~15u;
+        wr_half(rdram, vram, start);
+        wr_half(rdram, vram + 2, end);
+        wr_half(rdram, vram + 4, (uint16_t)tracks.size());
+        wr_half(rdram, vram + 6, 0);
+        uint32_t at = vram + 8;
+        for (const Track& t : tracks) {
+            wr_half(rdram, at, (uint16_t)((t.bone << 4) | t.type));
+            wr_half(rdram, at + 2, (uint16_t)t.keys.size());
+            at += 4;
+            for (const Key& k : t.keys) {
+                wr_half(rdram, at, k.frame);
+                wr_half(rdram, at + 2, (uint16_t)k.value);
+                at += 4;
+            }
+        }
+        built.emplace_back(index, vram);
+        if (log_on()) {
+            std::printf("[dive] pose animation made from 0x%X: %zu tracks, at 0x%08X\n", index, tracks.size(), vram);
+            std::fflush(stdout);
+        }
+        return vram;
+    }
+
     // TOOIE_RUN_ANIM_DUMP=<folder>: writes each animation file the game evaluates once, as anim_<index>.bin.
     void dump_anim(uint8_t* rdram, uint32_t index, uint32_t file) {
         static const char* dump = std::getenv("TOOIE_RUN_ANIM_DUMP");
@@ -814,6 +901,13 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t index = (uint32_t)(uint16_t)MEM_H(0x18, (gpr)(int32_t)anim);
     dump_anim(rdram, index, file);
     reload_tune();
+    if (anim == pose_struct.load() && index == pose_source.load()) {
+        const uint32_t dive = dive_file(rdram, index, file);
+        if (dive != 0) {
+            ctx->r2 = (gpr)(int32_t)dive;
+        }
+        return;
+    }
     if (anim != sprint_anim_struct.load() || index != sprint_source.load()) {
         return;
     }
@@ -827,4 +921,11 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     if (sprint != 0) {
         ctx->r2 = (gpr)(int32_t)sprint;
     }
+}
+
+void tooie::hold_to_run::set_dive_pose(uint8_t* rdram, recomp_context* ctx, bool on) {
+    const uint32_t player = read_word(rdram, player_table);
+    const uint32_t ctrl = on && valid_ptr(player) ? anim_ctrl(rdram, ctx, player) : 0;
+    pose_struct = ctrl != 0 ? ctrl + anctrl_animation : 0;
+    pose_source = ctrl != 0 ? anim_index(rdram, ctx, ctrl) : 0;
 }
