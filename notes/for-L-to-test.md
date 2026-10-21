@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T510 Dump sounds (DEV)
+- Asked: 2026-10-21 12:38 UTC
+- Build: main @ cbfad44
+- Steps:
+  1. Open Settings > DEV and switch on Dump sounds
+  2. Play for a minute, then enter a few different areas
+  3. Open the sound_dump folder in the app-data folder
+- Look for: Are there WAV files in bank*/inst*/ folders, and do they sound right (not noise)? Are Kazooie's sounds among them? Send index.txt if the sounds are wrong or missing.
+- Status: waiting for L
+
 ## T509 3D grass in ray tracing
 - Asked: 2026-10-21 12:29 UTC
 - Build: main
