@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T507 Tessellated sand speed in Terrydactyland
+## T508 Tessellated sand speed in Terrydactyland
 - Asked: 2026-10-21 12:27 UTC
 - Build: main
 - Steps:
@@ -8,6 +8,15 @@
   2. Go to Terrydactyland and walk around the sand
   3. Turn the camera around and walk a long way on sand
 - Look for: Is it playable now (frame rate close to Tessellated sand off)? Footprints still show near Banjo; no sand or snow vanishing at the screen edges (also check Icy Side's deep snow)
+
+## T507 Mirror Mode: controls follow the picture
+- Asked: 2026-10-21 12:26 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Push the stick left, then right
+  3. Turn the camera with C-left and C-right
+- Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
 - Status: waiting for L
 
 ## T506 Fence thickness (layers on flat cut-out textures)

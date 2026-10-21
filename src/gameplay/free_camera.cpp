@@ -47,6 +47,7 @@
 #include "tooie_photo_mode.h"
 #include "tooie_game.h"
 #include "tooie_hooks.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_rdram.h"
 
 namespace {
@@ -364,7 +365,7 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
         }
         if (state.active) {
             const auto speed = std::min<uint32_t>(option<uint32_t>(tooie::free_camera_speed_option, 1), 2);
-            const float sx = option<bool>(tooie::free_camera_invert_x_option, false) ? -stick_x : stick_x;
+            const float sx = (option<bool>(tooie::free_camera_invert_x_option, false) != tooie::mirror_mode::active()) ? -stick_x : stick_x;
             const float sy = option<bool>(tooie::free_camera_invert_y_option, false) ? -stick_y : stick_y;
             // Right turns the view right (yaw grows to the left). Up looks up, so the camera drops.
             state.yaw = wrap_degrees(state.yaw - sx * yaw_speeds[speed] * dt);
