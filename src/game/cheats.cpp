@@ -52,7 +52,7 @@ namespace {
         { "cheat_split_anywhere", "Split up anywhere",
           "Press D-pad down to split Banjo and Kazooie up where you stand, and again to join them up. While split, D-pad left plays Banjo and D-pad right plays Kazooie. Off while Noclip is on.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_noclip", "Noclip",
-          "Walk and float through walls, floors and ceilings. Hold R (RT) to rise and Z (LT) to sink; you stay at that height when you let go.", { -1, -1, -1, -1, -1, -1 } },
+          "Walk and float through walls, floors and ceilings. Hold R (RT) to rise and Z (LT) to sink; you stay at that height when you let go. Hold the Run button to move 5 times faster.", { -1, -1, -1, -1, -1, -1 } },
         { "cheat_fly_anywhere", "Fly anywhere",
           "Press D-pad up to take off anywhere, as Banjo-Kazooie or the bee. While flying, B stops flying instead of doing a Beak Bomb.", { -1, -1, -1, -1, -1, -1 } },
         { "cheato_feathers", "Cheato: FEATHERS", "Doubles how many red and gold feathers you can carry (the feather counters' limits are twice the normal ones).", { -1, -1, -1, -1, -1, -1 } },
