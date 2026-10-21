@@ -493,6 +493,8 @@ if (WIN32)
     )
 
     target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_SOURCE_DIR}/icons/app.rc)
+    # CMake does not see the ICON line in app.rc, so rebuild the resource when app.ico changes.
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/icons/app.rc PROPERTIES OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/icons/app.ico)
     target_link_libraries(BanjoTooieN64Recomp PRIVATE SDL2 Winmm.lib Dbghelp.lib)
 endif()
 
