@@ -7090,7 +7090,7 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..97a71a7
+index 0000000..8af2108
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
 @@ -0,0 +1,3105 @@
@@ -9184,7 +9184,7 @@ index 0000000..97a71a7
 +            const std::scoped_lock lock(effectsMutex);
 +            settings = effectsSettings;
 +        }
-+        if (settings.view < SceneEffectsSoloFirst) {
++        if ((settings.view < SceneEffectsSoloFirst) || (settings.view == SceneEffectsViewRayScene)) {
 +            return settings;
 +        }
 +        if ((settings.view >= SceneEffectsViewGtao) && (settings.view <= SceneEffectsViewSsr)) {
@@ -10201,10 +10201,10 @@ index 0000000..97a71a7
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..d172dc9
+index 0000000..bfd9a60
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,484 @@
+@@ -0,0 +1,487 @@
 +//
 +// RT64
 +//
@@ -10236,6 +10236,9 @@ index 0000000..d172dc9
 +    constexpr uint32_t SceneEffectsViewGtao = 19;
 +    constexpr uint32_t SceneEffectsViewSsgi = 20;
 +    constexpr uint32_t SceneEffectsViewSsr = 21;
++    // What the traced effects' rays see: green where they meet the drawn surface, blue where it isn't in the traced
++    // scene (light goes through it), red where something traced stands in front of it.
++    constexpr uint32_t SceneEffectsViewRayScene = 22;
 +
 +    constexpr uint32_t SceneMaxLights = 32;
 +
@@ -15258,10 +15261,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..227938c
+index 0000000..6fef50c
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4109 @@
+@@ -0,0 +1,4132 @@
 +//
 +// RT64
 +//
@@ -18965,6 +18968,29 @@ index 0000000..227938c
 +
 +    // Debug views of GTAO's visibility (white open, dark occluded), SSGI's light, and screen-space reflections: the
 +    // reflection where they show (red where the ray found nothing on screen), the dimmed scene elsewhere.
++    // Debug view of the traced scene: a ray from the eye to each pixel's surface, green where it meets that surface,
++    // blue where it passes through (not in the traced scene: light goes through it), red where something traced
++    // stands in front of it; over the scene, dimmed. Grey without ray tracing.
++    if (gConstants.view.x > 21.5f) {
++        const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
++        const float grey = dot(scene, float3(0.299f, 0.587f, 0.114f)) * 0.5f + 0.1f;
++        if (depth >= 0.99999f) {
++            return float4(grey.xxx * 0.5f, 0.0f);
++        }
++#ifdef RAY_TRACED
++        const float3 surface = ViewPosition(pixel, depth);
++        const float distance = length(surface);
++        const float tolerance = max(distance * 0.02f, 8.0f);
++        const float t = TraceDistance(float3(0.0f, 0.0f, 0.0f), surface / distance, distance + tolerance);
++        float3 tint = float3(0.2f, 0.4f, 1.0f);
++        if (t >= 0.0f) {
++            tint = (t < distance - tolerance) ? float3(1.0f, 0.2f, 0.2f) : float3(0.3f, 1.0f, 0.3f);
++        }
++        return float4(tint * grey * 1.6f, 0.0f);
++#else
++        return float4(grey.xxx, 0.0f);
++#endif
++    }
 +    if (gConstants.view.x > 18.5f) {
 +        if (depth >= 0.99999f) {
 +            return float4(0.0f, 0.0f, 0.0f, 0.0f);
