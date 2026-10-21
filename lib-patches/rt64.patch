@@ -2171,7 +2171,7 @@ index 69a82ac..3d5b165 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..396c2d8 100644
+index 9fae0d4..932881a 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -4,6 +4,15 @@
@@ -3570,7 +3570,7 @@ index 9fae0d4..396c2d8 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,10 +2928,675 @@ namespace RT64 {
+@@ -1747,10 +2928,676 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3667,14 +3667,15 @@ index 9fae0d4..396c2d8 100644
 +                instanceExcludedVector.push_back(excluded ? 1 : 0);
 +
 +                // Banjo-Tooie: the 3D world's solid draws cast sun shadows from the shadow map (depth written, not
-+                // blended, not a decal). Cut-outs (alpha compare, coverage times alpha) are left to the screen-space
-+                // shadows: drawn without their textures they would cast solid squares.
++                // blended, not a decal). Cut-outs (alpha compare, coverage times alpha, or the texture's alpha as the
++                // coverage) are left to the screen-space shadows: drawn without their textures they would cast solid
++                // squares. The last kind was missed (L, 2026-10-21: no light through a Spiral Mountain grate).
 +                {
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
 +                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        (call.callDesc.triangleCount > 0) && sm.zCmp() && sm.zUpd() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) &&
-+                        !interop::Blender::usesAlphaBlend(sm) && (sm.alphaCompare() == G_AC_NONE) && !sm.cvgXAlpha())
++                        !interop::Blender::usesAlphaBlend(sm) && (sm.alphaCompare() == G_AC_NONE) && !sm.cvgXAlpha() && !sm.alphaCvgSel())
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
 +                    }
@@ -4249,7 +4250,7 @@ index 9fae0d4..396c2d8 100644
              }
          }
  
-@@ -1758,14 +3604,831 @@ namespace RT64 {
+@@ -1758,14 +3605,831 @@ namespace RT64 {
          checkRtScene(rtScene);
  #   endif
          checkRasterScene(rasterScene);
