@@ -27,7 +27,6 @@ namespace tooie::picture_filters {
     inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
-    inline const std::string ray_tracing_section_option = "ray_tracing_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -67,6 +66,13 @@ namespace tooie::picture_filters {
     inline const std::string ssr_stochastic_option = "ssr_stochastic";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
+    // Graphics > Ray Tracing's reflection sliders (L, 2026-10-21): how much the traced reflections show, on water, and on
+    // the Parallax materials that reflect.
+    inline const std::string ray_tracing_reflections_option = "ray_tracing_reflections";
+    inline const std::string ray_tracing_water_reflections_option = "ray_tracing_water_reflections";
+    inline const std::string ray_tracing_metal_option = "ray_tracing_metal";
+    inline const std::string ray_tracing_tiles_option = "ray_tracing_tiles";
+    inline const std::string ray_tracing_smooth_option = "ray_tracing_smooth";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
     inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";

@@ -75,6 +75,7 @@ namespace RT64 {
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
     void SetSceneRayTracing(bool enabled);
     void SetSceneRayTracingStrength(float strength);
+    void SetSceneRayTracingReflections(float reflections, float water, float metal, float tiles, float smooth);
     void SetSceneRayTracingHitColours(bool enabled);
     void SetSceneRayTracingPlayerShadows(bool enabled);
     void SetSceneRayTracingSmoothing(float smoothing);
@@ -105,6 +106,7 @@ namespace RT64 {
     void SetSceneNpcFeathers(float amount, float size, float length, float density, float noisiness, float transparency);
     void SetSceneSnow(bool on, float height, bool strictColor, float detail, float refillAfter, float lodDistance, uint32_t map, bool sand);
     void SetSceneSandTextures(const uint64_t *hashes, size_t count);
+    void SetSceneLampTextures(const uint64_t *hashes, size_t count);
     void SetSceneParallax(float depth, bool original, bool all);
     void SetSceneFence(float thickness);
     void SetSceneFenceTextures(const uint64_t *hashes, size_t count);
@@ -344,6 +346,20 @@ namespace {
         0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
         // The see-through blocks round notes themselves (a pale blue texture, 60 triangles, seen in Icy Side 2026-10-17).
         0xe3890f274d878db4,
+    };
+
+    // Lit lamps' textures (RT64 hashes): with Graphics > Ray tracing on, each draw with one lights the traced scene from
+    // where it hangs, its frame and bars casting shadows (L, 2026-10-21). Lamp picks add more.
+    constexpr uint64_t lamp_textures[] = {
+        // Bottles' house: the lantern's lit pane (the game gives it no light of its own).
+        0x861bfb5c8890c6e0,
+        // Picked by eye on 2026-10-21 from the 7,259-texture dump (textures/banjo-tooie-textures.zip), warm and bright
+        // ones first (L: a sweep to add light sources). The glow round Jinjo Village's lanterns.
+        0xe18f96f57e5f4241,
+        // Torch and candle flames.
+        0xcec58574a22efd1f, 0x6c297cad1c8edbbf, 0x2ccf00e0c31ed884, 0x910453acfb90f339, 0x2a0bcff2df52fe7e,
+        // Strip and ceiling lamps.
+        0xfe7ebd28c377b54f, 0x6f59260c143a2e31, 0xfbbb2214e197d33e,
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -4173,6 +4189,8 @@ namespace {
         // Mirror Mode: textures picked as Text are flipped back on the mirrored world.
         std::vector<uint64_t> mirror_text = build(nullptr, nullptr, tooie::effect_pick::effect_text, true);
         RT64::SetMirrorTextTextures(mirror_text.data(), mirror_text.size());
+        std::vector<uint64_t> lamps = build(std::begin(lamp_textures), std::end(lamp_textures), tooie::effect_pick::effect_lamp, true);
+        RT64::SetSceneLampTextures(lamps.data(), lamps.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         std::vector<uint64_t> fences = fence_extra;
@@ -4327,6 +4345,9 @@ void tooie::picture_filters::apply() {
     const bool ray_tracing = value<bool>(ray_tracing_option, false);
     RT64::SetSceneRayTracing(ray_tracing);
     RT64::SetSceneRayTracingStrength((float)(value<double>(ray_tracing_strength_option, 60.0) / 100.0));
+    RT64::SetSceneRayTracingReflections((float)(value<double>(ray_tracing_reflections_option, 60.0) / 100.0),
+        (float)(value<double>(ray_tracing_water_reflections_option, 60.0) / 100.0), (float)(value<double>(ray_tracing_metal_option, 100.0) / 100.0),
+        (float)(value<double>(ray_tracing_tiles_option, 60.0) / 100.0), (float)(value<double>(ray_tracing_smooth_option, 35.0) / 100.0));
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
     RT64::SetSceneRayTracingPlayerShadows(value<bool>(ray_tracing_player_shadows_option, true));
     RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
@@ -5067,11 +5088,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "The ground's cracks, gaps and grooves become real dips: floors with a Parallax texture (cracked flagstones, cobbles, paving, dirt) are cut into fine triangles near the camera and the dark parts of the texture pushed down, so the surface has a real outline and depth, not only a painted-on look. Higher numbers are deeper. Walls are left alone, and so is the ground near the edge of each piece. Uses Parallax's list of textures and their shapes and depths (Parallax on original textures must be on). Needs a graphics card with tessellation. Drawn on the picture, so nothing in the game changes. 0 is off.",
         0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
-        ray_tracing_section_option,
-        "Ray Tracing",
-        "Shows the ray tracing settings below. Hiding them does not turn ray tracing off.",
-        true);
-    graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
         "Ray traced effects: reflections on shiny surfaces and water, sun shadows and shadows from lamps and fires, ambient occlusion, and bounce and sky light, all found by tracing rays through the level's triangles instead of marching the picture. It is a switch of its own, apart from the shader effects: while it is on each of those shows at least as strongly as Ray tracing strength says, even with its own setting at 0 (a higher setting wins). Needs the Vulkan renderer and a graphics card with hardware ray tracing (ray queries): without them this shows a notice and the effects carry on as you have set them. Heavy on the graphics card.",
@@ -5079,8 +5095,33 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         ray_tracing_strength_option,
         "Ray tracing strength",
-        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (reflections, sun shadows and water reflections at this, ambient occlusion and bounce light a little under it). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
+        "How strongly the ray traced effects show while Ray tracing is on: the least each of them is drawn at (sun shadows at this, ambient occlusion and bounce light a little under it; the reflections have sliders of their own below). An effect's own slider still wins when it is higher. 60 is the default; 100 makes them plain.",
         0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_reflections_option,
+        "Traced reflections",
+        "How much shiny surfaces reflect while Ray tracing is on: metal, tiles and the other shiny textures, and whatever Parallax pick mode marks Metal, Tiles or Smooth. The Screen-space reflections slider still wins when it is higher. 0 turns the traced reflections off. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_water_reflections_option,
+        "Traced water reflections",
+        "How much water reflects while Ray tracing is on (traced, so what is off screen shows too). The Water reflections slider still wins when it is higher. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_metal_option,
+        "Metal reflection",
+        "How mirror-like the surfaces Parallax calls Metal are, in percent of Traced reflections. 100 is the default.",
+        0, 100, 5, 0, false, 100);
+    graphics.add_number_option(
+        ray_tracing_tiles_option,
+        "Tiles reflection",
+        "How much the surfaces Parallax calls Tiles reflect, in percent of Traced reflections. 60 is the default.",
+        0, 100, 5, 0, false, 60);
+    graphics.add_number_option(
+        ray_tracing_smooth_option,
+        "Smooth surface reflection",
+        "How much the surfaces Parallax calls Smooth reflect, in percent of Traced reflections. 35 is the default; stone, wood, dirt and the rest never reflect.",
+        0, 100, 5, 0, false, 35);
     graphics.add_number_option(
         ray_tracing_smoothing_option,
         "Ray tracing noise smoothing",
@@ -5439,7 +5480,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &fence_thickness_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &fence_thickness_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5474,11 +5515,6 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(underwater_haze_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(underwater_distortion_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(reflections_section_option, lighting_section_option, false);
-    // Graphics > Shaders > Ray Tracing (L, 2026-10-20): its own section under Shaders.
-    graphics.add_option_hidden_dependency(ray_tracing_section_option, lighting_section_option, false);
-    for (const std::string *id : { &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option }) {
-        graphics.add_option_hidden_dependency(*id, ray_tracing_section_option, false);
-    }
     graphics.add_option_hidden_dependency(water_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ice_reflections_option, reflections_section_option, false);
     graphics.add_option_hidden_dependency(ssr_option, reflections_section_option, false);

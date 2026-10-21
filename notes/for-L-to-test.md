@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T514 Tessellated sand: occlusion culling and props fix (Terrydactyland speed)
+- Asked: 2026-10-21 14:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Walk behind hills and turn the camera quickly
+- Look for: Is it playable now? Footprints still show near Banjo; no sand patches popping in or missing at hill edges or after quick camera turns (also check Icy Side's deep snow)
+- Status: waiting for L
+
 ## T513 Displaced ground (floors)
 - Asked: 2026-10-21 12:39 UTC
 - Build: claude/project-thread-zaob1b
@@ -69,15 +79,15 @@
 - Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
 - Status: waiting for L
 
-## T506 Fence thickness (layers on flat cut-out textures)
-- Asked: 2026-10-21 11:22 UTC
-- Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)
+## T506 Fence thickness (a filled slab behind the fence's face)
+- Asked: 2026-10-21 UTC (reworked 2026-10-21 after L: "two faces, blended in between, skipping transparent parts, not a stack")
+- Build: main, next push (built and run headless in Spiral Mountain: no crash; not seen on a real fence)
 - Steps:
   1. Settings > Graphics > Shaders: set Fence thickness to 60 (it is 0, off, by default)
-  2. Bind Shader Effects Pick Mode (Controls, Pick Modes) and press it next to a fence, grate or picket
-  3. Left click on the fence texture until it reads Fence (after Shiny Reflection and Text)
-  4. Walk round it and look at it from the side, then raise and lower Fence thickness
-- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Update: up to 24 close layers now (L: the stripes should run together), and layers drop faint edge pixels (the line along the top). Not built in for any fence yet: nothing happens until you pick one.
+  2. Bind Shader Effects Pick Mode (Controls, Pick Modes), press it next to a fence, grate or picket
+  3. Left click the fence texture until it reads Fence (after Shiny Reflection and Text)
+  4. Walk round it, look from the side and at a slant; raise and lower Fence thickness
+- Look for: no extra layers any more: the fence is one draw. Where the face is see-through, the picture follows the view ray through a slab behind it and shows the first solid part, so the pickets' sides and back show between the two faces and the see-through gaps stay clear. Darker the deeper. Tell me which world and textures (Save Pick writes shader_effect_tags.txt) so I can list them as built-in. Known limit: nothing is drawn outside the original face's outline, so the outer edge of a fence has no side. Yellow picket fence in Spiral Mountain is texture 806c8869cd6bb488.
 - Status: waiting for L
 
 ## T505 Mirror Mode: signs readable, Text pick
@@ -473,6 +483,8 @@
 - Fixed (L 08:10 grate, L lantern red bars, 2026-10-21): rays now read the texture where they hit. Where a cut-out or see-through texture is clear (the Spiral Mountain grate holes, fences, leaves), shadow, lamp and reflection rays go through; where it is solid they stop. A lamp's light is also dimmed by dark texels of its own casing within 60 units of the flame, so the bars painted on the lantern texture cut dark streaks into the light and glow. Check the grate in sunlight and Bottles' house lanterns; if the grate still blocks, send the "Ray traced scene" view; tell me any lamp that went dark.
 - Fixed (L 09:04-09:07, 2026-10-21): (a) Path tracing now brings real light: every spot a bounce lands on adds the sun's and the nearest lamps' traced light there, so sunlit patches and lamps light round corners; compare a room or cave with it off and on. (b) Grate: under cover (something straight above and on most sides) the sun let in through an opening now lights the spot, so the grate's holes throw a lit pattern below (before, traced shadows could only darken). (c) "Ray traced scene" view now shows cut-outs yellow, their clear parts blue, and with the textures read, each surface shaded by the texel the ray sees (a lantern's bars should show dark). (d) Parallax picks as Metal now count as shiny for reflections (the split pads' second half).
 - Fixed (L 10:22-10:39, 2026-10-21): (a) the sun let in through openings now only lights floors in a pit or room under a see-through cover (a grate): no more orange strips round the Jiggy shrine and stumps, or bright triangles on King Jingaling's house. (b) Models (Jinjos, birds, enemies) cast a soft traced shadow straight down, darker the closer they are to the ground. (c) New Ray Tracing option "Traced shadows of the player" (on by default): off, Banjo casts no traced shadows (sun, lamps, contact), everything else does. (d) The traced bounce light is capped and gives less to what is already bright, so sand and snow don't blow out; path tracing's sunlight per hop halved. (e) Banjo's traced shadows: leaving him out used a capsule that missed his backpack and nose and also cut the level's own triangles near him (his "shadow" was only those two, and a lit Banjo-shaped hole showed in shadows he stood or swam in). Now only his model is left out, and under ray tracing "Traced shadows of the player" decides (Sun shadow on Banjo is for the screen-space shadows). On, he casts his whole shadow. Check: Jingaling's house, a shrine in a cave, the sand, a Jinjo's shadow, Banjo swimming in sunlight with the option on and off.
+- Fixed (L 11:00-12:39, 2026-10-21): (a) Banjo's body was missing from the traced scene: the game draws characters see-through-capable with no texture on most of the body, and those parts were left out, so only his textured backpack, belt and nose cast a shadow. They are in now (checked headless in the Ray traced scene view: Banjo shows whole), so his traced shadow and enemies' should be complete. (b) Lit lamps are light sources: Bottles' house's lantern had no game light (its two lights are 2000 units away), so nothing was traced from it. Draws with a lamp texture now light the scene from where they hang, and the frame and bars (untextured or dark texels) cut the light. Bottles' lantern is built in; for other lamps use Shader Effects pick mode's new "Lamp" pick. (c) Ray tracing reads Parallax's material list (built-in and your picks): Metal, Tiles and Smooth reflect, stone, wood, dirt and the rest stay matte. (d) Graphics has its own "Ray Tracing" section after Grass, always shown (the hide toggle is gone), with new sliders: Traced reflections, Traced water reflections, Metal / Tiles / Smooth surface reflection. Check: Banjo's shadow in the sun, Bottles' lantern, a Metal-picked floor, the new sliders.
+- Fixed (L 12:39 performance, 14:14 light sweep, 2026-10-21): (a) Faster ray tracing, about 40% off the traced pass headless: outdoor light beams take 4 steps instead of 12 (rooms 8), sun shadows trace 2 rays and add 2 more only on a shadow's soft edge, the model shadow takes 2 cheaper rays, and the material and grate rays are skipped where the scene has nothing for them. (b) Open ground no longer goes black: the traced ambient occlusion started its rays a unit off the ground and hit a second layer the game draws just over it (Spiral Mountain's open grass read as fully covered). (c) Light source sweep: the 7,259-texture dump was gone through and torch and candle flames, strip and ceiling lamps and the lanterns' glow are light sources now (sheet: textures/lamp-sweep/lamp-sweep.png, with what was left out). Check: frame rate with Ray tracing on before and after, Spiral Mountain's open grass, torches in a cave, Grunty Industries' lamps.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 
