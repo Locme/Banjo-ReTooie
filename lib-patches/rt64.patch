@@ -13531,10 +13531,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..72220a2
+index 0000000..9e67cee
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4591 @@
+@@ -0,0 +1,4596 @@
 +//
 +// RT64
 +//
@@ -14533,9 +14533,9 @@ index 0000000..72220a2
 +    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 +}
 +
-+// How much of a light gets along a ray (world space) towards it (0 to 1). What lies within 60 units of the light is its
-+// fitting (a lantern's casing): there the light gets out where the texture is bright (lit panes) and is held back where
-+// it is dark (the frame and bars), so a lantern throws its bars' pattern (L, 2026-10-21); a fitting whose texture can't
++// How much of a light gets along a ray (world space) towards it (0 to 1). What lies within 90 units of the light is its
++// fitting (a lantern's casing): there the light gets out where the texture is lit yellow (the panes) and is held back
++// elsewhere (the frame, bars and roof), so a lantern throws its windows' pattern (L, 2026-10-21); a fitting whose texture can't
 +// be read lets it all out. Anything further off blocks it (a cut-out only where solid).
 +float TraceLampVisible(RayDesc ray, float3 light) {
 +    const bool textures = RayTexturesOn();
@@ -14561,10 +14561,15 @@ index 0000000..72220a2
 +        if (PlayerShadowsOff() && BanjoHit(geometry, at)) {
 +            continue;
 +        }
-+        if (length(at - light) < 60.0f) {
++        if (length(at - light) < 90.0f) {
 +            if (textures && ((flags & 2u) != 0u)) {
++                // Only through the lit, yellow parts (a lantern's panes): its dark frame and bars and its grey roof hold the
++                // light back, so the light falls in the shape of its windows (L, 2026-10-21: a window effect). (Near-white
++                // counts too, for the white-hot strip lamps.)
 +                const float3 texel = RayTexel(geometry, primitive, barycentrics).rgb;
-+                through *= saturate((dot(texel, float3(0.299f, 0.587f, 0.114f)) - 0.25f) / 0.35f);
++                const float luma = dot(texel, float3(0.299f, 0.587f, 0.114f));
++                const float yellow = max(saturate((min(texel.r, texel.g) - texel.b - 0.08f) / 0.2f), saturate((luma - 0.85f) / 0.1f));
++                through *= yellow * saturate((luma - 0.4f) / 0.25f);
 +                if (through < 0.02f) {
 +                    query.CommitNonOpaqueTriangleHit();
 +                    query.Abort();
