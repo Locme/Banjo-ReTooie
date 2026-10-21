@@ -33,6 +33,7 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/GroundTess.hlsl` | Displaced ground |
 | `src/shaders/WaterTess.hlsl`, `WaterTess.hlsli` | Tessellated water |
 | `src/shaders/Fur.hlsli` | Banjo's fur (included by RasterPS) |
+| `src/shaders/Snow.hlsli`, `SnowTess.hlsl` | Deep snow and tessellated sand (Snow.hlsli is included by RasterPS) |
 | `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h` | 3D grass with GPU instancing |
 
 **Can move here next (new files, verbatim; owner noted)**
@@ -40,7 +41,6 @@ resets `lib/rt64` doesn't touch it.
 | Files | Feature | Owner / condition |
 |---|---|---|
 | `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects, ray tracing | Ray tracing: OK, but message it just before and wait for its OK. Fences: not until L's fence test T506 is back |
-| `src/shaders/Snow.hlsli`, `SnowTess.hlsl` | Deep snow | ask the Deep snow thread first |
 | `src/tools/file_to_c/file_to_c.cmake` | Android build | none; RT64's CMakeLists names it, so its hunk stays |
 
 RT64's own shaders find `.hlsli` files here: with `RT64_EXTENSION_SOURCE_DIR` set (top-level

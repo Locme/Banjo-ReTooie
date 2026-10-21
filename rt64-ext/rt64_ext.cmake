@@ -73,6 +73,9 @@ rt64_ext_shader(build_geometry_shader rt64 "src/shaders/GrassGS.hlsl")
 # Displaced ground: floors tessellated and pushed down (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")
 
+# Deep snow as a tessellated surface (hull and domain shaders; D3D12 and Vulkan only).
+rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/SnowTess.hlsl" "src/shaders/SnowTessHS.hlsl" "src/shaders/SnowTessDS.hlsl")
+
 # Tessellated water (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/WaterTess.hlsl" "src/shaders/WaterTessHS.hlsl" "src/shaders/WaterTessDS.hlsl")
 
