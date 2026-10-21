@@ -188,7 +188,7 @@ namespace {
     // His fur: the browns the fur grew on under Spiral Mountain's light (hue 19-34, saturation 0.58 and up), not his
     // skin (hue 9-15, saturation about 0.5) or shorts (hue 39 and up). Her feathers: her reds. White and grey (his eyes,
     // her textured wings) are left to the colour as lit; anything else stays bare.
-    enum : uint8_t { mark_unknown = 0, mark_covered = 1, mark_bare = 2, mark_feathers = 3 };
+    enum : uint8_t { mark_unknown = 0, mark_covered = 1, mark_bare = 2, mark_feathers = 3, mark_shorts = 0x40 };
     uint8_t fur_vertex_mark(uint8_t r8, uint8_t g8, uint8_t b8) {
         const float r = r8 / 255.0f, g = g8 / 255.0f, b = b8 / 255.0f;
         const float high = std::max(r, std::max(g, b));
@@ -248,7 +248,9 @@ namespace {
     // shading at the crotch and hems is dark yellow to brown (hue 28-34, the fur's own range). So: every vertex of a
     // triangle drawn with a mostly yellow texture is bare, and so is a fur-marked vertex of hue 28 and up that shares
     // an untextured triangle with a yellow one. Found from the model's own lists and textures, so a model mod's
-    // shorts count too. marks has one per vertex of the model's vertex block.
+    // shorts count too. All of those and every yellow vertex also get mark_shorts: RT64 cuts the fur near them short,
+    // as his legs' and belly's fur starts under the hems and waistband and stood out over them (L: "hair still
+    // coming out of his pants"). marks has one per vertex of the model's vertex block.
     void mark_shorts_bare(const std::vector<uint8_t>& asset, const uint32_t header[3], std::vector<uint8_t>& marks) {
         auto rd16 = [&](size_t o) { return o + 2 <= asset.size() ? uint32_t((asset[o] << 8) | asset[o + 1]) : 0u; };
         auto rd32 = [&](size_t o) { return (rd16(o) << 16) | rd16(o + 2); };
@@ -308,7 +310,7 @@ namespace {
             if (textured) {
                 if (yellow_texture) {
                     for (uint32_t i : v) {
-                        marks[i] = mark_bare;
+                        marks[i] = mark_bare | mark_shorts;
                     }
                 }
                 return;
@@ -316,7 +318,10 @@ namespace {
             bool next_to_yellow = false;
             for (uint32_t i : v) {
                 const size_t at = vertices + size_t(i) * 16 + 12;
-                next_to_yellow = next_to_yellow || yellow(asset[at], asset[at + 1], asset[at + 2], 0.5f);
+                if (yellow(asset[at], asset[at + 1], asset[at + 2], 0.5f)) {
+                    next_to_yellow = true;
+                    marks[i] |= mark_shorts;
+                }
             }
             if (next_to_yellow) {
                 for (uint32_t i : v) {
@@ -356,7 +361,7 @@ namespace {
             }
         }
         for (uint32_t i : shading) {
-            marks[i] = mark_bare;
+            marks[i] = mark_bare | mark_shorts;
         }
     }
 
