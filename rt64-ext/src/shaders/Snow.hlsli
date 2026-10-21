@@ -15,6 +15,10 @@
 // textures and colours are worked out: most pixels are shaded once or twice, not once for every shell.
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHADERS_SNOW_HLSLI
+#define RT64_EXT_SHADERS_SNOW_HLSLI
 
 #include "FbRendererCommon.hlsli"
 #include "Grass.hlsli"
@@ -456,3 +460,5 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
     color = shade;
     return true;
 }
+
+#endif // RT64_EXT_SHADERS_SNOW_HLSLI

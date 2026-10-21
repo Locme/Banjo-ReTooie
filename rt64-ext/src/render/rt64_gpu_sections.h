@@ -3,6 +3,10 @@
 //
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_RENDER_RT64_GPU_SECTIONS_H
+#define RT64_EXT_RENDER_RT64_GPU_SECTIONS_H
 
 #include <iterator>
 #include <memory>
@@ -161,3 +165,5 @@ namespace RT64 {
         }
     };
 };
+
+#endif // RT64_EXT_RENDER_RT64_GPU_SECTIONS_H

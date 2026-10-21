@@ -12,6 +12,10 @@
 // model_tagging.cpp): not the yellow shorts, the blue backpack or the pale gloves and boots.
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHADERS_FUR_HLSLI
+#define RT64_EXT_SHADERS_FUR_HLSLI
 
 uint FurHash(int3 cell) {
     uint3 c = uint3(cell + 0x8000);
@@ -141,3 +145,5 @@ bool FeatherCard(float3 anchor, float3 baseColor, bool npc, bool wing, bool know
     color *= anchor.z * lerp(0.62f, 1.05f, smoothstep(0.0f, 0.75f, t)) * (1.0f - 0.18f * edge) * (1.0f - 0.08f * shaft);
     return true;
 }
+
+#endif // RT64_EXT_SHADERS_FUR_HLSLI

@@ -11,6 +11,10 @@
 // at the tips, and shorter with distance.
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHADERS_GRASS_HLSLI
+#define RT64_EXT_SHADERS_GRASS_HLSLI
 
 #include "FbRendererCommon.hlsli"
 
@@ -229,3 +233,5 @@ bool GrassBlade(float3 world, float3 baseColor, float rootY, inout float3 color)
     color = shade;
     return true;
 }
+
+#endif // RT64_EXT_SHADERS_GRASS_HLSLI

@@ -6,6 +6,10 @@
 // (GrassBladeVS.hlsl) share. FrParams must be declared before this is included.
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHADERS_GRASSBLADECOMMON_HLSLI
+#define RT64_EXT_SHADERS_GRASSBLADECOMMON_HLSLI
 
 #define GRASS_MAX_LEVEL 8
 
@@ -116,3 +120,5 @@ float3 GrassBladePoint(float s, float t, bool chunky, float3 side, float3 middle
     const float3 spine = chunky ? tip * t : ((t < 0.55f) ? middle * (t / 0.55f) : lerp(middle, tip, (t - 0.55f) / 0.45f));
     return spine + side * s;
 }
+
+#endif // RT64_EXT_SHADERS_GRASSBLADECOMMON_HLSLI

@@ -48,6 +48,13 @@ RT64's own shaders find `.hlsli` files here: with `RT64_EXTENSION_SOURCE_DIR` se
 `rt64-ext/src/shaders`, and the shader rebuild dependencies cover `.hlsli` files here too (no binary changed). Shaders built with
 `rt64_ext_shader` already get `-Irt64-ext/src` after RT64's own `-I`; with SMAA's that changed no binary.
 
+**Include guards:** every header here has an `#ifndef` guard as well as `#pragma once`, and so do the RT64
+`.hlsli` files these include (`FbRendererCommon`, `TextureSampler`, `Depth`). On Windows DXC reaches a file
+by two spellings of its path (`shaders\Grass.hlsli` from a file beside it, `shaders/Grass.hlsli` through
+`-I`), and `#pragma once` then lets it in twice (L's build, 2026-10-21). A new header here needs a guard.
+Linux can't show it as is; to check, rerun each shader command from `ninja -t commands` with `/.` after
+each `-I` folder.
+
 **Checking a move:** hash every `build-cmake/src/shaders/*.spv` and `*.spirv.c` before and after
 (all must match), and `llvm-dis` the old and new object of each moved `.cpp` (the build is LTO, so they
 are LLVM bitcode): apart from the first two lines (file path) and the `^` summary lines, they must be

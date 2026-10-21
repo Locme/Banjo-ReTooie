@@ -1,6 +1,10 @@
 //
 // RT64
 //
+// Include guard: DXC on Windows reaches a file here by two spellings of its path (from a file beside it,
+// and through -I), so it must not rely on #pragma once.
+#ifndef RT64_EXT_SHADERS_WATERTESS_HLSLI
+#define RT64_EXT_SHADERS_WATERTESS_HLSLI
 
 // Banjo-Tooie: tessellated Modern and Stylised water's height above its flat surface (WaterTess.hlsl raises the surface
 // by it; SceneEffectsPS.hlsl shades the surface by its slope, so the light follows the same waves). In world units.
@@ -30,3 +34,5 @@ float WaterTessHeight(float3 world, float t, float swell, float speed, float4 pl
     }
     return h;
 }
+
+#endif // RT64_EXT_SHADERS_WATERTESS_HLSLI

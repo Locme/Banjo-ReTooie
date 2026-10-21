@@ -10,6 +10,10 @@
 // (ComputeSceneGrass) and the pixel's depth, as for 3D grass, so the game's models need nothing new.
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHADERS_PARALLAX_HLSLI
+#define RT64_EXT_SHADERS_PARALLAX_HLSLI
 
 #include "FbRendererCommon.hlsli"
 #include "TextureSampler.hlsli"
@@ -313,3 +317,5 @@ float3 FenceSlabOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixe
     }
     return float3(0.0f, 0.0f, 1.0f);
 }
+
+#endif // RT64_EXT_SHADERS_PARALLAX_HLSLI

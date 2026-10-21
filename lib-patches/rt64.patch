@@ -13120,11 +13120,44 @@ index 0000000..fc9cf8f
 +
 +    return float4(color, 1.0f);
 +}
+diff --git a/src/shaders/Depth.hlsli b/src/shaders/Depth.hlsli
+index 64ae058..a3f6725 100644
+--- a/src/shaders/Depth.hlsli
++++ b/src/shaders/Depth.hlsli
+@@ -3,6 +3,10 @@
+ //
+ 
+ #pragma once
++// Banjo-Tooie: include guard as well, since files in the game's rt64-ext/ reach this file through -I while
++// RT64's shaders find it beside them, and DXC on Windows then sees two paths and #pragma once lets it in twice.
++#ifndef RT64_DEPTH_HLSLI
++#define RT64_DEPTH_HLSLI
+ 
+ #define DEPTH_EXPONENT_MASK     0xE000
+ #define DEPTH_MANTISSA_MASK     0x1FFC
+@@ -77,4 +81,6 @@ float4 DepthToRGBA8888(float depth) {
+ float RGBA8888ToDepth(float4 color) {
+     const float4 factor = 1.0f / float4(1.0f, 255.0f, 65025.0f, 16581375.0f);
+     return dot(color, factor);
+-}
+\ No newline at end of file
++}
++
++#endif // RT64_DEPTH_HLSLI
 diff --git a/src/shaders/FbRendererCommon.hlsli b/src/shaders/FbRendererCommon.hlsli
-index bc250a2..c4c231f 100644
+index bc250a2..ef32981 100644
 --- a/src/shaders/FbRendererCommon.hlsli
 +++ b/src/shaders/FbRendererCommon.hlsli
-@@ -8,6 +8,7 @@
+@@ -3,11 +3,16 @@
+ //
+ 
+ #pragma once
++// Banjo-Tooie: include guard as well, since files in the game's rt64-ext/ reach this file through -I while
++// RT64's shaders find it beside them, and DXC on Windows then sees two paths and #pragma once lets it in twice.
++#ifndef RT64_FBRENDERERCOMMON_HLSLI
++#define RT64_FBRENDERERCOMMON_HLSLI
+ 
+ #include "shared/rt64_fb_common.h"
  #include "shared/rt64_frame_params.h"
  #include "shared/rt64_framebuffer_params.h"
  #include "shared/rt64_gpu_tile.h"
@@ -13132,7 +13165,7 @@ index bc250a2..c4c231f 100644
  #include "shared/rt64_rdp_params.h"
  #include "shared/rt64_rdp_tile.h"
  #include "shared/rt64_render_indices.h"
-@@ -38,6 +39,20 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
+@@ -38,6 +43,20 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
  SamplerState gNearestClampWrapSampler : register(s22, space0);
  SamplerState gNearestClampMirrorSampler : register(s23, space0);
  SamplerState gNearestClampClampSampler : register(s24, space0);
@@ -13153,6 +13186,12 @@ index bc250a2..c4c231f 100644
  
  // Set 1 - RGBA32 texture cache.
  Texture2D<float4> gTextures[8192] : register(t0, space1);
+@@ -47,3 +66,5 @@ Texture1D<uint> gTMEM[8192] : register(t0, space2);
+ 
+ // Set 3 - Framebuffer.
+ ConstantBuffer<FramebufferParams> FbParams : register(b0, space3);
++
++#endif // RT64_FBRENDERERCOMMON_HLSLI
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
 index e7895c3..d9ea037 100644
 --- a/src/shaders/RasterPS.hlsl
@@ -18477,10 +18516,21 @@ index 0000000..fc50056
 +    pos = float4(SunMapPosition(SUN_MAP_FRAME(gConstants), world), 1.0f);
 +}
 diff --git a/src/shaders/TextureSampler.hlsli b/src/shaders/TextureSampler.hlsli
-index 1ceb2ce..192714b 100644
+index 1ceb2ce..e1ba872 100644
 --- a/src/shaders/TextureSampler.hlsli
 +++ b/src/shaders/TextureSampler.hlsli
-@@ -139,7 +139,20 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
+@@ -3,6 +3,10 @@
+ //
+ 
+ #pragma once
++// Banjo-Tooie: include guard as well, since files in the game's rt64-ext/ reach this file through -I while
++// RT64's shaders find it beside them, and DXC on Windows then sees two paths and #pragma once lets it in twice.
++#ifndef RT64_TEXTURESAMPLER_HLSLI
++#define RT64_TEXTURESAMPLER_HLSLI
+ 
+ #include "FbRendererCommon.hlsli"
+ #include "Math.hlsli"
+@@ -139,7 +143,20 @@ float4 sampleTextureNative(Texture2D texture, uint nativeSampler, int2 texelBase
      }
  }
  
@@ -18502,7 +18552,7 @@ index 1ceb2ce..192714b 100644
      float2 tcScale = gpuTile.tcScale;
      float mipScale = float(1U << mipLevel);
      uvCoord /= mipScale;
-@@ -186,6 +199,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
+@@ -186,6 +203,46 @@ float4 sampleTextureLevel(const RDPTile rdpTile, const GPUTile gpuTile, bool fil
  #endif
      }
      
@@ -18549,7 +18599,7 @@ index 1ceb2ce..192714b 100644
      float4 sample00 = samples[0];
      if (filtering) {
          float2 fracPart = uvCoord - texelBaseInt;
-@@ -243,6 +296,10 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -243,6 +300,10 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
      
      uvCoord *= gpuTile.tcScale;
      uvCoord -= (float2(rdpTile.uls, rdpTile.ult) * gpuTile.ulScale) / 4.0f;
@@ -18560,7 +18610,7 @@ index 1ceb2ce..192714b 100644
      
      const uint filter = otherMode.textFilt();
      const uint cycleType = otherMode.cycleType();
-@@ -278,7 +335,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -278,7 +339,7 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
              float2 ddxUVScaled = ddxUV * gpuTile.tcScale;
              float2 ddyUVScaled = ddyUV * gpuTile.tcScale;
              float ddMax = max(dot(ddxUVScaled, ddxUVScaled), dot(ddyUVScaled, ddyUVScaled));
@@ -18569,7 +18619,7 @@ index 1ceb2ce..192714b 100644
              mip = 0.5 * log2(ddMax) + mipBias;
              float maxMip = float(gpuTile.textureDimensions.z - 1);
              RDPMipLevels[0] = min(floor(mip), maxMip);
-@@ -326,13 +383,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+@@ -326,13 +387,13 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
  #if USE_FOR_LOOPS
      [unroll]
      for (uint i = 0; i < numRDPSamples; i++) {
@@ -18586,6 +18636,15 @@ index 1ceb2ce..192714b 100644
      }
  #endif
  
+@@ -356,4 +417,6 @@ float4 sampleTexture(OtherMode otherMode, RenderFlags renderFlags, float2 inputU
+     }
+     
+     return textureColor;
+-}
+\ No newline at end of file
++}
++
++#endif // RT64_TEXTURESAMPLER_HLSLI
 diff --git a/src/shaders/VideoInterfacePS.hlsl b/src/shaders/VideoInterfacePS.hlsl
 index 3f33475..7d84d10 100644
 --- a/src/shaders/VideoInterfacePS.hlsl

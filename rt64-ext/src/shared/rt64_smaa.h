@@ -3,6 +3,10 @@
 //
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_SHARED_RT64_SMAA_H
+#define RT64_EXT_SHARED_RT64_SMAA_H
 
 #include "shared/rt64_hlsl.h"
 
@@ -16,3 +20,5 @@ namespace interop {
 #ifdef HLSL_CPU
 };
 #endif
+
+#endif // RT64_EXT_SHARED_RT64_SMAA_H

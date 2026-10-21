@@ -3,6 +3,10 @@
 //
 
 #pragma once
+// Include guard as well as #pragma once: DXC on Windows reaches a file here by two spellings of its path
+// (from a file beside it, and through -I), and #pragma once then lets it in twice.
+#ifndef RT64_EXT_RENDER_RT64_PHOTO_GRADE_H
+#define RT64_EXT_RENDER_RT64_PHOTO_GRADE_H
 
 #include "rt64_descriptor_sets.h"
 #include "rt64_shader_library.h"
@@ -68,3 +72,5 @@ namespace RT64 {
             RenderTexture *input, RenderFormat format, uint32_t width, uint32_t height, bool forScreenshot, RenderTexture *depth);
     };
 };
+
+#endif // RT64_EXT_RENDER_RT64_PHOTO_GRADE_H
