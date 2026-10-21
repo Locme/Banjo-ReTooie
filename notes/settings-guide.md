@@ -284,8 +284,7 @@ F12 screenshots are taken before these filters, so they don't show them.
   of the texture, so the sides and back of the pickets show between the two
   faces and the gaps stay clear. No extra draws. Darker the deeper. 100 is a
   slab of about 12 world units. Only for the textures picked as **Fence** in
-  Shader Effects pick mode (left click steps Disable, Grass, Deep Snow, Ice
-  Reflection, Shiny Reflection, Text, Fence, then back to the built-in choice);
+  Shader Effects pick mode (right click chooses Fence, left click turns it on);
   nothing is built in yet. Seen at a slant or from the side (where a flat face
   covers almost nothing) it is also drawn as closely spaced layers, more the more
   slanted. Goes up to 300. Fades out toward 1800 units away. Default: 0 (off).
@@ -346,15 +345,26 @@ the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
 
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
-same way for the texture effects. The label names the texture's effect ("yours"
-or "built-in"), and each **left click** steps it: Disable (no grass, ice
-reflection or deep snow on it), Grass, Deep Snow, Ice Reflection, then back to
-the built-in choice. **Shift + left click** puts it back at once and the
-**mouse wheel** picks the surface behind. Grass and Ice Reflection show at once;
-Deep Snow is only recorded for now, as deep snow goes by level and colour, not
-texture. Save Pick writes the texture under the cursor to `shader_effect_tags.txt` in the `Dev Files` folder
-(one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
-them added to the port.
+same way for the texture effects. A texture can have several effects at once.
+The label lists the texture's effects ("yours" or "built-in") and the effect
+you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
+Ice Reflection, Shiny Reflection, Text, Fence, Lamp, Ignore; **Shift + right
+click** goes back one) and **left click** turns it on or off for the texture
+under the cursor. The first left click starts from the built-in effects, so
+adding Ice to built-in grass keeps the grass. Disable (no texture effect on it)
+and Ignore turn the others off, and any other effect turns them off; turning
+the last effect off leaves Disable, and turning Disable or Ignore off puts the
+built-in choice back. **Ignore** lets the texture pass through every shader: it
+is off every texture list (parallax, sand, night lights, snow and the effects
+above) and its draws are left out of the screen effects (ambient occlusion,
+outlines, fog and the rest) and ray tracing, so it looks as the N64 drew it.
+Whole-picture filters (colour, anti-aliasing) still apply. **Shift + left
+click** puts the built-in choice back at once and the **mouse wheel** picks the
+surface behind. Deep Snow is only recorded for now, as deep snow goes by level
+and colour, not texture. Save Pick writes the texture under the cursor to
+`shader_effect_tags.txt` in the `Dev Files` folder (one line a texture: the
+hash, then its effects, for example `<hash> grass ice`; files from before keep
+working); send it in to have them added to the port.
 
 **Interpolation Pick Mode** (Controls, Pick Modes, no default) does the
 same for models and characters, NPCs and enemies included: the label names the

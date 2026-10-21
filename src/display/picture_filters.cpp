@@ -71,6 +71,7 @@ namespace RT64 {
     // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
+    void SetSceneIgnoreTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -4118,8 +4119,8 @@ namespace {
     }
 
     // The grass, grass edge, ice and snow-off lists sent to RT64: the built-in ones (grass_textures[],
-    // grass_edge_textures[], ice_textures[]) with Shader Effects pick mode's picks over them. A pick other than
-    // Deep Snow also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
+    // grass_edge_textures[], ice_textures[]) with Shader Effects pick mode's picks over them. A pick without
+    // Deep Snow among its effects also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
     // snow goes by map and colour, not texture.
     std::atomic<uint32_t> effects_sent_version{0};
     // Parallax picks count too: a texture picked as Metal there is shiny (L, 2026-10-21).
@@ -4158,22 +4159,22 @@ namespace {
             return list;
         }();
         const uint32_t version = effect_textures_version();
-        std::unordered_map<uint64_t, tooie::effect_pick::Effect> picks;
-        tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effect effect) {
-            picks[hash] = effect;
+        std::unordered_map<uint64_t, tooie::effect_pick::Effects> picks;
+        tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effects effects) {
+            picks[hash] = effects;
         });
-        // Built-in entries a pick does not move elsewhere, then the picks for that effect.
+        // Built-in entries a pick does not take that effect off, then the picks with that effect (a pick can have several).
         auto build = [&](const uint64_t* begin, const uint64_t* end, tooie::effect_pick::Effect effect, bool add_picks) {
             std::vector<uint64_t> list;
             for (const uint64_t* h = begin; h != end; h++) {
                 const auto pick = picks.find(*h);
-                if ((pick == picks.end()) || (pick->second == effect)) {
+                if ((pick == picks.end()) || tooie::effect_pick::has(pick->second, effect)) {
                     list.push_back(*h);
                 }
             }
             if (add_picks) {
                 for (const auto& [hash, picked] : picks) {
-                    if ((picked == effect) && (std::find(list.begin(), list.end(), hash) == list.end())) {
+                    if (tooie::effect_pick::has(picked, effect) && (std::find(list.begin(), list.end(), hash) == list.end())) {
                         list.push_back(hash);
                     }
                 }
@@ -4202,7 +4203,7 @@ namespace {
         std::vector<uint64_t> shiny = build(shiny_all.data(), shiny_all.data() + shiny_all.size(), tooie::effect_pick::effect_shiny, true);
         std::vector<uint64_t> snow_off;
         for (const auto& [hash, picked] : picks) {
-            if (picked != tooie::effect_pick::effect_deep_snow) {
+            if (!tooie::effect_pick::has(picked, tooie::effect_pick::effect_deep_snow)) {
                 snow_off.push_back(hash);
             }
         }
@@ -4227,11 +4228,14 @@ namespace {
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         std::vector<uint64_t> fences = fence_extra;
         for (const auto& [hash, picked] : picks) {
-            if (picked == tooie::effect_pick::effect_fence) {
+            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_fence)) {
                 fences.push_back(hash);
             }
         }
         RT64::SetSceneFenceTextures(fences.data(), fences.size());
+        // Ignore: no shader at all, the screen effects included (RT64 reads every texture list as not listing these).
+        std::vector<uint64_t> ignored = build(nullptr, nullptr, tooie::effect_pick::effect_ignore, true);
+        RT64::SetSceneIgnoreTextures(ignored.data(), ignored.size());
         effects_sent_version.store(version);
     }
 

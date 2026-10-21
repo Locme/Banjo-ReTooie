@@ -498,6 +498,31 @@ namespace RT64 {
 
     static std::mutex lampMutex;
     static std::unordered_set<uint64_t> lampTextures;
+
+    // Shader Effects pick mode's Ignore: read by every texture lookup below, so kept apart under its own lock, and
+    // skipped while the list is empty.
+    static std::mutex ignoreTextureMutex;
+    static std::unordered_set<uint64_t> ignoreTextures;
+    static std::atomic<bool> ignoreAny{ false };
+
+    void SetSceneIgnoreTextures(const uint64_t *hashes, size_t count) {
+        std::unordered_set<uint64_t> textures(hashes, hashes + count);
+        const std::scoped_lock lock(ignoreTextureMutex);
+        ignoreTextures.swap(textures);
+        ignoreAny.store(!ignoreTextures.empty());
+    }
+
+    bool SceneIgnoreAny() {
+        return ignoreAny.load();
+    }
+
+    bool SceneIgnoreTexture(uint64_t hash) {
+        if (!ignoreAny.load()) {
+            return false;
+        }
+        const std::scoped_lock lock(ignoreTextureMutex);
+        return ignoreTextures.count(hash) != 0;
+    }
     static float lampLights[SceneMaxLights * 4] = {};
     static uint32_t lampLightCount = 0;
 
@@ -514,6 +539,9 @@ namespace RT64 {
     }
 
     bool SceneLampTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return false;
+        }
         const std::scoped_lock lock(lampMutex);
         return lampTextures.count(hash) != 0;
     }
@@ -757,6 +785,9 @@ namespace RT64 {
     }
 
     uint32_t SceneGrassTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return 0;
+        }
         const std::scoped_lock lock(grassTextureMutex);
         if (grassTextures.empty() || (grassTextures.count(hash) != 0)) {
             return 1;
@@ -776,6 +807,9 @@ namespace RT64 {
     }
 
     bool SceneShinyTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return false;
+        }
         const std::scoped_lock lock(shinyTextureMutex);
         return shinyTextures.count(hash) != 0;
     }
@@ -803,6 +837,9 @@ namespace RT64 {
     }
 
     uint32_t SceneIceTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return 0u;
+        }
         const std::scoped_lock lock(iceTextureMutex);
         return (iceAnywhereTextures.count(hash) != 0) ? 2u : ((iceTextures.count(hash) != 0) ? 1u : 0u);
     }
@@ -817,6 +854,9 @@ namespace RT64 {
     }
 
     bool SceneSnowOffTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return true;
+        }
         const std::scoped_lock lock(snowOffTextureMutex);
         return snowOffTextures.count(hash) != 0;
     }
@@ -830,6 +870,9 @@ namespace RT64 {
     }
 
     bool SceneSandTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return false;
+        }
         const std::scoped_lock lock(snowOffTextureMutex);
         return sandTextures.count(hash) != 0;
     }
@@ -864,6 +907,9 @@ namespace RT64 {
     }
 
     bool SceneNightLightTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return false;
+        }
         const std::scoped_lock lock(nightLightMutex);
         return nightLightTextures.count(hash) != 0;
     }
@@ -893,6 +939,9 @@ namespace RT64 {
     }
 
     bool SceneFenceTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return false;
+        }
         const std::scoped_lock lock(fenceMutex);
         return fenceTextures.count(hash) != 0;
     }
@@ -1052,7 +1101,7 @@ namespace RT64 {
     }
 
     uint32_t SceneParallaxTexture(uint64_t hash) {
-        if (!parallaxOriginalTextures) {
+        if (!parallaxOriginalTextures || SceneIgnoreTexture(hash)) {
             return 0u;
         }
         const std::scoped_lock lock(parallaxMutex);
@@ -1065,6 +1114,9 @@ namespace RT64 {
     }
 
     uint32_t SceneMaterialTexture(uint64_t hash) {
+        if (SceneIgnoreTexture(hash)) {
+            return 0u;
+        }
         const std::scoped_lock lock(parallaxMutex);
         const auto it = parallaxTextures.find(hash);
         if (it == parallaxTextures.end()) {

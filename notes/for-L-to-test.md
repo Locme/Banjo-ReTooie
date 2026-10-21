@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T520 Several shader effects on one texture, and Ignore
+- Asked: 2026-10-21 21:12 UTC
+- Build: main (next build)
+- Steps:
+  1. Bind Controls > Pick Modes > Shader Effects Pick Mode and turn it on
+  2. Point at a grass texture: the label lists its built-in effects and the chosen effect
+  3. Right click until Ice Reflection is chosen, left click: the label shows Grass + Ice Reflection and both show in game
+  4. Right click to Ignore, left click on a wall or floor: no AO, outlines, fog, grass, parallax or ray tracing on it, plain N64 look
+  5. Left click Ignore again: back to built-in. Give a texture Grass + Ice, Save Pick, restart: both come back from Dev Files/shader_effect_tags.txt
+  6. An old shader_effect_tags.txt (one effect a line) still loads
+- Look for: Can one texture hold several effects, and does Ignore make it pass through every shader?
+- Status: waiting for L
+
 ## T519 Intro: normal wide view from the first shot (replaces T403)
 - Asked: 2026-10-21 20:35 UTC
 - Build: main
