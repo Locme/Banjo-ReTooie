@@ -12,6 +12,7 @@
 
 #include "tooie_dive.h"
 #include "tooie_game.h"
+#include "tooie_game_frame_rate.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_rdram.h"
 
@@ -67,7 +68,8 @@ namespace {
     float heading_x = 0.0f, heading_z = 0.0f; // unit vector of the dive, fixed at the start
     bool dived_this_jump = false;
     bool run_prev = false;
-    Clock::time_point last_tick{};
+    uint32_t last_game_ms = 0;
+    bool have_last = false;
 
     // The pad hook (another thread) reads these.
     std::atomic<bool> can_dive{false};
@@ -75,6 +77,11 @@ namespace {
 
     // QOL > Dive, read a few times a second rather than on every pad read.
     bool enabled(Clock::time_point now) {
+        // TOOIE_DIVE=1 turns the dive on whatever the setting says, for headless runs.
+        static const bool forced = std::getenv("TOOIE_DIVE") != nullptr;
+        if (forced) {
+            return true;
+        }
         static bool cached = false;
         static Clock::time_point cached_at{};
         if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
@@ -135,9 +142,11 @@ void tooie::dive::apply(uint16_t* buttons) {
 void tooie::dive::tick(uint8_t* rdram, recomp_context* ctx) {
     (void)ctx;
     const auto now = Clock::now();
-    const float dt = last_tick == Clock::time_point{} ? 0.0f
-        : std::min(std::chrono::duration<float>(now - last_tick).count(), 0.1f);
-    last_tick = now;
+    // Game time, not real time, so the dive lasts the same however fast the game runs.
+    const uint32_t game_ms = tooie::game_frame_rate::game_ms();
+    const float dt = have_last ? std::min((game_ms - last_game_ms) / 1000.0f, 0.1f) : 0.0f;
+    last_game_ms = game_ms;
+    have_last = true;
 
     // The Run button as a fresh press (it also starts the dive, as the example's Action press does).
     const bool run = tooie::hold_to_run::held() || test_press(now);
