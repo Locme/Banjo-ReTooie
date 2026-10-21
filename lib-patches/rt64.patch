@@ -15629,10 +15629,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..fc4ada1
+index 0000000..fa103ff
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4234 @@
+@@ -0,0 +1,4349 @@
 +//
 +// RT64
 +//
@@ -17017,6 +17017,54 @@ index 0000000..fc4ada1
 +    return (dot(normal, direction) > 0.0f) ? -normal : normal;
 +}
 +
++// Path tracing's light at a spot a path landed on (view space, with its normal): the sun where a ray reaches it, and the
++// nearest few of the level's lights that reach it unblocked (cut-outs let it all through: the indirect pass has no
++// textures to read). The screen's colour there already holds the light the game
++// gave it; this is what the traced light adds, so sunlit patches and lamps light what is round the corner from them.
++float3 PathDirectLight(float3 at, float3 normal) {
++    float3 light = 0.0f;
++    const float3 start = at + normal * max(-at.z * 0.002f, 1.0f);
++    const float3 worldStart = ViewToWorldPoint(start);
++    const float3 sun = normalize(gConstants.sun.xyz);
++    const float sunFacing = dot(normal, sun);
++    if (sunFacing > 0.0f) {
++        if (TraceDistance(start, sun, 20000.0f) < 0.0f) {
++            light += float3(1.0f, 0.93f, 0.78f) * (0.8f * sunFacing);
++        }
++    }
++    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
++    const float3 worldNormal = normalize(ViewToWorldDirection(normal));
++    uint traced = 0u;
++    [loop] for (uint i = 0u; (i < count) && (traced < 3u); i++) {
++        const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
++        const float3 toLight = lamp.xyz - worldStart;
++        const float distance = length(toLight);
++        if ((distance < 10.0f) || (distance > lamp.w)) {
++            continue;
++        }
++        const float facing = dot(worldNormal, toLight / distance);
++        if (facing <= 0.0f) {
++            continue;
++        }
++        traced++;
++        // Stops short of the lamp's own fitting.
++        RayDesc ray;
++        ray.Origin = worldStart;
++        ray.Direction = toLight / distance;
++        ray.TMin = 0.0f;
++        ray.TMax = max(distance - 60.0f, 1.0f);
++        RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.Proceed();
++        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
++            continue;
++        }
++        const float falloff = saturate(1.0f - distance / lamp.w);
++        light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * facing);
++    }
++    return light;
++}
++
 +// Traced light (path traced): from the surface, two rays a pixel (32 over a 4x4 block) over the hemisphere, far enough
 +// to leave the world. A ray that leaves it brings the sky's light; one that lands brings the colour of where it lands
 +// (HitColour), the less the further off it was. With Path tracing on, the path goes on from there for Path tracing
@@ -17043,14 +17091,17 @@ index 0000000..fc4ada1
 +        float trust;
 +        const float3 hitColour = HitColour(hit, trust);
 +        light += hitColour * trust * far;
-+        // The path's further hops.
-+        float3 throughput = hitColour * (0.6f * far);
++        // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
++        // (PathDirectLight) on its own colour, so path tracing carries real light round corners, not only the colours
++        // the picture shows.
++        float3 throughput = hitColour * (0.8f * far);
 +        float3 at = hit;
 +        float3 from = direction;
 +        float reach = t;
 +        float3 previous = origin;
 +        [loop] for (uint b = 0u; b < bounces; b++) {
 +            const float3 surfaceNormal = HitNormal(previous, from, reach);
++            light += throughput * PathDirectLight(at, surfaceNormal);
 +            const float3 start = at + surfaceNormal * max(-at.z * 0.002f, 1.0f);
 +            const float3 next = IndirectDirection(surfaceNormal, (cell * 2u + uint(r) + 11u * (b + 1u)) & 31u);
 +            const float tn = TraceDistance(start, next, 15000.0f);
@@ -17065,7 +17116,7 @@ index 0000000..fc4ada1
 +            float nextTrust;
 +            const float3 nextColour = HitColour(nextHit, nextTrust);
 +            light += throughput * nextColour * nextTrust;
-+            throughput *= nextColour * 0.6f;
++            throughput *= nextColour * 0.8f;
 +            if (max(throughput.r, max(throughput.g, throughput.b)) < 0.02f) {
 +                break;
 +            }
@@ -19094,7 +19145,36 @@ index 0000000..fc4ada1
 +    return max(blocked / float(Taps), away);
 +}
 +
-+float SunShadow(int2 pixel, float3 center, float3 surfaceNormal) {
++#ifdef RAY_TRACED
++// Whether a spot is under cover (a grate, a roof with gaps, a room with windows): the ray straight up and at least three
++// of four slanted up meet something, counting a cut-out as solid whatever its texture (a canyon's floor is open above).
++bool CoveredAbove(float3 worldStart) {
++    const float3 directions[5] = { float3(0.0f, 1.0f, 0.0f), float3(0.82f, 0.57f, 0.0f), float3(-0.82f, 0.57f, 0.0f), float3(0.0f, 0.57f, 0.82f), float3(0.0f, 0.57f, -0.82f) };
++    uint hits = 0u;
++    [loop] for (int k = 0; k < 5; k++) {
++        RayDesc ray;
++        ray.Origin = worldStart;
++        ray.Direction = directions[k];
++        ray.TMin = 0.0f;
++        ray.TMax = 6000.0f;
++        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.Proceed();
++        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
++            hits++;
++        }
++        else if (k == 0) {
++            return false;
++        }
++    }
++    return hits >= 4u;
++}
++#endif
++
++// sunlight: with ray tracing, the sun's light let in through an opening (a grate's holes, a window, a gap in a roof)
++// onto a spot under cover. The game lit such spots as if in shade, so traced shadows alone could only darken them and
++// the light through the grate never showed (L, 2026-10-21).
++float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 sunlight) {
 +    const float3 sun = gConstants.sun.xyz;
 +    const float distance = -center.z;
 +    // Fades out with distance: far away the depth buffer is too coarse and the shadows too small to tell.
@@ -19163,6 +19243,9 @@ index 0000000..fc4ada1
 +        shadow = blocked / float(Rays);
 +        if (((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
 +            return 1.0f;
++        }
++        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && CoveredAbove(ViewToWorldPoint(start))) {
++            sunlight += float3(1.0f, 0.93f, 0.78f) * (0.9f * facing * (1.0f - shadow) * near);
 +        }
 +    }
 +#else
@@ -19451,10 +19534,40 @@ index 0000000..fc4ada1
 +        const float3 surface = ViewPosition(pixel, depth);
 +        const float distance = length(surface);
 +        const float tolerance = max(distance * 0.02f, 8.0f);
-+        const float t = TraceDistance(float3(0.0f, 0.0f, 0.0f), surface / distance, distance + tolerance);
++        // The ray reads the textures as the shadow rays do: a cut-out's clear texels let it through (blue there), its
++        // solid ones show yellow; solid draws green. With the textures readable, the tint is shaded by the texel's
++        // brightness, so a grate's holes and a lantern's bars show as the rays see them.
++        RayDesc ray;
++        ray.Origin = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
++        ray.Direction = ViewToWorldDirection(surface / distance);
++        ray.TMin = 0.0f;
++        ray.TMax = distance + tolerance;
++        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        while (query.Proceed()) {
++            if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
++                const uint geometry = query.CandidateGeometryIndex();
++                if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
++                    continue;
++                }
++                query.CommitNonOpaqueTriangleHit();
++            }
++        }
 +        float3 tint = float3(0.2f, 0.4f, 1.0f);
-+        if (t >= 0.0f) {
-+            tint = (t < distance - tolerance) ? float3(1.0f, 0.2f, 0.2f) : float3(0.3f, 1.0f, 0.3f);
++        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
++            const float t = query.CommittedRayT();
++            const uint geometry = query.CommittedGeometryIndex();
++            const uint flags = RayGeometryFlags(geometry);
++            if (t < distance - tolerance) {
++                tint = float3(1.0f, 0.2f, 0.2f);
++            }
++            else {
++                tint = ((flags & 1u) != 0u) ? float3(1.0f, 0.9f, 0.2f) : float3(0.3f, 1.0f, 0.3f);
++                if (RayTexturesOn() && ((flags & 2u) != 0u)) {
++                    const float3 texel = RayTexel(geometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb;
++                    return float4(tint * (0.25f + 0.75f * dot(texel, float3(0.299f, 0.587f, 0.114f))), 0.0f);
++                }
++            }
 +        }
 +        return float4(tint * grey * 1.6f, 0.0f);
 +#else
@@ -19616,12 +19729,14 @@ index 0000000..fc4ada1
 +            keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
 +        }
 +        if (sunShadows) {
-+            keep *= SunShadow(pixel, center, normal);
++            keep *= SunShadow(pixel, center, normal, lamp);
 +        }
 +#ifdef RAY_TRACED
 +        // Not tied to the sun: lamps and fires cast their own in caves and at night.
 +        if (lightShadows) {
-+            keep *= LightShadows(center, normal, lamp);
++            float3 lamps;
++            keep *= LightShadows(center, normal, lamps);
++            lamp += lamps;
 +            const float flags = gConstants.shadows.w - floor(gConstants.shadows.w / 4.0f) * 4.0f;
 +            if ((flags > 1.5f) && !onBanjo) {
 +                keep *= BanjoContactShadow(center, normal);
