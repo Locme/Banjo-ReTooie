@@ -7,7 +7,7 @@
 
 // Mirror Mode (src/display/mirror_mode.cpp): a General option that flips the picture left to right. RT64
 // flips the finished game image, after drawing the HUD and text flipped so they come out readable
-// (lib-patches/rt64.patch, src/render/rt64_mirror.cpp).
+// (rt64-ext/src/render/rt64_mirror.cpp, called from lib-patches/rt64.patch).
 namespace tooie::mirror_mode {
     inline const std::string option = "mirror_mode";
 

@@ -25,15 +25,15 @@ resets `lib/rt64` doesn't touch it.
 | `src/render/rt64_fxaa.cpp`, `.h`, `src/shaders/FxaaPS.hlsl` | FXAA (`RT64::SetFxaaMode`) |
 | `src/render/rt64_smaa.cpp`, `.h`, `src/shared/rt64_smaa.h`, `src/shaders/SmaaPS.hlsl` | SMAA (`RT64::SetSmaaQuality`) |
 | `src/render/rt64_mirror.cpp`, `.h`, `src/shaders/MirrorPS.hlsl` | Mirror Mode |
+| `src/render/rt64_fsr.cpp`, `.h`, `src/shared/rt64_fsr.h`, `src/shaders/FsrPS.hlsl` | FSR 1 (`RT64::SetFsrMode`) |
+| `src/render/rt64_photo_grade.cpp`, `.h`, `src/shared/rt64_photo_grade.h`, `src/shaders/PhotoGradePS.hlsl` | Photo mode filters, sharpening |
+| `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling |
+| `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay (included by the framebuffer renderer and scene effects, unchanged) |
 
 **Can move here next (new files, verbatim; owner noted)**
 
 | Files | Feature | Owner / condition |
 |---|---|---|
-| `src/render/rt64_fsr.cpp`, `.h`, `src/shared/rt64_fsr.h`, `src/shaders/FsrPS.hlsl` | FSR 1 | none |
-| `src/render/rt64_photo_grade.cpp`, `.h`, `src/shared/rt64_photo_grade.h`, `src/shaders/PhotoGradePS.hlsl` | Photo mode filters, sharpening | none |
-| `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling | none |
-| `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay | none |
 | `src/shaders/Parallax.hlsli`, `GrassGS.hlsl` | Parallax, grass blades | Fences: OK to move now (2026-10-21); tell it after the push |
 | `src/shaders/GroundTess.hlsl` | Displaced ground | Displaced ground: OK, same options and same `build_tessellation_shaders` line |
 | `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects, ray tracing | Ray tracing: OK, but message it just before and wait for its OK. Fences: not until L's fence test T506 is back |

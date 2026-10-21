@@ -16,19 +16,25 @@ target_include_directories(rt64 PUBLIC
 target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_smaa.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fxaa.cpp
-    ${RT64_EXT_DIR}/src/render/rt64_mirror.cpp)
+    ${RT64_EXT_DIR}/src/render/rt64_mirror.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp)
 
 # iryoku/smaa (lib/smaa, MIT): SMAA.hlsl for the shaders, AreaTex.h and SearchTex.h for rt64_smaa.cpp.
 target_include_directories(rt64 PRIVATE ${RT64_SMAA_DIR})
+# AMD FidelityFX FSR 1 (lib/fsr, MIT): ffx_a.h and ffx_fsr1.h.
+target_include_directories(rt64 PRIVATE ${RT64_FSR_DIR})
 
 # RT64's build_<kind>_shader, reading the shader from rt64-ext/ instead of lib/rt64/. The output has the
 # same name in the build folder as before (src/shaders/<name>.hlsl.spirv.h and so on), so RT64's sources
-# include it unchanged, and the shader is compiled with the same options as RT64's own, plus rt64-ext/src
-# as an include folder after RT64's src (for "shared/..." headers that moved here).
+# include it unchanged, and the shader is compiled with the same options as RT64's own, plus two include
+# folders after RT64's src: rt64-ext/src (for "shared/..." headers that moved here) and RT64's src/shaders
+# (for its .hlsli files, which a shader in lib/rt64 found beside itself).
+set(RT64_EXT_RT64_SHADERS ${PROJECT_SOURCE_DIR}/src/shaders)
 function(rt64_ext_shader KIND)
     set(PROJECT_SOURCE_DIR ${RT64_EXT_DIR})
     foreach(OPTS DXC_PS_OPTS DXC_VS_OPTS DXC_CS_OPTS DXC_GS_OPTS DXC_HS_OPTS DXC_DS_OPTS)
-        list(APPEND ${OPTS} "-I${RT64_EXT_DIR}/src")
+        list(APPEND ${OPTS} "-I${RT64_EXT_DIR}/src" "-I${RT64_EXT_RT64_SHADERS}")
     endforeach()
     cmake_language(CALL build_${KIND}_shader ${ARGN})
 endfunction()
@@ -50,3 +56,13 @@ rt64_ext_shader(pixel rt64 "src/shaders/FxaaPS.hlsl" "src/shaders/FxaaExtremePS.
 
 # Mirror Mode (src/display/mirror_mode.cpp).
 rt64_ext_shader(pixel rt64 "src/shaders/MirrorPS.hlsl")
+
+# FSR 1 (RT64::SetFsrMode, src/display/fsr.cpp): EASU upscale and RCAS sharpen.
+rt64_ext_shader(pixel rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrEasuPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_EASU" "-HV 2018")
+rt64_ext_shader(pixel rt64 "src/shaders/FsrPS.hlsl" "src/shaders/FsrRcasPS.hlsl" "-I${RT64_FSR_DIR}" "-D FSR_PASS_RCAS" "-HV 2018")
+
+# Photo mode's filters and sharpening (RT64::SetPhotoGrade, src/gameplay/photo_mode.cpp).
+rt64_ext_shader(pixel rt64 "src/shaders/PhotoGradePS.hlsl")
+
+# Live texture upscaling in the texture cache (RT64::SetTextureUpscale).
+rt64_ext_shader(compute rt64 "src/shaders/TextureUpscaleCS.hlsl")
