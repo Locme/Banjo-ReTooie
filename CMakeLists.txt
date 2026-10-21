@@ -378,6 +378,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/texture_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/game/memory_guard.cpp
     ${CMAKE_SOURCE_DIR}/src/game/asset_mods.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/sound_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/game/level_warp.cpp
     ${CMAKE_SOURCE_DIR}/src/game/achievements.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hide_hud.cpp
