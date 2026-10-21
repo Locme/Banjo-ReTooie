@@ -355,6 +355,11 @@ namespace {
         0x31d98da7f8ab6e40, 0x37488137fb10db24, 0x5030ec15ded34bc9, 0x604279c748dde428, 0x68dbdb32fd236996, 0x7757c212c3543909,
         0x7c7d6480aa2a36a2, 0x7e3dde1e37601f1d, 0x8328161013507ecd, 0x9e1db7eb4ed945a5, 0xa05ce779f63ba5ba, 0xa0754fa808c1eec1,
         0xa0c74c8970f42515, 0xb9ba390865aa6d04, 0xc3ef62edd84ea687, 0xe0d5ce6913a1288b,
+        // Ice sweep (L, 2026-10-21): crystal ice, ice blocks and icicle walls picked by eye from the 7,259-texture dump
+        // (textures/ice-sweep/ice-sweep.png; water, snowy backdrops and fog left out).
+        0xa111f6281c4c0ff7, 0x3ad422f50614deef, 0x7c6a08e45d7b0dcf, 0xfd9b9d2facc15775, 0x664b0c6644060bed, 0x61651a70e726dbdb,
+        0xce591e8142597cca, 0x343369c2081485f9, 0xca3ac18fa0ee884d, 0x5a223ae5487e2ed2, 0x3c2fe461b635534e, 0x8736bfc30bbe4140,
+        0x79a8b89ae797effa, 0x10907a3d02067a62,
     };
 
     // Lit lamps' textures (RT64 hashes): with Graphics > Ray tracing on, each draw with one lights the traced scene from
