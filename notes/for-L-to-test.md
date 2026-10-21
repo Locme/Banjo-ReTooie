@@ -1,5 +1,64 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T512 Mirror Mode: Start menu readable
+- Asked: 2026-10-21 13:11 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Press Start in the world
+  3. Read the menu rows and the Jiggy/Note counters
+- Look for: The Start menu text and icons are not mirrored (they sit where they do with Mirror Mode off); the world behind is mirrored. Not built or run.
+- Status: waiting for L
+
+## T511 Faint line on top of fences with texture upscaling
+- Asked: 2026-10-21 13:06 UTC
+- Build: main
+- Steps:
+  1. Turn Texture upscaling on (2x or 4x)
+  2. Look at a fence's top edge
+  3. Compare with upscaling off
+- Look for: Is the faint line along the top edge of the fence gone? If it stays with upscaling off too, say so: then it is the game's own texture
+- Status: waiting for L
+
+## T510 Dump sounds (DEV)
+- Asked: 2026-10-21 12:38 UTC
+- Build: main @ cbfad44
+- Steps:
+  1. Open Settings > DEV and switch on Dump sounds
+  2. Play for a minute, then enter a few different areas
+  3. Open the sound_dump folder in the app-data folder
+- Look for: Are there WAV files in bank*/inst*/ folders, and do they sound right (not noise)? Are Kazooie's sounds among them? Send index.txt if the sounds are wrong or missing.
+- Status: waiting for L
+
+## T509 3D grass in ray tracing
+- Asked: 2026-10-21 12:29 UTC
+- Build: main
+- Steps:
+  1. Turn on Ray tracing and 3D grass, leave 3D grass in ray tracing on (Graphics > 3D grass)
+  2. Stand in Spiral Mountain's grass in sunlight and walk through it
+  3. Look at the grass shadows on Banjo and the ground, then turn 3D grass in ray tracing off and on again and compare the frame rate
+- Look for: The grass casts shadows on Banjo's legs and on the ground beside it, and nothing flickers or goes black. Say how much slower it is with it on. Send console.log if the game crashes.
+- Status: waiting for L
+
+## T508 Tessellated sand speed in Terrydactyland
+- Asked: 2026-10-21 12:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Turn the camera around and walk a long way on sand
+- Look for: Is it playable now (frame rate close to Tessellated sand off)? Footprints still show near Banjo; no sand or snow vanishing at the screen edges (also check Icy Side's deep snow)
+
+## T507 Mirror Mode: controls follow the picture
+- Asked: 2026-10-21 12:26 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Push the stick left, then right
+  3. Turn the camera with C-left and C-right
+- Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
+- Status: waiting for L
+
 ## T506 Fence thickness (layers on flat cut-out textures)
 - Asked: 2026-10-21 11:22 UTC
 - Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)
@@ -8,7 +67,7 @@
   2. Bind Shader Effects Pick Mode (Controls, Pick Modes) and press it next to a fence, grate or picket
   3. Left click on the fence texture until it reads Fence (after Shiny Reflection and Text)
   4. Walk round it and look at it from the side, then raise and lower Fence thickness
-- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Not built in for any fence yet: nothing happens until you pick one.
+- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Update: up to 24 close layers now (L: the stripes should run together), and layers drop faint edge pixels (the line along the top). Not built in for any fence yet: nothing happens until you pick one.
 - Status: waiting for L
 
 ## T505 Mirror Mode: signs readable, Text pick

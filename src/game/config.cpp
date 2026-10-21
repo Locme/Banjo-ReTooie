@@ -61,6 +61,7 @@
 #include "tooie_texture_sweep.h"
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
+#include "tooie_sound_dump.h"
 #include "tooie_damage.h"
 #include "tooie_aim_trace.h"
 
@@ -849,6 +850,11 @@ void tooie::init_config() {
         tooie::asset_dump_option,
         "Dump assets",
         "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
+        false);
+    wip.add_bool_option(
+        tooie::sound_dump_option,
+        "Dump sounds",
+        "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
         false);
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
     wip.add_bool_option(

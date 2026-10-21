@@ -111,6 +111,7 @@ namespace tooie::picture_filters {
     // 3D grass LOD (0 off: every blade stays out to the grass distance) and 30 FPS grass (its culling every other frame).
     inline const std::string grass_lod_option = "grass_3d_lod";
     inline const std::string grass_half_rate_option = "grass_3d_30fps";
+    inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
     // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
