@@ -2220,7 +2220,7 @@ index 69a82ac..1939ed1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..a6f3a56 100644
+index 9fae0d4..993ad0b 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -3385,13 +3385,14 @@ index 9fae0d4..a6f3a56 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2302,156 @@ namespace RT64 {
+@@ -1296,9 +2302,157 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
 -                submitRasterScene(worker, framebuffer, targetDrawCall.fbStorage, rasterScene, depthState);
 +                // Mirror Mode: what comes after the 3D world of a frame that has one is the HUD.
-+                const bool mirrorHud = GetMirrorMode() && (targetDrawCall.sceneEffectsAfter > 0) && (int32_t(pair.first) >= targetDrawCall.sceneEffectsAfter);
++                // A frame with no 3D world at all (a transition's black screen, menus) is all HUD: it is drawn unflipped.
++                const bool mirrorHud = GetMirrorMode() && ((targetDrawCall.sceneEffectsAfter <= 0) || (int32_t(pair.first) >= targetDrawCall.sceneEffectsAfter));
 +                const bool beforeEffects = deferExcluded && (rasterScenesDrawn < targetDrawCall.sceneEffectsAfter);
 +                if (beforeEffects) {
 +                    scenesBeforeEffects.push_back(pair.first);
@@ -3543,7 +3544,7 @@ index 9fae0d4..a6f3a56 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2503,43 @@ namespace RT64 {
+@@ -1350,10 +2504,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3588,7 +3589,7 @@ index 9fae0d4..a6f3a56 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2572,11 @@ namespace RT64 {
+@@ -1386,6 +2573,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3600,7 +3601,7 @@ index 9fae0d4..a6f3a56 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2599,68 @@ namespace RT64 {
+@@ -1408,6 +2600,68 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3669,7 +3670,7 @@ index 9fae0d4..a6f3a56 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2684,22 @@ namespace RT64 {
+@@ -1431,6 +2685,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3692,7 +3693,7 @@ index 9fae0d4..a6f3a56 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2719,181 @@ namespace RT64 {
+@@ -1450,12 +2720,181 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3874,7 +3875,7 @@ index 9fae0d4..a6f3a56 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3044,7 @@ namespace RT64 {
+@@ -1606,6 +3045,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3882,7 +3883,7 @@ index 9fae0d4..a6f3a56 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3121,20 @@ namespace RT64 {
+@@ -1682,6 +3122,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3903,7 +3904,7 @@ index 9fae0d4..a6f3a56 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3200,2087 @@ namespace RT64 {
+@@ -1747,25 +3201,2087 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);

@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T517 Mirror Mode: transitions not mirrored
+- Asked: 2026-10-21 15:59 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Enter a level or collect a Jiggy so the Jiggy wipe plays
+  3. Watch the wipe close and open
+- Look for: The Jiggy-shaped wipe looks the same as with Mirror Mode off (shape not mirrored, hole clears the whole screen). Also check the title and file select, which should read normally. Not built or run.
+- Status: waiting for L
+
 ## T516 Dive animation and belly slide
 - Asked: 2026-10-21 15:56 UTC
 - Build: main
