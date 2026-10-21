@@ -69,15 +69,15 @@
 - Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
 - Status: waiting for L
 
-## T506 Fence thickness (layers on flat cut-out textures)
-- Asked: 2026-10-21 11:22 UTC
-- Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)
+## T506 Fence thickness (a filled slab behind the fence's face)
+- Asked: 2026-10-21 UTC (reworked 2026-10-21 after L: "two faces, blended in between, skipping transparent parts, not a stack")
+- Build: main, next push (built and run headless in Spiral Mountain: no crash; not seen on a real fence)
 - Steps:
   1. Settings > Graphics > Shaders: set Fence thickness to 60 (it is 0, off, by default)
-  2. Bind Shader Effects Pick Mode (Controls, Pick Modes) and press it next to a fence, grate or picket
-  3. Left click on the fence texture until it reads Fence (after Shiny Reflection and Text)
-  4. Walk round it and look at it from the side, then raise and lower Fence thickness
-- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Update: up to 24 close layers now (L: the stripes should run together), and layers drop faint edge pixels (the line along the top). Not built in for any fence yet: nothing happens until you pick one.
+  2. Bind Shader Effects Pick Mode (Controls, Pick Modes), press it next to a fence, grate or picket
+  3. Left click the fence texture until it reads Fence (after Shiny Reflection and Text)
+  4. Walk round it, look from the side and at a slant; raise and lower Fence thickness
+- Look for: no extra layers any more: the fence is one draw. Where the face is see-through, the picture follows the view ray through a slab behind it and shows the first solid part, so the pickets' sides and back show between the two faces and the see-through gaps stay clear. Darker the deeper. Tell me which world and textures (Save Pick writes shader_effect_tags.txt) so I can list them as built-in. Known limit: nothing is drawn outside the original face's outline, so the outer edge of a fence has no side. Yellow picket fence in Spiral Mountain is texture 806c8869cd6bb488.
 - Status: waiting for L
 
 ## T505 Mirror Mode: signs readable, Text pick
