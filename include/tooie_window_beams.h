@@ -15,6 +15,9 @@ namespace tooie::window_beams {
     bool enabled();
     // Whether the map is one of the rooms that get beams.
     bool has_beams(uint16_t map);
+    // Whether beams are drawn in the map: Mumbo's Skulls (the game's own) always, the rooms that get
+    // beams while the option is on. The traced light beams leave these maps alone, so they don't double.
+    bool drawn_beams(uint16_t map);
 
     // Called from the asset loader for every asset it loads: the room's see-through model with the
     // beams when id is one this feature stands in for, else empty. rom_asset gives an asset as the

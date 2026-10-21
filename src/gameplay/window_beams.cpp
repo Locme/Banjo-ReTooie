@@ -466,6 +466,14 @@ bool tooie::window_beams::has_beams(uint16_t map) {
     return std::any_of(rooms.begin(), rooms.end(), [map](const Room& room) { return has_map(room, map); });
 }
 
+bool tooie::window_beams::drawn_beams(uint16_t map) {
+    constexpr std::array<uint16_t, 9> skulls = { 0xB7, 0xD9, 0xEF, 0x134, 0x13E, 0x156, 0x171, 0x172, 0x176 };
+    if (std::find(skulls.begin(), skulls.end(), map) != skulls.end()) {
+        return true;
+    }
+    return enabled() && has_beams(map);
+}
+
 bool tooie::window_beams::room_light(uint16_t map, float direction[3]) {
     for (const Room& room : rooms) {
         if (!has_map(room, map) || room.windows.empty()) {
