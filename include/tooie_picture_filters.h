@@ -118,7 +118,7 @@ namespace tooie::picture_filters {
     inline const std::string grass_lod_option = "grass_3d_lod";
     inline const std::string grass_half_rate_option = "grass_3d_30fps";
     inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
-    // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
+    // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (rt64-ext/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string tessellated_sand_option = "tessellated_sand";
@@ -133,7 +133,7 @@ namespace tooie::picture_filters {
     inline const std::string ground_displacement_option = "ground_displacement";
     inline const std::string ground_displacement_distance_option = "ground_displacement_distance";
     inline const std::string parallax_original_option = "parallax_original";
-    // Banjo's fur: shells of strands over his brown fur (lib/rt64/src/shaders/Fur.hlsli).
+    // Banjo's fur: shells of strands over his brown fur (rt64-ext/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
