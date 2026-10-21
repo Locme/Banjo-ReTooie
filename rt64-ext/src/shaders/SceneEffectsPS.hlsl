@@ -1034,8 +1034,11 @@ float TraceLampVisible(RayDesc ray, float3 light) {
                 // counts too, for the white-hot strip lamps.)
                 const float3 texel = RayTexel(geometry, primitive, barycentrics).rgb;
                 const float luma = dot(texel, float3(0.299f, 0.587f, 0.114f));
-                const float yellow = max(saturate((min(texel.r, texel.g) - texel.b - 0.08f) / 0.2f), saturate((luma - 0.85f) / 0.1f));
-                through *= yellow * saturate((luma - 0.4f) / 0.25f);
+                // The panes are pale yellow to white with red and green equal (ffff8c, efef5a, f7f7de); the frame round them
+                // is ochre and gold, red well above green (efc642, ce9c31, a57b29), and must hold the light back too, or
+                // the light left by the whole side and no window pattern showed (L, 2026-10-21).
+                const float pale = saturate(1.0f - (texel.r - texel.g - 0.03f) / 0.05f);
+                through *= pale * saturate((luma - 0.75f) / 0.1f);
                 if (through < 0.02f) {
                     query.CommitNonOpaqueTriangleHit();
                     query.Abort();
