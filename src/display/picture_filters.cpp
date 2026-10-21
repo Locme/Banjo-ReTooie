@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -4039,9 +4040,21 @@ namespace {
         applying_preset = false;
     }
 
+    // The Effect Cost Check key's effect turned off for now (set_cost_override), read in place of its setting.
+    std::mutex cost_mutex;
+    std::atomic<bool> cost_override_on{ false };
+    const std::string* cost_override_id = nullptr;
+    recomp::config::ConfigValueVariant cost_override_value;
+
     template <typename T>
     T value(const std::string& id, T fallback) {
         try {
+            if (cost_override_on.load(std::memory_order_relaxed)) {
+                std::lock_guard lock{ cost_mutex };
+                if ((cost_override_id != nullptr) && (*cost_override_id == id)) {
+                    return std::get<T>(cost_override_value);
+                }
+            }
             return std::get<T>(graphics_config().get_option_value(id));
         } catch (...) {
             return fallback;
@@ -5415,4 +5428,53 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(fog_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(fog_start_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(fog_colour_option, lighting_section_option, false);
+}
+
+std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_effects() {
+    std::vector<CostEffect> effects;
+    if (!created) {
+        return effects;
+    }
+    auto add = [&](const std::string* id, recomp::config::ConfigValueVariant off) {
+        try {
+            if (graphics_config().get_option_value(*id) != off) {
+                effects.push_back({ id, graphics_config().get_option(*id).name, off });
+            }
+        } catch (...) {
+        }
+    };
+    for (const PresetValue& preset : preset_values) {
+        // SMAA, FXAA and FSR read their own settings (and have their own lines in the overlay); the
+        // sub-settings that only change how an effect looks are left as they are.
+        if ((preset.id == &tooie::smaa::option) || (preset.id == &tooie::fxaa::option) || (preset.id == &tooie::fsr::option) ||
+            (preset.id == &three_point_option) || (preset.id == &parallax_original_option) || (preset.id == &ssr_stochastic_option)) {
+            continue;
+        }
+        // The underwater ones only draw under water.
+        if (((preset.id == &underwater_tint_option) || (preset.id == &underwater_haze_option) || (preset.id == &underwater_distortion_option)) &&
+            (underwater() <= 0.0f)) {
+            continue;
+        }
+        add(preset.id, preset.off);
+    }
+    // Ray tracing as a whole (its effects fall back to their screen-space forms), then its own extras.
+    add(&ray_tracing_option, false);
+    if (ray_tracing_active()) {
+        add(&path_tracing_option, false);
+        add(&traced_beams_option, 0.0);
+        add(&ray_tracing_hit_colours_option, false);
+    }
+    return effects;
+}
+
+void tooie::picture_filters::set_cost_override(const CostEffect* effect) {
+    {
+        std::lock_guard lock{ cost_mutex };
+        cost_override_id = (effect != nullptr) ? effect->id : nullptr;
+        if (effect != nullptr) {
+            cost_override_value = effect->off;
+        }
+        cost_override_on.store(effect != nullptr, std::memory_order_relaxed);
+    }
+    apply();
 }

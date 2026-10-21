@@ -446,9 +446,15 @@ Game Frame Rate.
     are not included.
   - the GPU time per game frame
   - the GPU time of each of the port's extra passes that ran, in ms: on
-    the game's frame the water mask, eye adaptation, bloom and the effects
-    pass (fog, ambient occlusion, outlines, rim light and the other scene
-    effects share that one pass, so they show as one figure); on each frame
+    the game's frame the sun shadow map, the water mask, bloom, eye
+    adaptation, AO and bounce light (the half-size pass for ambient
+    occlusion, bounce light and SSGI, traced or not) and the effects pass
+    (fog, outlines, rim light and the other scene effects share that one
+    pass, so they show as one figure; the Effect Cost Check key splits it
+    up); with Ray tracing on, a "GPU ray tracing" line with the ray tracing
+    build (the structures rebuilt each frame) and the traced effects (the
+    effects pass while it traces: reflections, shadows, light beams and path
+    tracing together); on each frame
     shown SMAA, FXAA, photo filters, FSR, the output to the window and the UI
     (menus, notices and this overlay). The rest of the GPU time is the game's
     own drawing.
@@ -486,6 +492,17 @@ Game Frame Rate.
   the overlay's figures to `benchmarks\` next to the exe until pressed again, then
   writes a summary with the settings (notes/keys.md). Use it to compare two
   settings or two builds on the same spot.
+- **Effect Cost Check key** (no default key, bind it under Hotkeys in the
+  Controls tab): finds which effects cost the most on your PC. It measures
+  the GPU time with everything as set, then turns each effect that is on
+  off in turn for a few seconds (your settings are not changed or saved),
+  then measures as set again, and lists the effects heaviest first, with
+  each one's ms and share of the GPU time, in the overlay (shown for the
+  check even when the overlay is off) and in `benchmarks\effect_cost_<date>.txt`.
+  Ray tracing is one entry (its effects fall back to their screen-space
+  forms), then path tracing, traced light beams and hit colours on their
+  own. Stand still for it: about 3 seconds an effect. Press again to stop.
+  SMAA, FXAA and FSR are not in it: the overlay times them on their own.
 - **Frame Rate Overlay key** (F3, rebindable under Hotkeys in the Controls
   tab): steps the overlay through Off, Compact and Full while you play, with
   a notice. It lasts for the session; the setting decides how the next

@@ -5685,10 +5685,10 @@ index 0000000..c9187db
 +};
 diff --git a/src/render/rt64_gpu_sections.h b/src/render/rt64_gpu_sections.h
 new file mode 100644
-index 0000000..3a996b9
+index 0000000..c977859
 --- /dev/null
 +++ b/src/render/rt64_gpu_sections.h
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,163 @@
 +//
 +// RT64
 +//
@@ -5717,6 +5717,12 @@ index 0000000..3a996b9
 +        Fsr,
 +        Output,
 +        Interface,
++        // Added after the first ten so the overlay's copy of the list keeps its order. All four are
++        // in the workload command list, once per game frame.
++        SunShadowMap,
++        RayTracingBuild,
++        IndirectLight,
++        TracedEffects,
 +        Count
 +    };
 +
@@ -5820,9 +5826,11 @@ index 0000000..3a996b9
 +
 +    inline const char *GpuSectionMarker(GpuSection section, bool end) {
 +        static const char *starts[] = { "water mask: start", "eye adaptation: start", "bloom: start", "scene effects: start",
-+            "SMAA: start", "FXAA: start", "photo filters: start", "FSR: start", "output: start", "interface: start" };
++            "SMAA: start", "FXAA: start", "photo filters: start", "FSR: start", "output: start", "interface: start",
++            "sun shadow map: start", "ray tracing: build", "indirect light: start", "traced effects: start" };
 +        static const char *ends[] = { "water mask: end", "eye adaptation: end", "bloom: end", "scene effects: end",
-+            "SMAA: end", "FXAA: end", "photo filters: end", "FSR: end", "output: end", "interface: end" };
++            "SMAA: end", "FXAA: end", "photo filters: end", "FSR: end", "output: end", "interface: end",
++            "sun shadow map: end", "ray tracing: built", "indirect light: end", "traced effects: end" };
 +        static_assert(std::size(starts) == size_t(GpuSection::Count), "one marker per section");
 +        return end ? ends[uint32_t(section)] : starts[uint32_t(section)];
 +    }
@@ -7082,10 +7090,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..2079de0
+index 0000000..97a71a7
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3093 @@
+@@ -0,0 +1,3105 @@
 +//
 +// RT64
 +//
@@ -9337,7 +9345,8 @@ index 0000000..2079de0
 +            return;
 +        }
 +
-+        GpuCheckpoint(commandList, "ray tracing: build");
++        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::RayTracingBuild, false));
++        const int buildSpan = WorkloadGpuSections().start(GpuSection::RayTracingBuild, commandList);
 +        commandList->barriers(RenderBarrierStage::COMPUTE, {
 +            RenderBufferBarrier(const_cast<RenderBuffer *>(worldPos), RenderBufferAccess::READ),
 +            RenderBufferBarrier(const_cast<RenderBuffer *>(indices), RenderBufferAccess::READ),
@@ -9354,7 +9363,8 @@ index 0000000..2079de0
 +        commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, {
 +            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::READ)
 +        });
-+        GpuCheckpoint(commandList, "ray tracing: built");
++        WorkloadGpuSections().end(buildSpan);
++        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::RayTracingBuild, true));
 +        res.bvhReady = true;
 +        res.bvhBuiltOnce = true;
 +        if (bvhLog) {
@@ -9950,8 +9960,8 @@ index 0000000..2079de0
 +        // The traced pass (the structures are built) traces its shadows, so the map isn't drawn for it.
 +        const bool tracedShadows = res.bvhReady && (shaderLibrary->sceneEffectsTraced.pipeline != nullptr);
 +        if (drawSunCasters && !sunMapOffNow && !tracedShadows && (constants.shadows.x > 0.0f)) {
-+            GpuCheckpoint(commandList, "sun shadow map: start");
-+            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SceneEffects, commandList);
++            GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SunShadowMap, false));
++            const int sunMapSpan = WorkloadGpuSections().start(GpuSection::SunShadowMap, commandList);
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::DEPTH_WRITE) });
 +            commandList->setFramebuffer(res.sunMapFramebuffer.get());
 +            // Whether the far map is drawn again this time (see SunFarRefresh). Headless test hook: TOOIE_SUN_FAR_OFF
@@ -10018,7 +10028,7 @@ index 0000000..2079de0
 +            }
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.sunMapTexture.get(), RenderTextureLayout::SHADER_READ) });
 +            WorkloadGpuSections().end(sunMapSpan);
-+            GpuCheckpoint(commandList, "sun shadow map: end");
++            GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SunShadowMap, true));
 +            // Headless test hook: TOOIE_SUN_MAP_VIEW shows only what the map shades (grey outside it).
 +            static const bool sunMapView = (getenv("TOOIE_SUN_MAP_VIEW") != nullptr);
 +            constants.shadows.y = -std::abs(constants.shadows.y) - (sunMapView ? SUN_SHADOW_MAP_VIEW_FLAG : 0.0f);
@@ -10123,11 +10133,19 @@ index 0000000..2079de0
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderBufferBarrier(res.radianceBuffer.get(), RenderBufferAccess::READ | RenderBufferAccess::WRITE) });
 +        }
 +
++        // The firefly table is timed with the effects (left out when not drawn); the indirect pass and the main
++        // pass each on their own.
++        if (!((settings.timeOfDay && settings.dayFireflies) || (settings.depthOfField > 0.0f))) {
++            WorkloadGpuSections().drop(effectsSpan);
++        }
++        WorkloadGpuSections().end(effectsSpan);
++
 +        // The indirect pass: GTAO and SSGI at half size, with the same constants and inputs as the pass, which
 +        // gathers them. Only when one of them is on (SSGI only while the pass draws the scene, as it reads it).
 +        if (((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) {
 +            commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
 +            commandList->setFramebuffer(res.indirectFramebuffer.get());
++            GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
 +            commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(indirectHeight)));
 +            commandList->setScissors(RenderRect(0, 0, indirectWidth, indirectHeight));
 +            const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr);
@@ -10162,13 +10180,15 @@ index 0000000..2079de0
 +                fprintf(stderr, "[rt] scene effects pass %s\n", traced ? "traced (ray queries)" : "depth march");
 +            }
 +        }
++        // Timed as the traced effects while the pass traces (reflections, shadows, light beams, path tracing).
++        const int mainSpan = WorkloadGpuSections().start(traced ? GpuSection::TracedEffects : GpuSection::SceneEffects, commandList);
 +        commandList->setPipeline(traced ? shaderLibrary->sceneEffectsTraced.pipeline.get() : shaderLibrary->sceneEffects.pipeline.get());
 +        commandList->setGraphicsPipelineLayout(shaderLibrary->sceneEffects.pipelineLayout.get());
 +        commandList->setGraphicsDescriptorSet(res.sceneSet->get(), 0);
 +        commandList->setGraphicsPushConstants(0, &constants);
 +        commandList->setVertexBuffers(0, nullptr, 0, nullptr);
 +        commandList->drawInstanced(3, 1, 0, 0);
-+        WorkloadGpuSections().end(effectsSpan);
++        WorkloadGpuSections().end(mainSpan);
 +        GpuCheckpoint(commandList, GpuSectionMarker(GpuSection::SceneEffects, true));
 +
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, {

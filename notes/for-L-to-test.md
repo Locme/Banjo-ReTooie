@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T491 Effect Cost Check key and ray tracing GPU lines
+- Asked: 2026-10-21 07:29 UTC
+- Build: main
+- Steps:
+  1. Controls tab > Hotkeys: bind Effect Cost Check to a key
+  2. Turn on a few effects (3D grass, sun shadows, AO, bloom, Ray tracing if your GPU has it), stand still in Spiral Mountain and press the key
+  3. Wait for the list (about 3 s per effect), then open benchmarks\effect_cost_<date>.txt next to the exe
+  4. Set the frame rate overlay to Full with Ray tracing on
+- Look for: The overlay counts down through each effect, then lists them heaviest first with ms and %; your settings are the same afterwards. With Ray tracing on, a GPU ray tracing line shows the build and traced effects. Headless (software GPU, so the ms are not real-PC figures) Spiral Mountain gave sun shadows 63 ms (58%), AO 7 ms, bloom 1 ms, fog 0.
 ## T490 Tessellated sand
 - Asked: 2026-10-21 07:19 UTC
 - Build: main @ 7bc2450

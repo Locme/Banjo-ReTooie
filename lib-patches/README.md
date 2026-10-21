@@ -272,7 +272,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 * **Frame stats for the frame rate overlay** (`src/hle/rt64_present_queue.cpp/.h`, `RT64::TakeFrameStats`): present
   intervals, GPU time, input latency, shader compiles, and the GPU time of each extra pass
-  (`src/render/rt64_gpu_sections.h`: timestamps around the water mask, eye adaptation, bloom and effects passes and
+  (`src/render/rt64_gpu_sections.h`: timestamps around the water mask, eye adaptation, bloom, sun shadow map, indirect (AO and bounce light),
+  ray tracing build and effects passes, the last as traced effects while it traces, and
   around SMAA, FXAA, photo filters, FSR, the output and the UI).
 * **Shader list** (`src/render/rt64_raster_shader_cache.cpp/.h`, `RT64::SetShaderListPath`): every shader description
   submitted is appended to `cache/shader_list.bin`; at start the list is submitted again, so those shaders compile in

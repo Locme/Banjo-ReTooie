@@ -23,6 +23,7 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -60,6 +61,7 @@
 #include "tooie_frame_overlay.h"
 #include "tooie_hotkeys.h"
 #include "tooie_model_tagging.h"
+#include "tooie_picture_filters.h"
 #include "tooie_toast.h"
 #include "build_info.h"
 #include "tooie_watchdog.h"
@@ -78,8 +80,8 @@ namespace RT64 {
         double latencyMs = 0.0;
         double worstLatencyMs = 0.0;
         uint32_t shaderCompiles = 0;
-        double sectionMs[10] = {};
-        uint32_t sectionCount[10] = {};
+        double sectionMs[14] = {};
+        uint32_t sectionCount[14] = {};
     };
     FrameStats TakeFrameStats();
     void SetGpuSectionTiming(bool wanted);
@@ -102,6 +104,7 @@ namespace {
     constexpr auto key_poll = 16ms;
     constexpr auto overlay_input = recompinput::GameInput::FRAME_OVERLAY;
     constexpr auto benchmark_input = recompinput::GameInput::BENCHMARK;
+    constexpr auto cost_input = recompinput::GameInput::EFFECT_COST;
     // How far back the 1% low and the hitch count look.
     constexpr auto stutter_window = 5s;
     // A hitch: a frame more than this many times the median frame.
@@ -165,6 +168,8 @@ namespace {
     }
 
     void toggle_benchmark();
+    // The Effect Cost Check key, taken by the overlay's thread (cost_tick).
+    std::atomic<bool> cost_toggle{false};
 
     // F4 was the Benchmark key's default until L asked for it gone (2026-10-17). Saved controls
     // that still have F4 on it lose it once. Returns false until the keyboard profile is loaded.
@@ -198,6 +203,7 @@ namespace {
     void key_worker() {
         bool was_down = false;
         bool benchmark_was_down = false;
+        bool cost_was_down = false;
         bool f4_checked = false;
         for (;;) {
             std::this_thread::sleep_for(key_poll);
@@ -209,6 +215,11 @@ namespace {
                 toggle_benchmark();
             }
             benchmark_was_down = benchmark_down;
+            bool cost_down = key_down(cost_input);
+            if (cost_down && !cost_was_down) {
+                cost_toggle.store(true, std::memory_order_relaxed);
+            }
+            cost_was_down = cost_down;
             bool down = key_down(overlay_input);
             if (down && !was_down) {
                 Mode next = (Mode)(((uint32_t)current_mode() + 1) % 3);
@@ -564,19 +575,29 @@ namespace {
         return line;
     }
 
-    // The port's extra GPU passes, in RT64::GpuSection order: the first four are recorded with
-    // the game's frame, the rest at each present.
-    constexpr const char* section_names[10] = {
-        "water mask", "eye adaptation", "bloom", "effects", "SMAA", "FXAA", "photo filters", "FSR", "output", "UI"
+    // The port's extra GPU passes, in RT64::GpuSection order. The first four and the last four are
+    // recorded with the game's frame (per_game_frame), the rest at each present.
+    constexpr size_t section_count = 14;
+    constexpr const char* section_names[section_count] = {
+        "water mask", "eye adaptation", "bloom", "effects", "SMAA", "FXAA", "photo filters", "FSR", "output", "UI",
+        "sun shadow map", "ray tracing build", "AO and bounce light", "traced effects"
     };
-    constexpr size_t frame_sections = 4;
+    constexpr bool per_game_frame[section_count] = {
+        true, true, true, true, false, false, false, false, false, false, true, true, true, true
+    };
+    // The order the overlay lists them in, a line each: the game frame's passes as the GPU runs them,
+    // the ray tracing ones, then the present's.
+    constexpr size_t frame_order[] = { 10, 0, 2, 1, 12, 3 };
+    constexpr size_t traced_order[] = { 11, 13 };
+    constexpr size_t present_order[] = { 4, 5, 6, 7, 8, 9 };
 
     // "GPU 3D effects: bloom 0.31, effects 1.20 ms" with the passes that ran, per game frame or present;
     // empty when none ran.
-    std::string section_line(const RT64::FrameStats& frames, const char* label, size_t first, size_t last, uint32_t per) {
+    template <size_t N>
+    std::string section_line(const RT64::FrameStats& frames, const char* label, const size_t (&order)[N], uint32_t per) {
         std::string text;
         char part[48];
-        for (size_t i = first; i < last; i++) {
+        for (size_t i : order) {
             if (frames.sectionCount[i] == 0 || per == 0) {
                 continue;
             }
@@ -585,6 +606,10 @@ namespace {
         }
         return text.empty() ? std::string() : std::string(label) + text + " ms";
     }
+
+    // The Effect Cost Check's lines for the overlay (its progress, then its results for a while); empty
+    // otherwise. Only the overlay's thread touches them.
+    std::vector<std::string> cost_lines;
 
     // The last frame rate line, kept for an update in which no frame was shown (below 4 fps).
     std::string last_rate_line;
@@ -611,6 +636,12 @@ namespace {
             rate += line;
         }
         text.push_back(rate);
+        // The Effect Cost Check's progress or results take the place of everything else while shown.
+        if (!cost_lines.empty()) {
+            text.push_back(" ");
+            text.insert(text.end(), cost_lines.begin(), cost_lines.end());
+            return text;
+        }
         if (mode == Mode::Compact) {
             return text;
         }
@@ -629,13 +660,17 @@ namespace {
         if (frames.gpuFrames > 0) {
             std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame", frames.gpuMs / frames.gpuFrames);
             text.push_back(line);
-            std::string effects = section_line(frames, "GPU 3D effects: ", 0, frame_sections, frames.gpuFrames);
+            std::string effects = section_line(frames, "GPU 3D effects: ", frame_order, frames.gpuFrames);
             if (!effects.empty()) {
                 text.push_back(effects);
             }
+            std::string traced = section_line(frames, "GPU ray tracing: ", traced_order, frames.gpuFrames);
+            if (!traced.empty()) {
+                text.push_back(traced);
+            }
         }
         if (frames.presents > 0) {
-            std::string passes = section_line(frames, "GPU screen passes: ", frame_sections, 10, frames.presents);
+            std::string passes = section_line(frames, "GPU screen passes: ", present_order, frames.presents);
             if (!passes.empty()) {
                 text.push_back(passes);
             }
@@ -698,7 +733,7 @@ namespace {
         double worst_ms = 0.0;
         uint32_t gpu_frames = 0;
         double gpu_ms = 0.0;
-        double section_ms[10] = {};
+        double section_ms[section_count] = {};
         uint32_t latency_frames = 0;
         double latency_ms = 0.0;
         uint64_t shader_compiles = 0;
@@ -792,8 +827,8 @@ namespace {
         if (b.gpu_frames > 0) {
             std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame\n", b.gpu_ms / b.gpu_frames);
             text += line;
-            for (size_t i = 0; i < 10; i++) {
-                uint32_t per = i < frame_sections ? b.gpu_frames : b.presents;
+            for (size_t i = 0; i < section_count; i++) {
+                uint32_t per = per_game_frame[i] ? b.gpu_frames : b.presents;
                 if (b.section_ms[i] > 0.0 && per > 0) {
                     std::snprintf(line, sizeof(line), "  %s %.3f ms\n", section_names[i], b.section_ms[i] / per);
                     text += line;
@@ -865,7 +900,7 @@ namespace {
         b.worst_ms = std::max(b.worst_ms, frames.worstPresentMs);
         b.gpu_frames += frames.gpuFrames;
         b.gpu_ms += frames.gpuMs;
-        for (size_t i = 0; i < 10; i++) {
+        for (size_t i = 0; i < section_count; i++) {
             b.section_ms[i] += frames.sectionMs[i];
         }
         b.latency_frames += frames.latencyFrames;
@@ -878,8 +913,8 @@ namespace {
         double frame_ms = frames.presents > 0 ? frames.presentMs / frames.presents : 0.0;
         std::fprintf(b.csv, "%.2f,%.1f,%.3f,%.3f,%.3f", seconds, frame_ms > 0.0 ? 1000.0 / frame_ms : 0.0, frame_ms,
             frames.worstPresentMs, frames.gpuFrames > 0 ? frames.gpuMs / frames.gpuFrames : 0.0);
-        for (size_t i = 0; i < 10; i++) {
-            uint32_t per = i < frame_sections ? frames.gpuFrames : frames.presents;
+        for (size_t i = 0; i < section_count; i++) {
+            uint32_t per = per_game_frame[i] ? frames.gpuFrames : frames.presents;
             std::fprintf(b.csv, ",%.3f", per > 0 ? frames.sectionMs[i] / per : 0.0);
         }
         float x = 0, y = 0, z = 0;
@@ -903,6 +938,187 @@ namespace {
     bool benchmark_running() {
         std::lock_guard lock{ benchmark_mutex };
         return benchmark.csv != nullptr;
+    }
+
+    // Effect Cost Check (the Effect Cost Check key, or TOOIE_COST_CHECK=<seconds> once the game runs): measures
+    // the GPU time per game frame with every effect as set, then with each effect that is on turned off in
+    // turn (picture_filters::set_cost_override, the saved settings untouched), then as set again; each
+    // effect's cost is how much the time drops without it, against the two measurements as set. The list,
+    // heaviest first, shows in the overlay (shown for the check even when it is off) and goes to
+    // benchmarks/effect_cost_<date>.txt.
+    struct CostMeasure {
+        double gpu_ms = 0.0;
+        uint32_t gpu_frames = 0;
+        double present_ms = 0.0;
+        uint32_t presents = 0;
+        double gpu() const { return gpu_frames > 0 ? gpu_ms / gpu_frames : -1.0; }
+        double frame() const { return presents > 0 ? present_ms / presents : -1.0; }
+    };
+    struct CostCheck {
+        bool running = false;
+        std::vector<tooie::picture_filters::CostEffect> effects;
+        // 0: as set; 1 to n: effects[step - 1] off; n + 1: as set again.
+        size_t step = 0;
+        int ticks = 0;
+        CostMeasure now;
+        std::vector<CostMeasure> measured;
+        std::string map;
+    };
+    CostCheck cost;
+    clock_type::time_point cost_lines_until{};
+    // Each step lets the change settle (new shaders, the effect's history) before it measures, for at
+    // least 2 s and 20 game frames drawn (a slow PC takes longer), up to 30 s.
+    constexpr int cost_settle_ticks = 4;
+    constexpr int cost_measure_ticks = 8;
+    constexpr uint32_t cost_measure_frames = 20;
+    constexpr int cost_measure_most_ticks = 120;
+    constexpr auto cost_results_shown = 45s;
+    constexpr size_t cost_lines_listed = 12;
+
+    std::string cost_step_name(const CostCheck& c) {
+        if (c.step == 0 || c.step > c.effects.size()) {
+            return "everything as set";
+        }
+        return c.effects[c.step - 1].name + " off";
+    }
+
+    void cost_progress(const CostCheck& c, clock_type::time_point now) {
+        const size_t steps = c.effects.size() + 2;
+        const int left = int(steps - c.step) * (cost_settle_ticks + cost_measure_ticks) - std::min(c.ticks, cost_settle_ticks + cost_measure_ticks);
+        char line[160];
+        std::snprintf(line, sizeof(line), "Effect cost check: %s (%zu of %zu), about %d s left", cost_step_name(c).c_str(), c.step + 1, steps,
+            std::max(1, left / 4));
+        cost_lines = { line, "Keep the camera still; press the key again to stop" };
+        cost_lines_until = now + cost_results_shown;
+    }
+
+    void cost_finish(CostCheck& c, clock_type::time_point now) {
+        tooie::picture_filters::set_cost_override(nullptr);
+        c.running = false;
+        const CostMeasure& first = c.measured.front();
+        const CostMeasure& last = c.measured.back();
+        auto average = [](double a, double b) { return (a >= 0.0 && b >= 0.0) ? (a + b) / 2.0 : std::max(a, b); };
+        const double base_gpu = average(first.gpu(), last.gpu());
+        const double base_frame = average(first.frame(), last.frame());
+        struct Row {
+            std::string name;
+            double gpu;
+            double frame;
+        };
+        std::vector<Row> rows;
+        for (size_t i = 0; i < c.effects.size(); i++) {
+            const CostMeasure& m = c.measured[i + 1];
+            rows.push_back({ c.effects[i].name, (m.gpu() >= 0.0 && base_gpu >= 0.0) ? base_gpu - m.gpu() : NAN,
+                (m.frame() >= 0.0 && base_frame >= 0.0) ? base_frame - m.frame() : NAN });
+        }
+        std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+            return (std::isnan(b.gpu) ? -1e9 : b.gpu) < (std::isnan(a.gpu) ? -1e9 : a.gpu);
+        });
+
+        char line[512];
+        cost_lines.clear();
+        std::string text = "Banjo-Tooie N64 Recomp effect cost check\n\n";
+        text += std::string("Build ") + TOOIE_GIT_COMMIT + " (" + TOOIE_GIT_DATE + ")\n" + c.map + "\n";
+        if (base_gpu < 0.0) {
+            cost_lines.push_back("Effect cost check: no frames drawn, nothing measured");
+        }
+        else {
+            std::snprintf(line, sizeof(line), "Effect cost (GPU per game frame, %.2f ms as set), heaviest first:", base_gpu);
+            cost_lines.push_back(line);
+            std::snprintf(line, sizeof(line), "GPU %.2f ms per game frame and %.2f ms frame time with everything as set (GPU %.2f ms at the start, %.2f at the end).\n"
+                "Each effect's cost is how much those drop with it off. A cost near 0 or below is within the noise.\n\n",
+                base_gpu, std::max(base_frame, 0.0), std::max(first.gpu(), 0.0), std::max(last.gpu(), 0.0));
+            text += line;
+            for (const Row& r : rows) {
+                if (std::isnan(r.gpu)) {
+                    std::snprintf(line, sizeof(line), "%s: not measured (no frames drawn)", r.name.c_str());
+                }
+                else {
+                    std::snprintf(line, sizeof(line), "%s: %.2f ms (%.0f%%)", r.name.c_str(), r.gpu, base_gpu > 0.0 ? 100.0 * r.gpu / base_gpu : 0.0);
+                }
+                if (cost_lines.size() <= cost_lines_listed) {
+                    cost_lines.push_back(line);
+                }
+                text += line;
+                if (!std::isnan(r.frame)) {
+                    std::snprintf(line, sizeof(line), ", frame time %.2f ms", r.frame);
+                    text += line;
+                }
+                text += "\n";
+            }
+        }
+        std::filesystem::path dir = recomp::get_config_path() / "benchmarks";
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        const std::string name = "effect_cost_" + date_stamp() + ".txt";
+        std::ofstream file(dir / name);
+        file << text;
+        const bool saved = file.good();
+        file.close();
+        cost_lines.push_back(saved ? "Saved to benchmarks\\" + name : std::string("Not saved: can't write to the benchmarks folder"));
+        cost_lines_until = now + cost_results_shown;
+        std::printf("[cost] %s", text.c_str());
+        std::fflush(stdout);
+        tooie::toast::show(saved ? "Effect cost check saved: benchmarks\\" + name : std::string("Effect cost check done (not saved)"));
+    }
+
+    void cost_tick(const RT64::FrameStats& frames, uint64_t game_frames, clock_type::time_point now) {
+        static const char* auto_check = std::getenv("TOOIE_COST_CHECK");
+        static clock_type::time_point auto_start{};
+        if (auto_check != nullptr && auto_start == clock_type::time_point{} && game_frames > 0) {
+            auto_start = now + std::chrono::milliseconds((int64_t)(std::atof(auto_check) * 1000.0));
+        }
+        if (auto_check != nullptr && auto_start != clock_type::time_point{} && now >= auto_start) {
+            auto_start = clock_type::time_point::max();
+            cost_toggle.store(true, std::memory_order_relaxed);
+        }
+        if (cost_toggle.exchange(false, std::memory_order_relaxed)) {
+            if (cost.running) {
+                tooie::picture_filters::set_cost_override(nullptr);
+                cost.running = false;
+                cost_lines.clear();
+                tooie::toast::show("Effect cost check stopped");
+            }
+            else {
+                cost = CostCheck();
+                cost.effects = tooie::picture_filters::cost_effects();
+                if (cost.effects.empty()) {
+                    tooie::toast::show("Effect cost check: no effects are on");
+                }
+                else {
+                    cost.running = true;
+                    cost.map = game_rdram != nullptr ? map_line(game_rdram) : std::string("Map unknown");
+                    cost_progress(cost, now);
+                }
+            }
+            return;
+        }
+        if (!cost.running) {
+            if (!cost_lines.empty() && now >= cost_lines_until) {
+                cost_lines.clear();
+            }
+            return;
+        }
+        cost.ticks++;
+        if (cost.ticks > cost_settle_ticks) {
+            cost.now.gpu_ms += frames.gpuMs;
+            cost.now.gpu_frames += frames.gpuFrames;
+            cost.now.present_ms += frames.presentMs;
+            cost.now.presents += frames.presents;
+        }
+        const bool enough = (cost.ticks >= cost_settle_ticks + cost_measure_ticks) && (cost.now.gpu_frames >= cost_measure_frames);
+        if (enough || (cost.ticks >= cost_settle_ticks + cost_measure_most_ticks)) {
+            cost.measured.push_back(cost.now);
+            cost.now = CostMeasure();
+            cost.ticks = 0;
+            cost.step++;
+            if (cost.step > cost.effects.size() + 1) {
+                cost_finish(cost, now);
+                return;
+            }
+            tooie::picture_filters::set_cost_override(cost.step <= cost.effects.size() ? &cost.effects[cost.step - 1] : nullptr);
+        }
+        cost_progress(cost, now);
     }
 
     void worker() {
@@ -946,6 +1162,7 @@ namespace {
                 }
             }
             benchmark_tick(frames, game_frames, idle_ns, now);
+            cost_tick(frames, game_frames, now);
             add_latency(frames);
             static int mod_ticks = 0;
             if (mod_ticks++ % 8 == 0) {
@@ -978,6 +1195,10 @@ namespace {
             }
 
             Mode mode = current_mode();
+            // The cost check shows its progress and results with the overlay off too.
+            if (mode == Mode::Off && !cost_lines.empty()) {
+                mode = Mode::Compact;
+            }
             // The per-pass GPU times are only shown in Full and written by the benchmark and the log;
             // otherwise RT64 skips its timestamps (64 a frame, each a separate copy on D3D12).
             RT64::SetGpuSectionTiming(log || mode == Mode::Full || benchmark_running());
@@ -1038,6 +1259,12 @@ void tooie::frame_overlay::register_input() {
     // No default key (L, 2026-10-17: it was F4); bind it in the Controls tab.
     recompinput::set_default_mapping_for_keyboard(benchmark_input, {});
     recompinput::set_default_mapping_for_controller(benchmark_input, {});
+
+    recompinput::set_game_input_name(cost_input, "Effect Cost Check");
+    recompinput::set_game_input_description(cost_input,
+        "Measures how much GPU time each graphics effect that is on costs, by turning each off for a few seconds in turn (your settings stay as they are), then lists them heaviest first in the overlay and in the benchmarks folder.");
+    recompinput::set_default_mapping_for_keyboard(cost_input, {});
+    recompinput::set_default_mapping_for_controller(cost_input, {});
 
     recompinput::set_game_input_name(overlay_input, "Frame Rate Overlay");
     recompinput::set_game_input_description(overlay_input,

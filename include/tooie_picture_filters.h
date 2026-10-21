@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "librecomp/config.hpp"
 #include "recomp.h"
@@ -181,6 +182,18 @@ namespace tooie::picture_filters {
     // Hands the current settings to RT64 (the contrast, saturation, vignette and grain only while photo
     // mode is off).
     void apply();
+
+    // The Effect Cost Check key (src/game/frame_overlay.cpp): the effects that are on now, each with its
+    // name in the Graphics tab and the value that turns it off. Ray tracing comes with its own effects.
+    struct CostEffect {
+        const std::string* id;
+        std::string name;
+        recomp::config::ConfigValueVariant off;
+    };
+    std::vector<CostEffect> cost_effects();
+    // Turns one effect off for the cost check without touching the saved setting (nullptr: none), and
+    // applies it.
+    void set_cost_override(const CostEffect* effect);
 }
 
 #endif
