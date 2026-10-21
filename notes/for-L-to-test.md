@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T492 Noclip 5x faster while running
+- Asked: 2026-10-21 08:00 UTC
+- Build: main @ a5114b0
+- Steps:
+  1. Turn on the Noclip cheat
+  2. Move with the stick, then hold Run (B on a pad, your Run key) while moving
+  3. Hold Run with Z / R to go down / up
+- Look for: Is movement about 5x faster with Run held, sideways and up/down, and unchanged without it?
+- Status: waiting for L
+
 ## T491 Effect Cost Check key and ray tracing GPU lines
 - Asked: 2026-10-21 07:29 UTC
 - Build: main
