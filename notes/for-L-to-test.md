@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T498 Hold Speed-Up 3 s to skip a cutscene
+- Asked: 2026-10-21 09:48 UTC
+- Build: main (not built or run in the container)
+- Steps:
+  1. Settings: Cheats tab, Enable cheats and Speed-up on; QOL tab, Fast Forward Cutscenes on
+  2. Start a cutscene (Klungo intro, a boss intro)
+  3. Hold the Speed-Up key (F2) for under 3 s, then release
+  4. Hold it again for 3 s or more
+  5. Try the same in normal gameplay
+- Look for: Under 3 s it is the normal speed-up. At 3 s a toast says Skipping cutscene, the scene fast-forwards, and when it ends a toast says Cutscene skipped. Nothing happens in gameplay, on the title screen or file select. Start still fast-forwards and stops it as before.
+- Status: waiting for L
+
 ## T497 Toon shading split: Characters and World
 - Asked: 2026-10-21 09:35 UTC
 - Build: main (this commit; not built or run in the container)

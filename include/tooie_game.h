@@ -122,6 +122,8 @@ namespace tooie {
     void cutscene_skip_apply(uint16_t* buttons);
     // True while a skip is fast-forwarding (the sound is muted then).
     bool cutscene_skip_active();
+    // Starts a skip because Speed-Up was held 3 s; false outside a skippable scene or while skipping.
+    bool cutscene_skip_hold_request();
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.

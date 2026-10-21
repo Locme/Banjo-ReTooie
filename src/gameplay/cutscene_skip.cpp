@@ -24,6 +24,10 @@
 // fight camera is not letterboxed, so the skip ends there.
 // TOOIE_CUTSCENE_LOG=1 logs scene and gameplay changes.
 //
+// Holding the Speed-Up key for 3 s in such a scene starts the same skip
+// (speedup.cpp, needs Enable cheats and Speed-up on); toasts "Skipping cutscene"
+// and "Cutscene skipped" at the end. Shorter holds are plain speed-up.
+//
 // The game has no skip prompt for these scenes on N64, so nothing is drawn; a
 // toast says "Fast Forward Scene" ("Fast Forward stopped" when Start stops it).
 
@@ -54,6 +58,7 @@ namespace {
     std::atomic<bool> skip_requested{false}; // input thread -> game thread
     std::atomic<bool> stop_requested{false}; // input thread -> game thread
     std::atomic<bool> skipping{false};
+    std::atomic<bool> hold_started{false};   // the running skip came from holding Speed-Up
     uint16_t last_buttons = 0;
     uint32_t polls = 0;
     uint32_t speed_before = 1;
@@ -88,11 +93,16 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
 
     if (skipping) {
         if (stop_requested.exchange(false)) {
+            hold_started = false;
             stop("Start pressed");
             tooie::toast::show("Fast Forward stopped");
         } else if (!scene || menu) {
             stop(menu ? "menu" : "scene over");
+            if (hold_started.exchange(false) && !menu) {
+                tooie::toast::show("Cutscene skipped");
+            }
         } else if (std::chrono::steady_clock::now() - skip_started > skip_limit) {
+            hold_started = false;
             stop("time limit");
         }
         return;
@@ -103,7 +113,7 @@ void tooie::cutscene_skip_tick(uint8_t* rdram) {
         ultramodern::set_speed_multiplier(skip_speed);
         skip_started = std::chrono::steady_clock::now();
         skipping = true;
-        tooie::toast::show("Fast Forward Scene");
+        tooie::toast::show(hold_started ? "Skipping cutscene" : "Fast Forward Scene");
         printf("[cutscene] skip started\n");
         fflush(stdout);
     }
@@ -132,6 +142,15 @@ void tooie::cutscene_skip_apply(uint16_t* buttons) {
             skip_requested = true;
         }
     }
+}
+
+bool tooie::cutscene_skip_hold_request() {
+    if (!scene_on || skipping) {
+        return false;
+    }
+    hold_started = true;
+    skip_requested = true;
+    return true;
 }
 
 bool tooie::cutscene_skip_active() {
