@@ -18,6 +18,7 @@ target_sources(rt64 PRIVATE
     ${RT64_EXT_DIR}/src/render/rt64_smaa.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fxaa.cpp
     ${RT64_EXT_DIR}/src/render/rt64_mirror.cpp
+    ${RT64_EXT_DIR}/src/render/rt64_texture_marks.cpp
     ${RT64_EXT_DIR}/src/render/rt64_fsr.cpp
     ${RT64_EXT_DIR}/src/render/rt64_photo_grade.cpp
     ${RT64_EXT_DIR}/src/hle/rt64_present_queue_ext.cpp

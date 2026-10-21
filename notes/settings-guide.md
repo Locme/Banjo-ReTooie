@@ -334,9 +334,17 @@ result. Press the key again for the normal mouse.
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
 you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
-Ice Reflection, Shiny Reflection, Text, Lamp; **Shift + right click**
-goes back one) and **left click** turns it on or off for the texture under the
-cursor. The first left click starts from the built-in effects, so adding Ice
+Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow; **Shift +
+right click** goes back one) and **left click** turns it on or off for the
+texture under the cursor. The **number keys 1 to 9** choose effect 1 to 9 in
+that order and turn it on or off in one press; **Shift + 1 to 9** do the same
+for effects 10 to 18 once there are that many (a key with no effect does
+nothing). **Hold left click and sweep** to paint the same change (on or off, as
+the first click did) over every texture the cursor passes. **Middle click**
+turns Show All on or off: every texture with the chosen effect, built-in ones
+included, pulses orange between the cursor texture's blue pulses. **Slight
+Glow** draws the texture a little brighter, most on its lighter parts, as if
+lit from inside. The first left click starts from the built-in effects, so adding Ice
 to built-in grass keeps the grass. Disable (no texture effect on it) turns the
 others off, and any other effect turns Disable off; turning the last effect off
 leaves Disable, and turning Disable off puts the built-in choice back. **Shift + left

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T522 Pick mode number keys, paint, Show All and Slight Glow
+- Asked: 2026-10-21 22:56 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Shader Effects pick mode
+  2. Press 2 over a texture: Grass turns on or off there; 9 does Slight Glow (a little brighter); Shift + a number does nothing, as there are only 9 effects
+  3. Hold left click and sweep over several textures: each gets the same change as the first
+  4. Middle click: textures with the chosen effect pulse orange; press other number keys to see other effects' textures; middle click again turns it off
+- Look for: Do the keys, painting, Show All and Slight Glow work as described?
+- Status: waiting for L
+
 ## T521 Thick 3D picket fence mod (Spiral Mountain)
 - Asked: 2026-10-21 21:44 UTC
 - Build: main @ 5236e52 + mod zip in project files

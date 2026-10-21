@@ -71,6 +71,7 @@ namespace RT64 {
     // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
+    void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -4207,6 +4208,24 @@ namespace {
         RT64::SetSceneLampTextures(lamps.data(), lamps.size());
         RT64::SetSceneGrassEdgeTextures(edges.data(), value<bool>(tooie::picture_filters::grass_edges_option, true) ? edges.size() : 0);
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
+        std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
+        RT64::SetSceneGlowTextures(glow.data(), glow.size());
+        // The same lists for the pick mode's Show All (edges count as grass; ice in the icy maps or anywhere).
+        {
+            using tooie::effect_pick::set_list;
+            std::vector<uint64_t> grass_all = grass;
+            grass_all.insert(grass_all.end(), edges.begin(), edges.end());
+            set_list(tooie::effect_pick::effect_grass, grass_all);
+            std::vector<uint64_t> ice_any = ice;
+            ice_any.insert(ice_any.end(), ice_anywhere.begin(), ice_anywhere.end());
+            set_list(tooie::effect_pick::effect_ice, ice_any);
+            set_list(tooie::effect_pick::effect_shiny, shiny);
+            set_list(tooie::effect_pick::effect_text, mirror_text);
+            set_list(tooie::effect_pick::effect_lamp, lamps);
+            set_list(tooie::effect_pick::effect_glow, glow);
+            set_list(tooie::effect_pick::effect_disable, build(nullptr, nullptr, tooie::effect_pick::effect_disable, true));
+            set_list(tooie::effect_pick::effect_deep_snow, build(nullptr, nullptr, tooie::effect_pick::effect_deep_snow, true));
+        }
         effects_sent_version.store(version);
     }
 

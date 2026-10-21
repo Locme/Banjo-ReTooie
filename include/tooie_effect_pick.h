@@ -4,13 +4,15 @@
 // Shader Effects pick mode (src/debug/parallax_pick.cpp, beside parallax pick mode): the Shader Effects Pick Mode key
 // frees the mouse as a crosshair and the texture under it is highlighted. A texture can hold several effects at once:
 // right click chooses an effect (Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
-// back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it)) and left click
-// turns it on or off for that texture; Disable turns the others off, and Shift + left click goes back to the built-in
+// back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it), Slight Glow) and left
+// click turns it on or off for that texture (or keys 1 to 9 choose and turn on or off in one; hold left click and sweep
+// to paint it over more textures; middle click shows every texture with it); Disable turns the others off, and Shift + left click goes back to the built-in
 // choice. The picks
 // are kept in shader_effect_tags.txt in the Dev Files folder and override the built-in lists (grass_textures[],
 // ice_textures[], and the shiny list from parallax_textures[] in picture_filters.cpp), which they can be folded into.
 #include <cstdint>
 #include <functional>
+#include <vector>
 
 namespace tooie::effect_pick {
     enum Effect : uint8_t {
@@ -21,7 +23,9 @@ namespace tooie::effect_pick {
         effect_shiny = 4,
         effect_text = 5,
         effect_lamp = 6,
-        effect_count = 7
+        // Drawn a little brighter, as if lit from inside (RT64 SetSceneGlowTextures).
+        effect_glow = 7,
+        effect_count = 8
     };
 
     // A texture's effects, one bit each (1 << Effect). A picked texture gets exactly these, none of its built-in ones.
@@ -34,6 +38,9 @@ namespace tooie::effect_pick {
     uint32_t version();
     // Each texture picked, with its effects.
     void for_each(const std::function<void(uint64_t hash, Effects effects)>& visit);
+    // The textures an effect is on as last sent to RT64, built-in ones included (picture_filters.cpp tells the pick
+    // mode, for Show All).
+    void set_list(Effect effect, const std::vector<uint64_t>& hashes);
 }
 
 #endif
