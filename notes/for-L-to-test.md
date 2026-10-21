@@ -1,5 +1,14 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T494 Jinjo Village sun position
+- Asked: 2026-10-21 08:31 UTC
+- Build: main
+- Steps:
+  1. Start Jinjo Village (map 142) with Sun shadows on
+  2. Look up at the sky and at the ground shadows
+- Look for: Is the sun high, with the level mostly lit and shadows short? Tell me which way to move it if not (it is one table line, map_suns).
+- Status: waiting for L
+
 ## T493 Tessellated sand: deeper footprints, no edge outline, varied ripples
 - Asked: 2026-10-21 08:18 UTC
 - Build: main
@@ -262,6 +271,7 @@
 - New (L 06:31, 2026-10-21): Ray Tracing section "Traced light beams" (0-100, default 60): shafts of light through the air traced towards the light. In Bottles' house, Banjo's house and the throne room the light comes in at the windows (Window Light Beams' drawn tubes are hidden while this is on, the room reloads); elsewhere it follows the sun as a thin haze with shafts. Mumbo's Skull still has the game's own drawn beams. Check Bottles' house: beams in the windows' shape, Banjo's shadow through them; watch the frame rate.
 - New (L 06:42, 2026-10-21): every level light's rays now go right up to the flame, so lantern frames and bars throw their pattern on walls and floor (a light inside a solid casing keeps the old way, or it would go dark). With Traced light beams above 0, every light also glows in the air, with the bars and anything in between cutting dark streaks through the glow. Check Bottles' house lanterns; tell me any lamp that went dark.
 - New debug view (L 07:58, grate still blocks light): F6 or Graphics > Debug > Effect debug view > "Ray traced scene": green where the traced rays meet the surface, blue where the surface isn't in the traced scene (light passes through it), red where something traced stands in front of it. Screenshot it over the Spiral Mountain grate.
+- Fixed (L 08:10 grate, L lantern red bars, 2026-10-21): rays now read the texture where they hit. Where a cut-out or see-through texture is clear (the Spiral Mountain grate holes, fences, leaves), shadow, lamp and reflection rays go through; where it is solid they stop. A lamp's light is also dimmed by dark texels of its own casing within 60 units of the flame, so the bars painted on the lantern texture cut dark streaks into the light and glow. Check the grate in sunlight and Bottles' house lanterns; if the grate still blocks, send the "Ray traced scene" view; tell me any lamp that went dark.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 
