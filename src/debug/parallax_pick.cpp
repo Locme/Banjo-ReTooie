@@ -43,6 +43,7 @@ namespace RT64 {
     uint32_t SceneGrassTexture(uint64_t hash);
     bool SceneIceTexture(uint64_t hash);
     bool SceneShinyTexture(uint64_t hash);
+    bool SceneFenceTexture(uint64_t hash);
 }
 
 namespace {
@@ -260,14 +261,14 @@ namespace {
     std::map<uint64_t, Effect> effects;
     std::map<uint64_t, Effect> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "fence" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Fence" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
     }
 
-    // One line a texture: "<hash> disable|grass|deep_snow|ice|shiny|text".
+    // One line a texture: "<hash> disable|grass|deep_snow|ice|shiny|text|fence".
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
         std::string line;
@@ -296,7 +297,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice, shiny, text). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice, shiny, text, fence). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -380,6 +381,9 @@ namespace {
         if (RT64::SceneIceTexture(hash)) {
             return "Ice Reflection";
         }
+        if (RT64::SceneFenceTexture(hash)) {
+            return "Fence";
+        }
         return RT64::SceneShinyTexture(hash) ? "Shiny Reflection" : "None";
     }
 
@@ -412,7 +416,7 @@ namespace {
         return result;
     }
 
-    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in again.
+    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Fence, built-in again.
     // A texture's effect pick as it stands (had = false: none, the built-in choice), and setting it back.
     bool effect_of(uint64_t hash, Effect& effect) {
         std::lock_guard lock{ effects_mutex };
@@ -747,7 +751,7 @@ namespace {
                 recompinput::GameInput::INTERP_PICK };
             static const char* on_toasts[3] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
-                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in; Shift + left click built-in, wheel deeper",
+                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Fence, built-in; Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper" };
             static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };

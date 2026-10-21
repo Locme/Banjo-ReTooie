@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T506 Fence thickness (layers on flat cut-out textures)
+- Asked: 2026-10-21 11:22 UTC
+- Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)
+- Steps:
+  1. Settings > Graphics > Shaders: set Fence thickness to 60 (it is 0, off, by default)
+  2. Bind Shader Effects Pick Mode (Controls, Pick Modes) and press it next to a fence, grate or picket
+  3. Left click on the fence texture until it reads Fence (after Shiny Reflection and Text)
+  4. Walk round it and look at it from the side, then raise and lower Fence thickness
+- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Not built in for any fence yet: nothing happens until you pick one.
+- Status: waiting for L
+
 ## T505 Mirror Mode: signs readable, Text pick
 - Asked: 2026-10-21 10:55 UTC
 - Build: main, next push (untested)

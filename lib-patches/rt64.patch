@@ -2211,7 +2211,7 @@ index 69a82ac..769c4bd 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..859ca44 100644
+index 9fae0d4..4e68510 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2769,7 +2769,7 @@ index 9fae0d4..859ca44 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +694,79 @@ namespace RT64 {
+@@ -169,11 +694,81 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2805,6 +2805,8 @@ index 9fae0d4..859ca44 100644
 +        waterTessOn = false;
 +        frameParams.waterCamera.w = 0.0f;
 +        instanceFurVector.clear();
++        instanceFenceVector.clear();
++        fenceOn = false;
 +        instanceNightLightVector.clear();
 +        instanceSeeThroughVector.clear();
 +        instanceSeamVector.clear();
@@ -2849,7 +2851,7 @@ index 9fae0d4..859ca44 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +812,7 @@ namespace RT64 {
+@@ -219,6 +814,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2857,7 +2859,7 @@ index 9fae0d4..859ca44 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +844,7 @@ namespace RT64 {
+@@ -250,6 +846,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2865,7 +2867,7 @@ index 9fae0d4..859ca44 100644
                  }
              }
              else {
-@@ -272,6 +867,9 @@ namespace RT64 {
+@@ -272,6 +869,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2875,7 +2877,7 @@ index 9fae0d4..859ca44 100644
              }
          }
      }
-@@ -373,6 +971,15 @@ namespace RT64 {
+@@ -373,6 +973,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2891,7 +2893,7 @@ index 9fae0d4..859ca44 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1050,14 @@ namespace RT64 {
+@@ -443,6 +1052,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2906,7 +2908,7 @@ index 9fae0d4..859ca44 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1080,82 @@ namespace RT64 {
+@@ -465,12 +1082,82 @@ namespace RT64 {
          return true;
      }
      
@@ -2991,7 +2993,7 @@ index 9fae0d4..859ca44 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1184,16 @@ namespace RT64 {
+@@ -499,6 +1186,16 @@ namespace RT64 {
              }
          };
  
@@ -3008,7 +3010,7 @@ index 9fae0d4..859ca44 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1209,17 @@ namespace RT64 {
+@@ -514,6 +1211,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3026,7 +3028,7 @@ index 9fae0d4..859ca44 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -562,7 +1268,13 @@ namespace RT64 {
+@@ -562,7 +1270,13 @@ namespace RT64 {
                  }
  
                  if (previousScissor != triangles.scissor) {
@@ -3041,7 +3043,7 @@ index 9fae0d4..859ca44 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1286,165 @@ namespace RT64 {
+@@ -574,12 +1288,183 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3201,6 +3203,24 @@ index 9fae0d4..859ca44 100644
 +                    rasterParams.grassShells = 0;
 +                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
 +                }
++
++                // Banjo-Tooie: a fence, the same triangles again as layers pushed out along their normal, by the
++                // grass blades' geometry shader (FenceShells in GrassGS.hlsl).
++                if (fenceOn && (grassBladePipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (i < instanceFenceVector.size()) && (instanceFenceVector[i] != 0)) {
++                    mark("game draws: fence layers");
++                    worker->commandList->setPipeline(grassBladePipeline);
++                    previousPipeline = grassBladePipeline;
++                    const uint32_t layers = instanceFenceVector[i];
++                    rasterParams.grassShells = layers | RASTER_GRASS_BLADES | RASTER_FENCE;
++                    for (uint32_t pass = 1; pass <= layers; pass++) {
++                        rasterParams.grassShell = pass;
++                        worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                        drawCallTriangles(drawCall);
++                    }
++                    rasterParams.grassShell = 0;
++                    rasterParams.grassShells = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
  
                  // Simulate dither noise.
                  if (triangles.postBlendDitherNoise) {
@@ -3208,7 +3228,7 @@ index 9fae0d4..859ca44 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1462,7 @@ namespace RT64 {
+@@ -597,6 +1482,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3216,7 +3236,7 @@ index 9fae0d4..859ca44 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1482,7 @@ namespace RT64 {
+@@ -616,6 +1502,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3224,7 +3244,7 @@ index 9fae0d4..859ca44 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2113,76 @@ namespace RT64 {
+@@ -1246,10 +2133,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3301,7 +3321,7 @@ index 9fae0d4..859ca44 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2229,136 @@ namespace RT64 {
+@@ -1296,9 +2249,136 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3439,7 +3459,7 @@ index 9fae0d4..859ca44 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2410,38 @@ namespace RT64 {
+@@ -1350,10 +2430,38 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3478,7 +3498,7 @@ index 9fae0d4..859ca44 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2474,11 @@ namespace RT64 {
+@@ -1386,6 +2494,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3490,7 +3510,7 @@ index 9fae0d4..859ca44 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2501,65 @@ namespace RT64 {
+@@ -1408,6 +2521,65 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3556,14 +3576,10 @@ index 9fae0d4..859ca44 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,10 +2583,26 @@ namespace RT64 {
+@@ -1431,6 +2603,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
--        const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
--        const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
--        const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
--        const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
 +        // Banjo-Tooie: after a draw to another buffer (a shadow), the rest of the 3D world can come back in a part
 +        // that writes no depth, only see-through draws (Icy Side's water). It carries on the earlier part's world:
 +        // its draws with the world's projection open the world again, so their water goes in the mask and the
@@ -3580,14 +3596,10 @@ index 9fae0d4..859ca44 100644
 +            }
 +        }
 +
-+        const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
-+        const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
-+        const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-+        const float aspectRatioScale = adjustRatio ? (p.aspectRatioTarget / p.aspectRatioSource) : 1.0f;
-         InstanceDrawCall instanceDrawCall;
-         interop::RenderIndices renderIndices;
-         uint32_t globalCallIndex = 0;
-@@ -1450,12 +2618,175 @@ namespace RT64 {
+         const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
+         const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
+         const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
+@@ -1450,12 +2638,176 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3646,6 +3658,7 @@ index 9fae0d4..859ca44 100644
 +                                grassShells = SceneGrassShells();
 +                                // Banjo-Tooie: parallax mapping, which finds each pixel's place from the same camera.
 +                                parallaxOn = ComputeSceneParallax(frameParams);
++                                fenceOn = (grassBladePipeline != nullptr) && ComputeSceneFence(frameParams);
 +                                // Banjo-Tooie: the grid of where blades don't grow, round this camera.
 +                                if ((grassShells > 0) && ((grassBladePipeline != nullptr) || (grassInstancePipeline != nullptr))) {
 +                                    grassMaskStarted = true;
@@ -3763,7 +3776,7 @@ index 9fae0d4..859ca44 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2937,7 @@ namespace RT64 {
+@@ -1606,6 +2958,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3771,7 +3784,7 @@ index 9fae0d4..859ca44 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3014,20 @@ namespace RT64 {
+@@ -1682,6 +3035,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3792,7 +3805,7 @@ index 9fae0d4..859ca44 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3093,1761 @@ namespace RT64 {
+@@ -1747,25 +3114,1795 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3917,8 +3930,8 @@ index 9fae0d4..859ca44 100644
 +                    {
 +                        targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, SceneRayDrawCutout | SceneRayDrawTextured | (levelGeometry(drawData, call) ? 0u : SceneRayDrawModel) });
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -4150,8 +4163,8 @@ index 9fae0d4..859ca44 100644
 +                        snowDraws = 0;
 +                        snowShellDraws = 0;
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: Banjo's fur grows on his model's opaque draws of the 3D world (the game marks them).
 +                bool fur = false;
 +                // (3: a furry enemy's white fur, the yeti.)
@@ -4191,6 +4204,40 @@ index 9fae0d4..859ca44 100644
 +                instanceFurVector.push_back(fur ? (enemyFur ? 4 : 1) : featherKind);
 +                if (fur && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
++                }
++
++                // Banjo-Tooie: fences, by their textures: the draws of the 3D world that are cut out by their alpha (or opaque)
++                // and write depth, in an actor's model or the level's own.
++                uint8_t fenceValue = 0;
++                if (fenceOn && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ && (call.callDesc.tileCount > 0))
++                {
++                    const interop::OtherMode fm = call.shaderDesc.otherMode;
++                    if (fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY)) {
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (fenceValue == 0); t++) {
++                            if (SceneFenceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID)) {
++                                fenceValue = uint8_t(FenceLayers);
++                            }
++                        }
++                    }
++                }
++                instanceFenceVector.resize(instanceIndex, 0);
++                instanceFenceVector.push_back(fenceValue);
++                // TOOIE_FENCE_LOG=1: twice a second, how many fence draws were found.
++                if (fenceOn) {
++                    static const bool fenceLog = (getenv("TOOIE_FENCE_LOG") != nullptr);
++                    if (fenceLog) {
++                        static auto lastLog = std::chrono::steady_clock::now();
++                        static uint32_t logDraws = 0, logFences = 0, logTriangles = 0;
++                        logDraws++;
++                        logFences += (fenceValue != 0) ? 1 : 0;
++                        logTriangles += (fenceValue != 0) ? call.callDesc.triangleCount : 0;
++                        if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(500)) {
++                            lastLog = std::chrono::steady_clock::now();
++                            fprintf(stderr, "[fence] %u draws, %u fence draws, %u fence triangles (last 0.5 s)\n", logDraws, logFences, logTriangles);
++                            logDraws = logFences = logTriangles = 0;
++                        }
++                    }
 +                }
 +
 +                // Banjo-Tooie: windows and lamps that light up at night, by their textures.
@@ -5556,7 +5603,7 @@ index 9fae0d4..859ca44 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..c357c8e 100644
+index 3add9c3..5e5f2a3 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5638,7 +5685,7 @@ index 3add9c3..c357c8e 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +112,181 @@ namespace RT64 {
+@@ -62,11 +112,186 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5773,6 +5820,8 @@ index 3add9c3..c357c8e 100644
 +        void submitGrassHiZ(RenderWorker *worker, RenderTarget *depthTarget);
 +        // Banjo-Tooie: Banjo's fur. 1 for each instance draw call that gets fur shells over it (marked by the game).
 +        std::vector<uint8_t> instanceFurVector;
++        // Banjo-Tooie: per instance, how many layers its fence is redrawn in (0: not a fence).
++        std::vector<uint8_t> instanceFenceVector;
 +        // Banjo-Tooie: per instance, 1 for a window or lamp that lights up at night.
 +        std::vector<uint32_t> instanceNightLightVector;
 +        std::vector<uint32_t> instanceSeeThroughVector;
@@ -5785,6 +5834,9 @@ index 3add9c3..c357c8e 100644
 +        bool nightLights = false;
 +        // Banjo-Tooie: parallax mapping this frame (ComputeSceneParallax).
 +        bool parallaxOn = false;
++        // Banjo-Tooie: fences this frame (ComputeSceneFence), and how many layers each is redrawn in.
++        bool fenceOn = false;
++        static constexpr uint32_t FenceLayers = 6;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t furShells = 0;
 +        // Each vertex's normal for the fur (world space, by vertex index; zero where there is no fur), summed from
@@ -5820,7 +5872,7 @@ index 3add9c3..c357c8e 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +297,13 @@ namespace RT64 {
+@@ -77,6 +302,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5834,7 +5886,7 @@ index 3add9c3..c357c8e 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +314,12 @@ namespace RT64 {
+@@ -87,6 +319,12 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5847,7 +5899,7 @@ index 3add9c3..c357c8e 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +333,7 @@ namespace RT64 {
+@@ -100,6 +338,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5855,7 +5907,7 @@ index 3add9c3..c357c8e 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +357,10 @@ namespace RT64 {
+@@ -123,6 +362,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5866,7 +5918,7 @@ index 3add9c3..c357c8e 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +402,15 @@ namespace RT64 {
+@@ -164,7 +407,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -7728,10 +7780,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..0b31658
+index 0000000..a522762
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3209 @@
+@@ -0,0 +1,3240 @@
 +//
 +// RT64
 +//
@@ -8556,6 +8608,37 @@ index 0000000..0b31658
 +        effectsSettings.parallaxAll = all;
 +    }
 +
++    void SetSceneFence(float thickness) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.fence = std::clamp(thickness, 0.0f, 1.0f);
++    }
++
++    static std::mutex fenceMutex;
++    static std::unordered_set<uint64_t> fenceTextures;
++
++    void SetSceneFenceTextures(const uint64_t *hashes, size_t count) {
++        std::unordered_set<uint64_t> textures(hashes, hashes + count);
++        const std::scoped_lock lock(fenceMutex);
++        fenceTextures.swap(textures);
++    }
++
++    bool SceneFenceTexture(uint64_t hash) {
++        const std::scoped_lock lock(fenceMutex);
++        return fenceTextures.count(hash) != 0;
++    }
++
++    bool ComputeSceneFence(interop::FrameParams &frameParams) {
++        float thickness = 0.0f;
++        {
++            const std::scoped_lock lock(effectsMutex);
++            thickness = effectsSettings.fence;
++        }
++        // At the full setting the layers spread over 12 world units (Banjo is about 150 tall, a fence post 5 to 10
++        // across); past 1800 units away the thickness can't be seen and a fence is drawn as it is.
++        frameParams.fenceParams = { 12.0f * thickness, 0.0f, 1800.0f, 0.0f };
++        return thickness > 0.0f;
++    }
++
 +    static std::atomic<bool> textureSeamsBlend = true;
 +
 +    void SetSceneTextureSeams(bool blend) {
@@ -9064,7 +9147,7 @@ index 0000000..0b31658
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-+        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.fence <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
 +            return false;
 +        }
 +        UsePlayerFrame(settings, workloadId);
@@ -10943,10 +11026,10 @@ index 0000000..0b31658
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..5f6e2f3
+index 0000000..c23917f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,524 @@
+@@ -0,0 +1,534 @@
 +//
 +// RT64
 +//
@@ -11113,6 +11196,8 @@ index 0000000..5f6e2f3
 +        float npcFeatherNoisiness = 0.5f;
 +        float npcFeatherTransparency = 0.0f;
 +        float parallax = 0.0f;
++        // Fence thickness (0 off, 1 the thickest; SetSceneFence).
++        float fence = 0.0f;
 +        bool parallaxOriginal = true;
 +        bool parallaxAll = false;
 +        bool snow = false;
@@ -11413,6 +11498,14 @@ index 0000000..5f6e2f3
 +    // original on, the game's own textures listed (RT64 hashes), by their brightness; all lets it on every textured
 +    // draw of the 3D world instead, to look for textures that suit it.
 +    void SetSceneParallax(float depth, bool original, bool all);
++    // Banjo-Tooie: fences (and other flat textures cut out by their alpha that stand for something solid): the draws
++    // with one of the textures listed (SetSceneFenceTextures, RT64 hashes) are drawn again as a few layers pushed out
++    // along their own normal, so they have thickness seen from the side. thickness: 0 off, 1 the thickest.
++    void SetSceneFence(float thickness);
++    void SetSceneFenceTextures(const uint64_t *hashes, size_t count);
++    bool SceneFenceTexture(uint64_t hash);
++    // Fills the frame's fence terms (after ComputeSceneGrass filled the camera's). False when they are off.
++    bool ComputeSceneFence(interop::FrameParams &frameParams);
 +    // Banjo-Tooie: blends the seams of clamped textures, such as the lines between the pieces of the title's logo (DEV
 +    // option, on by default).
 +    void SetSceneTextureSeams(bool blend);
@@ -14302,10 +14395,10 @@ index 0000000..2f4c388
 +#endif
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..b3907b6
+index 0000000..93d2254
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
-@@ -0,0 +1,603 @@
+@@ -0,0 +1,657 @@
 +//
 +// RT64
 +//
@@ -14677,9 +14770,63 @@ index 0000000..b3907b6
 +    }
 +}
 +
++// Banjo-Tooie: a fence. Each triangle is drawn again as one layer of a stack, pushed along its own normal by this
++// pass's place in the stack's thickness (centred on the triangle, so the original draw is the middle of it), with its
++// own texture coordinates and colours; the pixel shader cuts each layer out by the texture's alpha and darkens the
++// layers away from the camera (RasterPS.hlsl). Seen from the side the layers show as the thickness of the fence.
++void FenceShells(triangle GrassVertex input[3], uint instance, inout TriangleStream<GrassVertex> stream) {
++    // (One invocation a triangle: the blades' other instances have nothing to do here.)
++    if (instance != 0) {
++        return;
++    }
++    const uint pass = gConstants.grassShell - 1;
++    const uint passes = max(gConstants.grassShells & GRASS_PASS_MASK, 1u);
++
++    float4 clip[3];
++    float3 world[3];
++    for (int k = 0; k < 3; k++) {
++        clip[k] = GrassUnscale(input[k].position);
++        world[k] = GrassToWorld(clip[k]);
++    }
++
++    float3 normal = cross(world[1] - world[0], world[2] - world[0]);
++    const float normalLength = length(normal);
++    if (normalLength <= 1e-4f) {
++        return;
++    }
++    normal /= normalLength;
++
++    // Far off the thickness can't be seen: only the original draw. Halfway there, every other layer.
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
++    const float cameraDistance = distance(center, camera);
++    if ((cameraDistance > FrParams.fenceParams.z) || ((cameraDistance > FrParams.fenceParams.z * 0.5f) && ((pass & 1u) != 0u))) {
++        return;
++    }
++
++    // This layer's place across the thickness (-0.5 to 0.5 along the normal), and how far back from the camera's side
++    // it lies (0 at the front, 1 at the back).
++    const float place = (float(pass) + 0.5f) / float(passes) - 0.5f;
++    const float side = (dot(normal, camera - center) >= 0.0f) ? 1.0f : -1.0f;
++    const float back = saturate(0.5f - place * side);
++    const float4 shift = GrassDirToClip(normal * (place * FrParams.fenceParams.x));
++    for (int v = 0; v < 3; v++) {
++        GrassVertex o = input[v];
++        o.position = GrassRescale(clip[v] + shift);
++        // (The layer's shade, for the pixel shader.)
++        o.furAnchor = float4(lerp(1.0f, 0.6f, back), 0.0f, 0.0f, 0.0f);
++        stream.Append(o);
++    }
++    stream.RestartStrip();
++}
++
 +[maxvertexcount(GRASS_BLADES_PER_INVOCATION * 5)]
 +[instance(GRASS_INVOCATIONS)]
 +void GSMain(triangle GrassVertex input[3], uint instance : SV_GSInstanceID, uint primitive : SV_PrimitiveID, inout TriangleStream<GrassVertex> stream) {
++    if ((gConstants.grassShells & RASTER_FENCE) != 0) {
++        FenceShells(input, instance, stream);
++        return;
++    }
 +    if ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0) {
 +        FeatherCards(input, primitive, instance, stream);
 +        return;
@@ -15580,7 +15727,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..2c51eaa 100644
+index e7895c3..ec57544 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -15595,7 +15742,7 @@ index e7895c3..2c51eaa 100644
  #include "Random.hlsli"
  #include "TextureSampler.hlsli"
  
-@@ -46,11 +50,90 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
+@@ -46,11 +50,92 @@ float sampleBackgroundDepth(int2 pixelPos, uint sampleCount) {
  #endif
  
  LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float2 vertexUV, float4 vertexSmoothColor, float4 vertexFlatColor,
@@ -15613,10 +15760,12 @@ index e7895c3..2c51eaa 100644
 +    // the pixel (the shell number is the same for the whole draw). A blade (GrassGS.hlsl) needs only the
 +    // position, and one of Kazooie's feathers neither.
 +    const bool featherCard = (grassShell != 0) && ((gConstants.grassShells & RASTER_FEATHER_CARDS) != 0);
++    // (A layer of a fence needs neither, GrassGS.hlsl FenceShells.)
++    const bool fenceShell = (grassShell != 0) && ((gConstants.grassShells & RASTER_FENCE) != 0);
 +    float3 grassWorld = 0.0f;
 +    float3 grassDx = 0.0f;
 +    float3 grassDy = 0.0f;
-+    if ((grassShell != 0) && !featherCard) {
++    if ((grassShell != 0) && !featherCard && !fenceShell) {
 +        // (Deep snow has its own from the vertices, RasterVS.hlsl.)
 +        grassWorld = ((gConstants.grassShells & RASTER_SNOW_SHELLS) != 0) ? vertexFurAnchor.xyz : GrassWorldPosition(vertexPosition);
 +        if ((gConstants.grassShells & RASTER_GRASS_BLADES) == 0) {
@@ -15688,7 +15837,7 @@ index e7895c3..2c51eaa 100644
          return false;
      }
  #endif
-@@ -88,7 +171,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -88,7 +173,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          }
      }
  
@@ -15699,7 +15848,7 @@ index e7895c3..2c51eaa 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +198,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +200,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -15724,7 +15873,7 @@ index e7895c3..2c51eaa 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +246,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +248,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -15734,7 +15883,7 @@ index e7895c3..2c51eaa 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +265,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +267,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -15744,7 +15893,7 @@ index e7895c3..2c51eaa 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +291,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +293,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -15783,7 +15932,7 @@ index e7895c3..2c51eaa 100644
      
  #if 0
      // Alpha dither.
-@@ -237,6 +378,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -237,6 +380,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultAlpha.a = resultColor.a;
      }
      
@@ -15796,7 +15945,7 @@ index e7895c3..2c51eaa 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +401,123 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +403,134 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -15860,6 +16009,17 @@ index e7895c3..2c51eaa 100644
 +            }
 +        }
 +    }
++    else if (fenceShell) {
++        // A layer of a fence: a part cut out by its texture's alpha (blended) keeps only its solid parts, drawn solid,
++        // and the layers away from the camera are darker (the shade is in the fur anchor).
++        if (alphaBlend) {
++            if (resultAlpha.a < 0.5f) {
++                return false;
++            }
++            resultAlpha = 1.0f;
++        }
++        resultColor.rgb *= vertexFurAnchor.x;
++    }
 +    else if (snowShell) {
 +        // (The tessellated snow keeps the ground's own colour where it isn't snowy, or no snow lies: it stands in for
 +        // the ground's draw.)
@@ -15920,7 +16080,7 @@ index e7895c3..2c51eaa 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +525,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +538,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -15945,7 +16105,7 @@ index e7895c3..2c51eaa 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +569,7 @@ void PSMain(
+@@ -287,6 +582,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -15953,7 +16113,7 @@ index e7895c3..2c51eaa 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +586,7 @@ void PSMain(
+@@ -303,7 +599,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -21949,10 +22109,10 @@ index 0000000..e6accce
 +    return h;
 +}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..8574eb9 100644
+index 2e62aaf..208872e 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,133 @@ namespace interop {
+@@ -13,6 +13,136 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -22057,6 +22217,9 @@ index 2e62aaf..8574eb9 100644
 +        float4 parallaxParams;
 +        // Banjo-Tooie: parallax mapping's shading: how much darker the deepest parts are, and the shadows the stones cast.
 +        float4 parallaxShading;
++        // Banjo-Tooie: fences (GrassGS.hlsl FenceShells): how thick, in world units, the layers spread over, then the
++        // camera distance past which a fence is drawn as it is.
++        float4 fenceParams;
 +        // Banjo-Tooie: 1 to blend the seams of clamped textures (TextureSampler.hlsli), the DEV option; then 1 to show the
 +        // blended edges in magenta (TOOIE_SEAM_SHOW).
 +        float4 textureSeams;
@@ -22272,10 +22435,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..a9a0bde 100644
+index 0a5c332..f6a57cd 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,78 @@
+@@ -9,11 +9,81 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -22301,6 +22464,9 @@ index 0a5c332..a9a0bde 100644
 +    // with holes where the trail goes down below it (through Icy Side's own snow layer); the raised snow is drawn after
 +    // it, so the ground shows through wherever the raised surface leaves a crack.
 +#define RASTER_SNOW_GROUND 0x02000000u
++    // Banjo-Tooie: with RASTER_GRASS_BLADES, the redraw is one layer of a fence (GrassGS.hlsl, FenceShells): the draw's
++    // triangles pushed along their own normal, grassShell of grassShells' low bits layers, cut out by the texture's alpha.
++#define RASTER_FENCE 0x01000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
 +    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
 +    // the shell count.

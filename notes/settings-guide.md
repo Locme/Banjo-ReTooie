@@ -248,6 +248,19 @@ F12 screenshots are taken before these filters, so they don't show them.
   only texture pack textures that come with a height map get parallax.
   Default: on.
 
+## Graphics: Fence thickness
+
+- **Fence thickness** (under Shaders): 0 to 100. Fences and other flat
+  textures cut out by their alpha (chain link, pickets, grates) that stand for
+  something solid are drawn again as six layers pushed out along their own
+  face, so seen from the side they have thickness instead of being paper thin.
+  The layers farther from the camera are darker. 100 spreads them over about 12
+  world units. Only for the textures picked as **Fence** in Shader Effects pick
+  mode (left click steps Disable, Grass, Deep Snow, Ice Reflection, Shiny
+  Reflection, Fence, then back to the built-in choice); nothing is built in yet.
+  Up close only: past about 900 units every other layer is dropped, past 1800
+  none. Default: 0 (off).
+
 ### Parallax pick mode
 
 Bind **Parallax Pick Mode** (Controls, Pick Modes) and press it in a level. The mouse
