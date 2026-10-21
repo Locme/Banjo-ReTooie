@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T504 General: Mirror Mode
+- Asked: 2026-10-21 10:51 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Settings > General: turn Mirror Mode on (no restart)
+  2. Walk around Spiral Mountain, open the pause menu, talk to someone, collect a Note
+  3. Look at the Jiggy and Note counters and the dialogue box
+  4. Turn Mirror Mode off again
+- Look for: The world is flipped left to right (Banjo's house on the other side, camera turns the opposite way on screen). The HUD stays in its usual place and every counter, dialogue box and menu text is readable, not mirrored. Signs on the world's surfaces are still mirrored (known). Menus with no 3D world may be mirrored whole. Off puts everything back at once. Not yet built or run: please report any crash or black screen
+- Status: waiting for L
+
 ## T503 See-through textures look solid with shaders
 - Asked: 2026-10-21 10:49 UTC
 - Build: main

@@ -49,6 +49,7 @@
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_low_latency.h"
 #include "tooie_frame_readback.h"
 #include "tooie_fsr.h"
@@ -333,6 +334,7 @@ void tooie::init_config() {
     tooie::bottles_revenge::add_option(general);
     tooie::torch_enemy::add_option(general);
     tooie::boss_rush::add_option(general);
+    tooie::mirror_mode::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
@@ -897,6 +899,7 @@ void tooie::init_config() {
     tooie::texture_slide::apply();
     tooie::debug::apply_heap_check();
     tooie::fxaa::apply();
+    tooie::mirror_mode::apply();
     tooie::fsr::apply();
     tooie::low_latency::apply();
     tooie::frame_readback::apply();
