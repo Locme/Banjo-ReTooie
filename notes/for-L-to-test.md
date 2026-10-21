@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T495 Sprint dust like Talon Trot
+- Asked: 2026-10-21 08:57 UTC
+- Build: main
+- Steps:
+  1. Start the game with Running on
+  2. Hold Run and sprint along open ground
+  3. Compare with Talon Trot (Kazooie, Z + C-left)
+- Look for: Does the sprint kick up the same foot dust as the Talon Trot, for as long as you sprint, with no gap between bursts?
+- Status: waiting for L
+
 ## T494 Jinjo Village sun position
 - Asked: 2026-10-21 08:31 UTC
 - Build: main

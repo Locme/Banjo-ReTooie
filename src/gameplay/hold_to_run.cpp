@@ -15,13 +15,11 @@
 // Holding it while the stick is tilted at all runs at full speed: a partly tilted stick would
 // otherwise walk, and the walk has no sprint. QOL > Running turns the whole feature off.
 //
-// Sprint dust (L, 2026-10-19): "dust trails to sprinting, similar ... as quickly turning from left/right to
-// the opposite direction (the same amount)", only when the sprint starts and at most once every 10 seconds
-// (5 seconds since L, 2026-10-20: "Make it 5 seconds instead").
-// The quick turn (bsturn) spawns its dust through _badust_entrypoint_3(player, angle, speed): for the
-// turn's 0.3 s it counts 1 to 5 then -1, 0, 1, ... each frame and on -1, 0 and 1 puffs at the angle in
-// physics +0x40 minus 10, plus 0 and plus 10 degrees, at 0.88, 1 and 0.88 of the horizontal speed. The
-// sprint start replays that pattern for the same 0.3 s, so the same puffs come out.
+// Sprint dust (L, 2026-10-21): "Make the dust replicate the behavior of talontrotting instead of what we have
+// now (timer etc)". The Talon Trot (bsbtrot's update) calls _badust_entrypoint_1(player), the walking
+// feet's dust, on every frame it moves; that function keeps its own timing (it puffs on the foot
+// events while the speed is over 100). The sprint does the same on every frame it is on: no burst, no
+// cooldown.
 //
 // Debug: TOOIE_RUN_HOLD=<from ms>:<to ms>[,...] acts as Run held between those times after the first pad
 // read (headless; game time with TOOIE_PAD_GAME_TIME=1); TOOIE_RUN_LOG=1 logs form, state, animation, speed, animation duration and sprint blend 10 times
@@ -549,17 +547,6 @@ namespace {
     uint32_t sprint_duration_bits = 0;
     Clock::time_point last_tick{};
 
-    // Sprint dust: how long the turn's dust lasts (its animation's 0.3 s), the gap between two
-    // bursts (both in game time), and the turn's side puffs' angle and speed factor (bsturn rodata).
-    constexpr double dust_seconds = 0.3;
-    constexpr double dust_gap = 5.0;
-    constexpr float dust_side_speed = 0.88f;
-    constexpr float dust_side_angle = 10.0f;
-    // Game thread only: game time the current burst ends and the last one began, bsturn's frame counter.
-    double dust_end = 0.0;
-    double last_dust = -dust_gap;
-    int dust_counter = 0;
-
     // 1 + (sprint_scale - 1) at full sprint, eased.
     float blend_factor() {
         const float w = sprint_blend.load();
@@ -593,31 +580,10 @@ namespace {
         return valid_ptr(block) ? read_word(rdram, block + state_current) : 0;
     }
 
-    // One frame of the turn's dust (bsturn's update): the counter steps, and on -1, 0 and 1 one puff
-    // goes out through the game's own dust spawner.
-    void dust_frame(uint8_t* rdram, recomp_context* ctx, uint32_t player) {
-        if (++dust_counter >= 6) {
-            dust_counter = -1;
-        }
-        if (dust_counter < -1 || dust_counter > 1) {
-            return;
-        }
-        const uint32_t physics = read_word(rdram, player + 0xC8);
-        if (!valid_ptr(physics)) {
-            return;
-        }
-        const float angle = tooie::rdram::read_float(rdram, physics + 0x40);
-        const float vx = tooie::rdram::read_float(rdram, physics + 0x10);
-        const float vz = tooie::rdram::read_float(rdram, physics + 0x18);
-        const float speed = std::sqrt(vx * vx + vz * vz);
+    // One frame of the Talon Trot's dust: the game's own foot dust, which times its puffs itself.
+    void dust_frame(recomp_context* ctx, uint8_t* rdram, uint32_t player) {
         recomp_context call = call_context(ctx, player);
-        call.r5 = (int32_t)as_bits(angle + dust_side_angle * (float)dust_counter);
-        call.r6 = (int32_t)as_bits(dust_counter == 0 ? speed : speed * dust_side_speed);
-        _badust_entrypoint_3(rdram, &call);
-        if (log_on()) {
-            std::printf("[run] sprint dust puff %d at angle %.1f speed %.1f\n", dust_counter, angle, speed);
-            std::fflush(stdout);
-        }
+        _badust_entrypoint_1(rdram, &call);
     }
 }
 
@@ -761,21 +727,9 @@ void tooie::hold_to_run::tick(uint8_t* rdram, recomp_context* ctx) {
     } else {
         blend = std::clamp(blend + (want ? dt : -dt) / blend_seconds, 0.0f, 1.0f);
     }
-    // The sprint has just started: the turn's dust, unless the last burst was under dust_gap ago.
-    const double game_now = tooie::game_frame_rate::game_seconds();
-    if (game_now < last_dust) {
-        last_dust = game_now - dust_gap; // the game clock went back
-    }
-    if (running && want && sprint_blend.load() <= 0.0f && blend > 0.0f && game_now - last_dust >= dust_gap) {
-        last_dust = game_now;
-        dust_end = game_now + dust_seconds;
-        dust_counter = 0;
-    }
-    if (!running) {
-        dust_end = 0.0;
-    }
-    if (game_now < dust_end) {
-        dust_frame(rdram, ctx, player);
+    // The sprint's dust, as the Talon Trot's: every frame the sprint is on.
+    if (running && blend > 0.0f) {
+        dust_frame(ctx, rdram, player);
     }
     sprint_blend = blend;
     // The sprint animation plays in place of the run while any of the sprint is on.
