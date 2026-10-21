@@ -512,10 +512,9 @@ namespace {
     // While Banjo-Kazooie dives (src/gameplay/dive.cpp) the animation he is already playing in the air is
     // replaced by a copy with these rules: body flat along the lunge, arms and legs held still behind it.
     // First guess made without seeing the game; TOOIE_DIVE_POSE_TUNE=<file> replaces it, one rule a line,
-    // "<bone> <type> <scale> <offset degrees>", so it can be tuned on a PC without a rebuild. Kazooie's
-    // wings are not in it yet: her wing bone ids are not known (the model's bone list is needed).
-    // L's reference (2026-10-21, a Super Mario Odyssey dive): body flat along the lunge, both arms stretched
-    // forward past the head, legs straight out behind. Shoulders are bones 12 and 26 (the first of each arm
+    // "<bone> <type> <scale> <offset degrees>", so it can be tuned on a PC without a rebuild.
+    // L's reference picture (2026-10-21): body flat along the lunge, both arms stretched forward past the
+    // head, legs straight out behind. Shoulders are bones 12 and 26 (the first of each arm
     // chain, which the run swings); turning them 160 degrees from hanging points the arms forward. The
     // direction of that turn (sign) is a guess: flip the offset in the tune file if the arms go backwards.
     const std::vector<Rule> dive_rules_default = {
@@ -525,6 +524,13 @@ namespace {
         { 12, 0, 0.0f, 160.0f }, { 26, 0, 0.0f, 160.0f },       // arms forward
         { 14, 0, 0.0f, 0.0f }, { 16, 0, 0.0f, 0.0f },           // elbows and hands straight
         { 28, 0, 0.0f, 0.0f }, { 30, 0, 0.0f, 0.0f },
+        // Kazooie's wings (ids read from the Banjo-Kazooie model 0x062A, whose bone table lists id, parent and
+        // position): each wing is a chain pointing back from the pack, stem bone 97 on Banjo's right (x+, chain
+        // 99 then 80-84 and 90-91) and 94 on his left (96, then 85-89 and 92-93). Held still and swept out 35
+        // degrees about the vertical axis so they spread back and away from the pack. The turn's sign is a
+        // guess, like the arms'.
+        { 97, 0, 0.0f, 0.0f }, { 97, 2, 0.0f, 0.0f }, { 97, 1, 0.0f, -35.0f },
+        { 94, 0, 0.0f, 0.0f }, { 94, 2, 0.0f, 0.0f }, { 94, 1, 0.0f, 35.0f },
     };
 
     const std::vector<Rule>& dive_rules() {
