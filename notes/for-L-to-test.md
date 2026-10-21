@@ -1,6 +1,7 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
 ## T487 Window Light Beams (Bottles' house, Banjo's house, Jingaling's throne room)
+- Update 2026-10-21: the option moved to Graphics > Vanilla Enhancements (a new group there, its first option).
 - Asked: 2026-10-20 23:57 UTC
 - Build: main
 - Steps:
