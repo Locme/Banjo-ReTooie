@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T507 Tessellated sand speed in Terrydactyland
+- Asked: 2026-10-21 12:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Turn the camera around and walk a long way on sand
+- Look for: Is it playable now (frame rate close to Tessellated sand off)? Footprints still show near Banjo; no sand or snow vanishing at the screen edges (also check Icy Side's deep snow)
+- Status: waiting for L
+
 ## T506 Fence thickness (layers on flat cut-out textures)
 - Asked: 2026-10-21 11:22 UTC
 - Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)

@@ -21260,10 +21260,10 @@ index 0000000..15a6637
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..5d3f594
+index 0000000..adfbd27
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,212 @@
 +//
 +// RT64
 +//
@@ -21333,9 +21333,13 @@ index 0000000..5d3f594
 +    return false;
 +}
 +
++// Sand's footprints are shallow: past this far from the camera they are smaller than a pixel, so the sand there isn't cut
++// for them (by each edge's middle, so the triangles either side of an edge agree).
++static const float SandTessReach = 900.0f;
++
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
 +    // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
-+    if (!trail) {
++    if (!trail || (SnowSand() && (cameraDistance > SandTessReach))) {
 +        return 1.0f;
 +    }
 +    return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
@@ -21345,16 +21349,41 @@ index 0000000..5d3f594
 +    const float edgeLength = distance(a, b);
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    const float cameraDistance = distance((a + b) * 0.5f, camera);
-+    const bool trail = SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
++    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
 +    return SnowSegmentFactor(edgeLength, cameraDistance, trail);
 +}
 +
 +// The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
 +float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
 +    const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
-+    const bool trail = SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    return max(edgeFactor, SnowSegmentFactor(longest, distance((a + b + c) / 3.0f, camera), trail));
++    const float cameraDistance = distance((a + b + c) / 3.0f, camera);
++    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
++    return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
++}
++
++// Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
++// same side of the screen (a little widened) or behind the camera. It is then not drawn at all (factor 0), so the
++// level's snow or sand out of view costs nothing past this.
++bool SnowPatchOutOfView(InputPatch<SnowVertex, 3> patch) {
++    float4 up = FrParams.snowClipUp;
++    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
++#ifdef __spirv__
++    up.y = -up.y;
++#endif
++    const float slack = 1.1f;
++    bool left = true, right = true, bottom = true, top = true, behind = true;
++    for (uint i = 0; i < 3; i++) {
++        for (int k = -1; k <= 1; k++) {
++            const float4 q = patch[i].position + up * float(k);
++            left = left && (q.x < -slack * q.w);
++            right = right && (q.x > slack * q.w);
++            bottom = bottom && (q.y < -slack * q.w);
++            top = top && (q.y > slack * q.w);
++            behind = behind && (q.w <= 0.0f);
++        }
++    }
++    return left || right || bottom || top || behind;
 +}
 +
 +SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
@@ -21363,6 +21392,11 @@ index 0000000..5d3f594
 +    const float3 b = patch[1].furAnchor.xyz;
 +    const float3 c = patch[2].furAnchor.xyz;
 +    p.normal = cross(b - a, c - a);
++    if (SnowPatchOutOfView(patch)) {
++        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
++        p.inside = 0.0f;
++        return p;
++    }
 +
 +    // Not cut at all on a wall, or where all of the triangle is past the snow's reach (drawn as it is: the ground's own
 +    // draw is left out).
