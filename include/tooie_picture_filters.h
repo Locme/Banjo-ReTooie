@@ -68,6 +68,7 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
+    inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
