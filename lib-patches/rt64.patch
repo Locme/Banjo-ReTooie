@@ -1929,7 +1929,7 @@ index 69a82ac..1939ed1 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..0d68f11 100644
+index 9fae0d4..4c7daf1 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -3686,7 +3686,7 @@ index 9fae0d4..0d68f11 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3225,2160 @@ namespace RT64 {
+@@ -1747,25 +3225,2168 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3875,6 +3875,14 @@ index 9fae0d4..0d68f11 100644
 +                    hlslpp::float3 centre;
 +                    if (lamp && drawCentre(drawData, call, centre)) {
 +                        addLampLight(targetDrawCall.lampLights, centre);
++                        // The lamp's own panes go into the traced scene even when drawn see-through without depth, so its
++                        // rays pass only their lit, yellow parts and its bars hold the light back (the window effect, L
++                        // 2026-10-21: the light still escaped everywhere).
++                        const bool traced = !targetDrawCall.rayDraws.empty() && (targetDrawCall.rayDraws.back().instanceIndex == instanceIndex);
++                        if (!traced && !instanceDrawCall.triangles.vertexTestZ) {
++                            targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex,
++                                SceneRayDrawCutout | SceneRayDrawTextured | (levelGeometry(drawData, call) ? 0u : SceneRayDrawModel) });
++                        }
 +                    }
 +                }
 +

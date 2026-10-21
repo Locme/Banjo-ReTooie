@@ -1016,15 +1016,18 @@ float TraceLampVisible(RayDesc ray, float3 light) {
         const uint primitive = query.CandidatePrimitiveIndex();
         const float2 barycentrics = query.CandidateTriangleBarycentrics();
         const uint flags = RayGeometryFlags(geometry);
-        if (((flags & 1u) != 0u) && !RayCutoutSolid(geometry, primitive, barycentrics)) {
+        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
+        const bool fitting = length(at - light) < 90.0f;
+        // A see-through part lets the light by, except the lamp's own fitting, whose panes are often drawn see-through:
+        // there the colour decides below.
+        if (!(fitting && textures && ((flags & 2u) != 0u)) && ((flags & 1u) != 0u) && !RayCutoutSolid(geometry, primitive, barycentrics)) {
             continue;
         }
-        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
         // With the player's traced shadows off, the light goes on through Banjo.
         if (PlayerShadowsOff() && BanjoHit(geometry, at)) {
             continue;
         }
-        if (length(at - light) < 90.0f) {
+        if (fitting) {
             if (textures && ((flags & 2u) != 0u)) {
                 // Only through the lit, yellow parts (a lantern's panes): its dark frame and bars and its grey roof hold the
                 // light back, so the light falls in the shape of its windows (L, 2026-10-21: a window effect). (Near-white
