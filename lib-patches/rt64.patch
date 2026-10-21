@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 79dfc38..d3512c6 100644
+index 79dfc38..a30e572 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -57,6 +57,17 @@ elseif (APPLE)
@@ -198,7 +198,7 @@ index 79dfc38..d3512c6 100644
  
  # Add any Apple-specific source files and libraries
  if (APPLE)
-@@ -505,6 +571,18 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
+@@ -505,6 +571,19 @@ build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_pixel_shader_spec_constants(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSSpecConstantFlatMS.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR" "-D MULTISAMPLING")
  build_vertex_shader( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSDynamic.hlsl" "-D DYNAMIC_RENDER_PARAMS")
@@ -214,10 +214,11 @@ index 79dfc38..d3512c6 100644
 +# Banjo-Tooie: deep snow as a tessellated surface.
 +build_tessellation_shaders(rt64 "src/shaders/SnowTess.hlsl" "src/shaders/SnowTessHS.hlsl" "src/shaders/SnowTessDS.hlsl")
 +build_tessellation_shaders(rt64 "src/shaders/WaterTess.hlsl" "src/shaders/WaterTessHS.hlsl" "src/shaders/WaterTessDS.hlsl")
++build_tessellation_shaders(rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstant.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS")
  build_vertex_shader_spec_constants( rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSSpecConstantFlat.hlsl" "-D SPEC_CONSTANT_RENDER_PARAMS" "-D VERTEX_FLAT_COLOR")
  build_compute_shader(rt64 "src/shaders/FbChangesClearCS.hlsl")
-@@ -543,13 +621,70 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
+@@ -543,13 +622,70 @@ build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/R
  build_pixel_shader(  rt64 "src/shaders/RtCopyDepthToColorPS.hlsl" "src/shaders/RtCopyDepthToColor8XPS.hlsl" "-D SAMPLES_8X")
  build_pixel_shader(  rt64 "src/shaders/TextureCopyPS.hlsl")
  build_compute_shader(rt64 "src/shaders/TextureDecodeCS.hlsl")
@@ -1983,7 +1984,7 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..769c4bd 100644
+index 69a82ac..68a2610 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
 @@ -212,6 +212,13 @@ namespace RT64 {
@@ -2019,7 +2020,7 @@ index 69a82ac..769c4bd 100644
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,190 @@ namespace RT64 {
+@@ -659,6 +678,192 @@ namespace RT64 {
          }
      };
  
@@ -2169,6 +2170,7 @@ index 69a82ac..769c4bd 100644
 +        uint32_t gChunkVisible;
 +        uint32_t gSlotCounts;
 +        uint32_t gBlades;
++        uint32_t gRayBlades;
 +
 +        GrassCullDescriptorSet(RenderDevice *device = nullptr) {
 +            builder.begin();
@@ -2182,6 +2184,7 @@ index 69a82ac..769c4bd 100644
 +            gChunkVisible = builder.addReadWriteStructuredBuffer(8);
 +            gSlotCounts = builder.addReadWriteStructuredBuffer(9);
 +            gBlades = builder.addReadWriteStructuredBuffer(10);
++            gRayBlades = builder.addReadWriteStructuredBuffer(11);
 +            builder.end();
 +
 +            if (device != nullptr) {
@@ -2211,7 +2214,7 @@ index 69a82ac..769c4bd 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..4e68510 100644
+index 9fae0d4..30be8f4 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2769,7 +2772,7 @@ index 9fae0d4..4e68510 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +694,81 @@ namespace RT64 {
+@@ -169,11 +694,83 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2795,6 +2798,7 @@ index 9fae0d4..4e68510 100644
 +        }
 +        frameParams.grassMask.w = 0.0f;
 +        instanceSnowVector.clear();
++        instanceGroundVector.clear();
 +        snowVertexFirst = UINT32_MAX;
 +        snowVertexEnd = 0;
 +        snowPositionsData = nullptr;
@@ -2803,6 +2807,7 @@ index 9fae0d4..4e68510 100644
 +        snowShells = 0;
 +        frameParams.snowGrid.w = 0.0f;
 +        waterTessOn = false;
++        groundTessOn = false;
 +        frameParams.waterCamera.w = 0.0f;
 +        instanceFurVector.clear();
 +        instanceFenceVector.clear();
@@ -2851,7 +2856,7 @@ index 9fae0d4..4e68510 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +814,7 @@ namespace RT64 {
+@@ -219,6 +816,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2859,7 +2864,7 @@ index 9fae0d4..4e68510 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +846,7 @@ namespace RT64 {
+@@ -250,6 +848,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2867,7 +2872,7 @@ index 9fae0d4..4e68510 100644
                  }
              }
              else {
-@@ -272,6 +869,9 @@ namespace RT64 {
+@@ -272,6 +871,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2877,7 +2882,7 @@ index 9fae0d4..4e68510 100644
              }
          }
      }
-@@ -373,6 +973,15 @@ namespace RT64 {
+@@ -373,6 +975,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2893,7 +2898,7 @@ index 9fae0d4..4e68510 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1052,14 @@ namespace RT64 {
+@@ -443,6 +1054,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2908,7 +2913,7 @@ index 9fae0d4..4e68510 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1082,82 @@ namespace RT64 {
+@@ -465,12 +1084,82 @@ namespace RT64 {
          return true;
      }
      
@@ -2993,7 +2998,7 @@ index 9fae0d4..4e68510 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1186,16 @@ namespace RT64 {
+@@ -499,6 +1188,16 @@ namespace RT64 {
              }
          };
  
@@ -3010,7 +3015,7 @@ index 9fae0d4..4e68510 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1211,17 @@ namespace RT64 {
+@@ -514,6 +1213,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3028,7 +3033,7 @@ index 9fae0d4..4e68510 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -562,7 +1270,13 @@ namespace RT64 {
+@@ -562,7 +1272,13 @@ namespace RT64 {
                  }
  
                  if (previousScissor != triangles.scissor) {
@@ -3043,7 +3048,7 @@ index 9fae0d4..4e68510 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1288,183 @@ namespace RT64 {
+@@ -574,12 +1290,210 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3065,7 +3070,34 @@ index 9fae0d4..4e68510 100644
 +                // Banjo's feet without that layer covering it.
 +                const bool snowTessDraw = (snowShells > 0) && (snowTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
 +                    (i < instanceSnowVector.size()) && (instanceSnowVector[i] != 0);
-+                if (!snowTessDraw) {
++                // Banjo-Tooie: displaced ground, drawn tessellated in place of the ground's own draw.
++                const bool groundDisplaceDraw = !snowTessDraw && groundTessOn && (groundTessPipeline != nullptr) && (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
++                    (i < instanceGroundVector.size()) && (instanceGroundVector[i] != 0);
++                if (groundDisplaceDraw) {
++                    mark("game draws: displaced ground (tessellated)");
++                    worker->commandList->setPipeline(groundTessPipeline);
++                    previousPipeline = groundTessPipeline;
++                    // (Test aids: TOOIE_GROUND_DEBUG tints the displaced ground by its depth, TOOIE_GROUND_LOG counts the draws.)
++                    static const bool groundDebug = (std::getenv("TOOIE_GROUND_DEBUG") != nullptr);
++                    static const bool groundLog = (std::getenv("TOOIE_GROUND_LOG") != nullptr);
++                    if (groundLog) {
++                        static uint32_t drawn = 0, triangles = 0;
++                        static auto last = std::chrono::steady_clock::now();
++                        drawn++;
++                        triangles += drawCall.triangles.faceCount;
++                        if (std::chrono::steady_clock::now() - last > std::chrono::seconds(2)) {
++                            last = std::chrono::steady_clock::now();
++                            fprintf(stderr, "[ground] %u displaced draws, %u triangles (since the last line)\n", drawn, triangles);
++                            drawn = triangles = 0;
++                        }
++                    }
++                    rasterParams.groundDisplace = RASTER_GROUND_DISPLACE | (groundDebug ? RASTER_GROUND_DEBUG : 0);
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                    drawCallTriangles(drawCall);
++                    rasterParams.groundDisplace = 0;
++                    worker->commandList->setGraphicsPushConstants(0, &rasterParams);
++                }
++                else if (!snowTessDraw) {
 +                    mark((drawCall.type == InstanceDrawCall::Type::RegularRect) ? "game draws: rectangles" : "game draws: plain");
 +                    drawCallTriangles(drawCall);
 +                }
@@ -3228,7 +3260,7 @@ index 9fae0d4..4e68510 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1482,7 @@ namespace RT64 {
+@@ -597,6 +1511,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3236,7 +3268,7 @@ index 9fae0d4..4e68510 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1502,7 @@ namespace RT64 {
+@@ -616,6 +1531,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3244,7 +3276,7 @@ index 9fae0d4..4e68510 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2133,76 @@ namespace RT64 {
+@@ -1246,10 +2162,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3321,7 +3353,7 @@ index 9fae0d4..4e68510 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2249,136 @@ namespace RT64 {
+@@ -1296,9 +2278,144 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3438,7 +3470,15 @@ index 9fae0d4..4e68510 100644
 +                        rayTextures.rdpTiles = rayRDPTilesBufferRef;
 +                        rayTextures.gpuTiles = rayGPUTilesBufferRef;
 +                        rayTextures.textureSet = (descTextureSet != nullptr) ? descTextureSet->get() : nullptr;
-+                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, rayDraws.data(), rayDraws.size(), rayTextures);
++                        // The 3D grass's blades near the camera, as the culling pass last wrote them.
++                        SceneRayGrass rayGrass;
++                        if (grassInstancing.rayValid && (grassInstancing.rayBladesBuffer != nullptr)) {
++                            rayGrass.vertices = grassInstancing.rayBladesBuffer.get();
++                            rayGrass.vertexCount = uint32_t(GRASS_RAY_BLADES * GRASS_BLADE_VERTICES);
++                            rayGrass.generation = grassInstancing.rayGeneration;
++                            rayGrass.reach = grassInstancing.rayReach;
++                        }
++                        BuildSceneBVH(worker, worldPosBufferRef, worldPosVertexCount, indexBufferView.buffer.ref, rayDraws.data(), rayDraws.size(), rayTextures, rayGrass);
 +                        RecordSceneEffects(worker, colorTarget, depthTarget, effectsProjection, effectsView, shaderLibrary, targetDrawCall.sceneEffectsArea,
 +                            depthScale, depthTranslate, sunCasters ? std::function<void(RenderCommandList *)>(drawSunCasters) : std::function<void(RenderCommandList *)>());
 +                    }
@@ -3459,7 +3499,7 @@ index 9fae0d4..4e68510 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2430,38 @@ namespace RT64 {
+@@ -1350,10 +2467,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3495,10 +3535,15 @@ index 9fae0d4..4e68510 100644
 +        static const bool snowShellsForced = (std::getenv("TOOIE_SNOW_SHELLS") != nullptr);
 +        snowTessPipeline = snowShellsForced ? nullptr : rasterShaderUber->snowTessPipeline.get();
 +        waterTessPipeline = rasterShaderUber->waterTessReady.load();
++        // (Built the first time Displaced ground is on.)
++        if (SceneGroundDisplacement() > 0.0f) {
++            rasterShaderUber->startGroundTess();
++        }
++        groundTessPipeline = rasterShaderUber->groundTessReady.load();
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2494,11 @@ namespace RT64 {
+@@ -1386,6 +2536,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3510,10 +3555,16 @@ index 9fae0d4..4e68510 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2521,65 @@ namespace RT64 {
+@@ -1408,12 +2563,71 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
+-
+-#   if RT_ENABLED
+-        RaytracingScene rtScene;
+-        auto checkRtScene = [&](RaytracingScene &rtScene) {
+-            if (!rtScene.instanceIndices.empty()) {
+-                uint32_t sceneIndex = static_cast<uint32_t>(targetDrawCall.rtScenes.size());
 +        targetDrawCall.sceneEffectsAfter = -1;
 +        targetDrawCall.sceneEffectsDrawData = nullptr;
 +        targetDrawCall.waterInstances.clear();
@@ -3573,10 +3624,16 @@ index 9fae0d4..4e68510 100644
 +            }
 +        }
 +        int32_t worldEnd = -1;
- 
- #   if RT_ENABLED
-         RaytracingScene rtScene;
-@@ -1431,6 +2603,22 @@ namespace RT64 {
++
++#   if RT_ENABLED
++        RaytracingScene rtScene;
++        auto checkRtScene = [&](RaytracingScene &rtScene) {
++            if (!rtScene.instanceIndices.empty()) {
++                uint32_t sceneIndex = static_cast<uint32_t>(targetDrawCall.rtScenes.size());
+                 targetDrawCall.rtScenes.push_back(rtScene);
+                 targetDrawCall.sceneIndices.push_back({ sceneIndex, true });
+                 rtScene.instanceIndices.clear();
+@@ -1431,6 +2645,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3599,7 +3656,7 @@ index 9fae0d4..4e68510 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2638,176 @@ namespace RT64 {
+@@ -1450,12 +2680,179 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3683,11 +3740,14 @@ index 9fae0d4..4e68510 100644
 +                            }
 +                        }
 +                        // Banjo-Tooie: Modern and Stylised water's tessellated surface, from the first 3D world of the frame.
-+                        if (!waterTessOn && (waterTessPipeline != nullptr) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
++                        // (Displaced ground takes the same camera terms.)
++                        if (!waterTessOn && !groundTessOn && ((waterTessPipeline != nullptr) || (groundTessPipeline != nullptr)) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
 +                            const auto &waterViewport = drawData.rspViewports[proj.transformsIndex];
-+                            waterTessOn = ComputeSceneWater(drawData.modProjTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex],
++                            const uint32_t tessKinds = ComputeSceneWater(drawData.modProjTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex],
 +                                drawData.modViewProjTransforms[proj.transformsIndex], waterViewport.scale, waterViewport.translate, fbParams.resolution,
 +                                p.submissionFrame, frameParams);
++                            waterTessOn = ((tessKinds & 1) != 0) && (waterTessPipeline != nullptr);
++                            groundTessOn = ((tessKinds & 2) != 0) && (groundTessPipeline != nullptr);
 +                        }
 +                        // Banjo-Tooie: Banjo's fur, from the first 3D world of the frame.
 +                        if ((furShells == 0) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
@@ -3776,7 +3836,7 @@ index 9fae0d4..4e68510 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +2958,7 @@ namespace RT64 {
+@@ -1606,6 +3003,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3784,7 +3844,7 @@ index 9fae0d4..4e68510 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3035,20 @@ namespace RT64 {
+@@ -1682,6 +3080,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3805,7 +3865,7 @@ index 9fae0d4..4e68510 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3114,1795 @@ namespace RT64 {
+@@ -1747,25 +3159,1840 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3930,8 +3990,8 @@ index 9fae0d4..4e68510 100644
 +                    {
 +                        targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, SceneRayDrawCutout | SceneRayDrawTextured | (levelGeometry(drawData, call) ? 0u : SceneRayDrawModel) });
 +                    }
-                 }
- 
++                }
++
 +                // Banjo-Tooie: 3D grass grows on the level's own textured ground (drawn without a model
 +                // transform of its own) with a grass texture; the shader keeps only green surfaces facing up.
 +                bool grass = false;
@@ -4086,8 +4146,8 @@ index 9fae0d4..4e68510 100644
 +                            logGrass = logBlades = logMaxPasses = logSumPasses = 0;
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
 +                // Banjo-Tooie: deep snow lies on the level's own opaque, textured ground as 3D grass does; the shader
 +                // keeps only snowy surfaces facing up. Fewer shells further away, none beyond the snow's reach.
 +                uint8_t snowValue = 0;
@@ -4216,7 +4276,7 @@ index 9fae0d4..4e68510 100644
 +                    if (fm.zCmp() && fm.zUpd() && (fm.zMode() != ZMODE_DEC) && (fm.cycleType() != G_CYC_COPY)) {
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (fenceValue == 0); t++) {
 +                            if (SceneFenceTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID)) {
-+                                fenceValue = uint8_t(FenceLayers);
++                                fenceValue = uint8_t(std::clamp(frameParams.fenceParams.y, 1.0f, 24.0f));
 +                            }
 +                        }
 +                    }
@@ -4444,6 +4504,27 @@ index 9fae0d4..4e68510 100644
 +                    instanceSeeThroughVector.resize(instanceIndex, 0);
 +                    instanceSeeThroughVector.push_back(seeThrough ? RASTER_SEE_THROUGH_DEPTH : 0);
 +                }
++                // Banjo-Tooie: level ground whose parallax texture has a floor-like shape is drawn as a tessellated surface,
++                // its darkest parts pushed down (GroundTess.hlsl), in place of its own draw. Not the sand or the snow
++                // (their own tessellation), nor anything a shell or blade pass is drawn over.
++                uint8_t groundValue = 0;
++                if (groundTessOn && !excluded && worldOpen && fbPair.depthWrite && (parallax != 0) && (snowValue == 0) &&
++                    (proj.type == Projection::Type::Perspective) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) &&
++                    !instanceDrawCall.triangles.vertexTestZ && (call.callDesc.tileCount > 0) && (call.callDesc.triangleCount > 0) && levelGeometry(drawData, call))
++                {
++                    const interop::OtherMode gm = call.shaderDesc.otherMode;
++                    const uint32_t nl = instanceNightLightVector.back();
++                    // (Its shape: 0 stone, 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 9 brick, 10 dirt, 13 tiles, 15 smooth.)
++                    const uint32_t shape = ((nl >> 25) & 0x7u) | (((nl & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
++                    const bool grassDraw = (instanceGrassVector.size() > instanceIndex) && (instanceGrassVector[instanceIndex] != 0);
++                    if (((0xA63Fu >> shape) & 1u) && !grassDraw && gm.zCmp() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
++                        (gm.cycleType() != G_CYC_FILL) && !interop::Blender::usesAlphaBlend(gm))
++                    {
++                        groundValue = 1;
++                    }
++                }
++                instanceGroundVector.resize(instanceIndex, 0);
++                instanceGroundVector.push_back(groundValue);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
 +
                  instanceDrawCallVector.push_back(instanceDrawCall);
@@ -5243,11 +5324,16 @@ index 9fae0d4..4e68510 100644
 +
 +        // 30 FPS grass: every other frame, when the slots are the same ground draws as when the culling pass last ran,
 +        // the frame draws that pass's blades again (its buffers stay as they are) instead of running it.
-+        g.reusing = SceneGrassHalfRate() && !g.skippedLast && !g.slots.empty() && (g.dispatchedSignature != 0) && (g.signature == g.dispatchedSignature);
++        const float rayReach = worker->device->getCapabilities().rayQuery ? SceneGrassRayReach() : 0.0f;
++        g.reusing = SceneGrassHalfRate() && !g.skippedLast && !g.slots.empty() && (g.dispatchedSignature != 0) && (g.signature == g.dispatchedSignature) &&
++            ((rayReach > 0.0f) == (g.rayReach > 0.0f));
 +        g.skippedLast = g.reusing;
 +        if (g.reusing) {
 +            return;
 +        }
++
++        g.rayReach = rayReach;
++        g.rayValid = false;
 +
 +        g.dispatchedSlots.clear();
 +        g.dispatchedSignature = 0;
@@ -5277,8 +5363,16 @@ index 9fae0d4..4e68510 100644
 +            }
 +        };
 +        ensure(g.bladesBuffer, g.bladesCapacity, bladeTotal, sizeof(interop::GrassBladeInstance), "Grass Blades");
-+        ensure(g.countsBuffer, g.countsCapacity, g.slots.size() * 4, sizeof(uint32_t), "Grass Blade Draws", RenderBufferFlag::INDIRECT);
++        ensure(g.countsBuffer, g.countsCapacity, g.slots.size() * 4 + 4, sizeof(uint32_t), "Grass Blade Draws", RenderBufferFlag::INDIRECT);
 +        ensure(g.chunkVisibleBuffer, g.chunkVisibleCapacity, g.chunks.size(), sizeof(uint32_t), "Grass Chunks Seen");
++        // The ray-traced blades: all of them with ray tracing (once), else one blade's worth for the culling pass to bind.
++        const uint64_t rayVertices = uint64_t((g.rayReach > 0.0f) ? GRASS_RAY_BLADES : 1u) * GRASS_BLADE_VERTICES;
++        if ((g.rayBladesBuffer == nullptr) || (g.rayBladesCapacity < rayVertices)) {
++            const RenderBufferFlags rayInput = (g.rayReach > 0.0f) ? RenderBufferFlags(RenderBufferFlag::ACCELERATION_STRUCTURE_INPUT) : RenderBufferFlags(RenderBufferFlag::NONE);
++            g.rayBladesCapacity = rayVertices;
++            g.rayBladesBuffer = worker->device->createBuffer(RenderBufferDesc::DefaultBuffer(rayVertices * sizeof(interop::float4), RenderBufferFlag::STORAGE | RenderBufferFlag::UNORDERED_ACCESS | rayInput));
++            g.rayBladesBuffer->setName("Grass Ray Blades");
++        }
 +
 +        // The depth pyramid starts as one texel of nothing known, until a frame's blades build it.
 +        if (g.hizFine == nullptr) {
@@ -5318,6 +5412,7 @@ index 9fae0d4..4e68510 100644
 +        set.setBuffer(set.gChunkVisible, g.chunkVisibleBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
 +        set.setBuffer(set.gSlotCounts, g.countsBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
 +        set.setBuffer(set.gBlades, g.bladesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GrassBladeInstance)));
++        set.setBuffer(set.gRayBlades, g.rayBladesBuffer.get(), RenderBufferStructuredView(sizeof(interop::float4)));
 +
 +        RenderBuffer *vertexBuffers[2] = { const_cast<RenderBuffer *>(g.texcoordBuffer), const_cast<RenderBuffer *>(g.colorBuffer) };
 +        const RenderBufferBarrier before[] = {
@@ -5325,7 +5420,8 @@ index 9fae0d4..4e68510 100644
 +            RenderBufferBarrier(vertexBuffers[1], RenderBufferAccess::READ),
 +            RenderBufferBarrier(g.chunkVisibleBuffer.get(), RenderBufferAccess::WRITE),
 +            RenderBufferBarrier(g.countsBuffer.get(), RenderBufferAccess::WRITE),
-+            RenderBufferBarrier(g.bladesBuffer.get(), RenderBufferAccess::WRITE)
++            RenderBufferBarrier(g.bladesBuffer.get(), RenderBufferAccess::WRITE),
++            RenderBufferBarrier(g.rayBladesBuffer.get(), RenderBufferAccess::WRITE)
 +        };
 +        const RenderTextureBarrier hizRead[] = {
 +            RenderTextureBarrier(g.hizFine.get(), RenderTextureLayout::SHADER_READ),
@@ -5338,27 +5434,36 @@ index 9fae0d4..4e68510 100644
 +        cb.candidateCount = g.candidates;
 +        cb.chunkCount = uint32_t(g.chunks.size());
 +        cb.slotCount = uint32_t(g.slots.size());
++        cb.rayBlades = (g.rayReach > 0.0f) ? GRASS_RAY_BLADES : 0u;
++        cb.rayReach = g.rayReach;
++        cb.pad0 = cb.pad1 = 0;
 +        commandList->setComputePipelineLayout(shaderLibrary->grassCull.pipelineLayout.get());
 +        commandList->setComputePushConstants(0, &cb);
 +        commandList->setComputeDescriptorSet(descCommonSet->get(), 0);
 +        commandList->setComputeDescriptorSet(set.get(), 1);
 +        commandList->setPipeline(shaderLibrary->grassChunkCull.get());
-+        commandList->dispatch((std::max(cb.chunkCount, cb.slotCount) + GRASS_CULL_GROUP - 1) / GRASS_CULL_GROUP, 1, 1);
++        commandList->dispatch((std::max({ cb.chunkCount, cb.slotCount, cb.rayBlades }) + GRASS_CULL_GROUP - 1) / GRASS_CULL_GROUP, 1, 1);
 +
 +        const RenderBufferBarrier between[] = {
 +            RenderBufferBarrier(g.chunkVisibleBuffer.get(), RenderBufferAccess::WRITE),
-+            RenderBufferBarrier(g.countsBuffer.get(), RenderBufferAccess::WRITE)
++            RenderBufferBarrier(g.countsBuffer.get(), RenderBufferAccess::WRITE),
++            RenderBufferBarrier(g.rayBladesBuffer.get(), RenderBufferAccess::WRITE)
 +        };
 +        commandList->barriers(RenderBarrierStage::COMPUTE, between, uint32_t(std::size(between)), nullptr, 0);
 +        commandList->setPipeline(shaderLibrary->grassCull.pipeline.get());
 +        commandList->dispatch((g.candidates + GRASS_CULL_GROUP - 1) / GRASS_CULL_GROUP, 1, 1);
 +        g.dispatchedSlots = g.slots;
 +        g.dispatchedSignature = g.signature;
++        if (g.rayReach > 0.0f) {
++            g.rayValid = true;
++            g.rayGeneration++;
++        }
 +
 +        // The blades and counts for the vertex shader; the ground's vertices back for drawing.
 +        const RenderBufferBarrier forDrawing[] = {
 +            RenderBufferBarrier(g.countsBuffer.get(), RenderBufferAccess::READ),
-+            RenderBufferBarrier(g.bladesBuffer.get(), RenderBufferAccess::READ)
++            RenderBufferBarrier(g.bladesBuffer.get(), RenderBufferAccess::READ),
++            RenderBufferBarrier(g.rayBladesBuffer.get(), RenderBufferAccess::READ)
 +        };
 +        commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, forDrawing, uint32_t(std::size(forDrawing)), nullptr, 0);
 +        const RenderBufferBarrier vertices[] = {
@@ -5603,7 +5708,7 @@ index 9fae0d4..4e68510 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..5e5f2a3 100644
+index 3add9c3..2561626 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5685,7 +5790,7 @@ index 3add9c3..5e5f2a3 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +112,186 @@ namespace RT64 {
+@@ -62,11 +112,197 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -5708,10 +5813,14 @@ index 3add9c3..5e5f2a3 100644
 +        uint32_t grassShells = 0;
 +        // Banjo-Tooie: for each instance, 0, or the shells of deep snow drawn over it.
 +        std::vector<uint8_t> instanceSnowVector;
++        // Banjo-Tooie: 1 on a ground draw drawn as displaced, tessellated ground (GroundTess.hlsl).
++        std::vector<uint8_t> instanceGroundVector;
 +        // Banjo-Tooie: the most shells of deep snow (0 when there is none this frame), and its trail grid.
 +        uint32_t snowShells = 0;
 +        // Banjo-Tooie: Modern and Stylised water's surface is tessellated this frame (ComputeSceneWater).
 +        bool waterTessOn = false;
++        // Banjo-Tooie: ground with a parallax texture is drawn displaced this frame (Graphics > Displaced ground).
++        bool groundTessOn = false;
 +        SceneSnowTrailCopy snowTrail;
 +        BufferPair snowTrailBuffer;
 +        // Banjo-Tooie: the vertices deep snow's draws use this frame (from snowPositionsData's posFloats), for their
@@ -5810,6 +5919,14 @@ index 3add9c3..5e5f2a3 100644
 +            std::vector<interop::GrassSlot> dispatchedSlots;
 +            bool skippedLast = false;
 +            bool reusing = false;
++            // Ray tracing: the blades near the camera as triangles (GRASS_RAY_BLADES), how far out they go this frame
++            // (0: none), whether the buffer holds this frame's (or the reused pass's) blades, and a count of the culling
++            // passes that wrote it (the traced effects rebuild the grass's structure when it changes).
++            std::unique_ptr<RenderBuffer> rayBladesBuffer;
++            uint64_t rayBladesCapacity = 0;
++            float rayReach = 0.0f;
++            bool rayValid = false;
++            uint64_t rayGeneration = 0;
 +        };
 +        GrassInstancing grassInstancing;
 +        RenderPipeline *grassInstancePipeline = nullptr;
@@ -5834,9 +5951,8 @@ index 3add9c3..5e5f2a3 100644
 +        bool nightLights = false;
 +        // Banjo-Tooie: parallax mapping this frame (ComputeSceneParallax).
 +        bool parallaxOn = false;
-+        // Banjo-Tooie: fences this frame (ComputeSceneFence), and how many layers each is redrawn in.
++        // Banjo-Tooie: fences this frame (ComputeSceneFence), and how many layers each is redrawn in (frameParams.fenceParams.y).
 +        bool fenceOn = false;
-+        static constexpr uint32_t FenceLayers = 6;
 +        // The shells over each of them this frame (0 none: off, or no 3D world's camera yet).
 +        uint32_t furShells = 0;
 +        // Each vertex's normal for the fur (world space, by vertex index; zero where there is no fur), summed from
@@ -5872,7 +5988,7 @@ index 3add9c3..5e5f2a3 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +302,13 @@ namespace RT64 {
+@@ -77,6 +313,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -5886,7 +6002,7 @@ index 3add9c3..5e5f2a3 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +319,12 @@ namespace RT64 {
+@@ -87,6 +330,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -5896,10 +6012,12 @@ index 3add9c3..5e5f2a3 100644
 +        RenderPipeline *snowTessPipeline = nullptr;
 +        // Banjo-Tooie: Modern and Stylised water's tessellated surface in the water mask (WaterTess.hlsl), or null.
 +        RenderPipeline *waterTessPipeline = nullptr;
++        // Banjo-Tooie: displaced, tessellated ground (GroundTess.hlsl), or null.
++        RenderPipeline *groundTessPipeline = nullptr;
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +338,7 @@ namespace RT64 {
+@@ -100,6 +351,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -5907,7 +6025,7 @@ index 3add9c3..5e5f2a3 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +362,10 @@ namespace RT64 {
+@@ -123,6 +375,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -5918,7 +6036,7 @@ index 3add9c3..5e5f2a3 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +407,15 @@ namespace RT64 {
+@@ -164,7 +420,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -6895,7 +7013,7 @@ index 5bc3a2a..c5c88cc 100644
  };
 \ No newline at end of file
 diff --git a/src/render/rt64_raster_shader.cpp b/src/render/rt64_raster_shader.cpp
-index 721a01e..d7b0cdf 100644
+index 721a01e..fd22c39 100644
 --- a/src/render/rt64_raster_shader.cpp
 +++ b/src/render/rt64_raster_shader.cpp
 @@ -5,6 +5,7 @@
@@ -6906,7 +7024,7 @@ index 721a01e..d7b0cdf 100644
  
  #include "shaders/RenderParams.hlsli.rw.h"
  #include "shaders/RasterPSDynamic.hlsl.spirv.h"
-@@ -19,7 +20,19 @@
+@@ -19,7 +20,23 @@
  #include "shaders/PostBlendDitherNoiseAddPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubPS.hlsl.spirv.h"
  #include "shaders/PostBlendDitherNoiseSubNegativePS.hlsl.spirv.h"
@@ -6916,6 +7034,8 @@ index 721a01e..d7b0cdf 100644
 +#include "shaders/SnowTessDS.hlsl.spirv.h"
 +#include "shaders/WaterTessHS.hlsl.spirv.h"
 +#include "shaders/WaterTessDS.hlsl.spirv.h"
++#include "shaders/GroundTessHS.hlsl.spirv.h"
++#include "shaders/GroundTessDS.hlsl.spirv.h"
  #ifdef _WIN32
 +#   include "shaders/GrassGS.hlsl.dxil.h"
 +#   include "shaders/GrassBladeVS.hlsl.dxil.h"
@@ -6923,10 +7043,12 @@ index 721a01e..d7b0cdf 100644
 +#   include "shaders/SnowTessDS.hlsl.dxil.h"
 +#   include "shaders/WaterTessHS.hlsl.dxil.h"
 +#   include "shaders/WaterTessDS.hlsl.dxil.h"
++#   include "shaders/GroundTessHS.hlsl.dxil.h"
++#   include "shaders/GroundTessDS.hlsl.dxil.h"
  #   include "shaders/RasterPSLibrary.hlsl.dxil.h"
  #   include "shaders/RasterPSLibraryMS.hlsl.dxil.h"
  #   include "shaders/RasterVSLibrary.hlsl.dxil.h"
-@@ -117,7 +130,7 @@ namespace RT64 {
+@@ -117,7 +134,7 @@ namespace RT64 {
              thread_local std::vector<uint8_t> optimizedVS;
              thread_local std::vector<uint8_t> optimizedPS;
              if (!specConstantsSetup) {
@@ -6935,7 +7057,7 @@ index 721a01e..d7b0cdf 100644
                      specConstants.push_back(respv::SpecConstant(i, { 0 }));
                  }
  
-@@ -129,6 +142,7 @@ namespace RT64 {
+@@ -129,6 +146,7 @@ namespace RT64 {
              specConstants[2].values[0] = desc.colorCombiner.L;
              specConstants[3].values[0] = desc.colorCombiner.H;
              specConstants[4].values[0] = desc.flags.value;
@@ -6943,7 +7065,7 @@ index 721a01e..d7b0cdf 100644
              
              bool vsRun = respv::Optimizer::run(*VS, specConstants.data(), uint32_t(specConstants.size()), optimizedVS);
              bool psRun = respv::Optimizer::run(*PS, specConstants.data(), uint32_t(specConstants.size()), optimizedPS);
-@@ -172,6 +186,7 @@ namespace RT64 {
+@@ -172,6 +190,7 @@ namespace RT64 {
              specConstants.emplace_back(2, desc.colorCombiner.L);
              specConstants.emplace_back(3, desc.colorCombiner.H);
              specConstants.emplace_back(4, desc.flags.value);
@@ -6951,7 +7073,7 @@ index 721a01e..d7b0cdf 100644
  #       else
              assert(false && "This platform does not support METAL shaders.");
  #       endif
-@@ -180,39 +195,57 @@ namespace RT64 {
+@@ -180,39 +199,57 @@ namespace RT64 {
  #       if defined(_WIN32)
              RasterShaderText shaderText = generateShaderText(desc, useMSAA);
  
@@ -7041,7 +7163,7 @@ index 721a01e..d7b0cdf 100644
  #       else
              assert(false && "This platform does not support runtime shader compilation.");
  #       endif
-@@ -249,25 +282,26 @@ namespace RT64 {
+@@ -249,25 +286,26 @@ namespace RT64 {
          vss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          vss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          vss <<
@@ -7072,7 +7194,7 @@ index 721a01e..d7b0cdf 100644
              "}";
  
          // Generate pixel shader.
-@@ -275,7 +309,7 @@ namespace RT64 {
+@@ -275,7 +313,7 @@ namespace RT64 {
          pss << std::string_view(RenderParamsText, sizeof(RenderParamsText));
          pss << "RenderParams getRenderParams() {" + renderParamsCode + "; return rp; }";
          pss <<
@@ -7081,7 +7203,7 @@ index 721a01e..d7b0cdf 100644
              "[shader(\"pixel\")]"
              "void PSMain("
              "  in float4 vertexPosition : SV_POSITION"
-@@ -286,6 +320,8 @@ namespace RT64 {
+@@ -286,6 +324,8 @@ namespace RT64 {
              pss << ", nointerpolation in float4 vertexFlatColor : COLOR1";
          }
  
@@ -7090,7 +7212,7 @@ index 721a01e..d7b0cdf 100644
          pss <<
              ", out float4 pixelColor : SV_TARGET0"
              ", out float4 pixelAlpha : SV_TARGET1"
-@@ -298,7 +334,7 @@ namespace RT64 {
+@@ -298,7 +338,7 @@ namespace RT64 {
          pss <<
              "   float4 resultColor;"
              "   float4 resultAlpha;"
@@ -7099,7 +7221,7 @@ index 721a01e..d7b0cdf 100644
              "   pixelColor = resultColor;"
              "   pixelAlpha = resultAlpha;"
              "}";
-@@ -318,14 +354,19 @@ namespace RT64 {
+@@ -318,14 +358,19 @@ namespace RT64 {
          pipelineDesc.depthWriteEnabled = c.zUpd;
          pipelineDesc.depthTargetFormat = RenderFormat::D32_FLOAT;
          pipelineDesc.multisampling = c.multisampling;
@@ -7124,7 +7246,7 @@ index 721a01e..d7b0cdf 100644
          pipelineDesc.specConstants = c.specConstants.data();
          pipelineDesc.specConstantsCount = uint32_t(c.specConstants.size());
  
-@@ -347,6 +388,15 @@ namespace RT64 {
+@@ -347,6 +392,15 @@ namespace RT64 {
          return c.device->createGraphicsPipeline(pipelineDesc);
      }
      
@@ -7140,7 +7262,7 @@ index 721a01e..d7b0cdf 100644
      RenderMultisampling RasterShader::generateMultisamplingPattern(RenderSampleCounts sampleCount, bool sampleLocationsSupported) {
  #   if SAMPLE_LOCATIONS_REQUIRED
          if (!sampleLocationsSupported) {
-@@ -449,7 +499,12 @@ namespace RT64 {
+@@ -449,7 +503,12 @@ namespace RT64 {
          FramebufferRendererDescriptorFramebufferSet descriptorFramebufferSet;
          RenderPipelineLayoutBuilder layoutBuilder;
          layoutBuilder.begin(false, true);
@@ -7154,7 +7276,7 @@ index 721a01e..d7b0cdf 100644
          layoutBuilder.addDescriptorSet(descriptorCommonSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
          layoutBuilder.addDescriptorSet(descriptorTextureSet);
-@@ -483,6 +538,112 @@ namespace RT64 {
+@@ -483,6 +542,146 @@ namespace RT64 {
              threadIndex = (threadIndex + 1) % threadCount;
          }
  
@@ -7250,7 +7372,10 @@ index 721a01e..d7b0cdf 100644
 +                break;
 +            }
 +
-+            if ((waterHullShader != nullptr) && (waterDomainShader != nullptr)) {
++            // (Test aid: TOOIE_NO_WATER_TESS leaves the water's pipeline out: the software Vulkan driver, lavapipe, takes
++            // gigabytes to build each of these, and headless runs of another one run out of memory.)
++            static const bool waterTessSkipped = (std::getenv("TOOIE_NO_WATER_TESS") != nullptr);
++            if ((waterHullShader != nullptr) && (waterDomainShader != nullptr) && !waterTessSkipped) {
 +                PipelineCreation waterCreation = creation;
 +                waterCreation.hullShader = waterHullShader.get();
 +                waterCreation.domainShader = waterDomainShader.get();
@@ -7262,23 +7387,71 @@ index 721a01e..d7b0cdf 100644
 +                    waterTessReady = waterTessPipeline.get();
 +                });
 +            }
++
++            // Banjo-Tooie: displaced, tessellated ground (GroundTess.hlsl): depth tested and written, drawn solid in place of
++            // the ground's own draw.
++            switch (shaderFormat) {
++#   ifdef _WIN32
++            case RenderShaderFormat::DXIL:
++                groundHullShader = device->createShader(GroundTessHSBlobDXIL, std::size(GroundTessHSBlobDXIL), "HSMain", shaderFormat);
++                groundDomainShader = device->createShader(GroundTessDSBlobDXIL, std::size(GroundTessDSBlobDXIL), "DSMain", shaderFormat);
++                break;
++#   endif
++            case RenderShaderFormat::SPIRV:
++                groundHullShader = device->createShader(GroundTessHSBlobSPIRV, std::size(GroundTessHSBlobSPIRV), "HSMain", shaderFormat);
++                groundDomainShader = device->createShader(GroundTessDSBlobSPIRV, std::size(GroundTessDSBlobSPIRV), "DSMain", shaderFormat);
++                break;
++            default:
++                break;
++            }
++
++            if ((groundHullShader != nullptr) && (groundDomainShader != nullptr)) {
++                PipelineCreation groundCreation = creation;
++                groundVertexShader = device->createShader(VSBlob, VSBlobSize, "VSMain", shaderFormat);
++                groundPixelShader = device->createShader(PSBlob, PSBlobSize, "PSMain", shaderFormat);
++                groundCreation.vertexShader = groundVertexShader.get();
++                groundCreation.pixelShader = groundPixelShader.get();
++                groundCreation.hullShader = groundHullShader.get();
++                groundCreation.domainShader = groundDomainShader.get();
++                groundCreation.zCmp = true;
++                groundCreation.zUpd = true;
++                groundCreation.cvgAdd = false;
++                this->groundCreation = std::make_unique<PipelineCreation>(groundCreation);
++            }
 +        }
 +
          // Spawn the threads that will compile all the pipelines.
          pipelineThreads.clear();
          pipelineThreads.resize(pipelineThreadCreations.size());
-@@ -556,6 +717,9 @@ namespace RT64 {
+@@ -554,8 +753,26 @@ namespace RT64 {
+         postBlendDitherNoiseSubNegativePipeline = device->createGraphicsPipeline(postBlendDesc);
+     }
  
++    void RasterShaderUber::startGroundTess() const {
++        std::call_once(groundTessOnce, [this]() {
++            if (groundCreation != nullptr) {
++                groundTessThreadMutable = std::make_unique<std::thread>([this]() {
++                    auto *self = const_cast<RasterShaderUber *>(this);
++                    self->groundTessPipeline = RasterShader::createBanjoPipeline(*groundCreation, "displaced ground");
++                    self->groundTessReady = self->groundTessPipeline.get();
++                });
++            }
++        });
++    }
++
      RasterShaderUber::~RasterShaderUber() {
          waitForPipelineCreation();
 +        if ((waterTessThread != nullptr) && waterTessThread->joinable()) {
 +            waterTessThread->join();
 +        }
++        if ((groundTessThreadMutable != nullptr) && groundTessThreadMutable->joinable()) {
++            groundTessThreadMutable->join();
++        }
      }
  
      void RasterShaderUber::threadCreatePipelines(uint32_t threadIndex) {
 diff --git a/src/render/rt64_raster_shader.h b/src/render/rt64_raster_shader.h
-index 3b991ff..fea3571 100644
+index 3b991ff..48b0986 100644
 --- a/src/render/rt64_raster_shader.h
 +++ b/src/render/rt64_raster_shader.h
 @@ -6,6 +6,7 @@
@@ -7312,7 +7485,7 @@ index 3b991ff..fea3571 100644
          static RenderMultisampling generateMultisamplingPattern(uint32_t sampleCount, bool sampleLocationsSupported);
      };
  
-@@ -90,6 +100,27 @@ namespace RT64 {
+@@ -90,6 +100,41 @@ namespace RT64 {
          std::vector<std::unique_ptr<std::thread>> pipelineThreads;
          std::unique_ptr<RenderShader> vertexShader;
          std::unique_ptr<RenderShader> pixelShader;
@@ -7337,6 +7510,20 @@ index 3b991ff..fea3571 100644
 +        std::unique_ptr<RenderPipeline> waterTessPipeline;
 +        std::atomic<RenderPipeline *> waterTessReady{ nullptr };
 +        std::unique_ptr<std::thread> waterTessThread;
++        // Banjo-Tooie: displaced, tessellated ground (GroundTess.hlsl), built on its own thread the same way.
++        // (Its own copies of the ubershader's vertex and pixel shaders: those are freed once the first pipelines are made,
++        // long before the first time this is built.)
++        std::unique_ptr<RenderShader> groundVertexShader;
++        std::unique_ptr<RenderShader> groundPixelShader;
++        std::unique_ptr<RenderShader> groundHullShader;
++        std::unique_ptr<RenderShader> groundDomainShader;
++        std::unique_ptr<RenderPipeline> groundTessPipeline;
++        std::atomic<RenderPipeline *> groundTessReady{ nullptr };
++        // (Not built until Displaced ground is first used: the ubershader's tessellation pipeline is slow to compile.)
++        std::unique_ptr<PipelineCreation> groundCreation;
++        mutable std::once_flag groundTessOnce;
++        mutable std::unique_ptr<std::thread> groundTessThreadMutable;
++        void startGroundTess() const;
  
          RasterShaderUber(RenderDevice *device, RenderShaderFormat shaderFormat, const RenderMultisampling &multisampling, const ShaderLibrary *shaderLibrary, uint32_t threadCount);
          ~RasterShaderUber();
@@ -7780,10 +7967,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..a522762
+index 0000000..307858d
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3240 @@
+@@ -0,0 +1,3343 @@
 +//
 +// RT64
 +//
@@ -7899,6 +8086,14 @@ index 0000000..a522762
 +            uint64_t bvhBlasSize = 0;
 +            uint64_t bvhTlasSize = 0;
 +            uint64_t bvhScratchSize = 0;
++            // The 3D grass's blades near the camera: their own bottom level structure (rebuilt when the grass's culling
++            // pass writes them again), a second instance in the top level one (instance 1, mask 2; the world is mask 1).
++            std::unique_ptr<RenderBuffer> grassBlasBuffer;
++            std::unique_ptr<RenderAccelerationStructure> grassBlas;
++            uint64_t grassBlasSize = 0;
++            uint64_t grassBuiltGeneration = UINT64_MAX;
++            const RenderBuffer *grassBuiltVertices = nullptr;
++            uint32_t bvhInstanceCount = 0;
 +            bool bvhReady = false;
 +            // A structure has been built at least once: a pass with no casters of its own reuses it (it holds the world
 +            // in world space, so it stays right as the camera moves).
@@ -8635,7 +8830,9 @@ index 0000000..a522762
 +        }
 +        // At the full setting the layers spread over 12 world units (Banjo is about 150 tall, a fence post 5 to 10
 +        // across); past 1800 units away the thickness can't be seen and a fence is drawn as it is.
-+        frameParams.fenceParams = { 12.0f * thickness, 0.0f, 1800.0f, 0.0f };
++        // Layers about half a unit apart, so from the side they run together into a solid slab (6 to 24).
++        const float layers = std::clamp(std::ceil(12.0f * thickness / 0.5f), 6.0f, 24.0f);
++        frameParams.fenceParams = { 12.0f * thickness, layers, 1800.0f, 0.0f };
 +        return thickness > 0.0f;
 +    }
 +
@@ -8760,9 +8957,11 @@ index 0000000..a522762
 +
 +    bool ComputeSceneParallax(interop::FrameParams &frameParams) {
 +        float depth = 0.0f;
++        float ground = 0.0f;
 +        {
 +            const std::scoped_lock lock(effectsMutex);
 +            depth = effectsSettings.parallax;
++            ground = effectsSettings.groundDisplacement;
 +            parallaxAllTextures = effectsSettings.parallaxAll;
 +            parallaxOriginalTextures = effectsSettings.parallaxOriginal;
 +        }
@@ -8772,8 +8971,9 @@ index 0000000..a522762
 +        // The deepest parts and the shadows the stones cast about a third darker, less at a lower setting.
 +        const float shade = std::min(1.0f, 0.4f + depth * 0.6f);
 +        frameParams.parallaxShading = { 0.3f * shade, 0.3f * shade, 0.0f, 0.0f };
-+        // On whenever it is set, as a texture pack's height maps need nothing else.
-+        return depth > 0.0f;
++        // On whenever it is set, as a texture pack's height maps need nothing else. (And with displaced ground, which takes
++        // the list's textures and shapes.)
++        return (depth > 0.0f) || (ground > 0.0f);
 +    }
 +
 +    uint32_t SceneParallaxTexture(uint64_t hash) {
@@ -8914,6 +9114,23 @@ index 0000000..a522762
 +        // Test aid: TOOIE_GRASS_HALF=0 or 1 instead of the setting.
 +        static const char *forced = getenv("TOOIE_GRASS_HALF");
 +        return (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassHalfRate;
++    }
++
++    void SetSceneGrassRayTracing(bool enabled) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.grassRayTracing = enabled;
++    }
++
++    float SceneGrassRayReach() {
++        if (!RayTracingActive()) {
++            return 0.0f;
++        }
++        const std::scoped_lock lock(effectsMutex);
++        // Test aid: TOOIE_GRASS_RT=0 or 1 instead of the setting.
++        static const char *forced = getenv("TOOIE_GRASS_RT");
++        const bool wanted = (forced != nullptr) ? (forced[0] == '1') : effectsSettings.grassRayTracing;
++        // Out to 1500 units: further off a blade's shadow is too small to see, and the blades too many.
++        return wanted ? std::min(effectsSettings.grassDistance, 1500.0f) : 0.0f;
 +    }
 +
 +    void SetSceneFur(float amount, float length, float density, float noisiness) {
@@ -9147,7 +9364,7 @@ index 0000000..a522762
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        // (Deep snow, Kazooie's and NPCs' feathers and parallax mapping need the camera's terms worked out here too.)
-+        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.fence <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++        if (((settings.grass <= 0.0f) && !settings.snow && (settings.feathers <= 0.0f) && (settings.npcFeathers <= 0.0f) && (settings.parallax <= 0.0f) && (settings.fence <= 0.0f) && (settings.groundDisplacement <= 0.0f)) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
 +            return false;
 +        }
 +        UsePlayerFrame(settings, workloadId);
@@ -9640,14 +9857,28 @@ index 0000000..a522762
 +    static std::mutex waterTessMutex;
 +    static WaterTessShared waterTessShared;
 +
-+    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
++    void SetSceneGroundDisplacement(float amount) {
++        const std::scoped_lock lock(effectsMutex);
++        effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
++    }
++
++    float SceneGroundDisplacement() {
++        const std::scoped_lock lock(effectsMutex);
++        return effectsSettings.groundDisplacement;
++    }
++
++    // (Also the camera terms displaced ground uses, GroundTess.hlsl: they are the water's.)
++    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
 +        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
 +        interop::FrameParams &frameParams)
 +    {
 +        SceneEffectsSettings settings = GetSceneEffects();
 +        frameParams.waterCamera.w = 0.0f;
-+        if (!settings.modernWater || (settings.waterDetail <= 0.0f) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
-+            return false;
++        frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
++        const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
++        const bool ground = settings.groundDisplacement > 0.0f;
++        if ((!water && !ground) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
++            return 0;
 +        }
 +        UsePlayerFrame(settings, workloadId);
 +
@@ -9655,7 +9886,7 @@ index 0000000..a522762
 +        const float (&m)[4][4] = projection.m;
 +        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
 +        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
-+            return false;
++            return 0;
 +        }
 +        const float halfWidth = resolution.x / 2.0f;
 +        const float halfHeight = resolution.y / 2.0f;
@@ -9672,7 +9903,7 @@ index 0000000..a522762
 +        }
 +        double inverse[4][4];
 +        if (!InvertMatrix4(toClip, inverse)) {
-+            return false;
++            return 0;
 +        }
 +        // One world unit straight up: the map's y column.
 +        frameParams.waterClipUp = { float(toClip[0][1]), float(toClip[1][1]), float(toClip[2][1]), float(toClip[3][1]) };
@@ -9695,11 +9926,20 @@ index 0000000..a522762
 +            }
 +        }
 +        if (!InvertMatrix4(viewD, viewInverse)) {
-+            return false;
++            return 0;
 +        }
 +        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
 +        const float detail = settings.waterDetail;
-+        frameParams.waterCamera = { float(viewInverse[3][0]), float(viewInverse[3][1]), float(viewInverse[3][2]), detail };
++        frameParams.waterCamera = { float(viewInverse[3][0]), float(viewInverse[3][1]), float(viewInverse[3][2]), water ? detail : 0.0f };
++
++        // Displaced ground: the deepest part of a texture is pushed down by up to 16 units at the full setting, cut into at
++        // most 16 pieces an edge no shorter than 12 units, fading out over 1400 to 2800 units from the camera.
++        if (ground) {
++            frameParams.groundParams = { 16.0f * settings.groundDisplacement, 16.0f, 12.0f, 2800.0f };
++        }
++        if (!water) {
++            return 2;
++        }
 +
 +        // Water detail: up to 4 to 16 pieces an edge, pieces no shorter than 24 down to 8 units, cut finely within 500 to
 +        // 1500 units of the player, coarsening over 600 to 2000 units from the camera.
@@ -9745,7 +9985,7 @@ index 0000000..a522762
 +            waterTessShared.velocity[0] = velocity[0];
 +            waterTessShared.velocity[1] = velocity[1];
 +        }
-+        return true;
++        return 1 | (ground ? 2 : 0);
 +    }
 +
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
@@ -10006,7 +10246,7 @@ index 0000000..a522762
 +    // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
 +    // RayTracingActive(); on a failure the pass falls back to the depth march (bvhReady stays false).
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures)
++        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass)
 +    {
 +        Resources &res = resourcesFor(worker);
 +        res.bvhReady = false;
@@ -10047,6 +10287,7 @@ index 0000000..a522762
 +            std::copy(wanted, wanted + 4, res.rayTexturesSetBuffers);
 +        }
 +        const bool building = (worldPos != nullptr) && (indices != nullptr) && (worldPosVertexCount != 0) && (drawCount != 0);
++        const bool withGrass = building && (grass.vertices != nullptr) && (grass.vertexCount >= 3);
 +        // A pass with no casters (some in-between frames have none) traces through the last structure built, rather than
 +        // dropping to the depth march and its shadow map, which made the shadows come and go.
 +        // The lights are written every pass, whatever the casters.
@@ -10079,6 +10320,10 @@ index 0000000..a522762
 +            mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? 1.0f : 0.0f;
 +            // Whether the player casts traced shadows (Traced shadows of the player).
 +            mapped[9] = rayTracingPlayerShadows.load() ? 0.0f : 1.0f;
++            // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
++            // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
++            // blade and its neighbours: one and a half blade heights.
++            mapped[10] = withGrass ? 54.0f * lightSettings.grassHeight : 0.0f;
 +            memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
 +            res.lightsBuffer->unmap();
 +        }
@@ -10115,6 +10360,12 @@ index 0000000..a522762
 +        RenderCommandList *commandList = worker->commandList.get();
 +        RenderBottomLevelASBuildInfo blasInfo;
 +        device->setBottomLevelASBuildInfo(blasInfo, meshes.data(), uint32_t(meshes.size()), true, false);
++        RenderBottomLevelASBuildInfo grassInfo;
++        if (withGrass) {
++            const RenderBottomLevelASMesh grassMesh(RenderBufferReference(), RenderBufferReference(grass.vertices, 0), RenderFormat::UNKNOWN, RenderFormat::R32G32B32_FLOAT,
++                0, grass.vertexCount - (grass.vertexCount % 3), uint32_t(sizeof(float) * 4), false);
++            device->setBottomLevelASBuildInfo(grassInfo, &grassMesh, 1, true, false);
++        }
 +
 +        // Buffers that are too small are replaced (the old ones kept until the GPU is done with them).
 +        bool instancesChanged = false;
@@ -10128,9 +10379,32 @@ index 0000000..a522762
 +            res.bvhBlasSize = size;
 +            instancesChanged = true;
 +        }
-+        RenderTopLevelASInstance instance(RenderBufferReference(res.bvhBlasBuffer.get()), 0, 0xFF, 0, true, RenderAffineTransform());
++        bool grassBuild = false;
++        if (withGrass && ((res.grassBlas == nullptr) || (res.grassBlasSize < grassInfo.accelerationStructureSize))) {
++            const uint64_t size = std::max<uint64_t>(grassInfo.accelerationStructureSize, 1u << 20);
++            res.retireLater(std::move(res.grassBlas));
++            res.retireLater(std::move(res.grassBlasBuffer));
++            res.grassBlasBuffer = device->createBuffer(RenderBufferDesc::AccelerationStructureBuffer(size));
++            res.grassBlasBuffer->setName("Scene Effects grass BLAS");
++            res.grassBlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::BOTTOM_LEVEL, RenderBufferReference(res.grassBlasBuffer.get()), size));
++            res.grassBlasSize = size;
++            res.grassBuiltGeneration = UINT64_MAX;
++            instancesChanged = true;
++        }
++        if (withGrass) {
++            grassBuild = (res.grassBuiltGeneration != grass.generation) || (res.grassBuiltVertices != grass.vertices);
++        }
++        RenderTopLevelASInstance instances[2] = {
++            RenderTopLevelASInstance(RenderBufferReference(res.bvhBlasBuffer.get()), 0, 0x01, 0, true, RenderAffineTransform()),
++            RenderTopLevelASInstance(RenderBufferReference(res.grassBlasBuffer.get()), 1, 0x02, 0, true, RenderAffineTransform())
++        };
++        const uint32_t instanceCount = withGrass ? 2u : 1u;
++        if (instanceCount != res.bvhInstanceCount) {
++            res.bvhInstanceCount = instanceCount;
++            instancesChanged = true;
++        }
 +        RenderTopLevelASBuildInfo tlasInfo;
-+        device->setTopLevelASBuildInfo(tlasInfo, &instance, 1, true, false);
++        device->setTopLevelASBuildInfo(tlasInfo, instances, instanceCount, true, false);
 +        if ((res.bvhTlas == nullptr) || (res.bvhTlasSize < tlasInfo.accelerationStructureSize)) {
 +            const uint64_t size = std::max<uint64_t>(tlasInfo.accelerationStructureSize, 4096);
 +            res.retireLater(std::move(res.bvhTlas));
@@ -10140,7 +10414,7 @@ index 0000000..a522762
 +            res.bvhTlas = device->createAccelerationStructure(RenderAccelerationStructureDesc(RenderAccelerationStructureType::TOP_LEVEL, RenderBufferReference(res.bvhTlasBuffer.get()), size));
 +            res.bvhTlasSize = size;
 +        }
-+        const uint64_t scratchNeeded = std::max(blasInfo.scratchSize, tlasInfo.scratchSize);
++        const uint64_t scratchNeeded = std::max({ blasInfo.scratchSize, tlasInfo.scratchSize, withGrass ? grassInfo.scratchSize : 0 });
 +        if ((res.bvhScratchBuffer == nullptr) || (res.bvhScratchSize < scratchNeeded)) {
 +            const uint64_t size = std::max<uint64_t>(scratchNeeded + scratchNeeded / 2, 1u << 20);
 +            res.retireLater(std::move(res.bvhScratchBuffer));
@@ -10169,11 +10443,26 @@ index 0000000..a522762
 +            RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE)
 +        });
 +        commandList->buildBottomLevelAS(res.bvhBlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), blasInfo);
++        if (grassBuild) {
++            commandList->barriers(RenderBarrierStage::COMPUTE, {
++                RenderBufferBarrier(const_cast<RenderBuffer *>(grass.vertices), RenderBufferAccess::READ),
++                RenderBufferBarrier(res.grassBlasBuffer.get(), RenderBufferAccess::WRITE),
++                RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE)
++            });
++            commandList->buildBottomLevelAS(res.grassBlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), grassInfo);
++            res.grassBuiltGeneration = grass.generation;
++            res.grassBuiltVertices = grass.vertices;
++        }
 +        commandList->barriers(RenderBarrierStage::COMPUTE, {
 +            RenderBufferBarrier(res.bvhBlasBuffer.get(), RenderBufferAccess::READ),
 +            RenderBufferBarrier(res.bvhScratchBuffer.get(), RenderBufferAccess::WRITE),
 +            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::WRITE)
 +        });
++        if (withGrass) {
++            commandList->barriers(RenderBarrierStage::COMPUTE, {
++                RenderBufferBarrier(res.grassBlasBuffer.get(), RenderBufferAccess::READ)
++            });
++        }
 +        commandList->buildTopLevelAS(res.bvhTlas.get(), RenderBufferReference(res.bvhScratchBuffer.get()), RenderBufferReference(res.bvhInstancesBuffer.get()), tlasInfo);
 +        commandList->barriers(RenderBarrierStage::GRAPHICS | RenderBarrierStage::COMPUTE, {
 +            RenderBufferBarrier(res.bvhTlasBuffer.get(), RenderBufferAccess::READ)
@@ -10187,8 +10476,9 @@ index 0000000..a522762
 +            static auto lastLog = std::chrono::steady_clock::now();
 +            if (std::chrono::steady_clock::now() - lastLog > std::chrono::milliseconds(1000)) {
 +                lastLog = std::chrono::steady_clock::now();
-+                fprintf(stderr, "[rt] BVH built: %zu geometries, %u triangles, BLAS %llu KB, TLAS %llu KB, scratch %llu KB\n", meshes.size(), blasInfo.primitiveCount,
-+                    (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024));
++                fprintf(stderr, "[rt] BVH built: %zu geometries, %u triangles, BLAS %llu KB, TLAS %llu KB, scratch %llu KB, grass %s (BLAS %llu KB, reach %.0f)\n", meshes.size(), blasInfo.primitiveCount,
++                    (unsigned long long)(res.bvhBlasSize / 1024), (unsigned long long)(res.bvhTlasSize / 1024), (unsigned long long)(res.bvhScratchSize / 1024),
++                    withGrass ? (grassBuild ? "rebuilt" : "kept") : "none", (unsigned long long)(res.grassBlasSize / 1024), grass.reach);
 +            }
 +        }
 +    }
@@ -11026,10 +11316,10 @@ index 0000000..a522762
 +};
 diff --git a/src/render/rt64_scene_effects.h b/src/render/rt64_scene_effects.h
 new file mode 100644
-index 0000000..c23917f
+index 0000000..753628f
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.h
-@@ -0,0 +1,534 @@
+@@ -0,0 +1,554 @@
 +//
 +// RT64
 +//
@@ -11108,6 +11398,8 @@ index 0000000..c23917f
 +        // Water detail (0 to 1): how finely Modern and Stylised water's surface is tessellated round the player (0 keeps it
 +        // flat, its waves only in the shading).
 +        float waterDetail = 0.0f;
++        // Displaced ground (0 to 1; 0 off).
++        float groundDisplacement = 0.0f;
 +        // Modern water under the water: how far into the underwater look (0 to 1), the water's surface height and
 +        // whether the whole level is under water (Atlantis, the Sea Bottom).
 +        float modernUnderwater = 0.0f;
@@ -11172,6 +11464,7 @@ index 0000000..c23917f
 +        // instanced grass's culling pass runs every other frame.
 +        float grassLod = 0.0f;
 +        bool grassHalfRate = true;
++        bool grassRayTracing = true;
 +        float fur = 0.0f;
 +        float furLength = 1.0f;
 +        float furDensity = 1.0f;
@@ -11335,8 +11628,16 @@ index 0000000..c23917f
 +        const RenderBuffer *gpuTiles = nullptr;
 +        RenderDescriptorSet *textureSet = nullptr;
 +    };
++    // The 3D grass's blades near the camera as triangles (world positions, float4, three a triangle; unused ones NaN), and
++    // a count that changes whenever they are written again. No vertices: no grass in the structures.
++    struct SceneRayGrass {
++        const RenderBuffer *vertices = nullptr;
++        uint32_t vertexCount = 0;
++        uint64_t generation = 0;
++        float reach = 0.0f;
++    };
 +    void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures);
++        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass);
 +    void SetSceneRayTracing(bool enabled);
 +    // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
 +    // ray tracing is active (see RefreshReflections).
@@ -11380,6 +11681,10 @@ index 0000000..c23917f
 +    uint32_t SceneGrassCulling();
 +    void SetSceneGrassLod(float lod, bool halfRate);
 +    bool SceneGrassHalfRate();
++    // Whether the 3D grass near the camera is in the traced effects' structures (casting traced shadows, seen in traced
++    // reflections), and how far from the camera it is (0 while ray tracing isn't active or this is off).
++    void SetSceneGrassRayTracing(bool enabled);
++    float SceneGrassRayReach();
 +    // The blades drawn over each grass draw: 0 when 3D grass is off.
 +    uint32_t SceneGrassShells();
 +    // Real blades: how many passes of blades a ground triangle spanning low to high (world x and z) this far from the
@@ -11458,10 +11763,15 @@ index 0000000..c23917f
 +    // the renderer's trail grid up to date (two uints a cell, Snow.hlsli). False when there is no deep snow this frame.
 +    // Banjo-Tooie: Modern and Stylised water's tessellated surface (WaterTess.hlsl): the camera's terms, the player's place
 +    // and motion, and how finely to cut, into frameParams' water fields. False when it isn't tessellated this frame.
-+    bool ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
++    // Returns bit 1 when the water is tessellated this frame, bit 2 when ground is displaced (0: neither).
++    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
 +        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
 +        interop::FrameParams &frameParams);
 +    void SetSceneWaterDetail(float detail);
++    // Banjo-Tooie: Graphics > Displaced ground (0 to 1, 0 off): level ground with a parallax texture drawn as a tessellated,
++    // displaced surface (GroundTess.hlsl).
++    void SetSceneGroundDisplacement(float amount);
++    float SceneGroundDisplacement();
 +    bool ComputeSceneSnow(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
 +        const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId, interop::FrameParams &frameParams,
 +        SceneSnowTrailCopy &trail);
@@ -14045,10 +14355,10 @@ index 0000000..d9f98aa
 +}
 diff --git a/src/shaders/GrassCullCS.hlsl b/src/shaders/GrassCullCS.hlsl
 new file mode 100644
-index 0000000..2f4c388
+index 0000000..85905a9
 --- /dev/null
 +++ b/src/shaders/GrassCullCS.hlsl
-@@ -0,0 +1,344 @@
+@@ -0,0 +1,379 @@
 +//
 +// RT64
 +//
@@ -14063,6 +14373,9 @@ index 0000000..2f4c388
 +//   road, in a patch, shown at its distance) and dropped when it is out of view (frustum culling) or hidden behind
 +//   last frame's depth (occlusion culling). What is left is added to its ground draw's blades, packed from the start,
 +//   ready for the instanced draw (GrassBladeVS.hlsl).
++//
++// With ray tracing, the chunk pass also clears the ray-traced blades (NaN corners: no triangle) and the blade pass
++// writes the blades it keeps near the camera there as triangles, for the traced effects (GRASS_RAY_BLADES).
 +
 +#include "shared/rt64_frame_params.h"
 +#include "shared/rt64_grass_instances.h"
@@ -14081,6 +14394,7 @@ index 0000000..2f4c388
 +RWStructuredBuffer<uint> gChunkVisible : register(u8, space1);
 +RWStructuredBuffer<uint> gSlotCounts : register(u9, space1);
 +RWStructuredBuffer<GrassBladeInstance> gBlades : register(u10, space1);
++RWStructuredBuffer<float4> gRayBlades : register(u11, space1);
 +
 +#include "GrassBladeCommon.hlsli"
 +
@@ -14150,6 +14464,17 @@ index 0000000..2f4c388
 +        gSlotCounts[index * 4 + 1] = 0;
 +        gSlotCounts[index * 4 + 2] = 0;
 +        gSlotCounts[index * 4 + 3] = 0;
++    }
++
++    if (index < gConstants.rayBlades) {
++        const float nan = asfloat(0x7FC00000u);
++        for (uint v = 0; v < GRASS_BLADE_VERTICES; v++) {
++            gRayBlades[index * GRASS_BLADE_VERTICES + v] = float4(nan, nan, nan, 1.0f);
++        }
++
++        if (index == 0) {
++            gSlotCounts[gConstants.slotCount * 4] = 0;
++        }
 +    }
 +
 +    if (index >= gConstants.chunkCount) {
@@ -14390,12 +14715,32 @@ index 0000000..2f4c388
 +    blade.colors = uint4(GrassPackHalves(smoothColor.r, smoothColor.g), GrassPackHalves(smoothColor.b, smoothColor.a),
 +        GrassPackHalves(flatColor.r, flatColor.g), GrassPackHalves(flatColor.b, 0.0f));
 +    gBlades[slotInfo.info.x + place] = blade;
++
++    // Ray tracing: the blade as the vertex shader draws it (without the pixelated blades' growth), when it is near.
++    if ((gConstants.rayBlades > 0) && (cameraDistance < gConstants.rayReach)) {
++        uint rayPlace;
++        InterlockedAdd(gSlotCounts[gConstants.slotCount * 4], 1u, rayPlace);
++        if (rayPlace < gConstants.rayBlades) {
++            static const uint corners[GRASS_BLADE_VERTICES] = { 0, 1, 2, 1, 3, 2, 2, 3, 4 };
++            static const float2 cornerST[5] = { float2(-1.0f, 0.0f), float2(1.0f, 0.0f), float2(-0.75f, 0.55f), float2(0.75f, 0.55f), float2(0.0f, 1.0f) };
++            const float3 side = float3(facing.x, 0.0f, facing.y) * (bladeWidth * 0.5f);
++            const float3 tipBend = float3(bend.x, 0.0f, bend.y) * bladeHeight;
++            const float3 middle = float3(0.0f, rise * 0.55f, 0.0f) + tipBend * 0.3f;
++            const float3 tip = float3(0.0f, rise, 0.0f) + tipBend;
++            const uint vertices = chunky ? 3 : GRASS_BLADE_VERTICES;
++            for (uint k = 0; k < vertices; k++) {
++                const uint corner = (chunky && (k == 2)) ? 4 : corners[k];
++                const float3 at = root + GrassBladePoint(cornerST[corner].x, cornerST[corner].y, chunky, side, middle, tip);
++                gRayBlades[rayPlace * GRASS_BLADE_VERTICES + k] = float4(at, 1.0f);
++            }
++        }
++    }
 +}
 +
 +#endif
 diff --git a/src/shaders/GrassGS.hlsl b/src/shaders/GrassGS.hlsl
 new file mode 100644
-index 0000000..93d2254
+index 0000000..99ff368
 --- /dev/null
 +++ b/src/shaders/GrassGS.hlsl
 @@ -0,0 +1,657 @@
@@ -14796,7 +15141,7 @@ index 0000000..93d2254
 +    }
 +    normal /= normalLength;
 +
-+    // Far off the thickness can't be seen: only the original draw. Halfway there, every other layer.
++    // Far off the thickness can't be seen: only the original draw. Halfway there, every other layer (the rest still run together at that range).
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    const float3 center = (world[0] + world[1] + world[2]) / 3.0f;
 +    const float cameraDistance = distance(center, camera);
@@ -14814,7 +15159,7 @@ index 0000000..93d2254
 +        GrassVertex o = input[v];
 +        o.position = GrassRescale(clip[v] + shift);
 +        // (The layer's shade, for the pixel shader.)
-+        o.furAnchor = float4(lerp(1.0f, 0.6f, back), 0.0f, 0.0f, 0.0f);
++        o.furAnchor = float4(lerp(1.0f, 0.78f, back), 0.0f, 0.0f, 0.0f);
 +        stream.Append(o);
 +    }
 +    stream.RestartStrip();
@@ -15114,6 +15459,202 @@ index 0000000..73867ad
 +    }
 +
 +    gTarget[texel] = farthest;
++}
+diff --git a/src/shaders/GroundTess.hlsl b/src/shaders/GroundTess.hlsl
+new file mode 100644
+index 0000000..3862635
+--- /dev/null
++++ b/src/shaders/GroundTess.hlsl
+@@ -0,0 +1,190 @@
++//
++// RT64
++//
++
++// Banjo-Tooie: displaced ground, where the device has hull and domain shaders (D3D12, and Vulkan with
++// tessellationShader). Level ground whose texture is in the parallax list, with a floor-like shape (cracks, terraced
++// slabs, rounded cobbles, bumpy dirt and so on), is drawn through these in place of its own draw: the hull shader cuts
++// each triangle finer near the camera, and the domain shader pushes every new vertex straight down by how deep the
++// texture's surface lies there (the same depth Parallax.hlsli finds, ParallaxDepthAt), so the cracks, gaps and grooves
++// are real dips in the ground: they change its outline, hide what lies behind them and take the depth buffer with them.
++// Straight down in the world, and nothing at all within a few units of the triangle's own edges: the same direction
++// for every vertex and no height where it meets another draw, so no crack can open between pieces of ground (the
++// game's meshes carry no smooth normals to displace along). The vertex shader leaves the ground where it is
++// (RASTER_GROUND_DISPLACE, RasterVS.hlsl) and gives each corner's place in the world in furAnchor, as for the water.
++// The pixel shader darkens the deeper parts (the anchor's w, RasterPS.hlsl; -1 on walls, which keep their parallax).
++//
++// Built twice from this file: HSMain (hull) and DSMain (domain). Both use the ubershader's vertex and pixel shaders,
++// whose outputs and inputs GroundVertex matches (as WaterTess.hlsl's WaterVertex).
++
++#include "shared/rt64_raster_params.h"
++
++#include "FbRendererCommon.hlsli"
++#include "Parallax.hlsli"
++
++[[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
++
++struct GroundVertex {
++    float4 position : SV_POSITION;
++    float2 uv : TEXCOORD;
++    float4 smoothColor : COLOR0;
++    nointerpolation float4 flatColor : COLOR1;
++    float4 furAnchor : TEXCOORD1;
++};
++
++struct GroundPatch {
++    float edges[3] : SV_TessFactor;
++    float inside : SV_InsideTessFactor;
++};
++
++// How far from a triangle's edges the ground is left as it is, in world units.
++static const float GroundEdgeMargin = 24.0f;
++// Faces steeper than this (the share of the normal that points up) are walls: left alone.
++static const float GroundFloorShare = 0.7f;
++
++// Where a world point lands before the draw's screen scale and offset (as WaterTess.hlsl).
++float4 GroundClip(float3 world) {
++    const float4 p = float4(world, 1.0f);
++    return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
++}
++
++// How finely an edge between two world points is cut: finer near the camera, never more than the cap, and no finer than
++// the shortest piece. By the edge alone, so the triangles either side of it cut it the same way and no cracks open.
++float GroundEdgeFactor(float3 a, float3 b) {
++    const float4 params = FrParams.groundParams;
++    const float cameraDistance = distance((a + b) * 0.5f, FrParams.waterCamera.xyz);
++    const float near = 1.0f - smoothstep(params.w * 0.15f, params.w * 0.6f, cameraDistance);
++    const float wanted = 1.0f + (params.y - 1.0f) * near;
++    return clamp(min(wanted, distance(a, b) / params.z), 1.0f, params.y);
++}
++
++// Whether all three corners lie past one side of the screen (with room for the dips to reach back in).
++bool GroundOffScreen(float4 a, float4 b, float4 c) {
++    const float m = 1.15f;
++    if ((a.w <= 0.0f) && (b.w <= 0.0f) && (c.w <= 0.0f)) {
++        return true;
++    }
++    return ((a.x > a.w * m) && (b.x > b.w * m) && (c.x > c.w * m)) || ((a.x < -a.w * m) && (b.x < -b.w * m) && (c.x < -c.w * m)) ||
++        ((a.y > a.w * m) && (b.y > b.w * m) && (c.y > c.w * m)) || ((a.y < -a.w * m) && (b.y < -b.w * m) && (c.y < -c.w * m));
++}
++
++GroundPatch GroundPatchConstants(InputPatch<GroundVertex, 3> patch) {
++    GroundPatch p;
++    const float3 a = patch[0].furAnchor.xyz;
++    const float3 b = patch[1].furAnchor.xyz;
++    const float3 c = patch[2].furAnchor.xyz;
++    p.edges[0] = p.edges[1] = p.edges[2] = 1.0f;
++    p.inside = 1.0f;
++    const float3 normal = cross(b - a, c - a);
++    const float normalLength = length(normal);
++    // A wall, or a sliver: drawn as it is.
++    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength)) {
++        return p;
++    }
++    // Off screen: left out (a factor of 0 draws nothing).
++    if (GroundOffScreen(GroundClip(a), GroundClip(b), GroundClip(c))) {
++        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
++        p.inside = 0.0f;
++        return p;
++    }
++    // (Edge 0 is the one across from vertex 0.)
++    p.edges[0] = GroundEdgeFactor(b, c);
++    p.edges[1] = GroundEdgeFactor(c, a);
++    p.edges[2] = GroundEdgeFactor(a, b);
++    p.inside = max(p.edges[0], max(p.edges[1], p.edges[2]));
++    return p;
++}
++
++[domain("tri")]
++[partitioning("fractional_odd")]
++[outputtopology("triangle_cw")]
++[outputcontrolpoints(3)]
++[patchconstantfunc("GroundPatchConstants")]
++[maxtessfactor(16.0f)]
++GroundVertex HSMain(InputPatch<GroundVertex, 3> patch, uint i : SV_OutputControlPointID) {
++    return patch[i];
++}
++
++[domain("tri")]
++GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPatch<GroundVertex, 3> patch) {
++    GroundVertex v;
++    v.position = patch[0].position * w.x + patch[1].position * w.y + patch[2].position * w.z;
++    v.uv = patch[0].uv * w.x + patch[1].uv * w.y + patch[2].uv * w.z;
++    v.smoothColor = patch[0].smoothColor * w.x + patch[1].smoothColor * w.y + patch[2].smoothColor * w.z;
++    v.flatColor = patch[0].flatColor;
++    v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
++    v.furAnchor.w = 0.0f;
++
++    const float3 a = patch[0].furAnchor.xyz;
++    const float3 b = patch[1].furAnchor.xyz;
++    const float3 c = patch[2].furAnchor.xyz;
++    const float3 normal = cross(b - a, c - a);
++    const float normalLength = length(normal);
++    const float3 world = v.furAnchor.xyz;
++    const float cameraDistance = distance(world, FrParams.waterCamera.xyz);
++    // Left as it is on a wall or a sliver, far off, and (below) at the triangle's own edges.
++    float fade = 1.0f - smoothstep(FrParams.groundParams.w * 0.5f, FrParams.groundParams.w, cameraDistance);
++    if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || (FrParams.groundParams.x <= 0.0f)) {
++        fade = 0.0f;
++    }
++    // (The pixel shader's anchor w: -1 on a wall or a sliver, which is shaded as it was drawn, with its parallax.)
++    const bool wall = (normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength);
++    float depthAt = 0.0f;
++    if (fade > 0.0f) {
++        // The distance to each edge: the corner's share of the triangle's height over that edge.
++        const float d0 = w.x * normalLength / max(length(c - b), 1e-4f);
++        const float d1 = w.y * normalLength / max(length(a - c), 1e-4f);
++        const float d2 = w.z * normalLength / max(length(b - a), 1e-4f);
++        fade *= smoothstep(0.0f, GroundEdgeMargin, min(d0, min(d1, d2)));
++    }
++    if (fade > 0.0f) {
++        // The draw's first texture, as the pixel shader finds it (the ubershader's tile lookups, RasterPS.hlsl).
++        const uint instanceIndex = instanceRenderIndices[gConstants.renderIndex].instanceIndex;
++        const RenderParams rp = DynamicRenderParams[instanceIndex];
++        const OtherMode otherMode = { rp.omL, rp.omH };
++        const uint globalTileIndex = instanceRenderIndices[gConstants.renderIndex].rdpTileIndex;
++        RDPTile rdpTile = RDPTiles[globalTileIndex];
++        if (!renderFlagDynamicTiles(rp.flags)) {
++            rdpTile.cms = renderCMS0(rp.flags);
++            rdpTile.cmt = renderCMT0(rp.flags);
++            rdpTile.nativeSampler = renderFlagNativeSampler0(rp.flags);
++        }
++        const GPUTile gpuTile = GPUTiles[globalTileIndex];
++        const bool heightMap = gpuTileFlagHasHeight(gpuTile.flags);
++        GPUTile heightTile = gpuTile;
++        if (heightMap) {
++            heightTile = ParallaxHeightTile(gpuTile);
++        }
++        const uint bits = gConstants.nightLight;
++        const uint shape = ((bits >> 25) & 0x7u) | (((bits & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
++        const float2 range = float2((bits >> 8) & 0xFF, (bits >> 16) & 0xFF) / 255.0f;
++
++        // The texture's depth, averaged over about the spacing of the new vertices (five taps), so a thin crack the
++        // vertices would step over doesn't pop in and out as they move.
++        const float3 span = max(float3(length(b - a), length(c - b), length(a - c)), 1e-3f);
++        const float2 uvPerUnit = max(abs(patch[1].uv - patch[0].uv) / span.x, max(abs(patch[2].uv - patch[1].uv) / span.y, abs(patch[0].uv - patch[2].uv) / span.z));
++        const float2 radius = uvPerUnit * (FrParams.groundParams.z * 0.5f);
++        const float2 ddxUV = float2(radius.x * 2.0f, 0.0f);
++        const float2 ddyUV = float2(0.0f, radius.y * 2.0f);
++        // (A loop, not five copies: the texture lookup is a big function.)
++        float depth = 0.0f;
++        [loop]
++        for (uint tap = 0; tap < 5; tap++) {
++            const float2 offset = (tap == 0) ? float2(0.0f, 0.0f) : ((tap == 1) ? float2(1.0f, 0.0f) : ((tap == 2) ? float2(-1.0f, 0.0f) : ((tap == 3) ? float2(0.0f, 1.0f) : float2(0.0f, -1.0f))));
++            depth += ParallaxDepthAt(otherMode, rp.flags, v.uv + offset * radius, ddxUV, ddyUV, rdpTile, heightTile, range, heightMap, shape);
++        }
++        depthAt = depth * 0.2f * fade;
++
++        // Down by the texture's depth in world units: the Displaced ground setting at its picked depth.
++        const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
++        const float depthScale = (fineDepth != 0) ? (float(fineDepth) * 0.1f) : ParallaxDepthScale((bits >> 28) & 0x7u);
++        float4 up = FrParams.waterClipUp * (-depthAt * FrParams.groundParams.x * depthScale);
++        up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
++#ifdef __spirv__
++        up.y = -up.y;
++#endif
++        v.position += up;
++    }
++    v.furAnchor.w = wall ? -1.0f : depthAt;
++    return v;
 +}
 diff --git a/src/shaders/MirrorPS.hlsl b/src/shaders/MirrorPS.hlsl
 new file mode 100644
@@ -15727,7 +16268,7 @@ index 0000000..b6751fa
 +    return float4(rgb, color.a);
 +}
 diff --git a/src/shaders/RasterPS.hlsl b/src/shaders/RasterPS.hlsl
-index e7895c3..ec57544 100644
+index e7895c3..8285a7b 100644
 --- a/src/shaders/RasterPS.hlsl
 +++ b/src/shaders/RasterPS.hlsl
 @@ -8,7 +8,11 @@
@@ -15848,7 +16389,7 @@ index e7895c3..ec57544 100644
          // Sample the depth buffer for this pixel to compare for the decal check.
          int2 pixelPos = floor(vertexPosition.xy);
          uint sampleCount = 1U << renderFlagSampleCount(rp.flags);
-@@ -113,6 +200,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -113,6 +200,26 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      
      float2 ddxVertexUV = ddx(vertexUV);
      float2 ddyVertexUV = ddy(vertexUV);
@@ -15857,7 +16398,9 @@ index e7895c3..ec57544 100644
 +    // Banjo-Tooie: parallax mapping on stone: the textures are looked up where the view ray meets the surface their
 +    // brightness makes (Parallax.hlsli). The slopes above stay those of the triangle, so the texture detail chosen
 +    // doesn't jump at the stones' edges.
-+    if (renderFeatureParallax(rp.features) && ((gConstants.nightLight & RASTER_PARALLAX) != 0) && (grassShell == 0) && (furShell == 0) && renderFlagUsesTexture0(rp.flags)) {
++    // (Displaced ground is the real surface: its parallax would be a second set of the same depth. Walls drawn through it
++    // keep theirs: their anchor's w is -1.)
++    if (renderFeatureParallax(rp.features) && ((gConstants.nightLight & RASTER_PARALLAX) != 0) && (((gConstants.groundDisplace & RASTER_GROUND_DISPLACE) == 0) || (vertexFurAnchor.w < 0.0f)) && (grassShell == 0) && (furShell == 0) && renderFlagUsesTexture0(rp.flags)) {
 +        const uint globalTileIndex = instanceRenderIndices[gConstants.renderIndex].rdpTileIndex;
 +        RDPTile rdpTile = RDPTiles[globalTileIndex];
 +        if (!renderFlagDynamicTiles(rp.flags)) {
@@ -15873,7 +16416,7 @@ index e7895c3..ec57544 100644
      float2 lowResUV = vertexUV;
      if (!renderFlagUpscale2D(rp.flags)) {
          float2 screenPos = floor(vertexPosition.xy);
-@@ -143,6 +248,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -143,6 +250,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
@@ -15883,7 +16426,7 @@ index e7895c3..ec57544 100644
          texVal0 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, false);
      }
      
-@@ -159,6 +267,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -159,6 +269,9 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          const GPUTile gpuTile = GPUTiles[globalTileIndex];
          const float2 textureUV = gpuTileFlagHighRes(gpuTile.flags) ? vertexUV : lowResUV;
          const uint nativeSampler = renderFlagNativeSampler1(rp.flags);
@@ -15893,7 +16436,7 @@ index e7895c3..ec57544 100644
          texVal1 = sampleTexture(otherMode, rp.flags, textureUV, ddxVertexUV, ddyVertexUV, rdpTile, gpuTile, oneCycleHardwareBug);
      }
      
-@@ -182,6 +293,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -182,6 +295,38 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
      ccInputs.K4 = (instanceRDPParams[instanceIndex].convertK[4] / 255.0f);
      ccInputs.K5 = (instanceRDPParams[instanceIndex].convertK[5] / 255.0f);
      colorCombiner.run(ccInputs, combinerColor, alphaCompareValue);
@@ -15932,7 +16475,7 @@ index e7895c3..ec57544 100644
      
  #if 0
      // Alpha dither.
-@@ -237,6 +380,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -237,6 +382,12 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultAlpha.a = resultColor.a;
      }
      
@@ -15945,7 +16488,7 @@ index e7895c3..ec57544 100644
      // Preserve the value in the destination.
      if (otherMode.cvgDst() == CVG_DST_SAVE) {
          resultColor.a = 0.0f;
-@@ -254,6 +403,134 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -254,6 +405,148 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor.a = resultCvg;
      }
      
@@ -16012,6 +16555,11 @@ index e7895c3..ec57544 100644
 +    else if (fenceShell) {
 +        // A layer of a fence: a part cut out by its texture's alpha (blended) keeps only its solid parts, drawn solid,
 +        // and the layers away from the camera are darker (the shade is in the fur anchor).
++        // (Any alpha under a half goes, blended or not: the faint edge pixels of a cut-out, at the top row of the texture
++        // where it wraps, made a thin line along every layer.)
++        if (combinerColor.a < 0.5f) {
++            return false;
++        }
 +        if (alphaBlend) {
 +            if (resultAlpha.a < 0.5f) {
 +                return false;
@@ -16066,6 +16614,15 @@ index e7895c3..ec57544 100644
 +    }
 +
 +    // Banjo-Tooie: parallax mapping's shading: darker deep down and in the stones' shadows.
++    // Banjo-Tooie: displaced ground is darker the deeper the pixel lies (GroundTess.hlsl packs the depth, 0 to 1, in the
++    // anchor's w), as parallax's crevices are.
++    if (((gConstants.groundDisplace & RASTER_GROUND_DISPLACE) != 0) && (vertexFurAnchor.w >= 0.0f)) {
++        parallaxLight = 1.0f - 0.35f * saturate(vertexFurAnchor.w);
++        if ((gConstants.groundDisplace & RASTER_GROUND_DEBUG) != 0) {
++            resultColor.rgb = lerp(float3(0.0f, 1.0f, 1.0f), float3(1.0f, 0.0f, 1.0f), saturate(vertexFurAnchor.w * 4.0f));
++            parallaxLight = 1.0f;
++        }
++    }
 +    resultColor.rgb *= parallaxLight;
 +
 +    // Banjo-Tooie: a window or lamp lights up at night: a warm light, a little of its own pattern kept.
@@ -16080,7 +16637,7 @@ index e7895c3..ec57544 100644
      // Add highlight color to the last step.
      uint highlightColorUint = instanceRenderIndices[gConstants.renderIndex].highlightColor;
      if (highlightColorUint > 0) {
-@@ -261,6 +538,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
+@@ -261,6 +554,24 @@ LIBRARY_EXPORT bool RasterPS(const RenderParams rp, float4 vertexPosition, float
          resultColor = lerp(resultColor, highlightColor, highlightColor.a);
      }
      
@@ -16105,7 +16662,7 @@ index e7895c3..ec57544 100644
  #ifdef DYNAMIC_RENDER_PARAMS
      if (FrParams.viewUbershaders) {
          resultColor.rgb = lerp(resultColor.rgb, float3(1.0f, 0.0f, 0.0f), 0.5f);
-@@ -287,6 +582,7 @@ void PSMain(
+@@ -287,6 +598,7 @@ void PSMain(
  #if defined(DYNAMIC_RENDER_PARAMS) || defined(VERTEX_FLAT_COLOR)
      , nointerpolation in float4 vertexFlatColor : COLOR1
  #endif
@@ -16113,7 +16670,7 @@ index e7895c3..ec57544 100644
  #if defined(DYNAMIC_RENDER_PARAMS)
      , bool isFrontFace : SV_IsFrontFace
  #endif
-@@ -303,7 +599,7 @@ void PSMain(
+@@ -303,7 +615,7 @@ void PSMain(
      float4 resultColor;
      float4 resultAlpha;
      float resultDepth;
@@ -16123,10 +16680,10 @@ index e7895c3..ec57544 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..41a7404 100644
+index 74b1fa0..3f0c600 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
-@@ -11,16 +11,73 @@
+@@ -11,16 +11,74 @@
  
  [[vk::push_constant]] ConstantBuffer<RasterParams> gConstants : register(b0, space0);
  
@@ -16192,7 +16749,8 @@ index 74b1fa0..41a7404 100644
      
 +    // Banjo-Tooie: Modern water drawn into the water mask while it may be tessellated: its place in the world, for the
 +    // hull and domain shaders (WaterTess.hlsl), so they need neither this draw's screen scale nor its position.
-+    if (((gConstants.waterMask == 1) || (gConstants.waterMask == 2)) && (FrParams.waterCamera.w > 0.0f)) {
++    // (And displaced ground the same way, GroundTess.hlsl: the camera terms are the water's.)
++    if ((((gConstants.waterMask == 1) || (gConstants.waterMask == 2)) && (FrParams.waterCamera.w > 0.0f)) || ((gConstants.groundDisplace & RASTER_GROUND_DISPLACE) != 0)) {
 +        const float4 world = float4(dot(FrParams.waterClipToWorld[0], ndcPos), dot(FrParams.waterClipToWorld[1], ndcPos),
 +            dot(FrParams.waterClipToWorld[2], ndcPos), dot(FrParams.waterClipToWorld[3], ndcPos));
 +        oFurAnchor = float4(world.xyz / ((abs(world.w) > 1e-8f) ? world.w : 1e-8f), 1.0f);
@@ -16201,7 +16759,7 @@ index 74b1fa0..41a7404 100644
      // Apply screen scale and offset.
      ndcPos.xy = (ndcPos.xy * gConstants.screenScale) + gConstants.screenOffset * ndcPos.w;
      
-@@ -33,6 +90,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
+@@ -33,6 +91,13 @@ LIBRARY_EXPORT void RasterVS(const RenderParams rp, in float4 iPosition, in floa
          ndcPos.z = instanceRDPParams[instanceIndex].primDepth.x * ndcPos.w;
      }
  
@@ -16215,7 +16773,7 @@ index 74b1fa0..41a7404 100644
      oPosition = ndcPos;
      oUV = iUV;
      oSmoothColor = iColor;
-@@ -53,17 +117,19 @@ void VSMain(
+@@ -53,17 +118,19 @@ void VSMain(
      in float4 iPosition : POSITION
      , in float2 iUV : TEXCOORD
      , in float4 iColor : COLOR
@@ -16259,10 +16817,10 @@ index 68163d4..6dbf211 100644
 \ No newline at end of file
 diff --git a/src/shaders/SceneEffectsPS.hlsl b/src/shaders/SceneEffectsPS.hlsl
 new file mode 100644
-index 0000000..989b206
+index 0000000..382d17e
 --- /dev/null
 +++ b/src/shaders/SceneEffectsPS.hlsl
-@@ -0,0 +1,4474 @@
+@@ -0,0 +1,4504 @@
 +//
 +// RT64
 +//
@@ -17132,9 +17690,25 @@ index 0000000..989b206
 +    return asfloat(gLights.Load(32)) > 0.5f;
 +}
 +
-+// A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture.
++// The 3D grass's blades near the camera are the traced structure's second instance (BuildSceneBVH: instance 1, mask 2;
++// the world is mask 1), not opaque, with no geometry entry: a ray's geometry is RayGrassGeometry there.
++static const uint RayGrassGeometry = 0xFFFFFFFFu;
++static const uint RayWorldMask = 0x01u;
++
++uint RayGeometryOf(uint instance, uint geometry) {
++    return (instance == 1u) ? RayGrassGeometry : geometry;
++}
++
++// Whether a ray stops at a grass blade it met t along (ray units): only past one and a half blade heights from where
++// it started (the lights buffer's header), so the blade a ray starts on and those round it (where the picture's
++// surfaces only roughly match the blades) don't shade it.
++bool RayGrassStops(RayDesc ray, float t) {
++    return t * length(ray.Direction) > asfloat(gLights.Load(40));
++}
++
++// A traced geometry's flags: 1 a cut-out or see-through draw, 2 it has a texture, 4 a model, 8 the 3D grass.
 +uint RayGeometryFlags(uint geometry) {
-+    return gRayGeometries.Load(geometry * 16u + 8u);
++    return (geometry == RayGrassGeometry) ? 8u : gRayGeometries.Load(geometry * 16u + 8u);
 +}
 +
 +int RayWrap(int texel, int mask, bool mirror) {
@@ -17205,10 +17779,14 @@ index 0000000..989b206
 +bool TraceOccluded(RayDesc ray, uint mode) {
 +    if (mode == 0u) {
 +        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, RayTexturesOn() ? RAY_FLAG_NONE : RAY_FLAG_CULL_NON_OPAQUE, 0xFFu, ray);
++        query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, 0xFFu, ray);
 +        while (query.Proceed()) {
-+            if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) &&
-+                RayCutoutSolid(query.CandidateGeometryIndex(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
++            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
++                continue;
++            }
++            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
++            if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
++                RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
 +            {
 +                query.CommitNonOpaqueTriangleHit();
 +            }
@@ -17219,7 +17797,10 @@ index 0000000..989b206
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
 +        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-+            const uint geometry = query.CandidateGeometryIndex();
++            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
++            if ((geometry == RayGrassGeometry) && !RayGrassStops(ray, query.CandidateTriangleRayT())) {
++                continue;
++            }
 +            if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
 +                continue;
 +            }
@@ -17246,7 +17827,10 @@ index 0000000..989b206
 +        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
 +            continue;
 +        }
-+        const uint geometry = query.CandidateGeometryIndex();
++        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
++        if ((geometry == RayGrassGeometry) && !RayGrassStops(ray, query.CandidateTriangleRayT())) {
++            continue;
++        }
 +        const uint primitive = query.CandidatePrimitiveIndex();
 +        const float2 barycentrics = query.CandidateTriangleBarycentrics();
 +        const uint flags = RayGeometryFlags(geometry);
@@ -17350,9 +17934,13 @@ index 0000000..989b206
 +    ray.TMin = 0.0f;
 +    // The direction keeps the view's scale, so t is in view units.
 +    ray.TMax = rayDistance;
-+    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
++    // Cut-outs are passed by; the 3D grass is seen (away from where the ray starts).
++    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
 +    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +    while (query.Proceed()) {
++        if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) && (query.CandidateInstanceID() == 1u) && RayGrassStops(ray, query.CandidateTriangleRayT())) {
++            query.CommitNonOpaqueTriangleHit();
++        }
 +    }
 +    const float2 size = gConstants.projection.zw;
 +    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
@@ -17592,7 +18180,7 @@ index 0000000..989b206
 +        ray.TMin = 0.0f;
 +        ray.TMax = reach;
 +        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +        while (query.Proceed()) {
 +            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
 +                continue;
@@ -17634,7 +18222,7 @@ index 0000000..989b206
 +    ray.TMin = 0.0f;
 +    ray.TMax = reach;
 +    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-+    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +    while (query.Proceed()) {
 +    }
 +    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
@@ -17751,7 +18339,7 @@ index 0000000..989b206
 +        ray.TMin = 0.0f;
 +        ray.TMax = max(distance - 60.0f, 1.0f);
 +        RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +        query.Proceed();
 +        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
 +            continue;
@@ -19871,7 +20459,7 @@ index 0000000..989b206
 +        ray.TMin = 0.0f;
 +        ray.TMax = 6000.0f;
 +        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +        query.Proceed();
 +        if ((query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) || (query.CommittedRayT() < 20.0f) ||
 +            ((RayGeometryFlags(query.CommittedGeometryIndex()) & 5u) != 1u))
@@ -19888,7 +20476,7 @@ index 0000000..989b206
 +        ray.TMin = 0.0f;
 +        ray.TMax = 6000.0f;
 +        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-+        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
++        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
 +        query.Proceed();
 +        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
 +            hits++;
@@ -20291,7 +20879,7 @@ index 0000000..989b206
 +        query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
 +        while (query.Proceed()) {
 +            if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-+                const uint geometry = query.CandidateGeometryIndex();
++                const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
 +                if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
 +                    continue;
 +                }
@@ -20301,7 +20889,7 @@ index 0000000..989b206
 +        float3 tint = float3(0.2f, 0.4f, 1.0f);
 +        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
 +            const float t = query.CommittedRayT();
-+            const uint geometry = query.CommittedGeometryIndex();
++            const uint geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
 +            const uint flags = RayGeometryFlags(geometry);
 +            if (t < distance - tolerance) {
 +                tint = float3(1.0f, 0.2f, 0.2f);
@@ -21260,10 +21848,10 @@ index 0000000..15a6637
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..5d3f594
+index 0000000..adfbd27
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,212 @@
 +//
 +// RT64
 +//
@@ -21333,9 +21921,13 @@ index 0000000..5d3f594
 +    return false;
 +}
 +
++// Sand's footprints are shallow: past this far from the camera they are smaller than a pixel, so the sand there isn't cut
++// for them (by each edge's middle, so the triangles either side of an edge agree).
++static const float SandTessReach = 900.0f;
++
 +float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
 +    // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
-+    if (!trail) {
++    if (!trail || (SnowSand() && (cameraDistance > SandTessReach))) {
 +        return 1.0f;
 +    }
 +    return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
@@ -21345,16 +21937,41 @@ index 0000000..5d3f594
 +    const float edgeLength = distance(a, b);
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
 +    const float cameraDistance = distance((a + b) * 0.5f, camera);
-+    const bool trail = SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
++    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
 +    return SnowSegmentFactor(edgeLength, cameraDistance, trail);
 +}
 +
 +// The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
 +float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
 +    const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
-+    const bool trail = SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
 +    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-+    return max(edgeFactor, SnowSegmentFactor(longest, distance((a + b + c) / 3.0f, camera), trail));
++    const float cameraDistance = distance((a + b + c) / 3.0f, camera);
++    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
++    return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
++}
++
++// Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
++// same side of the screen (a little widened) or behind the camera. It is then not drawn at all (factor 0), so the
++// level's snow or sand out of view costs nothing past this.
++bool SnowPatchOutOfView(InputPatch<SnowVertex, 3> patch) {
++    float4 up = FrParams.snowClipUp;
++    up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
++#ifdef __spirv__
++    up.y = -up.y;
++#endif
++    const float slack = 1.1f;
++    bool left = true, right = true, bottom = true, top = true, behind = true;
++    for (uint i = 0; i < 3; i++) {
++        for (int k = -1; k <= 1; k++) {
++            const float4 q = patch[i].position + up * float(k);
++            left = left && (q.x < -slack * q.w);
++            right = right && (q.x > slack * q.w);
++            bottom = bottom && (q.y < -slack * q.w);
++            top = top && (q.y > slack * q.w);
++            behind = behind && (q.w <= 0.0f);
++        }
++    }
++    return left || right || bottom || top || behind;
 +}
 +
 +SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
@@ -21363,6 +21980,11 @@ index 0000000..5d3f594
 +    const float3 b = patch[1].furAnchor.xyz;
 +    const float3 c = patch[2].furAnchor.xyz;
 +    p.normal = cross(b - a, c - a);
++    if (SnowPatchOutOfView(patch)) {
++        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
++        p.inside = 0.0f;
++        return p;
++    }
 +
 +    // Not cut at all on a wall, or where all of the triangle is past the snow's reach (drawn as it is: the ground's own
 +    // draw is left out).
@@ -22109,10 +22731,10 @@ index 0000000..e6accce
 +    return h;
 +}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..208872e 100644
+index 2e62aaf..4a77606 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,136 @@ namespace interop {
+@@ -13,6 +13,141 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -22243,6 +22865,11 @@ index 2e62aaf..208872e 100644
 +        float4 waterMotion;
 +        // The slow swell over all the water: its height in world units, its speed, then 1 for Stylised water.
 +        float4 waterSwell;
++        // Banjo-Tooie: displaced ground (GroundTess.hlsl): how far the deepest part of a texture is pushed down, in world
++        // units at 100% depth (x), the number of pieces an edge is cut into at most (y), the shortest piece in world
++        // units (z), then the camera distance the cutting and the displacement fade out over (w, from half of it).
++        // (The clip-space terms and the camera are the water's: waterClipUp, waterClipToWorld and waterCamera.xyz.)
++        float4 groundParams;
 +        // Banjo-Tooie: Banjo's fur jiggle (RasterVS.hlsl): how far his strands' tips lag behind his movement, a world
 +        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
 +        float4 furSway;
@@ -22313,10 +22940,10 @@ index 4548f15..784123d 100644
  };
 diff --git a/src/shared/rt64_grass_instances.h b/src/shared/rt64_grass_instances.h
 new file mode 100644
-index 0000000..fbb6e4b
+index 0000000..dae4cc8
 --- /dev/null
 +++ b/src/shared/rt64_grass_instances.h
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,89 @@
 +//
 +// RT64
 +//
@@ -22342,6 +22969,10 @@ index 0000000..fbb6e4b
 +#define GRASS_TRIANGLE_EDGES 0x40u
 +// The vertices of one blade (three triangles; a chunky blade uses the first).
 +#define GRASS_BLADE_VERTICES 9
++// Banjo-Tooie: Graphics > Ray tracing: the culling pass also writes the blades it kept near the camera as triangles
++// (GRASS_BLADE_VERTICES world positions each, float4) for the traced effects' structures (BuildSceneBVH), at most this
++// many blades; their count is the last uint of the slot counts. Unused blades' corners are NaN (no triangle).
++#define GRASS_RAY_BLADES 131072u
 +
 +#ifdef HLSL_CPU
 +namespace interop {
@@ -22388,6 +23019,11 @@ index 0000000..fbb6e4b
 +        uint candidateCount;
 +        uint chunkCount;
 +        uint slotCount;
++        // The ray-traced blades: how many there can be (0: none) and how far from the camera they go.
++        uint rayBlades;
++        float rayReach;
++        uint pad0;
++        uint pad1;
 +    };
 +
 +    struct GrassHiZCB {
@@ -22435,10 +23071,10 @@ index 0000000..ad4cab2
 +};
 +#endif
 diff --git a/src/shared/rt64_raster_params.h b/src/shared/rt64_raster_params.h
-index 0a5c332..f6a57cd 100644
+index 0a5c332..4244103 100644
 --- a/src/shared/rt64_raster_params.h
 +++ b/src/shared/rt64_raster_params.h
-@@ -9,11 +9,81 @@
+@@ -9,11 +9,88 @@
  #ifdef HLSL_CPU
  namespace interop {
  #endif
@@ -22468,6 +23104,10 @@ index 0a5c332..f6a57cd 100644
 +    // triangles pushed along their own normal, grassShell of grassShells' low bits layers, cut out by the texture's alpha.
 +#define RASTER_FENCE 0x01000000u
 +#define RASTER_SHELL_COUNT_MASK 0xFFFFu
++    // Banjo-Tooie: RasterParams.groundDisplace.
++#define RASTER_GROUND_DISPLACE 0x1u
++    // Banjo-Tooie: with RASTER_GROUND_DISPLACE, a test aid (TOOIE_GROUND_DEBUG): displaced ground tinted by its depth.
++#define RASTER_GROUND_DEBUG 0x2u
 +    // Banjo-Tooie: set in furShells for a furry enemy's white fur (the yeti) instead of Banjo's brown; the low bits are
 +    // the shell count.
 +#define RASTER_FUR_WHITE 0x10000u
@@ -22518,6 +23158,9 @@ index 0a5c332..f6a57cd 100644
 +        // below, left of and above this one, which its texture blends into at its edges (TextureSampler.hlsli), or
 +        // RASTER_SEAM_NONE; the top bit set on pieces of the 3D world.
 +        uint4 seamTiles;
++        // Banjo-Tooie: RASTER_GROUND_DISPLACE when this redraw is level ground drawn as a tessellated, displaced surface
++        // (GroundTess.hlsl), in place of the ground's own draw.
++        uint groundDisplace;
      };
  #ifdef HLSL_CPU
  };

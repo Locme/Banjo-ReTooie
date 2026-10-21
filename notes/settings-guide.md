@@ -260,6 +260,23 @@ F12 screenshots are taken before these filters, so they don't show them.
   Reflection, Fence, then back to the built-in choice); nothing is built in yet.
   Up close only: past about 900 units every other layer is dropped, past 1800
   none. Default: 0 (off).
+### Displaced ground
+
+- **Displaced ground** (under Shaders): 0 to 100. The ground's cracks, gaps and
+  grooves become real dips instead of a painted-on look: floors drawn with a
+  Parallax texture of a floor-like shape (cracks, terraced slabs, rounded
+  cobbles, bumpy dirt, brick, tiles, smooth stone) are cut into fine triangles
+  near the camera and the dark parts of the texture pushed straight down by up to
+  16 world units at 100 (times the texture's own Parallax depth). The ground's
+  outline and depth change, not only its shading, and the deeper parts are a
+  little darker. Walls and the ground within about 24 units of each triangle's
+  edge are left as they are, so no gaps open between pieces of ground. It takes
+  Parallax's list of textures, shapes and depths (including those picked in
+  Parallax pick mode) and needs Parallax on original textures to be on, but the
+  Parallax setting itself can stay at 0. Needs a graphics card with tessellation;
+  without it the ground is drawn as the game did. Fades out between 1400 and 2800
+  units from the camera. Drawn on the picture, so nothing in the game changes.
+  Default: 0 (off).
 
 ### Parallax pick mode
 
