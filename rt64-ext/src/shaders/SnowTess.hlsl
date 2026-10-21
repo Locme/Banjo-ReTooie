@@ -96,7 +96,7 @@ float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
     return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
 }
 
-// Frustum culling: whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
+// Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
 // same side of the screen (a little widened) or behind the camera. It is then not drawn at all (factor 0), so the
 // level's snow or sand out of view costs nothing past this.
 bool SnowPatchOutOfView(InputPatch<SnowVertex, 3> patch) {
@@ -120,77 +120,13 @@ bool SnowPatchOutOfView(InputPatch<SnowVertex, 3> patch) {
     return left || right || bottom || top || behind;
 }
 
-// Occlusion culling: whether a patch was hidden behind what last frame drew in front of it (its depth pyramid, built
-// from the depth of the frame the snow was drawn in: snowHiZFine, each texel the farthest depth of 8 x 8 pixels, and
-// snowHiZCoarse, of 8 x 8 of those), by every point of it from as far below the ground as the trail goes to the snow's
-// full height above it. Not close to the camera, where the game draws the ground with a nearer near plane of its own
-// (its depth there isn't the frame camera's) and a patch costs little anyway.
-static const float SnowOcclusionSlack = 0.03f;
-static const float SnowOcclusionNearest = 600.0f;
-static const int SnowOcclusionMostTexels = 16;
-
-bool SnowPatchHidden(InputPatch<SnowVertex, 3> patch) {
-    const float4 occlusion = FrParams.snowOcclusion;
-    if (occlusion.x < 0.5f) {
-        return false;
-    }
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
-    const float2 size = occlusion.yz;
-    float2 low = 1e30f;
-    float2 high = -1e30f;
-    float nearest = 1e30f;
-    for (uint i = 0; i < 3; i++) {
-        const float3 ground = patch[i].furAnchor.xyz;
-        if (distance(ground, camera) < SnowOcclusionNearest) {
-            return false;
-        }
-        for (int k = 0; k < 2; k++) {
-            const float3 world = ground + float3(0.0f, (k == 0) ? -SnowLayerMost : FrParams.snowParams.y, 0.0f);
-            const float4 w = float4(world, 1.0f);
-            const float4 c = float4(dot(FrParams.snowPrevWorldToClip[0], w), dot(FrParams.snowPrevWorldToClip[1], w),
-                dot(FrParams.snowPrevWorldToClip[2], w), dot(FrParams.snowPrevWorldToClip[3], w));
-            if (c.w <= 1e-3f) {
-                // (Reaching behind last frame's camera: nothing known.)
-                return false;
-            }
-            const float2 ndc = (c.xy / c.w) * gConstants.screenScale + gConstants.screenOffset;
-            const float2 texel = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
-            low = min(low, texel);
-            high = max(high, texel);
-            nearest = min(nearest, c.z / c.w);
-        }
-    }
-    // (Off last frame's picture, or reaching the camera: nothing known.)
-    if (any(low < 0.0f) || any(high >= size) || (nearest <= 0.0f)) {
-        return false;
-    }
-    int2 a = int2(floor(low));
-    int2 b = int2(floor(high));
-    bool fine = true;
-    if ((b.x - a.x + 1) * (b.y - a.y + 1) > SnowOcclusionMostTexels) {
-        a /= 8;
-        b /= 8;
-        fine = false;
-        if ((b.x - a.x + 1) * (b.y - a.y + 1) > SnowOcclusionMostTexels) {
-            return false;
-        }
-    }
-    float farthest = 0.0f;
-    for (int y = a.y; y <= b.y; y++) {
-        for (int x = a.x; x <= b.x; x++) {
-            farthest = max(farthest, fine ? snowHiZFine.Load(int3(x, y, 0)) : snowHiZCoarse.Load(int3(x, y, 0)));
-        }
-    }
-    return nearest > farthest + (1.0f - farthest) * SnowOcclusionSlack;
-}
-
 SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
     SnowPatch p;
     const float3 a = patch[0].furAnchor.xyz;
     const float3 b = patch[1].furAnchor.xyz;
     const float3 c = patch[2].furAnchor.xyz;
     p.normal = cross(b - a, c - a);
-    if (SnowPatchOutOfView(patch) || SnowPatchHidden(patch)) {
+    if (SnowPatchOutOfView(patch)) {
         p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
         p.inside = 0.0f;
         return p;

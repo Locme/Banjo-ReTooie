@@ -79,7 +79,7 @@
   2. Go to Terrydactyland and walk around the sand
   3. Walk behind hills and turn the camera quickly
 - Look for: Is it playable now? Footprints still show near Banjo; no sand patches popping in or missing at hill edges or after quick camera turns (also check Icy Side's deep snow)
-- Status: waiting for L
+- Status: L 2026-10-21 22:37: occlusion breaks the sand, removed (the props fix stays). Still 10 fps in Terrydactyland, being looked at.
 
 ## T513 Displaced ground (floors)
 - Asked: 2026-10-21 12:39 UTC
