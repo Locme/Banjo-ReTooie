@@ -155,6 +155,10 @@ To change it: edit the files in `lib/RecompFrontend`, then
 
 ## rt64.patch
 
+Files this patch would only add live in `rt64-ext/` instead (its README sorts every file of the patch):
+RT64's `CMakeLists.txt` includes `rt64-ext/rt64_ext.cmake` at its end, which builds them into the same
+`rt64` target with RT64's own shader options. Move more there wherever a change allows (L, 2026-10-21).
+
 * **Textures kept until drawn** (`src/render/rt64_texture_cache.cpp/.h`, `src/hle/rt64_rdp_tmem.cpp`):
   the display list parser uploads only textures whose hash it hasn't seen, and evicts old textures at
   the end of each parse, before that frame is drawn. A texture unused for a while and used again by the
@@ -234,9 +238,8 @@ To change it: edit the files in `lib/RecompFrontend`, then
   `RT64_SMAA_DIR` at it. Because this patch changes RT64's `CMakeLists.txt`,
   the patches are applied before `add_subdirectory(lib/rt64)`.
   `src/display/smaa.cpp` sets the quality.
-* **FXAA** (`src/render/rt64_fxaa.cpp`, `.h`, `src/shaders/FxaaPS.hlsl`,
-  `src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`,
-  `CMakeLists.txt`): adds `RT64::SetFxaaMode(...)`. After SMAA, one FXAA pass
+* **FXAA** (`src/render/rt64_shader_library.cpp`, `.h`, `src/hle/rt64_present_queue.cpp`, `.h`;
+  the pass itself, `rt64_fxaa.cpp`, `.h` and `FxaaPS.hlsl`, is in `rt64-ext/`): adds `RT64::SetFxaaMode(...)`. After SMAA, one FXAA pass
   (written for this port) smooths the game image; Extreme searches further along
   edges. `src/display/fxaa.cpp` sets the mode.
 * **FSR 1** (`src/render/rt64_fsr.cpp`, `.h`, `src/shaders/FsrPS.hlsl`,

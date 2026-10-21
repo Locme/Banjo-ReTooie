@@ -226,6 +226,8 @@ endif()
 set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
 # AMD FidelityFX FSR 1, for the FSR passes rt64.patch adds.
 set(RT64_FSR_DIR ${CMAKE_SOURCE_DIR}/lib/fsr)
+# Our additions to RT64 that live in this repository, not in rt64.patch (rt64-ext/README.md).
+set(RT64_EXTENSION_CMAKE ${CMAKE_SOURCE_DIR}/rt64-ext/rt64_ext.cmake)
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)
@@ -585,6 +587,8 @@ set(RECOMP_FRONTEND_N64MODERNRUNTIME_PATH ${CMAKE_SOURCE_DIR}/lib/N64ModernRunti
 set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
+# recompui lists RT64's include folders itself; RT64's headers also include files from rt64-ext/.
+target_include_directories(recompui PRIVATE ${CMAKE_SOURCE_DIR}/rt64-ext/src)
 
 if (ANDROID)
     # SDL copies its headers into its build folder while building; these include them without linking SDL.

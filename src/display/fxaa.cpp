@@ -1,7 +1,7 @@
 // FXAA (handoff 4.34, the XBLA port's FXAA and FXAA Extreme).
 //
 // RT64 runs one FXAA pass on the finished game image before the VI draws it to the window, after SMAA
-// when both are on (lib-patches/rt64.patch, src/render/rt64_fxaa.cpp and src/shaders/FxaaPS.hlsl).
+// when both are on (rt64-ext/src/render/rt64_fxaa.cpp and rt64-ext/src/shaders/FxaaPS.hlsl, called from lib-patches/rt64.patch).
 // FXAA finds edges by brightness and blends across them; it is cheaper than SMAA and softer.
 // Extreme follows edges further and catches fainter ones, for an even softer picture.
 // Like SMAA, it saves and applies as it changes instead of waiting for Apply.
@@ -14,7 +14,7 @@
 #include "tooie_fxaa.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_fxaa.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_fxaa.h.
     void SetFxaaMode(uint32_t mode);
 }
 
