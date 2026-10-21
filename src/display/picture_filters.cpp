@@ -5080,8 +5080,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         fence_thickness_option,
         "Fence thickness",
-        "Fences, and other flat textures cut out by their alpha that stand for something solid, get real thickness: drawn as a few layers, so seen from the side they are no longer paper thin. Only the textures picked as Fence in Shader Effects pick mode (left click steps to Fence) get it. Higher is thicker, 100 is about a dozen units. Drawn up close, thinning out with distance. 0 is off.",
-        0, 100, 5, 0, false, 0);
+        "Fences, and other flat textures cut out by their alpha that stand for something solid, get real thickness. Face on, the picture looks through a slab behind the face and shows the sides and back of the pickets; at a slant or from the side they are also drawn as a few closely spaced layers. Only the textures picked as Fence in Shader Effects pick mode get it (left click steps to Fence). 100 is about a dozen units thick, 300 chunky. Drawn up close, fading out with distance. 0 is off.",
+        0, 300, 5, 0, false, 0);
     graphics.add_number_option(
         ground_displacement_option,
         "Displaced ground",

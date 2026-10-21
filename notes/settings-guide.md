@@ -265,7 +265,7 @@ F12 screenshots are taken before these filters, so they don't show them.
 
 ## Graphics: Fence thickness
 
-- **Fence thickness** (under Shaders): 0 to 100. Fences and other flat
+- **Fence thickness** (under Shaders): 0 to 300. Fences and other flat
   textures cut out by their alpha (chain link, pickets, grates) that stand for
   something solid get thickness: where the face is see-through, the picture
   follows the view ray through a slab behind it and shows the first solid part
@@ -274,8 +274,9 @@ F12 screenshots are taken before these filters, so they don't show them.
   slab of about 12 world units. Only for the textures picked as **Fence** in
   Shader Effects pick mode (left click steps Disable, Grass, Deep Snow, Ice
   Reflection, Shiny Reflection, Text, Fence, then back to the built-in choice);
-  nothing is built in yet. Fades out from 900 to 1800 units away. Nothing is
-  drawn outside the face's own outline. Default: 0 (off).
+  nothing is built in yet. Seen at a slant or from the side (where a flat face
+  covers almost nothing) it is also drawn as closely spaced layers, more the more
+  slanted. Goes up to 300. Fades out toward 1800 units away. Default: 0 (off).
 
 ### Displaced ground
 

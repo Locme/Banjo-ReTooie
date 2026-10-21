@@ -117,7 +117,7 @@
   2. Bind Shader Effects Pick Mode (Controls, Pick Modes), press it next to a fence, grate or picket
   3. Left click the fence texture until it reads Fence (after Shiny Reflection and Text)
   4. Walk round it, look from the side and at a slant; raise and lower Fence thickness
-- Look for: no extra layers any more: the fence is one draw. Where the face is see-through, the picture follows the view ray through a slab behind it and shows the first solid part, so the pickets' sides and back show between the two faces and the see-through gaps stay clear. Darker the deeper. Tell me which world and textures (Save Pick writes shader_effect_tags.txt) so I can list them as built-in. Known limit: nothing is drawn outside the original face's outline, so the outer edge of a fence has no side. Yellow picket fence in Spiral Mountain is texture 806c8869cd6bb488.
+- Look for: no extra layers any more: the fence is one draw. Where the face is see-through, the picture follows the view ray through a slab behind it and shows the first solid part, so the pickets' sides and back show between the two faces and the see-through gaps stay clear. Darker the deeper. Tell me which world and textures (Save Pick writes shader_effect_tags.txt) so I can list them as built-in. Seen at a slant or from the side the face covers almost nothing, so there the fence is also drawn as closely spaced layers (none face on, more the more slanted), darker at the back. Fence thickness now goes to 300 (100 is about 12 units). Known limit: the slab is not drawn outside the original face's outline. Yellow picket fence in Spiral Mountain is texture 806c8869cd6bb488.
 - Status: waiting for L
 
 ## T505 Mirror Mode: signs readable, Text pick
