@@ -95,7 +95,7 @@ diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include
 index f5ed6c0..3b3dd29 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,49 @@ namespace recompinput {
+@@ -37,10 +37,50 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -135,7 +135,8 @@ index f5ed6c0..3b3dd29 100644
 +    DEFINE_INPUT(PICK_PASTE, 0, "Paste Pick") \
 +    DEFINE_INPUT(PICK_UNDO, 0, "Undo Pick") \
 +    DEFINE_INPUT(TALON_TROT, 0, "Talon Trot") \
-+    DEFINE_INPUT(EFFECT_COST, 0, "Effect Cost Check")
++    DEFINE_INPUT(EFFECT_COST, 0, "Effect Cost Check") \
++    DEFINE_INPUT(NOCLIP_TOGGLE, 0, "Toggle Noclip")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \

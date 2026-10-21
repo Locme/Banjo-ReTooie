@@ -31,6 +31,7 @@
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_player_cheats.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_transform_anywhere.h"
 #include "tooie_menu_pause.h"
@@ -271,6 +272,7 @@ void tooie::init_config() {
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
     tooie::talon_trot::register_input();
+    tooie::player_cheats::register_input();
     tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();

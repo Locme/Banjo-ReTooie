@@ -8,6 +8,8 @@
 // Cheats that change how the player moves (src/gameplay/player_cheats.cpp): Infinite Jumps (Levitate)
 // and Fly anywhere.
 namespace tooie::player_cheats {
+    // Names the Toggle Noclip input and gives it its default button (Y). Call before recompui::config::finalize().
+    void register_input();
     // Call once per frame from the game thread (tooie_warp_tick).
     void tick(uint8_t* rdram, recomp_context* ctx);
     // Call on every read of player 1's buttons: while flying with Fly anywhere on, B stops the flight

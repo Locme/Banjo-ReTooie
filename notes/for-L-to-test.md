@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T500 Noclip: Y toggles it, and no damage
+- Asked: 2026-10-21 10:09 UTC
+- Build: main, next push
+- Steps:
+  1. Settings > Cheats: turn Enable cheats on
+  2. In the game press Y on the controller: noclip turns on (the Noclip row in Cheats switches on)
+  3. Walk into an enemy or a hazard: no damage, no hurt reaction
+  4. Press Y again to leave noclip; check Controls > Movement > Toggle Noclip
+- Look for: Y flips Noclip, and while it is on you take no damage. Y is also C-left by default, so it still sends C-left to the game; rebind Toggle Noclip if that gets in the way. LT+Y still transforms.
+- Status: waiting for L
+
 ## T499 Take no damage cheat is listed again
 - Asked: 2026-10-21 09:59 UTC
 - Build: main, next push

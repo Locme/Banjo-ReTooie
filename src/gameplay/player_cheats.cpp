@@ -6,7 +6,11 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <variant>
+
 #include "recomp.h"
+#include "recompinput/recompinput.h"
+#include "recompui/config.h"
 #include "funcs.h"
 
 #include "tooie_cheats.h"
@@ -14,9 +18,11 @@
 #include "tooie_player_cheats.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_hooks.h"
+#include "tooie_hotkeys.h"
 #include "tooie_rdram.h"
 
 namespace {
+    constexpr auto noclip_input = recompinput::GameInput::NOCLIP_TOGGLE;
     // Player 0's PlayerState pointer lives in a table of words at 0x80135490 (func_800F53D0 reads it).
     constexpr uint32_t player_table = 0x80135490;
     constexpr uint32_t physics_offset = 0xC8;  // PlayerState -> physics block
@@ -161,6 +167,16 @@ void tooie::player_cheats::apply_input(uint16_t* buttons) {
     }
 }
 
+void tooie::player_cheats::register_input() {
+    recompinput::set_game_input_name(noclip_input, "Toggle Noclip");
+    recompinput::set_game_input_description(noclip_input,
+        "Turns Noclip on and off (Cheats > Noclip), while Enable cheats is on. Noclip also stops all damage.");
+    recompinput::set_game_input_section(noclip_input, "Movement");
+    recompinput::set_default_mapping_for_keyboard(noclip_input, {});
+    recompinput::set_default_mapping_for_controller(noclip_input,
+        { recompinput::InputField::controller_digital(recompinput::SDL_CONTROLLER_BUTTON_NORTH) });
+}
+
 void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
     static const bool log = std::getenv("TOOIE_PLAYER_LOG") != nullptr;
     static auto last_log = std::chrono::steady_clock::now();
@@ -294,6 +310,19 @@ void tooie::player_cheats::tick(uint8_t* rdram, recomp_context* ctx) {
 
     // Noclip.
     {
+        // The toggle key flips the Cheats tab's Noclip option (not while Transform's LT + Y is held).
+        static bool toggle_was_down = false;
+        const bool toggle_down = tooie::cheats::enabled() && tooie::hotkeys::down(noclip_input)
+            && !tooie::hotkeys::down(recompinput::GameInput::TRANSFORM);
+        if (toggle_down && !toggle_was_down) {
+            try {
+                recomp::config::Config& cheats = tooie::cheats::config();
+                cheats.update_option_value("cheat_noclip", !std::get<bool>(cheats.get_option_value("cheat_noclip")));
+            } catch (...) {
+            }
+        }
+        toggle_was_down = toggle_down;
+
         static bool anchored = false;
         static float anchor[3];
         static uint16_t anchor_map = 0;
