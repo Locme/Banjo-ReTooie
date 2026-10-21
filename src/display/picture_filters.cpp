@@ -4066,6 +4066,10 @@ namespace {
     // Deep Snow also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
     // snow goes by map and colour, not texture.
     std::atomic<uint32_t> effects_sent_version{0};
+    // Parallax picks count too: a texture picked as Metal there is shiny (L, 2026-10-21).
+    uint32_t effect_textures_version() {
+        return tooie::effect_pick::version() + tooie::parallax_pick::version() * 65599u;
+    }
     void send_effect_textures() {
         static const std::vector<uint64_t> ice_extra = [] {
             std::vector<uint64_t> list;
@@ -4082,7 +4086,7 @@ namespace {
             }
             return list;
         }();
-        const uint32_t version = tooie::effect_pick::version();
+        const uint32_t version = effect_textures_version();
         std::unordered_map<uint64_t, tooie::effect_pick::Effect> picks;
         tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effect effect) {
             picks[hash] = effect;
@@ -4118,6 +4122,11 @@ namespace {
                 shiny_all.push_back(texture.hash);
             }
         }
+        tooie::parallax_pick::for_each([&](uint64_t hash, const tooie::parallax_pick::Pick& pick) {
+            if (!pick.off && (pick.shape == tooie::parallax_pick::shape_metal)) {
+                shiny_all.push_back(hash);
+            }
+        });
         shiny_all.erase(std::remove_if(shiny_all.begin(), shiny_all.end(), [&](uint64_t h) { return std::find(ice_all.begin(), ice_all.end(), h) != ice_all.end(); }), shiny_all.end());
         std::vector<uint64_t> shiny = build(shiny_all.data(), shiny_all.data() + shiny_all.size(), tooie::effect_pick::effect_shiny, true);
         std::vector<uint64_t> snow_off;
@@ -4537,7 +4546,7 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         send_parallax_textures();
     }
     // Likewise for Shader Effects pick mode.
-    if (tooie::effect_pick::version() != effects_sent_version.load()) {
+    if (effect_textures_version() != effects_sent_version.load()) {
         send_effect_textures();
     }
     // DEV > Blend texture seams; TOOIE_TEXTURE_SEAMS=0 or 1 sets it instead (headless A/B).
