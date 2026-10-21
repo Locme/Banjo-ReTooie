@@ -374,6 +374,15 @@ namespace {
         0xcec58574a22efd1f, 0x6c297cad1c8edbbf, 0x2ccf00e0c31ed884, 0x910453acfb90f339, 0x2a0bcff2df52fe7e,
         // Strip and ceiling lamps.
         0xfe7ebd28c377b54f, 0x6f59260c143a2e31, 0xfbbb2214e197d33e,
+        // The second sweep, 2026-10-21 (L: everything relevant to ray tracing). Small flames.
+        0xdac402b2c6689462, 0x398b65ffa9ca4c95,
+        // Fires and a furnace's glowing door. (Lava and Hailfire Peaks' burning walls and edges are left out: they
+        // cover the lava side, and a light per piece used up all 32 lights there, headless.)
+        0xcde1f307e74ccd61, 0xacdd8a64c72db73b, 0xe330c9e79570e5d6, 0xc4b1866b2ad526fa,
+        // Lit windows: round ones with a cross (the light falls in their shape) and barred ones.
+        0xdf5bda9c967f0cf8, 0x4ace91a7ca4d04f7, 0x7982df0b74a1b2f5, 0xa8c70f9559367755, 0x45b7432c37b52e79,
+        // Panel and round ceiling lamps, and a small warm glow.
+        0x0850e871a6ef8d8b, 0x89a3b176a1fec7d3, 0xd6288b4fa0525df4, 0x082b687364b25694, 0xd7aa28a361f6a24d,
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -434,6 +443,11 @@ namespace {
         0x8962042db2fc940b,
         // Glossy paint (1)
         0x12c31c68cdc11203,
+        // The second sweep, 2026-10-21 (for ray tracing): chrome, steel plates and slots, hammered metal, brass
+        // plates, gold bars and a gold statue, and a glass tube with copper ends.
+        0x1a5b229900cf51dc, 0x5df2bd92df810920, 0x65d7f51774d6f517, 0x38d2eb489e460671, 0x37ea7fb53d8476bf,
+        0x864c46576cf6d66f, 0x6496a585b38c359e, 0x5fc7747fd3682881, 0x051417523e95e419, 0x0094046121ae7630,
+        0x85919b047554690d, 0x2134e632976c842b, 0xdeb45d22885ce6ae, 0xeb54025ce2d6dfff, 0xd3a3c48b65567f1c,
     };
 
     // Fog colours by FogColour value, and how far fog takes to thicken (world units).
