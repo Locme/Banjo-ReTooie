@@ -109,7 +109,7 @@ namespace {
         return true;
     }
 
-    // QOL > Dive, read a few times a second rather than on every pad read.
+    // WIP > Dive, read a few times a second rather than on every pad read.
     bool enabled(Clock::time_point now) {
         // TOOIE_DIVE=1 turns the dive on whatever the setting says, for headless runs.
         static const bool forced = std::getenv("TOOIE_DIVE") != nullptr;
@@ -121,7 +121,7 @@ namespace {
         if (cached_at == Clock::time_point{} || now - cached_at > 250ms) {
             cached_at = now;
             try {
-                cached = std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::dive::option));
+                cached = std::get<bool>(recompui::config::get_config(tooie::work_in_progress_tab_id).get_option_value(tooie::dive::option));
             } catch (...) {
                 cached = false;
             }

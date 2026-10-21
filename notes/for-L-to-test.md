@@ -24,7 +24,7 @@
 - Asked: 2026-10-21 15:56 UTC
 - Build: main
 - Steps:
-  1. Settings > QOL > Dive on
+  1. Settings > WIP > Dive on
   2. As Banjo-Kazooie jump, then press Run (B) in the air
   3. Land and keep still, then move the stick, then press A
 - Look for: Banjo pushes off and his arms, legs and Kazooie's wings move during the dive (not a still pose); he slides on his belly and stays lying until A; the stick doesn't walk him off; he gets up smoothly into the jump

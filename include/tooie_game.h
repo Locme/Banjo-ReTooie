@@ -82,6 +82,9 @@ namespace tooie {
     // (Developer Mode).
     inline const std::string wip_tab_id = "wip";
     inline const std::string wip_tab_option = "wip_tab";
+    // WIP tab (L, 2026-10-21): player features still being worked on, in a section also named WIP; each
+    // moves to its own tab when it is done. (The DEV tab keeps the old "wip" id.)
+    inline const std::string work_in_progress_tab_id = "work_in_progress";
     // DEV > Additional Tabs (L, 2026-10-16): the toggles that show the Achievements and Cheats tabs.
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";

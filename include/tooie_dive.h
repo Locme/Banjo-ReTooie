@@ -7,10 +7,10 @@
 #include "recomp.h"
 
 // Dive (src/gameplay/dive.cpp, L 2026-10-21): an optional mid-air lunge for Banjo-Kazooie, on the Run
-// button (B on a controller). QOL > Dive turns it on; it is off by default, so the game plays as it
+// button (B on a controller). WIP > Dive turns it on; it is off by default, so the game plays as it
 // always did until then.
 namespace tooie::dive {
-    // QOL > Dive: off (the default) leaves B in the air to the game.
+    // WIP > Dive: off (the default) leaves B in the air to the game.
     inline const std::string option = "dive";
 
     // Call once per game state update from tooie_warp_tick: starts, drives and ends the dive.

@@ -124,21 +124,6 @@ framework, not from this port's code, so it is not described here.
 - **Level transitions**: how fast the screen wipe plays when you go to another
   area: Original, Fast (4x) or Instant (16x). Cutscene fades are not affected.
   Default: Original.
-- **Dive** (off by default): press the Run key (B on a controller) in the air as
-  Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
-  lying on it until you jump (the stick can't walk him off it). Works from a jump, after the
-  Feathery Flap and in the ground pound (Bill Drill), once per jump (the jump off the belly is
-  a new jump); a wall ends it. Banjo alone, Kazooie alone and the transformations are
-  unchanged. While it is on and Run is held, B in the air belongs to the dive (not in the
-  pause menu, and not when Run is on another key). Tuning (src/gameplay/dive.cpp, units per
-  second; the run is 500): starts at 850 (1.7x), settles to 700 (1.4x) over 0.25 s, a 150
-  lift at the start, falling held to 450, then the slide slows from 600 to a stop over 0.4 s.
-  Pose (rules in src/gameplay/hold_to_run.cpp): a push-off as it eases in over 0.16 s, then
-  Banjo flat with arms forward and legs trailing, wings beating and legs kicking every 0.45 s;
-  on the belly his legs flutter while he slides; the pose fades into the jump over 0.15 s.
-  Kazooie shows when the game shows her (after the Feathery Flap).
-  `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
-  `<bone> <type> <scale> <offset degrees> [set]`.
 - **Talon Trot**: Toggle or Hold. With Toggle, once Z + C-left starts the trot,
   Banjo keeps trotting after you let go of Z; press Z or C-left to stop. The
   toggle also ends by itself when the trot does (water, a hit, a cutscene).
@@ -190,6 +175,31 @@ framework, not from this port's code, so it is not described here.
   - **Free camera: smooth walls**: the camera glides in when a wall gets
     between it and Banjo and glides back out afterwards, instead of jumping,
     and Banjo fades out when the camera comes very close to him. Default: off.
+
+## WIP
+
+Features still being worked on, in the WIP tab's WIP section. When one is done it
+moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus
+back to QOL).
+
+- **Mouse in the game's menus** (on by default): the pause menu and the save select follow
+  the mouse; the row under the cursor is picked and a left click presses A, a right click B.
+
+- **Dive** (off by default): press the Run key (B on a controller) in the air as
+  Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
+  lying on it until you jump (the stick can't walk him off it). Works from a jump, after the
+  Feathery Flap and in the ground pound (Bill Drill), once per jump (the jump off the belly is
+  a new jump); a wall ends it. Banjo alone, Kazooie alone and the transformations are
+  unchanged. While it is on and Run is held, B in the air belongs to the dive (not in the
+  pause menu, and not when Run is on another key). Tuning (src/gameplay/dive.cpp, units per
+  second; the run is 500): starts at 850 (1.7x), settles to 700 (1.4x) over 0.25 s, a 150
+  lift at the start, falling held to 450, then the slide slows from 600 to a stop over 0.4 s.
+  Pose (rules in src/gameplay/hold_to_run.cpp): a push-off as it eases in over 0.16 s, then
+  Banjo flat with arms forward and legs trailing, wings beating and legs kicking every 0.45 s;
+  on the belly his legs flutter while he slides; the pose fades into the jump over 0.15 s.
+  Kazooie shows when the game shows her (after the Feathery Flap).
+  `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
+  `<bone> <type> <scale> <offset degrees> [set]`.
 
 ## Controls: Movement
 

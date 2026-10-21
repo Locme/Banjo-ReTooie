@@ -154,6 +154,40 @@ namespace {
         qol.save_config();
     }
 
+    // The Dive and Mouse in the game's menus moved from QOL to the WIP tab (L, 2026-10-21): carry values
+    // saved in qol.json over once, while the WIP tab's file doesn't have them yet.
+    void move_saved_options_to_wip() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        nlohmann::json wip_json;
+        {
+            std::ifstream wip_file(dir / (tooie::work_in_progress_tab_id + ".json"));
+            if (wip_file) {
+                wip_json = nlohmann::json::parse(wip_file, nullptr, false);
+            }
+        }
+        std::ifstream qol_file(dir / "qol.json");
+        if (!qol_file) {
+            return;
+        }
+        nlohmann::json qol_json = nlohmann::json::parse(qol_file, nullptr, false);
+        if (!qol_json.is_object()) {
+            return;
+        }
+        recomp::config::Config& work_in_progress = recompui::config::get_config(tooie::work_in_progress_tab_id);
+        bool changed = false;
+        for (const std::string& option : {tooie::dive::option, tooie::menu_mouse::enabled_option}) {
+            if ((wip_json.is_object() && wip_json.contains(option)) || !qol_json.contains(option) ||
+                !qol_json[option].is_boolean()) {
+                continue;
+            }
+            work_in_progress.set_option_value(option, qol_json[option].get<bool>());
+            changed = true;
+        }
+        if (changed) {
+            work_in_progress.save_config();
+        }
+    }
+
     // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
     // on once; turning it off again afterwards stays.
     void turn_on_transform_anywhere_once() {
@@ -627,11 +661,6 @@ void tooie::init_config() {
         "Hold the Run key (Controls tab, Movement; not bound by default) to run faster as Banjo-Kazooie, Banjo or Kazooie. Off turns running off.",
         true);
     qol.add_bool_option(
-        tooie::dive::option,
-        "Dive",
-        "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge that ends in a short slide. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
-        false);
-    qol.add_bool_option(
         tooie::transform_anywhere::option,
         "Transform anywhere",
         "The Transform key (Controls tab, Movement; T on the keyboard, not bound on a controller) changes Banjo into the world's Humba Wumba form where he stands, and back, once you have changed in that world's Humba pool. Not in the air, swimming or in cutscenes. The submarine changes in water only.",
@@ -664,7 +693,6 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
-    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::canary_mary::mode_option,
         "Canary Mary races",
@@ -684,7 +712,19 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::canary_mary::mode_option, "Balancing");
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
-    recompui::config::set_option_group(tooie::dive::option, "Moves and aiming");
+
+    // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
+    // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL).
+    recomp::config::Config& work_in_progress =
+        recompui::config::create_config_tab("WIP", tooie::work_in_progress_tab_id, false);
+    work_in_progress.add_bool_option(
+        tooie::dive::option,
+        "Dive",
+        "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
+        false);
+    tooie::menu_mouse::add_options(work_in_progress);
+    recompui::config::set_option_group(tooie::dive::option, "WIP");
+    recompui::config::set_option_group(tooie::menu_mouse::enabled_option, "WIP");
 
     recomp::config::Config& graphics = recompui::config::create_graphics_tab();
     tooie::picture_filters::add_options(graphics);
@@ -916,6 +956,7 @@ void tooie::init_config() {
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
+    move_saved_options_to_wip();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();

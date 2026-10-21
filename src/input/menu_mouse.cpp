@@ -1,4 +1,4 @@
-// The mouse in the game's own menus (L, 2026-10-19): QOL > "Mouse in the game's menus", on by default.
+// The mouse in the game's own menus (L, 2026-10-19): WIP > "Mouse in the game's menus" (moved from QOL 2026-10-21), on by default.
 //
 // In the pause menu (the Start menu) the row under the cursor is picked as the cursor moves over it, and a
 // left click on a row picks it and presses A. A right click is B anywhere in the menu (back, or no to "are
@@ -107,7 +107,7 @@ namespace {
 
     bool enabled() {
         try {
-            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::enabled_option));
+            return std::get<bool>(recompui::config::get_config(tooie::work_in_progress_tab_id).get_option_value(tooie::menu_mouse::enabled_option));
         } catch (...) {
             return true;
         }
