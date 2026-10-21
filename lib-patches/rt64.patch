@@ -1984,10 +1984,10 @@ index bde2f03..ea4d76b 100644
          uint64_t lastPresentId;
          std::mutex workloadIdMutex;
 diff --git a/src/render/rt64_descriptor_sets.h b/src/render/rt64_descriptor_sets.h
-index 69a82ac..68a2610 100644
+index 69a82ac..1939ed1 100644
 --- a/src/render/rt64_descriptor_sets.h
 +++ b/src/render/rt64_descriptor_sets.h
-@@ -212,6 +212,13 @@ namespace RT64 {
+@@ -212,6 +212,15 @@ namespace RT64 {
          uint32_t gFilteredDirectLight;
          uint32_t gFilteredIndirectLight;
          uint32_t gBlueNoise;
@@ -1998,10 +1998,12 @@ index 69a82ac..68a2610 100644
 +        uint32_t grassBlades;
 +        uint32_t grassSlots;
 +        uint32_t grassSlotCounts;
++        uint32_t snowHiZFine;
++        uint32_t snowHiZCoarse;
  
          FramebufferRendererDescriptorCommonSet(const SamplerLibrary &samplerLibrary, bool raytracing, RenderDevice *device = nullptr) {
              builder.begin();
-@@ -282,6 +289,18 @@ namespace RT64 {
+@@ -282,6 +291,22 @@ namespace RT64 {
              gFilteredDirectLight = builder.addReadWriteTexture(65);
              gFilteredIndirectLight = builder.addReadWriteTexture(66);
              gBlueNoise = builder.addTexture(67);
@@ -2017,10 +2019,14 @@ index 69a82ac..68a2610 100644
 +            grassBlades = builder.addStructuredBuffer(72);
 +            grassSlots = builder.addStructuredBuffer(73);
 +            grassSlotCounts = builder.addStructuredBuffer(74);
++            // Banjo-Tooie: last frame's depth pyramid (the grass's, GrassHiZCS.hlsl), for the tessellated snow's
++            // occlusion culling (SnowTess.hlsl).
++            snowHiZFine = builder.addTexture(75);
++            snowHiZCoarse = builder.addTexture(76);
              builder.end();
  
              if (device != nullptr) {
-@@ -659,6 +678,192 @@ namespace RT64 {
+@@ -659,6 +684,192 @@ namespace RT64 {
          }
      };
  
@@ -2214,7 +2220,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..15d20b4 100644
+index 9fae0d4..bafe9f4 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,18 @@
@@ -2812,7 +2818,7 @@ index 9fae0d4..15d20b4 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +734,83 @@ namespace RT64 {
+@@ -169,11 +734,84 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2845,6 +2851,7 @@ index 9fae0d4..15d20b4 100644
 +        snowFaceRanges.clear();
 +        snowEdgeRanges.clear();
 +        snowShells = 0;
++        snowTessFramebuffer = UINT32_MAX;
 +        frameParams.snowGrid.w = 0.0f;
 +        waterTessOn = false;
 +        groundTessOn = false;
@@ -2896,7 +2903,7 @@ index 9fae0d4..15d20b4 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +856,7 @@ namespace RT64 {
+@@ -219,6 +857,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2904,7 +2911,7 @@ index 9fae0d4..15d20b4 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +888,7 @@ namespace RT64 {
+@@ -250,6 +889,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2912,7 +2919,7 @@ index 9fae0d4..15d20b4 100644
                  }
              }
              else {
-@@ -272,6 +911,9 @@ namespace RT64 {
+@@ -272,6 +912,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2922,7 +2929,7 @@ index 9fae0d4..15d20b4 100644
              }
          }
      }
-@@ -373,6 +1015,15 @@ namespace RT64 {
+@@ -373,6 +1016,19 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2930,6 +2937,10 @@ index 9fae0d4..15d20b4 100644
 +        descCommonSet->setBuffer(descCommonSet->snowTrail, snowTrailBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
 +        descCommonSet->setBuffer(descCommonSet->grassMask, grassMaskBuffer.get(), RenderBufferStructuredView(sizeof(uint32_t)));
 +        descCommonSet->setBuffer(descCommonSet->snowPositions, snowPositionsBuffer.get(), RenderBufferStructuredView(sizeof(float)));
++        if ((grassInstancing.hizFine != nullptr) && (grassInstancing.hizCoarse != nullptr)) {
++            descCommonSet->setTexture(descCommonSet->snowHiZFine, grassInstancing.hizFine.get(), RenderTextureLayout::SHADER_READ);
++            descCommonSet->setTexture(descCommonSet->snowHiZCoarse, grassInstancing.hizCoarse.get(), RenderTextureLayout::SHADER_READ);
++        }
 +        if (grassInstancing.bladesBuffer != nullptr) {
 +            descCommonSet->setBuffer(descCommonSet->grassBlades, grassInstancing.bladesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GrassBladeInstance)));
 +            descCommonSet->setBuffer(descCommonSet->grassSlots, grassInstancing.slotsBuffer.get(), RenderBufferStructuredView(sizeof(interop::GrassSlot)));
@@ -2938,7 +2949,7 @@ index 9fae0d4..15d20b4 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1094,14 @@ namespace RT64 {
+@@ -443,6 +1099,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2953,7 +2964,7 @@ index 9fae0d4..15d20b4 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1124,85 @@ namespace RT64 {
+@@ -465,12 +1129,85 @@ namespace RT64 {
          return true;
      }
      
@@ -3041,7 +3052,7 @@ index 9fae0d4..15d20b4 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1231,16 @@ namespace RT64 {
+@@ -499,6 +1236,16 @@ namespace RT64 {
              }
          };
  
@@ -3058,7 +3069,7 @@ index 9fae0d4..15d20b4 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1256,17 @@ namespace RT64 {
+@@ -514,6 +1261,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -3076,7 +3087,7 @@ index 9fae0d4..15d20b4 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1314,16 @@ namespace RT64 {
+@@ -561,8 +1319,16 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -3095,7 +3106,7 @@ index 9fae0d4..15d20b4 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1335,192 @@ namespace RT64 {
+@@ -574,12 +1340,192 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -3289,7 +3300,7 @@ index 9fae0d4..15d20b4 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1538,7 @@ namespace RT64 {
+@@ -597,6 +1543,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3297,7 +3308,7 @@ index 9fae0d4..15d20b4 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1558,7 @@ namespace RT64 {
+@@ -616,6 +1563,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3305,7 +3316,7 @@ index 9fae0d4..15d20b4 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2189,76 @@ namespace RT64 {
+@@ -1246,10 +2194,82 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3313,6 +3324,12 @@ index 9fae0d4..15d20b4 100644
 +        const bool grassFramebuffer = (framebufferIndex == grassInstancing.framebufferIndex) && (grassInstancing.candidates > 0) && (grassInstancePipeline != nullptr);
 +        if (grassFramebuffer) {
 +            submitGrassCull(worker);
++        }
++        // Banjo-Tooie: the tessellated snow's hull shader reads last frame's depth pyramid (SnowTess.hlsl).
++        const bool snowFramebuffer = (framebufferIndex == snowTessFramebuffer) && (grassInstancing.hizFine != nullptr) && (grassInstancing.hizCoarse != nullptr);
++        if (snowFramebuffer) {
++            startBarriers.emplace_back(RenderTextureBarrier(grassInstancing.hizFine.get(), RenderTextureLayout::SHADER_READ));
++            startBarriers.emplace_back(RenderTextureBarrier(grassInstancing.hizCoarse.get(), RenderTextureLayout::SHADER_READ));
 +        }
          worker->commandList->barriers(RenderBarrierStage::GRAPHICS, startBarriers);
  
@@ -3382,7 +3399,7 @@ index 9fae0d4..15d20b4 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,35 +2305,181 @@ namespace RT64 {
+@@ -1296,33 +2316,180 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3420,8 +3437,6 @@ index 9fae0d4..15d20b4 100644
 -        const FramebufferPair &fbPair = p.curWorkload->fbPairs[p.fbPairIndex];
 -        interop::FramebufferParams fbParams;
 -        fbParams.resolution = { p.targetWidth / p.resolutionScale.x, p.targetHeight / p.resolutionScale.y };
--        fbParams.resolutionScale = p.resolutionScale;
--        fbParams.horizontalMisalignment = p.horizontalMisalignment;
 +                // Banjo-Tooie: the screen-space effects, once the 3D world is drawn and before the HUD.
 +                if (drawSceneEffects && (++rasterScenesDrawn == targetDrawCall.sceneEffectsAfter)) {
 +                    submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3559,8 +3574,9 @@ index 9fae0d4..15d20b4 100644
 +        skippingWater = false;
 +
 +        // Banjo-Tooie: the depth the blades were drawn into, as the next frame's culling pass reads it.
-+        if (grassFramebuffer) {
-+            submitGrassHiZ(worker, depthTarget);
++        // (And the tessellated snow's or sand's, for its next frame's patches, SnowTess.hlsl.)
++        if (grassFramebuffer || snowFramebuffer) {
++            submitGrassHiZ(worker, depthTarget, snowFramebuffer);
 +        }
 +    }
 +
@@ -3586,12 +3602,10 @@ index 9fae0d4..15d20b4 100644
 +        const FramebufferPair &fbPair = p.curWorkload->fbPairs[p.fbPairIndex];
 +        interop::FramebufferParams fbParams;
 +        fbParams.resolution = { p.targetWidth / p.resolutionScale.x, p.targetHeight / p.resolutionScale.y };
-+        fbParams.resolutionScale = p.resolutionScale;
-+        fbParams.horizontalMisalignment = p.horizontalMisalignment;
+         fbParams.resolutionScale = p.resolutionScale;
+         fbParams.horizontalMisalignment = p.horizontalMisalignment;
          framebufferCount++;
- 
-         while (framebufferCount > framebufferVector.size()) {
-@@ -1350,10 +2505,43 @@ namespace RT64 {
+@@ -1350,10 +2517,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3635,7 +3649,7 @@ index 9fae0d4..15d20b4 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2574,11 @@ namespace RT64 {
+@@ -1386,6 +2586,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3647,7 +3661,7 @@ index 9fae0d4..15d20b4 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2601,68 @@ namespace RT64 {
+@@ -1408,6 +2613,68 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3716,7 +3730,7 @@ index 9fae0d4..15d20b4 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2686,22 @@ namespace RT64 {
+@@ -1431,6 +2698,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3739,7 +3753,7 @@ index 9fae0d4..15d20b4 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2721,179 @@ namespace RT64 {
+@@ -1450,12 +2733,179 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3919,7 +3933,7 @@ index 9fae0d4..15d20b4 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3044,7 @@ namespace RT64 {
+@@ -1606,6 +3056,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3927,7 +3941,7 @@ index 9fae0d4..15d20b4 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3121,20 @@ namespace RT64 {
+@@ -1682,6 +3133,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3948,7 +3962,7 @@ index 9fae0d4..15d20b4 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3200,1902 @@ namespace RT64 {
+@@ -1747,25 +3212,1935 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4325,6 +4339,9 @@ index 9fae0d4..15d20b4 100644
 +                    if (!snowOff && !iceGround && sm.zCmp() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY) && !interop::Blender::usesAlphaBlend(sm)) {
 +                        snowValue = uint8_t(std::min(snowShellCount(drawData, call, frameParams, snowTessPipeline != nullptr), 255u));
 +                        if (snowValue != 0) {
++                            if (snowTessPipeline != nullptr) {
++                                snowTessFramebuffer = framebufferCount - 1;
++                            }
 +                            for (uint32_t k = call.meshDesc.faceIndicesStart; k < call.meshDesc.faceIndicesStart + call.callDesc.triangleCount * 3; k++) {
 +                                snowVertexFirst = std::min(snowVertexFirst, drawData.faceIndices[k]);
 +                                snowVertexEnd = std::max(snowVertexEnd, drawData.faceIndices[k] + 1);
@@ -5629,12 +5646,12 @@ index 9fae0d4..15d20b4 100644
 +        commandList->barriers(RenderBarrierStage::GRAPHICS, vertices, uint32_t(std::size(vertices)), nullptr, 0);
 +    }
 +
-+    void FramebufferRenderer::submitGrassHiZ(RenderWorker *worker, RenderTarget *depthTarget) {
++    void FramebufferRenderer::submitGrassHiZ(RenderWorker *worker, RenderTarget *depthTarget, bool forSnow) {
 +        GrassInstancing &g = grassInstancing;
 +        const bool multisampled = (depthTarget != nullptr) && (depthTarget->multisampling.sampleCount > 1);
 +        RenderPipeline *finePipeline = multisampled ? shaderLibrary->grassHiZMS.get() : shaderLibrary->grassHiZ.pipeline.get();
 +        if ((depthTarget == nullptr) || (depthTarget->texture == nullptr) || (finePipeline == nullptr) || (shaderLibrary->grassHiZCoarse == nullptr) ||
-+            ((SceneGrassCulling() & GRASS_CULL_OCCLUSION) == 0) || (g.hizFine == nullptr))
++            (((SceneGrassCulling() & GRASS_CULL_OCCLUSION) == 0) && !forSnow) || (g.hizFine == nullptr))
 +        {
 +            return;
 +        }
@@ -5702,6 +5719,7 @@ index 9fae0d4..15d20b4 100644
 +        g.lastDepthSize[0] = width;
 +        g.lastDepthSize[1] = height;
 +        g.hizBuilt = true;
++        snowHiZBuilt = snowHiZBuilt || forSnow;
 +    }
 +
 +    void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
@@ -5849,6 +5867,35 @@ index 9fae0d4..15d20b4 100644
 +        }
 +        // Banjo-Tooie: instanced 3D grass's triangles, chunks and slots, and its terms in the frame's parameters.
 +        std::vector<BufferUploader::Upload> grassUploads;
++        // Banjo-Tooie: the tessellated snow's occlusion culling reads last frame's depth pyramid (SnowTess.hlsl), as the
++        // grass's does: only when it was built from the snow's framebuffer and the camera hasn't jumped since.
++        // (TOOIE_SNOW_OCCLUSION=0: off, to compare.)
++        {
++            static const bool snowOcclusionOff = (std::getenv("TOOIE_SNOW_OCCLUSION") != nullptr) && (std::getenv("TOOIE_SNOW_OCCLUSION")[0] == '0');
++            const GrassInstancing &g = grassInstancing;
++            const interop::float3 camera = { frameParams.grassWorldX.w, frameParams.grassWorldY.w, frameParams.grassWorldZ.w };
++            const interop::float3 forward = { -frameParams.grassWorldX.z, -frameParams.grassWorldY.z, -frameParams.grassWorldZ.z };
++            const float dx = camera.x - snowLastCamera.x, dy = camera.y - snowLastCamera.y, dz = camera.z - snowLastCamera.z;
++            const float moved = std::sqrt(dx * dx + dy * dy + dz * dz);
++            const float forwardLength = std::sqrt(forward.x * forward.x + forward.y * forward.y + forward.z * forward.z);
++            const float lastLength = std::sqrt(snowLastForward.x * snowLastForward.x + snowLastForward.y * snowLastForward.y + snowLastForward.z * snowLastForward.z);
++            const float turn = ((forwardLength > 1e-6f) && (lastLength > 1e-6f)) ? ((forward.x * snowLastForward.x + forward.y * snowLastForward.y + forward.z * snowLastForward.z) / (forwardLength * lastLength)) : -1.0f;
++            const bool occlusion = !snowOcclusionOff && snowHiZBuilt && snowHaveLast && (snowTessFramebuffer != UINT32_MAX) && (moved < 300.0f) && (turn > 0.9f) &&
++                (g.hizFineSize[0] > 0) && (g.hizFineSize[1] > 0);
++            for (int r = 0; r < 4; r++) {
++                frameParams.snowPrevWorldToClip[r] = snowLastWorldToClip[r];
++            }
++            frameParams.snowOcclusion = { occlusion ? 1.0f : 0.0f, float(g.hizFineSize[0]), float(g.hizFineSize[1]), 0.0f };
++            snowHiZBuilt = false;
++            snowHaveLast = (snowTessFramebuffer != UINT32_MAX);
++            if (snowHaveLast) {
++                for (int r = 0; r < 4; r++) {
++                    snowLastWorldToClip[r] = frameParams.grassWorldToClip[r];
++                }
++                snowLastCamera = camera;
++                snowLastForward = forward;
++            }
++        }
 +        finishGrassInstancing(worker, grassUploads);
          std::vector<BufferUploader::Upload> shaderUploads = {
              { renderIndicesVector.data(), { 0, renderIndicesVector.size() }, sizeof(interop::RenderIndices), RenderBufferFlag::STORAGE, { }, &renderIndicesBuffer},
@@ -5864,7 +5911,7 @@ index 9fae0d4..15d20b4 100644
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..b3af0a4 100644
+index 3add9c3..75cef81 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
 @@ -4,7 +4,11 @@
@@ -5949,7 +5996,7 @@ index 3add9c3..b3af0a4 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +115,197 @@ namespace RT64 {
+@@ -62,11 +115,206 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -6002,6 +6049,15 @@ index 3add9c3..b3af0a4 100644
 +        uint32_t snowGroundNext = 0;
 +        float snowPositionsFallback[4] = {};
 +        BufferPair snowPositionsBuffer;
++        // Banjo-Tooie: the tessellated snow's (and sand's) occlusion culling (SnowTess.hlsl), on the grass's depth
++        // pyramid: the framebuffer its draws are in this frame, whether the pyramid was built from it last frame, and
++        // the camera it was built with.
++        uint32_t snowTessFramebuffer = UINT32_MAX;
++        bool snowHiZBuilt = false;
++        bool snowHaveLast = false;
++        interop::float4 snowLastWorldToClip[4] = {};
++        interop::float3 snowLastCamera = { 0.0f, 0.0f, 0.0f };
++        interop::float3 snowLastForward = { 0.0f, 0.0f, 0.0f };
 +        // Banjo-Tooie: where 3D grass doesn't grow (a road or dirt laid over grass ground as a decal): one bit a cell
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
 +        std::vector<uint32_t> grassMaskVector;
@@ -6093,7 +6149,7 @@ index 3add9c3..b3af0a4 100644
 +        uint32_t collectGrassTriangles(const DrawData &drawData, const GameCall &call, bool edges, const interop::float2 &screenScale, const interop::float2 &screenOffset);
 +        void finishGrassInstancing(RenderWorker *worker, std::vector<BufferUploader::Upload> &uploads);
 +        void submitGrassCull(RenderWorker *worker);
-+        void submitGrassHiZ(RenderWorker *worker, RenderTarget *depthTarget);
++        void submitGrassHiZ(RenderWorker *worker, RenderTarget *depthTarget, bool forSnow);
 +        // Banjo-Tooie: Banjo's fur. 1 for each instance draw call that gets fur shells over it (marked by the game).
 +        std::vector<uint8_t> instanceFurVector;
 +        // Banjo-Tooie: per instance, 1 for a window or lamp that lights up at night.
@@ -6147,7 +6203,7 @@ index 3add9c3..b3af0a4 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +316,13 @@ namespace RT64 {
+@@ -77,6 +325,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -6161,7 +6217,7 @@ index 3add9c3..b3af0a4 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +333,14 @@ namespace RT64 {
+@@ -87,6 +342,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -6176,7 +6232,7 @@ index 3add9c3..b3af0a4 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +354,7 @@ namespace RT64 {
+@@ -100,6 +363,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -6184,7 +6240,7 @@ index 3add9c3..b3af0a4 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +378,10 @@ namespace RT64 {
+@@ -123,6 +387,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -6195,7 +6251,7 @@ index 3add9c3..b3af0a4 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +423,15 @@ namespace RT64 {
+@@ -164,7 +432,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);
@@ -13767,7 +13823,7 @@ index 0000000..fc9cf8f
 +    return float4(color, 1.0f);
 +}
 diff --git a/src/shaders/FbRendererCommon.hlsli b/src/shaders/FbRendererCommon.hlsli
-index bc250a2..f7bcc28 100644
+index bc250a2..c4c231f 100644
 --- a/src/shaders/FbRendererCommon.hlsli
 +++ b/src/shaders/FbRendererCommon.hlsli
 @@ -8,6 +8,7 @@
@@ -13778,7 +13834,7 @@ index bc250a2..f7bcc28 100644
  #include "shared/rt64_rdp_params.h"
  #include "shared/rt64_rdp_tile.h"
  #include "shared/rt64_render_indices.h"
-@@ -38,6 +39,18 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
+@@ -38,6 +39,20 @@ SamplerState gNearestMirrorClampSampler : register(s21, space0);
  SamplerState gNearestClampWrapSampler : register(s22, space0);
  SamplerState gNearestClampMirrorSampler : register(s23, space0);
  SamplerState gNearestClampClampSampler : register(s24, space0);
@@ -13794,6 +13850,8 @@ index bc250a2..f7bcc28 100644
 +StructuredBuffer<GrassBladeInstance> grassBlades : register(t72, space0);
 +StructuredBuffer<GrassSlot> grassSlots : register(t73, space0);
 +StructuredBuffer<uint> grassSlotCounts : register(t74, space0);
++Texture2D<float> snowHiZFine : register(t75, space0);
++Texture2D<float> snowHiZCoarse : register(t76, space0);
  
  // Set 1 - RGBA32 texture cache.
  Texture2D<float4> gTextures[8192] : register(t0, space1);
@@ -22190,10 +22248,10 @@ index 0000000..15a6637
 +}
 diff --git a/src/shaders/SnowTess.hlsl b/src/shaders/SnowTess.hlsl
 new file mode 100644
-index 0000000..adfbd27
+index 0000000..98c6f34
 --- /dev/null
 +++ b/src/shaders/SnowTess.hlsl
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,276 @@
 +//
 +// RT64
 +//
@@ -22292,7 +22350,7 @@ index 0000000..adfbd27
 +    return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
 +}
 +
-+// Whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
++// Frustum culling: whether a patch is out of view: all of it, from the snow's full height above the ground to as far below it, past the
 +// same side of the screen (a little widened) or behind the camera. It is then not drawn at all (factor 0), so the
 +// level's snow or sand out of view costs nothing past this.
 +bool SnowPatchOutOfView(InputPatch<SnowVertex, 3> patch) {
@@ -22316,13 +22374,77 @@ index 0000000..adfbd27
 +    return left || right || bottom || top || behind;
 +}
 +
++// Occlusion culling: whether a patch was hidden behind what last frame drew in front of it (its depth pyramid, built
++// from the depth of the frame the snow was drawn in: snowHiZFine, each texel the farthest depth of 8 x 8 pixels, and
++// snowHiZCoarse, of 8 x 8 of those), by every point of it from as far below the ground as the trail goes to the snow's
++// full height above it. Not close to the camera, where the game draws the ground with a nearer near plane of its own
++// (its depth there isn't the frame camera's) and a patch costs little anyway.
++static const float SnowOcclusionSlack = 0.03f;
++static const float SnowOcclusionNearest = 600.0f;
++static const int SnowOcclusionMostTexels = 16;
++
++bool SnowPatchHidden(InputPatch<SnowVertex, 3> patch) {
++    const float4 occlusion = FrParams.snowOcclusion;
++    if (occlusion.x < 0.5f) {
++        return false;
++    }
++    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
++    const float2 size = occlusion.yz;
++    float2 low = 1e30f;
++    float2 high = -1e30f;
++    float nearest = 1e30f;
++    for (uint i = 0; i < 3; i++) {
++        const float3 ground = patch[i].furAnchor.xyz;
++        if (distance(ground, camera) < SnowOcclusionNearest) {
++            return false;
++        }
++        for (int k = 0; k < 2; k++) {
++            const float3 world = ground + float3(0.0f, (k == 0) ? -SnowLayerMost : FrParams.snowParams.y, 0.0f);
++            const float4 w = float4(world, 1.0f);
++            const float4 c = float4(dot(FrParams.snowPrevWorldToClip[0], w), dot(FrParams.snowPrevWorldToClip[1], w),
++                dot(FrParams.snowPrevWorldToClip[2], w), dot(FrParams.snowPrevWorldToClip[3], w));
++            if (c.w <= 1e-3f) {
++                // (Reaching behind last frame's camera: nothing known.)
++                return false;
++            }
++            const float2 ndc = (c.xy / c.w) * gConstants.screenScale + gConstants.screenOffset;
++            const float2 texel = float2(ndc.x * 0.5f + 0.5f, 0.5f - ndc.y * 0.5f) * size;
++            low = min(low, texel);
++            high = max(high, texel);
++            nearest = min(nearest, c.z / c.w);
++        }
++    }
++    // (Off last frame's picture, or reaching the camera: nothing known.)
++    if (any(low < 0.0f) || any(high >= size) || (nearest <= 0.0f)) {
++        return false;
++    }
++    int2 a = int2(floor(low));
++    int2 b = int2(floor(high));
++    bool fine = true;
++    if ((b.x - a.x + 1) * (b.y - a.y + 1) > SnowOcclusionMostTexels) {
++        a /= 8;
++        b /= 8;
++        fine = false;
++        if ((b.x - a.x + 1) * (b.y - a.y + 1) > SnowOcclusionMostTexels) {
++            return false;
++        }
++    }
++    float farthest = 0.0f;
++    for (int y = a.y; y <= b.y; y++) {
++        for (int x = a.x; x <= b.x; x++) {
++            farthest = max(farthest, fine ? snowHiZFine.Load(int3(x, y, 0)) : snowHiZCoarse.Load(int3(x, y, 0)));
++        }
++    }
++    return nearest > farthest + (1.0f - farthest) * SnowOcclusionSlack;
++}
++
 +SnowPatch SnowPatchConstants(InputPatch<SnowVertex, 3> patch) {
 +    SnowPatch p;
 +    const float3 a = patch[0].furAnchor.xyz;
 +    const float3 b = patch[1].furAnchor.xyz;
 +    const float3 c = patch[2].furAnchor.xyz;
 +    p.normal = cross(b - a, c - a);
-+    if (SnowPatchOutOfView(patch)) {
++    if (SnowPatchOutOfView(patch) || SnowPatchHidden(patch)) {
 +        p.edges[0] = p.edges[1] = p.edges[2] = 0.0f;
 +        p.inside = 0.0f;
 +        return p;
@@ -23082,10 +23204,10 @@ index 0000000..e6accce
 +    return h;
 +}
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..c94d3f4 100644
+index 2e62aaf..17f4867 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,141 @@ namespace interop {
+@@ -13,6 +13,146 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -23224,6 +23346,11 @@ index 2e62aaf..c94d3f4 100644
 +        // Banjo-Tooie: Banjo's fur jiggle (RasterVS.hlsl): how far his strands' tips lag behind his movement, a world
 +        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
 +        float4 furSway;
++        // Banjo-Tooie: the tessellated snow's occlusion culling (SnowTess.hlsl): last frame's world to clip (as
++        // grassWorldToClip), then 1 when last frame's depth pyramid can be read (snowHiZFine, snowHiZCoarse) and the
++        // fine level's width and height.
++        float4 snowPrevWorldToClip[4];
++        float4 snowOcclusion;
      };
  #ifdef HLSL_CPU
  };

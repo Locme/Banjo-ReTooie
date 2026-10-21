@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T514 Tessellated sand: occlusion culling and props fix (Terrydactyland speed)
+- Asked: 2026-10-21 14:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Walk behind hills and turn the camera quickly
+- Look for: Is it playable now? Footprints still show near Banjo; no sand patches popping in or missing at hill edges or after quick camera turns (also check Icy Side's deep snow)
+- Status: waiting for L
+
 ## T513 Displaced ground (floors)
 - Asked: 2026-10-21 12:39 UTC
 - Build: claude/project-thread-zaob1b
