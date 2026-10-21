@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T507 Mirror Mode: controls follow the picture
+- Asked: 2026-10-21 12:26 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Push the stick left, then right
+  3. Turn the camera with C-left and C-right
+- Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
+- Status: waiting for L
+
 ## T506 Fence thickness (layers on flat cut-out textures)
 - Asked: 2026-10-21 11:22 UTC
 - Build: main, next push (built and run headless in Spiral Mountain with a test texture list: layers drawn, no crash; not seen on a real fence)

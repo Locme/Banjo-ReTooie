@@ -7,6 +7,7 @@
 // part of the world and are mirrored with it.
 // It applies as it changes, with no restart.
 
+#include <atomic>
 #include <variant>
 
 #include "recompui/config.h"
@@ -18,12 +19,21 @@ namespace RT64 {
     void SetMirrorMode(bool on);
 }
 
+namespace {
+    std::atomic<bool> mirrored{ false };
+}
+
+bool tooie::mirror_mode::active() {
+    return mirrored.load();
+}
+
 void tooie::mirror_mode::apply() {
     bool on = false;
     try {
         on = std::get<bool>(recompui::config::get_general_config().get_option_value(option));
     } catch (...) {
     }
+    mirrored.store(on);
     RT64::SetMirrorMode(on);
 }
 
@@ -37,6 +47,7 @@ void tooie::mirror_mode::add_option(recomp::config::Config& general) {
         [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant value, recomp::config::OptionChangeContext) {
             // Live: the new value goes straight to RT64 (the config may not hold it yet).
             if (const bool* on = std::get_if<bool>(&value)) {
+                mirrored.store(*on);
                 RT64::SetMirrorMode(*on);
             }
         });
