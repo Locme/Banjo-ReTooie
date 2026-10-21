@@ -33,7 +33,6 @@
 
 #include "recomp.h"
 #include "recompui/config.h"
-#include "tooie_picture_filters.h"
 #include "tooie_window_beams.h"
 
 namespace {
@@ -45,17 +44,18 @@ namespace {
         float floor_y;              // the floor where its beam lands
     };
 
-    // The windows' shapes, read off their glass in the solid models. Bottles' are round (the glass
-    // an octagon of radius 97 behind a round frame; ten corners keep the vertices in one load).
-    Outline round(float radius, int corners) {
+    // The windows' shapes, read off their glass in the solid models. Bottles' are round: the glass is
+    // an octagon of radius 99 with corners straight across and straight up, at the back of a frame
+    // 68 deep.
+    Outline octagon(float radius) {
         Outline out;
-        for (int i = 0; i < corners; i++) {
-            const float a = (i + 0.5f) * 2.0f * 3.14159265f / corners;
+        for (int i = 0; i < 8; i++) {
+            const float a = i * 2.0f * 3.14159265f / 8;
             out.push_back({ radius * std::cos(a), radius * std::sin(a) });
         }
         return out;
     }
-    const Outline bottles_window = round(100.0f, 10);
+    const Outline bottles_window = octagon(99.0f);
     const Outline banjo_window = {      // hexagonal, its glass texture 0x113
         { 76.0f, 11.0f }, { 36.0f, 63.0f }, { -36.0f, 63.0f }, { -76.0f, 11.0f }, { -50.0f, -62.0f }, { 50.0f, -62.0f },
     };
@@ -72,8 +72,10 @@ namespace {
     };
     const std::array<Room, 3> rooms = {{
         { { 0x143, 0x169, 0x191, 0x192 }, 0x1DD0, 0x1DD3, false, {
-            { 529.0f, 443.0f, -2137.0f, -0.162f, 0.987f, &bottles_window, 262.0f },   // right of the doorway (from inside)
-            { -553.0f, 422.0f, -2155.0f, 0.215f, 0.977f, &bottles_window, 282.0f },   // left of the doorway
+            // On the glass (2 in front of it), not the front of the frame, so each beam leaves its window
+            // (L, 2026-10-21: they started beside it).
+            { 542.0f, 443.0f, -2202.0f, -0.162f, 0.987f, &bottles_window, 262.0f },   // right of the doorway (from inside)
+            { -571.0f, 422.0f, -2222.0f, 0.218f, 0.976f, &bottles_window, 282.0f },   // left of the doorway
         } },
         { { 0x173, 0x173, 0x173, 0x173 }, 0x1D08, 0x1D49, true, {
             { 250.0f, 116.0f, 304.0f, 0.0f, -1.0f, &banjo_window, 0.0f },             // either side of the door
@@ -451,10 +453,8 @@ namespace {
 }
 
 bool tooie::window_beams::enabled() {
-    // The traced light beams take over (L, 2026-10-21): the drawn tubes would double them.
-    if (tooie::picture_filters::traced_beams_on()) {
-        return false;
-    }
+    // On with ray tracing too: the traced light beams didn't show in these rooms (L, 2026-10-21), so they step
+    // aside here instead (picture_filters.cpp).
     try {
         return std::get<bool>(recompui::config::get_graphics_config().get_option_value(option));
     } catch (...) {

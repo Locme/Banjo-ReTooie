@@ -4650,8 +4650,10 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
     {
         static float beams_sent = -1.0f;
         static uint16_t beams_map_sent = 0xFFFF;
-        const float beams = traced_beams_on() ? (float)(value<double>(traced_beams_option, 60.0) / 100.0) : 0.0f;
         const uint16_t map = tooie::debug::current_map(rdram);
+        // Not in a room Window Light Beams draws beams in: they would double.
+        const bool drawn = tooie::window_beams::enabled() && tooie::window_beams::has_beams(map);
+        const float beams = (traced_beams_on() && !drawn) ? (float)(value<double>(traced_beams_option, 60.0) / 100.0) : 0.0f;
         if ((beams != beams_sent) || (map != beams_map_sent)) {
             beams_sent = beams;
             beams_map_sent = map;
@@ -5186,7 +5188,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_number_option(
         traced_beams_option,
         "Traced light beams",
-        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. In the rooms Window Light Beams covers they take the place of its drawn beams. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
+        "Shafts of light through the air, found by tracing rays towards the light: in a room the light only gets in at the windows, so the beams take the windows' shapes and anything standing in them (Banjo too) cuts its shadow through them; outdoors it is a thin haze with shafts between trees and under arches. In the rooms Window Light Beams covers, its drawn beams are used instead while it is on. Needs Ray tracing on. 0 is off. Costs a dozen rays a pixel.",
         0, 100, 5, 0, false, 60);
     graphics.add_bool_option(
         ray_tracing_player_shadows_option,
