@@ -5,7 +5,7 @@
 - Build: main (next build)
 - Steps:
   1. Turn on Shader Effects pick mode
-  2. Press 2 over a texture: Grass turns on or off there; 9 does Slight Glow (a little brighter); Shift + a number does nothing, as there are only 9 effects
+  2. Press 2 over a texture: Grass turns on or off there; 8 does Slight Glow (a little brighter); 9 and Shift + a number do nothing, as there are only 8 effects
   3. Hold left click and sweep over several textures: each gets the same change as the first
   4. Middle click: textures with the chosen effect pulse orange; press other number keys to see other effects' textures; middle click again turns it off
 - Look for: Do the keys, painting, Show All and Slight Glow work as described?
