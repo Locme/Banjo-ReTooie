@@ -126,7 +126,7 @@ namespace tooie::picture_filters {
     inline const std::string snow_detail_option = "deep_snow_detail";
     inline const std::string snow_refill_option = "deep_snow_refill_seconds";
     inline const std::string snow_lod_option = "deep_snow_lod_distance";
-    // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
+    // Parallax mapping on the stone textures listed in picture_filters.cpp (rt64-ext/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
     inline const std::string fence_thickness_option = "fence_thickness";
@@ -139,7 +139,7 @@ namespace tooie::picture_filters {
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
     // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
     inline const std::string character_section_option = "character_shaders_section";
-    // Kazooie's feathers (GrassGS.hlsl in lib/rt64): how full (0 off) and how big.
+    // Kazooie's feathers (rt64-ext/src/shaders/GrassGS.hlsl): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
     inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
     // Like Banjo's fur (L): length, density, noisiness, and how see-through.

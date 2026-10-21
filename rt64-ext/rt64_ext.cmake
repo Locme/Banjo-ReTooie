@@ -66,3 +66,6 @@ rt64_ext_shader(pixel rt64 "src/shaders/PhotoGradePS.hlsl")
 
 # Live texture upscaling in the texture cache (RT64::SetTextureUpscale).
 rt64_ext_shader(compute rt64 "src/shaders/TextureUpscaleCS.hlsl")
+
+# 3D grass blades (geometry shader; D3D12 and Vulkan only, see build_geometry_shader in RT64's CMakeLists.txt).
+rt64_ext_shader(geometry rt64 "src/shaders/GrassGS.hlsl")
