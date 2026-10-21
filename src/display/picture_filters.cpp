@@ -96,6 +96,7 @@ namespace RT64 {
     void SetSceneGrassBlades(float thickness, float randomLength, bool chunky, float chunkSize, bool pixelated, float pixelSize, float blend);
     void SetSceneGrassCulling(bool frustum, bool occlusion, bool chunking);
     void SetSceneGrassLod(float lod, bool halfRate);
+    void SetSceneGrassRayTracing(bool enabled);
     void SetSceneGrassTextures(const uint64_t *hashes, size_t count);
     void SetSceneGrassEdgeTextures(const uint64_t *hashes, size_t count);
     void SetSceneFur(float amount, float length, float density, float noisiness);
@@ -4353,6 +4354,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneGrassCulling(value<bool>(grass_frustum_cull_option, true), value<bool>(grass_occlusion_cull_option, true),
         value<bool>(grass_chunking_option, true));
     RT64::SetSceneGrassLod((float)(value<double>(grass_lod_option, 0.0) / 100.0), value<bool>(grass_half_rate_option, true));
+    RT64::SetSceneGrassRayTracing(value<bool>(grass_ray_tracing_option, true));
     send_effect_textures();
     double fur = value<double>(banjo_fur_option, 0.0);
     if (const char* forced = std::getenv("TOOIE_BANJO_FUR")) {
@@ -5427,12 +5429,17 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "30 FPS 3D grass",
         "Works out which 3D grass blades to draw, and their sway in the wind, 30 times a second instead of every frame, and draws them again in between. Faster above 30 FPS; the wind and the grass parting round Banjo update at 30 FPS.",
         true);
+    graphics.add_bool_option(
+        grass_ray_tracing_option,
+        "3D grass in ray tracing",
+        "With Ray tracing on: the 3D grass near Banjo casts traced shadows (sun, lamps, light beams) and shows in traced reflections. Off leaves the grass out of the rays (faster).",
+        true);
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &fence_thickness_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &fence_thickness_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5500,6 +5507,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_lod_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_half_rate_option, grass_section_option, false);
+    graphics.add_option_hidden_dependency(grass_ray_tracing_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(tessellated_sand_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);

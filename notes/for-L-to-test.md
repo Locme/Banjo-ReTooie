@@ -1,5 +1,24 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T509 3D grass in ray tracing
+- Asked: 2026-10-21 12:29 UTC
+- Build: main
+- Steps:
+  1. Turn on Ray tracing and 3D grass, leave 3D grass in ray tracing on (Graphics > 3D grass)
+  2. Stand in Spiral Mountain's grass in sunlight and walk through it
+  3. Look at the grass shadows on Banjo and the ground, then turn 3D grass in ray tracing off and on again and compare the frame rate
+- Look for: The grass casts shadows on Banjo's legs and on the ground beside it, and nothing flickers or goes black. Say how much slower it is with it on. Send console.log if the game crashes.
+- Status: waiting for L
+
+## T508 Tessellated sand speed in Terrydactyland
+- Asked: 2026-10-21 12:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Turn the camera around and walk a long way on sand
+- Look for: Is it playable now (frame rate close to Tessellated sand off)? Footprints still show near Banjo; no sand or snow vanishing at the screen edges (also check Icy Side's deep snow)
+
 ## T507 Mirror Mode: controls follow the picture
 - Asked: 2026-10-21 12:26 UTC
 - Build: main, next push (untested)
@@ -18,7 +37,7 @@
   2. Bind Shader Effects Pick Mode (Controls, Pick Modes) and press it next to a fence, grate or picket
   3. Left click on the fence texture until it reads Fence (after Shiny Reflection and Text)
   4. Walk round it and look at it from the side, then raise and lower Fence thickness
-- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Not built in for any fence yet: nothing happens until you pick one.
+- Look for: Seen from the side the fence has real thickness (six layers, darker at the back) instead of a paper-thin sheet, with the cut-out holes staying clear. Tell me which world and which textures (Save Pick writes them to shader_effect_tags.txt) so I can list them as built-in, and whether 60 is the right look or you want chunkier. Update: up to 24 close layers now (L: the stripes should run together), and layers drop faint edge pixels (the line along the top). Not built in for any fence yet: nothing happens until you pick one.
 - Status: waiting for L
 
 ## T505 Mirror Mode: signs readable, Text pick
