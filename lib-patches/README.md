@@ -323,6 +323,11 @@ Applied in `lib/rt64/src/contrib/plume` (a submodule of rt64).
   (`capabilities.rayQuery`; D3D12 leaves it false), and `buildBottomLevelAS` gives each geometry its own build
   range (it gave one range for all, wrong with more than one mesh).
 
+* **Indirect draws** (`drawInstancedIndirect`, `RenderBufferFlag::INDIRECT`): one instanced draw whose
+  arguments a GPU buffer holds (`vkCmdDrawIndirect`; D3D12 `ExecuteIndirect` with a plain draw command
+  signature made on first use, buffer state INDIRECT_ARGUMENT while read). Metal does nothing (instanced 3D
+  grass, its only user, has no Metal pipeline).
+
 To change it: edit the files in `lib/rt64/src/contrib/plume`, then
 `git -C lib/rt64/src/contrib/plume diff > lib-patches/plume.patch`.
 * **Context lifetime lock** (`recompui/include/recompui/recompui.h`, `src/core/ui_context.cpp`): `lock_context_lifetime()` and `contexts_alive()`; `destroy_all_contexts` takes the lock and marks contexts gone, so the port's overlay, notice and photo panel threads never open a context after exit tears them down.

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T501 3D grass stays put, LOD slider and 30 FPS grass
+- Asked: 2026-10-21 10:14 UTC
+- Build: main
+- Steps:
+  1. Turn 3D grass on (Graphics > 3D grass), leave 3D grass LOD at 0 (Off) and 30 FPS 3D grass on
+  2. Walk and turn around in Spiral Mountain's grass fields and on the lawn by Banjo's house
+  3. Watch the frame rate overlay, then turn 30 FPS 3D grass off and compare
+  4. Move 3D grass LOD to 50 and to 100 and walk again
+- Look for: With LOD 0 no blade changes, pops or disappears while you move. Better frame rate than the last build with grass on, and higher with 30 FPS 3D grass on. With LOD up, far grass gets thinner but still does not flicker as you walk. Send console.log if the game crashes or the grass is missing.
+- Status: waiting for L
+
 ## T500 Noclip: Y toggles it, and no damage
 - Asked: 2026-10-21 10:09 UTC
 - Build: main, next push
