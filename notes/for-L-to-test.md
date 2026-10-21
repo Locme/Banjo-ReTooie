@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T511 Displaced ground (floors)
+- Asked: 2026-10-21 12:39 UTC
+- Build: claude/project-thread-zaob1b
+- Steps:
+  1. Settings > Graphics: switch on Parallax on original textures and set Displaced ground to 60
+  2. Go to Spiral Mountain and Mumbo's Mountain and walk over stone, brick, cracked and dirt floors
+  3. Look at the ground from a low angle and from far away, then set Displaced ground back to 0 and compare the frame rate
+- Look for: Cracks, gaps and grooves in floors are real dips (they change the outline of the ground and hide what is behind them), the deeper parts are a little darker, and walls keep their old parallax. No holes or cracks between pieces of ground, nothing flickers. Say how much slower it is on your GPU. Send console.log if a message says the graphics driver could not build the pipeline.
+- Status: waiting for L
+
 ## T510 Dump sounds (DEV)
 - Asked: 2026-10-21 12:38 UTC
 - Build: main @ cbfad44
