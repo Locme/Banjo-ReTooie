@@ -8373,10 +8373,10 @@ index 81917bc..179c3ff 100644
  #endif
 diff --git a/src/render/rt64_scene_effects.cpp b/src/render/rt64_scene_effects.cpp
 new file mode 100644
-index 0000000..d6c240d
+index 0000000..c2fbe41
 --- /dev/null
 +++ b/src/render/rt64_scene_effects.cpp
-@@ -0,0 +1,3460 @@
+@@ -0,0 +1,3505 @@
 +//
 +// RT64
 +//
@@ -10042,6 +10042,8 @@ index 0000000..d6c240d
 +            std::vector<uint32_t> edges;
 +            // How many model triangles the last frame had (TOOIE_SNOW_LOG).
 +            uint32_t lastTouches = 0;
++            uint32_t lastDraws = 0;
++            uint32_t lastStillDraws = 0;
 +            float lastTouchMs = 0.0f;
 +            uint64_t frame = 0;
 +            std::chrono::steady_clock::time_point lastTime{};
@@ -10052,18 +10054,40 @@ index 0000000..d6c240d
 +        // The model triangles drawn since the trail last took them (SceneSnowTouch): nine floats each, x y z three times.
 +        std::mutex snowTouchMutex;
 +        std::vector<float> snowTouches;
-+        // By draw (SceneSnowTouchDraw), each with a fingerprint of where its triangles are: this frame's so far, and the
-+        // last frame's, held back a frame. A draw found in the same place in the frames either side of it is standing
-+        // still (the level's props drawn as models: rocks, plants, a nest in the sand), and its triangles press nothing,
-+        // or every one of them keeps the trail's blocks under it cut finely forever (Terrydactyland, L: unusable).
++        // By draw (SceneSnowTouchDraw), each with where it is (its triangle count and the middle of its points): this
++        // frame's so far, and the last frame's, held back a frame. A draw found in about the same place in the frames
++        // either side of it is standing still (the level's props drawn as models: rocks, plants turned to face the
++        // camera, a nest in the sand), and its triangles press nothing, or every one of them keeps the trail's blocks
++        // under it cut finely forever (Terrydactyland, L: unusable).
++        struct SnowTouchPlace {
++            uint32_t count;
++            float x, y, z;
++        };
 +        struct SnowTouchDraws {
 +            std::vector<float> triangles;
-+            std::vector<std::pair<uint64_t, std::pair<size_t, size_t>>> draws;
-+            std::unordered_set<uint64_t> places;
-+            void clear() { triangles.clear(); draws.clear(); places.clear(); }
++            std::vector<std::pair<SnowTouchPlace, std::pair<size_t, size_t>>> draws;
++            void clear() { triangles.clear(); draws.clear(); }
 +        };
 +        SnowTouchDraws snowTouchNow, snowTouchHeld;
-+        std::unordered_set<uint64_t> snowTouchBefore;
++        std::vector<SnowTouchPlace> snowTouchBefore;
++        // (Within this of where it was: a prop's matrix is worked out again each frame, a sprite turns to the camera.)
++        constexpr float SnowStillReach = 1.0f;
++        bool SnowTouchFound(const std::vector<std::pair<SnowTouchPlace, std::pair<size_t, size_t>>> &draws, const SnowTouchPlace &p) {
++            for (const auto &[q, range] : draws) {
++                if ((q.count == p.count) && (std::abs(q.x - p.x) < SnowStillReach) && (std::abs(q.y - p.y) < SnowStillReach) && (std::abs(q.z - p.z) < SnowStillReach)) {
++                    return true;
++                }
++            }
++            return false;
++        }
++        bool SnowTouchFound(const std::vector<SnowTouchPlace> &places, const SnowTouchPlace &p) {
++            for (const SnowTouchPlace &q : places) {
++                if ((q.count == p.count) && (std::abs(q.x - p.x) < SnowStillReach) && (std::abs(q.y - p.y) < SnowStillReach) && (std::abs(q.z - p.z) < SnowStillReach)) {
++                    return true;
++                }
++            }
++            return false;
++        }
 +    }
 +
 +    static float SnowSpringBack(float age, float hold, float recover) {
@@ -10087,6 +10111,7 @@ index 0000000..d6c240d
 +        uint32_t &a = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2];
 +        uint32_t &b = trail.cells[(uint32_t(slotZ) * SnowGridSize + uint32_t(slotX)) * 2 + 1];
 +        const bool bankOnly = (bank > 0.0f);
++        bool again = false;
 +        if ((b != 0) && (((b >> 16) & 0xFFu) == tagX) && ((b >> 24) == tagZ)) {
 +            const float age = float((now - (b & 0xFFFFu)) & 0xFFFFu) / SnowTicksPerSecond;
 +            const float spring = SnowSpringBack(age, trail.hold, recover);
@@ -10115,6 +10140,7 @@ index 0000000..d6c240d
 +                    if ((std::abs(oldY - y) < 0.1f) && (age < 1.0f)) {
 +                        return;
 +                    }
++                    again = std::abs(oldY - y) < 0.1f;
 +                }
 +            }
 +        }
@@ -10126,26 +10152,32 @@ index 0000000..d6c240d
 +            b = 1;
 +        }
 +        trail.rowPressed[slotZ] = trail.frame;
-+        trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
++        // (The same print held again doesn't keep its block cut finely: something standing in it the whole time would
++        // keep it so forever, and covers it anyway.)
++        if (!again) {
++            trail.blockPressed[(uint32_t(slotZ) / SnowBlockCells) * SnowBlocks + uint32_t(slotX) / SnowBlockCells] = trail.seconds;
++        }
 +    }
 +
 +    void SceneSnowTouchDraw(const float *triangles, size_t count) {
 +        if (count == 0) {
 +            return;
 +        }
-+        uint64_t h = 0xCBF29CE484222325ull;
-+        for (size_t i = 0; i < count * 9; i++) {
-+            uint32_t bits;
-+            std::memcpy(&bits, &triangles[i], sizeof(bits));
-+            h = (h ^ bits) * 0x100000001B3ull;
++        SnowTouchPlace place = { uint32_t(count), 0.0f, 0.0f, 0.0f };
++        for (size_t i = 0; i < count * 3; i++) {
++            place.x += triangles[i * 3 + 0];
++            place.y += triangles[i * 3 + 1];
++            place.z += triangles[i * 3 + 2];
 +        }
++        place.x /= float(count * 3);
++        place.y /= float(count * 3);
++        place.z /= float(count * 3);
 +        const std::scoped_lock lock(snowTouchMutex);
 +        if (snowTouchNow.triangles.size() + count * 9 > SnowTouchMost * 9) {
 +            return;
 +        }
-+        snowTouchNow.draws.push_back({ h, { snowTouchNow.triangles.size(), count * 9 } });
++        snowTouchNow.draws.push_back({ place, { snowTouchNow.triangles.size(), count * 9 } });
 +        snowTouchNow.triangles.insert(snowTouchNow.triangles.end(), triangles, triangles + count * 9);
-+        snowTouchNow.places.insert(h);
 +    }
 +
 +    void SceneSnowTouch(const float *triangle) {
@@ -10165,12 +10197,21 @@ index 0000000..d6c240d
 +            const std::scoped_lock lock(snowTouchMutex);
 +            touches.swap(snowTouches);
 +            // Last frame's draws, less those standing still (in the same place this frame or the frame before).
++            uint32_t still = 0;
 +            for (const auto &[place, range] : snowTouchHeld.draws) {
-+                if ((snowTouchNow.places.count(place) == 0) && (snowTouchBefore.count(place) == 0)) {
++                if (!SnowTouchFound(snowTouchNow.draws, place) && !SnowTouchFound(snowTouchBefore, place)) {
 +                    touches.insert(touches.end(), snowTouchHeld.triangles.begin() + range.first, snowTouchHeld.triangles.begin() + range.first + range.second);
 +                }
++                else {
++                    still++;
++                }
 +            }
-+            snowTouchBefore.swap(snowTouchHeld.places);
++            trail.lastStillDraws = still;
++            trail.lastDraws = uint32_t(snowTouchHeld.draws.size());
++            snowTouchBefore.clear();
++            for (const auto &[place, range] : snowTouchHeld.draws) {
++                snowTouchBefore.push_back(place);
++            }
 +            std::swap(snowTouchHeld, snowTouchNow);
 +            snowTouchNow.clear();
 +        }
@@ -10619,8 +10660,12 @@ index 0000000..d6c240d
 +            for (size_t i = 0; i < trail.cells.size(); i += 2) {
 +                pressed += (trail.cells[i + 1] != 0) ? 1 : 0;
 +            }
-+            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, depth %.1f, recover %.0f s, %u model triangles (%.1f ms)\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
-+                pressed, depth, recover, trail.lastTouches, trail.lastTouchMs);
++            uint32_t activeBlocks = 0;
++            for (uint32_t k = 0; k < SnowBlocks * SnowBlocks; k++) {
++                activeBlocks += (trail.seconds - trail.blockPressed[k] < double(trail.hold) + SnowRecoverSeconds + 2.0) ? 1 : 0;
++            }
++            fprintf(stderr, "[snow] Banjo %.0f %.0f %.0f%s, %u cells pressed, %u of %u blocks cut finely, depth %.1f, recover %.0f s, %u model triangles from %u of %u draws (the rest standing still) (%.1f ms)\n", settings.player[0], settings.player[1], settings.player[2], settings.playerGrounded ? "" : " (in the air)",
++                pressed, activeBlocks, SnowBlocks * SnowBlocks, depth, recover, trail.lastTouches, trail.lastDraws - trail.lastStillDraws, trail.lastDraws, trail.lastTouchMs);
 +        }
 +        // (Sand banks up less round a print than snow.)
 +        frameParams.snowSpring = { trail.hold, recover, settings.snowSand ? SnowBank * 0.6f : SnowBank, float(now) };
