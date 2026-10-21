@@ -30,12 +30,12 @@ resets `lib/rt64` doesn't touch it.
 | `src/shaders/TextureUpscaleCS.hlsl` | Live texture upscaling |
 | `src/render/rt64_gpu_sections.h` | GPU timings for the frame overlay (included by the framebuffer renderer and scene effects, unchanged) |
 | `src/shaders/Parallax.hlsli`, `GrassGS.hlsl` | Parallax and fences (included by RasterPS and GroundTess), grass blades |
+| `src/shaders/GroundTess.hlsl` | Displaced ground |
 
 **Can move here next (new files, verbatim; owner noted)**
 
 | Files | Feature | Owner / condition |
 |---|---|---|
-| `src/shaders/GroundTess.hlsl` | Displaced ground | Displaced ground: OK, same options and same `build_tessellation_shaders` line |
 | `src/render/rt64_scene_effects.cpp`, `.h`, `src/shared/rt64_scene_effects.h`, `src/shaders/SceneEffectsPS.hlsl`, `BloomPS.hlsl`, `SunShadowMap.hlsli`, `SunShadowMapVS.hlsl`, `SunShadowMapPS.hlsl` | Scene effects, ray tracing | Ray tracing: OK, but message it just before and wait for its OK. Fences: not until L's fence test T506 is back |
 | `src/shaders/Grass.hlsli`, `GrassBladeCommon.hlsli`, `GrassBladeVS.hlsl`, `GrassCullCS.hlsl`, `GrassHiZCS.hlsl`, `src/shared/rt64_grass_instances.h`, `Fur.hlsli`, `Snow.hlsli`, `SnowTess.hlsl`, `WaterTess.hlsl`, `WaterTess.hlsli` | Grass, fur, deep snow, water | ask Fences (grass) first |
 | `src/tools/file_to_c/file_to_c.cmake` | Android build | none; RT64's CMakeLists names it, so its hunk stays |
