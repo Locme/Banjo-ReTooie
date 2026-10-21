@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T502 Klungo fights 2 and 3 replay
+- Asked: 2026-10-21 10:24 UTC
+- Build: main
+- Steps:
+  1. Cheats > Replays: pick Klungo (second fight)
+  2. Let the intro play; touch or hit Klungo when he walks up
+  3. Repeat with Klungo (third fight)
+- Look for: He drinks a potion, the bottle shows, and the fight starts (throws) instead of him standing still
+- Status: waiting for L
+
 ## T501 3D grass stays put, LOD slider and 30 FPS grass
 - Asked: 2026-10-21 10:14 UTC
 - Build: main

@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Replaying Klungo's second or third fight no longer gets stuck after he drinks. With saves that hadn't seen his potions in the story, the replay gave him no potion, so he stood still with the letterbox up and no bottle; he now gets a random potion order, as outside a replay (L). Checked headless with fresh saves (fights 2 and 3).
 - Belly jiggle: the tooth necklace no longer vanishes as the belly swings (it moves in one piece), and the belly moves most just above the belt, less and less up to the chest (L). Untested on PC (T463).
 - Belly jiggle now wobbles the belly just above his belt instead of up at his chest and necklace (L). Untested on PC (T458).
 - DEV > Hide Vanilla Widescreen Entry in the Game Menu is now called Hide Unnecessary Settings Entry; it covers Wide-screen Mode and Screen Alignment on the TV (L). Untested on PC (T455).

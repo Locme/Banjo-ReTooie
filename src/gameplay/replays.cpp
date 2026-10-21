@@ -23,6 +23,7 @@
 // Headless: TOOIE_REPLAY_PICK=<hex replay number>@<ms> asks for that replay as the drop-down does.
 
 #include <atomic>
+#include <random>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -316,4 +317,24 @@ void tooie::replays::tick(uint8_t* rdram, recomp_context* ctx) {
     save_open_file(rdram, ctx);
     std::fprintf(stderr, "[replays] starting replay 0x%X (%s)\n", replay, name_of(replay));
     start_replay(rdram, ctx, replay);
+}
+
+// Klungo's potions in a replay (L, 2026-10-21: fights 2 and 3 stuck after he drinks, no bottle).
+// func_80802DF4_chklungo picks which potion Klungo drinks in each of his three fights: a set number
+// 1-6 (one order of the three potions) kept in flags 0x315-0x317. In a replay (game mode 2) it picks
+// the set from the potions the global flags 0xC08-0xC0A say the player has seen, which the story
+// fights set. With none set (fresh saves, the fights replayed from this menu without playing them)
+// it finds no set and stores 0, and set 0 gives fights 2 and 3 potion 0, which state 9 (the drink)
+// has no way out of: Klungo stands still with the letterbox up for good. Fight 1 happens to read a
+// real potion there. Here (0x80802EC4, the set number at $sp+0x28 just before it is stored) a 0 is
+// replaced by a random set, as the game picks one outside a replay.
+extern "C" void tooie_klungo_replay_potions(uint8_t* rdram, recomp_context* ctx) {
+    const gpr slot = ctx->r29 + 0x28;
+    if (MEM_W(0, slot) != 0) {
+        return;
+    }
+    static std::minstd_rand rng{ std::random_device{}() };
+    const int32_t set = 1 + (int32_t)(rng() % 6);
+    MEM_W(0, slot) = set;
+    std::fprintf(stderr, "[replays] Klungo had no potion set (no potions seen), using set %d\n", set);
 }
