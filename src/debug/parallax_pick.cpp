@@ -264,8 +264,8 @@ namespace {
     std::map<uint64_t, Effects> effects;
     std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
@@ -288,12 +288,16 @@ namespace {
             if (tooie::effect_pick::has(set, Effect(e))) {
                 text += text.empty() ? "" : (names ? " " : " + ");
                 text += names ? effect_names[e] : effect_labels[e];
+                const int strength = tooie::effect_pick::light_strength(set);
+                if ((e == tooie::effect_pick::effect_light) && (!names || (strength != 100))) {
+                    text += (names ? ":" : " ") + std::to_string(strength) + (names ? "" : "%");
+                }
             }
         }
         return text.empty() ? (names ? "disable" : "None") : text;
     }
 
-    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp glow (lines
+    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp glow light (light:<percent> with a strength other than 100) (lines
     // from before several effects a texture have just one).
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
@@ -307,9 +311,16 @@ namespace {
             }
             Effects set = 0;
             while (words >> effect_text) {
+                // light:<percent>: Light Source at that strength.
+                const size_t colon = effect_text.find(':');
+                const int strength = (colon == std::string::npos) ? 100 : std::atoi(effect_text.c_str() + colon + 1);
+                effect_text = effect_text.substr(0, colon);
                 for (int e = 0; e < tooie::effect_pick::effect_count; e++) {
                     if (effect_text == effect_names[e]) {
                         set |= bit(Effect(e));
+                        if (e == tooie::effect_pick::effect_light) {
+                            set = tooie::effect_pick::with_light_strength(set, strength);
+                        }
                     }
                 }
             }
@@ -330,7 +341,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp, glow). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp, glow, light or light:<strength %>). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -508,7 +519,9 @@ namespace {
                 set = on ? bit(chosen) : ((set == bit(chosen)) ? 0 : set);
             } else {
                 set = (on ? (set | bit(chosen)) : (set & ~bit(chosen))) & ~solo_effects;
-                set = (set != 0) ? set : bit(tooie::effect_pick::effect_disable);
+                // Light Source off: its strength goes too.
+                set = tooie::effect_pick::has(set, tooie::effect_pick::effect_light) ? set : (set & tooie::effect_pick::effect_bits);
+                set = ((set & tooie::effect_pick::effect_bits) != 0) ? set : bit(tooie::effect_pick::effect_disable);
             }
             if (set != 0) {
                 effects[hash] = set;
@@ -518,6 +531,22 @@ namespace {
         }
         effects_version.fetch_add(1);
         return on;
+    }
+
+    // Shift + wheel on a Light Source texture: its strength up or down by 10% a notch (10% to 500%). False when the
+    // texture has no Light Source pick.
+    bool step_light_strength(uint64_t hash, int notches, int& strength) {
+        {
+            std::lock_guard lock{ effects_mutex };
+            const auto it = effects.find(hash);
+            if ((it == effects.end()) || !tooie::effect_pick::has(it->second, tooie::effect_pick::effect_light)) {
+                return false;
+            }
+            strength = std::clamp(tooie::effect_pick::light_strength(it->second) + notches * 10, 10, 500);
+            it->second = tooie::effect_pick::with_light_strength(it->second, strength);
+        }
+        effects_version.fetch_add(1);
+        return true;
     }
 
     // Left click (or a number key): the chosen effect on or off. Shift + left click (reset): built-in. Returns whether
@@ -832,7 +861,7 @@ namespace {
                 recompinput::GameInput::INTERP_PICK };
             static const char* on_toasts[3] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
-                "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + left click built-in, wheel deeper",
+                "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper" };
             static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
@@ -958,6 +987,15 @@ namespace {
             if (on && shift && (deeper != 0)) {
                 depth_steps += deeper;
                 deeper = 0;
+            }
+            // In Shader Effects pick mode, Shift + wheel sets a Light Source's strength (up stronger) instead.
+            int light_notches = 0;
+            if (effects_on && shift && (deeper != 0)) {
+                light_notches = -deeper;
+                deeper = 0;
+            }
+            if (effects_on) {
+                light_notches += depth_steps;
             }
             if (deeper > 0) {
                 layer += uint32_t(deeper);
@@ -1151,6 +1189,19 @@ namespace {
                     } else {
                         fprintf(stderr, "[effect-pick] chosen effect: %s\n", effect_labels[number_pressed]);
                     }
+                }
+                if ((light_notches != 0) && (hash != 0)) {
+                    remember(mode, hash);
+                    int strength = 0;
+                    char text[96];
+                    if (step_light_strength(hash, light_notches, strength)) {
+                        snprintf(text, sizeof(text), "Light Source strength %d%%", strength);
+                    } else {
+                        undo_stack.pop_back();
+                        snprintf(text, sizeof(text), "No Light Source on this texture to make stronger or weaker");
+                    }
+                    tooie::toast::show(text);
+                    fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, text);
                 }
                 if (middle) {
                     show_all.store(!show_all.load());

@@ -4,7 +4,8 @@
 // Shader Effects pick mode (src/debug/parallax_pick.cpp, beside parallax pick mode): the Shader Effects Pick Mode key
 // frees the mouse as a crosshair and the texture under it is highlighted. A texture can hold several effects at once:
 // right click chooses an effect (Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, Text (Mirror Mode flips it
-// back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it), Slight Glow) and left
+// back so it reads normally), Lamp (a lit lamp: Graphics > Ray tracing lights the scene from it), Slight Glow, Light Source (lights the
+// scene like a lamp, with no glow in the air round it; Shift + wheel sets its strength)) and left
 // click turns it on or off for that texture (or keys 1 to 9 choose and turn on or off in one; hold left click and sweep
 // to paint it over more textures; middle click shows every texture with it); Disable turns the others off, and Shift + left click goes back to the built-in
 // choice. The picks
@@ -25,13 +26,28 @@ namespace tooie::effect_pick {
         effect_lamp = 6,
         // Drawn a little brighter, as if lit from inside (RT64 SetSceneGlowTextures).
         effect_glow = 7,
-        effect_count = 8
+        // Lights the traced scene like a lamp (Graphics > Ray tracing), with no glow in the air round the light, at
+        // the texture's own strength (light_strength).
+        effect_light = 8,
+        effect_count = 9
     };
 
     // A texture's effects, one bit each (1 << Effect). A picked texture gets exactly these, none of its built-in ones.
     using Effects = uint32_t;
     constexpr bool has(Effects effects, Effect effect) {
         return (effects & (Effects(1) << effect)) != 0;
+    }
+    // The effect bits; bits 16 to 21 hold Light Source's strength in 10% steps (0: 100%).
+    constexpr Effects effect_bits = 0xFFFFu;
+    constexpr Effects strength_shift = 16;
+    constexpr Effects strength_bits = Effects(0x3F) << strength_shift;
+    constexpr int light_strength(Effects effects) {
+        const int steps = int((effects & strength_bits) >> strength_shift);
+        return (steps == 0) ? 100 : steps * 10;
+    }
+    constexpr Effects with_light_strength(Effects effects, int percent) {
+        const int steps = (percent < 10) ? 1 : ((percent > 500) ? 50 : (percent / 10));
+        return (effects & ~strength_bits) | ((steps == 10) ? 0 : (Effects(steps) << strength_shift));
     }
 
     // Bumped each time a pick changes, so the texture lists are rebuilt.

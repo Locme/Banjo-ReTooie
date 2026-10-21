@@ -1214,6 +1214,10 @@ float3 LampGlow(int2 pixel, float depth, float strength) {
     float3 glow = 0.0f;
     [loop] for (uint i = 0u; i < count; i++) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
+        // A Light Source pick (its reach a whole number plus a half) lights the scene but not the air round it.
+        if (frac(light.w) > 0.25f) {
+            continue;
+        }
         const float radius = min(light.w * 0.35f, 450.0f);
         // Where the eye's ray passes through the glow's sphere.
         const float along = dot(light.xyz - eyeWorld, lookWorld);

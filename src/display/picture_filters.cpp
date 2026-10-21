@@ -72,6 +72,7 @@ namespace RT64 {
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
+    void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -4210,6 +4211,17 @@ namespace {
         RT64::SetSceneSnowOffTextures(snow_off.data(), snow_off.size());
         std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
         RT64::SetSceneGlowTextures(glow.data(), glow.size());
+        // Light Source picks: lamps with no glow in the air, reaching 900 units at 100% (as a lamp), more or less with
+        // the texture's strength.
+        std::vector<uint64_t> light_sources;
+        std::vector<float> light_reaches;
+        for (const auto& [hash, picked] : picks) {
+            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light)) {
+                light_sources.push_back(hash);
+                light_reaches.push_back(9.0f * float(tooie::effect_pick::light_strength(picked)));
+            }
+        }
+        RT64::SetSceneLightSourceTextures(light_sources.data(), light_reaches.data(), light_sources.size());
         // The same lists for the pick mode's Show All (edges count as grass; ice in the icy maps or anywhere).
         {
             using tooie::effect_pick::set_list;
@@ -4223,6 +4235,7 @@ namespace {
             set_list(tooie::effect_pick::effect_text, mirror_text);
             set_list(tooie::effect_pick::effect_lamp, lamps);
             set_list(tooie::effect_pick::effect_glow, glow);
+            set_list(tooie::effect_pick::effect_light, light_sources);
             set_list(tooie::effect_pick::effect_disable, build(nullptr, nullptr, tooie::effect_pick::effect_disable, true));
             set_list(tooie::effect_pick::effect_deep_snow, build(nullptr, nullptr, tooie::effect_pick::effect_deep_snow, true));
         }

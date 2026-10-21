@@ -1,11 +1,22 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T523 Light Source pick effect and its strength
+- Asked: 2026-10-21 23:11 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Graphics > Ray tracing and Shader Effects pick mode
+  2. Go somewhere dark (Bottles' house), point at a lamp or window texture and press 9: the label says Light Source 100% and the room lights up from it with no glowing ball in the air
+  3. Shift + mouse wheel up and down over it: the toast shows 10% to 500% and the light reaches further or less far
+  4. Save Pick, restart: the strength comes back
+- Look for: Does Light Source light the scene with no ball, and does Shift + wheel change its strength?
+- Status: waiting for L
+
 ## T522 Pick mode number keys, paint, Show All and Slight Glow
 - Asked: 2026-10-21 22:56 UTC
 - Build: main (next build)
 - Steps:
   1. Turn on Shader Effects pick mode
-  2. Press 2 over a texture: Grass turns on or off there; 8 does Slight Glow (a little brighter); 9 and Shift + a number do nothing, as there are only 8 effects
+  2. Press 2 over a texture: Grass turns on or off there; 8 does Slight Glow (a little brighter); Shift + a number does nothing, as there are only 9 effects
   3. Hold left click and sweep over several textures: each gets the same change as the first
   4. Middle click: textures with the chosen effect pulse orange; press other number keys to see other effects' textures; middle click again turns it off
 - Look for: Do the keys, painting, Show All and Slight Glow work as described?

@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Shader Effects pick mode: new effect **Light Source** (key 9): the texture lights the scene like a Lamp with Graphics > Ray tracing on, but with no glowing ball of light in the air round it. Shift + mouse wheel over it sets its strength, 10% to 500% (L). Untested on PC (T523).
 - Removed Graphics > Shaders > Fence thickness and the Fence step in Shader Effects pick mode, with the shader code behind them (L's call: the fence is better as a 3D model). Old Fence picks in shader_effect_tags.txt are ignored.
 - Shader Effects pick mode: number keys 1 to 9 choose an effect and turn it on or off on the texture under the cursor in one press (Shift + 1 to 9 for effects 10 and up, once there are that many); holding left click and sweeping paints the change over every texture passed; middle click turns Show All on, which makes every texture with the chosen effect pulse orange. New effect **Slight Glow** draws a texture a little brighter, as if lit from inside (L). Untested on PC (T522).
 - Shader Effects pick mode: a texture can have several effects at once. Right click chooses an effect (Shift + right click goes back), left click turns it on or off on the texture under the cursor, and the label lists all of its effects. Saved tags from before still load (L). Untested on PC (T520).

@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace RT64 {
@@ -14,6 +15,9 @@ namespace RT64 {
         std::mutex glowMutex;
         std::unordered_set<uint64_t> glowTextures;
         std::atomic<bool> glowAny{ false };
+        std::mutex lightSourceMutex;
+        std::unordered_map<uint64_t, float> lightSourceReaches;
+        std::atomic<bool> lightSourceAny{ false };
         std::mutex markedMutex;
         std::unordered_set<uint64_t> markedTextures;
         std::atomic<bool> markedAny{ false };
@@ -32,6 +36,25 @@ namespace RT64 {
         }
         const std::scoped_lock lock(glowMutex);
         return glowTextures.count(hash) != 0;
+    }
+
+    void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count) {
+        std::unordered_map<uint64_t, float> sources;
+        for (size_t i = 0; i < count; i++) {
+            sources[hashes[i]] = reaches[i];
+        }
+        const std::scoped_lock lock(lightSourceMutex);
+        lightSourceReaches.swap(sources);
+        lightSourceAny.store(!lightSourceReaches.empty());
+    }
+
+    float SceneLightSourceReach(uint64_t hash) {
+        if (!lightSourceAny.load()) {
+            return 0.0f;
+        }
+        const std::scoped_lock lock(lightSourceMutex);
+        const auto it = lightSourceReaches.find(hash);
+        return (it != lightSourceReaches.end()) ? it->second : 0.0f;
     }
 
     void SetScenePickMarkedTextures(const uint64_t *hashes, size_t count) {

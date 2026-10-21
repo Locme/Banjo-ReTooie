@@ -1923,7 +1923,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..1f342cd 100644
+index 9fae0d4..87d76b0 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,19 @@
@@ -1957,7 +1957,7 @@ index 9fae0d4..1f342cd 100644
  #include "rt64_render_worker.h"
  
  // TODO: Move to shared.
-@@ -125,6 +140,542 @@ namespace RT64 {
+@@ -125,6 +140,543 @@ namespace RT64 {
          return { v.x, v.y, v.z, v.w };
      }
  
@@ -2023,8 +2023,9 @@ index 9fae0d4..1f342cd 100644
 +    }
 +
 +    // Banjo-Tooie: a lamp's light, merged into one already found close by (a lantern's panes may be drawn apart).
-+    static void addLampLight(std::vector<float> &lights, hlslpp::float3 centre) {
-+        const float reach = 900.0f;
++    // reach: 900 for a lamp; a Light Source pick (rt64_texture_marks.h) its own, made a whole number plus a half,
++    // which tells the shader (LampGlow) to leave the air round it unlit.
++    static void addLampLight(std::vector<float> &lights, hlslpp::float3 centre, float reach = 900.0f) {
 +        for (size_t i = 0; i + 3 < lights.size(); i += 4) {
 +            const hlslpp::float3 other(lights[i], lights[i + 1], lights[i + 2]);
 +            if (float(hlslpp::length(other - centre)) < 80.0f) {
@@ -2500,7 +2501,7 @@ index 9fae0d4..1f342cd 100644
      static RenderRect viewportScissorIntersection(const RenderViewport &viewport, const RenderRect &scissor) {
          return RenderRect{
              std::max(static_cast<int32_t>(std::floor(viewport.x)), scissor.left),
-@@ -151,6 +702,7 @@ namespace RT64 {
+@@ -151,6 +703,7 @@ namespace RT64 {
  
          shaderUploader = std::make_unique<BufferUploader>(worker->device);
          descCommonSet = std::make_unique<FramebufferRendererDescriptorCommonSet>(shaderLibrary->samplerLibrary, worker->device->getCapabilities().raytracing, worker->device);
@@ -2508,7 +2509,7 @@ index 9fae0d4..1f342cd 100644
  
  #   if RT_ENABLED
          if (rtSupport) {
-@@ -169,11 +721,87 @@ namespace RT64 {
+@@ -169,11 +722,87 @@ namespace RT64 {
      
      void FramebufferRenderer::resetFramebuffers(RenderWorker *worker, bool ubershadersVisible, float ditherNoiseStrength, const RenderMultisampling &multisampling) {
          instanceDrawCallVector.clear();
@@ -2596,7 +2597,7 @@ index 9fae0d4..1f342cd 100644
          framebufferCount = 0;
  
          // Create dummy color target if it hasn't been created yet.
-@@ -219,6 +847,7 @@ namespace RT64 {
+@@ -219,6 +848,7 @@ namespace RT64 {
          textureCacheSize = static_cast<uint32_t>(textureCacheTextures.size());
          textureCacheGlobalVersion = textureCache->textureMap.globalVersion;
          textureCacheReplacementMapEnabled = textureCache->textureMap.replacementMapEnabled;
@@ -2604,7 +2605,7 @@ index 9fae0d4..1f342cd 100644
          dynamicTextureViewVector.clear();
          dynamicTextureBarrierVector.clear();
      }
-@@ -250,6 +879,7 @@ namespace RT64 {
+@@ -250,6 +880,7 @@ namespace RT64 {
                      gpuTile.flags.fromCopy = true;
                      gpuTile.flags.rawTMEM = false;
                      gpuTile.flags.hasMipmaps = false;
@@ -2612,7 +2613,7 @@ index 9fae0d4..1f342cd 100644
                  }
              }
              else {
-@@ -272,6 +902,9 @@ namespace RT64 {
+@@ -272,6 +903,9 @@ namespace RT64 {
                  gpuTile.flags.rawTMEM = !textureReplaced && callTile.rawTMEM;
                  gpuTile.flags.hasMipmaps = hasMipmaps;
                  gpuTile.flags.shiftedByHalf = shiftedByHalf;
@@ -2622,7 +2623,7 @@ index 9fae0d4..1f342cd 100644
              }
          }
      }
-@@ -373,6 +1006,15 @@ namespace RT64 {
+@@ -373,6 +1007,15 @@ namespace RT64 {
  
          descCommonSet->setBuffer(descCommonSet->FrParams, frameParamsBuffer.get(), sizeof(interop::FrameParams));
          descCommonSet->setBuffer(descCommonSet->instanceRenderIndices, renderIndicesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RenderIndices)));
@@ -2638,7 +2639,7 @@ index 9fae0d4..1f342cd 100644
          descCommonSet->setBuffer(descCommonSet->instanceRDPParams, drawBuffers->rdpParamsBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPParams)));
          descCommonSet->setBuffer(descCommonSet->RDPTiles, drawBuffers->rdpTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::RDPTile)));
          descCommonSet->setBuffer(descCommonSet->GPUTiles, drawBuffers->gpuTilesBuffer.get(), RenderBufferStructuredView(sizeof(interop::GPUTile)));
-@@ -443,6 +1085,14 @@ namespace RT64 {
+@@ -443,6 +1086,14 @@ namespace RT64 {
          updateShaderDescriptorSet(worker, drawBuffers, outputBuffers, raytracingEnabled);
          updateRSPVertexTestZSet(worker, drawBuffers, outputBuffers);
  
@@ -2653,7 +2654,7 @@ index 9fae0d4..1f342cd 100644
  #   if RT_ENABLED
          if (raytracingEnabled) {
              updateRSPSmoothNormalSet(worker, drawBuffers, outputBuffers);
-@@ -465,12 +1115,85 @@ namespace RT64 {
+@@ -465,12 +1116,85 @@ namespace RT64 {
          return true;
      }
      
@@ -2741,7 +2742,7 @@ index 9fae0d4..1f342cd 100644
          RenderDescriptorSet *descRealFbSet = framebuffer.descRealFbSet->get();
          RenderDescriptorSet *descDummyFbSet = framebuffer.descDummyFbSet->get();
  
-@@ -499,6 +1222,16 @@ namespace RT64 {
+@@ -499,6 +1223,16 @@ namespace RT64 {
              }
          };
  
@@ -2758,7 +2759,7 @@ index 9fae0d4..1f342cd 100644
          auto drawCallTriangles = [&](const InstanceDrawCall &drawCall) {
              if (drawCall.type == InstanceDrawCall::Type::IndexedTriangles) {
                  worker->commandList->drawIndexedInstanced(drawCall.triangles.faceCount * 3, 1, drawCall.triangles.indexStart, 0, 0);
-@@ -514,6 +1247,17 @@ namespace RT64 {
+@@ -514,6 +1248,17 @@ namespace RT64 {
          
          for (uint32_t i : rasterScene.instanceIndices) {
              const InstanceDrawCall &drawCall = instanceDrawCallVector[i];
@@ -2776,7 +2777,7 @@ index 9fae0d4..1f342cd 100644
              switch (drawCall.type) {
              case InstanceDrawCall::Type::IndexedTriangles: 
              case InstanceDrawCall::Type::RawTriangles:
-@@ -561,8 +1305,16 @@ namespace RT64 {
+@@ -561,8 +1306,16 @@ namespace RT64 {
                      switchToDepthWrite();
                  }
  
@@ -2795,7 +2796,7 @@ index 9fae0d4..1f342cd 100644
                      previousScissor = triangles.scissor;
                  }
  
-@@ -574,12 +1326,195 @@ namespace RT64 {
+@@ -574,12 +1327,195 @@ namespace RT64 {
                  rasterParams.renderIndex = i;
                  rasterParams.screenScale = triangles.screenScale;
                  rasterParams.screenOffset = triangles.screenOffset;
@@ -2992,7 +2993,7 @@ index 9fae0d4..1f342cd 100644
                      if (triangles.postBlendDitherNoiseNegative) {
                          worker->commandList->setPipeline(postBlendDitherNoiseSubNegativePipeline);
                      }
-@@ -597,6 +1532,7 @@ namespace RT64 {
+@@ -597,6 +1533,7 @@ namespace RT64 {
                  break;
              };
              case InstanceDrawCall::Type::FillRect: {
@@ -3000,7 +3001,7 @@ index 9fae0d4..1f342cd 100644
                  const auto &clearRect = drawCall.clearRect;
                  RenderTarget *chosenTarget = (fbStorage->colorTarget != nullptr) ? fbStorage->colorTarget : fbStorage->depthTarget;
                  bool rectCoversWholeTarget = (clearRect.rect.left == 0) && (clearRect.rect.top == 0) && (uint32_t(clearRect.rect.right) == chosenTarget->width) && (uint32_t(clearRect.rect.bottom) == chosenTarget->height);
-@@ -616,6 +1552,7 @@ namespace RT64 {
+@@ -616,6 +1553,7 @@ namespace RT64 {
                  assert(fbStorage->colorTarget != nullptr);
  
                  const interop::RSPVertexTestZCB &testZCB = drawCall.vertexTestZ;
@@ -3008,7 +3009,7 @@ index 9fae0d4..1f342cd 100644
                  switchToDepthRead();
  
                  const bool useMSAA = (fbStorage->colorTarget->multisampling.sampleCount > 0);
-@@ -1246,10 +2183,76 @@ namespace RT64 {
+@@ -1246,10 +2184,76 @@ namespace RT64 {
          }
  
          startBarriers.emplace_back(RenderTextureBarrier(depthTarget->texture.get(), RenderTextureLayout::DEPTH_WRITE));
@@ -3085,7 +3086,7 @@ index 9fae0d4..1f342cd 100644
          for (const auto &pair : targetDrawCall.sceneIndices) {
  #       if RT_ENABLED
              if (pair.second) {
-@@ -1296,9 +2299,156 @@ namespace RT64 {
+@@ -1296,9 +2300,156 @@ namespace RT64 {
              {
                  const RasterScene &rasterScene = targetDrawCall.rasterScenes[pair.first];
                  submitDepthAccess(worker, targetDrawCall.fbStorage, false, depthState);
@@ -3243,7 +3244,7 @@ index 9fae0d4..1f342cd 100644
      }
  
      void FramebufferRenderer::waitForUploaders() {
-@@ -1350,10 +2500,43 @@ namespace RT64 {
+@@ -1350,10 +2501,43 @@ namespace RT64 {
  
          // Store ubershader and other effect pipelines.
          const RasterShaderUber *rasterShaderUber = p.rasterShaderCache->getGPUShaderUber();
@@ -3289,7 +3290,7 @@ index 9fae0d4..1f342cd 100644
  
          // Make a new render target draw call.
          RenderTargetDrawCall &targetDrawCall = framebuffer.renderTargetDrawCall;
-@@ -1386,6 +2569,11 @@ namespace RT64 {
+@@ -1386,6 +2570,11 @@ namespace RT64 {
          indexedVertexViews[1] = RenderVertexBufferView(RenderBufferReference(tcRes), TcStride * vertexCount);
          indexedVertexViews[2] = RenderVertexBufferView(RenderBufferReference(shadedColRes), ColStride * vertexCount);
          indexBufferView = RenderIndexBufferView(RenderBufferReference(indexRes), IndexStride * indexCount, RenderFormat::R32_UINT);
@@ -3301,7 +3302,7 @@ index 9fae0d4..1f342cd 100644
          rawVertexViews[0] = RenderVertexBufferView(RenderBufferReference(triPosRes), PosStride * rawTriVertexCount);
          rawVertexViews[1] = RenderVertexBufferView(RenderBufferReference(triTcRes), TcStride * rawTriVertexCount);
          rawVertexViews[2] = RenderVertexBufferView(RenderBufferReference(triColRes), ColStride * rawTriVertexCount);
-@@ -1408,6 +2596,68 @@ namespace RT64 {
+@@ -1408,6 +2597,68 @@ namespace RT64 {
          };
  
          targetDrawCall.rasterScenes.clear();
@@ -3370,7 +3371,7 @@ index 9fae0d4..1f342cd 100644
  
  #   if RT_ENABLED
          RaytracingScene rtScene;
-@@ -1431,6 +2681,22 @@ namespace RT64 {
+@@ -1431,6 +2682,22 @@ namespace RT64 {
          targetDrawCall.fbStorage = p.fbStorage;
          targetDrawCall.sceneIndices.clear();
  
@@ -3393,7 +3394,7 @@ index 9fae0d4..1f342cd 100644
          const float SimilarityPercentage = 0.1f; // TODO: Make more strict once VI ratios are in.
          const float scissorRatio = static_cast<float>(fbPair.scissorRect.width(false, true)) / static_cast<float>(fbPair.scissorRect.height(false, true));
          const bool adjustRatio = (abs((scissorRatio / p.aspectRatioSource) - 1.0f) < SimilarityPercentage);
-@@ -1450,12 +2716,181 @@ namespace RT64 {
+@@ -1450,12 +2717,181 @@ namespace RT64 {
          uint32_t vertexTestZFaceIndicesStart = 0;
          int32_t vertexTestZCallIndex = -1;
          RenderViewport viewportClip;
@@ -3575,7 +3576,7 @@ index 9fae0d4..1f342cd 100644
  #       if RT_ENABLED
              // TODO: Move heuristics of RT proj elsewhere?
              // TODO: Use detected scenes logic instead.
-@@ -1606,6 +3041,7 @@ namespace RT64 {
+@@ -1606,6 +3042,7 @@ namespace RT64 {
  #               endif
                      {
                          triangles.shaderDesc = call.shaderDesc;
@@ -3583,7 +3584,7 @@ index 9fae0d4..1f342cd 100644
  
                          RasterShader *gpuShader = p.ubershadersOnly ? nullptr : p.rasterShaderCache->getGPUShader(call.shaderDesc);
                          if (gpuShader != nullptr) {
-@@ -1682,6 +3118,20 @@ namespace RT64 {
+@@ -1682,6 +3119,20 @@ namespace RT64 {
                          if (usesViewport) {
                              triangles.scissor = viewportScissorIntersection(viewportClip, triangles.scissor);
                          }
@@ -3604,7 +3605,7 @@ index 9fae0d4..1f342cd 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3197,2102 @@ namespace RT64 {
+@@ -1747,25 +3198,2105 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3776,12 +3777,15 @@ index 9fae0d4..1f342cd 100644
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0))
 +                {
 +                    bool lamp = false;
++                    float sourceReach = 0.0f;
 +                    for (uint32_t t = 0; (t < call.callDesc.tileCount) && !lamp; t++) {
-+                        lamp = SceneLampTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
++                        const uint64_t tileHash = drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID;
++                        lamp = SceneLampTexture(tileHash);
++                        sourceReach = (sourceReach > 0.0f) ? sourceReach : SceneLightSourceReach(tileHash);
 +                    }
 +                    hlslpp::float3 centre;
-+                    if (lamp && drawCentre(drawData, call, centre)) {
-+                        addLampLight(targetDrawCall.lampLights, centre);
++                    if ((lamp || (sourceReach > 0.0f)) && drawCentre(drawData, call, centre)) {
++                        addLampLight(targetDrawCall.lampLights, centre, lamp ? 900.0f : (std::floor(sourceReach) + 0.5f));
 +                    }
 +                }
 +
