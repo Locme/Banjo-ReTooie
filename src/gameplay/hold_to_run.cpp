@@ -514,12 +514,17 @@ namespace {
     // First guess made without seeing the game; TOOIE_DIVE_POSE_TUNE=<file> replaces it, one rule a line,
     // "<bone> <type> <scale> <offset degrees>", so it can be tuned on a PC without a rebuild. Kazooie's
     // wings are not in it yet: her wing bone ids are not known (the model's bone list is needed).
+    // L's reference (2026-10-21, a Super Mario Odyssey dive): body flat along the lunge, both arms stretched
+    // forward past the head, legs straight out behind. Shoulders are bones 12 and 26 (the first of each arm
+    // chain, which the run swings); turning them 160 degrees from hanging points the arms forward. The
+    // direction of that turn (sign) is a guess: flip the offset in the tune file if the arms go backwards.
     const std::vector<Rule> dive_rules_default = {
         { 3, 0, 0.2f, 75.0f },                                  // body leant flat
-        { 6, 0, 0.2f, 0.0f }, { 8, 0, 0.2f, 0.0f }, { 10, 0, 0.2f, 0.0f },     // legs hang still
-        { 20, 0, 0.2f, 0.0f }, { 22, 0, 0.2f, 0.0f }, { 24, 0, 0.2f, 0.0f },
-        { 12, 0, 0.3f, 0.0f }, { 14, 0, 0.3f, 0.0f }, { 16, 0, 0.3f, 0.0f },   // arms flail less
-        { 26, 0, 0.3f, 0.0f }, { 28, 0, 0.3f, 0.0f }, { 30, 0, 0.3f, 0.0f },
+        { 6, 0, 0.0f, 0.0f }, { 8, 0, 0.0f, 0.0f }, { 10, 0, 0.0f, 0.0f },     // legs straight, trailing
+        { 20, 0, 0.0f, 0.0f }, { 22, 0, 0.0f, 0.0f }, { 24, 0, 0.0f, 0.0f },
+        { 12, 0, 0.0f, 160.0f }, { 26, 0, 0.0f, 160.0f },       // arms forward
+        { 14, 0, 0.0f, 0.0f }, { 16, 0, 0.0f, 0.0f },           // elbows and hands straight
+        { 28, 0, 0.0f, 0.0f }, { 30, 0, 0.0f, 0.0f },
     };
 
     const std::vector<Rule>& dive_rules() {
