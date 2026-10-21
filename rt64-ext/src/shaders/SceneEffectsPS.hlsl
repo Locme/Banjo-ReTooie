@@ -1080,12 +1080,28 @@ float3 TracedBeams(int2 pixel, float depth) {
     return float3(1.0f, 0.93f, 0.78f) * (strength * density * phase * lit);
 }
 
+// The remembered colour at a spot, blended between the eight nearest cells (by how near their centres are, the ones
+// remembered only): one cell's colour alone showed in reflections as 16-unit squares (L, 2026-10-21: blocky ice).
 bool RadianceLoad(float3 world, out float3 colour) {
-    uint check;
-    const uint at = RadianceCell(world, check);
-    const uint2 entry = gRadianceCache.Load2(at);
-    colour = float3(float(entry.y & 255u), float((entry.y >> 8) & 255u), float((entry.y >> 16) & 255u)) * (1.0f / 255.0f);
-    return entry.x == check;
+    const float3 cellAt = world * (1.0f / 16.0f) - 0.5f;
+    const float3 base = floor(cellAt);
+    const float3 f = cellAt - base;
+    float3 sum = 0.0f;
+    float weights = 0.0f;
+    [unroll] for (int k = 0; k < 8; k++) {
+        const float3 corner = float3(float(k & 1), float((k >> 1) & 1), float((k >> 2) & 1));
+        const float3 w3 = lerp(1.0f - f, f, corner);
+        const float w = w3.x * w3.y * w3.z;
+        uint check;
+        const uint at = RadianceCell((base + corner + 0.5f) * 16.0f, check);
+        const uint2 entry = gRadianceCache.Load2(at);
+        if ((entry.x == check) && (w > 0.0f)) {
+            sum += float3(float(entry.y & 255u), float((entry.y >> 8) & 255u), float((entry.y >> 16) & 255u)) * (w / 255.0f);
+            weights += w;
+        }
+    }
+    colour = (weights > 0.0f) ? sum / weights : 0.0f;
+    return weights > 0.05f;
 }
 
 // Traced reflections: the same mirror ray as ScreenSpaceReflection, but through the world's triangles (a ray query
@@ -1195,67 +1211,6 @@ bool Enclosed(float3 worldStart) {
         }
     }
     return true;
-}
-
-// The level's lights glowing in the air (with Traced light beams): along the eye's ray where it passes a light, six
-// points each traced to the flame; the lit ones glow warm, brighter nearer it. Anything between stands out against it.
-float3 LampGlow(int2 pixel, float depth, float strength) {
-    const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
-    if ((count == 0u) || (strength <= 0.0f)) {
-        return 0.0f;
-    }
-    const float3 surface = (depth >= 0.99999f) ? normalize(ViewPosition(pixel, 0.5f)) * 8000.0f : ViewPosition(pixel, depth);
-    const float surfaceDistance = length(surface);
-    const float3 eyeWorld = ViewToWorldPoint(float3(0.0f, 0.0f, 0.0f));
-    const float3 lookWorld = normalize(ViewToWorldPoint(surface) - eyeWorld);
-    const int2 cell = pixel & 3;
-    const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
-    const float offset = (bayer[cell.y * 4 + cell.x] + 0.5f) / 16.0f;
-    float3 glow = 0.0f;
-    [loop] for (uint i = 0u; i < count; i++) {
-        const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
-        // A Light Source pick (its reach a whole number plus a half) lights the scene but not the air round it.
-        if (frac(light.w) > 0.25f) {
-            continue;
-        }
-        const float radius = min(light.w * 0.35f, 450.0f);
-        // Where the eye's ray passes through the glow's sphere.
-        const float along = dot(light.xyz - eyeWorld, lookWorld);
-        const float3 nearest = eyeWorld + lookWorld * along;
-        const float miss = length(light.xyz - nearest);
-        if (miss >= radius) {
-            continue;
-        }
-        const float halfChord = sqrt(radius * radius - miss * miss);
-        const float from = max(along - halfChord, 0.0f);
-        const float to = min(along + halfChord, surfaceDistance);
-        if (to <= from) {
-            continue;
-        }
-        const float stopShort = 3.0f;
-        const int Samples = 6;
-        const float step = (to - from) / float(Samples);
-        [loop] for (int k = 0; k < Samples; k++) {
-            const float3 p = eyeWorld + lookWorld * (from + (float(k) + offset) * step);
-            const float3 toLight = light.xyz - p;
-            const float d = length(toLight);
-            const float near = saturate(1.0f - d / radius);
-            // Not inside the lamp's fitting (within 90, as TraceLampVisible): the points there, brightest and seen
-            // without a ray, drew a glowing ball at the light, through the lamp itself (L, 2026-10-21: the balls
-            // should be invisible). The glow is only in the air the light reaches.
-            if ((near <= 0.0f) || (d < 90.0f)) {
-                continue;
-            }
-            RayDesc ray;
-            ray.Origin = p;
-            ray.Direction = toLight / d;
-            ray.TMin = 0.0f;
-            ray.TMax = d - stopShort;
-            const float visible = TraceLampVisible(ray, light.xyz);
-            glow += float3(1.0f, 0.75f, 0.45f) * (near * near * step * visible);
-        }
-    }
-    return glow * (strength * 0.0025f);
 }
 
 // The level's lights (lamps, fires), traced: each lights what it can see and leaves the rest in the dark. Within a
@@ -2235,7 +2190,9 @@ float4 WaterReflectionMarch(float3 surface, float3 r, float nearest, out bool hi
                     // there (it smeared across ice and water), so the surface's own picture shows instead.
                     return 0.0f;
                 }
-                return float4(gColor.Load(int3(int2(inside), 0)).rgb, RayEdgeFade(inside));
+                // Sampled between pixels: a point load gave every ice pixel that lands on the same scene pixel the same
+                // colour, so a close reflection came out in squares (L, 2026-10-21).
+                return float4(gColor.SampleLevel(LinearSampler, (inside + 0.5f) / size, 0).rgb, RayEdgeFade(inside));
             }
             // Behind the camera: only as remembered.
             hit = true;
@@ -4391,7 +4348,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #ifdef RAY_TRACED
     // Traced light beams, added like the rim light (the fog still covers them).
     if (gConstants.view.x < 1.5f) {
-        rim += TracedBeams(pixel, depth) + LampGlow(pixel, depth, asfloat(gLights.Load(16)));
+        // (No glow round the level's lights in the air: it showed as balls round every light, L 2026-10-21.)
+        rim += TracedBeams(pixel, depth);
     }
 #endif
 
