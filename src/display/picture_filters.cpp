@@ -66,6 +66,7 @@ namespace RT64 {
     void SetSceneWaterReflections(float strength);
     void SetSceneIceReflections(float strength);
     void SetSceneIceTextures(const uint64_t *hashes, size_t count);
+    void SetSceneIceAnywhereTextures(const uint64_t *hashes, size_t count);
     void SetSceneShinyTextures(const uint64_t *hashes, size_t count);
     // rt64-ext/src/render/rt64_mirror.h.
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
@@ -346,6 +347,14 @@ namespace {
         0xb5185cb35b5559d8, 0xc03abd6a4d9d4295, 0xd5787e1378d43620, 0xfc57075b40c809cb,
         // The see-through blocks round notes themselves (a pale blue texture, 60 triangles, seen in Icy Side 2026-10-17).
         0xe3890f274d878db4,
+    };
+
+    // Ice outside the icy maps that reflects wherever it is (Ice reflections), picked by L on 2026-10-21 in Glitter Gulch
+    // Mine's Waterfall Cavern (shader_effect_tags.txt). The Ice picks join it.
+    constexpr uint64_t ice_anywhere_textures[] = {
+        0x31d98da7f8ab6e40, 0x37488137fb10db24, 0x5030ec15ded34bc9, 0x604279c748dde428, 0x68dbdb32fd236996, 0x7757c212c3543909,
+        0x7c7d6480aa2a36a2, 0x7e3dde1e37601f1d, 0x8328161013507ecd, 0x9e1db7eb4ed945a5, 0xa05ce779f63ba5ba, 0xa0754fa808c1eec1,
+        0xa0c74c8970f42515, 0xb9ba390865aa6d04, 0xc3ef62edd84ea687, 0xe0d5ce6913a1288b,
     };
 
     // Lit lamps' textures (RT64 hashes): with Graphics > Ray tracing on, each draw with one lights the traced scene from
@@ -4186,6 +4195,9 @@ namespace {
         }
         RT64::SetSceneGrassTextures(grass.data(), grass.size());
         RT64::SetSceneIceTextures(ice.data(), ice.size());
+        // Ice that reflects in any map: ice_anywhere_textures and the Ice picks.
+        std::vector<uint64_t> ice_anywhere = build(std::begin(ice_anywhere_textures), std::end(ice_anywhere_textures), tooie::effect_pick::effect_ice, true);
+        RT64::SetSceneIceAnywhereTextures(ice_anywhere.data(), ice_anywhere.size());
         RT64::SetSceneShinyTextures(shiny.data(), shiny.size());
         // Mirror Mode: textures picked as Text are flipped back on the mirrored world.
         std::vector<uint64_t> mirror_text = build(nullptr, nullptr, tooie::effect_pick::effect_text, true);
