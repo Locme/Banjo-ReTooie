@@ -379,8 +379,8 @@ namespace {
         // Fires and a furnace's glowing door. (Lava and Hailfire Peaks' burning walls and edges are left out: they
         // cover the lava side, and a light per piece used up all 32 lights there, headless.)
         0xcde1f307e74ccd61, 0xacdd8a64c72db73b, 0xe330c9e79570e5d6, 0xc4b1866b2ad526fa,
-        // Lit windows: round ones with a cross (the light falls in their shape) and barred ones.
-        0xdf5bda9c967f0cf8, 0x4ace91a7ca4d04f7, 0x7982df0b74a1b2f5, 0xa8c70f9559367755, 0x45b7432c37b52e79,
+        // (Not lit windows, 0xdf5bda9c967f0cf8, 0x4ace91a7ca4d04f7, 0x7982df0b74a1b2f5, 0xa8c70f9559367755,
+        // 0x45b7432c37b52e79: a light's glow showed as a ball in each pane, and Window Light Beams light them.)
         // Panel and round ceiling lamps, and a small warm glow.
         0x0850e871a6ef8d8b, 0x89a3b176a1fec7d3, 0xd6288b4fa0525df4, 0x082b687364b25694, 0xd7aa28a361f6a24d,
     };
