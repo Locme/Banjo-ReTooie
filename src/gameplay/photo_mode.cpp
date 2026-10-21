@@ -20,7 +20,7 @@
 //   A               screenshot (as F12), after the self-timer if one is set
 //   D-pad up/down   pick a row of the photo panel (src/ui/photo_panel.cpp)
 //   D-pad left/right change it (held repeats): zoom (the field of view, through tooie_set_fov), camera
-//                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), time,
+//                   (free, or orbit Banjo: the sticks circle him, Z / R move closer and further), collision on or off, time,
 //                   HUD, Banjo shown or hidden, his pose and the point in it, the others shown or hidden, the filter rows below, depth of field, tilt, crop, grid
 //   L               show / hide the photo panel
 //   Start           frozen, 1/167 speed, 1/8 speed, 1/4 speed
@@ -49,7 +49,7 @@
 // show them. They can be changed from the photo panel or the menu while photo mode is on, as can
 // QOL > Photo tilt (the camera's roll); the panel writes the same options, so both stay in step.
 //
-// Collision (QOL > Photo mode camera collision, on by default): each move is swept with the game's
+// Collision (the photo panel's Collision row, on by default): each move is swept with the game's
 // camera line test (tooie::free_camera::sweep_line); a hit stops the camera at the surface and the
 // rest of the move slides along it. In orbit the line from Banjo to the camera pulls it in instead.
 //
@@ -164,7 +164,7 @@ namespace {
 
     // The photo panel: its rows, the one picked, whether it is shown, and a change waiting for the game
     // thread (-1 or +1 on the picked row).
-    enum class Row { Zoom, Camera, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
+    enum class Row { Zoom, Camera, Collision, Time, Hud, Banjo, Pose, PoseFrame, Others, Timer, Shutter, Filter, Exposure, Contrast, Saturation, Warmth,
         Vignette, Grain, Focus, FocusPoint, Tilt, Crop, Border, Grid, Album, Count };
     constexpr int row_count = (int)Row::Count;
     std::atomic<int> picked{0};
@@ -431,7 +431,7 @@ namespace {
         "Teal and orange", "Dream" };
     constexpr const char* border_names[] = { "None", "Instant photo", "Film strip", "Honeycomb", "Jiggy", "Wooden" };
     constexpr const char* crop_names[] = { "None", "16:9", "2.39:1", "4:3", "1:1", "4:5", "9:16" };
-    constexpr const char* row_names[] = { "Zoom", "Camera", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
+    constexpr const char* row_names[] = { "Zoom", "Camera", "Collision", "Time", "HUD", "Banjo", "Pose", "Pose frame", "Others", "Timer", "Shutter", "Filter", "Exposure",
         "Contrast", "Saturation", "Warmth", "Vignette", "Film grain", "Depth of field", "Focus point", "Tilt", "Crop", "Border", "Grid", "Album" };
     static_assert(std::size(row_names) == row_count);
 
@@ -444,6 +444,9 @@ namespace {
                 break;
             case Row::Camera:
                 orbit_toggle = true;
+                break;
+            case Row::Collision:
+                qol.update_option_value(tooie::photo_mode_collision_option, !collision_on());
                 break;
             case Row::Time:
                 speed = (speed + speed_count + step) % speed_count;
@@ -522,6 +525,8 @@ namespace {
             return text;
         case Row::Camera:
             return orbit_on ? "Orbit Banjo" : "Free";
+        case Row::Collision:
+            return collision_on() ? "On" : "Off";
         case Row::Time:
             return speed_values[speed.load()];
         case Row::Hud:
@@ -716,7 +721,7 @@ void tooie::photo_mode::register_input() {
     recompinput::set_game_input_description(photo_input,
         "Freezes the game and hides the HUD so you can fly the camera around and take screenshots. "
         "Left stick moves, right stick looks, Z and R go down and up, A takes a screenshot. "
-        "A list on screen holds zoom, camera, time, HUD, Banjo, the filters, depth of field, tilt, crop and grid: "
+        "A list on screen holds zoom, camera, collision, time, HUD, Banjo, the filters, depth of field, tilt, crop and grid: "
         "D-pad up and down pick a row, left and right change it, L hides the list. "
         "Start runs time at 1/167, 1/8 or 1/4 speed, B goes back to the game.");
     recompinput::set_default_mapping_for_keyboard(photo_input, { recompinput::InputField::keyboard(SDL_SCANCODE_F10) });
@@ -810,6 +815,9 @@ void tooie::photo_mode::add_options(recomp::config::Config& qol) {
         "Plays a camera click and flashes the screen when photo mode takes a photo. The flash is never in the photo.", true, true);
     qol.add_bool_option(grid_option, "Photo grid",
         "Draws a rule-of-thirds grid in photo mode, inside the crop frame. It is never in screenshots.", false, true);
+    // Was QOL > Photo mode camera collision until L moved it to the photo panel (2026-10-21); same key.
+    qol.add_bool_option(tooie::photo_mode_collision_option, "Photo mode camera collision",
+        "In photo mode the camera stops at the ground and slides along walls. Off lets it fly through everything.", true, true);
 }
 
 bool tooie::photo_mode::panel_state(std::vector<std::string>& rows, int& picked_row) {
