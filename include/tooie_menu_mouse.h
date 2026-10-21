@@ -15,8 +15,6 @@ namespace recomp::config {
 namespace tooie::menu_mouse {
     inline const std::string enabled_option = "menu_mouse";
 
-    inline const std::string free_hand_option = "menu_mouse_free_hand_v4";
-
     void add_options(recomp::config::Config& qol);
 
     // Once per frame on the game thread (tooie_warp_tick): works out what is under the cursor.

@@ -105,14 +105,6 @@ namespace {
         return log;
     }
 
-    bool free_hand_enabled() {
-        try {
-            return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::free_hand_option));
-        } catch (...) {
-            return false;
-        }
-    }
-
     bool enabled() {
         try {
             return std::get<bool>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(tooie::menu_mouse::enabled_option));
@@ -470,7 +462,7 @@ namespace {
         // cursor has rested on another thing for a moment, or on a click, so crossing things does not pan the camera
         // and put the hand back every time (L, 2026-10-20: "keeps resetting").
         static int dwell_hit = -1, dwell_frames = 0;
-        if (free_hand_enabled()) {
+        {
             if (hit >= 0 && hit != spot && hit == dwell_hit) {
                 dwell_frames++;
             } else {
@@ -482,9 +474,6 @@ namespace {
                 select_press_a = false;
                 dwell_frames = 0;
             }
-        } else if (use.moved && hit >= 0) {
-            select_target = hit;
-            select_press_a = false;
         }
         if (use.left && hit >= 0) {
             select_target = hit;
@@ -515,8 +504,6 @@ namespace {
 }
 
 void tooie::menu_mouse::add_options(recomp::config::Config& qol) {
-    qol.add_bool_option(free_hand_option, "Free hand on the save select (broken, off)",
-        "The save select's hand follows the cursor exactly instead of snapping to what it is over.", false);
     qol.add_bool_option(enabled_option, "Mouse in the game's menus",
         "The pause menu follows the mouse: the row under the cursor is picked as the cursor moves over it and "
         "a left click presses A on it. A right click is B (back). The cursor shows once the mouse is used.", true);
@@ -598,7 +585,7 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
             float sx = 0.0f, sy = 0.0f;
             const bool have = cursor_in_800(&sx, &sy);
             steer_select(rdram, menu, use, sx, sy, have);
-            if (have && free_hand_enabled()) {
+            if (have) {
                 free_hand(rdram, menu, sx, sy);
             }
         } else {
