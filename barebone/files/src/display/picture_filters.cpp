@@ -4538,7 +4538,7 @@ void tooie::picture_filters::apply() {
     // Graphics > Ray tracing (L, 2026-10-20): its own switch, not one of the shader effects. Reflections are the
     // first effect it drives. On a device without ray tracing (RT64::GetRayTracingSupport 1) the option does
     // nothing but tell you once; the screen-space and water reflections carry on as set.
-    const bool ray_tracing = value<bool>(ray_tracing_option, false);
+    const bool ray_tracing = false;  // barebone: ray tracing is off
     RT64::SetSceneRayTracing(ray_tracing);
     RT64::SetSceneRayTracingStrength((float)(value<double>(ray_tracing_strength_option, 60.0) / 100.0));
     RT64::SetSceneRayTracingReflections((float)(value<double>(ray_tracing_reflections_option, 60.0) / 100.0),
@@ -5288,6 +5288,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Displaced ground distance",
         "How far from the camera the ground is displaced, in the game's units. The dips fade out over the last quarter. Further costs more: every displaced floor in reach is cut into fine triangles.",
         2000, 20000, 500, 0, false, 8000);
+#if 0  // barebone: ray tracing options hidden (ray_tracing is forced off above)
     graphics.add_bool_option(
         ray_tracing_option,
         "Ray tracing",
@@ -5378,6 +5379,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Ray detail distance (quarter)",
         "Past this far, a quarter of the rays (one lamp, one ray). The traced shadows fade out from 4000 to 7000 anyway. 0 for never. Needs Ray tracing on.",
         0, 8000, 250, 0, false, 4000);
+#endif
     graphics.add_bool_option(
         reflections_section_option,
         "Reflections",
@@ -5696,11 +5698,13 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "30 FPS 3D grass",
         "Works out which 3D grass blades to draw, and their sway in the wind, 30 times a second instead of every frame, and draws them again in between. Faster above 30 FPS; the wind and the grass parting round Banjo update at 30 FPS.",
         true);
+#if 0  // barebone: grass ray tracing option hidden
     graphics.add_bool_option(
         grass_ray_tracing_option,
         "3D grass in ray tracing",
         "With Ray tracing on: the 3D grass near Banjo casts traced shadows (sun, lamps, light beams) and shows in traced reflections. Off leaves the grass out of the rays (faster).",
         true);
+#endif
 
     for (const std::string* id : { &brightness_option, &brightness_pattern_option, &colourblind_option, &colourblind_strength_option,
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
@@ -5769,7 +5773,9 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_option_hidden_dependency(grass_chunking_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_lod_option, grass_section_option, false);
     graphics.add_option_hidden_dependency(grass_half_rate_option, grass_section_option, false);
+#if 0  // barebone: grass ray tracing option hidden
     graphics.add_option_hidden_dependency(grass_ray_tracing_option, grass_section_option, false);
+#endif
     graphics.add_option_hidden_dependency(deep_snow_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(tessellated_sand_option, lighting_section_option, false);
     graphics.add_option_hidden_dependency(snow_height_option, lighting_section_option, false);

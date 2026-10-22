@@ -727,7 +727,7 @@ void tooie::init_config() {
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
                 &pf::grass_pixelated_option, &pf::grass_pixel_size_option, &pf::grass_edges_option,
                 &pf::grass_frustum_cull_option, &pf::grass_occlusion_cull_option, &pf::grass_chunking_option,
-                &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
+                &pf::grass_lod_option, &pf::grass_half_rate_option }) {  // barebone: grass ray tracing option not shown
             recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
         }
         // Dive and Mouse in the game's menus first, then the Grass toggle and its settings, all under one
@@ -851,6 +851,7 @@ void tooie::init_config() {
     // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
     // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
     // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
+#if 0  // barebone: no ray tracing menu
     for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
                                        &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
                                        &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
@@ -863,6 +864,7 @@ void tooie::init_config() {
         recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
+#endif
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
     recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
