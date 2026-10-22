@@ -1,5 +1,19 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T556 Six new effects in the WIP tab (New effects)
+- Asked: 2026-10-22 22:24 UTC
+- Build: branch claude/project-thread-g3vtln
+- Steps:
+  1. Pull branch claude/project-thread-g3vtln and build (not on main yet)
+  2. WIP tab > New effects: turn on one option at a time (all start off)
+  3. Glints on snow and ice and Breath vapour: Icy Side, Chilly Willy, Boggy's Igloo or a snowy map
+  4. God rays and Dust motes: Spiral Mountain or any outdoor map with the sun on screen and open sky near it
+  5. Contact shadows: stand Banjo beside a wall, a crate or a prop in daylight
+  6. Soft bloom on pickups: stand beside a Jiggy, a honeycomb or a Jinjo, with Bloom in Lighting on and off
+  7. Breath vapour: try Banjo and Kazooie, Banjo alone and Kazooie alone (Cheats > split up)
+- Look for: Each effect shows only while its option is on, and with all six off the picture is exactly as before. Say which look wrong or too strong, and send the console log if anything is odd. Not seen in a real render here, so tune from your test.
+- Status: waiting for L
+
 ## T555 Save Pick and Paste Pick in all three pick modes
 - Asked: 2026-10-22 21:55 UTC
 - Build: main

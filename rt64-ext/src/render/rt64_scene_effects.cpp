@@ -1138,6 +1138,26 @@ namespace RT64 {
         effectsSettings.dayMistWhen = std::min(when, 2u);
     }
 
+    void SetSceneWipEffects(bool glints, bool godRays, bool contactShadows, bool dustMotes, bool breath, bool pickupBloom) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.wipGlints = glints;
+        effectsSettings.wipGodRays = godRays;
+        effectsSettings.wipContactShadows = contactShadows;
+        effectsSettings.wipDustMotes = dustMotes;
+        effectsSettings.wipBreath = breath;
+        effectsSettings.wipPickupBloom = pickupBloom;
+    }
+
+    void SetSceneWipBreath(bool valid, float x, float y, float z, float heading, bool small) {
+        const std::scoped_lock lock(effectsMutex);
+        effectsSettings.wipBreathValid = valid;
+        effectsSettings.wipBreathPos[0] = x;
+        effectsSettings.wipBreathPos[1] = y;
+        effectsSettings.wipBreathPos[2] = z;
+        effectsSettings.wipBreathHeading = heading;
+        effectsSettings.wipBreathSmall = small;
+    }
+
     void SetSceneOwnMist(float strength) {
         const std::scoped_lock lock(effectsMutex);
         effectsSettings.ownMist = std::clamp(strength, 0.0f, 1.0f);
@@ -2463,11 +2483,21 @@ namespace RT64 {
         return framebuffer;
     }
 
+    // One of the WIP effects that draw in the scene pass is on.
+    static bool SceneWipOn(const SceneEffectsSettings &settings) {
+        return settings.wipGlints || settings.wipGodRays || settings.wipContactShadows || settings.wipDustMotes || (settings.wipBreath && settings.wipBreathValid);
+    }
+
     SceneEffectsSettings GetSceneEffects() {
         SceneEffectsSettings settings;
         {
             const std::scoped_lock lock(effectsMutex);
             settings = effectsSettings;
+        }
+        // Soft bloom on glowing pickups: with Bloom off it runs at a low strength and lets only those glow.
+        if (settings.wipPickupBloom && (settings.bloom <= 0.0f)) {
+            settings.bloom = 0.35f;
+            settings.bloomPickupsOnly = true;
         }
         if ((settings.view < SceneEffectsSoloFirst) || (settings.view == SceneEffectsViewRayScene)) {
             return settings;
@@ -2515,7 +2545,7 @@ namespace RT64 {
         const SceneEffectsSettings settings = GetSceneEffects();
         return ((settings.ambientOcclusion > 0.0f) || (settings.fog > 0.0f) || (settings.outlines > 0.0f) ||
             (settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) ||
-            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || (settings.view != 0)) && (settings.depthAddress != 0);
+            (settings.eyeAdaptation > 0.0f) || (settings.rimLight > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.sunShadows > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || SceneWipOn(settings) || (settings.view != 0)) && (settings.depthAddress != 0);
     }
 
     bool SceneEffectsWanted(const RenderTarget *depthTarget) {
@@ -2954,6 +2984,18 @@ namespace RT64 {
         constants.fogColor = { settings.fogColor[0] * fogTint[0], settings.fogColor[1] * fogTint[1], settings.fogColor[2] * fogTint[2],
             (settings.outlines > 0.0f) ? (settings.outlines + 2.0f * (std::round(settings.outlineThickness * 4.0f) - 1.0f)) : 0.0f };
 
+        {
+            // The WIP effects (see SceneEffectsCB::wip).
+            const bool breathing = settings.wipBreath && settings.wipBreathValid;
+            float turns = std::fmod(settings.wipBreathHeading / 6.2831853f, 1.0f);
+            if (turns < 0.0f) {
+                turns += 1.0f;
+            }
+            const float flags = (settings.wipGlints ? 1.0f : 0.0f) + (settings.wipGodRays ? 2.0f : 0.0f) + (settings.wipContactShadows ? 4.0f : 0.0f) +
+                (settings.wipDustMotes ? 8.0f : 0.0f) + (breathing ? 16.0f : 0.0f) + ((breathing && settings.wipBreathSmall) ? 32.0f : 0.0f) +
+                (breathing ? 64.0f * std::min(std::floor(turns * 4096.0f), 4095.0f) : 0.0f);
+            constants.wip = breathing ? interop::float4{ settings.wipBreathPos[0], settings.wipBreathPos[1], settings.wipBreathPos[2], flags } : interop::float4{ 0.0f, 0.0f, 0.0f, flags };
+        }
         constants.bloom = { settings.bloom, settings.depthOfFieldOnBanjo ? -settings.depthOfField : settings.depthOfField, settings.eyeAdaptation, settings.underwaterHaze };
 
         // The waves' own clock, so changing their speed doesn't make them jump.
@@ -3129,7 +3171,7 @@ namespace RT64 {
         }
 
         RenderTexture *source = nullptr;
-        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f)) {
+        if ((settings.bloom > 0.0f) || (settings.depthOfField > 0.0f) || (settings.eyeAdaptation > 0.0f) || (settings.toonShading > 0.0f) || (settings.toonCharacters > 0.0f) || (settings.underwaterTint > 0.0f) || (settings.heatHaze > 0.0f) || (settings.waterReflections > 0.0f) || (settings.iceReflections > 0.0f) || (settings.waterWaves > 0.0f) || settings.shoreFoam || settings.modernWater || (settings.lightShafts > 0.0f) || (settings.bounceLight > 0.0f) || (settings.screenSpaceGI > 0.0f) || (settings.screenSpaceReflections > 0.0f) || settings.timeOfDay || (settings.ownMist > 0.0f) || SceneWipOn(settings)) {
             // The scene so far, without multisampling: the target's resolve, or a copy of the target.
             const RenderTextureView *sourceView = nullptr;
             if (colorTarget->usesResolve()) {
@@ -3262,6 +3304,7 @@ namespace RT64 {
                 const uint32_t outputHeight = eighth ? std::max(bloomHeight / 2, 1U) : bloomHeight;
                 interop::BloomCB bloomConstants;
                 bloomConstants.params = { 1.0f / float(inputWidth), 1.0f / float(inputHeight), pass, settings.bloomThreshold };
+                bloomConstants.waterSim = { settings.wipPickupBloom ? (settings.bloomPickupsOnly ? 2.0f : 1.0f) : 0.0f, 0.0f, 0.0f, 0.0f };
                 commandList->setFramebuffer(res.bloomFramebuffer[output].get());
                 commandList->setViewports(RenderViewport(0.0f, 0.0f, float(outputWidth), float(outputHeight)));
                 commandList->setScissors(RenderRect(0, 0, outputWidth, outputHeight));

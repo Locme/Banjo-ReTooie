@@ -93,6 +93,11 @@ namespace interop {
         // ground is (0 to 31) + 16384 when raindrops land on the screen). The reach is negative when the sun
         // shadow map was drawn this frame.
         float4 shadows;
+        // The WIP effects (L, 2026-10-22): xyz the world position the breath vapour leaves from (the controlled player's
+        // mouth), then flags in w: bit 0 glints on snow and ice, 1 god rays, 2 contact shadows, 3 dust motes, 4 breath
+        // vapour (xyz is valid), 5 a small breather (Kazooie alone), then the player's heading in 4096ths of a turn from
+        // bit 6 (0 faces +z). 0 when none is on.
+        float4 wip;
     };
 #ifdef HLSL_CPU
     // Push constants: Vulkan guarantees only 256 bytes (NVIDIA allows no more), and going over can lose the device.
@@ -105,7 +110,8 @@ namespace interop {
     // Pass 7 is Modern water's ripple simulation on a grid round the player (height, speed per cell): params.y
     // is unused, waterSim holds how many cells the grid moved since the last step (x, z: read from there), then
     // the player in grid cells, and waterPush how hard the player pushes the water down this step, over how
-    // many cells, a splash's extra push, then how much of each cell's movement is kept per step.
+    // many cells, a splash's extra push, then how much of each cell's movement is kept per step. Pass 0 reads
+    // waterSim.x as the pickup glow: 0 off, 1 warm saturated colours glow at a lower threshold, 2 only those glow.
     struct BloomCB {
         float4 params;
         float4 waterSim;

@@ -789,6 +789,16 @@ void tooie::init_config() {
         }
         recompui::config::set_option_group(dn::option, "Day and night");
     }
+    // Six new effects (L, 2026-10-22), each off by default, in their own WIP section.
+    tooie::picture_filters::add_wip_effect_options(graphics);
+    {
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &pf::wip_glints_option, &pf::wip_god_rays_option, &pf::wip_contact_shadows_option,
+                &pf::wip_dust_motes_option, &pf::wip_pickup_bloom_option, &pf::wip_breath_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(pf::wip_glints_option, "New effects");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",

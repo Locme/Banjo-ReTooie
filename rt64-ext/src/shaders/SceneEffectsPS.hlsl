@@ -4017,7 +4017,7 @@ float3 DayFireflies(int2 pixel, float depth, float3 tint) {
 
 // Light shafts: from each pixel, steps towards the sun on screen, gathering the bright sky it passes
 // through and fading with each step, so light streams through gaps between things against the sky.
-float3 LightShafts(int2 pixel) {
+float3 LightShaftsScaled(int2 pixel, float strength) {
     const float3 sun = gConstants.sun.xyz;
     if (sun.z > -0.05f) {
         // Behind the camera, or almost square to it.
@@ -4056,7 +4056,219 @@ float3 LightShafts(int2 pixel) {
     // The share of the way to the sun that is open sky: whole near gaps in the scenery, so beams fan out
     // from them across whatever is in front, and brightest close to the sun.
     const float near = saturate(1.0f - length(sunScreen - float2(pixel)) / (size.y * 1.2f));
-    return (gathered / total) * (DayWeather().y * onScreen * near * near * 1.4f);
+    return (gathered / total) * (strength * onScreen * near * near * 1.4f);
+}
+
+float3 LightShafts(int2 pixel) {
+    return LightShaftsScaled(pixel, DayWeather().y);
+}
+
+// ---- The WIP effects (L, 2026-10-22), Graphics > WIP > Effects to test. All are added to the picture like the light
+// shafts (bloom in PSMain), except contact shadows, which darken it. gConstants.wip is 0 for the ones that are off.
+uint WipFlags() {
+    return uint(gConstants.wip.w + 0.5f);
+}
+
+bool WipOn() {
+    return (WipFlags() & 31u) != 0u;
+}
+
+bool WipGlints() {
+    return (WipFlags() & 1u) != 0u;
+}
+
+bool WipGodRays() {
+    return (WipFlags() & 2u) != 0u;
+}
+
+bool WipContactShadows() {
+    return (WipFlags() & 4u) != 0u;
+}
+
+bool WipDustMotes() {
+    return (WipFlags() & 8u) != 0u;
+}
+
+bool WipBreath() {
+    return (WipFlags() & 16u) != 0u;
+}
+
+// Glints on snow and ice: pale, bright surfaces (and the ice the mask shows) twinkle with small points of light, one in
+// a handful of 14-unit cells of the world, each blinking at its own rate. The CPU sends the strength on the icy and snowy
+// maps only.
+float3 WipGlintsAt(int2 pixel, float depth, float strength) {
+    const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
+    const float peak = max(scene.r, max(scene.g, scene.b));
+    const float low = min(scene.r, min(scene.g, scene.b));
+    const float saturation = (peak - low) / max(peak, 1e-4f);
+    float surface = smoothstep(0.5f, 0.75f, peak) * (1.0f - smoothstep(0.2f, 0.4f, saturation));
+    float iceDepth;
+    if ((gConstants.water.y > 0.5f) && IceAt(pixel, depth, iceDepth)) {
+        surface = 1.0f;
+    }
+    if (surface <= 0.0f) {
+        return 0.0f;
+    }
+    const float3 center = ViewPosition(pixel, depth);
+    const float distance = -center.z;
+    const float range = 1.0f - smoothstep(900.0f, 2600.0f, distance);
+    if (range <= 0.0f) {
+        return 0.0f;
+    }
+    const float3 world = ViewToWorldPoint(center);
+    const float cell = 14.0f;
+    const float3 id = floor(world / cell);
+    const float h = DayHash(id);
+    if (h < 0.8f) {
+        return 0.0f;
+    }
+    const float3 offset = float3(DayHash(id + 17.0f), DayHash(id + 41.0f), DayHash(id + 83.0f));
+    const float3 spot = (id + 0.2f + offset * 0.6f) * cell;
+    // At least a pixel and a half wide, whatever the distance and resolution.
+    const float pixelWorld = distance / gConstants.projection.y * 2.0f / gConstants.projection.w;
+    const float radius = clamp(pixelWorld * 1.6f, 1.2f, 3.0f);
+    const float d = length(world - spot);
+    if (d >= radius) {
+        return 0.0f;
+    }
+    const float rate = 1.5f + 3.0f * DayHash(id + 5.0f);
+    const float twinkle = pow(saturate(sin(gConstants.view.z * rate + h * 80.0f) * 0.5f + 0.5f), 12.0f);
+    const float falloff = 1.0f - d / radius;
+    return float3(0.9f, 0.97f, 1.0f) * (twinkle * falloff * falloff * range * surface * strength * 3.0f);
+}
+
+// Contact shadows: from the surface a short ray marches towards the sun through the depth buffer (36 units, steps
+// spreading out from the surface); something standing just in front of a step darkens the surface, so props and Banjo
+// meet the ground with a dark line even where the sun shadows are soft, off or too coarse. Surfaces turned from the sun
+// are left to the sun shadows.
+float WipContactShadowAt(int2 pixel, float3 center, float3 normal, float strength) {
+    const float distance = -center.z;
+    const float range = 1.0f - smoothstep(1500.0f, 3500.0f, distance);
+    const float3 toLight = normalize(gConstants.sun.xyz);
+    const float facing = dot(normal, toLight);
+    if ((range <= 0.0f) || (facing < 0.05f)) {
+        return 1.0f;
+    }
+    const int Steps = 10;
+    const float reach = 36.0f;
+    const float jitter = InterleavedNoise(pixel);
+    float blocked = 0.0f;
+    [loop] for (int i = 0; i < Steps; i++) {
+        const float t = (float(i) + jitter) / float(Steps);
+        const float3 p = center + normal * 1.5f + toLight * (reach * t * t + 2.0f);
+        if (p.z > -1.0f) {
+            break;
+        }
+        const float2 px = ViewToPixel(p);
+        if ((px.x < 0.0f) || (px.y < 0.0f) || (px.x >= gConstants.projection.z) || (px.y >= gConstants.projection.w)) {
+            break;
+        }
+        const int2 at = int2(px);
+        const float sceneDepth = LoadDepth(at);
+        if (sceneDepth >= 0.99999f) {
+            continue;
+        }
+        // The scene is nearer than the step by more than a hair, but not by so much that the ray passed behind it.
+        const float nearer = ViewPosition(at, sceneDepth).z - p.z;
+        if ((nearer > 1.0f + distance * 0.002f) && (nearer < 14.0f + distance * 0.01f)) {
+            blocked = max(blocked, 1.0f - t);
+        }
+    }
+    return 1.0f - 0.55f * strength * blocked * range * saturate(facing * 4.0f);
+}
+
+// Dust motes in sun shafts: tiny specks drifting in five layers at fixed distances in front of the camera, each layer a
+// lattice of the world (so they stay put as the camera turns) with a mote in some cells. They show only where the
+// radial shafts are (the same gather as the God rays), and not behind scenery.
+float3 WipDustMotesAt(int2 pixel, float depth, float strength) {
+    const float3 shafts = LightShaftsScaled(pixel, 1.0f);
+    const float inShaft = saturate(dot(shafts, float3(0.299f, 0.587f, 0.114f)) * 3.0f);
+    if (inShaft <= 0.01f) {
+        return 0.0f;
+    }
+    const float sceneDistance = (depth >= 0.99999f) ? 1e9f : -ViewPosition(pixel, depth).z;
+    const float2 ndc = float2((float(pixel.x) + 0.5f) / gConstants.projection.z * 2.0f - 1.0f, 1.0f - (float(pixel.y) + 0.5f) / gConstants.projection.w * 2.0f);
+    const float time = gConstants.view.z;
+    float amount = 0.0f;
+    [unroll] for (int k = 0; k < 5; k++) {
+        const float d = 110.0f * pow(1.75f, float(k));
+        if (d > sceneDistance) {
+            break;
+        }
+        const float3 q = float3(ndc.x * d / gConstants.projection.x, ndc.y * d / gConstants.projection.y, -d);
+        const float3 world = ViewToWorldPoint(q);
+        const float cell = d * 0.08f;
+        const float3 id = floor(world / cell);
+        const float h = DayHash(id + float(k) * 7.0f);
+        if (h < 0.3f) {
+            continue;
+        }
+        // Each mote circles slowly about a place in its cell.
+        const float3 base = float3(DayHash(id + 11.0f), DayHash(id + 29.0f), DayHash(id + 53.0f));
+        const float3 phase = base * 6.2831853f;
+        const float3 drift = float3(sin(time * 0.45f + phase.x), sin(time * 0.31f + phase.y), cos(time * 0.38f + phase.z)) * 0.2f;
+        const float3 spot = (id + 0.3f + base * 0.4f + drift) * cell;
+        const float pixelWorld = d / gConstants.projection.y * 2.0f / gConstants.projection.w;
+        const float radius = pixelWorld * 2.4f;
+        const float distanceToMote = length(world - spot);
+        if (distanceToMote < radius) {
+            const float falloff = 1.0f - distanceToMote / radius;
+            const float twinkle = 0.55f + 0.45f * sin(time * (1.0f + 2.0f * h) + h * 50.0f);
+            amount += falloff * falloff * twinkle;
+        }
+    }
+    return float3(1.0f, 0.95f, 0.8f) * (amount * inShaft * strength * 1.4f);
+}
+
+// A view-space position from a world one (ViewToWorldPoint's inverse, from the matrix inverse by cross products).
+float3 WipWorldToView(float3 world) {
+    const float3 r0 = gConstants.worldX.xyz;
+    const float3 r1 = gConstants.worldY.xyz;
+    const float3 r2 = gConstants.worldZ.xyz;
+    const float3 d = world - float3(gConstants.worldX.w, gConstants.worldY.w, gConstants.worldZ.w);
+    const float det = dot(r0, cross(r1, r2));
+    return (cross(r1, r2) * d.x + cross(r2, r0) * d.y + cross(r0, r1) * d.z) / ((abs(det) > 1e-12f) ? det : 1.0f);
+}
+
+// Breath vapour: a soft white puff leaves the player's mouth every 2.6 seconds, swells, drifts forward and up and fades over
+// 2.2. It follows the player (the shader keeps no history of where it left); it is drawn as a blend towards white, so it
+// shows on dark water and rock and is faint on snow. The CPU sends the mouth's place (gConstants.wip.xyz) only on cold maps,
+// for the player being controlled (Banjo and Kazooie, Banjo alone or Kazooie alone).
+float3 WipBreathAt(int2 pixel, float depth, float strength) {
+    // The size of the breather: Banjo (with Kazooie in the backpack or without), or Kazooie alone.
+    const float height = ((WipFlags() & 32u) != 0u) ? 45.0f : 90.0f;
+    const float heading = float((WipFlags() >> 6) & 4095u) * (6.2831853f / 4096.0f);
+    const float time = gConstants.view.z;
+    const float life = 2.2f;
+    const float u = fmod(time, 2.6f) / life;
+    if (u >= 1.0f) {
+        return 0.0f;
+    }
+    const float3 forward = float3(sin(heading), 0.0f, cos(heading));
+    const float3 mouth = gConstants.wip.xyz;
+    const float3 center = mouth + forward * (height * 0.25f * u) + float3(0.0f, height * 0.12f * u, 0.0f);
+    const float radius = height * (0.07f + 0.16f * u);
+    const float3 view = WipWorldToView(center);
+    if (view.z > -2.0f) {
+        return 0.0f;
+    }
+    const float2 delta = float2(pixel) + 0.5f - ViewToPixel(view);
+    const float radiusPixels = max(radius * gConstants.projection.y / -view.z * 0.5f * gConstants.projection.w, 1.0f);
+    const float angle = atan2(delta.y, delta.x);
+    const float wisp = 1.0f + 0.25f * sin(angle * 3.0f + time * 1.7f) + 0.15f * sin(angle * 5.0f - time * 2.3f);
+    const float dp = length(delta) / (radiusPixels * wisp);
+    if (dp >= 1.0f) {
+        return 0.0f;
+    }
+    const float sceneDistance = (depth >= 0.99999f) ? 1e9f : -ViewPosition(pixel, depth).z;
+    if (-view.z > sceneDistance + radius * 0.5f) {
+        return 0.0f;
+    }
+    const float swell = smoothstep(0.0f, 0.12f, u) * (1.0f - u) * (1.0f - u);
+    const float soft = 1.0f - dp * dp;
+    const float alpha = swell * soft * soft * strength * 0.7f * (1.0f - smoothstep(1800.0f, 3600.0f, -view.z));
+    const float3 scene = gColor.Load(int3(pixel, 0)).rgb;
+    return (float3(0.88f, 0.93f, 1.0f) - scene) * alpha;
 }
 
 // Sun shadows: from the surface, steps towards the sun and checks the depth buffer at each step; when
@@ -4822,6 +5034,22 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     if (!daytime && (depth >= 0.99999f) && HeldSunShown() && (gConstants.view.x < 1.5f)) {
         bloom += HeldSun(pixel);
     }
+    // The WIP effects, added the same way (none runs while they are off).
+    if (WipOn() && (gConstants.view.x < 1.5f)) {
+        const bool surfaceHere = depth < 0.99999f;
+        if (WipGlints() && surfaceHere) {
+            bloom += WipGlintsAt(pixel, depth, 1.0f);
+        }
+        if (WipGodRays()) {
+            bloom += LightShaftsScaled(pixel, 0.8f) * (surfaceHere ? 1.0f : 0.4f);
+        }
+        if (WipDustMotes()) {
+            bloom += WipDustMotesAt(pixel, depth, 1.0f);
+        }
+        if (WipBreath()) {
+            bloom += WipBreathAt(pixel, depth, 1.0f);
+        }
+    }
 
     // With depth of field the pass draws the blurred scene itself (a = 0), with the other effects on it.
     const bool blur = (gConstants.bloom.y != 0.0f) && (gConstants.view.x < 0.5f);
@@ -4903,7 +5131,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 #else
     const bool lightShadows = false;
 #endif
-    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows) {
+    const bool contactShadows = WipContactShadows() && (gConstants.view.x < 1.5f);
+    if (occlusion || globalIllumination || reflections || sunShadows || lightShadows || contactShadows) {
         center = ViewPosition(pixel, depth);
         normal = ViewNormal(pixel, center);
 #ifdef RAY_TRACED
@@ -4933,6 +5162,9 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             const float3 world = ViewToWorldPoint(center);
             const bool banjoBody = InsideBanjo(world) && (world.y > gConstants.rippleAge.w + 8.0f);
             keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
+        }
+        if (contactShadows) {
+            keep *= WipContactShadowAt(pixel, center, normal, 1.0f);
         }
         if (sunShadows) {
 #ifdef RAY_TRACED

@@ -104,6 +104,14 @@ namespace tooie::picture_filters {
     inline const std::string water_option = "water_style";
     // Graphics > Shore foam: Modern water's broken white line along the shores, on the game's own water (Original).
     inline const std::string shore_foam_option = "water_shore_foam";
+    // WIP tab > New effects (L, 2026-10-22), each off by default: glints on snow and ice, screen-space god rays from the sun,
+    // contact shadows, dust motes in sun shafts, soft bloom on glowing pickups, breath vapour in cold areas.
+    inline const std::string wip_glints_option = "wip_glints";
+    inline const std::string wip_god_rays_option = "wip_god_rays";
+    inline const std::string wip_contact_shadows_option = "wip_contact_shadows";
+    inline const std::string wip_dust_motes_option = "wip_dust_motes";
+    inline const std::string wip_pickup_bloom_option = "wip_pickup_bloom";
+    inline const std::string wip_breath_option = "wip_breath_vapour";
     // Graphics > Mist: the day and night cycle's mist (over low ground, on water, spray at waterfalls) on its own, always
     // showing. While the cycle runs in a level, its own Mist and Mist Time settings are used instead.
     inline const std::string mist_option = "mist";
@@ -193,6 +201,8 @@ namespace tooie::picture_filters {
 
     // Adds the options to the Graphics tab. They apply as soon as they change.
     void add_options(recomp::config::Config& graphics);
+    // The six WIP effects above (Graphics options, moved to the WIP tab by config.cpp).
+    void add_wip_effect_options(recomp::config::Config& graphics);
     // An effect setting was changed by hand: the effects preset becomes Custom (unless a preset is
     // being applied).
     void effect_changed();

@@ -54,6 +54,8 @@ namespace RT64 {
         float outlineThickness = 1.0f;
         float bloom = 0.0f;
         float bloomThreshold = 0.7f;
+        // Bloom runs only for glowing pickups (the Bloom setting is off; see wipPickupBloom).
+        bool bloomPickupsOnly = false;
         float depthOfField = 0.0f;
         bool depthOfFieldOnBanjo = false;
         float eyeAdaptation = 0.0f;
@@ -115,6 +117,20 @@ namespace RT64 {
         uint32_t dayMistWhen = 0;
         // Graphics > Mist (0 off, 1 thickest): the same mist on its own, always showing, used while the cycle is off.
         float ownMist = 0.0f;
+        // The WIP effects (L, 2026-10-22): glints on snow and ice, god rays, contact shadows, dust motes in sun shafts and breath
+        // vapour, and soft bloom on glowing pickups. wipBreathValid when the controlled player has a mouth to breathe from
+        // (a cold map, a form with one): then wipBreathPos is where, wipBreathHeading its heading in radians, wipBreathSmall
+        // for Kazooie alone.
+        bool wipGlints = false;
+        bool wipGodRays = false;
+        bool wipContactShadows = false;
+        bool wipDustMotes = false;
+        bool wipBreath = false;
+        bool wipBreathValid = false;
+        bool wipBreathSmall = false;
+        float wipBreathPos[3] = {};
+        float wipBreathHeading = 0.0f;
+        bool wipPickupBloom = false;
         // How wet the ground is (0 dry, 1 soaked), and whether raindrops land on the screen.
         float dayWet = 0.0f;
         bool dayDrops = false;

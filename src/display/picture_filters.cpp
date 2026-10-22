@@ -99,6 +99,8 @@ namespace RT64 {
     void SetSceneWaterDetail(float detail);
     void SetSceneGroundDisplacement(float amount, float reach);
     void SetSceneIcyLevel(bool enabled);
+    void SetSceneWipEffects(bool glints, bool godRays, bool contactShadows, bool dustMotes, bool breath, bool pickupBloom);
+    void SetSceneWipBreath(bool valid, float x, float y, float z, float heading, bool small);
     void SetSceneModernUnderwater(float amount, float surfaceY, bool wholeLevel);
     void SetSceneLightShafts(float strength);
     void SetSceneSunShadows(float strength, bool onBanjo, float softness);
@@ -171,6 +173,10 @@ namespace {
     // without deep snow.
     std::atomic<bool> tessellated_sand{false};
     std::atomic<float> snow_height{1.0f};
+    // WIP tab > New effects (L, 2026-10-22); breath vapour is also gated to cold maps in tick().
+    std::atomic<bool> wip_breath{false};
+    // The current map is cold (cold_map), set by tick().
+    std::atomic<bool> cold_map_now{false};
     std::atomic<float> snow_detail{1.0f};
     std::atomic<float> snow_refill{0.0f};
     std::atomic<float> snow_lod_distance{2000.0f};
@@ -209,6 +215,11 @@ namespace {
     bool by_lava(uint8_t* rdram) {
         const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
         return (map == 0x127) || (map == 0x129) || (map == 0x12B) || (map == 0x133);
+    }
+    // A cold map: the icy ones (Icy Side, the Ice Train Station, Chilly Willy, Boggy's Igloo, Icicle Grotto, the parade) and
+    // the snowy ones. Glints and breath vapour are for these only.
+    bool cold_map(uint16_t map) {
+        return (map == 0x128) || (map == 0x12A) || (map == 0x12C) || (map == 0x131) || (map == 0x132) || (map == 0x168) || snowy_map(map);
     }
     // How far into the underwater look (0 above water, 1 under), eased over a fifth of a second.
     float underwater_amount = 0.0f;
@@ -4291,6 +4302,29 @@ namespace {
         }
     }
 
+    // The WIP effects (L, 2026-10-22), sent to RT64 when they change and when the map turns cold or not (glints are for cold
+    // maps only). TOOIE_WIP_EFFECTS=<bits> (1 glints, 2 god rays, 4 contact shadows, 8 dust motes, 16 pickup bloom, 32 breath)
+    // sets them instead, and TOOIE_WIP_COLD=1 counts every map as cold (headless).
+    void send_wip_effects() {
+        bool glints = value<bool>(tooie::picture_filters::wip_glints_option, false);
+        bool god_rays = value<bool>(tooie::picture_filters::wip_god_rays_option, false);
+        bool contact = value<bool>(tooie::picture_filters::wip_contact_shadows_option, false);
+        bool dust = value<bool>(tooie::picture_filters::wip_dust_motes_option, false);
+        bool pickups = value<bool>(tooie::picture_filters::wip_pickup_bloom_option, false);
+        bool breath = value<bool>(tooie::picture_filters::wip_breath_option, false);
+        if (const char* forced = std::getenv("TOOIE_WIP_EFFECTS")) {
+            const int bits = std::atoi(forced);
+            glints = (bits & 1) != 0;
+            god_rays = (bits & 2) != 0;
+            contact = (bits & 4) != 0;
+            dust = (bits & 8) != 0;
+            pickups = (bits & 16) != 0;
+            breath = (bits & 32) != 0;
+        }
+        wip_breath = breath;
+        RT64::SetSceneWipEffects(glints && cold_map_now.load(), god_rays, contact, dust, breath, pickups);
+    }
+
     // The grass, grass edge, ice and snow-off lists sent to RT64: the built-in ones (grass_textures[],
     // grass_edge_textures[], ice_textures[]) with Shader Effects pick mode's picks over them. A pick without
     // Deep Snow among its effects also keeps deep snow off that texture; Deep Snow picks are only kept in the file for now, as deep
@@ -4751,6 +4785,7 @@ void tooie::picture_filters::apply() {
         own_mist = (float)(std::atof(forced) / 100.0);
     }
     RT64::SetSceneOwnMist(own_mist);
+    send_wip_effects();
     water_waves_on = (shader(value<double>(water_waves_option, 0.0)) > 0.0) || modern_water;
     RT64::SetSceneWaterWaves((float)(shader(value<double>(water_waves_option, 0.0)) / 100.0), (float)(value<double>(wave_speed_option, 100.0) / 100.0));
     water_reflections_set = (float)(shader(value<double>(water_reflections_option, 0.0)) / 100.0);
@@ -5088,6 +5123,49 @@ void tooie::picture_filters::tick(uint8_t* rdram, recomp_context* ctx) {
         float pos[3];
         const bool valid = banjo_position(rdram, pos);
         RT64::SetScenePlayer(valid, valid ? pos[0] : 0.0f, valid ? pos[1] : 0.0f, valid ? pos[2] : 0.0f, banjo_grounded(rdram));
+    }
+
+    // The WIP effects that depend on where the player is (L, 2026-10-22): glints only on cold maps, and breath vapour from the
+    // mouth of whoever is controlled there: Banjo-Kazooie (form 1), Banjo alone (10) or Kazooie alone (11).
+    {
+        const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)0x80132DC2);
+        static bool env_cold = std::getenv("TOOIE_WIP_COLD") != nullptr;
+        const bool cold = cold_map(map) || env_cold;
+        static int cold_sent = -1;
+        if (int(cold) != cold_sent) {
+            cold_sent = int(cold);
+            cold_map_now = cold;
+            // Glints follow the map.
+            send_wip_effects();
+        }
+        bool breathing = false;
+        float mouth[3] = {};
+        float heading = 0.0f;
+        bool small = false;
+        if (wip_breath.load() && cold) {
+            const uint32_t index = (uint32_t)MEM_W(0, (int32_t)0x801354DC);
+            const uint32_t player = (index < 2) ? (uint32_t)MEM_W((int32_t)(4 * index), (int32_t)0x80135490) : 0u;
+            const uint8_t form = (uint8_t)MEM_BU(0, (int32_t)0x8012704C);
+            const bool mouthed = (form == 1) || (form == 10) || (form == 11);
+            if (mouthed && valid_pointer(player)) {
+                const uint32_t transform = (uint32_t)MEM_W(0xE4, (int32_t)player);
+                const uint32_t yaw_ptr = (uint32_t)MEM_W(0xF8, (int32_t)player);
+                if (valid_pointer(transform) && valid_pointer(yaw_ptr)) {
+                    small = (form == 11);
+                    heading = read_f32(rdram, yaw_ptr) * 3.14159265f / 180.0f;
+                    // The mouth: head height above the feet, a little ahead of them.
+                    const float head = small ? 45.0f : 90.0f;
+                    for (int i = 0; i < 3; i++) {
+                        mouth[i] = read_f32(rdram, transform + 4 * i);
+                    }
+                    mouth[0] += std::sin(heading) * head * 0.22f;
+                    mouth[1] += head;
+                    mouth[2] += std::cos(heading) * head * 0.22f;
+                    breathing = underwater_amount < 0.3f;
+                }
+            }
+        }
+        RT64::SetSceneWipBreath(breathing, mouth[0], mouth[1], mouth[2], heading, small);
     }
 
     // The same shimmer, gentler, under water. By lava it only rises above hot things (lava, fire); under water it
@@ -5919,4 +5997,37 @@ void tooie::picture_filters::set_cost_override(const CostEffect* effect) {
         cost_override_on.store(effect != nullptr, std::memory_order_relaxed);
     }
     apply();
+}
+
+void tooie::picture_filters::add_wip_effect_options(recomp::config::Config& graphics) {
+    struct Entry {
+        const std::string* id;
+        const char* name;
+        const char* description;
+    };
+    const Entry entries[] = {
+        { &wip_glints_option, "Glints on snow and ice",
+          "Small points of light twinkle on snow and ice, each blinking at its own pace. Only on the snowy and icy maps (Icy Side, the Ice Train Station, Chilly Willy, Boggy's Igloo, Icicle Grotto, the parade and the other snow). Off (the default) leaves the picture as it was." },
+        { &wip_god_rays_option, "God rays (screen space)",
+          "Beams of light fan out from the sun across the scenery when it is on screen: the sky's light is smeared away from the sun through gaps in the scenery. It works on the picture alone, with no ray tracing and apart from Light shafts in the Lighting section, so with both on they add up. Off leaves the picture as it was." },
+        { &wip_contact_shadows_option, "Contact shadows",
+          "A short dark line where things meet the ground or each other, so Banjo and props sit on the floor instead of floating: from each surface a short ray goes towards the sun through the picture's depth, and something close in front of it darkens the spot. Works with the sun shadows or on its own, indoors and out. Off leaves the picture as it was." },
+        { &wip_dust_motes_option, "Dust motes in sun shafts",
+          "Tiny specks of dust drift in the air, visible only inside shafts of sunlight and never in front of scenery. Needs the sun on screen with open sky near it. Off leaves the picture as it was." },
+        { &wip_pickup_bloom_option, "Soft bloom on pickups",
+          "A soft glow round bright, warm things like Jiggies, Jinjos, honeycombs and notes. With Bloom on in Lighting it lets those glow at a lower brightness than the rest of the picture; with Bloom off only they glow. Off leaves the picture as it was." },
+        { &wip_breath_option, "Breath vapour",
+          "A puff of breath leaves the mouth of the character you control every few seconds, on the snowy and icy maps. It follows Banjo and Kazooie together, Banjo alone and Kazooie alone (a smaller puff), and is not shown under water or as other transformations. Off leaves the picture as it was." },
+    };
+    for (const Entry& entry : entries) {
+        graphics.add_bool_option(*entry.id, entry.name, entry.description, false);
+        graphics.add_option_change_callback(*entry.id,
+            [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext context) {
+                if (context == recomp::config::OptionChangeContext::Temporary) {
+                    graphics_config().save_config();
+                } else {
+                    apply();
+                }
+            });
+    }
 }

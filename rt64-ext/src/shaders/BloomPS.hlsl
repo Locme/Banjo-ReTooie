@@ -95,7 +95,15 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         const float brightness = max(dot(color, float3(0.2126f, 0.7152f, 0.0722f)), max(color.r, max(color.g, color.b)) * 0.6f);
         float soft = clamp(brightness - threshold + knee, 0.0f, 2.0f * knee);
         soft = soft * soft / (4.0f * knee);
-        const float keep = max(soft, brightness - threshold) / max(brightness, 1e-4f);
+        float keep = max(soft, brightness - threshold) / max(brightness, 1e-4f);
+        if (gConstants.waterSim.x > 0.5f) {
+            // Soft bloom on glowing pickups (WIP): the warm, saturated glows of a Jiggy, a honeycomb or a Jinjo's aura
+            // count as bright at a much lower threshold; with 2 (Bloom itself is off) only they glow.
+            const float peak = max(color.r, max(color.g, color.b));
+            const float saturation = (peak - min(color.r, min(color.g, color.b))) / max(peak, 1e-4f);
+            const float pickup = smoothstep(0.35f, 0.6f, peak) * smoothstep(0.35f, 0.65f, saturation);
+            keep = (gConstants.waterSim.x > 1.5f) ? pickup : max(keep, pickup * 0.7f);
+        }
         return float4(color * keep, 1.0f);
     }
     else if (pass == 5) {
