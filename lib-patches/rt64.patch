@@ -7949,7 +7949,7 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..878d817 100644
+index 0848f3e..2b735ce 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
 @@ -20,6 +20,8 @@
@@ -8027,18 +8027,23 @@ index 0848f3e..878d817 100644
          globalVersion++;
      }
  
-@@ -314,8 +352,10 @@ namespace RT64 {
+@@ -314,9 +352,14 @@ namespace RT64 {
          }
  
          // Remove the existing entry from the list if it exists.
 +        // Banjo-Tooie: keep a later use already marked by touch(), so drawing an older frame doesn't age the texture.
++        // Banjo-Tooie: an entry already in the list is moved to the front (splice) instead of erased and pushed again,
++        // which freed and allocated a list node for every texture of every draw.
          AccessList::iterator listIt = listIterators[textureIndex];
          if (listIt != accessList.end()) {
-+            submissionFrame = std::max(submissionFrame, listIt->second);
-             accessList.erase(listIt);
+-            accessList.erase(listIt);
++            listIt->second = std::max(submissionFrame, listIt->second);
++            accessList.splice(accessList.begin(), accessList, listIt);
++            return true;
          }
  
-@@ -325,6 +365,30 @@ namespace RT64 {
+         // Push a new access entry to the front of the list and store the new iterator.
+@@ -325,6 +368,32 @@ namespace RT64 {
          return true;
      }
  
@@ -8059,7 +8064,9 @@ index 0848f3e..878d817 100644
 +                return;
 +            }
 +
-+            accessList.erase(listIt);
++            listIt->second = submissionFrame;
++            accessList.splice(accessList.begin(), accessList, listIt);
++            return;
 +        }
 +
 +        accessList.push_front({ textureIndex, submissionFrame });
@@ -8069,7 +8076,7 @@ index 0848f3e..878d817 100644
      bool TextureMap::evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes) {
          evictedHashes.clear();
  
-@@ -352,6 +416,7 @@ namespace RT64 {
+@@ -352,6 +421,7 @@ namespace RT64 {
                  listIterators[textureIndex] = accessList.end();
                  hashMap.erase(textureHash);
                  evictedHashes.push_back(textureHash);
@@ -8077,7 +8084,7 @@ index 0848f3e..878d817 100644
                  it = decltype(it)(accessList.erase(std::next(it).base()));
  
                  // If a texture replacement was used for this texture, decrease the reference in the map.
-@@ -976,12 +1041,22 @@ namespace RT64 {
+@@ -976,12 +1046,22 @@ namespace RT64 {
          std::vector<StreamResult> streamResultQueueCopy;
          std::vector<TextureMapAddition> textureMapAdditions;
          std::vector<ReplacementMapAddition> replacementMapAdditions;
@@ -8100,7 +8107,7 @@ index 0848f3e..878d817 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1066,15 @@ namespace RT64 {
+@@ -991,10 +1071,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -8118,7 +8125,7 @@ index 0848f3e..878d817 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1174,6 +1254,50 @@ namespace RT64 {
+@@ -1174,6 +1259,50 @@ namespace RT64 {
                          bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
                          replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
                      }
@@ -8169,7 +8176,7 @@ index 0848f3e..878d817 100644
                  }
                  
                  // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
-@@ -1222,6 +1346,24 @@ namespace RT64 {
+@@ -1222,6 +1351,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -8194,7 +8201,7 @@ index 0848f3e..878d817 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1372,7 @@ namespace RT64 {
+@@ -1230,6 +1377,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -8202,7 +8209,7 @@ index 0848f3e..878d817 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1242,6 +1385,14 @@ namespace RT64 {
+@@ -1242,6 +1390,14 @@ namespace RT64 {
                          textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
                      }
  
@@ -8217,7 +8224,7 @@ index 0848f3e..878d817 100644
                      textureMap.replacementMap.evict(textureMap.evictedTextures);
                  }
  
-@@ -1317,6 +1468,16 @@ namespace RT64 {
+@@ -1317,6 +1473,16 @@ namespace RT64 {
          return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
      }
  
