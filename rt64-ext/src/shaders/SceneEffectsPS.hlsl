@@ -1216,7 +1216,13 @@ bool RadianceLoad(float3 world, out float3 colour) {
 // front of it: metal, glazed tiles and smooth surfaces as their sliders say (fully, 60% and 35% by default); otherwise for anything else (L, 2026-10-21:
 // ray tracing took no notice of the material list).
 // The geometry a pixel's surface belongs to (a short ray from just in front of it); false where the ray finds none.
-bool SurfaceGeometry(float3 center, out uint geometry) {
+// The main pass asks twice for the same spot (its material, then how much it reflects): the second time reads the first's answer.
+static bool gSurfaceKnown = false;
+static float3 gSurfaceCenter = 0.0f;
+static bool gSurfaceFound = false;
+static uint gSurfaceGeometry = 0u;
+
+bool SurfaceGeometryTraced(float3 center, out uint geometry) {
     geometry = 0u;
     const float distance = length(center);
     if (distance < 10.0f) {
@@ -1235,6 +1241,16 @@ bool SurfaceGeometry(float3 center, out uint geometry) {
     }
     geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
     return true;
+}
+
+bool SurfaceGeometry(float3 center, out uint geometry) {
+    if (!gSurfaceKnown || any(center != gSurfaceCenter)) {
+        gSurfaceFound = SurfaceGeometryTraced(center, gSurfaceGeometry);
+        gSurfaceCenter = center;
+        gSurfaceKnown = true;
+    }
+    geometry = gSurfaceGeometry;
+    return gSurfaceFound;
 }
 
 float MaterialShine(float3 center, float otherwise) {
@@ -1544,20 +1560,16 @@ float ModelShadow(float3 center, float3 normal) {
         ray.Direction = normalize(float3(cos(angle) * 0.08f, 1.0f, sin(angle) * 0.08f));
         ray.TMin = 0.0f;
         ray.TMax = reach;
-        // Solid triangles are taken as they come (the nearest wins without a look at each); only cut-outs and the grass
-        // are looked at one by one.
+        // The first thing above decides: a model shades, the level (a roof, a ledge) stops the ray. The nearest model
+        // first (the models' instance is small, and most rays meet none); only then is the level asked whether
+        // anything of it comes before. Solid triangles are taken as they come; only cut-outs are looked at one by one.
         RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+        query.TraceRayInline(gSceneBVH, 0, RayModelMask, ray);
         while (query.Proceed()) {
             if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
                 continue;
             }
-            // The 3D grass's blades round the spot don't count.
-            if (query.CandidateInstanceID() == RayGrassInstance) {
-                continue;
-            }
             const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-            // The first thing above decides: a model shades, the level (a roof, a ledge) stops the ray.
             if (!RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
                 continue;
             }
@@ -1565,9 +1577,14 @@ float ModelShadow(float3 center, float3 normal) {
         }
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
             const float t = query.CommittedRayT();
-            const bool model = (RayGeometryFlags(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex())) & 4u) != 0u;
-            if (model && !(PlayerShadowsOff() && BanjoHit(RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex()), ray.Origin + ray.Direction * t))) {
-                shade += 0.5f * (1.0f - t / reach);
+            const uint geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
+            const bool model = (RayGeometryFlags(geometry) & 4u) != 0u;
+            if (model && !(PlayerShadowsOff() && BanjoHit(geometry, ray.Origin + ray.Direction * t))) {
+                RayDesc below = ray;
+                below.TMax = t;
+                if (!TraceAny(below, RayLevelMask)) {
+                    shade += 0.5f * (1.0f - t / reach);
+                }
             }
         }
     }
@@ -1598,8 +1615,8 @@ float TraceDistance(float3 origin, float3 direction, float reach) {
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
 }
 
-// The geometry a ray meets (as TraceDistance traces it), false where it meets none.
-bool TraceGeometry(float3 origin, float3 direction, float reach, out uint geometry) {
+// TraceDistance with the geometry it met too (any where it met none), from the same ray.
+float TraceDistanceGeometry(float3 origin, float3 direction, float reach, out uint geometry) {
     geometry = 0u;
     RayDesc ray;
     ray.Origin = ViewToWorldPoint(origin);
@@ -1611,10 +1628,24 @@ bool TraceGeometry(float3 origin, float3 direction, float reach, out uint geomet
     while (query.Proceed()) {
     }
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-        return false;
+        return -1.0f;
     }
     geometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
-    return true;
+    return query.CommittedRayT();
+}
+
+// Whether a ray (as TraceDistance traces it) meets anything within reach: the first triangle met ends the search, where
+// only the nearest's distance needed the whole search.
+bool TraceBlocked(float3 origin, float3 direction, float reach) {
+    RayDesc ray;
+    ray.Origin = ViewToWorldPoint(origin);
+    ray.Direction = ViewToWorldDirection(direction);
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+    query.Proceed();
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
 
 // Traced ambient occlusion: the share of the cosine-spread rays that reach the open (a ray that hits something
@@ -1625,17 +1656,26 @@ float IndirectLift(float3 center) {
     return max(-center.z * 0.003f, 8.0f);
 }
 
-float TracedOcclusion(float3 center, float3 normal, uint cell) {
-    const float3 origin = center + normal * IndirectLift(center);
+// The occlusion from its two rays' distances (negative: met nothing).
+float OcclusionFrom(float2 distances) {
     const float radius = gConstants.ambientOcclusion.y * 1.5f;
     float blocked = 0.0f;
     [unroll] for (int r = 0; r < 2; r++) {
-        const float t = TraceDistance(origin, IndirectDirection(normal, cell * 2u + uint(r)), radius);
-        if (t >= 0.0f) {
-            blocked += 1.0f - t / radius * 0.6f;
+        if ((distances[r] >= 0.0f) && (distances[r] <= radius)) {
+            blocked += 1.0f - distances[r] / radius * 0.6f;
         }
     }
     return 1.0f - blocked * 0.5f;
+}
+
+float TracedOcclusion(float3 center, float3 normal, uint cell) {
+    const float3 origin = center + normal * IndirectLift(center);
+    const float radius = gConstants.ambientOcclusion.y * 1.5f;
+    float2 distances;
+    [unroll] for (int r = 0; r < 2; r++) {
+        distances[r] = TraceDistance(origin, IndirectDirection(normal, cell * 2u + uint(r)), radius);
+    }
+    return OcclusionFrom(distances);
 }
 
 // The sky's light from a direction (world space up from the view's worldY): the horizon's haze at the horizon, bluer
@@ -1708,7 +1748,7 @@ float3 PathDirectLight(float3 at, float3 normal) {
     const float3 sun = normalize(gConstants.sun.xyz);
     const float sunFacing = dot(normal, sun);
     if (sunFacing > 0.0f) {
-        if (TraceDistance(start, sun, 20000.0f) < 0.0f) {
+        if (!TraceBlocked(start, sun, 20000.0f)) {
             light += float3(1.0f, 0.93f, 0.78f) * (0.4f * sunFacing);
         }
     }
@@ -1754,14 +1794,18 @@ float3 PathDirectLight(float3 at, float3 normal) {
 // bounces more hops: each turns off the surface it landed on (its normal from HitNormal) in a cosine-spread
 // direction, and brings what it meets (sky or a surface's colour) tinted by the colours along the way, so light
 // carries round corners and into rooms. The directions are fixed per pixel, so the light holds still from frame to frame.
-float3 TracedGI(float3 center, float3 normal, uint cell) {
+// distances: its first two rays' (the ones the traced occlusion uses too, so with both on they're traced once).
+float3 TracedGI(float3 center, float3 normal, uint cell, out float2 distances) {
     const float3 origin = center + normal * IndirectLift(center);
     const float nearReach = gConstants.ambientOcclusion.y * 3.0f;
     const uint bounces = PathBounces();
     float3 light = 0.0f;
+    distances = -1.0f;
     [loop] for (int r = 0; r < 2; r++) {
         const float3 direction = IndirectDirection(normal, cell * 2u + uint(r));
-        const float t = TraceDistance(origin, direction, 15000.0f);
+        uint hitGeometry;
+        const float t = TraceDistanceGeometry(origin, direction, 15000.0f, hitGeometry);
+        distances[r] = t;
         if (t < 0.0f) {
             light += SkyLight(normalize(ViewToWorldDirection(direction)));
             continue;
@@ -1776,11 +1820,8 @@ float3 TracedGI(float3 center, float3 normal, uint cell) {
         // A surface with a Ray Tracing Material Pick Mode material tints the light it sends back by its albedo, and an
         // emissive one gives off its own light into the ray's payload whether or not the picture shows it lit.
         if (RayPbrOn()) {
-            uint hitGeometry;
-            if (TraceGeometry(origin, direction, t * 1.01f, hitGeometry)) {
-                const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
-                hitColour = hitColour * hitMaterial.albedo + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
-            }
+            const RayPbr hitMaterial = RayGeometryPbr(hitGeometry);
+            hitColour = hitColour * hitMaterial.albedo + hitMaterial.albedo * (hitMaterial.emissive * 0.35f);
         }
         light += hitColour * trust * far;
         // The path's further hops. Each spot the path lands on also brings the sun's and the lamps' traced light
@@ -1835,7 +1876,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
     if (dot(gConstants.sun.xyz, gConstants.sun.xyz) > 0.25f) {
         const float3 toSun = normalize(gConstants.sun.xyz);
         const float back = saturate(-dot(normal, toSun));
-        if ((back > 0.02f) && (TraceDistance(behind, toSun, 20000.0f) < 0.0f)) {
+        if ((back > 0.02f) && !TraceBlocked(behind, toSun, 20000.0f)) {
             light += float3(1.0f, 0.93f, 0.78f) * (0.9f * back);
         }
     }
@@ -4131,6 +4172,10 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
         // Half-resolution ray tracing reads what the indirect pass traced instead (gSunHalf 2).
         int traced = 0;
+        // A surface turned from the sun in a room is left alone whatever its rays find: asked first, they needn't be traced.
+        if ((gSunHalf != 2) && (facing < 0.0f) && Enclosed(ViewToWorldPoint(start))) {
+            return (gSunHalf == 1) ? 2.0f : 1.0f;
+        }
         if (gSunHalf == 2) {
             const float half = TracedHalfShadow(pixel, center, surfaceNormal);
             if (half > 1.5f) {
@@ -4162,7 +4207,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             blocked += TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 1.0f : 0.0f;
         }
         shadow = blocked / float(max(traced, 1));
-        if ((gSunHalf != 2) && ((shadow > 0.0f) || (facing < 0.0f)) && Enclosed(ViewToWorldPoint(start))) {
+        if ((gSunHalf != 2) && (shadow > 0.0f) && (facing >= 0.0f) && Enclosed(ViewToWorldPoint(start))) {
             return (gSunHalf == 1) ? 2.0f : 1.0f;
         }
         if (gSunHalf == 1) {
@@ -4456,11 +4501,15 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     if (InsideBanjo(ViewToWorldPoint(center)) && (BanjoSmoothRadius() > 0)) {
         normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
     }
-    if (AoStrength() > 0.0f) {
-        result.a = TracedOcclusion(center, normal, cell);
-    }
     if (SsgiStrength() > 0.0f) {
-        result.rgb = TracedGI(center, normal, cell);
+        float2 distances;
+        result.rgb = TracedGI(center, normal, cell, distances);
+        if (AoStrength() > 0.0f) {
+            result.a = OcclusionFrom(distances);
+        }
+    }
+    else if (AoStrength() > 0.0f) {
+        result.a = TracedOcclusion(center, normal, cell);
     }
 #else
     if (AoStrength() > 0.0f) {
