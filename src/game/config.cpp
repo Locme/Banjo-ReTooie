@@ -768,6 +768,18 @@ void tooie::init_config() {
         tooie::hd_shadows::Direction::Overhead);
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     tooie::day_night::add_options(graphics);
+    {
+        // Day and night is a WIP section for now (L, 2026-10-22): its options sit in the WIP tab under one
+        // "Day and night" heading. They are still Graphics options, so they save to graphics.json as before.
+        namespace dn = tooie::day_night;
+        for (const std::string* id : { &dn::option, &dn::length_option, &dn::flare_option, &dn::fireflies_option,
+                &dn::weather_option, &dn::aurora_option, &dn::clouds_option, &dn::cloud_amount_option,
+                &dn::cloud_height_option, &dn::cloud_thickness_option, &dn::cloud_speed_option, &dn::wet_ground_option,
+                &dn::drops_option, &dn::mist_option, &dn::mist_time_option, &dn::sounds_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(dn::option, "Day and night");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
