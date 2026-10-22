@@ -1160,7 +1160,9 @@ float3 TracedBeams(int2 pixel, float depth) {
     const float3 look = surface / max(length(surface), 1e-3f);
     // Fewer steps outdoors, where the haze is thin and the shafts soft (the beams were over half the traced pass's time,
     // L 2026-10-21: performance very bad); the Bayer offsets below spread the steps between neighbouring pixels.
-    const int Samples = max((room ? 8 : 4) >> RayDetail(reach), 1);
+    // Ray detail distances take a room's eight down to no fewer than four: with one or two, the Bayer offsets turned a
+    // pixel's whole beam on or off and the 4x4 pattern showed as a mesh over the scene (L, 2026-10-22).
+    const int Samples = room ? max(8 >> RayDetail(reach), 4) : 4;
     const float step = reach / float(Samples);
     const int2 cell = pixel & 3;
     const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
@@ -4075,8 +4077,15 @@ float3 TracedHalfBeams(int2 pixel) {
     const int2 halfSize = TracedHalfSize();
     const float2 textureSize = float2(halfSize.x, halfSize.y * 3);
     // Kept inside the lower half, so the upper half's texels never blend in.
-    const float2 at = clamp((float2(pixel) + 0.5f) * 0.5f, 0.5f, float2(halfSize) - 0.5f) + float2(0.0f, float(halfSize.y));
-    return gIndirect.SampleLevel(LinearSampler, at / textureSize, 0).rgb;
+    // Four bilinear taps half a texel apart: a 3x3 tent, which weighs the Bayer pattern's alternate texels equally so it
+    // smooths out instead of showing as a mesh.
+    const float2 at = clamp((float2(pixel) + 0.5f) * 0.5f, 1.0f, float2(halfSize) - 1.0f) + float2(0.0f, float(halfSize.y));
+    float3 sum = 0.0f;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const float2 offset = float2((k & 1) ? 0.5f : -0.5f, (k & 2) ? 0.5f : -0.5f);
+        sum += gIndirect.SampleLevel(LinearSampler, (at + offset) / textureSize, 0).rgb;
+    }
+    return sum * 0.25f;
 }
 
 // The lamps' and fires' traced light (LightShadows' lamp), from the third band, on the same surface as TracedHalfShadow.
