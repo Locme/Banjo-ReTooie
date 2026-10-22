@@ -1844,7 +1844,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
     const float3 worldNormal = normalize(ViewToWorldDirection(normal));
     uint traced = 0u;
     [loop] for (uint i = 0u; (i < count) && (traced < 1u); i++) {
-        const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
+        const float4 lamp = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = lamp.xyz - worldBehind;
         const float distance = length(toLight);
         const float radius = LightSourceRadius(lamp.w);
