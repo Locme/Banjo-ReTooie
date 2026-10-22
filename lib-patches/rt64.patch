@@ -1923,7 +1923,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..980aa70 100644
+index 9fae0d4..89c408b 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,19 @@
@@ -3605,7 +3605,7 @@ index 9fae0d4..980aa70 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3198,2112 @@ namespace RT64 {
+@@ -1747,25 +3198,2113 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4307,10 +4307,11 @@ index 9fae0d4..980aa70 100644
 +                {
 +                    const interop::OtherMode gm = call.shaderDesc.otherMode;
 +                    const uint32_t nl = instanceNightLightVector.back();
-+                    // (Its shape: 0 stone, 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 9 brick, 10 dirt, 13 tiles, 15 smooth.)
-+                    const uint32_t shape = ((nl >> 25) & 0x7u) | (((nl & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u);
++                    // (Its shape: 0 stone, 1 bumpy, 2 inverted, 3 cracks, 4 terraced, 5 rounded, 9 brick, 10 dirt, 13 tiles, 15 smooth;
++                    // not 16, ice, whose clear top layer stays flat.)
++                    const uint32_t shape = ((nl >> 25) & 0x7u) | (((nl & RASTER_PARALLAX_SHAPE_HIGH) != 0) ? 8u : 0u) | (((nl & RASTER_PARALLAX_SHAPE_TOP) != 0) ? 16u : 0u);
 +                    const bool grassDraw = (instanceGrassVector.size() > instanceIndex) && (instanceGrassVector[instanceIndex] != 0);
-+                    if (((0xA63Fu >> shape) & 1u) && !grassDraw && gm.zCmp() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
++                    if ((shape < 16u) && ((0xA63Fu >> shape) & 1u) && !grassDraw && gm.zCmp() && (gm.zMode() != ZMODE_DEC) && (gm.cycleType() != G_CYC_COPY) &&
 +                        (gm.cycleType() != G_CYC_FILL) && !interop::Blender::usesAlphaBlend(gm))
 +                    {
 +                        // (One draw's vertices a frame: their positions go to the GPU by vertex index.)
