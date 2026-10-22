@@ -40,7 +40,7 @@
 - Steps:
   1. Graphics > Ray tracing on
   2. Look at torches, candles and fires (Mayahem Temple, Hailfire Peaks' lava side, Bottles' house): they glow a little and light the area, with no glowing ball in the air
-  3. Blow something up (grenade egg, TNT): does it light up? If not, tag it in pick mode (9 for Light Source) and send shader_effect_tags.txt
+  3. Blow something up (grenade egg, TNT): does it light up? The grenade egg's fireball should now (added after a headless blow-up run). If not, tag it in pick mode (9 for Light Source) and send shader_effect_tags.txt
 - Look for: Do fires glow and light the area, and which explosions still don't light up?
 - Status: waiting for L
 

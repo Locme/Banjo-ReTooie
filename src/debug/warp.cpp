@@ -24,6 +24,11 @@
 #include <vector>
 
 #include "recomp.h"
+
+namespace tooie::debug {
+    // TOOIE_EXPLODE=<type>@<ms>,...: the game's explosions in front of Banjo (src/debug/explode_test.cpp).
+    void explode_tick(uint8_t* rdram, recomp_context* ctx);
+}
 #include "funcs.h"
 #include "tooie_debug.h"
 #include "tooie_game_frame_rate.h"
@@ -171,6 +176,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::bottles_revenge::tick(rdram, ctx);
     tooie::torch_enemy::tick(rdram, ctx);
     tooie::enemy_spawner::tick(rdram, ctx);
+    tooie::debug::explode_tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);

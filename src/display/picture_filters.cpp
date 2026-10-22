@@ -453,6 +453,8 @@ namespace {
         { 0xa0754fa808c1eec1, fx(effect_ice, effect_shiny) | fx(effect_light) },
         { 0xa95b7ee485b02d15, fx(effect_rt_off) },
         { 0xaa4fb767534de6b1, fx(effect_rt_off) },
+        // The grenade egg's blast fireball (8x8 fire), found with a headless blow-up run (TOOIE_EXPLODE=a15D@<ms>).
+        { 0x0f99c88fb5007ceb, fx(effect_glow, effect_light) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
