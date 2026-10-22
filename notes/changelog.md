@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Fire glows and lights the scene: flames, torch and candle flames and fire walls are now Light Sources with Slight Glow (with Ray tracing on they light the area with no glowing ball), embers glow, and three likely explosion frames from the texture dump light up too (L). Untested on PC (T526).
 - Shader Effects pick mode: new effect **Disable RT** (Shift + 1) leaves a texture out of the ray traced scene. The lanterns' glass now has it, so the lanterns no longer show black squares round them with Ray tracing on. L's shader effect tags (explosions as Light Sources, lamps, glow) now ship with the port, and Shift + mouse wheel sets the strength of these built-in Light Sources too (L). Untested on PC (T525).
 - General > Back-Port: Get Jiggy animation now works: collecting a Jiggy starts Banjo-Kazooie's jig (under the black bars) once Banjo is standing. Before, it only changed the animation of a pose that an ordinary Jiggy never starts in Banjo-Tooie, so it did nothing (L). Untested on PC (T51).
 - Shader Effects pick mode: new effect **Light Source** (key 9): the texture lights the scene like a Lamp with Graphics > Ray tracing on, but with no glowing ball of light in the air round it. Shift + mouse wheel over it sets its strength, 10% to 500% (L). Untested on PC (T523).

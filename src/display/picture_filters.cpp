@@ -422,6 +422,28 @@ namespace {
         // The lanterns' glass (L picked Disable): Disable RT instead, so it no longer blocks the lamp's traced light
         // into black squares round each lantern (L's screenshot, 2026-10-22).
         { 0xc330b27b1c24cb3d, fx(effect_rt_off) },
+        // Fire (L, 2026-10-22: light source and glow on fire), picked by eye from the texture dump: flames, torch and
+        // candle flames, fire walls. (Most were Lamps, whose glow in the air drew a ball; these light with none.)
+        { 0xff7cbfcbb9802b27, fx(effect_glow, effect_light) },
+        { 0xdac402b2c6689462, fx(effect_glow, effect_light) },
+        { 0xa995bc282a7d4f6c, fx(effect_glow, effect_light) },
+        { 0x6c297cad1c8edbbf, fx(effect_glow, effect_light) },
+        { 0xd65734810b0d40e3, fx(effect_glow, effect_light) },
+        { 0x92aa7b146c40b48e, fx(effect_glow, effect_light) },
+        { 0xcec58574a22efd1f, fx(effect_glow, effect_light) },
+        { 0x927ef8d07ab0a7ac, fx(effect_glow, effect_light) },
+        { 0x398b65ffa9ca4c95, fx(effect_glow, effect_light) },
+        { 0x2ccf00e0c31ed884, fx(effect_glow, effect_light) },
+        { 0xcde1f307e74ccd61, fx(effect_glow, effect_light) },
+        { 0xacdd8a64c72db73b, fx(effect_glow, effect_light) },
+        { 0xe330c9e79570e5d6, fx(effect_glow, effect_light) },
+        // Embers: glow only (many small ones would use up the lights).
+        { 0xd8d30fc16d3c2078, fx(effect_glow) },
+        // Likely explosion frames from the dump (a fiery burst, a flash, a burst disc); the explosions L picked are not
+        // in the dump, as they are drawn only when something blows up.
+        { 0xfa680103e7ce6cbc, fx(effect_glow, effect_light) },
+        { 0x28f275d076d8817d, fx(effect_glow, effect_light) },
+        { 0x52ad0ec437488cbd, fx(effect_glow, effect_light) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
