@@ -89,10 +89,11 @@ namespace {
         { 255, 205, 100, 22, 100, 0, 0, false },
         // copper and bronze.
         { 235, 150, 105, 30, 100, 0, 0, false },
-        // steel: satin grey metal, a soft reflection.
-        { 255, 255, 255, 45, 85, 0, 0, false },
-        // rust: worn, dull metal, a wide faint one.
-        { 255, 255, 255, 78, 45, 0, 0, false },
+        // steel: satin grey metal, a soft reflection. Most of the game's grey metal is painted or worn (L, 2026-10-22: metal
+        // too shiny), so it is rougher and less metal than bare steel.
+        { 255, 255, 255, 65, 60, 0, 0, false },
+        // rust: worn, dull metal, a wide faint one (all but a dielectric).
+        { 255, 255, 255, 85, 15, 0, 0, false },
         // glass.
         { 255, 255, 255, 4, 0, 0, 0, false },
         // gem: glossy, light through it, a faint glow.

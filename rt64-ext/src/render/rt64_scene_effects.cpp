@@ -3691,11 +3691,14 @@ namespace RT64 {
         const bool tracedIndirect = res.bvhReady && (shaderLibrary->sceneIndirectTraced.pipeline != nullptr) && (res.sceneSetBvh != nullptr) &&
             (res.rayTexturesSet != nullptr) && (res.rayTextureCacheSet != nullptr);
         const bool tracedHalf = tracedIndirect && rayTracingHalf.load();
-        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf) {
+        // The traced light beams are a soft haze: below Ray tracing resolution High they come from the indirect pass's
+        // second band at half size too (a quarter of their rays), whatever the shadows do (SceneEffectsPS BeamsHalf).
+        const bool tracedBeamsHalf = tracedIndirect && (tracedBeams[0] > 0.0f) && (rayTracingResolution.load() < 2u);
+        if ((((settings.ambientOcclusion > 0.0f) || ((settings.screenSpaceGI > 0.0f) && (source != nullptr))) && ((settings.view < 2) || (settings.view == SceneEffectsViewGtao) || (settings.view == SceneEffectsViewSsgi))) || tracedHalf || tracedBeamsHalf) {
             commandList->barriers(RenderBarrierStage::GRAPHICS, { RenderTextureBarrier(res.indirectTexture.get(), RenderTextureLayout::COLOR_WRITE) });
             commandList->setFramebuffer(res.indirectFramebuffer.get());
             GpuSectionScope timedIndirect(WorkloadGpuSections(), GpuSection::IndirectLight, commandList);
-            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : indirectHeight;
+            const uint32_t drawnHeight = tracedHalf ? indirectHeight * 3 : (tracedBeamsHalf ? indirectHeight * 2 : indirectHeight);
             commandList->setViewports(RenderViewport(0.0f, 0.0f, float(indirectWidth), float(drawnHeight)));
             commandList->setScissors(RenderRect(0, 0, indirectWidth, drawnHeight));
             // The traced form reads the rays' textures too (cut-outs let the sun through their holes), so it takes the

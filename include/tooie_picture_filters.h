@@ -175,6 +175,8 @@ namespace tooie::picture_filters {
     bool toon_characters_on();
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
+    // Whether a texture has a Light Source pick, so the model tagging tells RT64 which model each matrix is part of.
+    bool light_source_models_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.
     bool sun_shadows_on();
     // Graphics > Ray tracing is on and the device has ray queries (the traced effects run).

@@ -1,5 +1,41 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T559 Metal less shiny (rough reflections fade, steel and rust defaults)
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ray traced BRDF on
+  2. Look at grey metal (Grunty Industries, Glitter Gulch Mine rails) and rusty metal
+- Look for: Grey and rusty metal show a dull sheen instead of a mirror; chrome and gold still mirror-like. Rough surfaces' reflections fade far more than before.
+- Status: waiting for L
+
+## T558 Banjo's ring of lost shading (ray tracing)
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; Ray tracing on, Ambient occlusion on
+  2. Stand in grass or on bumpy ground and look at the ground round Banjo
+- Look for: No lighter circle round him that moves with him; his own body still keeps its lighter AO.
+- Status: waiting for L
+
+## T557 Light Source makes the whole model shine
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Go to the Note Nest from your screenshot (Light Source on its inside)
+- Look for: The note and the nest's rim shine too, not only the picked inside. Banjo walking past it doesn't start shining. The level round it doesn't shine.
+- Status: waiting for L
+
+## T556 Ray tracing speed-ups
+- Asked: 2026-10-22 23:15 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build; your usual ray tracing settings, Ray tracing resolution Medium, overlay Full
+  2. Stand outdoors with Traced light beams on, then in a lamp-lit room (Bottles' house), and send the overlay each time
+- Look for: Higher fps than before, mostly where light beams show. Beams look the same, maybe a touch softer. Lamps unchanged.
+- Status: waiting for L
+
 ## T555 Save Pick and Paste Pick in all three pick modes
 - Asked: 2026-10-22 21:55 UTC
 - Build: main

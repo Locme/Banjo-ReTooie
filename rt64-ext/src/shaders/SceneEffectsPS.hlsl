@@ -914,6 +914,12 @@ bool HalfTraced() {
     return (uint(asfloat(gLights.Load(36)) + 0.5f) & 2u) != 0u;
 }
 
+// The traced light beams from the indirect pass's second band (half size, TracedHalfBeams): below Ray tracing resolution
+// High; it draws the band whenever the beams are on (rt64_scene_effects.cpp tracedBeamsHalf).
+bool BeamsHalf() {
+    return HalfTraced() || !RayResolutionHigh();
+}
+
 // Ray tracing noise smoothing, 0 (the raw rays) to 1.
 float RtSmoothing() {
     return saturate(asfloat(gLights.Load(8)));
@@ -1421,7 +1427,9 @@ float4 TracedRoughReflection(int2 pixel, float3 center, float3 normal, float rou
     if (true) {
         const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
         const float4 found = TracedReflectionRay(origin, reflect(normalize(center), normal), roughness);
-        return float4(found.rgb, found.a * lerp(1.0f, 0.6f, roughness));
+        // A rough surface's lobe spreads its light thin: it fades well down, so rough and worn metal shows a dull sheen
+        // rather than a dimmed mirror (L, 2026-10-22: metal too shiny).
+        return float4(found.rgb, found.a * lerp(1.0f, 0.15f, smoothstep(0.1f, 0.9f, roughness)));
     }
     const float3 incoming = normalize(center);
     const float3 V = -incoming;
@@ -1540,8 +1548,9 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         }
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
-        // At most six lights traced a pixel (a room full of lamps traced every one).
-        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2)) {
+        // At most six lights traced a pixel (a room full of lamps traced every one). A light that would add less than a
+        // step of the picture's colour here isn't traced (nor counted, so a nearer one gets its turn).
+        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2) || (1.3f * reachHere * facing * distanceFade < 0.002f)) {
             continue;
         }
         traced++;
@@ -4117,12 +4126,36 @@ float SunMapLookup(SunMapFrame mapFrame, int offsetX, float3 worldCenter, float3
 // and the spot is under cover (the ray straight up and three of four slanted up meet something). There the game lit it as
 // shade, so the sun's light coming through is added, throwing the grate's pattern (L, 2026-10-21). A wall under eaves or
 // the floor round an object's lip isn't lit through a cut-out, so it gets nothing (King Jingaling's house, the Jiggy shrine).
-bool SunThroughCutout(float3 worldStart, float3 worldSun) {
+bool SunThroughCutout(float3 worldStart, float3 worldSun, bool unblocked) {
     // gLights 8 is 3 when the scene has a level cut-out at all.
     if (asfloat(gLights.Load(32)) < 2.5f) {
         return false;
     }
-    {
+    if (unblocked) {
+        // Every shadow ray got through, so nothing solid lies towards the sun: the first thing there counting cut-outs as
+        // solid is a cut-out wherever there is one. Asked of the cut-outs alone, the solid triangles (most of the world)
+        // are passed by, where the closest-hit ray below walked the whole structure for every sunlit pixel.
+        RayDesc ray;
+        ray.Origin = worldStart;
+        ray.Direction = worldSun;
+        ray.TMin = 0.0f;
+        ray.TMax = 20000.0f;
+        RayQuery<RAY_FLAG_CULL_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(gSceneBVH, 0, RayLevelMask, ray);
+        while (query.Proceed()) {
+            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                continue;
+            }
+            if ((RayGeometryFlags(RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex())) & 5u) == 1u) {
+                query.CommitNonOpaqueTriangleHit();
+                query.Abort();
+            }
+        }
+        if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+            return false;
+        }
+    }
+    else {
         RayDesc ray;
         ray.Origin = worldStart;
         ray.Direction = worldSun;
@@ -4359,7 +4392,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         if (gSunHalf == 1) {
             return shadow;
         }
-        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)))) {
+        if ((shadow < 1.0f) && (facing > 0.0f) && !onBanjo && SunThroughCutout(ViewToWorldPoint(start), normalize(ViewToWorldDirection(sunDirection)), shadow <= 0.0f)) {
             sunlight += float3(1.0f, 0.93f, 0.78f) * (0.9f * facing * (1.0f - shadow) * near);
         }
     }
@@ -4621,7 +4654,8 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         const int2 lowerPixel = int2(int(pos.x), int(pos.y) - halfSize.y) * 2;
         const float lowerDepth = LoadDepth(lowerPixel);
         float4 lower = float4(TracedBeams(lowerPixel, lowerDepth), 0.0f);
-        if ((lowerDepth < 0.99999f) && (gConstants.shadows.x > 0.0f)) {
+        // The sun's shadows only at Half resolution (at Medium the band is the beams' alone).
+        if (HalfTraced() && (lowerDepth < 0.99999f) && (gConstants.shadows.x > 0.0f)) {
             const float3 lowerCenter = ViewPosition(lowerPixel, lowerDepth);
             float3 unused = 0.0f;
             gSunHalf = 1;
@@ -4931,7 +4965,13 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             // On Banjo himself (above his feet, so the ground round them keeps its contact shading) a quarter as
             // much: his fur and limbs crowd each other, and full GTAO blackened him (L, 2026-10-21).
             const float3 world = ViewToWorldPoint(center);
+#ifdef RAY_TRACED
+            // Traced, only his model's own pixels: the capsule alone took in the grass and bumps round his feet, a ring
+            // with its shading gone that went round with him (L, 2026-10-22).
+            const bool banjoBody = onBanjo && (world.y > gConstants.rippleAge.w + 8.0f);
+#else
             const bool banjoBody = InsideBanjo(world) && (world.y > gConstants.rippleAge.w + 8.0f);
+#endif
             keep *= pow(saturate(MultiBounce(indirect.a, albedo)), AoStrength() * (banjoBody ? 0.5f : 2.0f));
         }
         if (sunShadows) {
@@ -5010,9 +5050,10 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     }
 #ifdef RAY_TRACED
     // Traced light beams, added like the rim light (the fog still covers them).
-    if (gConstants.view.x < 1.5f) {
+    // (Off, the indirect pass draws no band of them to read.)
+    if ((gConstants.view.x < 1.5f) && (asfloat(gLights.Load(16)) > 0.0f)) {
         // (No glow round the level's lights in the air: it showed as balls round every light, L 2026-10-21.)
-        rim += HalfTraced() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
+        rim += BeamsHalf() ? TracedHalfBeams(pixel) : TracedBeams(pixel, depth);
     }
     // Ray Tracing Material Pick Mode's emissive: the surface's own colour, tinted by its albedo, added as light that shadows
     // and the traced lighting don't dim (and the bloom picks up).

@@ -73,6 +73,7 @@ namespace RT64 {
     void SetMirrorTextTextures(const uint64_t *hashes, size_t count);
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
+    void SetSceneShineModelTextures(const uint64_t *hashes, size_t count);
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
@@ -159,6 +160,8 @@ namespace {
     std::atomic<float> water_reflections_set{0.0f};
     std::atomic<bool> water_settings_changed{true};
     std::atomic<bool> banjo_fur{false};
+    // A Light Source pick is set: the model tagging tells RT64 which model each matrix belongs to, so the whole model shines.
+    std::atomic<bool> light_source_models{false};
     std::atomic<bool> sun_shadows{false};
     std::atomic<float> sun_shadow_distance_set{3000.0f};
     std::atomic<float> sun_shadow_reach{0.0f};
@@ -4391,12 +4394,20 @@ namespace {
         // Light Source picks make the object itself shine (Slight Glow) and light nothing round it: a light of its own
         // drew a ball of light round the object however it was cast (L, 2026-10-22: "Object glows only").
         std::vector<uint64_t> glow = build(nullptr, nullptr, tooie::effect_pick::effect_glow, true);
+        // A Light Source pick on a model makes the whole model shine, not only the picked texture's parts (L, 2026-10-22:
+        // a Note Nest's note stayed dark with its nest picked).
+        std::vector<uint64_t> shine_models;
         for (const auto& [hash, picked] : picks) {
-            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light) && (std::find(glow.begin(), glow.end(), hash) == glow.end())) {
-                glow.push_back(hash);
+            if (tooie::effect_pick::has(picked, tooie::effect_pick::effect_light)) {
+                shine_models.push_back(hash);
+                if (std::find(glow.begin(), glow.end(), hash) == glow.end()) {
+                    glow.push_back(hash);
+                }
             }
         }
         RT64::SetSceneGlowTextures(glow.data(), glow.size());
+        RT64::SetSceneShineModelTextures(shine_models.data(), shine_models.size());
+        light_source_models.store(!shine_models.empty());
         // Lights for the traced scene from textures: Ray Tracing Material Pick Mode's emissive picks below.
         std::vector<uint64_t> light_sources;
         std::vector<float> light_reaches;
@@ -4806,6 +4817,10 @@ bool tooie::picture_filters::toon_characters_on() {
 
 bool tooie::picture_filters::banjo_fur_on() {
     return banjo_fur;
+}
+
+bool tooie::picture_filters::light_source_models_on() {
+    return light_source_models;
 }
 
 // Ray tracing shows sun shadows (traced ones) at 60 at least whatever the slider says, so the game keeps the whole
