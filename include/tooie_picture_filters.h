@@ -75,6 +75,7 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_smooth_option = "ray_tracing_smooth";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
     inline const std::string ray_tracing_half_option = "ray_tracing_half";
+    inline const std::string ray_tracing_parallax_option = "ray_tracing_parallax";
     inline const std::string ray_detail_half_option = "ray_detail_half_distance";
     inline const std::string ray_detail_quarter_option = "ray_detail_quarter_distance";
     inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";

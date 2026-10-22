@@ -963,7 +963,11 @@ uint RayGeometryFlags(uint geometry) {
 }
 
 // A geometry's material (SceneMaterialTexture: Parallax's shape + 1; 0 for none).
+// The Parallax shape a geometry carries (0 none), unless Ray tracing uses Parallax materials is off (gLights 14).
 uint RayGeometryMaterial(uint geometry) {
+    if (asfloat(gLights.Load(56)) < 0.5f) {
+        return 0u;
+    }
     return (geometry == RayGrassGeometry) ? 0u : (gRayGeometries.Load(geometry * 16u + 12u) & 0xFFu);
 }
 
@@ -1391,6 +1395,14 @@ float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
 float4 TracedRoughReflection(int2 pixel, float3 center, float3 normal, float roughness) {
     if (roughness < 0.03f) {
         return TracedReflection(pixel, center, normal);
+    }
+    // One ray along the mirror direction, what it finds blurred by the roughness (TracedReflectionRay's softness): the
+    // lobe's few rays, a different few each pixel of a 4x4 block with nothing to even them out, showed as a dotted mesh
+    // over every surface with a material (L, 2026-10-22).
+    if (true) {
+        const float3 origin = center + normal * max(-center.z * 0.002f, 1.0f);
+        const float4 found = TracedReflectionRay(origin, reflect(normalize(center), normal), roughness);
+        return float4(found.rgb, found.a * lerp(1.0f, 0.6f, roughness));
     }
     const float3 incoming = normalize(center);
     const float3 V = -incoming;

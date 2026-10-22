@@ -332,6 +332,9 @@ namespace RT64 {
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     static std::atomic<bool> rayTracingHalf{ false };
+    // Graphics > Ray Tracing uses Parallax materials: off, the traced pass ignores the Parallax shapes (metal, tiles, smooth,
+    // leaves and grass) its geometries carry.
+    static std::atomic<bool> rayTracingParallax{ true };
     static std::atomic<float> rayDetailDistances[2] = { 2000.0f, 4000.0f };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
@@ -546,6 +549,10 @@ namespace RT64 {
 
     void SetSceneRayTracingHitColours(bool enabled) {
         rayTracingHitColours.store(enabled);
+    }
+
+    void SetSceneRayTracingParallax(bool enabled) {
+        rayTracingParallax.store(enabled);
     }
 
     void SetSceneRayTracingHalf(bool enabled) {
@@ -2666,6 +2673,7 @@ namespace RT64 {
             // Ray detail by distance: past the first the rays a pixel are halved, past the second quartered (0 for never).
             mapped[12] = rayDetailDistances[0].load();
             mapped[13] = rayDetailDistances[1].load();
+            mapped[14] = rayTracingParallax.load() ? 1.0f : 0.0f;
             memcpy(mapped + 16, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
             // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
             // (SceneLightSourceW).
