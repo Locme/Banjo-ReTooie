@@ -336,7 +336,7 @@ result. Press the key again for the normal mouse.
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect
 you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
-Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source; **Shift +
+Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source, Disable RT; **Shift +
 right click** goes back one) and **left click** turns it on or off for the
 texture under the cursor. The **number keys 1 to 9** choose effect 1 to 9 in
 that order and turn it on or off in one press; **Shift + 1 to 9** do the same
@@ -349,7 +349,12 @@ Glow** draws the texture a little brighter, most on its lighter parts, as if
 lit from inside. **Light Source** lights the scene from the texture like a Lamp
 (needs Graphics > Ray tracing), with no glow in the air round it; **Shift +
 mouse wheel** over it sets its strength from 10% to 500% (up is stronger; 100%
-reaches as far as a lamp), saved as `light:<percent>`. The first left click starts from the built-in effects, so adding Ice
+reaches as far as a lamp), saved as `light:<percent>`; on a built-in Light
+Source it makes your own pick at the new strength. **Disable RT** (Shift + 1)
+leaves the texture out of the ray traced scene: it casts no traced shadow and
+blocks no traced light. The port ships some picks of its own (L's tag file of
+2026-10-22: explosions, lamps, the lanterns' glass); your own pick of a texture
+replaces them. The first left click starts from the built-in effects, so adding Ice
 to built-in grass keeps the grass. Disable (no texture effect on it) turns the
 others off, and any other effect turns Disable off; turning the last effect off
 leaves Disable, and turning Disable off puts the built-in choice back. **Shift + left

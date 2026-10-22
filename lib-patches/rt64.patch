@@ -1923,7 +1923,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..87d76b0 100644
+index 9fae0d4..980aa70 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,19 @@
@@ -3605,7 +3605,7 @@ index 9fae0d4..87d76b0 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3198,2105 @@ namespace RT64 {
+@@ -1747,25 +3198,2112 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -3740,9 +3740,14 @@ index 9fae0d4..87d76b0 100644
 +                    const interop::OtherMode sm = call.shaderDesc.otherMode;
 +                    // The draw's material (Parallax's list and picks) for the traced effects.
 +                    uint32_t materialFlags = 0;
++                    // Disable RT picks (rt64_texture_marks.h): the draw stays out of the traced scene.
++                    bool rayOff = false;
 +                    if (RayTracingActive()) {
 +                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && (materialFlags == 0); t++) {
 +                            materialFlags = SceneMaterialTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID) << SceneRayDrawMaterialShift;
++                        }
++                        for (uint32_t t = 0; (t < call.callDesc.tileCount) && !rayOff; t++) {
++                            rayOff = SceneRayOffTexture(drawData.callTiles[call.callDesc.tileIndex + t].tmemHashOrID);
 +                        }
 +                    }
 +                    if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
@@ -3751,11 +3756,13 @@ index 9fae0d4..87d76b0 100644
 +                        !interop::Blender::usesAlphaBlend(sm) && (sm.alphaCompare() == G_AC_NONE) && !sm.cvgXAlpha() && !sm.alphaCvgSel())
 +                    {
 +                        targetDrawCall.sunCasterInstances.push_back(instanceIndex);
-+                        targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, ((call.callDesc.tileCount > 0) ? SceneRayDrawTextured : 0u) | (levelGeometry(drawData, call) ? 0u : SceneRayDrawModel) | materialFlags });
++                        if (!rayOff) {
++                            targetDrawCall.rayDraws.push_back({ instanceIndex, call.callDesc.tileIndex, ((call.callDesc.tileCount > 0) ? SceneRayDrawTextured : 0u) | (levelGeometry(drawData, call) ? 0u : SceneRayDrawModel) | materialFlags });
++                        }
 +                    }
 +                    // The cut-outs and see-through draws that write depth, for the traced effects only: the rays read their
 +                    // texture where they meet them and go on through where it is see-through (L, 2026-10-21).
-+                    else if (!excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
++                    else if (!rayOff && !excluded && worldOpen && fbPair.depthWrite && (proj.type == Projection::Type::Perspective) &&
 +                        (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && !instanceDrawCall.triangles.vertexTestZ &&
 +                        (call.callDesc.triangleCount > 0) && sm.zCmp() && sm.zUpd() && (sm.zMode() != ZMODE_DEC) && (sm.cycleType() != G_CYC_COPY))
 +                    {
@@ -3925,7 +3932,7 @@ index 9fae0d4..87d76b0 100644
 +                // Layered grass (no blades) redraws the triangles as shells: with the material's shell shader.
 +                if ((grassValue != 0) && (grassBladePipeline == nullptr) && (grassInstancePipeline == nullptr) && (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles)) {
 +                    instanceDrawCall.triangles.shellPipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_SHELLS);
-+                }
+                 }
 +                // TOOIE_GRASS_LOG: twice a second, the grass draws of the frame and their blade passes.
 +                {
 +                    static const bool grassLog = (getenv("TOOIE_GRASS_LOG") != nullptr);
@@ -4317,7 +4324,7 @@ index 9fae0d4..87d76b0 100644
 +                            }
 +                        }
 +                    }
-                 }
++                }
 +                // (Other level draws lying on the ground: where one does, the ground stays where it is under it.)
 +                if (groundTessOn && (groundValue == 0) && !excluded && worldOpen && (proj.type == Projection::Type::Perspective) &&
 +                    (instanceDrawCall.type == InstanceDrawCall::Type::IndexedTriangles) && (call.callDesc.triangleCount > 0) && levelGeometry(drawData, call) &&

@@ -1,5 +1,16 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T525 Shipped shader tags and Disable RT on the lanterns
+- Asked: 2026-10-22 08:47 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Graphics > Ray tracing; move your own Dev Files/shader_effect_tags.txt aside so the shipped picks show
+  2. Go to the lanterns in your screenshot: no black squares round them, and the lanterns still light the place
+  3. In Shader Effects pick mode the lanterns' glass says Disable RT (built-in); Shift + 1 toggles it on other textures
+  4. Point at an explosion: it lights the area; Shift + mouse wheel changes its strength
+- Look for: Are the black squares gone, and do the shipped tags and Disable RT work?
+- Status: waiting for L
+
 ## T524 Ice parallax shape
 - Asked: 2026-10-21 23:57 UTC
 - Build: main (Ice parallax)

@@ -18,6 +18,9 @@ namespace RT64 {
         std::mutex lightSourceMutex;
         std::unordered_map<uint64_t, float> lightSourceReaches;
         std::atomic<bool> lightSourceAny{ false };
+        std::mutex rayOffMutex;
+        std::unordered_set<uint64_t> rayOffTextures;
+        std::atomic<bool> rayOffAny{ false };
         std::mutex markedMutex;
         std::unordered_set<uint64_t> markedTextures;
         std::atomic<bool> markedAny{ false };
@@ -55,6 +58,21 @@ namespace RT64 {
         const std::scoped_lock lock(lightSourceMutex);
         const auto it = lightSourceReaches.find(hash);
         return (it != lightSourceReaches.end()) ? it->second : 0.0f;
+    }
+
+    void SetSceneRayOffTextures(const uint64_t *hashes, size_t count) {
+        std::unordered_set<uint64_t> textures(hashes, hashes + count);
+        const std::scoped_lock lock(rayOffMutex);
+        rayOffTextures.swap(textures);
+        rayOffAny.store(!rayOffTextures.empty());
+    }
+
+    bool SceneRayOffTexture(uint64_t hash) {
+        if (!rayOffAny.load()) {
+            return false;
+        }
+        const std::scoped_lock lock(rayOffMutex);
+        return rayOffTextures.count(hash) != 0;
     }
 
     void SetScenePickMarkedTextures(const uint64_t *hashes, size_t count) {

@@ -73,6 +73,7 @@ namespace RT64 {
     void SetSceneSnowOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
+    void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -383,6 +384,44 @@ namespace {
         // 0x45b7432c37b52e79: a light's glow showed as a ball in each pane, and Window Light Beams light them.)
         // Panel and round ceiling lamps, and a small warm glow.
         0x0850e871a6ef8d8b, 0x89a3b176a1fec7d3, 0xd6288b4fa0525df4, 0x082b687364b25694, 0xd7aa28a361f6a24d,
+    };
+
+    // Shader Effects picks that ship with the port, as if picked (a player's own pick of the texture replaces it): L's
+    // shader_effect_tags.txt of 2026-10-22, then the explosion and fire sweep.
+    struct ShippedPick {
+        uint64_t hash;
+        tooie::effect_pick::Effects effects;
+    };
+    constexpr tooie::effect_pick::Effects fx(tooie::effect_pick::Effect a) {
+        return tooie::effect_pick::Effects(1) << a;
+    }
+    constexpr tooie::effect_pick::Effects fx(tooie::effect_pick::Effect a, tooie::effect_pick::Effect b) {
+        return fx(a) | fx(b);
+    }
+    using namespace tooie::effect_pick;
+    constexpr ShippedPick shipped_effect_picks[] = {
+        // L's picks. Explosions (Light Source), some glowing too.
+        { 0x147dea7cee6cdebe, fx(effect_light) },
+        { 0x60ca3428768dd6a0, fx(effect_light) },
+        { 0x8fe93bef0359f4e9, fx(effect_light) },
+        { 0x9cf1200adfd04a03, fx(effect_glow, effect_light) },
+        { 0xa905125b3c0e82f8, fx(effect_glow, effect_light) },
+        { 0xc129d9786a8369af, fx(effect_light) },
+        { 0xd56f986c82dbb0b6, fx(effect_light) },
+        { 0x7b06f0b824a155d5, fx(effect_glow) },
+        // Lamps.
+        { 0x1dd9cc6fd0e4e782, fx(effect_lamp) },
+        { 0x303ca05590e1a6c8, fx(effect_lamp) },
+        { 0x4ace91a7ca4d04f7, fx(effect_ice, effect_lamp) },
+        { 0x68f33cb17b917dfc, fx(effect_lamp) },
+        { 0xead9da3505577c00, fx(effect_lamp) },
+        { 0xeea8b5ed41ab6218, fx(effect_lamp) },
+        // No texture effects.
+        { 0x2c3c98c477419020, fx(effect_disable) },
+        { 0xf47cb4e25f06a8f8, fx(effect_disable) },
+        // The lanterns' glass (L picked Disable): Disable RT instead, so it no longer blocks the lamp's traced light
+        // into black squares round each lantern (L's screenshot, 2026-10-22).
+        { 0xc330b27b1c24cb3d, fx(effect_rt_off) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -4183,6 +4222,10 @@ namespace {
         tooie::effect_pick::for_each([&](uint64_t hash, tooie::effect_pick::Effects effects) {
             picks[hash] = effects;
         });
+        // The shipped picks, where the player has none of their own.
+        for (const ShippedPick& shipped : shipped_effect_picks) {
+            picks.emplace(shipped.hash, shipped.effects);
+        }
         // Built-in entries a pick does not take that effect off, then the picks with that effect (a pick can have several).
         auto build = [&](const uint64_t* begin, const uint64_t* end, tooie::effect_pick::Effect effect, bool add_picks) {
             std::vector<uint64_t> list;
@@ -4259,6 +4302,8 @@ namespace {
             }
         }
         RT64::SetSceneLightSourceTextures(light_sources.data(), light_reaches.data(), light_sources.size());
+        std::vector<uint64_t> ray_off = build(nullptr, nullptr, tooie::effect_pick::effect_rt_off, true);
+        RT64::SetSceneRayOffTextures(ray_off.data(), ray_off.size());
         // The same lists for the pick mode's Show All (edges count as grass; ice in the icy maps or anywhere).
         {
             using tooie::effect_pick::set_list;
@@ -4273,6 +4318,7 @@ namespace {
             set_list(tooie::effect_pick::effect_lamp, lamps);
             set_list(tooie::effect_pick::effect_glow, glow);
             set_list(tooie::effect_pick::effect_light, light_sources);
+            set_list(tooie::effect_pick::effect_rt_off, ray_off);
             set_list(tooie::effect_pick::effect_disable, build(nullptr, nullptr, tooie::effect_pick::effect_disable, true));
             set_list(tooie::effect_pick::effect_deep_snow, build(nullptr, nullptr, tooie::effect_pick::effect_deep_snow, true));
         }

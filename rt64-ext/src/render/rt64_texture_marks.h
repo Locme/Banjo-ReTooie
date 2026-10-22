@@ -20,6 +20,11 @@ namespace RT64 {
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     float SceneLightSourceReach(uint64_t hash);
 
+    // Banjo-Tooie: Shader Effects pick mode's Disable RT: textures whose draws stay out of the traced scene (they
+    // cast no traced shadows and block no traced light; a lamp's glass, L 2026-10-22).
+    void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
+    bool SceneRayOffTexture(uint64_t hash);
+
     // Banjo-Tooie: Shader Effects pick mode's Show All: while a pick mode is on, the draws with one of these textures
     // pulse in their own colour, between the picked texture's pulses.
     void SetScenePickMarkedTextures(const uint64_t *hashes, size_t count);

@@ -45,6 +45,8 @@ namespace RT64 {
     bool SceneShinyTexture(uint64_t hash);
     bool SceneLampTexture(uint64_t hash);
     bool SceneGlowTexture(uint64_t hash);
+    float SceneLightSourceReach(uint64_t hash);
+    bool SceneRayOffTexture(uint64_t hash);
     void SetScenePickMarkedTextures(const uint64_t *hashes, size_t count);
 }
 
@@ -263,8 +265,8 @@ namespace {
     std::map<uint64_t, Effects> effects;
     std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light", "rt_off" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source", "Disable RT" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
@@ -296,7 +298,7 @@ namespace {
         return text.empty() ? (names ? "disable" : "None") : text;
     }
 
-    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp glow light (light:<percent> with a strength other than 100) (lines
+    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp glow light rt_off (light:<percent> with a strength other than 100) (lines
     // from before several effects a texture have just one).
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
@@ -340,7 +342,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp, glow, light or light:<strength %>). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp, glow, light or light:<strength %>, rt_off). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -422,6 +424,9 @@ namespace {
         set |= RT64::SceneShinyTexture(hash) ? bit(tooie::effect_pick::effect_shiny) : 0;
         set |= RT64::SceneLampTexture(hash) ? bit(tooie::effect_pick::effect_lamp) : 0;
         set |= RT64::SceneGlowTexture(hash) ? bit(tooie::effect_pick::effect_glow) : 0;
+        const float reach = RT64::SceneLightSourceReach(hash);
+        set |= (reach > 0.0f) ? tooie::effect_pick::with_light_strength(bit(tooie::effect_pick::effect_light), int(reach / 9.0f + 0.5f)) : 0;
+        set |= RT64::SceneRayOffTexture(hash) ? bit(tooie::effect_pick::effect_rt_off) : 0;
         return set;
     }
 
@@ -535,9 +540,15 @@ namespace {
     // Shift + wheel on a Light Source texture: its strength up or down by 10% a notch (10% to 500%). False when the
     // texture has no Light Source pick.
     bool step_light_strength(uint64_t hash, int notches, int& strength) {
+        // A built-in Light Source (a shipped pick) becomes the player's own pick with the same effects.
+        bool edges_only = false;
+        const Effects built_in = built_in_effects(hash, edges_only);
         {
             std::lock_guard lock{ effects_mutex };
-            const auto it = effects.find(hash);
+            auto it = effects.find(hash);
+            if ((it == effects.end()) && tooie::effect_pick::has(built_in, tooie::effect_pick::effect_light)) {
+                it = effects.emplace(hash, built_in).first;
+            }
             if ((it == effects.end()) || !tooie::effect_pick::has(it->second, tooie::effect_pick::effect_light)) {
                 return false;
             }
