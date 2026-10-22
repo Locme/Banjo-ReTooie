@@ -1000,9 +1000,19 @@ bool TraceOccluded(RayDesc ray, uint mode) {
     return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }
 
+// A Light Source pick's object size (SceneLightSourceW in rt64_texture_marks.cpp): its radius from the fraction of the
+// light's w, 0 for a lamp (whole). Its light leaves from the whole object, not a point inside it, so it lights what
+// is round it evenly instead of only through the gaps in its own shape (L, 2026-10-22: "make the OBJECT itself
+// light source, dont add balls").
+float LightSourceRadius(float w) {
+    const float f = frac(w);
+    return (f > 0.01f) ? (f - 0.05f) / 0.9f * 1000.0f : 0.0f;
+}
+
 // A lamp's light, traced from a surface towards it: blocked by anything solid on the way (a cut-out only where
-// solid). The lamp's own fitting (within 90 units of the light) lets it all out, so the lamp lights up as normal.
-float TraceLampVisible(RayDesc ray, float3 light) {
+// solid). The lamp's own fitting (within 90 units of the light, or of a Light Source's object) lets it all out, so
+// the lamp lights up as normal.
+float TraceLampVisible(RayDesc ray, float3 light, float radius) {
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     while (query.Proceed()) {
@@ -1022,7 +1032,7 @@ float TraceLampVisible(RayDesc ray, float3 light) {
         if (PlayerShadowsOff() && BanjoHit(geometry, at)) {
             continue;
         }
-        if (length(at - light) < 90.0f) {
+        if (length(at - light) < max(90.0f, radius + 10.0f)) {
             continue;
         }
         query.CommitNonOpaqueTriangleHit();
@@ -1245,10 +1255,12 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
         const float3 toLight = light.xyz - start;
         const float distance = length(toLight);
-        if ((distance < 30.0f) || (distance > light.w)) {
+        const float radius = LightSourceRadius(light.w);
+        const float fromSurface = max(distance - radius, 0.0f);
+        if ((distance < 30.0f) || (fromSurface > light.w)) {
             continue;
         }
-        const float falloff = saturate(1.0f - distance / light.w);
+        const float falloff = saturate(1.0f - fromSurface / light.w);
         const float reachHere = falloff * falloff;
         influence = max(influence, reachHere);
         const float3 direction = toLight / distance;
@@ -1259,8 +1271,8 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         }
         traced++;
         // Two points on a small disc round the light. The rays go right up to the flame, through its fitting
-        // (TraceLampVisible).
-        const float stopShort = 3.0f;
+        // (TraceLampVisible); a Light Source's stop at its object.
+        const float stopShort = max(3.0f, radius);
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
         const float3 across = cross(direction, side);
@@ -1280,7 +1292,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             ray.TMin = 0.0f;
             ray.TMax = reach;
             // Banjo casts his shadow from the lamps too.
-            visible += 0.5f * TraceLampVisible(ray, light.xyz);
+            visible += 0.5f * TraceLampVisible(ray, light.xyz, radius);
         }
         lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
     }
@@ -1505,7 +1517,9 @@ float3 PathDirectLight(float3 at, float3 normal) {
         const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
         const float3 toLight = lamp.xyz - worldStart;
         const float distance = length(toLight);
-        if ((distance < 10.0f) || (distance > lamp.w)) {
+        const float radius = LightSourceRadius(lamp.w);
+        const float fromSurface = max(distance - radius, 0.0f);
+        if ((distance < 10.0f) || (fromSurface > lamp.w)) {
             continue;
         }
         const float facing = dot(worldNormal, toLight / distance);
@@ -1518,14 +1532,14 @@ float3 PathDirectLight(float3 at, float3 normal) {
         ray.Origin = worldStart;
         ray.Direction = toLight / distance;
         ray.TMin = 0.0f;
-        ray.TMax = max(distance - 60.0f, 1.0f);
+        ray.TMax = max(distance - max(60.0f, radius), 1.0f);
         RayQuery<RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
         query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
         query.Proceed();
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
             continue;
         }
-        const float falloff = saturate(1.0f - distance / lamp.w);
+        const float falloff = saturate(1.0f - fromSurface / lamp.w);
         light += float3(1.0f, 0.8f, 0.55f) * (1.3f * falloff * falloff * facing);
     }
     return light;

@@ -19,6 +19,9 @@ namespace RT64 {
     // with its own reach (strength), and no glow in the air round the light. SceneLightSourceReach is 0 for others.
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     float SceneLightSourceReach(uint64_t hash);
+    // The light's w for a Light Source: its reach as a whole number, and the object's radius (up to 1000) in the
+    // fraction, 0.05 to 0.95 (LightSourceRadius in SceneEffectsPS.hlsl). A lamp's w is whole (fraction 0).
+    float SceneLightSourceW(float reach, float radius);
 
     // Banjo-Tooie: Shader Effects pick mode's Disable RT: textures whose draws stay out of the traced scene (they
     // cast no traced shadows and block no traced light; a lamp's glass, L 2026-10-22).

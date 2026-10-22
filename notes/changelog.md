@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Shader Effects pick mode's **Light Source**: the object itself now gives off the light. The light used to sit at a point inside the object, so it only got out through the gaps in the object's shape and left bright blobs ("balls") round it; it now leaves from the whole object, lighting what is round it evenly, with its reach counted from the object's edge (L). Untested on PC (T532).
 - The grenade egg's blast fireball is now a Light Source with Slight Glow, so it lights the area with Ray tracing on (found by setting off grenade eggs in a headless run) (L). Untested on PC (T526).
 - Fire glows and lights the scene: flames, torch and candle flames and fire walls are now Light Sources with Slight Glow (with Ray tracing on they light the area with no glowing ball), embers glow, and three likely explosion frames from the texture dump light up too (L). Untested on PC (T526).
 - Shader Effects pick mode: new effect **Disable RT** (Shift + 1) leaves a texture out of the ray traced scene. The lanterns' glass now has it, so the lanterns no longer show black squares round them with Ray tracing on. L's shader effect tags (explosions as Light Sources, lamps, glow) now ship with the port, and Shift + mouse wheel sets the strength of these built-in Light Sources too (L). Untested on PC (T525).

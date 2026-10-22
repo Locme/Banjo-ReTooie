@@ -2548,7 +2548,8 @@ namespace RT64 {
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
                 std::round(rayTracingMaterials[2].load() * 100.0f) * 65536.0f;
             memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
-            // The level's reaches as whole numbers: a half over one marks a Light Source pick, which LampGlow leaves out.
+            // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
+            // (SceneLightSourceW).
             for (uint32_t i = 0; i < std::min(lightSettings.lightCount, SceneMaxLights); i++) {
                 mapped[12 + i * 4 + 3] = std::floor(mapped[12 + i * 4 + 3]);
             }
