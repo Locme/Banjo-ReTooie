@@ -4278,6 +4278,7 @@ RECOMP_FUNC void func_800B4790(uint8_t* rdram, recomp_context* ctx) {
     ctx->r14 = S32(0X8012 << 16);
     // 0x800B47C4: lbu         $t6, 0x7F1C($t6)
     ctx->r14 = MEM_BU(ctx->r14, 0X7F1C);
+    tooie_particle_age_floor(rdram, ctx);
     // 0x800B47C8: mov.s       $f20, $f0
     CHECK_FR(ctx, 20);
     CHECK_FR(ctx, 0);

@@ -47,6 +47,7 @@
 // more would.
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -91,6 +92,7 @@ namespace {
     const bool log_on = std::getenv("TOOIE_GFX_LOG") != nullptr;
     uint32_t peak[2] = {};
     uint32_t skipped = 0;
+    std::atomic<float> last_fraction{ 0.0f };
 
     constexpr uint32_t map_addr = 0x80132DC2;
 
@@ -364,6 +366,10 @@ extern "C" void tooie_list_end_guard(uint8_t* rdram, recomp_context* ctx, int st
     MEM_W(0, heads_addr) = (int32_t)(end - tail);
 }
 
+float tooie::gfx_budget::last_list_fraction() {
+    return last_fraction.load();
+}
+
 bool tooie::gfx_budget::room_for_extras(uint8_t* rdram) {
     for (int pool = 0; pool < 2; pool++) {
         uint32_t used, size;
@@ -397,6 +403,7 @@ void tooie::gfx_budget::frame_end(uint8_t* rdram) {
                 add_bytes(head);
             }
             history[frames++ % history_size] = head - start;
+            last_fraction.store(float(head - start) / float(std::max<uint32_t>(end - start, 1)));
             const uint16_t map = (uint16_t)MEM_HU(0, (int32_t)map_addr);
             if (head - start > (end - start) / 2 && map != heavy_map) {
                 heavy_map = map;

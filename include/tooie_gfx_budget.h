@@ -10,6 +10,8 @@ namespace tooie::gfx_budget {
     // for the game's own drawing, so extras (extended draw distance, HD
     // shadows) may add to them. Call from the game thread while it draws.
     bool room_for_extras(uint8_t* rdram);
+    // How full the last completed frame's display list was (0 to 1, 0 before the first).
+    float last_list_fraction();
     // Call when the frame's display list is complete: logs an overflow.
     void frame_end(uint8_t* rdram);
     // Call at the entry of each model draw (func_800DE498): counts it for the
