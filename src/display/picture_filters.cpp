@@ -447,7 +447,7 @@ namespace {
         // Likely explosion frames from the dump (a fiery burst, a flash, a burst disc); the explosions L picked are not
         // in the dump, as they are drawn only when something blows up.
         { 0xfa680103e7ce6cbc, fx(effect_glow, effect_light) },
-        { 0x28f275d076d8817d, fx(effect_glow, effect_light) },
+        { 0x28f275d076d8817d, fx(effect_glow) },
         { 0x52ad0ec437488cbd, fx(effect_glow) },
         // L's shader_effect_tags.txt of 2026-10-22 (the Disable and Glow picks above are from it too).
         { 0x4f86a813903a7df4, fx(effect_disable) },
@@ -458,6 +458,7 @@ namespace {
         { 0xa0754fa808c1eec1, fx(effect_ice, effect_shiny) | fx(effect_light) },
         { 0xa95b7ee485b02d15, fx(effect_rt_off) },
         { 0xaa4fb767534de6b1, fx(effect_rt_off) },
+        { 0xbfca5f9eff23e2ab, fx(effect_glow) },
         // The grenade egg's blast fireball (8x8 fire), found with a headless blow-up run (TOOIE_EXPLODE=a15D@<ms>).
         { 0x0f99c88fb5007ceb, fx(effect_glow, effect_light) },
     };
