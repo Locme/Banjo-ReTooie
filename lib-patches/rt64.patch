@@ -1964,7 +1964,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..49870a1 100644
+index 9fae0d4..0b9ae7f 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3717,7 +3717,7 @@ index 9fae0d4..49870a1 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3247,2133 @@ namespace RT64 {
+@@ -1747,25 +3247,2204 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -5484,6 +5484,104 @@ index 9fae0d4..49870a1 100644
 +        g.hizBuilt = true;
 +    }
 +
++    // Banjo-Tooie: a vertex's place, to a quarter unit, for SnowGround::shares.
++    static uint64_t snowPlaceKey(const float *p) {
++        const int64_t x = std::llround(p[0] * 4.0f), y = std::llround(p[1] * 4.0f), z = std::llround(p[2] * 4.0f);
++        return uint64_t((x & 0x1FFFFF) | ((y & 0x1FFFFF) << 21) | ((z & 0x1FFFFF) << 42));
++    }
++
++    // Banjo-Tooie: deep snow's or displaced ground's four floats a vertex (snowGroundVertices), from the cache, or else
++    // worked out on another thread while the last ground worked out stands in (SnowGroundCache). Worked out here only
++    // the first time, when there's nothing to stand in.
++    static const std::vector<float> &snowGroundCached(FramebufferRenderer::SnowGroundCache &cache, const DrawData &drawData,
++        const std::vector<std::pair<uint32_t, uint32_t>> &faceRanges, const std::vector<std::pair<uint32_t, uint32_t>> &edgeRanges,
++        uint32_t first, uint32_t end, float ramp, uint32_t &redone)
++    {
++        using SnowGround = FramebufferRenderer::SnowGround;
++        auto keep = [&cache](SnowGround &&done) -> SnowGround & {
++            cache.latest = done.shares;
++            SnowGround &entry = cache.entries[cache.next];
++            cache.next = (cache.next + 1) % uint32_t(cache.entries.size());
++            entry = std::move(done);
++            return entry;
++        };
++        // (The first ground waits for its work: nothing else can stand in.)
++        if (cache.pending.valid() && (!cache.latest || (cache.pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready))) {
++            keep(cache.pending.get());
++        }
++        const uint64_t key = snowGroundKey(drawData, faceRanges, edgeRanges, ramp);
++        for (SnowGround &cached : cache.entries) {
++            if ((cached.key == key) && cached.shares) {
++                snowGroundCorners(drawData, faceRanges, end, false, cached.positions, cached.corners);
++                return cached.positions;
++            }
++        }
++        // (Only what the work reads goes with it: the positions, and the faces' indices one range after another.)
++        auto work = [](DrawData data, std::vector<std::pair<uint32_t, uint32_t>> faces, std::vector<std::pair<uint32_t, uint32_t>> edges,
++            uint32_t first, uint32_t end, float ramp, uint64_t key)
++        {
++            SnowGround done;
++            done.key = key;
++            snowGroundVertices(data, faces, edges, first, end, ramp, done.positions);
++            snowGroundCorners(data, faces, end, true, done.positions, done.corners);
++            auto shares = std::make_shared<std::unordered_map<uint64_t, float>>();
++            shares->reserve(done.corners.size() / 4);
++            for (size_t c = 0; c < done.corners.size(); c += 4) {
++                shares->emplace(snowPlaceKey(&done.corners[c]), done.corners[c + 3]);
++            }
++            done.shares = std::move(shares);
++            return done;
++        };
++        auto launch = [&](bool here) {
++            redone++;
++            DrawData data;
++            std::vector<std::pair<uint32_t, uint32_t>> faces, edges;
++            uint32_t highest = 0;
++            auto take = [&](const std::vector<std::pair<uint32_t, uint32_t>> &ranges, std::vector<std::pair<uint32_t, uint32_t>> &out) {
++                for (const auto &[start, triangles] : ranges) {
++                    out.push_back({ uint32_t(data.faceIndices.size()), triangles });
++                    for (uint32_t i = start; i < start + triangles * 3; i++) {
++                        data.faceIndices.push_back(drawData.faceIndices[i]);
++                        highest = std::max(highest, drawData.faceIndices[i]);
++                    }
++                }
++            };
++            take(faceRanges, faces);
++            take(edgeRanges, edges);
++            const size_t floats = std::min(drawData.posFloats.size(), (size_t(std::max(highest + 1, end))) * 3);
++            data.posFloats.assign(drawData.posFloats.begin(), drawData.posFloats.begin() + floats);
++            if (here) {
++                return work(std::move(data), std::move(faces), std::move(edges), first, end, ramp, key);
++            }
++            cache.pending = std::async(std::launch::async, work, std::move(data), std::move(faces), std::move(edges), first, end, ramp, key);
++            return SnowGround();
++        };
++        if (!cache.latest) {
++            SnowGround &entry = keep(launch(true));
++            snowGroundCorners(drawData, faceRanges, end, false, entry.positions, entry.corners);
++            return entry.positions;
++        }
++        if (!cache.pending.valid()) {
++            launch(false);
++        }
++        // (A place the last ground lacked takes the full dips: most of the ground is away from its edges.)
++        const std::unordered_map<uint64_t, float> &shares = *cache.latest;
++        cache.scratch.resize(size_t(end) * 4);
++        for (const auto &[start, triangles] : faceRanges) {
++            for (uint32_t i = start; i < start + triangles * 3; i++) {
++                const uint32_t v = drawData.faceIndices[i];
++                const float *p = &drawData.posFloats[size_t(v) * 3];
++                float *out = &cache.scratch[size_t(v) * 4];
++                const auto found = shares.find(snowPlaceKey(p));
++                out[0] = p[0];
++                out[1] = p[1];
++                out[2] = p[2];
++                out[3] = (found != shares.end()) ? found->second : 1.0f;
++            }
++        }
++        return cache.scratch;
++    }
++
      void FramebufferRenderer::endFramebuffers(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool rtEnabled) {
          bool shaderViewRtEnabled = false;
 +        // Banjo-Tooie: each part's time, to the frame overlay (RendererEffectsPart).
@@ -5496,6 +5594,8 @@ index 9fae0d4..49870a1 100644
 +        };
 +        finishFurNormals();
 +        effectsPart(RendererEffectsPart::Fur);
++        // Banjo-Tooie: how many grounds had to be worked out again (snowGroundCached), to the frame overlay.
++        uint32_t snowRedone = 0;
 +        // Banjo-Tooie: deep snow's trail grid (a cell of nothing until there is one), only the rows changed since the
 +        // last upload: the buffer keeps the rest.
 +        std::pair<size_t, size_t> snowTrailRange = { 0, 0 };
@@ -5743,22 +5843,7 @@ index 9fae0d4..49870a1 100644
 +                    snowEdges.push_back(range);
 +                }
 +            }
-+            const uint64_t snowKey = snowGroundKey(*snowPositionsData, snowFaceRanges, snowEdges, snowRamp);
-+            SnowGround *ground = nullptr;
-+            for (SnowGround &cached : snowGrounds) {
-+                if (cached.key == snowKey) {
-+                    ground = &cached;
-+                    snowGroundCorners(*snowPositionsData, snowFaceRanges, snowVertexEnd, false, ground->positions, ground->corners);
-+                    break;
-+                }
-+            }
-+            if (ground == nullptr) {
-+                ground = &snowGrounds[snowGroundNext];
-+                snowGroundNext = (snowGroundNext + 1) % uint32_t(snowGrounds.size());
-+                snowGroundVertices(*snowPositionsData, snowFaceRanges, snowEdges, snowVertexFirst, snowVertexEnd, snowRamp, ground->positions);
-+                snowGroundCorners(*snowPositionsData, snowFaceRanges, snowVertexEnd, true, ground->positions, ground->corners);
-+                ground->key = snowKey;
-+            }
++            const std::vector<float> &ground = snowGroundCached(snowGrounds, *snowPositionsData, snowFaceRanges, snowEdges, snowVertexFirst, snowVertexEnd, snowRamp, snowRedone);
 +            // TOOIE_SNOW_LOG: how long the edges took, every 2 seconds.
 +            static const bool edgeLog = (std::getenv("TOOIE_SNOW_LOG") != nullptr);
 +            static auto edgeLogged = std::chrono::steady_clock::now();
@@ -5767,7 +5852,7 @@ index 9fae0d4..49870a1 100644
 +                fprintf(stderr, "[snow] edges of %u ground vertices in %.1f ms\n", snowVertexEnd - snowVertexFirst,
 +                    std::chrono::duration<float, std::milli>(edgeLogged - edgeStarted).count());
 +            }
-+            snowPositionsSource = ground->positions.data();
++            snowPositionsSource = ground.data();
 +            snowPositionsRange = { size_t(snowVertexFirst) * 4, size_t(snowVertexEnd) * 4 };
 +        }
 +        // Banjo-Tooie: displaced ground's vertices (groundVertexFirst), added to the same buffer. Without them (or when
@@ -5785,24 +5870,9 @@ index 9fae0d4..49870a1 100644
 +                }
 +            }
 +            const float groundRamp = 32.0f;
-+            const uint64_t groundKey = snowGroundKey(*groundPositionsData, groundFaceRanges, layers, groundRamp);
-+            SnowGround *cover = nullptr;
-+            for (SnowGround &cached : groundCovers) {
-+                if (cached.key == groundKey) {
-+                    cover = &cached;
-+                    snowGroundCorners(*groundPositionsData, groundFaceRanges, groundVertexEnd, false, cover->positions, cover->corners);
-+                    break;
-+                }
-+            }
-+            if (cover == nullptr) {
-+                cover = &groundCovers[groundCoverNext];
-+                groundCoverNext = (groundCoverNext + 1) % uint32_t(groundCovers.size());
-+                snowGroundVertices(*groundPositionsData, groundFaceRanges, layers, groundVertexFirst, groundVertexEnd, groundRamp, cover->positions);
-+                snowGroundCorners(*groundPositionsData, groundFaceRanges, groundVertexEnd, true, cover->positions, cover->corners);
-+                cover->key = groundKey;
-+            }
++            const std::vector<float> &cover = snowGroundCached(groundCovers, *groundPositionsData, groundFaceRanges, layers, groundVertexFirst, groundVertexEnd, groundRamp, snowRedone);
 +            if (snowPositionsSource == snowPositionsFallback) {
-+                snowPositionsSource = cover->positions.data();
++                snowPositionsSource = cover.data();
 +                snowPositionsRange = { size_t(groundVertexFirst) * 4, size_t(groundVertexEnd) * 4 };
 +            }
 +            else {
@@ -5814,7 +5884,7 @@ index 9fae0d4..49870a1 100644
 +                for (const auto &[start, triangles] : groundFaceRanges) {
 +                    for (uint32_t k = start; k < start + triangles * 3; k++) {
 +                        const size_t v = size_t(groundPositionsData->faceIndices[k]) * 4;
-+                        std::copy(cover->positions.begin() + v, cover->positions.begin() + v + 4, sharedPositions.begin() + v);
++                        std::copy(cover.begin() + v, cover.begin() + v + 4, sharedPositions.begin() + v);
 +                    }
 +                }
 +                snowPositionsSource = sharedPositions.data();
@@ -5835,6 +5905,7 @@ index 9fae0d4..49870a1 100644
 +        }
 +        // Banjo-Tooie: the snow's CPU time this frame, to the frame overlay.
 +        RecordRendererSnowTimes(snowCpuMs);
++        RecordRendererSnowRedone(snowRedone);
 +        std::fill(std::begin(snowCpuMs), std::end(snowCpuMs), 0.0);
 +        // Banjo-Tooie: instanced 3D grass's triangles, chunks and slots, and its terms in the frame's parameters.
 +        std::vector<BufferUploader::Upload> grassUploads;
@@ -5858,7 +5929,7 @@ index 9fae0d4..49870a1 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5424,12 @@ namespace RT64 {
+@@ -1816,8 +5495,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -5872,14 +5943,16 @@ index 9fae0d4..49870a1 100644
  
      void FramebufferRenderer::advanceFrame(bool rtEnabled) {
 diff --git a/src/render/rt64_framebuffer_renderer.h b/src/render/rt64_framebuffer_renderer.h
-index 3add9c3..7763663 100644
+index 3add9c3..a33402a 100644
 --- a/src/render/rt64_framebuffer_renderer.h
 +++ b/src/render/rt64_framebuffer_renderer.h
-@@ -4,7 +4,11 @@
+@@ -4,7 +4,13 @@
  
  #pragma once
  
 +#include <array>
++#include <future>
++#include <memory>
 +
  #include <stdint.h>
 +#include <unordered_map>
@@ -5887,7 +5960,7 @@ index 3add9c3..7763663 100644
  
  #include "common/rt64_emulator_configuration.h"
  #include "common/rt64_user_configuration.h"
-@@ -13,6 +17,7 @@
+@@ -13,6 +19,7 @@
  #include "preset/rt64_preset_scene.h"
  #include "shared/rt64_frame_params.h"
  #include "shared/rt64_gpu_tile.h"
@@ -5895,7 +5968,7 @@ index 3add9c3..7763663 100644
  #include "shared/rt64_render_indices.h"
  #include "shared/rt64_render_params.h"
  
-@@ -22,6 +27,7 @@
+@@ -22,6 +29,7 @@
  #include "rt64_raster_shader_cache.h"
  #include "rt64_render_target.h"
  #include "rt64_rsp_processor.h"
@@ -5903,7 +5976,7 @@ index 3add9c3..7763663 100644
  #include "rt64_vertex_processor.h"
  
  #if RT_ENABLED
-@@ -48,6 +54,53 @@ namespace RT64 {
+@@ -48,6 +56,53 @@ namespace RT64 {
          RenderFramebufferStorage *fbStorage = nullptr;
          std::vector<RasterScene> rasterScenes;
          std::vector<SceneIndexPair> sceneIndices;
@@ -5957,7 +6030,7 @@ index 3add9c3..7763663 100644
  #   if RT_ENABLED
          std::vector<RaytracingScene> rtScenes;
  #   endif
-@@ -62,11 +115,234 @@ namespace RT64 {
+@@ -62,11 +117,244 @@ namespace RT64 {
          std::vector<uint32_t> textureCacheVersions;
          std::vector<Texture *> textureCacheTextures;
          std::vector<Texture *> textureCacheTextureReplacements;
@@ -6008,9 +6081,20 @@ index 3add9c3..7763663 100644
 +            // Each face corner's four floats, in face order: a hit puts them back at this frame's vertex numbers, which
 +            // move when something else is drawn first.
 +            std::vector<float> corners;
++            // Each vertex's edge share by its place (snowPlaceKey), for the frames whose ground isn't in the cache.
++            std::shared_ptr<const std::unordered_map<uint64_t, float>> shares;
 +        };
-+        std::array<SnowGround, 4> snowGrounds;
-+        uint32_t snowGroundNext = 0;
++        // A ground not in the cache is worked out on another thread (pending; it took a whole frame's CPU time in
++        // Terrydactyland's sand, L 2026-10-22), and until it is done the last ground worked out gives the edge shares by
++        // place (latest), into scratch.
++        struct SnowGroundCache {
++            std::array<SnowGround, 4> entries;
++            uint32_t next = 0;
++            std::future<SnowGround> pending;
++            std::shared_ptr<const std::unordered_map<uint64_t, float>> latest;
++            std::vector<float> scratch;
++        };
++        SnowGroundCache snowGrounds;
 +        float snowPositionsFallback[4] = {};
 +        BufferPair snowPositionsBuffer;
 +        // Banjo-Tooie: displaced ground's vertices this frame, in the same buffer as deep snow's (their draws never share
@@ -6022,8 +6106,7 @@ index 3add9c3..7763663 100644
 +        const DrawData *groundPositionsData = nullptr;
 +        std::vector<std::pair<uint32_t, uint32_t>> groundFaceRanges;
 +        std::vector<std::pair<const DrawData *, std::pair<uint32_t, uint32_t>>> groundLayerRanges;
-+        std::array<SnowGround, 2> groundCovers;
-+        uint32_t groundCoverNext = 0;
++        SnowGroundCache groundCovers;
 +        std::vector<float> sharedPositions;
 +        // Banjo-Tooie: where 3D grass doesn't grow (a road or dirt laid over grass ground as a decal): one bit a cell
 +        // of a square grid round the camera over the world's x and z (FrameParams.grassMask).
@@ -6192,7 +6275,7 @@ index 3add9c3..7763663 100644
          std::vector<RenderPipelineProgram> hitGroupVector;
          std::vector<interop::RenderIndices> renderIndicesVector;
          std::vector<DynamicTextureView> dynamicTextureViewVector;
-@@ -77,6 +353,13 @@ namespace RT64 {
+@@ -77,6 +365,13 @@ namespace RT64 {
          std::array<RenderVertexBufferView, 3> indexedVertexViews;
          std::array<RenderVertexBufferView, 3> rawVertexViews;
          RenderIndexBufferView indexBufferView;
@@ -6206,7 +6289,7 @@ index 3add9c3..7763663 100644
          RenderBuffer *testZIndexBuffer = nullptr;
          RenderIndexBufferView testZIndexBufferView;
          BufferPair renderIndicesBuffer;
-@@ -87,6 +370,14 @@ namespace RT64 {
+@@ -87,6 +382,14 @@ namespace RT64 {
          RenderPipeline *postBlendDitherNoiseAddPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubPipeline = nullptr;
          RenderPipeline *postBlendDitherNoiseSubNegativePipeline = nullptr;
@@ -6221,7 +6304,7 @@ index 3add9c3..7763663 100644
          std::unique_ptr<FramebufferRendererDescriptorCommonSet> descCommonSet;
          std::unique_ptr<FramebufferRendererDescriptorTextureSet> descTextureSet;
          std::unique_ptr<RenderTexture> dummyColorTarget;
-@@ -100,6 +391,7 @@ namespace RT64 {
+@@ -100,6 +403,7 @@ namespace RT64 {
          bool descriptorTextureReplacementMapEnabled = false;
          std::unique_ptr<RSPSmoothNormalDescriptorSet> smoothDescSet;
          std::unique_ptr<RSPVertexTestZDescriptorSet> vertexTestZSet;
@@ -6229,7 +6312,7 @@ index 3add9c3..7763663 100644
          interop::FrameParams frameParams;
          const ShaderLibrary *shaderLibrary = nullptr;
  
-@@ -123,6 +415,10 @@ namespace RT64 {
+@@ -123,6 +427,10 @@ namespace RT64 {
          std::vector<Framebuffer> framebufferVector;
          std::vector<BufferUploader *> pendingUploaders;
          uint32_t framebufferCount = 0;
@@ -6240,7 +6323,7 @@ index 3add9c3..7763663 100644
  
          struct DrawParams {
              RenderWorker *worker;
-@@ -164,7 +460,15 @@ namespace RT64 {
+@@ -164,7 +472,15 @@ namespace RT64 {
          void updateShaderViews(RenderWorker *worker, const DrawBuffers *drawBuffers, const OutputBuffers *outputBuffers, bool raytracingEnabled);
          void submitRSPSmoothNormalCompute(RenderWorker *worker, const OutputBuffers *outputBuffers);
          bool submitDepthAccess(RenderWorker *worker, RenderFramebufferStorage *fbStorage, bool readOnly, bool &depthState);

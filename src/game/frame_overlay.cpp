@@ -86,6 +86,7 @@ namespace RT64 {
         double cpuMs[5] = {};
         double snowMs[4] = {};
         double effectsMs[6] = {};
+        uint32_t snowRedone = 0;
     };
     FrameStats TakeFrameStats();
     void SetGpuSectionTiming(bool wanted);
@@ -682,8 +683,8 @@ namespace {
             text.push_back(line);
             const double snow = frames.snowMs[0] + frames.snowMs[1] + frames.snowMs[2] + frames.snowMs[3];
             if (snow > 0.0) {
-                std::snprintf(line, sizeof(line), "Snow and sand CPU %.2f ms: trail %.2f, ground %.2f, models pressing %.2f, edges %.2f",
-                    snow / n, frames.snowMs[0] / n, frames.snowMs[1] / n, frames.snowMs[2] / n, frames.snowMs[3] / n);
+                std::snprintf(line, sizeof(line), "Snow and sand CPU %.2f ms: trail %.2f, ground %.2f, models pressing %.2f, edges %.2f (worked out %u times)",
+                    snow / n, frames.snowMs[0] / n, frames.snowMs[1] / n, frames.snowMs[2] / n, frames.snowMs[3] / n, frames.snowRedone);
                 text.push_back(line);
             }
             const double *e = frames.effectsMs;

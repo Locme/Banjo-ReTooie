@@ -138,6 +138,11 @@ namespace RT64 {
         }
     }
 
+    void RecordRendererSnowRedone(uint32_t count) {
+        const std::scoped_lock lock(frameStatsMutex);
+        frameStats.snowRedone += count;
+    }
+
     void RecordRendererEffectsTimes(const double (&ms)[uint32_t(RendererEffectsPart::Count)]) {
         const std::scoped_lock lock(frameStatsMutex);
         for (uint32_t i = 0; i < uint32_t(RendererEffectsPart::Count); i++) {
