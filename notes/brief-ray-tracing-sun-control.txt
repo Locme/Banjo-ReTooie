@@ -107,3 +107,10 @@ OPEN QUESTIONS FOR L (defaults in brackets; the thread continues on the default)
 - (answered by L 08:24: key + mouse wheel, no sliders, save setting in Ray Trace Debug)
 - Should Custom also override the Day and Night cycle's sun? [no, the cycle wins]
 - One sun for all maps, or per map? [per map through sun.txt, one global value through Custom]
+
+HINTS FROM EXISTING CODE (added 2026-10-22)
+- Wheel + held-key handling already exists for the pick modes (src/debug/parallax_pick.cpp, src/input/hotkeys.cpp:
+  Shift+wheel = fine step). Copy that pattern for swallowing the wheel; keep Shift = fine.
+- Put sun.txt in the Dev Files folder (include/tooie_dev_files.h, "Dev Files" beside the config), like parallax_tags.txt.
+- Hotkey sections come from the section name in src/input/hotkeys.cpp: use "Ray Trace Debug" for the key so it
+  shows in Controls too.
