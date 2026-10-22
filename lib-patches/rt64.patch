@@ -2001,7 +2001,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..04f0bc6 100644
+index 9fae0d4..4cdbbe2 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3784,7 +3784,7 @@ index 9fae0d4..04f0bc6 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3297,2280 @@ namespace RT64 {
+@@ -1747,25 +3297,2287 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4183,6 +4183,13 @@ index 9fae0d4..04f0bc6 100644
 +                }
 +                instanceSnowVector.resize(instanceIndex, 0);
 +                instanceSnowVector.push_back(snowValue);
++                // Banjo-Tooie: deep snow (and tessellated sand) draws its ground pushed down into the trail, below where
++                // the game's own layer lies; with that layer in the traced scene, every ray from the trench started under
++                // it and met it at once, and the trail came out black (L, 2026-10-22). The layer stays out of it: the
++                // ground beneath it is there.
++                if ((snowValue != 0) && !targetDrawCall.rayDraws.empty() && (targetDrawCall.rayDraws.back().instanceIndex == instanceIndex)) {
++                    targetDrawCall.rayDraws.pop_back();
++                }
 +                // Banjo-Tooie: a model's solid draw (Banjo, an NPC, an enemy, something thrown) presses the snow down
 +                // wherever it reaches into it, see-through ones too (Chilly Willy's ice balls). Not the level's ground,
 +                // nor shadows and effects (decals, or what writes no depth).
@@ -4425,7 +4432,7 @@ index 9fae0d4..04f0bc6 100644
 +                        }
 +                        AddScenePickHit(nearest, hash, matrixId);
 +                    }
-                 }
++                }
 +                // Banjo-Tooie: a draw with a clamped, filtered texture whose texels it covers at most once along s and t (from
 +                // within a texel of 0, as the game sets half a texel off, to within a texel of the tile's size), for Blend
 +                // texture seams: a piece of a bigger picture. Its corners need not be the tile's (a flight pad's pieces are cut
@@ -4569,7 +4576,7 @@ index 9fae0d4..04f0bc6 100644
 +                    else {
 +                        p.rasterShaderCache->submit(groundDesc);
 +                    }
-+                }
+                 }
 +                instanceGroundPipelineVector.resize(instanceIndex, nullptr);
 +                instanceGroundPipelineVector.push_back(groundPipeline);
 +                targetDrawCall.hasExcludedInstances = targetDrawCall.hasExcludedInstances || excluded;
@@ -4582,7 +4589,6 @@ index 9fae0d4..04f0bc6 100644
 -#   if RT_ENABLED
 -        checkRtScene(rtScene);
 -#   endif
--        checkRasterScene(rasterScene);
 +        // Banjo-Tooie: Blend texture seams: a piece's neighbour along an edge has at least two points of its opposite edge in
 +        // the same places as this one's (on the screen and at the same depth), at the same texels along the edge.
 +        if (seamPieces.size() > 1) {
@@ -4714,7 +4720,7 @@ index 9fae0d4..04f0bc6 100644
 +#   if RT_ENABLED
 +        checkRtScene(rtScene);
 +#   endif
-+        checkRasterScene(rasterScene);
+         checkRasterScene(rasterScene);
 +        if (worldOpen) {
 +            worldEnd = int32_t(targetDrawCall.rasterScenes.size());
 +        }
@@ -6070,7 +6076,7 @@ index 9fae0d4..04f0bc6 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5621,12 @@ namespace RT64 {
+@@ -1816,8 +5628,12 @@ namespace RT64 {
          }
  #   endif
  

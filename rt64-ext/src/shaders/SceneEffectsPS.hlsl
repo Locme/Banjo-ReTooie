@@ -1259,6 +1259,17 @@ bool SurfaceGeometry(float3 center, out uint geometry) {
     return gSurfaceFound;
 }
 
+// Whether a pixel's surface (view space) is Banjo himself: inside his capsule (InsideBanjo) and a model's triangle. The capsule
+// alone took in the ground round his feet, a circle where his fur's smoothing went and the model shadows were left
+// out, which showed as a lighter ring round him with no shadow (L, 2026-10-22).
+bool OnBanjoTraced(float3 center) {
+    if (!InsideBanjo(ViewToWorldPoint(center))) {
+        return false;
+    }
+    uint geometry;
+    return SurfaceGeometry(center, geometry) && ((RayGeometryFlags(geometry) & 4u) != 0u);
+}
+
 float MaterialShine(float3 center, float otherwise) {
     // Graphics > Ray Tracing's Metal, Tiles and Smooth reflection sliders (gLights 11, packed; 0 when nothing in the
     // scene has a material that reflects, and no ray is needed).
@@ -4226,7 +4237,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         const float3 up = cross(sunDirection, side);
         const float spread = lerp(0.006f, 0.04f, softness);
         const int Rays = 4;
-        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
+        const bool onBanjo = OnBanjoTraced(center);
         const uint sunDetail = RayDetail(distance);
         float blocked = 0.0f;
         // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
@@ -4559,7 +4570,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
     float4 result = float4(0.0f, 0.0f, 0.0f, 1.0f);
 #ifdef RAY_TRACED
     // Banjo's fur: its rays round the smoothed normal (see the main pass).
-    if (InsideBanjo(ViewToWorldPoint(center)) && (BanjoSmoothRadius() > 0)) {
+    if ((BanjoSmoothRadius() > 0) && OnBanjoTraced(center)) {
         normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
     }
     if (SsgiStrength() > 0.0f) {
@@ -4825,7 +4836,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Banjo's fur: its tufts' normals turn every pixel, so the traced rays on him were a different few a pixel
         // and crawled as he moved (L, 2026-10-20). There the normal is smoothed over his surface and the traced
         // light gathered wider, so the fur keeps its traced shading without the speckle.
-        const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
+        const bool onBanjo = OnBanjoTraced(center);
         if (onBanjo && (BanjoSmoothRadius() > 0)) {
             normal = SmoothedNormal(pixel, center, normal, BanjoSmoothRadius());
         }
