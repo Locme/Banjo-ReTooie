@@ -23,6 +23,24 @@ CURRENT BEHAVIOUR (verified in code 2026-10-22)
   off, and HD shadows then use tilt_light {0.47, 0.82, 0.33}.
 - Test aid already there: TOOIE_MAP_SUN=<x>,<y>,<z> forces one sun on every map (day_night.cpp map_sun).
 
+REVISION 2026-10-22 08:24 (L) - THIS REPLACES DESIGN items 1, 2, 3 and 6 BELOW. No sliders.
+- Hold a key and turn the mouse wheel to move the sun. Key option "Move sun key" (a hotkey option, default
+  unbound or a free key; check notes/keys.md and tooie::hotkeys::down in include/tooie_rdram.h/hotkeys.cpp;
+  wheel handling is in src/input/hotkeys.cpp and menu_mouse.cpp). While the key is held, the wheel is swallowed
+  (the game and the free camera must not also zoom) and:
+    wheel          = azimuth, 5 degrees per notch (hold Shift for 1 degree)
+    wheel + Ctrl   = elevation, 2 degrees per notch, clamped 5..90 (y >= 0.15)
+  The sun applies live through RT64::SetSceneSun every frame it changes. Azimuth 0 = +z, 90 = +x.
+  Print "[sun] az 150 el 40" to the console on change.
+- That key and its settings live in a NEW "Ray Trace Debug" section of Graphics > Ray Tracing (group name
+  "Ray Trace Debug", after the other ray tracing options).
+- Its own setting there: "Save world sun location" (bool, default off). When on, every change to the sun is
+  written to sun.txt (format in item 6 below, one line per map, replaced in place) so L can send the file.
+  Off: the sun is held for the session only and goes back to the game's sun on restart.
+- The sun override is active only while a moved sun exists for the current map (or sun.txt has a line for it);
+  with nothing moved and no file, the picture is identical to main. No Game/Custom enum, no F9 key.
+- Priority and everything else stay as written: the Day and Night cycle wins over the moved sun.
+
 DESIGN (defaults chosen; L can change any of them)
 1. Setting: "Sun direction" in Graphics > Ray Tracing section (group "Ray Tracing", shown before
    high_detail_models_option like the other ray tracing options in src/game/config.cpp ~842-851).
@@ -86,6 +104,6 @@ a saved state or TOOIE_MAP_SUN-style forcing rather than timing)
    (see memory lesson-msvc-return-type-mangling): keep function signatures identical in header and cpp.
 
 OPEN QUESTIONS FOR L (defaults in brackets; the thread continues on the default)
-- Sliders in the menu plus an F9 save key, or a sun.txt you edit by hand only? [both]
+- (answered by L 08:24: key + mouse wheel, no sliders, save setting in Ray Trace Debug)
 - Should Custom also override the Day and Night cycle's sun? [no, the cycle wins]
 - One sun for all maps, or per map? [per map through sun.txt, one global value through Custom]
