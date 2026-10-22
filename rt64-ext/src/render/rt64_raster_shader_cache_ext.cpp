@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
+#include <mutex>
 #include <vector>
 
 #include "render/rt64_raster_shader_cache_ext.h"
@@ -29,6 +30,36 @@ namespace RT64 {
     namespace shaderlistext {
         std::atomic<uint32_t> listProgressDone = 0;
         std::atomic<uint32_t> listProgressTotal = 0;
+    }
+
+    namespace {
+        std::mutex listCacheMutex;
+        RasterShaderCache *listCache = nullptr;
+        // Displaced ground was turned on (QueueGroundShaders), maybe before the list was loaded.
+        bool groundShadersWanted = false;
+    }
+
+    void SetShaderListCache(RasterShaderCache *cache) {
+        bool queueGround = false;
+        {
+            const std::scoped_lock lock(listCacheMutex);
+            listCache = cache;
+            queueGround = (cache != nullptr) && groundShadersWanted;
+        }
+
+        if (queueGround) {
+            cache->queueGroundVariants();
+        }
+    }
+
+    // Called when Displaced ground is turned on: from then on, the displaced versions of the listed floor shaders
+    // compile with the list, under the "Compiling shaders" notice.
+    void QueueGroundShaders() {
+        const std::scoped_lock lock(listCacheMutex);
+        groundShadersWanted = true;
+        if (listCache != nullptr) {
+            listCache->queueGroundVariants();
+        }
     }
 
     namespace {
@@ -187,6 +218,13 @@ namespace RT64 {
             }
 
             listCount = uint32_t(descs.size());
+            listedParallax.clear();
+            for (const ShaderDescription &desc : descs) {
+                if (((desc.features & RENDER_FEATURE_PARALLAX) != 0) && ((desc.features & RENDER_FEATURE_GROUND_TESS) == 0)) {
+                    listedParallax.push_back(desc);
+                }
+            }
+            groundVariantsQueued = false;
             listFile.close();
             if (valid) {
                 listFile.open(path, std::ios::binary | std::ios::app);
@@ -225,6 +263,37 @@ namespace RT64 {
 
         if (queued > 0) {
             fprintf(stdout, "[shaders] compiling %u shaders from the shader list in the background\n", queued);
+        }
+
+        SetShaderListCache(this);
+    }
+
+    void RasterShaderCache::queueGroundVariants() {
+        if (groundVariantsQueued.exchange(true)) {
+            return;
+        }
+
+        uint32_t queued = 0;
+        {
+            const std::unique_lock<std::mutex> queueLock(submissionMutex);
+            const std::unique_lock<std::mutex> descLock(descQueueMutex);
+            for (const ShaderDescription &listed : listedParallax) {
+                ShaderDescription desc = listed;
+                desc.features |= RENDER_FEATURE_GROUND_TESS;
+                bool &found = shaderHashes[desc.hash()];
+                if (!found) {
+                    found = true;
+                    listQueue.push(desc);
+                    listPending.insert(desc.hash());
+                    queued++;
+                }
+            }
+        }
+
+        if (queued > 0) {
+            listProgressTotal += queued;
+            descQueueChanged.notify_all();
+            fprintf(stdout, "[shaders] compiling %u displaced ground shaders in the background\n", queued);
         }
     }
 }

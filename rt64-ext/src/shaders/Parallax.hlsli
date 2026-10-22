@@ -20,11 +20,13 @@
 
 // The view space position at a pixel (the camera at the origin, looking down -z), from its depth, as
 // GrassWorldPosition finds it before it goes to world space.
-float3 ParallaxViewPosition(float4 pixelPosition) {
-    const float4 t = FrParams.grassDepthTerms;
+// With the camera of the draw's own framebuffer (RASTER_PARALLAX_CAMERA, FrameParams.parallaxCameras).
+float3 ParallaxViewPosition(float4 pixelPosition, uint bits) {
+    const uint camera = (bits & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT;
+    const float4 t = FrParams.parallaxCameras[camera * 2];
     const float ndcZ = pixelPosition.z * 2.0f - 1.0f;
     const float z = (t.y - ndcZ * t.w) / (ndcZ * t.z - t.x);
-    const float4 p = FrParams.grassProjection;
+    const float4 p = FrParams.parallaxCameras[camera * 2 + 1];
     const float2 ndc = float2(pixelPosition.x / p.z * 2.0f - 1.0f, 1.0f - pixelPosition.y / p.w * 2.0f);
     return float3(ndc.x * -z / p.x, ndc.y * -z / p.y, z);
 }
@@ -132,7 +134,7 @@ float3 ParallaxOffset(OtherMode otherMode, RenderFlags renderFlags, float4 pixel
     const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
     params.x *= (fineDepth != 0) ? (float(fineDepth) * 0.1f) : 1.0f;
     const float4 shading = ((bits & RASTER_PARALLAX_NO_SHADOWS) != 0) ? float4(0.0f, 0.0f, 0.0f, 0.0f) : FrParams.parallaxShading;
-    const float3 p = ParallaxViewPosition(pixelPosition);
+    const float3 p = ParallaxViewPosition(pixelPosition, bits);
     const float3 dp1 = ddx(p);
     const float3 dp2 = ddy(p);
     const float distance = length(p);

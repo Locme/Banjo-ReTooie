@@ -90,7 +90,7 @@ float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
 
 float SnowEdgeFactor(float3 a, float3 b) {
     const float edgeLength = distance(a, b);
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
+    const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b) * 0.5f, camera);
     const bool trail = !SandTooFar((a + b) * 0.5f, cameraDistance) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
     return SnowSegmentFactor(edgeLength, cameraDistance, trail);
@@ -99,7 +99,7 @@ float SnowEdgeFactor(float3 a, float3 b) {
 // The inside's factor: as fine as the trail anywhere over the triangle needs, and at least as fine as its edges.
 float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
     const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
+    const float3 camera = FrParams.snowCamera.xyz;
     const float cameraDistance = distance((a + b + c) / 3.0f, camera);
     const bool trail = !SandTooFar((a + b + c) / 3.0f, cameraDistance) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
     return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
@@ -189,7 +189,7 @@ SnowVertex DSMain(SnowPatch p, float3 w : SV_DomainLocation, const OutputPatch<S
     // (Below the ground where the trail goes down through a game's own snow layer to Banjo's feet. The ground pass,
     // RASTER_SNOW_GROUND, stays where it is.)
     SnowSample s;
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
+    const float3 camera = FrParams.snowCamera.xyz;
     // (Smoothed over at least as far as this patch's new vertices really are apart: a big triangle can't be cut finer
     // than SnowTessMaxFactor allows, and a trail followed by points further apart than it is smoothed over is spiky. A
     // vertex on an edge takes that edge's spacing only, so the patches either side of it put it in the same place;

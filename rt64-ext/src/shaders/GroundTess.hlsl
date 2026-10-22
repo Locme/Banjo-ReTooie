@@ -47,10 +47,28 @@ static const float GroundEdgeMargin = 24.0f;
 // Faces steeper than this (the share of the normal that points up) are walls: left alone.
 static const float GroundFloorShare = 0.7f;
 
+// The draw's framebuffer's camera terms (FrameParams.groundCameras, picked as parallax's by RASTER_PARALLAX_CAMERA): the
+// world is drawn in several framebuffers a frame of different sizes, and one pass's terms put another's ground in the
+// wrong place.
+uint GroundCameraBase() {
+    return ((gConstants.nightLight & RASTER_PARALLAX_CAMERA) >> RASTER_PARALLAX_CAMERA_SHIFT) * 5;
+}
+
+float3 GroundCameraPosition() {
+    return FrParams.groundCameras[GroundCameraBase() + 4].xyz;
+}
+
 // Where a world point lands before the draw's screen scale and offset (as WaterTess.hlsl).
 float4 GroundClip(float3 world) {
+    const uint c = GroundCameraBase();
     const float4 p = float4(world, 1.0f);
-    return float4(dot(FrParams.waterWorldToClip[0], p), dot(FrParams.waterWorldToClip[1], p), dot(FrParams.waterWorldToClip[2], p), dot(FrParams.waterWorldToClip[3], p));
+    return float4(dot(FrParams.groundCameras[c], p), dot(FrParams.groundCameras[c + 1], p), dot(FrParams.groundCameras[c + 2], p), dot(FrParams.groundCameras[c + 3], p));
+}
+
+// One world unit straight up in clip space: the map's y column.
+float4 GroundClipUp() {
+    const uint c = GroundCameraBase();
+    return float4(FrParams.groundCameras[c].y, FrParams.groundCameras[c + 1].y, FrParams.groundCameras[c + 2].y, FrParams.groundCameras[c + 3].y);
 }
 
 // How finely an edge between two world points is cut: one piece per few units up to the cap, by the edge's length, so
@@ -63,8 +81,9 @@ float4 GroundClip(float3 world) {
 float GroundEdgeFactor(float3 a, float3 b) {
     const float4 params = FrParams.groundParams;
     const float3 ab = b - a;
-    const float t = saturate(dot(FrParams.waterCamera.xyz - a, ab) / max(dot(ab, ab), 1e-4f));
-    const float cameraDistance = distance(a + ab * t, FrParams.waterCamera.xyz);
+    const float3 camera = GroundCameraPosition();
+    const float t = saturate(dot(camera - a, ab) / max(dot(ab, ab), 1e-4f));
+    const float cameraDistance = distance(a + ab * t, camera);
     if (cameraDistance > params.w) {
         return 1.0f;
     }
@@ -140,7 +159,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
     const float3 normal = cross(b - a, c - a);
     const float normalLength = length(normal);
     const float3 world = v.furAnchor.xyz;
-    const float cameraDistance = distance(world, FrParams.waterCamera.xyz);
+    const float cameraDistance = distance(world, GroundCameraPosition());
     // Left as it is on a wall or a sliver, far off, and (below) at the triangle's own edges.
     float fade = 1.0f - smoothstep(FrParams.groundParams.w * 0.75f, FrParams.groundParams.w, cameraDistance);
     if ((normalLength <= 1e-6f) || (abs(normal.y) < GroundFloorShare * normalLength) || (FrParams.groundParams.x <= 0.0f)) {
@@ -200,7 +219,7 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
         // Down by the texture's depth in world units: the Displaced ground setting at its picked depth.
         const uint fineDepth = (bits & RASTER_PARALLAX_FINE_DEPTH) >> RASTER_PARALLAX_FINE_DEPTH_SHIFT;
         const float depthScale = (fineDepth != 0) ? (float(fineDepth) * 0.1f) : 1.0f;
-        float4 up = FrParams.waterClipUp * (-depthAt * FrParams.groundParams.x * depthScale);
+        float4 up = GroundClipUp() * (-depthAt * FrParams.groundParams.x * depthScale);
         up.xy = up.xy * gConstants.screenScale + gConstants.screenOffset * up.w;
 #ifdef __spirv__
         up.y = -up.y;

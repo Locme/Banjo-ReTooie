@@ -332,6 +332,7 @@ namespace RT64 {
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     static std::atomic<bool> rayTracingHalf{ false };
+    static std::atomic<float> rayDetailDistances[2] = { 2000.0f, 4000.0f };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
     // Traced light beams: strength, then the room's light direction (world, towards it), or 0 for the sun.
@@ -549,6 +550,11 @@ namespace RT64 {
 
     void SetSceneRayTracingHalf(bool enabled) {
         rayTracingHalf.store(enabled);
+    }
+
+    void SetSceneRayDetailDistances(float half, float quarter) {
+        rayDetailDistances[0].store(std::max(half, 0.0f));
+        rayDetailDistances[1].store(std::max(quarter, 0.0f));
     }
 
     void SetSceneRayTracingPlayerShadows(bool enabled) {
@@ -1366,6 +1372,20 @@ namespace RT64 {
         return interop::float4{ t.x - b * t.z, t.y - b * t.w, a * t.z, a * t.w };
     }
 
+    bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
+        float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms)
+    {
+        // As ComputeSceneGrass works out grassDepthTerms and grassProjection.
+        const float (&m)[4][4] = projection.m;
+        if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
+            return false;
+        }
+        const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
+        depthTerms = DepthTermsForViewport(rowVector ? interop::float4{ m[2][2], m[3][2], m[2][3], m[3][3] } : interop::float4{ m[2][2], m[2][3], m[3][2], m[3][3] }, viewportScale.z, viewportTranslate.z);
+        projectionTerms = { m[0][0], m[1][1], viewportWidth, viewportHeight };
+        return true;
+    }
+
     bool ComputeSceneFur(const interop::float4x4 &projection, const interop::float4x4 &viewProj, const interop::float3 &viewportScale,
         const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::FrameParams &frameParams)
     {
@@ -2036,8 +2056,8 @@ namespace RT64 {
     }
 
     float SceneSnowZoom(const interop::FrameParams &frameParams) {
-        // grassProjection.y is the projection's 1 / tan(half the field of view): about 2 for the game's usual camera.
-        return std::clamp(SnowUsualFov / std::max(frameParams.grassProjection.y, 1e-3f), 0.2f, 1.0f);
+        // snowCamera.w is the projection's 1 / tan(half the field of view): about 2 for the game's usual camera.
+        return std::clamp(SnowUsualFov / std::max(frameParams.snowCamera.w, 1e-3f), 0.2f, 1.0f);
     }
 
     uint32_t SceneSnowShellsAt(float distanceToCamera, const interop::FrameParams &frameParams) {
@@ -2069,10 +2089,19 @@ namespace RT64 {
     static std::mutex waterTessMutex;
     static WaterTessShared waterTessShared;
 
+    void QueueGroundShaders();
+
     void SetSceneGroundDisplacement(float amount, float reach) {
-        const std::scoped_lock lock(effectsMutex);
-        effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
-        effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
+        {
+            const std::scoped_lock lock(effectsMutex);
+            effectsSettings.groundDisplacement = std::clamp(amount, 0.0f, 1.0f);
+            effectsSettings.groundReach = std::clamp(reach, 500.0f, 50000.0f);
+        }
+
+        // The floors' displaced shaders compile with the shader list from now on, not on a first visit.
+        if (amount > 0.0f) {
+            QueueGroundShaders();
+        }
     }
 
     float SceneGroundDisplacement() {
@@ -2080,30 +2109,24 @@ namespace RT64 {
         return effectsSettings.groundDisplacement;
     }
 
-    // (Also the camera terms displaced ground uses, GroundTess.hlsl: they are the water's.)
-    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
-        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
-        interop::FrameParams &frameParams)
+    // A world camera's map from world space to clip space as RasterVS places the vertices (row r of toClip gives clip
+    // component r), and the camera's world position. False for a projection that isn't a perspective one.
+    static bool SceneCameraToClip(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution,
+        double (&toClip)[4][4], double (&camera)[3])
     {
-        SceneEffectsSettings settings = GetSceneEffects();
-        frameParams.waterCamera.w = 0.0f;
-        frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
-        const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
-        const bool ground = settings.groundDisplacement > 0.0f;
-        if ((!water && !ground) || (resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
-            return 0;
+        if ((resolution.x <= 0.0f) || (resolution.y <= 0.0f)) {
+            return false;
         }
-        UsePlayerFrame(settings, workloadId);
 
         // As ComputeSceneGrass: row-vector matrices told apart by the projection, and RasterVS's positions.
         const float (&m)[4][4] = projection.m;
         const bool rowVector = std::abs(m[2][3] + 1.0f) <= std::abs(m[3][2] + 1.0f);
         if ((std::abs(m[2][3] + 1.0f) > 0.01f) && (std::abs(m[3][2] + 1.0f) > 0.01f)) {
-            return 0;
+            return false;
         }
         const float halfWidth = resolution.x / 2.0f;
         const float halfHeight = resolution.y / 2.0f;
-        double toClip[4][4];
         for (int j = 0; j < 4; j++) {
             float c[4];
             for (int k = 0; k < 4; k++) {
@@ -2113,6 +2136,57 @@ namespace RT64 {
             toClip[1][j] = c[1] * (viewportScale.y / halfHeight) - c[3] * ((viewportTranslate.y - halfHeight) / halfHeight);
             toClip[2][j] = c[2] * viewportScale.z + c[3] * viewportTranslate.z;
             toClip[3][j] = c[3];
+        }
+
+        // The camera: view space's origin in the world.
+        double viewD[4][4], viewInverse[4][4];
+        for (int r = 0; r < 4; r++) {
+            for (int c = 0; c < 4; c++) {
+                viewD[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
+            }
+        }
+        if (!InvertMatrix4(viewD, viewInverse)) {
+            return false;
+        }
+        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
+        camera[0] = viewInverse[3][0];
+        camera[1] = viewInverse[3][1];
+        camera[2] = viewInverse[3][2];
+        return true;
+    }
+
+    bool SceneGroundCamera(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::float4 *terms)
+    {
+        double toClip[4][4], camera[3];
+        if (!SceneCameraToClip(projection, view, viewProj, viewportScale, viewportTranslate, resolution, toClip, camera)) {
+            return false;
+        }
+        for (int r = 0; r < 4; r++) {
+            terms[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
+        }
+        terms[4] = { float(camera[0]), float(camera[1]), float(camera[2]), 0.0f };
+        return true;
+    }
+
+    // (Displaced ground takes each framebuffer's own camera terms, FrameParams.groundCameras.)
+    uint32_t ComputeSceneWater(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, uint64_t workloadId,
+        interop::FrameParams &frameParams)
+    {
+        SceneEffectsSettings settings = GetSceneEffects();
+        frameParams.waterCamera.w = 0.0f;
+        frameParams.groundParams = { 0.0f, 0.0f, 0.0f, 0.0f };
+        const bool water = settings.modernWater && (settings.waterDetail > 0.0f);
+        const bool ground = settings.groundDisplacement > 0.0f;
+        if (!water && !ground) {
+            return 0;
+        }
+        UsePlayerFrame(settings, workloadId);
+
+        double toClip[4][4], camera[3];
+        if (!SceneCameraToClip(projection, view, viewProj, viewportScale, viewportTranslate, resolution, toClip, camera)) {
+            return 0;
         }
         double inverse[4][4];
         if (!InvertMatrix4(toClip, inverse)) {
@@ -2125,25 +2199,8 @@ namespace RT64 {
             frameParams.waterWorldToClip[r] = { float(toClip[r][0]), float(toClip[r][1]), float(toClip[r][2]), float(toClip[r][3]) };
         }
 
-        // The camera: view space's origin in the world.
-        float v[4][4];
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 4; c++) {
-                v[r][c] = rowVector ? view.m[r][c] : view.m[c][r];
-            }
-        }
-        double viewD[4][4], viewInverse[4][4];
-        for (int r = 0; r < 4; r++) {
-            for (int c = 0; c < 4; c++) {
-                viewD[r][c] = v[r][c];
-            }
-        }
-        if (!InvertMatrix4(viewD, viewInverse)) {
-            return 0;
-        }
-        // (Row vectors: a point is p * M, so the origin's place is the inverse's last row.)
         const float detail = settings.waterDetail;
-        frameParams.waterCamera = { float(viewInverse[3][0]), float(viewInverse[3][1]), float(viewInverse[3][2]), water ? detail : 0.0f };
+        frameParams.waterCamera = { float(camera[0]), float(camera[1]), float(camera[2]), water ? detail : 0.0f };
 
         // Displaced ground: the deepest part of a texture is pushed down by up to 16 units at the full setting, cut into at
         // most 16 pieces an edge no shorter than 12 units, fading out over 1400 to 2800 units from the camera.
@@ -2565,7 +2622,7 @@ namespace RT64 {
         // dropping to the depth march and its shadow map, which made the shadows come and go.
         // The lights are written every pass, whatever the casters.
         if (res.lightsBuffer == nullptr) {
-            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 3)));
+            res.lightsBuffer = worker->device->createBuffer(RenderBufferDesc::UploadBuffer(16 * (SceneMaxLights + 4)));
             res.lightsBuffer->setName("Scene Effects lights");
         }
         if (res.radianceBuffer == nullptr) {
@@ -2575,7 +2632,7 @@ namespace RT64 {
         if (res.lightsBuffer != nullptr) {
             const SceneEffectsSettings lightSettings = GetSceneEffects();
             float *mapped = reinterpret_cast<float *>(res.lightsBuffer->map());
-            memset(mapped, 0, 16 * (SceneMaxLights + 3));
+            memset(mapped, 0, 16 * (SceneMaxLights + 4));
             mapped[0] = float(lightSettings.lightCount);
             mapped[1] = rayTracingHitColours.load() ? 1.0f : 0.0f;
             mapped[2] = rayTracingSmoothing.load();
@@ -2606,17 +2663,20 @@ namespace RT64 {
             // then Tiles times 256, then Smooth times 65536.
             mapped[11] = !rayScenesShine.load() ? 0.0f : std::round(rayTracingMaterials[0].load() * 100.0f) + std::round(rayTracingMaterials[1].load() * 100.0f) * 256.0f +
                 std::round(rayTracingMaterials[2].load() * 100.0f) * 65536.0f;
-            memcpy(mapped + 12, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
+            // Ray detail by distance: past the first the rays a pixel are halved, past the second quartered (0 for never).
+            mapped[12] = rayDetailDistances[0].load();
+            mapped[13] = rayDetailDistances[1].load();
+            memcpy(mapped + 16, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
             // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
             // (SceneLightSourceW).
             for (uint32_t i = 0; i < std::min(lightSettings.lightCount, SceneMaxLights); i++) {
-                mapped[12 + i * 4 + 3] = std::floor(mapped[12 + i * 4 + 3]);
+                mapped[16 + i * 4 + 3] = std::floor(mapped[16 + i * 4 + 3]);
             }
             // The lit lamps after the level's lights.
             {
                 const std::scoped_lock lampLock(lampMutex);
                 const uint32_t lamps = std::min(lampLightCount, SceneMaxLights - std::min(lightSettings.lightCount, SceneMaxLights));
-                memcpy(mapped + 12 + lightSettings.lightCount * 4, lampLights, size_t(lamps) * 4 * sizeof(float));
+                memcpy(mapped + 16 + lightSettings.lightCount * 4, lampLights, size_t(lamps) * 4 * sizeof(float));
                 mapped[0] = float(lightSettings.lightCount + lamps);
             }
             res.lightsBuffer->unmap();
@@ -3564,7 +3624,7 @@ namespace RT64 {
             res.sceneSetBvh = nullptr;
             if (worker->device->getCapabilities().rayQuery && res.bvhReady) {
                 res.sceneSet->setAccelerationStructure(res.sceneSet->gSceneBVH, res.bvhTlas.get());
-                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 3));
+                res.sceneSet->setBuffer(res.sceneSet->gLights, res.lightsBuffer.get(), 16 * (SceneMaxLights + 4));
                 res.sceneSet->setBuffer(res.sceneSet->gRadianceCache, res.radianceBuffer.get(), 8ull << 20);
                 res.sceneSetBvh = res.bvhTlas.get();
             }

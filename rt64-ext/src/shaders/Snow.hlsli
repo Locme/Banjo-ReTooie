@@ -153,11 +153,11 @@ float SnowHeight(float surface, float3 trail) {
 // and its distance from the camera. (The shells reach snowParams.z; the tessellated snow, cheap far away, much further,
 // snowLod.y.)
 float SnowThin(float3 world, out float cameraDistance, float reach) {
-    const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
+    const float3 camera = FrParams.snowCamera.xyz;
     cameraDistance = distance(world, camera);
     // (As far as the snow's reach goes, a camera zoomed in brings it nearer, SceneSnowZoom, and the snow round Banjo is
     // never far, SceneSnowNearBanjo: Chilly Willy's fight watches him from far back.)
-    float reachDistance = cameraDistance * clamp(2.2f / max(FrParams.grassProjection.y, 1e-3f), 0.2f, 1.0f);
+    float reachDistance = cameraDistance * clamp(2.2f / max(FrParams.snowCamera.w, 1e-3f), 0.2f, 1.0f);
     if (FrParams.snowPlayer.w > 0.0f) {
         reachDistance = min(reachDistance, distance(world, float3(FrParams.snowPlayer.x, FrParams.snowPlayer.z, FrParams.snowPlayer.y)) + 600.0f);
     }
@@ -441,7 +441,7 @@ bool SnowShellShade(float3 world, float3 baseColor, float share, SnowSample s, b
 
     // A few glints in the sun close by, each catching the light from some places and not others.
     if (s.cameraDistance < 700.0f) {
-        const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
+        const float3 camera = FrParams.snowCamera.xyz;
         const float3 glint = GrassHash(floor(world.xz * 1.6f) + floor(camera.xz * 0.04f) * 17.0f);
         if ((glint.x > 0.992f) && (s.height - s.shellY < FrParams.snowParams.y * 0.12f)) {
             shade += 0.35f * (1.0f - s.cameraDistance / 700.0f) * glint.y;

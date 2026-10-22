@@ -1,5 +1,54 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T549 175 FPS in Terrydactyland: shown frames and renderer CPU (mailbox presenting + cheaper texture seams)
+- Asked: 2026-10-22 14:46 UTC
+- Build: main @ fdca435
+- Steps:
+  1. Pull main (fdca435 or later) and build, Vulkan API
+  2. Game Frame Rate 175 FPS, overlay Full
+  3. Stand where your last 175 FPS overlay was taken in Terrydactyland and wait 10 s
+  4. Send the overlay
+  5. Optional: General > DEV > Blend texture seams off, then send the overlay again
+- Look for: The top fps close to the Game fps (it was 53 shown with the game at 99). Renderer CPU draws lower than 2.07 ms. Input latency at or below the old 30 ms. No tearing, no new stutter. Seams on the title screen logo still blended.
+- Status: waiting for L
+
+## T548 Displaced ground in every framebuffer
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Displaced ground on, HD Shadows on, in Isle o' Hags (the world is drawn in two framebuffers there) and Terrydactyland
+  2. Walk and turn the camera past the spots where parallax flickered (T547)
+- Look for: floors that jump, go flat, vanish or flicker for a frame. Each framebuffer now places its ground with its own camera.
+- Status: waiting for L
+
+## T547 Parallax flicker (each world pass has its own camera)
+- Asked: 2026-10-22 13:20 UTC
+- Build: main
+- Steps:
+  1. Parallax at 100, HD shadows on as you play them
+  2. Play where you saw parallax flatten out and come back, walking past walls and things that cast shadows
+- Look for: Whether parallax still turns itself off and on
+- Status: waiting for L
+
+## T546 Displaced ground shaders built at start
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Graphics > Shaders > Displaced ground above 0, then close the game
+  2. Start the game again: "Compiling shaders N%" counts the floors' displaced shaders too (the log says "compiling N displaced ground shaders")
+  3. Once it reaches 100%, go into a level you have visited before (Terrydactyland, Mayahem Temple)
+- Look for: no hitch or flat floor that turns displaced a moment later on entering. Turning Displaced ground on in the menu starts the same compile at once.
+- Status: waiting for L
+
+## T545 Ray detail distances (half and quarter)
+- Asked: 2026-10-22 12:55 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full, in an open level (Terrydactyland, Spiral Mountain from a high spot)
+  2. Note "traced effects" with Graphics > Ray Tracing > Ray detail distance (half) and (quarter) both at 0 (all the rays), then at their defaults 2000 and 4000
+  3. Look at far shadows and light beams with the defaults
+- Look for: Traced effects lower with the defaults in open levels (headless Spiral Mountain about 197 -> 165 ms), little change indoors. Far shadows may look a little grainier; if they do, raise the distances
+- Status: waiting for L
 ## T540 Shader pipeline cache (Vulkan)
 - Asked: 2026-10-22 UTC
 - Build: claude/project-thread-6bme9v (not built on a PC yet)
@@ -894,7 +943,7 @@
   4. Left click a row, right click to go back
   5. Use a controller in the ESC menu and move the mouse over rows without clicking
 - Look for: The hand follows the mouse to what it is over and a left click presses A; right click is B; in the copy, erase and yes/no screens a left click is A (no hover there yet); with a controller the mouse position does not light up rows until you click; QOL > Mouse in the game's menus turns it off
-- UNTESTED, 2026-10-21: free hand is always on now (no toggle); Start menu: Up on the first row goes to the last row, the mouse wheel moves the highlight a row a notch (scrolls the list). Earlier, 2026-10-20 21:40: free hand now moves by how far the cursor moved each frame (L's log showed it ran away because it re-added the full offset every frame); QOL > Free hand on the save select must be on. Earlier, 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
+- 2026-10-22 (L): the mouse no longer controls the save select at all (WASD only); Start menu mouse stays. Earlier, UNTESTED, 2026-10-21: free hand is always on now (no toggle); Start menu: Up on the first row goes to the last row, the mouse wheel moves the highlight a row a notch (scrolls the list). Earlier, 2026-10-20 21:40: free hand now moves by how far the cursor moved each frame (L's log showed it ran away because it re-added the full offset every frame); QOL > Free hand on the save select must be on. Earlier, 16:40: free hand rebuilt (fitted from the spots' world positions, no axis guess); QOL > Free hand turns it off; tell me if it still leaves the screen. Earlier, 15:10: Start menu rows are now picked at once under the mouse (no sound for the jump); a pad stick move on the save select hands it back to the pad; the free hand broke Save 2 and is off by default (QOL option). Earlier note: the save select hand follows the cursor exactly (no snapping); geometry is guessed. If it moves the wrong way or vanishes, tell me which; QOL > Free hand on the save select turns it off
 
 ## T448 Extended draw distance: the frozen Sabreman and his ice stay drawn far away
 - Asked: 2026-10-20 08:41 UTC

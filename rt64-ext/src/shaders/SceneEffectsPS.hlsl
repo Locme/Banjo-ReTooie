@@ -889,6 +889,17 @@ bool PlayerShadowsOff() {
     return (uint(asfloat(gLights.Load(36)) + 0.5f) & 1u) != 0u;
 }
 
+// Ray detail by distance (Graphics > Ray detail distances, the lights buffer's header): 0 all the rays, 1 half (past the
+// first distance), 2 a quarter (past the second); a distance of 0 never.
+uint RayDetail(float distance) {
+    const float half = asfloat(gLights.Load(48));
+    const float quarter = asfloat(gLights.Load(52));
+    if ((quarter > 0.0f) && (distance > quarter)) {
+        return 2u;
+    }
+    return ((half > 0.0f) && (distance > half)) ? 1u : 0u;
+}
+
 // Half-resolution ray tracing: the sun's traced shadows and the traced light beams come from the indirect pass's lower
 // half (one ray set for each 2x2 pixels), see TracedHalfAt.
 bool HalfTraced() {
@@ -1149,7 +1160,7 @@ float3 TracedBeams(int2 pixel, float depth) {
     const float3 look = surface / max(length(surface), 1e-3f);
     // Fewer steps outdoors, where the haze is thin and the shafts soft (the beams were over half the traced pass's time,
     // L 2026-10-21: performance very bad); the Bayer offsets below spread the steps between neighbouring pixels.
-    const int Samples = room ? 8 : 4;
+    const int Samples = max((room ? 8 : 4) >> RayDetail(reach), 1);
     const float step = reach / float(Samples);
     const int2 cell = pixel & 3;
     const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
@@ -1417,8 +1428,12 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     // pixels cover the disc as four did, at half the cost (L, 2026-10-22: Bottles' House at 20 fps).
     const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f;
     uint traced = 0u;
+    // Fewer lights and rays far off (Ray detail distances): six lights at two rays, three at one, then one at one.
+    const uint detail = RayDetail(-center.z);
+    const uint mostTraced = (detail == 0u) ? 6u : ((detail == 1u) ? 3u : 1u);
+    const int rays = (detail == 0u) ? 2 : 1;
     [loop] for (uint i = 0u; i < count; i++) {
-        const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
+        const float4 light = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = light.xyz - start;
         const float distance = length(toLight);
         const float radius = LightSourceRadius(light.w);
@@ -1432,7 +1447,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
         // At most six lights traced a pixel (a room full of lamps traced every one).
-        if ((facing <= 0.0f) || (traced >= 6u) || (gLampHalf == 2)) {
+        if ((facing <= 0.0f) || (traced >= mostTraced) || (gLampHalf == 2)) {
             continue;
         }
         traced++;
@@ -1444,12 +1459,15 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         const float3 across = cross(direction, side);
         float visible = 0.0f;
         [unroll] for (int k = 0; k < 2; k++) {
+            if (k >= rays) {
+                break;
+            }
             const float angle = float(k) * 3.1415927f + turn;
             const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * discRadius;
             const float3 toTarget = target - start;
             const float reach = length(toTarget) - stopShort;
             if (reach <= 1.0f) {
-                visible += 0.5f;
+                visible += 1.0f / float(rays);
                 continue;
             }
             RayDesc ray;
@@ -1458,7 +1476,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             ray.TMin = 0.0f;
             ray.TMax = reach;
             // Banjo casts his shadow from the lamps too.
-            visible += 0.5f * TraceLampVisible(ray, light.xyz, radius);
+            visible += TraceLampVisible(ray, light.xyz, radius) / float(rays);
         }
         lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
     }
@@ -1699,7 +1717,7 @@ float3 PathDirectLight(float3 at, float3 normal) {
     uint traced = 0u;
     // One lamp a hop (three made path tracing the dearest part of a room full of lamps, L 2026-10-22).
     [loop] for (uint i = 0u; (i < count) && (traced < 1u); i++) {
-        const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
+        const float4 lamp = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = lamp.xyz - worldStart;
         const float distance = length(toLight);
         const float radius = LightSourceRadius(lamp.w);
@@ -1826,7 +1844,7 @@ float3 TracedSubsurface(float3 center, float3 normal) {
     const float3 worldNormal = normalize(ViewToWorldDirection(normal));
     uint traced = 0u;
     [loop] for (uint i = 0u; (i < count) && (traced < 1u); i++) {
-        const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
+        const float4 lamp = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = lamp.xyz - worldBehind;
         const float distance = length(toLight);
         const float radius = LightSourceRadius(lamp.w);
@@ -4108,6 +4126,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         const float spread = lerp(0.006f, 0.04f, softness);
         const int Rays = 4;
         const bool onBanjo = InsideBanjo(ViewToWorldPoint(center));
+        const uint sunDetail = RayDetail(distance);
         float blocked = 0.0f;
         // Two rays across the cone first; only where they disagree (the shadow's soft edge) the other two are traced.
         // Half-resolution ray tracing reads what the indirect pass traced instead (gSunHalf 2).
@@ -4122,6 +4141,10 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
         }
         [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2); k++) {
             if ((k == 2) && ((blocked == 0.0f) || (blocked == 2.0f))) {
+                break;
+            }
+            // Far off (Ray detail distances) one ray.
+            if ((k == 1) && (sunDetail > 0u)) {
                 break;
             }
             traced++;
@@ -4504,7 +4527,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
             const float3 world = ViewToWorldPoint(surface);
             const uint lightCount = uint(asfloat(gLights.Load(0)) + 0.5f);
             for (uint i = 0u; i < lightCount; i++) {
-                const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
+                const float4 light = asfloat(gLights.Load4(16u * (i + 4u)));
                 const float near = length(world - light.xyz);
                 if (near < 60.0f) {
                     return float4(float3(1.0f, 0.1f, 1.0f) * (1.0f - near / 80.0f), 0.0f);

@@ -866,7 +866,8 @@ void tooie::init_config() {
                                        &tooie::picture_filters::ray_tracing_brdf_option, &tooie::picture_filters::ray_tracing_subsurface_option,
                                        &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
                                        &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
-                                       &tooie::picture_filters::ray_tracing_hit_colours_option, &tooie::picture_filters::ray_tracing_half_option }) {
+                                       &tooie::picture_filters::ray_tracing_hit_colours_option, &tooie::picture_filters::ray_tracing_half_option,
+                                       &tooie::picture_filters::ray_detail_half_option, &tooie::picture_filters::ray_detail_quarter_option }) {
         recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
     }
     recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");

@@ -348,6 +348,8 @@ namespace RT64 {
     void SetSceneRayTracingPlayerShadows(bool enabled);
     // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
     void SetSceneRayTracingHalf(bool enabled);
+    // Graphics > Ray detail distances: past the first, half the traced rays a pixel; past the second, a quarter (0 for never).
+    void SetSceneRayDetailDistances(float half, float quarter);
     // Banjo-Tooie: Traced light beams, 0 off to 1; direction (world, towards the light) for a room whose light comes
     // in at its windows from a known way, or null for the sun.
     void SetSceneTracedBeams(float strength, const float *direction);
@@ -545,6 +547,14 @@ namespace RT64 {
     void FinishScenePick();
     // Fills the frame's parallax terms (after ComputeSceneGrass filled the camera's). False when it is off.
     bool ComputeSceneParallax(interop::FrameParams &frameParams);
+    // The camera terms parallax mapping finds a pixel's place with (FrameParams.parallaxCameras), for a draw's projection
+    // and its framebuffer's viewport. False for a projection that isn't a perspective one.
+    bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
+        float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms);
+    // Displaced ground's camera terms for a draw's framebuffer (FrameParams.groundCameras): the world to clip space map's
+    // four rows, then the camera's world position. False for a projection that isn't a perspective one.
+    bool SceneGroundCamera(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::float4 *terms);
     // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none or when the original
     // textures are off (only meaningful after ComputeSceneParallax returned true).
     uint32_t SceneParallaxTexture(uint64_t hash);
