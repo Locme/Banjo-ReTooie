@@ -2,7 +2,7 @@
 
 ## T529 Terrydactyland sand frame rate (edge cache)
 - Asked: 2026-10-22 10:28 UTC
-- Build: main abd3bef or later (adds an 'Effects setup' line to the overlay)
+- Build: main 9beb710 or later (edges worked out on another thread; overlay shows how many times)
 - Steps:
   1. Graphics: Tessellated sand on, Parallax off, Frame overlay on Full
   2. Go to Terrydactyland and stand on the sand
