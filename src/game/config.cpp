@@ -626,16 +626,6 @@ void tooie::init_config() {
         "Free camera: invert up/down",
         "Reverses which way the right stick tilts the free camera.",
         false);
-    qol.add_enum_option(
-        tooie::free_camera_ease_back_option,
-        "Free camera: ease back",
-        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it.",
-        {
-            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
-            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
-            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
-        },
-        tooie::FreeCameraEaseBack::Off);
     qol.add_bool_option(
         tooie::free_camera_smooth_walls_option,
         "Free camera: smooth walls",
@@ -643,7 +633,7 @@ void tooie::init_config() {
         false);
     tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
-                                   &tooie::free_camera_invert_y_option, &tooie::free_camera_ease_back_option,
+                                   &tooie::free_camera_invert_y_option,
                                    &tooie::free_camera_smooth_walls_option }) {
         qol.add_option_hidden_dependency(*id, tooie::free_camera_option, false);
     }
@@ -728,9 +718,31 @@ void tooie::init_config() {
         "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
         false);
     tooie::menu_mouse::add_options(graphics);
+    graphics.add_enum_option(
+        tooie::free_camera_ease_back_option,
+        "Free camera: ease back",
+        "A second after you let go of the right stick, the camera drifts back behind Banjo. <recomp-color primary>Flying only</recomp-color> does it while flying, <recomp-color primary>Always</recomp-color> also while running or swimming. Standing still leaves the camera where you turned it. On by default (Always) while it is tested here.",
+        {
+            {tooie::FreeCameraEaseBack::Off, "Off", "Off"},
+            {tooie::FreeCameraEaseBack::Flying, "Flying", "Flying only"},
+            {tooie::FreeCameraEaseBack::Always, "Always", "Always"},
+        },
+        tooie::FreeCameraEaseBack::Always);
+    graphics.add_bool_option(
+        tooie::free_camera_floor_clearance_option,
+        "Free camera: floor clearance",
+        "Keeps the free camera a little above the floor under it, so tilting the camera low cannot push it into the ground.",
+        false);
+    graphics.add_bool_option(
+        tooie::free_camera_look_up_option,
+        "Free camera: look up",
+        "Pushing the right stick (or mouse) up past the lowest the camera can go swings it down near the ground and then tips the view up, to about 80 degrees, so tall things show. Only the picture moves, not the game's camera or collision.",
+        false);
     {
         namespace pf = tooie::picture_filters;
-        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option, &pf::grass_section_option,
+        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option,
+                &tooie::free_camera_ease_back_option, &tooie::free_camera_floor_clearance_option,
+                &tooie::free_camera_look_up_option, &pf::grass_section_option,
                 &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
                 &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
                 &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
@@ -743,6 +755,9 @@ void tooie::init_config() {
         // WIP heading.
         recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
         recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_ease_back_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_floor_clearance_option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::free_camera_look_up_option, pf::grass_section_option);
         recompui::config::set_option_group(tooie::dive::option, "WIP");
     }
     graphics.add_bool_option(

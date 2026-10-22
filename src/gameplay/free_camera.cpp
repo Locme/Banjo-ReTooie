@@ -18,7 +18,7 @@
 // dynamic camera keeps its own position (+0x74) and rotation (+0x80), so the
 // game's camera logic is left as it was and only the picture moves.
 //
-// Ease back (QOL > Free camera: ease back, off by default): a second after the stick is let go while
+// Ease back (WIP > Free camera: ease back, Always by default while it is tested): a second after the stick is let go while
 // Banjo flies (Flying only) or flies or moves (Always), the held yaw, elevation, aim and zoom ease
 // towards the game's own camera, which keeps chasing the spot behind Banjo underneath; once they
 // meet, the game's camera takes over again.
@@ -95,6 +95,12 @@ namespace {
     // camera when the stick is first used.
     constexpr float min_aim = -5.0f;
     constexpr float max_aim = 20.0f;
+    // Look-up tilt (WIP): the eye may swing this low, and the view aims up to this many degrees.
+    constexpr float look_min_elevation = -30.0f;
+    constexpr float look_max_pitch = 80.0f;
+    // Floor clearance (WIP): the downward line test runs from this far above the camera to this far below it.
+    constexpr float floor_probe_up = 40.0f;
+    constexpr float floor_probe_down = 60.0f;
     constexpr float stick_deadzone = 0.2f;
     // Distance, as a multiple of the game's, reached by pushing on past the tilt limits.
     constexpr float min_zoom = 0.25f;
@@ -129,6 +135,7 @@ namespace {
         float elevation = 0.0f; // held height of the camera above the pivot, in degrees
         float aim = 0.0f;       // view pitch plus elevation: how far above the pivot the camera looks
         float zoom = 1.0f;     // times the game's distance
+        float look = 0.0f;      // look-up tilt: degrees the view is raised past the lowest eye height
         float idle = 0.0f;      // seconds since the stick was last used
         float wall = 1.0f;      // smooth walls: the camera's distance as a fraction of the wanted one
         float banjo[3] = { 0, 0, 0 }; // Banjo's position last step, for his speed
@@ -152,6 +159,16 @@ namespace {
     T option(const std::string& id, T fallback) {
         try {
             return std::get<T>(recompui::config::get_config(tooie::qol_tab_id).get_option_value(id));
+        } catch (...) {
+            return fallback;
+        }
+    }
+
+    // The WIP tab's options live in the Graphics config (graphics.json).
+    template <typename T>
+    T wip_option(const std::string& id, T fallback) {
+        try {
+            return std::get<T>(recompui::config::get_config(recompui::config::graphics::id).get_option_value(id));
         } catch (...) {
             return fallback;
         }
@@ -336,12 +353,13 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.elevation = std::clamp(game_elevation(pos, banjo), min_elevation, max_elevation);
             state.aim = std::clamp(signed_degrees(rot[0]) + game_elevation(pos, banjo), min_aim, max_aim);
             state.zoom = 1.0f;
+            state.look = 0.0f;
             state.wall = 1.0f;
         }
         state.idle = stick ? 0.0f : state.idle + dt;
 
         // Ease back towards the game's camera, which is behind Banjo while he moves.
-        const auto ease_back = option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Off);
+        const auto ease_back = wip_option<uint32_t>(tooie::free_camera_ease_back_option, (uint32_t)tooie::FreeCameraEaseBack::Always);
         const bool flying = std::find(std::begin(flying_states), std::end(flying_states), player_state) != std::end(flying_states);
         easing = state.active && state.idle >= ease_delay &&
             ((ease_back == (uint32_t)tooie::FreeCameraEaseBack::Flying && flying) ||
@@ -354,11 +372,12 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             state.elevation += (elevation - state.elevation) * k;
             state.aim += (aim - state.aim) * k;
             state.zoom += (1.0f - state.zoom) * k;
+            state.look -= state.look * k;
             state.wall += (1.0f - state.wall) * k;
             if (std::fabs(angle_delta(rot[1], state.yaw)) < ease_done_degrees &&
                 std::fabs(elevation - state.elevation) < ease_done_degrees &&
                 std::fabs(aim - state.aim) < ease_done_degrees &&
-                std::fabs(1.0f - state.zoom) < 0.01f && state.wall > 0.99f) {
+                std::fabs(1.0f - state.zoom) < 0.01f && state.look < ease_done_degrees && state.wall > 0.99f) {
                 // Caught up: the game's camera is back in charge.
                 state.active = false;
             }
@@ -390,7 +409,19 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
             // reverses that first.
             const float horizontal = std::sqrt(rx * rx + rz * rz);
             const float distance = std::sqrt(horizontal * horizontal + oy * oy);
+            const bool look_up = wip_option<bool>(tooie::free_camera_look_up_option, false);
+            const float low_limit = look_up ? look_min_elevation : min_elevation;
             float tilt_left = tilt_input;
+            // Look-up tilt: a push past the lowest eye height raises the view instead of closing in; tilting
+            // back lowers the view first.
+            if (look_up && tilt_left > 0.0f && state.look > 0.0f) {
+                const float used = std::min(tilt_left, state.look);
+                state.look -= used;
+                tilt_left -= used;
+            }
+            if (!look_up) {
+                state.look = 0.0f;
+            }
             if (tilt_left < 0.0f && state.zoom > 1.0f) {
                 const float used = std::max(tilt_left, (1.0f - state.zoom) / zoom_rate);
                 state.zoom += used * zoom_rate;
@@ -402,9 +433,14 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 tilt_left -= used;
             }
             float wanted = state.elevation + tilt_left;
-            if (wanted < min_elevation) {
-                state.zoom = std::max(min_zoom, state.zoom - (min_elevation - wanted) * zoom_rate);
-                wanted = min_elevation;
+            if (wanted < low_limit) {
+                if (look_up) {
+                    state.look += low_limit - wanted;
+                }
+                else {
+                    state.zoom = std::max(min_zoom, state.zoom - (low_limit - wanted) * zoom_rate);
+                }
+                wanted = low_limit;
             }
             else if (wanted > max_elevation) {
                 state.zoom = std::min(max_zoom, state.zoom + (wanted - max_elevation) * zoom_rate);
@@ -449,10 +485,27 @@ extern "C" void tooie_free_camera(uint8_t* rdram, recomp_context* ctx) {
                 state.wall = 1.0f;
             }
 
+            // Floor clearance (WIP): a low tilt can swing the eye into the floor, so lift it onto the floor
+            // under it (the camera line test's resting point is its radius above the surface).
+            if (wip_option<bool>(tooie::free_camera_floor_clearance_option, false)) {
+                const float from[3] = { want[0], want[1] + floor_probe_up, want[2] };
+                float down[3] = { want[0], want[1] - floor_probe_down, want[2] };
+                if (sweep(rdram, ctx, from, down) && down[1] > want[1]) {
+                    want[1] = down[1];
+                }
+            }
+
+            // Look-up tilt: the view aims further up, to look_max_pitch, without moving the eye.
+            float view_pitch = state.aim - wanted;
+            if (state.look > 0.0f) {
+                state.look = std::min(state.look, std::max(0.0f, look_max_pitch - view_pitch));
+                view_pitch += state.look;
+            }
+
             write_float(rdram, camera + cam_pos + 0, want[0]);
             write_float(rdram, camera + cam_pos + 4, want[1]);
             write_float(rdram, camera + cam_pos + 8, want[2]);
-            write_float(rdram, camera + cam_rot + 0, wrap_degrees(state.aim - wanted));
+            write_float(rdram, camera + cam_rot + 0, wrap_degrees(view_pitch));
             write_float(rdram, camera + cam_rot + 4, state.yaw);
         }
     }
