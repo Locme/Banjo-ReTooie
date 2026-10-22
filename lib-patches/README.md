@@ -66,8 +66,9 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
   `ui_config_page_options_menu.cpp`): `recompui::config::set_option_group(option_id, title)`
   puts a heading above that option in its tab (used by the QOL tab).
 * **Vulkan is the default Graphics API** (`recompui/src/config/ui_config_tab_graphics.cpp`):
-  the `api_option` default is Vulkan and the Auto entry is removed (the list is D3D12 and
-  Vulkan on Windows). A saved `graphics.json` with Auto is not migrated. The row is shown
+  the `api_option` default is Vulkan and the Auto entry is removed. D3D12 is left out of the
+  menu (L, 2026-10-22; define `SHOW_D3D12_OPTION` to list it again), so a saved D3D12 loads
+  as Vulkan. A saved `graphics.json` with Auto is not migrated. The row is shown
   in the Graphics tab (upstream hides it); src/game/api_restart.cpp asks to restart when it
   changes.
 * **Live graphics settings** (`recompui/src/config/ui_config_tab_graphics.cpp`):

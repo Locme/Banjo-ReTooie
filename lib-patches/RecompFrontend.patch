@@ -2219,7 +2219,7 @@ index 49e05db..a9dce3a 100644
          virtual ~ConfigPageOptionsMenu() = default;
      };
 diff --git a/recompui/src/config/ui_config_tab_graphics.cpp b/recompui/src/config/ui_config_tab_graphics.cpp
-index 4fdf81f..65fedeb 100644
+index 4fdf81f..6195e47 100644
 --- a/recompui/src/config/ui_config_tab_graphics.cpp
 +++ b/recompui/src/config/ui_config_tab_graphics.cpp
 @@ -22,6 +22,10 @@ namespace recompui {
@@ -2233,15 +2233,20 @@ index 4fdf81f..65fedeb 100644
              {ultramodern::renderer::Resolution::Auto, "Auto", "Auto"},
          };
  
-@@ -52,7 +56,6 @@ namespace recompui {
+@@ -51,9 +55,10 @@ namespace recompui {
+         #define ALLOW_METAL
          #endif
  
++        // D3D12 is left out of the menu (L, 2026-10-22). A saved D3D12 is then not one of the
++        // options, so the config loads the default, Vulkan. Define SHOW_D3D12_OPTION to list it again.
          static EnumOptionVector graphics_api_options = {
 -            {ultramodern::renderer::GraphicsApi::Auto, "Auto"},
-         #ifdef ALLOW_D3D12
+-        #ifdef ALLOW_D3D12
++        #if defined(ALLOW_D3D12) && defined(SHOW_D3D12_OPTION)
              {ultramodern::renderer::GraphicsApi::D3D12, "D3D12"},
          #endif
-@@ -65,9 +68,9 @@ namespace recompui {
+         #ifdef ALLOW_VULKAN
+@@ -65,9 +70,9 @@ namespace recompui {
          };
  
          static EnumOptionVector aspect_ratio_options = {
@@ -2254,7 +2259,7 @@ index 4fdf81f..65fedeb 100644
          };
  
          static EnumOptionVector antialiasing_options = {
-@@ -78,7 +81,7 @@ namespace recompui {
+@@ -78,7 +83,7 @@ namespace recompui {
          };
  
          static EnumOptionVector refresh_rate_options = {
@@ -2263,7 +2268,7 @@ index 4fdf81f..65fedeb 100644
              {ultramodern::renderer::RefreshRate::Display, "Display"},
              {ultramodern::renderer::RefreshRate::Manual, "Manual"},
          };
-@@ -100,6 +103,11 @@ namespace recompui {
+@@ -100,6 +105,11 @@ namespace recompui {
                  default:
                  case ultramodern::renderer::Resolution::Auto:
                      return "Downsampling is not available at auto resolution";
@@ -2275,7 +2280,7 @@ index 4fdf81f..65fedeb 100644
                  case ultramodern::renderer::Resolution::Original:
                      if (ds_option == DownsamplingOption::X2) {
                          return "Rendered in 480p and scaled to 240p";
-@@ -153,7 +161,7 @@ namespace recompui {
+@@ -153,7 +163,7 @@ namespace recompui {
  
          static std::string get_framerate_text(uint32_t refresh_rate) {
              return
@@ -2284,7 +2289,7 @@ index 4fdf81f..65fedeb 100644
                  "<br />"
                  "<br />"
                  "Note: If you have issues with <recomp-color primary>Display</recomp-color> mode while using an external frame limiter, use <recomp-color primary>Manual</recomp-color> mode instead and configure it to that same frame limit."
-@@ -217,6 +225,47 @@ namespace recompui {
+@@ -217,6 +227,47 @@ namespace recompui {
              apply_graphics_config();
          }
  
@@ -2332,7 +2337,7 @@ index 4fdf81f..65fedeb 100644
          recomp::config::Config &create_graphics_tab(const std::string &name) {
              created_graphics_config = true;
  
-@@ -235,7 +284,7 @@ namespace recompui {
+@@ -235,7 +286,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::res_option,
                  "Resolution",
@@ -2341,7 +2346,7 @@ index 4fdf81f..65fedeb 100644
                  resolution_options,
                  ultramodern::renderer::Resolution::Auto
              );
-@@ -245,6 +294,7 @@ namespace recompui {
+@@ -245,6 +296,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto new_opt = static_cast<ultramodern::renderer::Resolution>(std::get<uint32_t>(cur_value));
                          determine_downsampling_display(new_opt, change_context);
@@ -2349,7 +2354,7 @@ index 4fdf81f..65fedeb 100644
                      }
                  );
              }
-@@ -265,6 +315,7 @@ namespace recompui {
+@@ -265,6 +317,7 @@ namespace recompui {
                      [](recomp::config::ConfigValueVariant cur_value, recomp::config::ConfigValueVariant prev_value, OptionChangeContext change_context) {
                          auto resolution_opt = get_graphics_enum_value<ultramodern::renderer::Resolution>(graphics::options::res_option, change_context);
                          determine_downsampling_display(resolution_opt, change_context);
@@ -2357,7 +2362,7 @@ index 4fdf81f..65fedeb 100644
                      }
                  );
  
-@@ -286,7 +337,7 @@ namespace recompui {
+@@ -286,7 +339,7 @@ namespace recompui {
              config.add_enum_option(
                  graphics::options::ar_option,
                  "Aspect Ratio",
@@ -2366,7 +2371,7 @@ index 4fdf81f..65fedeb 100644
                  aspect_ratio_options,
                  ultramodern::renderer::AspectRatio::Expand
              );
-@@ -299,29 +350,6 @@ namespace recompui {
+@@ -299,29 +352,6 @@ namespace recompui {
                  wm_default()
              );
  
@@ -2396,7 +2401,7 @@ index 4fdf81f..65fedeb 100644
              config.add_enum_option(
                  graphics::options::msaa_option,
                  "MS Anti-Aliasing",
-@@ -338,16 +366,15 @@ namespace recompui {
+@@ -338,16 +368,15 @@ namespace recompui {
                  "HUD Placement",
                  "Adjusts the placement of HUD elements to fit the selected aspect ratio. <recomp-color primary>Expand</recomp-color> will use the aspect ratio of the game's output window.",
                  hud_ratio_mode_options,
@@ -2408,7 +2413,7 @@ index 4fdf81f..65fedeb 100644
                  graphics::options::api_option,
                  "Graphics API",
 -                "Selects the graphics API to use.",
-+                "Which graphics API draws the game. <recomp-color primary>Vulkan</recomp-color> is the default; <recomp-color primary>D3D12</recomp-color> is Windows only. Changing it restarts the game.",
++                "Which graphics API draws the game. <recomp-color primary>Vulkan</recomp-color> is the only choice. Changing it restarts the game.",
                  graphics_api_options,
 -                ultramodern::renderer::GraphicsApi::Auto,
 -                true
@@ -2416,7 +2421,7 @@ index 4fdf81f..65fedeb 100644
              );
  
              config.add_enum_option(
-@@ -359,6 +386,16 @@ namespace recompui {
+@@ -359,6 +388,16 @@ namespace recompui {
                  true
              );
  

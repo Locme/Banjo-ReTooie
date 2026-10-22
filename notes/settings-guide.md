@@ -236,7 +236,7 @@ HUD Placement: **Original**, **16:9** or **Expand** (the HUD follows the
 window's shape). Default: Expand; a saved 16:9 from the old default changes to
 Expand once.
 
-Graphics changes apply at once. Graphics API needs a restart: changing it asks "Restart now?", and Restart closes the game and opens it again with the new API. The choices are Vulkan (the default) and, on Windows, D3D12; there is no Auto. A saved Auto is not migrated, so switch it once.
+Graphics changes apply at once. Graphics API needs a restart: changing it asks "Restart now?", and Restart closes the game and opens it again with the new API. The only choice is Vulkan (the default); D3D12 is hidden from the menu (L, 2026-10-22), and a saved D3D12 loads as Vulkan. There is no Auto. A saved Auto is not migrated, so switch it once.
 
 ## Graphics: picture filters
 
