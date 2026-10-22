@@ -1216,9 +1216,9 @@ bool Enclosed(float3 worldStart) {
 // The level's lights (lamps, fires), traced: each lights what it can see and leaves the rest in the dark. Within a
 // light's reach the room's own light is dimmed (keep, returned) and the light's own added back (lamp, rgb) only where
 // rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
-// what stands between (four rays over a small disc at the light, a soft edge), not just a glow over the room
+// what stands between (two rays a pixel over a small disc at the light, turned from pixel to pixel, a soft edge), not just a glow over the room
 // (L, 2026-10-20: "they don't emit ray traced light").
-float LightShadows(float3 center, float3 normal, out float3 lamp) {
+float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     lamp = 0.0f;
     const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
     if (count == 0u) {
@@ -1231,6 +1231,10 @@ float LightShadows(float3 center, float3 normal, out float3 lamp) {
     const float3 start = ViewToWorldPoint(center + normal * max(-center.z * 0.003f + 2.0f, 2.0f));
     const float3 worldNormal = normalize(ViewToWorldDirection(normal));
     float influence = 0.0f;
+    // A turn of the disc's points for each pixel (interleaved gradient noise), so two rays a light over neighbouring
+    // pixels cover the disc as four did, at half the cost (L, 2026-10-22: Bottles' House at 20 fps).
+    const float turn = frac(52.9829189f * frac(0.06711056f * float(pixel.x) + 0.00583715f * float(pixel.y))) * 6.2831853f;
+    uint traced = 0u;
     [loop] for (uint i = 0u; i < count; i++) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 3u)));
         const float3 toLight = light.xyz - start;
@@ -1243,23 +1247,25 @@ float LightShadows(float3 center, float3 normal, out float3 lamp) {
         influence = max(influence, reachHere);
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
-        if (facing <= 0.0f) {
+        // At most six lights traced a pixel (a room full of lamps traced every one).
+        if ((facing <= 0.0f) || (traced >= 6u)) {
             continue;
         }
-        // Four points on a small disc round the light. The rays go right up to the flame, through its fitting
+        traced++;
+        // Two points on a small disc round the light. The rays go right up to the flame, through its fitting
         // (TraceLampVisible).
         const float stopShort = 3.0f;
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
         const float3 across = cross(direction, side);
         float visible = 0.0f;
-        [unroll] for (int k = 0; k < 4; k++) {
-            const float angle = float(k) * 1.5707963f + 0.785398f;
+        [unroll] for (int k = 0; k < 2; k++) {
+            const float angle = float(k) * 3.1415927f + turn;
             const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * discRadius;
             const float3 toTarget = target - start;
             const float reach = length(toTarget) - stopShort;
             if (reach <= 1.0f) {
-                visible += 0.25f;
+                visible += 0.5f;
                 continue;
             }
             RayDesc ray;
@@ -1268,7 +1274,7 @@ float LightShadows(float3 center, float3 normal, out float3 lamp) {
             ray.TMin = 0.0f;
             ray.TMax = reach;
             // Banjo casts his shadow from the lamps too.
-            visible += 0.25f * TraceLampVisible(ray, light.xyz);
+            visible += 0.5f * TraceLampVisible(ray, light.xyz);
         }
         lamp += float3(1.0f, 0.8f, 0.55f) * (1.3f * reachHere * saturate(facing) * visible);
     }
@@ -1488,7 +1494,8 @@ float3 PathDirectLight(float3 at, float3 normal) {
     const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
     const float3 worldNormal = normalize(ViewToWorldDirection(normal));
     uint traced = 0u;
-    [loop] for (uint i = 0u; (i < count) && (traced < 3u); i++) {
+    // One lamp a hop (three made path tracing the dearest part of a room full of lamps, L 2026-10-22).
+    [loop] for (uint i = 0u; (i < count) && (traced < 1u); i++) {
         const float4 lamp = asfloat(gLights.Load4(16u * (i + 3u)));
         const float3 toLight = lamp.xyz - worldStart;
         const float distance = length(toLight);
@@ -1554,7 +1561,10 @@ float3 TracedGI(float3 center, float3 normal, uint cell) {
         float3 previous = origin;
         [loop] for (uint b = 0u; b < bounces; b++) {
             const float3 surfaceNormal = HitNormal(previous, from, reach);
-            light += throughput * PathDirectLight(at, surfaceNormal);
+            // Direct light on the first spot the path lands on only: further hops add little of it for their rays.
+            if (b == 0u) {
+                light += throughput * PathDirectLight(at, surfaceNormal);
+            }
             const float3 start = at + surfaceNormal * max(-at.z * 0.002f, 1.0f);
             const float3 next = IndirectDirection(surfaceNormal, (cell * 2u + uint(r) + 11u * (b + 1u)) & 31u);
             const float tn = TraceDistance(start, next, 15000.0f);
@@ -4301,7 +4311,7 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Not tied to the sun: lamps and fires cast their own in caves and at night.
         if (lightShadows) {
             float3 lamps;
-            keep *= LightShadows(center, normal, lamps);
+            keep *= LightShadows(pixel, center, normal, lamps);
             lamp += lamps;
             if (!onBanjo) {
                 keep *= ModelShadow(center, normal);
