@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T549 175 FPS in Terrydactyland: shown frames and renderer CPU (mailbox presenting + cheaper texture seams)
+- Asked: 2026-10-22 14:46 UTC
+- Build: main @ fdca435
+- Steps:
+  1. Pull main (fdca435 or later) and build, Vulkan API
+  2. Game Frame Rate 175 FPS, overlay Full
+  3. Stand where your last 175 FPS overlay was taken in Terrydactyland and wait 10 s
+  4. Send the overlay
+  5. Optional: General > DEV > Blend texture seams off, then send the overlay again
+- Look for: The top fps close to the Game fps (it was 53 shown with the game at 99). Renderer CPU draws lower than 2.07 ms. Input latency at or below the old 30 ms. No tearing, no new stutter. Seams on the title screen logo still blended.
+- Status: waiting for L
+
 ## T548 Displaced ground in every framebuffer
 - Asked: 2026-10-22 UTC
 - Build: main
