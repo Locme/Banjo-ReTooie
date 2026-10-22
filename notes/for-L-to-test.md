@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T528 Parallax shapes per texture (frame rate check)
+- Asked: 2026-10-22 10:15 UTC
+- Build: main
+- Steps:
+  1. Set Parallax to 100 with Parallax on original textures on
+  2. Go to Terrydactyland, then two other worlds where parallax felt slow
+  3. In each place, note the fps with Graphics > Parallax shapes per texture on, then flip it off and note the fps again (it applies live)
+- Look for: Whether the fps comes back with the switch off. If it does, the per-texture shapes are the cost and I make them cheaper; if not, the slowdown is elsewhere
+- Status: waiting for L
+
 ## T527 Move Sun and Save Sun Location
 - Asked: 2026-10-22 09:29 UTC
 - Build: main (Move Sun)

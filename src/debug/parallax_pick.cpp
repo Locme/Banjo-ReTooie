@@ -863,6 +863,7 @@ namespace {
         uint64_t shown_hash = 0;
         uint32_t shown_layers = 0;
         uint32_t shown_version = 0;
+        uint32_t shown_bits = 0;
         float shown_x = -1.0f, shown_y = -1.0f;
         int64_t last_log = 0;
         for (;;) {
@@ -1292,7 +1293,9 @@ namespace {
                 fprintf(stderr, "[parallax-pick] %016llx %s\n", (unsigned long long)hash, describe(hash, layer, layers).c_str());
             }
             const uint32_t version = picks_version.load();
-            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
+            // The built-in choice can change under it too (Parallax shapes per texture, Parallax on original textures).
+            const uint32_t bits = (hash != 0) ? RT64::SceneParallaxTexture(hash) : 0;
+            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) || (bits != shown_bits) ||
                 (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
             {
                 label.update(true, describe(hash, layer, layers), x, y);
@@ -1303,6 +1306,7 @@ namespace {
                 shown_hash = hash;
                 shown_layers = layers;
                 shown_version = version;
+                shown_bits = bits;
                 shown_x = x;
                 shown_y = y;
             }
