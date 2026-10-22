@@ -1,5 +1,20 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T534 Ray Tracing Material Pick Mode (PBR materials)
+- Asked: 2026-10-22 11:58 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull main and build; bind Controls > Pick Modes > Ray Tracing Material Pick Mode; turn Graphics > Ray tracing on
+  2. Spiral Mountain or any level: press the key, aim at a stone or metal texture and left click (the label says it has a material); middle click steps presets (Mirror, Brushed metal, Gold, Plastic, Rubber, Glowing)
+  3. Shift + wheel changes the chosen property (right click or keys 1 to 6 choose: albedo red/green/blue, roughness, metalness, emissive; Ctrl for fine)
+  4. Set Mirror: roughness 0, metalness 100; then raise roughness to 40 and 80 and watch the reflection go from sharp to brushed
+  5. Set metalness 0 and 100 with the same roughness; set Albedo to a strong colour and see a metal reflect in that colour
+  6. Set Emissive to 100 and 300 on a wall near a dark corner and on a floor, and look at the walls round it
+  7. Save Pick (the key you bound), restart and see it kept; Delete Saved Pick takes it off
+  8. Turn Ray tracing off, and look at textures with no pick
+- Look for: Textures you did not pick look exactly as before. A picked one: albedo tints it; roughness widens the reflection from a mirror to a blur (noisy at high roughness is expected for now); metalness 100 darkens the surface to almost only its reflection, in the albedo's colour; emissive makes it glow past the shadows and lights what is near it, also showing in other shiny surfaces' reflections. Anything that costs frame rate with materials on? Does the label read well and does Show All (key 8) pulse every textured material?
+- Status: waiting for L
+
 ## T533 Displaced ground cost (floors' own shaders)
 - Asked: 2026-10-22 11:32 UTC
 - Build: main

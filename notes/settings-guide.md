@@ -332,6 +332,25 @@ built-in choice and takes it out of the file (one line a texture: `<hash> <shape
 the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
 
+**Ray Tracing Material Pick Mode** (Controls, Pick Modes, no default) gives a
+texture a production PBR material for Graphics > Ray tracing: **Albedo** (the
+base colour it is tinted by, red, green and blue), **Roughness** (0 a mirror, 100
+a wide brushed lobe: its reflection rays are scattered over a GGX lobe that
+wide), **Metalness** (0 a plain dielectric with a faint Fresnel reflection, 100 a
+metal with almost no diffuse that reflects in its albedo colour) and
+**Emissive** (percent of its own colour added as light the shadows don't dim; the
+traced light bounces pick it up, and it lights the scene like a Light Source).
+**Left click** gives the texture a material (the default one) or takes it off,
+**middle click** steps through presets (Mirror, Brushed metal, Gold, Plastic,
+Rubber, Glowing, Default), **Shift + wheel** changes the chosen property
+(**Ctrl** for fine steps), **right click** or the **number keys 1 to 6** choose
+which property (albedo red, green, blue, roughness, metalness, emissive), key
+**7** steps the preset and key **8** turns Show All on or off. Save Pick, Delete
+Saved Pick, Copy, Paste and Undo work as in the other modes; the picks are kept in
+`rt_material_tags.txt` in the Dev Files folder (one line a texture:
+`<hash> albedo=RRGGBB roughness=N metalness=N emissive=N`). Without Ray tracing
+the picks do nothing.
+
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
 same way for the texture effects. A texture can have several effects at once.
 The label lists the texture's effects ("yours" or "built-in") and the effect

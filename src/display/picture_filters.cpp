@@ -44,6 +44,7 @@
 #include "tooie_window_beams.h"
 #include "tooie_toast.h"
 #include "tooie_effect_pick.h"
+#include "tooie_material_pick.h"
 #include "tooie_parallax_pick.h"
 
 namespace RT64 {
@@ -74,6 +75,7 @@ namespace RT64 {
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
+    void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
     void SetSceneScreenSpaceReflections(float strength, float glossiness);
@@ -4233,7 +4235,7 @@ namespace {
     std::atomic<uint32_t> effects_sent_version{0};
     // Parallax picks count too: a texture picked as Metal there is shiny (L, 2026-10-21).
     uint32_t effect_textures_version() {
-        return tooie::effect_pick::version() + tooie::parallax_pick::version() * 65599u;
+        return tooie::effect_pick::version() + tooie::parallax_pick::version() * 65599u + tooie::material_pick::version() * 4099u;
     }
     void send_effect_textures() {
         static const std::vector<uint64_t> ice_extra = [] {
@@ -4334,6 +4336,25 @@ namespace {
                 light_sources.push_back(hash);
                 light_reaches.push_back(9.0f * float(tooie::effect_pick::light_strength(picked)));
             }
+        }
+        // Ray Tracing Material Pick Mode: the materials go to the traced pass, and an emissive one also lights the scene as a Light
+        // Source would (half the emissive's percent as its strength), unless Shader Effects pick mode has given the texture
+        // a Light Source of its own.
+        {
+            std::vector<uint64_t> material_hashes;
+            std::vector<uint32_t> albedo_roughness;
+            std::vector<uint32_t> metalness_emissive;
+            tooie::material_pick::for_each([&](uint64_t hash, const tooie::material_pick::Material& material) {
+                material_hashes.push_back(hash);
+                albedo_roughness.push_back(uint32_t(material.red) | (uint32_t(material.green) << 8) | (uint32_t(material.blue) << 16) | (uint32_t(material.roughness) << 24));
+                metalness_emissive.push_back(uint32_t(material.metalness) | (uint32_t(material.emissive) << 8));
+                const auto own_light = picks.find(hash);
+                if ((material.emissive > 0) && ((own_light == picks.end()) || !tooie::effect_pick::has(own_light->second, tooie::effect_pick::effect_light))) {
+                    light_sources.push_back(hash);
+                    light_reaches.push_back(9.0f * std::max(10.0f, float(material.emissive) * 0.5f));
+                }
+            });
+            RT64::SetSceneRayMaterials(material_hashes.data(), albedo_roughness.data(), metalness_emissive.data(), material_hashes.size());
         }
         RT64::SetSceneLightSourceTextures(light_sources.data(), light_reaches.data(), light_sources.size());
         std::vector<uint64_t> ray_off = build(nullptr, nullptr, tooie::effect_pick::effect_rt_off, true);

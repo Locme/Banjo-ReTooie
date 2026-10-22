@@ -1,5 +1,5 @@
-// Parallax pick mode and Shader Effects pick mode (see include/tooie_parallax_pick.h and include/tooie_effect_pick.h):
-// one worker, as both drive the same pick in RT64.
+// Parallax pick mode, Shader Effects pick mode and Ray Tracing Material pick mode (see include/tooie_parallax_pick.h,
+// include/tooie_effect_pick.h and include/tooie_material_pick.h): one worker, as they all drive the same pick in RT64.
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -31,6 +31,7 @@
 #include "tooie_effect_pick.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
+#include "tooie_material_pick.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
 
@@ -775,6 +776,7 @@ namespace {
     void worker() {
         load();
         load_effects();
+        tooie::material_pick::load();
         float forced_x = -1.0f, forced_y = -1.0f;
         if (const char* v = std::getenv("TOOIE_PICK")) {
             std::sscanf(v, "%f,%f", &forced_x, &forced_y);
@@ -796,14 +798,14 @@ namespace {
         const auto start = std::chrono::steady_clock::now();
         Label label;
         // One pick mode at a time. TOOIE_PICK_MODE=effects or interp: the headless pick is that mode's.
-        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp };
+        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material };
         Mode mode = mode_off;
         if (forced_x >= 0.0f) {
             const char* forced = std::getenv("TOOIE_PICK_MODE");
             const std::string name = forced != nullptr ? forced : "";
-            mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : mode_parallax);
+            mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : (name == "material" ? mode_material : mode_parallax));
         }
-        bool key_was_down[3] = {};
+        bool key_was_down[4] = {};
         bool save_was_down = false, delete_was_down = false;
         bool copy_was_down = false, paste_was_down = false, undo_was_down = false;
         // Shader Effects pick mode: the number keys held last poll, and a left click held down to paint: whether it
@@ -812,6 +814,12 @@ namespace {
         bool painting = false, paint_on = false;
         std::vector<uint64_t> painted;
         uint32_t marks_sent = 0;
+        // Ray Tracing Material pick mode: what the wheel changes, the preset middle click gives next, the number keys held
+        // last poll and Show All.
+        tooie::material_pick::Property chosen_property = tooie::material_pick::property_roughness;
+        int next_preset = 1;
+        bool material_number_was_down[8] = {};
+        bool material_show_all = false;
         // Undo Pick's history: each texture or model as it was before a change, newest last.
         struct Undo {
             Mode mode;
@@ -821,13 +829,14 @@ namespace {
             Effects effect;
             int interp_mode;
             bool no_effects;
+            tooie::material_pick::Material material;
         };
         std::vector<Undo> undo_stack;
         // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode).
-        Undo copied{ mode_off, 0, false, Pick{}, 0, 0, false };
+        Undo copied{ mode_off, 0, false, Pick{}, 0, 0, false, tooie::material_pick::Material{} };
         // The texture or model's state now, in the mode's terms.
         auto snapshot = [&](Mode m, uint64_t key) {
-            Undo u{ m, key, false, Pick{}, 0, tooie::interp_tags::mode_default, false };
+            Undo u{ m, key, false, Pick{}, 0, tooie::interp_tags::mode_default, false, tooie::material_pick::Material{} };
             if (m == mode_parallax) {
                 u.had = pick_of(key, u.pick);
             } else if (m == mode_effects) {
@@ -835,6 +844,8 @@ namespace {
             } else if (m == mode_interp) {
                 tooie::interp_tags::live(uint32_t(key), u.interp_mode, u.no_effects);
                 u.had = true;
+            } else if (m == mode_material) {
+                u.had = tooie::material_pick::get(key, u.material);
             }
             return u;
         };
@@ -846,6 +857,8 @@ namespace {
                 set_effect(key, u.had, u.effect);
             } else if (u.mode == mode_interp) {
                 tooie::interp_tags::set_live(uint32_t(key), u.interp_mode, u.no_effects);
+            } else if (u.mode == mode_material) {
+                tooie::material_pick::set(key, u.had ? &u.material : nullptr);
             }
         };
         auto remember = [&](Mode m, uint64_t key) {
@@ -868,15 +881,16 @@ namespace {
         int64_t last_log = 0;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            static const recompinput::GameInput keys[3] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
-                recompinput::GameInput::INTERP_PICK };
-            static const char* on_toasts[3] = {
+            static const recompinput::GameInput keys[4] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
+                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK };
+            static const char* on_toasts[4] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
                 "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
-                    "Shift + left click default, wheel deeper" };
-            static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
-            for (int k = 0; k < 3; k++) {
+                    "Shift + left click default, wheel deeper",
+                "Ray Tracing Material pick mode: left click gives or takes off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-6 choose which, Ctrl fine), key 8 Show All, wheel deeper" };
+            static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
+            for (int k = 0; k < 4; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
                 if (down && !key_was_down[k]) {
                     // The newer mode wins.
@@ -890,19 +904,25 @@ namespace {
             const bool on = (mode == mode_parallax);
             const bool effects_on = (mode == mode_effects);
             const bool interp_on = (mode == mode_interp);
+            const bool material_on = (mode == mode_material);
             recompinput::set_pick_mode(mode != mode_off);
             // The game highlights a picked model itself.
             RT64::SetScenePickHighlight(!interp_on);
             tooie::interp_tags::set_mouse_pick(interp_on, interp_on ? RT64::ScenePickMatrixId() : 0);
             // Show All marks only while Shader Effects pick mode is on.
             {
-                const uint32_t marks = (effects_on && show_all.load()) ? (lists_version.load() * 64u + uint32_t(chosen_effect.load()) + 1u) : 0u;
+                const uint32_t marks = (effects_on && show_all.load()) ? (lists_version.load() * 64u + uint32_t(chosen_effect.load()) + 1u) :
+                    ((material_on && material_show_all) ? (tooie::material_pick::version() * 64u + 63u) : 0u);
                 if (marks != marks_sent) {
                     marks_sent = marks;
                     std::vector<uint64_t> marked;
                     if (marks != 0) {
-                        std::lock_guard lock{ lists_mutex };
-                        marked = effect_lists[chosen_effect.load()];
+                        if (material_on) {
+                            tooie::material_pick::for_each([&](uint64_t hash, const tooie::material_pick::Material&) { marked.push_back(hash); });
+                        } else {
+                            std::lock_guard lock{ lists_mutex };
+                            marked = effect_lists[chosen_effect.load()];
+                        }
                     }
                     RT64::SetScenePickMarkedTextures(marked.data(), marked.size());
                 }
@@ -1008,6 +1028,16 @@ namespace {
             if (effects_on) {
                 light_notches += depth_steps;
             }
+            // In Ray Tracing Material pick mode, Shift + wheel steps the chosen property (up more), Ctrl for fine steps.
+            int material_notches = 0;
+            if (material_on && shift && (deeper != 0)) {
+                material_notches = -deeper;
+                deeper = 0;
+            }
+            if (material_on) {
+                material_notches += depth_steps;
+            }
+            const bool fine = (SDL_GetModState() & KMOD_CTRL) != 0;
             if (deeper > 0) {
                 layer += uint32_t(deeper);
             } else if (deeper < 0) {
@@ -1022,23 +1052,23 @@ namespace {
             RT64::ScenePickResult(hash, layers);
             // The unsaved count and Save All, every poll (they only change the page when they change).
             auto show_panel = [&] {
-                const size_t unsaved = interp_on ? tooie::interp_tags::unsaved_count() : (effects_on ? effects_unsaved_count() : unsaved_count());
+                const size_t unsaved = interp_on ? tooie::interp_tags::unsaved_count() : (effects_on ? effects_unsaved_count() : (material_on ? tooie::material_pick::unsaved_count() : unsaved_count()));
                 label.update_panel(unsaved, hover_panel);
             };
             if (press_discard) {
-                const size_t count = interp_on ? tooie::interp_tags::discard_changes() : (effects_on ? discard_effect_changes() : discard_changes());
+                const size_t count = interp_on ? tooie::interp_tags::discard_changes() : (effects_on ? discard_effect_changes() : (material_on ? tooie::material_pick::discard_changes() : discard_changes()));
                 char text[96];
                 snprintf(text, sizeof(text), "Deleted all changes: %zu back as Dev Files/%s has them", count,
-                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt")));
                 tooie::toast::show(text);
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
             }
             if (press_save_all) {
-                const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_all_effects() : save_all());
+                const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_all_effects() : (material_on ? tooie::material_pick::save_all() : save_all()));
                 char text[96];
                 snprintf(text, sizeof(text), "Saved all: %zu picks in Dev Files/%s", count,
-                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt")));
                 tooie::toast::show(text);
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
@@ -1073,7 +1103,7 @@ namespace {
                         apply(copied, key);
                         snprintf(text, sizeof(text), "Pasted onto %016llx (not saved yet)", (unsigned long long)key);
                     }
-                } else if ((depth_steps != 0) && (hash != 0)) {
+                } else if ((depth_steps != 0) && (hash != 0) && !material_on) {
                     remember(mode, hash);
                     bool own = false;
                     Pick pick = current(hash, own);
@@ -1094,7 +1124,7 @@ namespace {
                     remember(mode, interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash);
                 }
                 const uint32_t model = interp_on ? tooie::interp_tags::hovered() : 0;
-                const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt");
+                const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt"));
                 char name[32];
                 if (interp_on) {
                     snprintf(name, sizeof(name), "Model %08X", model);
@@ -1109,6 +1139,8 @@ namespace {
                         tooie::interp_tags::save_one(model);
                     } else if (effects_on) {
                         save_one_effect(hash);
+                    } else if (material_on) {
+                        tooie::material_pick::save_one(hash);
                     } else {
                         save_one(hash);
                     }
@@ -1118,6 +1150,8 @@ namespace {
                         tooie::interp_tags::unsave(model);
                     } else if (effects_on) {
                         delete_saved_effect(hash);
+                    } else if (material_on) {
+                        tooie::material_pick::delete_saved(hash);
                     } else {
                         delete_saved(hash);
                     }
@@ -1250,6 +1284,90 @@ namespace {
                     label.update(true, describe_effect(hash, layer, layers), x, y);
                     if ((hash != shown_hash) && (ms - last_log > 200)) {
                         fprintf(stderr, "[effect-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
+                        last_log = ms;
+                    }
+                    shown_hash = hash;
+                    shown_layers = layers;
+                    shown_version = version;
+                    shown_x = x;
+                    shown_y = y;
+                }
+                show_panel();
+                continue;
+            }
+            if (material_on) {
+                // Number keys 1 to 6 choose what the wheel changes; 7 steps the preset; 8 turns Show All on or off.
+                {
+                    const Uint8* keyboard = SDL_GetKeyboardState(nullptr);
+                    for (int k = 0; k < 8; k++) {
+                        const bool down = (keyboard != nullptr) && (keyboard[SDL_SCANCODE_1 + k] != 0);
+                        if (down && !material_number_was_down[k]) {
+                            if (k < tooie::material_pick::property_count) {
+                                chosen_property = tooie::material_pick::Property(k);
+                                tooie::toast::show(std::string("The wheel changes: ") + tooie::material_pick::property_labels[k]);
+                            } else if (k == 6) {
+                                middle = true;
+                            } else {
+                                material_show_all = !material_show_all;
+                                tooie::toast::show(material_show_all ? "Show All on: textures with a material pulse orange" : "Show All off");
+                            }
+                        }
+                        material_number_was_down[k] = down;
+                    }
+                }
+                // TOOIE_PICK_CLICKS key1 to key8 do the same, headless.
+                for (const std::string& key : script_keys) {
+                    const int k = std::atoi(key.c_str() + key.size() - 1) - 1;
+                    if (k < tooie::material_pick::property_count) {
+                        chosen_property = tooie::material_pick::Property(k);
+                    } else if (k == 6) {
+                        middle = true;
+                    } else if (k == 7) {
+                        material_show_all = !material_show_all;
+                    }
+                }
+                script_keys.clear();
+                if (right) {
+                    const int count = tooie::material_pick::property_count;
+                    chosen_property = tooie::material_pick::Property((int(chosen_property) + (shift ? count - 1 : 1)) % count);
+                    tooie::toast::show(std::string("The wheel changes: ") + tooie::material_pick::property_labels[chosen_property]);
+                }
+                if (hash != 0) {
+                    if (left || reset) {
+                        remember(mode, hash);
+                        tooie::material_pick::Material material;
+                        if (reset || tooie::material_pick::get(hash, material)) {
+                            tooie::material_pick::set(hash, nullptr);
+                        } else {
+                            material = tooie::material_pick::preset_material(0, material);
+                            tooie::material_pick::set(hash, &material);
+                        }
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all).c_str());
+                    }
+                    if (middle) {
+                        remember(mode, hash);
+                        tooie::material_pick::Material material;
+                        tooie::material_pick::get(hash, material);
+                        material = tooie::material_pick::preset_material(next_preset, material);
+                        tooie::material_pick::set(hash, &material);
+                        tooie::toast::show(std::string("Preset: ") + tooie::material_pick::preset_name(next_preset));
+                        next_preset = (next_preset + 1) % tooie::material_pick::preset_count;
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all).c_str());
+                    }
+                    if (material_notches != 0) {
+                        remember(mode, hash);
+                        const std::string text = tooie::material_pick::step_property(hash, chosen_property, material_notches, fine);
+                        tooie::toast::show(text);
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, text.c_str());
+                    }
+                }
+                const uint32_t version = tooie::material_pick::version() + 0x40000000u + (material_show_all ? 0x10000000u : 0u) + uint32_t(chosen_property) * 0x01000000u;
+                if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
+                    (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
+                {
+                    label.update(true, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all), x, y);
+                    if ((hash != shown_hash) && (ms - last_log > 200)) {
+                        fprintf(stderr, "[material-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
                         last_log = ms;
                     }
                     shown_hash = hash;
