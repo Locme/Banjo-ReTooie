@@ -412,7 +412,7 @@ namespace {
         // Lamps.
         { 0x1dd9cc6fd0e4e782, fx(effect_lamp) },
         { 0x303ca05590e1a6c8, fx(effect_lamp) },
-        { 0x4ace91a7ca4d04f7, fx(effect_ice, effect_lamp) },
+        { 0x4ace91a7ca4d04f7, fx(effect_disable) },
         { 0x68f33cb17b917dfc, fx(effect_lamp) },
         { 0xead9da3505577c00, fx(effect_lamp) },
         { 0xeea8b5ed41ab6218, fx(effect_lamp) },
@@ -443,7 +443,16 @@ namespace {
         // in the dump, as they are drawn only when something blows up.
         { 0xfa680103e7ce6cbc, fx(effect_glow, effect_light) },
         { 0x28f275d076d8817d, fx(effect_glow, effect_light) },
-        { 0x52ad0ec437488cbd, fx(effect_glow, effect_light) },
+        { 0x52ad0ec437488cbd, fx(effect_glow) },
+        // L's shader_effect_tags.txt of 2026-10-22 (the Disable and Glow picks above are from it too).
+        { 0x4f86a813903a7df4, fx(effect_disable) },
+        { 0x5462e6d9c55692d5, fx(effect_disable) },
+        { 0x65149dd8580c268f, fx(effect_shiny) },
+        { 0x6a4311930945f097, fx(effect_shiny, effect_glow) },
+        { 0x861bfb5c8890c6e0, fx(effect_glow, effect_light) },
+        { 0xa0754fa808c1eec1, fx(effect_ice, effect_shiny) | fx(effect_light) },
+        { 0xa95b7ee485b02d15, fx(effect_rt_off) },
+        { 0xaa4fb767534de6b1, fx(effect_rt_off) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -2571,6 +2580,7 @@ namespace {
         { 0x91c0cbe58581d7b6, 54, 114, Metal, 7 },
         { 0x91d69b3654b91ac3, 53, 133, Metal, 7 },
         { 0x91dc63433e7132c8, 97, 168, Bumpy, 7 },
+        { 0x91e24b5ac9fe1611, 40, 190, Stone },
         { 0x92281f3d22a435ab, 18, 123, Metal, 7 },
         { 0x9233817d7fb6b383, 25, 177, Bumpy, 7 },
         { 0x923dcb8f364ecb2b, 25, 170, Rounded },
@@ -2810,7 +2820,7 @@ namespace {
         { 0xa452d5ab4722ca21, 0, 88, Metal, 7 },
         { 0xa455894091918abc, 15, 157, Rounded },
         { 0xa45c682a45b6901e, 91, 218 },
-        { 0xa45e6eb6df215fff, 61, 143, Grass, 7 },
+        { 0xa45e6eb6df215fff, 61, 143, Grass },
         { 0xa46698ccae52c778, 28, 83, Wood, 7 },
         { 0xa46cd8fa45fa7bb3, 17, 148, Bumpy },
         { 0xa47b7057aa363cb6, 0, 149, Bumpy, 15 },
