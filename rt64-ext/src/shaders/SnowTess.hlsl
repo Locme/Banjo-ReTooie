@@ -68,12 +68,21 @@ bool SnowTrailInBox(float2 low, float2 high) {
 }
 
 // Sand's footprints are shallow: past this far from the camera they are smaller than a pixel, so the sand there isn't cut
-// for them (by each edge's middle, so the triangles either side of an edge agree).
+// for them (by each edge's middle, so the triangles either side of an edge agree). Never round Banjo, though: a camera
+// high over him (looking straight down) is further than this from all of the sand, and flattened it (L 2026-10-22).
 static const float SandTessReach = 900.0f;
+
+bool SandTooFar(float3 world, float cameraDistance) {
+    if (!SnowSand() || (cameraDistance <= SandTessReach)) {
+        return false;
+    }
+    const float4 player = FrParams.snowPlayer;
+    return (player.w <= 0.0f) || (distance(world, float3(player.x, player.z, player.y)) > SandTessReach);
+}
 
 float SnowSegmentFactor(float edgeLength, float cameraDistance, bool trail) {
     // (Untouched snow lies flat over the ground, raised by the same height all over a triangle: nothing to cut.)
-    if (!trail || (SnowSand() && (cameraDistance > SandTessReach))) {
+    if (!trail) {
         return 1.0f;
     }
     return clamp(edgeLength / SnowTrailSegment(cameraDistance), 1.0f, SnowTessMaxFactor);
@@ -83,7 +92,7 @@ float SnowEdgeFactor(float3 a, float3 b) {
     const float edgeLength = distance(a, b);
     const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
     const float cameraDistance = distance((a + b) * 0.5f, camera);
-    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
+    const bool trail = !SandTooFar((a + b) * 0.5f, cameraDistance) && SnowTrailInBox(min(a.xz, b.xz), max(a.xz, b.xz));
     return SnowSegmentFactor(edgeLength, cameraDistance, trail);
 }
 
@@ -92,7 +101,7 @@ float SnowInsideFactor(float3 a, float3 b, float3 c, float edgeFactor) {
     const float longest = max(distance(a, b), max(distance(b, c), distance(c, a)));
     const float3 camera = float3(FrParams.grassWorldX.w, FrParams.grassWorldY.w, FrParams.grassWorldZ.w);
     const float cameraDistance = distance((a + b + c) / 3.0f, camera);
-    const bool trail = !(SnowSand() && (cameraDistance > SandTessReach)) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
+    const bool trail = !SandTooFar((a + b + c) / 3.0f, cameraDistance) && SnowTrailInBox(min(a.xz, min(b.xz, c.xz)), max(a.xz, max(b.xz, c.xz)));
     return max(edgeFactor, SnowSegmentFactor(longest, cameraDistance, trail));
 }
 

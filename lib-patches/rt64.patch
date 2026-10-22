@@ -620,7 +620,7 @@ index e1889e5..0f4b149 100644
  };
 \ No newline at end of file
 diff --git a/src/hle/rt64_present_queue.cpp b/src/hle/rt64_present_queue.cpp
-index 3227ab1..0930ba0 100644
+index 3227ab1..31bc74e 100644
 --- a/src/hle/rt64_present_queue.cpp
 +++ b/src/hle/rt64_present_queue.cpp
 @@ -4,10 +4,17 @@
@@ -999,7 +999,7 @@ index 3227ab1..0930ba0 100644
      }
  
      void PresentQueue::threadLoop() {
-@@ -449,22 +657,55 @@ namespace RT64 {
+@@ -449,22 +657,58 @@ namespace RT64 {
          uint32_t displayTimingRate = UINT32_MAX;
          const bool displayTiming = ext.device->getCapabilities().displayTiming;
          bool swapChainValid = !ext.swapChain->needsResize();
@@ -1049,6 +1049,9 @@ index 3227ab1..0930ba0 100644
 +                        screenRate = ext.sharedResources->swapChainRate;
 +                    }
 +                    const bool vsyncWanted = (gameRate == 0) || (screenRate == 0) || (gameRate <= screenRate + 2);
++                    // Frames the game paces itself (gameRate) are shown newest first without waiting for the vblank
++                    // (mailbox, where supported): waiting made every other frame be skipped when the GPU ran near the screen rate.
++                    ext.swapChain->setMailboxPreferred(gameRate != 0);
 +                    if (vsyncWanted != vsyncApplied) {
 +                        ext.swapChain->setVsyncEnabled(vsyncWanted);
 +                        vsyncApplied = vsyncWanted;
@@ -1058,7 +1061,7 @@ index 3227ab1..0930ba0 100644
                  const bool needsResize = ext.swapChain->needsResize() || !swapChainValid;
                  if (needsResize) {
                      ext.presentGraphicsWorker->commandList->begin();
-@@ -518,6 +759,15 @@ namespace RT64 {
+@@ -518,6 +762,15 @@ namespace RT64 {
                      threadPresent(present, swapChainValid);
                  }
  
@@ -1074,7 +1077,7 @@ index 3227ab1..0930ba0 100644
                  if (!present.paused) {
                      if (!present.fbOperations.empty()) {
                          const std::scoped_lock lock(screenFbChangePoolMutex);
-@@ -528,6 +778,7 @@ namespace RT64 {
+@@ -528,6 +781,7 @@ namespace RT64 {
                      threadAdvanceBarrier();
                  }
  

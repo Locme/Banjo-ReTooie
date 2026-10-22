@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T531 Displaced ground cost (floors' own shaders)
+## T532 Displaced ground cost (floors' own shaders)
 - Asked: 2026-10-22 11:32 UTC
 - Build: main
 - Steps:
@@ -8,6 +8,15 @@
   2. Stand where your screenshot was in Terrydactyland (-4367, 3322, -1133) and note the fps and GPU ms with Displaced ground at 60, then at 0
   3. Do the same in the intro
 - Look for: Displaced ground should now cost a few ms, not half the frame rate. In the first seconds after loading a level it may still be slower (the floors' shaders are built in the background). Check that floors look the same as before (colours, lighting) and no floor turns black or disappears. Send console.log if a message says the graphics driver could not build a pipeline.
+
+## T531 Sand footprints with the camera straight above
+- Asked: 2026-10-22 11:08 UTC
+- Build: main 3da2b67
+- Steps:
+  1. Tessellated sand on, Terrydactyland
+  2. Walk on the sand to leave footprints
+  3. Move the camera so it looks straight down on Banjo, as high as it goes
+- Look for: The footprints and dips round Banjo stay. If the sand still goes flat, tell me roughly how high the camera is
 - Status: waiting for L
 
 ## T530 Displaced ground cost
@@ -29,7 +38,8 @@
   3. Read the fps and the overlay's 'Snow and sand CPU' and 'Renderer CPU' lines
   4. Turn Parallax back on and read them again
 - Look for: Edges on the 'Snow and sand CPU' line should be near 0 ms (was 36 ms) and effects setup much lower than 100 ms. The new 'Effects setup' line shows where the rest goes. Send a screenshot of the overlay either way.
-- Status: waiting for L
+- Status: answered 2026-10-22 11:08 UTC
+- L's result: L 2026-10-22 11:04: performance fixed (e210f77: 60 fps, sand CPU 0.25 ms, edges 0.15 ms, worked out 5 times in 5 s)
 
 ## T528 Parallax shapes per texture (frame rate check)
 - Asked: 2026-10-22 10:15 UTC
