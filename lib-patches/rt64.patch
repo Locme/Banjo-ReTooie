@@ -7953,10 +7953,18 @@ index 95618bc..f298779 100644
      };
  };
 diff --git a/src/render/rt64_texture_cache.cpp b/src/render/rt64_texture_cache.cpp
-index 0848f3e..2b735ce 100644
+index 0848f3e..149f29f 100644
 --- a/src/render/rt64_texture_cache.cpp
 +++ b/src/render/rt64_texture_cache.cpp
-@@ -20,6 +20,8 @@
+@@ -4,6 +4,7 @@
+ 
+ #define STB_IMAGE_IMPLEMENTATION
+ 
++#include <chrono>
+ #include "ddspp/ddspp.h"
+ #include "stb/stb_image.h"
+ #include "xxHash/xxh3.h"
+@@ -20,6 +21,8 @@
  
  #include "rt64_texture_cache.h"
  
@@ -7965,7 +7973,7 @@ index 0848f3e..2b735ce 100644
  #define ONLY_USE_LOW_MIP_CACHE 0
  
  namespace RT64 {
-@@ -29,6 +31,35 @@ namespace RT64 {
+@@ -29,6 +32,35 @@ namespace RT64 {
      static const uint32_t TextureDataPitchAlignment = 256;
      static const uint32_t TextureDataPlacementAlignment = 512;
  
@@ -8001,7 +8009,7 @@ index 0848f3e..2b735ce 100644
      ReplacementMap::ReplacementMap() {
          // Empty constructor.
      }
-@@ -66,7 +97,9 @@ namespace RT64 {
+@@ -66,7 +98,9 @@ namespace RT64 {
      }
  
      void ReplacementMap::evict(std::vector<Texture *> &evictedTextures) {
@@ -8012,7 +8020,7 @@ index 0848f3e..2b735ce 100644
              // Push texture to the eviction list.
              Texture *lastUnusedTexture = unusedTextureList.back();
              evictedTextures.emplace_back(lastUnusedTexture);
-@@ -81,6 +114,8 @@ namespace RT64 {
+@@ -81,6 +115,8 @@ namespace RT64 {
              unusedTextureList.pop_back();
              cachedTexturePoolSize -= lastUnusedTexture->memorySize;
          }
@@ -8021,7 +8029,7 @@ index 0848f3e..2b735ce 100644
      }
  
      bool ReplacementMap::saveDatabase(std::ostream &stream) {
-@@ -211,6 +246,9 @@ namespace RT64 {
+@@ -211,6 +247,9 @@ namespace RT64 {
              }
          }
  
@@ -8031,7 +8039,7 @@ index 0848f3e..2b735ce 100644
          globalVersion++;
      }
  
-@@ -314,9 +352,14 @@ namespace RT64 {
+@@ -314,9 +353,14 @@ namespace RT64 {
          }
  
          // Remove the existing entry from the list if it exists.
@@ -8047,7 +8055,7 @@ index 0848f3e..2b735ce 100644
          }
  
          // Push a new access entry to the front of the list and store the new iterator.
-@@ -325,6 +368,32 @@ namespace RT64 {
+@@ -325,6 +369,32 @@ namespace RT64 {
          return true;
      }
  
@@ -8080,7 +8088,7 @@ index 0848f3e..2b735ce 100644
      bool TextureMap::evict(uint64_t submissionFrame, std::vector<uint64_t> &evictedHashes) {
          evictedHashes.clear();
  
-@@ -352,6 +421,7 @@ namespace RT64 {
+@@ -352,6 +422,7 @@ namespace RT64 {
                  listIterators[textureIndex] = accessList.end();
                  hashMap.erase(textureHash);
                  evictedHashes.push_back(textureHash);
@@ -8088,7 +8096,7 @@ index 0848f3e..2b735ce 100644
                  it = decltype(it)(accessList.erase(std::next(it).base()));
  
                  // If a texture replacement was used for this texture, decrease the reference in the map.
-@@ -976,12 +1046,22 @@ namespace RT64 {
+@@ -976,12 +1047,22 @@ namespace RT64 {
          std::vector<StreamResult> streamResultQueueCopy;
          std::vector<TextureMapAddition> textureMapAdditions;
          std::vector<ReplacementMapAddition> replacementMapAdditions;
@@ -8111,7 +8119,7 @@ index 0848f3e..2b735ce 100644
              resolvedPathQueueCopy.clear();
              streamResultQueueCopy.clear();
              beforeCopyBarriers.clear();
-@@ -991,10 +1071,15 @@ namespace RT64 {
+@@ -991,10 +1072,15 @@ namespace RT64 {
              // Check the top of the queue or wait if it's empty.
              {
                  std::unique_lock queueLock(uploadQueueMutex);
@@ -8129,7 +8137,7 @@ index 0848f3e..2b735ce 100644
                  if (!uploadQueue.empty()) {
                      queueCopy = uploadQueue;
                  }
-@@ -1174,6 +1259,50 @@ namespace RT64 {
+@@ -1174,6 +1260,50 @@ namespace RT64 {
                          bool referenceCounted = (resolvedPath.resolvedOperation != ReplacementOperation::Preload) && (replacementTexture != lowMipCacheTexture);
                          replacementMapAdditions.emplace_back(ReplacementMapAddition{ resolvedPath.textureHash, replacementTexture, resolvedPath.resolvedShift, referenceCounted });
                      }
@@ -8180,7 +8188,7 @@ index 0848f3e..2b735ce 100644
                  }
                  
                  // Execute the copy worker and signal a semaphore so it synchronizes with the direct worker afterwards.
-@@ -1222,6 +1351,24 @@ namespace RT64 {
+@@ -1222,6 +1352,24 @@ namespace RT64 {
                      directWorker->commandList->barriers(RenderBarrierStage::GRAPHICS_AND_COMPUTE, afterDecodeBarriers);
                  }
  
@@ -8205,7 +8213,7 @@ index 0848f3e..2b735ce 100644
                  // Execute the direct worker but make it wait for the copy worker to finish first.
                  const RenderCommandList *directCommandList = directWorker->commandList.get();
                  directWorker->commandList->end();
-@@ -1230,6 +1377,7 @@ namespace RT64 {
+@@ -1230,6 +1378,7 @@ namespace RT64 {
  
                  // Delete all the resources used during the upload of replacements.
                  replacementUploadResources.clear();
@@ -8213,7 +8221,7 @@ index 0848f3e..2b735ce 100644
                  
                  // Add all the textures to the map once they're ready.
                  {
-@@ -1242,6 +1390,14 @@ namespace RT64 {
+@@ -1242,6 +1391,14 @@ namespace RT64 {
                          textureMap.replace(addition.hash, addition.texture, addition.shift == ReplacementShift::Half, addition.referenceCounted);
                      }
  
@@ -8228,10 +8236,35 @@ index 0848f3e..2b735ce 100644
                      textureMap.replacementMap.evict(textureMap.evictedTextures);
                  }
  
-@@ -1317,6 +1473,16 @@ namespace RT64 {
-         return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
-     }
+@@ -1314,7 +1471,38 @@ namespace RT64 {
  
+     bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureScale, interop::float3 &textureDimensions, bool &textureReplaced, bool &hasMipmaps, bool &shiftedByHalf) {
+         std::unique_lock lock(textureMapMutex);
+-        return textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
++        const bool found = textureMap.use(hash, submissionFrame, textureIndex, textureScale, textureDimensions, textureReplaced, hasMipmaps, shiftedByHalf);
++
++        // Banjo-Tooie: a draw whose texture is not in the cache (still uploading or evicted) is drawn with a blank one for
++        // that frame. Logged (a few a second) to tie a flicker to a texture.
++        if (!found) {
++            static uint64_t missesSinceLog = 0;
++            static uint32_t loggedThisSecond = 0;
++            static std::chrono::steady_clock::time_point secondStart = std::chrono::steady_clock::now();
++            missesSinceLog++;
++            const auto now = std::chrono::steady_clock::now();
++            if ((now - secondStart) >= std::chrono::seconds(1)) {
++                secondStart = now;
++                loggedThisSecond = 0;
++            }
++            if (loggedThisSecond < 3) {
++                loggedThisSecond++;
++                fprintf(stderr, "[tex] a draw used a texture that was not ready: %016llx at workload %llu (%llu such draws so far)\n",
++                    (unsigned long long)(hash), (unsigned long long)(submissionFrame), (unsigned long long)(missesSinceLog));
++            }
++        }
++
++        return found;
++    }
++
 +    bool TextureCache::useHeight(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex, interop::float2 &textureDimensions) {
 +        std::unique_lock lock(textureMapMutex);
 +        return textureMap.useHeight(hash, submissionFrame, textureIndex, textureDimensions);
@@ -8240,11 +8273,9 @@ index 0848f3e..2b735ce 100644
 +    void TextureCache::touchTexture(uint64_t hash, uint64_t submissionFrame) {
 +        std::unique_lock lock(textureMapMutex);
 +        textureMap.touch(hash, submissionFrame);
-+    }
-+
+     }
+ 
      bool TextureCache::useTexture(uint64_t hash, uint64_t submissionFrame, uint32_t &textureIndex) {
-         interop::float2 textureScale;
-         interop::float3 textureDimensions;
 diff --git a/src/render/rt64_texture_cache.h b/src/render/rt64_texture_cache.h
 index 9131697..1500356 100644
 --- a/src/render/rt64_texture_cache.h
