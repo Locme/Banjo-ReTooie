@@ -1967,7 +1967,7 @@ index 69a82ac..68a2610 100644
          uint32_t gInput;
          uint32_t gSampler;
 diff --git a/src/render/rt64_framebuffer_renderer.cpp b/src/render/rt64_framebuffer_renderer.cpp
-index 9fae0d4..2822111 100644
+index 9fae0d4..da8fa04 100644
 --- a/src/render/rt64_framebuffer_renderer.cpp
 +++ b/src/render/rt64_framebuffer_renderer.cpp
 @@ -3,6 +3,20 @@
@@ -3621,7 +3621,7 @@ index 9fae0d4..2822111 100644
 +                            }
 +                        }
 +                        // Banjo-Tooie: Modern and Stylised water's tessellated surface, from the first 3D world of the frame.
-+                        // (Displaced ground takes the same camera terms.)
++                        // (And whether displaced ground is on this frame; its camera terms are each framebuffer's own, groundCameras.)
 +                        if (!waterTessOn && !groundTessOn && ((waterTessPipeline != nullptr) || (groundTessPipeline != nullptr)) && (proj.transformsIndex < drawData.modViewProjTransforms.size()) && (proj.transformsIndex < drawData.modProjTransforms.size())) {
 +                            const auto &waterViewport = drawData.rspViewports[proj.transformsIndex];
 +                            const uint32_t tessKinds = ComputeSceneWater(drawData.modProjTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex],
@@ -3746,7 +3746,7 @@ index 9fae0d4..2822111 100644
                          
                          if (triangles.vertexTestZ && usesViewport) {
                              instanceDrawCallVector[vertexTestZCallIndex].vertexTestZ.indexCount += call.callDesc.triangleCount * 3;
-@@ -1747,25 +3293,2256 @@ namespace RT64 {
+@@ -1747,25 +3293,2266 @@ namespace RT64 {
  #           endif
                  {
                      rasterScene.instanceIndices.push_back(instanceIndex);
@@ -4286,6 +4286,16 @@ index 9fae0d4..2822111 100644
 +                                parallaxCameraCount++;
 +                                frameParams.parallaxCameras[slot * 2] = depthTerms;
 +                                frameParams.parallaxCameras[slot * 2 + 1] = projectionTerms;
++                                if ((proj.transformsIndex >= drawData.viewTransforms.size()) || (proj.transformsIndex >= drawData.modViewProjTransforms.size()) ||
++                                    !SceneGroundCamera(drawData.modProjTransforms[proj.transformsIndex], drawData.viewTransforms[proj.transformsIndex],
++                                        drawData.modViewProjTransforms[proj.transformsIndex], drawData.rspViewports[proj.transformsIndex].scale,
++                                        drawData.rspViewports[proj.transformsIndex].translate, fbParams.resolution, &frameParams.groundCameras[slot * 5]))
++                                {
++                                    // (No ground camera: no displacement there.)
++                                    for (uint32_t r = 0; r < 5; r++) {
++                                        frameParams.groundCameras[slot * 5 + r] = { 0.0f, 0.0f, 0.0f, 0.0f };
++                                    }
++                                }
 +                            }
 +                            parallaxCamera = slot;
 +                            instanceDrawCall.triangles.pipeline = featurePipelineFor(call.shaderDesc, RENDER_FEATURE_PARALLAX);
@@ -6008,7 +6018,7 @@ index 9fae0d4..2822111 100644
  
  #   if RT_ENABLED
          // FIXME: Add support for multiple raytracing scenes.
-@@ -1816,8 +5593,12 @@ namespace RT64 {
+@@ -1816,8 +5603,12 @@ namespace RT64 {
          }
  #   endif
  
@@ -8866,7 +8876,7 @@ index e7895c3..91b40a7 100644
      }
  
 diff --git a/src/shaders/RasterVS.hlsl b/src/shaders/RasterVS.hlsl
-index 74b1fa0..3bb87c7 100644
+index 74b1fa0..77f8757 100644
 --- a/src/shaders/RasterVS.hlsl
 +++ b/src/shaders/RasterVS.hlsl
 @@ -11,16 +11,83 @@
@@ -8935,7 +8945,7 @@ index 74b1fa0..3bb87c7 100644
      
 +    // Banjo-Tooie: Modern water drawn into the water mask while it may be tessellated: its place in the world, for the
 +    // hull and domain shaders (WaterTess.hlsl), so they need neither this draw's screen scale nor its position.
-+    // (And displaced ground the same way, GroundTess.hlsl: the camera terms are the water's.)
++    // (And displaced ground the same way, GroundTess.hlsl; without its cover data it takes the water's camera terms.)
 +    if ((((gConstants.waterMask == 1) || (gConstants.waterMask == 2)) && (FrParams.waterCamera.w > 0.0f)) || ((gConstants.groundDisplace & RASTER_GROUND_DISPLACE) != 0)) {
 +        const float4 world = float4(dot(FrParams.waterClipToWorld[0], ndcPos), dot(FrParams.waterClipToWorld[1], ndcPos),
 +            dot(FrParams.waterClipToWorld[2], ndcPos), dot(FrParams.waterClipToWorld[3], ndcPos));
@@ -9290,10 +9300,10 @@ index 3f33475..7d84d10 100644
  }
 \ No newline at end of file
 diff --git a/src/shared/rt64_frame_params.h b/src/shared/rt64_frame_params.h
-index 2e62aaf..d3b999f 100644
+index 2e62aaf..e24dd62 100644
 --- a/src/shared/rt64_frame_params.h
 +++ b/src/shared/rt64_frame_params.h
-@@ -13,6 +13,144 @@ namespace interop {
+@@ -13,6 +13,148 @@ namespace interop {
          uint frameCount;
          uint viewUbershaders;
          float ditherNoiseStrength;
@@ -9424,7 +9434,7 @@ index 2e62aaf..d3b999f 100644
 +        // Banjo-Tooie: displaced ground (GroundTess.hlsl): how far the deepest part of a texture is pushed down, in world
 +        // units at 100% depth (x), the number of pieces an edge is cut into at most (y), the shortest piece in world
 +        // units (z), then the camera distance the cutting and the displacement fade out over (w, from half of it).
-+        // (The clip-space terms and the camera are the water's: waterClipUp, waterClipToWorld and waterCamera.xyz.)
++        // (The clip-space terms and the camera are each framebuffer's own, groundCameras.)
 +        float4 groundParams;
 +        // Banjo-Tooie: Banjo's fur jiggle (RasterVS.hlsl): how far his strands' tips lag behind his movement, a world
 +        // vector in units at the fur's full length (the shells move by the square of their height), 0 when off.
@@ -9435,6 +9445,10 @@ index 2e62aaf..d3b999f 100644
 +        // framebuffers a frame (after an HD shadow, or in two passes) of different sizes, and one set of terms for all of
 +        // them put the pixels of the others in the wrong place: their parallax flattened out and came back (L).
 +        float4 parallaxCameras[8];
++        // Banjo-Tooie: displaced ground's camera (GroundTess.hlsl) for each of parallaxCameras' framebuffers, picked the same
++        // way (RASTER_PARALLAX_CAMERA): the map from world space to clip space as RasterVS places the vertices (four rows),
++        // then the camera's world x, y and z. Each framebuffer's own, as parallax's (its size changes the map).
++        float4 groundCameras[20];
      };
  #ifdef HLSL_CPU
  };

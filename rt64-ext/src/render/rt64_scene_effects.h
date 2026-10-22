@@ -551,6 +551,10 @@ namespace RT64 {
     // and its framebuffer's viewport. False for a projection that isn't a perspective one.
     bool SceneParallaxCamera(const interop::float4x4 &projection, const interop::float3 &viewportScale, const interop::float3 &viewportTranslate,
         float viewportWidth, float viewportHeight, interop::float4 &depthTerms, interop::float4 &projectionTerms);
+    // Displaced ground's camera terms for a draw's framebuffer (FrameParams.groundCameras): the world to clip space map's
+    // four rows, then the camera's world position. False for a projection that isn't a perspective one.
+    bool SceneGroundCamera(const interop::float4x4 &projection, const interop::float4x4 &view, const interop::float4x4 &viewProj,
+        const interop::float3 &viewportScale, const interop::float3 &viewportTranslate, const interop::float2 &resolution, interop::float4 *terms);
     // A texture's brightness range for parallax mapping (darkest | lightest << 8), 0 for none or when the original
     // textures are off (only meaningful after ComputeSceneParallax returned true).
     uint32_t SceneParallaxTexture(uint64_t hash);
