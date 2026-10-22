@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T531 Sand footprints with the camera straight above
+- Asked: 2026-10-22 11:08 UTC
+- Build: main 3da2b67
+- Steps:
+  1. Tessellated sand on, Terrydactyland
+  2. Walk on the sand to leave footprints
+  3. Move the camera so it looks straight down on Banjo, as high as it goes
+- Look for: The footprints and dips round Banjo stay. If the sand still goes flat, tell me roughly how high the camera is
+- Status: waiting for L
+
 ## T530 Displaced ground cost
 - Asked: 2026-10-22 10:53 UTC
 - Build: main
