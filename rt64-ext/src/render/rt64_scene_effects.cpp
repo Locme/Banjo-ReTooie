@@ -15,6 +15,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <cstdlib>
 #include <deque>
 #include <iterator>
@@ -2400,6 +2403,23 @@ namespace RT64 {
 
     std::atomic<uint32_t> sceneEffectsRecorded{ 0 };
 
+    // Writes one buffer into a ray texture set, false if the driver faulted (an access violation inside NVIDIA's
+    // vkUpdateDescriptorSets crashed the game from here on 2026-10-21 and 22 with no way to tell which buffer it was).
+    static bool RaySetBufferSafe(SceneRayTexturesDescriptorSet *set, uint32_t index, const RenderBuffer *buffer, const RenderBufferStructuredView *view) {
+#   ifdef _WIN32
+        __try {
+            set->setBuffer(index, buffer, 0, view);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+#   else
+        set->setBuffer(index, buffer, 0, view);
+        return true;
+#   endif
+    }
+
     // Banjo-Tooie: Graphics > Ray tracing. Builds the structures the traced reflections trace through, from the world's
     // solid triangles: one geometry for each run of the index buffer (the sun shadow casters' runs), over the world
     // positions the vertex processor worked out, under one instance of the identity transform. Does nothing unless
@@ -2467,11 +2487,19 @@ namespace RT64 {
             Resources::RayTexturesEntry entry;
             entry.set = std::make_unique<SceneRayTexturesDescriptorSet>(worker->device);
             SceneRayTexturesDescriptorSet *set = entry.set.get();
-            set->setBuffer(set->gRayGeometries, res.rayGeometryBuffer.get());
-            set->setBuffer(set->gRayIndices, wanted[0]);
-            set->setBuffer(set->gRayTexcoords, wanted[1]);
-            set->setBuffer(set->gRayRDPTiles, wanted[2], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::RDPTile)) : RenderBufferStructuredView(16));
-            set->setBuffer(set->gRayGPUTiles, wanted[3], haveTextureBuffers ? RenderBufferStructuredView(sizeof(interop::GPUTile)) : RenderBufferStructuredView(16));
+            const RenderBufferStructuredView tilesView(haveTextureBuffers ? sizeof(interop::RDPTile) : 16);
+            const RenderBufferStructuredView gpuTilesView(haveTextureBuffers ? sizeof(interop::GPUTile) : 16);
+            const int faulted =
+                RaySetBufferSafe(set, set->gRayGeometries, res.rayGeometryBuffer.get(), nullptr) ? (RaySetBufferSafe(set, set->gRayIndices, wanted[0], nullptr) ?
+                (RaySetBufferSafe(set, set->gRayTexcoords, wanted[1], nullptr) ? (RaySetBufferSafe(set, set->gRayRDPTiles, wanted[2], &tilesView) ?
+                (RaySetBufferSafe(set, set->gRayGPUTiles, wanted[3], &gpuTilesView) ? 0 : 5) : 4) : 3) : 2) : 1;
+            if (faulted != 0) {
+                // The driver faulted on writing that buffer (the crashes of 2026-10-21/22): the traced pass falls back this frame.
+                fprintf(stderr, "[rt] the driver faulted writing ray texture buffer %d (%p), no traced pass this frame\n", faulted, (const void *)wanted[faulted - 1]);
+                res.retireLater(std::move(entry.set));
+                res.rayTexturesSet = nullptr;
+                return;
+            }
             std::copy(wanted, wanted + 4, entry.buffers);
             entry.usedPass = res.passes;
             res.rayTexturesSet = set;
