@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T535 Ray tracing speed-ups (masks, kept level structure, lamps at half resolution)
+- Asked: 2026-10-22 12:45 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full; compare "ray tracing build" and "traced effects" with the numbers before this build (same spot)
+  2. Check lamp and fire shadows (Bottles' House, a cave), Banjo's shadow with Traced shadows of the player off and on, and sun shadows outdoors
+  3. Turn on Half-resolution ray tracing indoors with lamps and check the lamp light
+- Look for: Same picture as before with Half-resolution off (lamp light may reach a little closer to the lamp's own fitting). Faster: headless Spiral Mountain build 4 -> 1.5 ms (the level's structure is kept), traced effects about 290 -> 200 ms. Wrong or missing shadows after a door or platform moves would mean the kept level structure missed a change
+- Status: waiting for L
+
 ## T534 Half-resolution ray tracing (175 FPS)
 - Asked: 2026-10-22 12:20 UTC
 - Build: main

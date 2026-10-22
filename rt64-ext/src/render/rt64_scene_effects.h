@@ -321,7 +321,7 @@ namespace RT64 {
         float reach = 0.0f;
     };
     void BuildSceneBVH(RenderWorker *worker, const RenderBuffer *worldPos, uint32_t worldPosVertexCount, const RenderBuffer *indices,
-        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass);
+        const SceneRayDraw *draws, size_t drawCount, const SceneRayTextures &textures, const SceneRayGrass &grass, uint64_t levelKey = 0);
     void SetSceneRayTracing(bool enabled);
     // Banjo-Tooie: Graphics > Ray tracing strength (0 to 1, 0.6 the default): the least each traced effect shows at while
     // ray tracing is active (see RefreshReflections).

@@ -5314,7 +5314,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_half_option,
         "Half-resolution ray tracing",
-        "Traces the sun's shadows and the Traced light beams once for every 2x2 pixels instead of every pixel, then fills in each pixel from the ones round it on the same surface. About a quarter of their rays, for higher frame rates (175 FPS); shadow edges are a little softer. Needs Ray tracing on.",
+        "Traces the sun's shadows, the lamps' and fires' light and the Traced light beams once for every 2x2 pixels instead of every pixel, then fills in each pixel from the ones round it on the same surface. About a quarter of their rays, for higher frame rates (175 FPS); shadow edges are a little softer. Needs Ray tracing on.",
         false);
     graphics.add_bool_option(
         reflections_section_option,

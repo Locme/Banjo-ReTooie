@@ -873,13 +873,19 @@ bool RayTexturesOn() {
     return asfloat(gLights.Load(32)) > 0.5f;
 }
 
-// The 3D grass's blades near the camera are the traced structure's second instance (BuildSceneBVH: instance 1, mask 2;
-// the world is mask 1), not opaque, with no geometry entry: a ray's geometry is RayGrassGeometry there.
+// The traced structure's instances (BuildSceneBVH): the level's own draws (mask 1, custom index 0), the models
+// (characters, enemies, objects: mask 4, custom index the first of their geometry table entries) and the 3D grass's
+// blades near the camera (mask 2, custom index RayGrassInstance), not opaque, with no geometry entry: a ray's geometry
+// is RayGrassGeometry there.
 static const uint RayGrassGeometry = 0xFFFFFFFFu;
-static const uint RayWorldMask = 0x01u;
+static const uint RayGrassInstance = 0xFFFFFFu;
+static const uint RayLevelMask = 0x01u;
+static const uint RayGrassMask = 0x02u;
+static const uint RayModelMask = 0x04u;
+static const uint RayWorldMask = RayLevelMask | RayModelMask;
 
 uint RayGeometryOf(uint instance, uint geometry) {
-    return (instance == 1u) ? RayGrassGeometry : geometry;
+    return (instance == RayGrassInstance) ? RayGrassGeometry : (instance + geometry);
 }
 
 // Whether a ray stops at a grass blade it met t along (ray units): only past one and a half blade heights from where
@@ -964,46 +970,58 @@ bool RayCutoutSolid(uint geometry, uint primitive, float2 barycentrics) {
 // Whether a ray (world space) meets anything: mode 0 anything, 1 anything but Banjo (the ray goes on past him to what
 // is behind, so his outline leaves no lit hole in a shadow he stands in), 2 only Banjo. A cut-out (a grate, a fence,
 // leaves) counts only where its texture is solid, so light goes through its holes (L, 2026-10-21).
-bool TraceOccluded(RayDesc ray, uint mode) {
-    if (mode == 0u) {
-        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-        query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, 0xFFu, ray);
-        while (query.Proceed()) {
-            if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-                continue;
-            }
-            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-            if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
-                RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
-            {
-                query.CommitNonOpaqueTriangleHit();
-            }
-        }
-        return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
-    }
-    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
+// Anything solid among the instances in mask: solid triangles end the search at once (the hardware's fast path); only
+// cut-outs and the grass are looked at one by one.
+bool TraceAny(RayDesc ray, uint mask) {
+    RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+    query.TraceRayInline(gSceneBVH, RAY_FLAG_NONE, mask, ray);
     while (query.Proceed()) {
-        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-            if ((geometry == RayGrassGeometry) && !RayGrassStops(ray, query.CandidateTriangleRayT())) {
-                continue;
-            }
-            if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
-                continue;
-            }
-            // Mode 3: the level only (models, Banjo among them, let the ray by).
-            if ((mode == 3u) && ((RayGeometryFlags(geometry) & 4u) != 0u)) {
-                continue;
-            }
-            const bool banjo = BanjoHit(geometry, ray.Origin + ray.Direction * query.CandidateTriangleRayT());
-            if (((mode == 1u) || (mode == 3u)) != banjo) {
-                query.CommitNonOpaqueTriangleHit();
-                query.Abort();
-            }
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if ((geometry == RayGrassGeometry) ? RayGrassStops(ray, query.CandidateTriangleRayT()) :
+            RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics()))
+        {
+            query.CommitNonOpaqueTriangleHit();
         }
     }
     return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
+// Whether a ray meets a model that is (banjo) or isn't Banjo. Only the models' instance, where each triangle is looked at.
+bool TraceModels(RayDesc ray, bool banjo) {
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(gSceneBVH, 0, RayModelMask, ray);
+    while (query.Proceed()) {
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
+        if (((RayGeometryFlags(geometry) & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+            continue;
+        }
+        if (BanjoHit(geometry, ray.Origin + ray.Direction * query.CandidateTriangleRayT()) == banjo) {
+            query.CommitNonOpaqueTriangleHit();
+            query.Abort();
+        }
+    }
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
+// Mode 3: the level only (models, Banjo among them, let the ray by). The level and the models are separate instances, so
+// only the models' triangles are looked at one by one, and only when Banjo has to be told apart.
+bool TraceOccluded(RayDesc ray, uint mode) {
+    if (mode == 0u) {
+        return TraceAny(ray, 0xFFu);
+    }
+    if (mode == 2u) {
+        return TraceModels(ray, true);
+    }
+    if (TraceAny(ray, RayLevelMask | RayGrassMask)) {
+        return true;
+    }
+    return (mode == 1u) && TraceModels(ray, false);
 }
 
 // A Light Source pick's object size (SceneLightSourceW in rt64_texture_marks.cpp): its radius from the fraction of the
@@ -1019,32 +1037,15 @@ float LightSourceRadius(float w) {
 // solid). The lamp's own fitting (within 90 units of the light, or of a Light Source's object) lets it all out, so
 // the lamp lights up as normal.
 float TraceLampVisible(RayDesc ray, float3 light, float radius) {
-    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-    query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
-    while (query.Proceed()) {
-        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            continue;
-        }
-        const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
-        if ((geometry == RayGrassGeometry) && !RayGrassStops(ray, query.CandidateTriangleRayT())) {
-            continue;
-        }
-        const uint flags = RayGeometryFlags(geometry);
-        if (((flags & 1u) != 0u) && !RayCutoutSolid(geometry, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
-            continue;
-        }
-        const float3 at = ray.Origin + ray.Direction * query.CandidateTriangleRayT();
-        // With the player's traced shadows off, the light goes on through Banjo.
-        if (PlayerShadowsOff() && BanjoHit(geometry, at)) {
-            continue;
-        }
-        if (length(at - light) < max(90.0f, radius + 10.0f)) {
-            continue;
-        }
-        query.CommitNonOpaqueTriangleHit();
-        query.Abort();
+    // The ray points at the light, so what lies within reach of it is the ray's last stretch: the ray stops short of it.
+    const float clear = max(90.0f, radius + 10.0f);
+    const float toLight = length(light - ray.Origin) / max(length(ray.Direction), 1e-4f);
+    ray.TMax = min(ray.TMax, toLight - clear);
+    if (ray.TMax <= ray.TMin) {
+        return 1.0f;
     }
-    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? 0.0f : 1.0f;
+    // With the player's traced shadows off, the light goes on through Banjo.
+    return TraceOccluded(ray, PlayerShadowsOff() ? 1u : 0u) ? 0.0f : 1.0f;
 }
 
 // Traced light beams: the light's shafts through the air, where the sun (or a room's window light) reaches. Along the
@@ -1171,7 +1172,7 @@ float4 TracedReflection(int2 pixel, float3 center, float3 normal) {
     RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(gSceneBVH, 0, 0xFFu, ray);
     while (query.Proceed()) {
-        if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) && (query.CandidateInstanceID() == 1u) && RayGrassStops(ray, query.CandidateTriangleRayT())) {
+        if ((query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) && (query.CandidateInstanceID() == RayGrassInstance) && RayGrassStops(ray, query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -1240,6 +1241,10 @@ bool Enclosed(float3 worldStart) {
 // rays to it get through and the surface faces it, falling off with distance. So a lamp throws hard-edged shadows of
 // what stands between (two rays a pixel over a small disc at the light, turned from pixel to pixel, a soft edge), not just a glow over the room
 // (L, 2026-10-20: "they don't emit ray traced light").
+// Half-resolution ray tracing: 2 leaves the lamps' traced light out (lamp stays 0; TracedHalfLamp reads it from the
+// indirect pass's third band) and only works out the shade.
+static int gLampHalf = 0;
+
 float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     lamp = 0.0f;
     const uint count = uint(asfloat(gLights.Load(0)) + 0.5f);
@@ -1272,7 +1277,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
         const float3 direction = toLight / distance;
         const float facing = dot(worldNormal, direction);
         // At most six lights traced a pixel (a room full of lamps traced every one).
-        if ((facing <= 0.0f) || (traced >= 6u)) {
+        if ((facing <= 0.0f) || (traced >= 6u) || (gLampHalf == 2)) {
             continue;
         }
         traced++;
@@ -1375,7 +1380,7 @@ float ModelShadow(float3 center, float3 normal) {
                 continue;
             }
             // The 3D grass's blades round the spot don't count.
-            if (query.CandidateInstanceID() == 1u) {
+            if (query.CandidateInstanceID() == RayGrassInstance) {
                 continue;
             }
             const uint geometry = RayGeometryOf(query.CandidateInstanceID(), query.CandidateGeometryIndex());
@@ -3776,10 +3781,37 @@ float TracedHalfShadow(int2 pixel, float3 center, float3 normal) {
 
 float3 TracedHalfBeams(int2 pixel) {
     const int2 halfSize = TracedHalfSize();
-    const float2 textureSize = float2(halfSize.x, halfSize.y * 2);
+    const float2 textureSize = float2(halfSize.x, halfSize.y * 3);
     // Kept inside the lower half, so the upper half's texels never blend in.
     const float2 at = clamp((float2(pixel) + 0.5f) * 0.5f, 0.5f, float2(halfSize) - 0.5f) + float2(0.0f, float(halfSize.y));
     return gIndirect.SampleLevel(LinearSampler, at / textureSize, 0).rgb;
+}
+
+// The lamps' and fires' traced light (LightShadows' lamp), from the third band, on the same surface as TracedHalfShadow.
+float3 TracedHalfLamp(int2 pixel, float3 center, float3 normal) {
+    const int2 halfSize = TracedHalfSize();
+    const int2 base = int2(floor((float2(pixel) - 1.0f) * 0.5f));
+    const float2 f = (float2(pixel) - float2(base * 2)) * 0.5f;
+    const float tolerance = max(-center.z * 0.03f, 2.0f);
+    float3 sum = 0.0f;
+    float weight = 0.0f;
+    [unroll] for (int k = 0; k < 4; k++) {
+        const int2 corner = int2(k & 1, k >> 1);
+        const int2 q = clamp(base + corner, int2(0, 0), halfSize - 1);
+        const float sampleDepth = LoadDepth(q * 2);
+        if (sampleDepth >= 0.99999f) {
+            continue;
+        }
+        const float planeDistance = abs(dot(ViewPosition(q * 2, sampleDepth) - center, normal));
+        const float2 b = lerp(1.0f - f, f, float2(corner));
+        const float w = saturate(1.0f - planeDistance / tolerance) * (b.x * b.y + 1e-3f);
+        sum += gIndirect.Load(int3(q.x, q.y + halfSize.y * 2, 0)).rgb * w;
+        weight += w;
+    }
+    if (weight < 1e-4f) {
+        return gIndirect.Load(int3(clamp(pixel / 2, int2(0, 0), halfSize - 1) + int2(0, halfSize.y * 2), 0)).rgb;
+    }
+    return sum / weight;
 }
 #endif
 
@@ -4125,8 +4157,19 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
 // gather.
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 #ifdef RAY_TRACED
-    // The lower half (drawn only with Half-resolution ray tracing): the light beams and the sun shadow (TracedHalfAt).
+    // The lower bands (drawn only with Half-resolution ray tracing): the light beams and the sun shadow, then the
+    // lamps' traced light (TracedHalfShadow, TracedHalfBeams, TracedHalfLamp).
     const int2 halfSize = TracedHalfSize();
+    if (int(pos.y) >= halfSize.y * 2) {
+        const int2 lampPixel = int2(int(pos.x), int(pos.y) - halfSize.y * 2) * 2;
+        const float lampDepth = LoadDepth(lampPixel);
+        float3 lamps = 0.0f;
+        if ((lampDepth < 0.99999f) && (gConstants.view.x < 1.5f)) {
+            const float3 lampCenter = ViewPosition(lampPixel, lampDepth);
+            LightShadows(lampPixel, lampCenter, ViewNormal(lampPixel, lampCenter), lamps);
+        }
+        return float4(lamps, 1.0f);
+    }
     if (int(pos.y) >= halfSize.y) {
         const int2 lowerPixel = int2(int(pos.x), int(pos.y) - halfSize.y) * 2;
         const float lowerDepth = LoadDepth(lowerPixel);
@@ -4438,8 +4481,10 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         // Not tied to the sun: lamps and fires cast their own in caves and at night.
         if (lightShadows) {
             float3 lamps;
+            gLampHalf = HalfTraced() ? 2 : 0;
             keep *= LightShadows(pixel, center, normal, lamps);
-            lamp += lamps;
+            gLampHalf = 0;
+            lamp += HalfTraced() ? TracedHalfLamp(pixel, center, normal) : lamps;
             if (!onBanjo) {
                 keep *= ModelShadow(center, normal);
             }
