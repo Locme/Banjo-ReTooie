@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T532 Displaced ground cost (floors' own shaders)
+## T533 Displaced ground cost (floors' own shaders)
 - Asked: 2026-10-22 11:32 UTC
 - Build: main
 - Steps:
@@ -8,6 +8,16 @@
   2. Stand where your screenshot was in Terrydactyland (-4367, 3322, -1133) and note the fps and GPU ms with Displaced ground at 60, then at 0
   3. Do the same in the intro
 - Look for: Displaced ground should now cost a few ms, not half the frame rate. In the first seconds after loading a level it may still be slower (the floors' shaders are built in the background). Check that floors look the same as before (colours, lighting) and no floor turns black or disappears. Send console.log if a message says the graphics driver could not build a pipeline.
+- Status: waiting for L
+
+## T532 Light Source lights from the object itself (no balls)
+- Asked: 2026-10-22 11:37 UTC
+- Build: main (next build)
+- Steps:
+  1. Graphics > Ray tracing on
+  2. Pick an object in Shader Effects pick mode and give it Light Source (9), e.g. the one from your screenshot (31d98c...)
+  3. Look round it, then try a few strengths with Shift + mouse wheel
+- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed
 - Status: waiting for L
 
 ## T531 Sand footprints with the camera straight above

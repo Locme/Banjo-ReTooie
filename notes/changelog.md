@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- Shader Effects pick mode's **Light Source**: the object itself now gives off the light. The light used to sit at a point inside the object, so it only got out through the gaps in the object's shape and left bright blobs ("balls") round it; it now leaves from the whole object, lighting what is round it evenly, with its reach counted from the object's edge (L). Untested on PC (T532).
 - The grenade egg's blast fireball is now a Light Source with Slight Glow, so it lights the area with Ray tracing on (found by setting off grenade eggs in a headless run) (L). Untested on PC (T526).
 - Fire glows and lights the scene: flames, torch and candle flames and fire walls are now Light Sources with Slight Glow (with Ray tracing on they light the area with no glowing ball), embers glow, and three likely explosion frames from the texture dump light up too (L). Untested on PC (T526).
 - Shader Effects pick mode: new effect **Disable RT** (Shift + 1) leaves a texture out of the ray traced scene. The lanterns' glass now has it, so the lanterns no longer show black squares round them with Ray tracing on. L's shader effect tags (explosions as Light Sources, lamps, glow) now ship with the port, and Shift + mouse wheel sets the strength of these built-in Light Sources too (L). Untested on PC (T525).
@@ -120,7 +121,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 - Above 60 FPS the water in Jolly Roger's Lagoon no longer pushes Banjo back so he can't swim. Untested on PC (T340).
 
 ### Graphics
-- Displaced ground: floors are now shaded with their own fast shaders instead of the slow all-purpose one (L: it halved the frame rate). Untested on PC (T532).
+- Displaced ground: floors are now shaded with their own fast shaders instead of the slow all-purpose one (L: it halved the frame rate). Untested on PC (T533).
 - Displaced ground costs much less: only the ground within a quarter of its reach is cut finely, and further off the pieces grow to four times as long (a sixteenth as many). Untested on PC (T530).
 - Displaced ground: the ground no longer wobbles while the camera moves, reaches 8000 units by default (new Displaced ground distance setting, 2000-20000), and stays flat under the grass edging the game paints over dirt (L). Untested on PC (T518).
 - 3D grass is faster on the CPU: the map of where roads, paths and floors cover the grass is now kept from frame to frame for each draw and only redone for draws that move or change, and ground far from any grass is skipped. Headless in Spiral Mountain this part went from about 20 ms to about 1 ms a frame. Untested on PC (T515).

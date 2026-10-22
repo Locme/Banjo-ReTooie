@@ -4,7 +4,9 @@
 
 #include "rt64_texture_marks.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -58,6 +60,10 @@ namespace RT64 {
         const std::scoped_lock lock(lightSourceMutex);
         const auto it = lightSourceReaches.find(hash);
         return (it != lightSourceReaches.end()) ? it->second : 0.0f;
+    }
+
+    float SceneLightSourceW(float reach, float radius) {
+        return std::floor(reach) + 0.05f + 0.9f * (std::clamp(radius, 0.0f, 1000.0f) / 1000.0f);
     }
 
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count) {
