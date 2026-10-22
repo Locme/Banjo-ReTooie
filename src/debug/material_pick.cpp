@@ -81,7 +81,7 @@ namespace {
         { 120, 220, 70, 70, 0, 0, 90 },
     };
     // The classes the sweep of the texture dump sorted textures into (see ray_material_defaults.inc), and the material each gets.
-    enum MaterialClass : uint8_t { c_chrome, c_gold, c_copper, c_steel, c_rust, c_glass, c_gem, c_glaze, c_plastic, c_leaf, c_petal, c_wax, c_glow };
+    enum MaterialClass : uint8_t { c_chrome, c_gold, c_copper, c_steel, c_rust, c_glass, c_gem, c_glaze, c_plastic, c_leaf, c_petal, c_wax, c_glow, c_plain };
     const Material class_materials[] = {
         // chrome: polished metal, a sharp reflection.
         { 255, 255, 255, 12, 100, 0, 0, false },
@@ -109,6 +109,8 @@ namespace {
         { 255, 255, 255, 35, 0, 0, 80, false },
         // glow: lit lamps, glowing crystals and magic (no light source of its own: the Lamp and Light Source picks do that).
         { 255, 255, 255, 50, 0, 150, 0, false },
+        // plain: the Default preset (a plain dielectric, half rough), as L picked it on 2026-10-22.
+        { 255, 255, 255, 50, 0, 0, 0, false },
     };
     struct BuiltIn {
         uint64_t hash;

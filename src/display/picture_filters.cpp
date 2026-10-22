@@ -461,6 +461,13 @@ namespace {
         { 0xbfca5f9eff23e2ab, fx(effect_glow) },
         // The grenade egg's blast fireball (8x8 fire), found with a headless blow-up run (TOOIE_EXPLODE=a15D@<ms>).
         { 0x0f99c88fb5007ceb, fx(effect_glow, effect_light) },
+        // L's parallax, shader effect and ray tags of 2026-10-22 (the Metal, Stone and Disable picks there too).
+        { 0x075593c29e89ead3, fx(effect_shiny, effect_glow) },
+        { 0x35635b4edddcbc9e, fx(effect_shiny, effect_glow) },
+        { 0x56999a939e83fb09, fx(effect_lamp) },
+        { 0x747f93d5552d7d66, fx(effect_disable) },
+        { 0x80c4e4b432d14a7a, fx(effect_disable) },
+        { 0xba2dc3d7540c679c, fx(effect_rt_off) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -682,6 +689,7 @@ namespace {
         { 0x06fd1f7c823ffd4d, 34, 168, Metal, 7 },
         { 0x070549b9291bc325, 11, 157, Bumpy },
         { 0x073071e9ef0574b7, 24, 182, Bumpy },
+        { 0x075593c29e89ead3, 40, 190, Metal, 30 },
         { 0x0758af959cf26fa1, 17, 141 },
         { 0x076a73c9792e9159, 11, 113, Bark, 15 },
         { 0x076b5bc2322742b8, 27, 102, Bumpy },
@@ -1303,6 +1311,7 @@ namespace {
         { 0x354e3dc78c79296c, 52, 156, Bumpy },
         { 0x3556f1557d8289c6, 44, 90, Bumpy, 7 },
         { 0x3558cb0a913e66ba, 21, 134, Stone, 7 },
+        { 0x35635b4edddcbc9e, 40, 190, Metal },
         { 0x359be5eefca1eaaa, 11, 168, Bumpy },
         { 0x35a06e91ca131dfc, 100, 156, Rounded },
         { 0x35a236bc6a897ec3, 75, 140, Dirt, 7 },
@@ -2361,7 +2370,7 @@ namespace {
         { 0x80b9ab1f1c75ddfb, 19, 99, Leaves, 7 },
         { 0x80bb6523e7c54f08, 90, 229, Bumpy, 7 },
         { 0x80c4bc312f199f5d, 9, 97, Leaves },
-        { 0x80c4e4b432d14a7a, 12, 171, Metal, 7 },
+        { 0x80c4e4b432d14a7a, 12, 171, Stone },
         { 0x80d299d1b5869b11, 26, 231 },
         { 0x80e6be46dbf243a3, 0, 150, Metal, 7 },
         { 0x80ff3baad3485760, 19, 138, Bumpy },
