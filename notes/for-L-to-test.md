@@ -29,7 +29,8 @@
   3. Read the fps and the overlay's 'Snow and sand CPU' and 'Renderer CPU' lines
   4. Turn Parallax back on and read them again
 - Look for: Edges on the 'Snow and sand CPU' line should be near 0 ms (was 36 ms) and effects setup much lower than 100 ms. The new 'Effects setup' line shows where the rest goes. Send a screenshot of the overlay either way.
-- Status: waiting for L
+- Status: answered 2026-10-22 11:08 UTC
+- L's result: L 2026-10-22 11:04: performance fixed (e210f77: 60 fps, sand CPU 0.25 ms, edges 0.15 ms, worked out 5 times in 5 s)
 
 ## T528 Parallax shapes per texture (frame rate check)
 - Asked: 2026-10-22 10:15 UTC
