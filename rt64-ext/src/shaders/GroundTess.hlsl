@@ -14,8 +14,11 @@
 // (RASTER_GROUND_DISPLACE, RasterVS.hlsl) and gives each corner's place in the world in furAnchor, as for the water.
 // The pixel shader darkens the deeper parts (the anchor's w, RasterPS.hlsl; -1 on walls, which keep their parallax).
 //
-// Built twice from this file: HSMain (hull) and DSMain (domain). Both use the ubershader's vertex and pixel shaders,
-// whose outputs and inputs GroundVertex matches (as WaterTess.hlsl's WaterVertex).
+// Built from this file as HSMain (hull) and DSMain (domain), twice: GroundTessHS/DS for vertex and pixel shaders with a
+// flat colour (the ubershader's, and a material's flat-shaded specialised shaders), and GroundTessSmoothHS/DS with
+// GROUND_SMOOTH for a material's smooth-shaded ones, which pass no flat colour. GroundVertex matches their outputs and
+// inputs. Each material's own specialised shaders are used once built (RENDER_FEATURE_GROUND_TESS, rt64_raster_shader.cpp):
+// the ubershader's pixel shader costs several times as much on every pixel of the ground.
 
 #include "shared/rt64_raster_params.h"
 
@@ -28,7 +31,9 @@ struct GroundVertex {
     float4 position : SV_POSITION;
     float2 uv : TEXCOORD;
     float4 smoothColor : COLOR0;
+#ifndef GROUND_SMOOTH
     nointerpolation float4 flatColor : COLOR1;
+#endif
     float4 furAnchor : TEXCOORD1;
 };
 
@@ -120,7 +125,9 @@ GroundVertex DSMain(GroundPatch p, float3 w : SV_DomainLocation, const OutputPat
     v.position = patch[0].position * w.x + patch[1].position * w.y + patch[2].position * w.z;
     v.uv = patch[0].uv * w.x + patch[1].uv * w.y + patch[2].uv * w.z;
     v.smoothColor = patch[0].smoothColor * w.x + patch[1].smoothColor * w.y + patch[2].smoothColor * w.z;
+#ifndef GROUND_SMOOTH
     v.flatColor = patch[0].flatColor;
+#endif
     v.furAnchor = patch[0].furAnchor * w.x + patch[1].furAnchor * w.y + patch[2].furAnchor * w.z;
     // (How much of the dips may show here: 0 on the edge of the displaced ground and where another draw lies over it,
     // the vertex shader's anchor w.)

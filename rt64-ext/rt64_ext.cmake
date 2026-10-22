@@ -77,6 +77,16 @@ rt64_ext_shader(build_geometry_shader rt64 "src/shaders/GrassGS.hlsl")
 
 # Displaced ground: floors tessellated and pushed down (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessHS.hlsl" "src/shaders/GroundTessDS.hlsl")
+# (And for a material's smooth-shaded specialised shaders, which pass no flat colour.)
+function(build_tessellation_shaders_with TARGETOBJ SHADERNAME HSNAME DSNAME)
+    if (WIN32)
+        build_shader_dxil(${TARGETOBJ} ${SHADERNAME} "${DXC_HS_OPTS}" ${HSNAME} ${ARGN})
+        build_shader_dxil(${TARGETOBJ} ${SHADERNAME} "${DXC_DS_OPTS}" ${DSNAME} ${ARGN})
+    endif()
+    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_HS_OPTS}" ${HSNAME} ${ARGN})
+    build_shader_spirv(${TARGETOBJ} ${SHADERNAME} "${DXC_DS_OPTS}" ${DSNAME} ${ARGN})
+endfunction()
+rt64_ext_shader(build_tessellation_shaders_with rt64 "src/shaders/GroundTess.hlsl" "src/shaders/GroundTessSmoothHS.hlsl" "src/shaders/GroundTessSmoothDS.hlsl" "-D GROUND_SMOOTH")
 
 # Deep snow as a tessellated surface (hull and domain shaders; D3D12 and Vulkan only).
 rt64_ext_shader(build_tessellation_shaders rt64 "src/shaders/SnowTess.hlsl" "src/shaders/SnowTessHS.hlsl" "src/shaders/SnowTessDS.hlsl")
