@@ -85,7 +85,7 @@ namespace RT64 {
     void SetSceneRayTracingReflections(float reflections, float water, float metal, float tiles, float smooth);
     void SetSceneRayTracingHitColours(bool enabled);
     void SetSceneRayTracingPlayerShadows(bool enabled);
-    void SetSceneRayTracingHalf(bool enabled);
+    void SetSceneRayTracingResolution(uint32_t resolution);
     void SetSceneRayTracingParallax(bool enabled);
     void SetSceneRayDetailDistances(float half, float quarter);
     void SetSceneRayTracingSmoothing(float smoothing);
@@ -4602,7 +4602,7 @@ void tooie::picture_filters::apply() {
         (float)(value<double>(ray_tracing_tiles_option, 60.0) / 100.0), (float)(value<double>(ray_tracing_smooth_option, 35.0) / 100.0));
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
     RT64::SetSceneRayTracingPlayerShadows(value<bool>(ray_tracing_player_shadows_option, true));
-    RT64::SetSceneRayTracingHalf(value<bool>(ray_tracing_half_option, false));
+    RT64::SetSceneRayTracingResolution(value<uint32_t>(ray_tracing_resolution_option, (uint32_t)RayResolution::Medium));
     RT64::SetSceneRayTracingParallax(value<bool>(ray_tracing_parallax_option, false));
     RT64::SetSceneRayDetailDistances(float(value<double>(ray_detail_half_option, 2000.0)), float(value<double>(ray_detail_quarter_option, 4000.0)));
     RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
@@ -5420,11 +5420,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Ray tracing hit colours",
         "Experimental. A traced reflection or bounce that lands on something the picture can't see (off the screen, or hidden behind something) uses the colour that spot had when it was last on screen, remembered in the world as you look around, instead of smearing the nearest colour from the picture. Adds a small cost every frame. Needs Ray tracing on. Starts off: if you see flicker, wrong colours or a crash, leave it off and tell me.",
         false);
-    graphics.add_bool_option(
-        ray_tracing_half_option,
-        "Half-resolution ray tracing",
-        "Traces the sun's shadows, the lamps' and fires' light and the Traced light beams once for every 2x2 pixels instead of every pixel, then fills in each pixel from the ones round it on the same surface. About a quarter of their rays, for higher frame rates (175 FPS); shadow edges are a little softer. Needs Ray tracing on.",
-        false);
+    graphics.add_enum_option(
+        ray_tracing_resolution_option,
+        "Ray tracing resolution",
+        "How many rays the traced shadows, lamp light and light beams use. <recomp-color primary>Half</recomp-color> traces them once for every 2x2 pixels and fills in each pixel from the ones round it on the same surface: about a quarter of the rays, for higher frame rates; shadow edges a little softer. <recomp-color primary>Medium</recomp-color> (the default) traces every pixel, with fewer rays far off (Ray detail distances). <recomp-color primary>High</recomp-color> traces every pixel with all its rays at any distance: the sun's four rays everywhere, four rays a lamp and the beams' eight steps, so less noise and finer shadow edges, at a lower frame rate. Needs Ray tracing on.",
+        {
+            {RayResolution::Half, "Half", "Half"},
+            {RayResolution::Medium, "Medium", "Medium"},
+            {RayResolution::High, "High", "High"},
+        },
+        RayResolution::Medium);
     graphics.add_bool_option(
         ray_tracing_parallax_option,
         "Ray tracing uses Parallax materials",
@@ -5768,7 +5773,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_half_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &ray_tracing_resolution_option, &ray_tracing_parallax_option, &ray_detail_half_option, &ray_detail_quarter_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,

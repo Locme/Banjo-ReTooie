@@ -331,6 +331,8 @@ namespace RT64 {
     static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
+    // Ray tracing resolution: 0 half, 1 medium, 2 high.
+    static std::atomic<uint32_t> rayTracingResolution{ 1u };
     static std::atomic<bool> rayTracingHalf{ false };
     // Graphics > Ray Tracing uses Parallax materials: off, the traced pass ignores the Parallax shapes (metal, tiles, smooth,
     // leaves and grass) its geometries carry.
@@ -555,8 +557,9 @@ namespace RT64 {
         rayTracingParallax.store(enabled);
     }
 
-    void SetSceneRayTracingHalf(bool enabled) {
-        rayTracingHalf.store(enabled);
+    void SetSceneRayTracingResolution(uint32_t resolution) {
+        rayTracingResolution.store(std::min(resolution, 2u));
+        rayTracingHalf.store(resolution == 0u);
     }
 
     void SetSceneRayDetailDistances(float half, float quarter) {
@@ -2674,6 +2677,8 @@ namespace RT64 {
             mapped[12] = rayDetailDistances[0].load();
             mapped[13] = rayDetailDistances[1].load();
             mapped[14] = rayTracingParallax.load() ? 1.0f : 0.0f;
+            // Ray tracing resolution High (2): all the rays at every distance.
+            mapped[15] = float(rayTracingResolution.load());
             memcpy(mapped + 16, lightSettings.lights, size_t(lightSettings.lightCount) * 4 * sizeof(float));
             // The level's reaches as whole numbers: a fraction marks a Light Source pick and holds its object's size
             // (SceneLightSourceW).

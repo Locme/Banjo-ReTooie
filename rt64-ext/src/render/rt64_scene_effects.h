@@ -347,7 +347,7 @@ namespace RT64 {
     // Graphics > Ray tracing's "Traced shadows of the player": off, Banjo (whoever is played) casts no traced shadows.
     void SetSceneRayTracingPlayerShadows(bool enabled);
     // Graphics > Half-resolution ray tracing: the sun's traced shadows and the traced light beams at half size.
-    void SetSceneRayTracingHalf(bool enabled);
+    void SetSceneRayTracingResolution(uint32_t resolution);
     void SetSceneRayTracingParallax(bool enabled);
     // Graphics > Ray detail distances: past the first, half the traced rays a pixel; past the second, a quarter (0 for never).
     void SetSceneRayDetailDistances(float half, float quarter);

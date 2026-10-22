@@ -889,9 +889,17 @@ bool PlayerShadowsOff() {
     return (uint(asfloat(gLights.Load(36)) + 0.5f) & 1u) != 0u;
 }
 
+// Ray tracing resolution High (lights word 15): every pixel traces all its rays, at any distance.
+bool RayResolutionHigh() {
+    return asfloat(gLights.Load(60)) > 1.5f;
+}
+
 // Ray detail by distance (Graphics > Ray detail distances, the lights buffer's header): 0 all the rays, 1 half (past the
 // first distance), 2 a quarter (past the second); a distance of 0 never.
 uint RayDetail(float distance) {
+    if (RayResolutionHigh()) {
+        return 0u;
+    }
     const float half = asfloat(gLights.Load(48));
     const float quarter = asfloat(gLights.Load(52));
     if ((quarter > 0.0f) && (distance > quarter)) {
@@ -1166,7 +1174,7 @@ float3 TracedBeams(int2 pixel, float depth) {
     // L 2026-10-21: performance very bad); the Bayer offsets below spread the steps between neighbouring pixels.
     // Ray detail distances take a room's eight down to no fewer than four: with one or two, the Bayer offsets turned a
     // pixel's whole beam on or off and the 4x4 pattern showed as a mesh over the scene (L, 2026-10-22).
-    const int Samples = room ? max(8 >> RayDetail(reach), 4) : 4;
+    const int Samples = (room || RayResolutionHigh()) ? max(8 >> RayDetail(reach), 4) : 4;
     const float step = reach / float(Samples);
     const int2 cell = pixel & 3;
     const float bayer[16] = { 0.0f, 8.0f, 2.0f, 10.0f, 12.0f, 4.0f, 14.0f, 6.0f, 3.0f, 11.0f, 1.0f, 9.0f, 15.0f, 7.0f, 13.0f, 5.0f };
@@ -1511,7 +1519,7 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
     // Fewer lights and rays far off (Ray detail distances): six lights at two rays, three at one, then one at one.
     const uint detail = RayDetail(-center.z);
     const uint mostTraced = (detail == 0u) ? 6u : ((detail == 1u) ? 3u : 1u);
-    const int rays = (detail == 0u) ? 2 : 1;
+    const int rays = RayResolutionHigh() ? 4 : ((detail == 0u) ? 2 : 1);
     [loop] for (uint i = 0u; i < count; i++) {
         const float4 light = asfloat(gLights.Load4(16u * (i + 4u)));
         const float3 toLight = light.xyz - start;
@@ -1537,18 +1545,18 @@ float LightShadows(int2 pixel, float3 center, float3 normal, out float3 lamp) {
             continue;
         }
         traced++;
-        // Two points on a small disc round the light. The rays go right up to the flame, through its fitting
+        // Two points (four at Ray tracing resolution High) on a small disc round the light. The rays go right up to the flame, through its fitting
         // (TraceLampVisible); a Light Source's stop at its object.
         const float stopShort = max(3.0f, radius);
         const float discRadius = 3.0f;
         const float3 side = normalize(cross(direction, float3(0.0f, 1.0f, 0.0f)) + float3(1e-4f, 0.0f, 0.0f));
         const float3 across = cross(direction, side);
         float visible = 0.0f;
-        [unroll] for (int k = 0; k < 2; k++) {
+        [unroll] for (int k = 0; k < 4; k++) {
             if (k >= rays) {
                 break;
             }
-            const float angle = float(k) * 3.1415927f + turn;
+            const float angle = float(k) * ((rays == 4) ? 1.5707963f : 3.1415927f) + turn;
             const float3 target = light.xyz + (side * cos(angle) + across * sin(angle)) * discRadius;
             const float3 toTarget = target - start;
             const float reach = length(toTarget) - stopShort;
@@ -1805,6 +1813,57 @@ float3 HitNormal(float3 origin, float3 direction, float t) {
     }
     normal = normalize(normal);
     return (dot(normal, direction) > 0.0f) ? -normal : normal;
+}
+
+// What a view-space ray first meets, seen-through things included (ice, glass and cut-outs count as solid), within reach.
+float TraceDistanceSolid(float3 origin, float3 direction, float reach) {
+    RayDesc ray;
+    ray.Origin = ViewToWorldPoint(origin);
+    ray.Direction = ViewToWorldDirection(direction);
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(gSceneBVH, 0, RayWorldMask, ray);
+    query.Proceed();
+    return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? query.CommittedRayT() : -1.0f;
+}
+
+// The true way a pixel's surface (view space) faces, from three rays from the camera, facing the camera (false where the rays
+// don't all meet it, at its edges). The ice's own depths can't tell a wall's edge from a floor's: there it fell back to
+// level, and a ray reflected off level ice went on into the wall and showed what is behind it (L, 2026-10-22, Icy Side).
+bool SurfaceNormalTraced(float3 surface, out float3 normal) {
+    normal = 0.0f;
+    const float distance = length(surface);
+    if (distance < 10.0f) {
+        return false;
+    }
+    const float3 direction = surface / distance;
+    const float3 side = normalize(cross(direction, (abs(direction.y) < 0.9f) ? float3(0.0f, 1.0f, 0.0f) : float3(1.0f, 0.0f, 0.0f)));
+    const float3 up = cross(side, direction);
+    const float spread = 0.004f;
+    const float reach = distance * 1.2f + 20.0f;
+    const float start = max(distance - 20.0f - distance * 0.05f, 0.0f);
+    const float3 d1 = normalize(direction + side * spread);
+    const float3 d2 = normalize(direction + up * spread);
+    const float t0 = TraceDistanceSolid(direction * start, direction, reach - start);
+    const float t1 = TraceDistanceSolid(d1 * start, d1, reach - start);
+    const float t2 = TraceDistanceSolid(d2 * start, d2, reach - start);
+    if ((t0 < 0.0f) || (t1 < 0.0f) || (t2 < 0.0f)) {
+        return false;
+    }
+    const float3 p0 = direction * (start + t0);
+    // The three must land on one face: a ray that met something else (the wall's far edge, what stands on the ice) gives
+    // no normal.
+    if (abs(start + t0 - distance) > max(distance * 0.03f, 6.0f)) {
+        return false;
+    }
+    float3 n = cross(d1 * (start + t1) - p0, d2 * (start + t2) - p0);
+    if (dot(n, n) < 1e-8f) {
+        return false;
+    }
+    n = normalize(n);
+    normal = (dot(n, direction) > 0.0f) ? -n : n;
+    return true;
 }
 
 // Path tracing's light at a spot a path landed on (view space, with its normal): the sun where a ray reaches it, and the
@@ -2521,6 +2580,11 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
     float3 r = reflect(v, n);
     float made = 1.0f;
     bool hit;
+    // A ray that leaves into the surface rather than off it (a normal facing away from the camera) meets only what is
+    // behind it: the surface's own picture shows instead.
+    if (dot(r, normal) <= 0.0f) {
+        return 0.0f;
+    }
 #ifdef RAY_TRACED
     // Traced, the true ray finds what is really there (behind the camera too), so ice keeps it rather than bending it
     // into the picture: bent rays copied the scenery on the screen down the ice in smeared stripes (L, 2026-10-21,
@@ -2533,7 +2597,11 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
     // off along a straight line across the ice wherever the angle passed it (L, 2026-10-21, Icy Side).
     float4 unbent = 0.0f;
     float bendIn = 1.0f;
-    if (bend && (r.z > -0.45f)) {
+    // Only ice that lies roughly level is bent: a ray bent off a wall of ice came back into the picture and copied what
+    // stands beside or behind the wall onto it, as if seen through it (L, 2026-10-22, Icy Side). A wall reflects what is
+    // really in front of it, or its own picture.
+    const float level = dot(normal, normalize(gConstants.worldY.xyz));
+    if (bend && (r.z > -0.45f) && (level > 0.6f)) {
         // The true ray first: one heading back towards the camera still meets what stands on the ice (Banjo's front),
         // so he keeps one real reflection under him at every camera height instead of it cutting out past 45 degrees.
         const float4 real = WaterReflectionMarch(surface, r, 0.0f, hit);
@@ -2541,7 +2609,7 @@ float4 WaterReflectionRay(float3 surface, float3 normal, bool bendBack) {
             return real;
         }
         unbent = real;
-        bendIn = smoothstep(-0.45f, -0.3f, r.z);
+        bendIn = smoothstep(-0.45f, -0.3f, r.z) * smoothstep(0.6f, 0.8f, level);
         // Along the picture the way the ray was going (or up the picture, the way level ground runs away, when it
         // came almost straight back), and a fixed way into it.
         float2 across = r.xy;
@@ -4262,7 +4330,7 @@ float SunShadow(int2 pixel, float3 center, float3 surfaceNormal, inout float3 su
             traced = 1;
         }
         [loop] for (int k = 0; (k < Rays) && (gSunHalf != 2); k++) {
-            if ((k == 2) && ((blocked == 0.0f) || (blocked == 2.0f))) {
+            if ((k == 2) && !RayResolutionHigh() && ((blocked == 0.0f) || (blocked == 2.0f))) {
                 break;
             }
             // Far off (Ray detail distances) one ray.
@@ -5115,7 +5183,14 @@ float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET
         if ((iceStrength > 0.0f) && IceAt(pixel, depth, iceDepth)) {
             const float3 iceSurface = ViewPosition(pixel, iceDepth);
             const float3 iceWorld = WorldPosition(iceSurface);
-            const float3 iceFacing = IceNormal(pixel, iceSurface);
+            float3 iceFacing = IceNormal(pixel, iceSurface);
+#ifdef RAY_TRACED
+            // Traced, the ice's own triangles say which way it faces wherever its depths can't.
+            float3 iceTraced;
+            if (SurfaceNormalTraced(iceSurface, iceTraced)) {
+                iceFacing = iceTraced;
+            }
+#endif
             const float2 wobbleAt = (iceWorld.xz + float2(iceWorld.y, -iceWorld.y)) / 40.0f;
             const float2 wobble = float2(WaterNoise(wobbleAt), WaterNoise(wobbleAt + 17.0f)) - 0.5f;
             const float3 side = normalize(cross(iceFacing, (abs(iceFacing.x) < 0.9f) ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f)));

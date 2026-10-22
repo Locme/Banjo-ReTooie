@@ -1,5 +1,24 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T554 Ray tracing resolution drop-down (Half / Medium / High)
+- Asked: 2026-10-22 21:00 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Graphics > Ray Tracing > Ray tracing resolution: it replaces the Half-resolution toggle and starts on Medium (the old toggle's setting isn't carried over)
+  3. Medium: the picture and fps as before. Half: as the old Half toggle. High: switch it on in a lamp-lit room and outdoors in the sun, overlay Full
+- Look for: High gives cleaner, less dotty shadows, lamp light and beams, sharp all the way into the distance (it ignores Ray detail distances), at a lower fps. Each choice applies live.
+- Status: waiting for L
+
+## T553 Ice reflection no longer shows what's behind the ice walls
+- Asked: 2026-10-22 21:00 UTC
+- Build: main @ HEAD
+- Steps:
+  1. Pull main and build
+  2. Ice reflections on, go to the Icy Side spot from your screenshot (the green ice wall with the oil drill area behind it), once with Ray tracing off and once on
+- Look for: The wall shows its own ice or what is really in front of it, never the drill area behind it. Ice floors still reflect Banjo and the scenery at every camera height.
+- Status: waiting for L
+
 ## T552 Ray tracing speed-ups with the same picture (AO, bounce light, model shadows)
 - Asked: 2026-10-22 17:10 UTC
 - Build: main @ 18f8a32
