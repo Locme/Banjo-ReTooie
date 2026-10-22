@@ -1283,6 +1283,20 @@ RayPbr PbrAt(float3 center) {
 // A reflection ray from origin along direction (view space). softness (0 to 1) blurs what it finds towards the half-size scene
 // (a rough surface's lobe); a surface with a Ray Tracing Material Pick Mode material tints it by its albedo and adds its
 // emissive, as the ray's payload.
+float3 HitNormal(float3 origin, float3 direction, float t);
+float3 PathDirectLight(float3 at, float3 normal);
+
+// The light round about, for a reflected spot the screen can't show: the picture's average brightness from five points
+// spread over it (a dark cave stays dark, a sunny field bright).
+float3 RoomLight() {
+    const float2 points[5] = { float2(0.25f, 0.25f), float2(0.75f, 0.25f), float2(0.5f, 0.5f), float2(0.25f, 0.75f), float2(0.75f, 0.75f) };
+    float3 sum = 0.0f;
+    [unroll] for (int k = 0; k < 5; k++) {
+        sum += gColorHalf.SampleLevel(LinearSampler, points[k], 0).rgb;
+    }
+    return sum * 0.2f;
+}
+
 float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
     const float rayDistance = 3000.0f;
     RayDesc ray;
@@ -1350,11 +1364,16 @@ float4 TracedReflectionRay(float3 origin, float3 direction, float softness) {
         }
     }
     // Off the screen or hidden, the screen there shows something else (a mirror showed stripes of whatever was drawn
-    // where the hit would be, L 2026-10-22): a textured surface's own texel, a little dimmed for the light it lacks.
+    // where the hit would be, L 2026-10-22): a textured surface's own texel, lit there: the sun and the nearest lamp
+    // where they reach it (PathDirectLight), and the light round about (RoomLight), so a mirror keeps showing what is
+    // behind the camera, dark where it is dark.
     if (!inView && (query.CommittedInstanceID() != RayGrassInstance) && RayTexturesOn()) {
         const uint hitGeometry = RayGeometryOf(query.CommittedInstanceID(), query.CommittedGeometryIndex());
         if ((RayGeometryFlags(hitGeometry) & 2u) != 0u) {
-            return float4(RayTexel(hitGeometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb * 0.8f, 0.8f);
+            const float3 texel = RayTexel(hitGeometry, query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics()).rgb;
+            const float3 hitNormal = HitNormal(origin, direction, query.CommittedRayT());
+            const float3 light = RoomLight() * 1.6f + PathDirectLight(hit, hitNormal);
+            return float4(texel * light, 0.85f);
         }
     }
     return float4(colour, inView ? RayEdgeFade(inside) : 0.5f);
