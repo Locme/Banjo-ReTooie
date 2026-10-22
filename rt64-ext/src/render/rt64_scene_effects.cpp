@@ -319,6 +319,9 @@ namespace RT64 {
     // Whether the last traced scene held a draw with a ray tracing material (SetSceneRayMaterials), so the traced pass looks
     // for them.
     static std::atomic<bool> rayScenesPbr{ false };
+    // Ray traced BRDF's roughness and traced subsurface scattering's strength, in percent.
+    static std::atomic<uint32_t> rayTracingBrdfPercent{ 0 };
+    static std::atomic<uint32_t> rayTracingSubsurfacePercent{ 0 };
     static std::atomic<bool> rayTracingHitColours{ false };
     static std::atomic<bool> rayTracingPlayerShadows{ true };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
@@ -1051,6 +1054,11 @@ namespace RT64 {
     static std::unordered_map<uint64_t, uint32_t> rayMaterialIndices;
     static std::vector<uint32_t> rayMaterialWords;
     static std::atomic<bool> rayMaterialsAny{ false };
+
+    void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface) {
+        rayTracingBrdfPercent.store(uint32_t(std::round(std::clamp(brdfRoughness, 0.0f, 1.0f) * 100.0f)));
+        rayTracingSubsurfacePercent.store(uint32_t(std::round(std::clamp(subsurface, 0.0f, 1.0f) * 100.0f)));
+    }
 
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count) {
         count = std::min<size_t>(count, SceneMaxRayMaterials);
@@ -2573,8 +2581,10 @@ namespace RT64 {
             // 3 when the scene also has a level cut-out (SunThroughCutout has something to find).
             mapped[8] = (building && haveTextureBuffers && (res.rayTextureCacheSet != nullptr)) ? (rayScenesLevelCutouts.load() ? 3.0f : 1.0f) : 0.0f;
             // Whether the player casts traced shadows (Traced shadows of the player).
-            // Plus 2 when the scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode).
-            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayScenesPbr.load() ? 2.0f : 0.0f);
+            // Plus 2 when the scene has a draw with a ray tracing material (Ray Tracing Material Pick Mode), plus the Ray traced
+            // BRDF roughness in percent times 4 and the subsurface scattering strength in percent times 512.
+            mapped[9] = (rayTracingPlayerShadows.load() ? 0.0f : 1.0f) + (rayScenesPbr.load() ? 2.0f : 0.0f) +
+                float(rayTracingBrdfPercent.load() * 4u + rayTracingSubsurfacePercent.load() * 512u);
             // The 3D grass (when it is in the structure): how far along a ray its blades are passed by, so a ray from a
             // blade or the ground among them (whose surfaces the picture only roughly has) isn't stopped by its own
             // blade and its neighbours: one and a half blade heights.

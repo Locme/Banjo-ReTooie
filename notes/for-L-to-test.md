@@ -1,5 +1,18 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T535 Ray traced BRDF and subsurface scattering
+- Asked: 2026-10-22 12:06 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; Graphics > Ray Tracing: turn Ray tracing on
+  2. Find a shiny surface (metal, gold) and set Ray traced BRDF to 0, 30, 70: the reflection goes from a mirror to a blur
+  3. With Ray traced BRDF above 0, turn Reflections > Stochastic reflections up: it should do nothing (the traced BRDF is in charge)
+  4. Stand under or beside a tree or bush with the sun behind it; raise Ray traced subsurface scattering to 50 and 100
+  5. In Ray Tracing Material Pick Mode give a texture the Wax or Leaf preset and Shift + wheel Subsurface (key 7 chooses it)
+  6. Set both sliders back to 0
+- Look for: BRDF 0 looks exactly as before. Above 0 shiny surfaces blur like brushed metal (grain at 70+ is expected). Leaves with the sun behind them glow and their shaded side keeps a soft glow rather than flat dark; nothing else changes. Frame rate cost of each?
+- Status: waiting for L
+
 ## T534 Ray Tracing Material Pick Mode (PBR materials)
 - Asked: 2026-10-22 11:58 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)

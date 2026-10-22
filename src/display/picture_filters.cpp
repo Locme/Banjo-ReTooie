@@ -75,6 +75,7 @@ namespace RT64 {
     void SetSceneGlowTextures(const uint64_t *hashes, size_t count);
     void SetSceneLightSourceTextures(const uint64_t *hashes, const float *reaches, size_t count);
     void SetSceneRayOffTextures(const uint64_t *hashes, size_t count);
+    void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count);
     void SetSceneBounceLight(float strength);
     void SetSceneScreenSpaceGI(float strength);
@@ -4347,7 +4348,7 @@ namespace {
             tooie::material_pick::for_each([&](uint64_t hash, const tooie::material_pick::Material& material) {
                 material_hashes.push_back(hash);
                 albedo_roughness.push_back(uint32_t(material.red) | (uint32_t(material.green) << 8) | (uint32_t(material.blue) << 16) | (uint32_t(material.roughness) << 24));
-                metalness_emissive.push_back(uint32_t(material.metalness) | (uint32_t(material.emissive) << 8));
+                metalness_emissive.push_back(uint32_t(material.metalness) | (uint32_t(material.emissive) << 8) | (uint32_t(material.subsurface) << 24));
                 const auto own_light = picks.find(hash);
                 if ((material.emissive > 0) && ((own_light == picks.end()) || !tooie::effect_pick::has(own_light->second, tooie::effect_pick::effect_light))) {
                     light_sources.push_back(hash);
@@ -4529,12 +4530,15 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
     RT64::SetSceneRayTracingPlayerShadows(value<bool>(ray_tracing_player_shadows_option, true));
     RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
+    // Ray traced BRDF takes over the glossy reflections: with it on, the screen-space Stochastic reflections are off.
+    const float traced_brdf = ray_tracing ? (float)(value<double>(ray_tracing_brdf_option, 0.0) / 100.0) : 0.0f;
+    RT64::SetSceneRayTracingBrdfSubsurface(traced_brdf, ray_tracing ? (float)(value<double>(ray_tracing_subsurface_option, 0.0) / 100.0) : 0.0f);
     RT64::SetScenePathTracing(value<bool>(path_tracing_option, false) ? (uint32_t)value<double>(path_tracing_bounces_option, 2.0) : 0u);
     ray_tracing_on.store(ray_tracing);
     if (!ray_tracing) {
         ray_tracing_notified.store(false);
     }
-    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
+    RT64::SetSceneScreenSpaceReflections((float)(shader(value<double>(ssr_option, 0.0)) / 100.0), (traced_brdf > 0.0f) ? 0.0f : (float)(shader(value<double>(ssr_stochastic_option, 0.0)) / 100.0));
     RT64::SetSceneLightShafts((float)(value<double>(light_shafts_option, 0.0) / 100.0));
     sun_shadows = value<double>(sun_shadows_option, 0.0) > 0.0;
     RT64::SetSceneSunShadows((float)(value<double>(sun_shadows_option, 0.0) / 100.0), value<bool>(sun_shadow_banjo_option, true),
@@ -5305,6 +5309,16 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
         "Ray tracing noise smoothing",
         "How much the ray traced light and shadows are smoothed out where they get grainy, mostly on Banjo's fur (whose surface turns every pixel, so each pixel caught different rays and the fur crawled as he moved). Higher is calmer but softer; 0 is the raw rays. 50 is the default. Needs Ray tracing on.",
         0, 100, 5, 0, false, 50);
+    graphics.add_number_option(
+        ray_tracing_brdf_option,
+        "Ray traced BRDF",
+        "Every traced reflection becomes a physically based one: rays are scattered over a GGX lobe (Smith visibility, weighted by the BRDF over each ray's probability), as wide as this setting, so reflections go from a sharp mirror to a soft brushed blur on shiny surfaces and on materials from Ray Tracing Material Pick Mode (which set their own roughness). Turns the screen-space Stochastic reflections off while it is above 0. Grainier the higher it goes. Needs Ray tracing on. 0 is off: mirror reflections.",
+        0, 100, 5, 0, false, 0);
+    graphics.add_number_option(
+        ray_tracing_subsurface_option,
+        "Ray traced subsurface scattering",
+        "Light that gets into a thin or soft surface and comes out the other side: leaves and grass glow with the sun or a lamp behind them (traced rays check the light reaches the back of the surface and how much solid there is to pass through), and shadowed parts keep a soft coloured glow instead of going flat dark. Textures given Subsurface in Ray Tracing Material Pick Mode use it at their own strength whatever this is set to. Needs Ray tracing on. 0 is off.",
+        0, 100, 5, 0, false, 0);
     graphics.add_bool_option(
         path_tracing_option,
         "Path tracing",
@@ -5658,7 +5672,7 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
                                    &three_point_option, &dither16_option, &crt_option, &sharpen_option, &contrast_option,
                                    &saturation_option, &vignette_option, &grain_option, &ambient_occlusion_option,
                                    &fog_option, &fog_start_option, &fog_colour_option, &outlines_option, &outline_thickness_option, &bloom_option, &cutscene_dof_option, &gameplay_dof_option,
-                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
+                                   &eye_adaptation_option, &rim_light_option, &toon_world_option, &toon_characters_option, &underwater_tint_option, &underwater_haze_option, &heat_haze_option, &underwater_distortion_option, &water_reflections_option, &ice_reflections_option, &bounce_light_option, &ssgi_option, &ssr_option, &ssr_stochastic_option, &ray_tracing_option, &ray_tracing_strength_option, &ray_tracing_reflections_option, &ray_tracing_water_reflections_option, &ray_tracing_metal_option, &ray_tracing_tiles_option, &ray_tracing_smooth_option, &ray_tracing_smoothing_option, &ray_tracing_brdf_option, &ray_tracing_subsurface_option, &path_tracing_option, &path_tracing_bounces_option, &traced_beams_option, &ray_tracing_player_shadows_option, &ray_tracing_hit_colours_option, &texture_upscale_option, &water_waves_option, &wave_speed_option, &water_detail_option, &light_shafts_option, &sun_shadows_option, &sun_shadow_banjo_option, &sun_shadow_softness_option, &sun_shadow_distance_option, &grass_option, &grass_height_option, &grass_distance_option, &grass_density_option, &grass_patches_option, &grass_thickness_option, &grass_random_length_option, &grass_blend_option, &grass_chunky_option, &grass_chunk_size_option, &grass_pixelated_option, &grass_pixel_size_option, &grass_edges_option, &grass_frustum_cull_option, &grass_occlusion_cull_option, &grass_chunking_option, &grass_lod_option, &grass_half_rate_option, &grass_ray_tracing_option, &deep_snow_option, &tessellated_sand_option, &snow_height_option, &snow_detail_option, &snow_refill_option, &snow_lod_option, &parallax_option, &parallax_original_option, &ground_displacement_option, &ground_displacement_distance_option, &banjo_fur_option, &banjo_fur_length_option, &banjo_fur_density_option, &banjo_fur_noisiness_option, &kazooie_feathers_option, &kazooie_feather_size_option, &kazooie_feather_length_option, &kazooie_feather_density_option, &kazooie_feather_noisiness_option, &kazooie_feather_transparency_option, &npc_fur_option, &npc_fur_length_option, &npc_fur_density_option, &npc_fur_noisiness_option, &npc_feathers_option, &npc_feather_size_option, &npc_feather_length_option, &npc_feather_density_option, &npc_feather_noisiness_option, &npc_feather_transparency_option, &water_option, &shore_foam_option, &mist_option, &lighting_section_option }) {
         const bool in_presets = std::any_of(std::begin(preset_values), std::end(preset_values),
             [id](const PresetValue& entry) { return *entry.id == *id; });
         graphics.add_option_change_callback(*id,
@@ -5783,6 +5797,8 @@ std::vector<tooie::picture_filters::CostEffect> tooie::picture_filters::cost_eff
     if (ray_tracing_active()) {
         add(&path_tracing_option, false);
         add(&traced_beams_option, 0.0);
+        add(&ray_tracing_brdf_option, 0.0);
+        add(&ray_tracing_subsurface_option, 0.0);
         add(&ray_tracing_hit_colours_option, false);
     }
     return effects;

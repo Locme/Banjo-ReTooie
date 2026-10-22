@@ -337,6 +337,9 @@ namespace RT64 {
     // Banjo-Tooie: Graphics > Ray tracing hit colours: a ray that lands where the picture can't see finds the colour that
     // spot had when it was last on screen (a world radiance cache, written from the screen each frame).
     void SetSceneRayTracingHitColours(bool enabled);
+    // Banjo-Tooie: Graphics > Ray tracing > Ray traced BRDF (the roughness, 0 to 1, of every traced reflection's GGX lobe; 0
+    // keeps the mirror) and Ray traced subsurface scattering (its strength on leaves and grass, 0 to 1; 0 is off).
+    void SetSceneRayTracingBrdfSubsurface(float brdfRoughness, float subsurface);
     // Banjo-Tooie: Ray tracing noise smoothing, 0 (the raw rays) to 1.
     void SetSceneRayTracingSmoothing(float smoothing);
     // Banjo-Tooie: Path tracing, its bounces after the first (0 off, up to 4).
@@ -548,7 +551,7 @@ namespace RT64 {
     uint32_t SceneMaterialTexture(uint64_t hash);
     // Banjo-Tooie: Ray Tracing Material Pick Mode's materials for the traced pass (production PBR), one for each picked
     // texture. albedoRoughness: red | green << 8 | blue << 16 | roughness (0 to 100) << 24. metalnessEmissive: metalness (0 to
-    // 100) | emissive (percent, 0 to 1000) << 8. A drawn surface carrying one has its albedo tinted, reflects by its
+    // 100) | emissive (percent, 0 to 1000) << 8 | subsurface (0 to 100) << 24. A drawn surface carrying one has its albedo tinted, reflects by its
     // metalness through a lobe as wide as its roughness, and glows by its emissive, where the rays meet it too.
     void SetSceneRayMaterials(const uint64_t *hashes, const uint32_t *albedoRoughness, const uint32_t *metalnessEmissive, size_t count);
     // Whether the water mask should be drawn this frame (reflections on, or the F6 water view).

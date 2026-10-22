@@ -818,7 +818,7 @@ namespace {
         // last poll and Show All.
         tooie::material_pick::Property chosen_property = tooie::material_pick::property_roughness;
         int next_preset = 1;
-        bool material_number_was_down[8] = {};
+        bool material_number_was_down[9] = {};
         bool material_show_all = false;
         // Undo Pick's history: each texture or model as it was before a change, newest last.
         struct Undo {
@@ -888,7 +888,7 @@ namespace {
                 "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
                     "Shift + left click default, wheel deeper",
-                "Ray Tracing Material pick mode: left click gives or takes off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-6 choose which, Ctrl fine), key 8 Show All, wheel deeper" };
+                "Ray Tracing Material pick mode: left click gives or takes off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
             static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
             for (int k = 0; k < 4; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
@@ -1296,16 +1296,16 @@ namespace {
                 continue;
             }
             if (material_on) {
-                // Number keys 1 to 6 choose what the wheel changes; 7 steps the preset; 8 turns Show All on or off.
+                // Number keys 1 to 7 choose what the wheel changes; 8 steps the preset; 9 turns Show All on or off.
                 {
                     const Uint8* keyboard = SDL_GetKeyboardState(nullptr);
-                    for (int k = 0; k < 8; k++) {
+                    for (int k = 0; k < 9; k++) {
                         const bool down = (keyboard != nullptr) && (keyboard[SDL_SCANCODE_1 + k] != 0);
                         if (down && !material_number_was_down[k]) {
                             if (k < tooie::material_pick::property_count) {
                                 chosen_property = tooie::material_pick::Property(k);
                                 tooie::toast::show(std::string("The wheel changes: ") + tooie::material_pick::property_labels[k]);
-                            } else if (k == 6) {
+                            } else if (k == 7) {
                                 middle = true;
                             } else {
                                 material_show_all = !material_show_all;
@@ -1315,14 +1315,14 @@ namespace {
                         material_number_was_down[k] = down;
                     }
                 }
-                // TOOIE_PICK_CLICKS key1 to key8 do the same, headless.
+                // TOOIE_PICK_CLICKS key1 to key9 do the same, headless.
                 for (const std::string& key : script_keys) {
                     const int k = std::atoi(key.c_str() + key.size() - 1) - 1;
                     if (k < tooie::material_pick::property_count) {
                         chosen_property = tooie::material_pick::Property(k);
-                    } else if (k == 6) {
-                        middle = true;
                     } else if (k == 7) {
+                        middle = true;
+                    } else if (k == 8) {
                         material_show_all = !material_show_all;
                     }
                 }

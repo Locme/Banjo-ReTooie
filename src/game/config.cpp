@@ -855,6 +855,7 @@ void tooie::init_config() {
                                        &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
                                        &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
                                        &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
+                                       &tooie::picture_filters::ray_tracing_brdf_option, &tooie::picture_filters::ray_tracing_subsurface_option,
                                        &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
                                        &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
                                        &tooie::picture_filters::ray_tracing_hit_colours_option }) {

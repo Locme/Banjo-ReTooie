@@ -28,7 +28,7 @@ namespace {
     // The line of a material: "albedo=RRGGBB roughness=N metalness=N emissive=N".
     std::string material_text(const Material& m) {
         char text[96];
-        snprintf(text, sizeof(text), "albedo=%02X%02X%02X roughness=%d metalness=%d emissive=%d", m.red, m.green, m.blue, int(m.roughness), int(m.metalness), int(m.emissive));
+        snprintf(text, sizeof(text), "albedo=%02X%02X%02X roughness=%d metalness=%d emissive=%d subsurface=%d", m.red, m.green, m.blue, int(m.roughness), int(m.metalness), int(m.emissive), int(m.subsurface));
         return text;
     }
 
@@ -37,7 +37,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(file_path().parent_path(), ec);
         std::ofstream out(file_path());
-        out << "# Ray tracing materials (Ray Tracing Material Pick Mode key): texture, albedo (hex colour), roughness (0 to 100), metalness (0 to 100), emissive (percent). Send this file in for the port's list.\n";
+        out << "# Ray tracing materials (Ray Tracing Material Pick Mode key): texture, albedo (hex colour), roughness (0 to 100), metalness (0 to 100), emissive (percent), subsurface (0 to 100). Send this file in for the port's list.\n";
         for (const auto& [hash, material] : saved_materials) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
@@ -58,24 +58,28 @@ namespace {
 
     const Material presets[tooie::material_pick::preset_count] = {
         // Default: a plain dielectric, half rough.
-        { 255, 255, 255, 50, 0, 0 },
+        { 255, 255, 255, 50, 0, 0, 0 },
         // Mirror: fully metallic, no roughness.
-        { 255, 255, 255, 0, 100, 0 },
+        { 255, 255, 255, 0, 100, 0, 0 },
         // Brushed metal: a wide lobe.
-        { 255, 255, 255, 40, 100, 0 },
+        { 255, 255, 255, 40, 100, 0, 0 },
         // Gold.
-        { 255, 200, 90, 20, 100, 0 },
+        { 255, 200, 90, 20, 100, 0, 0 },
         // Plastic: a smooth dielectric, a faint reflection.
-        { 255, 255, 255, 15, 0, 0 },
+        { 255, 255, 255, 15, 0, 0, 0 },
         // Rubber: rough, almost no reflection.
-        { 255, 255, 255, 95, 0, 0 },
+        { 255, 255, 255, 95, 0, 0, 0 },
         // Glowing: a lamp of its own colour.
-        { 255, 255, 255, 60, 0, 250 },
+        { 255, 255, 255, 60, 0, 250, 0 },
+        // Wax: soft, light carries through it.
+        { 255, 235, 200, 35, 0, 0, 80 },
+        // Leaf: sun behind it shows green through it.
+        { 120, 220, 70, 70, 0, 0, 90 },
     };
-    const char* preset_names[tooie::material_pick::preset_count] = { "Default", "Mirror", "Brushed metal", "Gold", "Plastic", "Rubber", "Glowing" };
+    const char* preset_names[tooie::material_pick::preset_count] = { "Default", "Mirror", "Brushed metal", "Gold", "Plastic", "Rubber", "Glowing", "Wax", "Leaf" };
 }
 
-const char* const tooie::material_pick::property_labels[tooie::material_pick::property_count] = { "Albedo red", "Albedo green", "Albedo blue", "Roughness", "Metalness", "Emissive" };
+const char* const tooie::material_pick::property_labels[tooie::material_pick::property_count] = { "Albedo red", "Albedo green", "Albedo blue", "Roughness", "Metalness", "Emissive", "Subsurface" };
 
 const char* tooie::material_pick::preset_name(int preset) {
     return preset_names[std::clamp(preset, 0, preset_count - 1)];
@@ -117,6 +121,8 @@ void tooie::material_pick::load() {
                     material.metalness = uint8_t(std::clamp(std::atoi(value.c_str()), 0, 100));
                 } else if (name == "emissive") {
                     material.emissive = uint16_t(std::clamp(std::atoi(value.c_str()), 0, 1000));
+                } else if (name == "subsurface") {
+                    material.subsurface = uint8_t(std::clamp(std::atoi(value.c_str()), 0, 100));
                 }
             }
             materials[std::strtoull(hash_text.c_str(), nullptr, 16)] = material;
@@ -173,7 +179,8 @@ std::string tooie::material_pick::step_property(uint64_t hash, Property property
     case property_blue: material.blue = uint8_t(stepped(material.blue, 0, 255)); break;
     case property_roughness: material.roughness = uint8_t(stepped(material.roughness, 0, 100)); break;
     case property_metalness: material.metalness = uint8_t(stepped(material.metalness, 0, 100)); break;
-    default: material.emissive = uint16_t(stepped(material.emissive, 0, 1000)); break;
+    case property_emissive: material.emissive = uint16_t(stepped(material.emissive, 0, 1000)); break;
+    default: material.subsurface = uint8_t(stepped(material.subsurface, 0, 100)); break;
     }
     set(hash, &material);
     char text[96];
@@ -183,7 +190,8 @@ std::string tooie::material_pick::step_property(uint64_t hash, Property property
     case property_blue: snprintf(text, sizeof(text), "Albedo blue %d", int(material.blue)); break;
     case property_roughness: snprintf(text, sizeof(text), "Roughness %d%%", int(material.roughness)); break;
     case property_metalness: snprintf(text, sizeof(text), "Metalness %d%%", int(material.metalness)); break;
-    default: snprintf(text, sizeof(text), "Emissive %d%%", int(material.emissive)); break;
+    case property_emissive: snprintf(text, sizeof(text), "Emissive %d%%", int(material.emissive)); break;
+    default: snprintf(text, sizeof(text), "Subsurface %d%%", int(material.subsurface)); break;
     }
     return text;
 }
@@ -252,12 +260,12 @@ std::string tooie::material_pick::describe(uint64_t hash, uint32_t layer, uint32
     }
     char text[640];
     if (own) {
-        snprintf(text, sizeof(text), "%016llx\nRay tracing material (yours%s)\nAlbedo %02X%02X%02X, Roughness %d%%, Metalness %d%%, Emissive %d%%\n"
-            "Shift + wheel: %s (Ctrl: fine). Right click or keys 1-6: change what the wheel does\nLeft click: take it off, middle click: next preset, key 8: Show All %s",
-            (unsigned long long)hash, note, material.red, material.green, material.blue, int(material.roughness), int(material.metalness), int(material.emissive),
+        snprintf(text, sizeof(text), "%016llx\nRay tracing material (yours%s)\nAlbedo %02X%02X%02X, Roughness %d%%, Metalness %d%%, Emissive %d%%, Subsurface %d%%\n"
+            "Shift + wheel: %s (Ctrl: fine). Right click or keys 1-7: change what the wheel does\nLeft click: take it off, middle click or key 8: next preset, key 9: Show All %s",
+            (unsigned long long)hash, note, material.red, material.green, material.blue, int(material.roughness), int(material.metalness), int(material.emissive), int(material.subsurface),
             property_labels[chosen], show_all ? "on" : "off");
     } else {
-        snprintf(text, sizeof(text), "%016llx\nNo ray tracing material\nLeft click: give it one, middle click: a preset, Shift + wheel: %s\nKeys 1-6 choose what the wheel does, key 8: Show All %s",
+        snprintf(text, sizeof(text), "%016llx\nNo ray tracing material\nLeft click: give it one, middle click: a preset, Shift + wheel: %s\nKeys 1-7 choose what the wheel does, key 9: Show All %s",
             (unsigned long long)hash, property_labels[chosen], show_all ? "on" : "off");
     }
     std::string result = text;

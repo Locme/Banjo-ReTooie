@@ -76,6 +76,10 @@ namespace tooie::picture_filters {
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
     inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
+    // Ray traced BRDF (reflection roughness for every traced reflection, switching the screen-space Stochastic reflections off) and
+    // traced Subsurface scattering (leaves and grass, and any texture a Ray Tracing Material pick gives subsurface) (L, 2026-10-22).
+    inline const std::string ray_tracing_brdf_option = "ray_tracing_brdf";
+    inline const std::string ray_tracing_subsurface_option = "ray_tracing_subsurface";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string traced_beams_option = "traced_light_beams";
