@@ -52,14 +52,6 @@ if (CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${tooie_march}")
     message(STATUS "CPU level: ${TOOIE_CPU} (${tooie_march})")
 endif()
-# Barebone build (L, 2026-10-22): build-barebone.bat. Leaves out the extras that cost frame time or
-# clutter the game (snout and other jiggle physics, optional RT64 shader passes). SMAA and the sun
-# shadow map stay in. Only the flag is set here; the code gates are added in later steps.
-option(TOOIE_BAREBONE "Barebone build: no jiggle physics or optional extra shader passes" OFF)
-if (TOOIE_BAREBONE)
-    add_compile_definitions(TOOIE_BAREBONE)
-    message(STATUS "Barebone build: jiggle physics and optional extra shader passes left out")
-endif()
 if (TOOIE_LTO AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (NOT MSVC)
         # The default GNU linker cannot link LLVM bitcode; lld can.
