@@ -4557,7 +4557,7 @@ void tooie::picture_filters::apply() {
     RT64::SetSceneRayTracingHitColours(value<bool>(ray_tracing_hit_colours_option, false));
     RT64::SetSceneRayTracingPlayerShadows(value<bool>(ray_tracing_player_shadows_option, true));
     RT64::SetSceneRayTracingHalf(value<bool>(ray_tracing_half_option, false));
-    RT64::SetSceneRayTracingParallax(value<bool>(ray_tracing_parallax_option, true));
+    RT64::SetSceneRayTracingParallax(value<bool>(ray_tracing_parallax_option, false));
     RT64::SetSceneRayDetailDistances(float(value<double>(ray_detail_half_option, 2000.0)), float(value<double>(ray_detail_quarter_option, 4000.0)));
     RT64::SetSceneRayTracingSmoothing((float)(value<double>(ray_tracing_smoothing_option, 50.0) / 100.0));
     // Ray traced BRDF takes over the glossy reflections: with it on, the screen-space Stochastic reflections are off.
@@ -5382,8 +5382,8 @@ void tooie::picture_filters::add_options(recomp::config::Config& graphics) {
     graphics.add_bool_option(
         ray_tracing_parallax_option,
         "Ray tracing uses Parallax materials",
-        "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off, ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
-        true);
+        "Lets ray tracing read what Parallax knows of each texture: metal, glazed tiles and smooth surfaces reflect (the Metal, Tiles and Smooth sliders), and leaves and grass let light through (Ray traced subsurface). Off (the default), ray tracing ignores the Parallax list; Ray Tracing Material picks still apply. Needs Ray tracing on.",
+        false);
     graphics.add_number_option(
         ray_detail_half_option,
         "Ray detail distance (half)",

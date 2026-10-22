@@ -334,7 +334,7 @@ namespace RT64 {
     static std::atomic<bool> rayTracingHalf{ false };
     // Graphics > Ray Tracing uses Parallax materials: off, the traced pass ignores the Parallax shapes (metal, tiles, smooth,
     // leaves and grass) its geometries carry.
-    static std::atomic<bool> rayTracingParallax{ true };
+    static std::atomic<bool> rayTracingParallax{ false };
     static std::atomic<float> rayDetailDistances[2] = { 2000.0f, 4000.0f };
     static std::atomic<float> rayTracingSmoothing{ 0.5f };
     static std::atomic<uint32_t> pathTracingBounces{ 0 };
