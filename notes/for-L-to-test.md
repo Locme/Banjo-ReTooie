@@ -8,6 +8,7 @@
   2. Quit and start again: the percentage should run through far quicker
   3. Send console.log: it shows "[shaders] Vulkan pipeline cache: N bytes read" (0 the first time)
   4. Delete the file: the next start is slow once and the file comes back
+  5. General tab > Shaders > Compile all shaders at start (on by default): off means only the shaders you have met compile at start. The shipped full list (assets/shader_list_full.bin) is not in yet, so this does nothing more until it lands
 
 ## T539 Built-in ray tracing materials (texture sweep)
 - Asked: 2026-10-22 UTC

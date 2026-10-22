@@ -123,6 +123,11 @@ ultramodern::input::connected_device_info_t get_connected_device_info(int contro
 
 #include "icon_bytes.h"
 
+namespace RT64 {
+    // rt64-ext/src/render/rt64_raster_shader_cache_ext.h.
+    void SetShippedShaderListPath(const std::filesystem::path &path);
+}
+
 namespace plume {
     // lib/rt64/src/contrib/plume/plume_vulkan.h (from lib-patches/plume.patch).
     void SetPipelineCachePath(const std::filesystem::path &path);
@@ -856,6 +861,15 @@ int main(int argc, char** argv) {
     recompinput::players::set_single_player_mode(true);
 
     tooie::init_config();
+    // Compile all shaders at start (General tab, on by default): the shipped list of every shader the game asks
+    // for is queued beside the player's own list. Read here because the renderer reads the lists when it starts.
+    try {
+        if (std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::precompile_shaders_option))) {
+            RT64::SetShippedShaderListPath(recompui::file::get_asset_path("shader_list_full.bin"));
+        }
+    } catch (...) {
+        RT64::SetShippedShaderListPath(recompui::file::get_asset_path("shader_list_full.bin"));
+    }
     tooie::session_log::start(version_string);
     // Zips dropped into the mods folder are unpacked before every mod scan (startup and Refresh Mods).
     // The first scan is the one at startup, before the renderer takes the window. The renderer starts right
