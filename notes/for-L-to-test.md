@@ -10,6 +10,16 @@
 - Look for: no hitch or flat floor that turns displaced a moment later on entering. Turning Displaced ground on in the menu starts the same compile at once.
 - Status: waiting for L
 
+## T545 Ray detail distances (half and quarter)
+- Asked: 2026-10-22 12:55 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full, in an open level (Terrydactyland, Spiral Mountain from a high spot)
+  2. Note "traced effects" with Graphics > Ray Tracing > Ray detail distance (half) and (quarter) both at 0 (all the rays), then at their defaults 2000 and 4000
+  3. Look at far shadows and light beams with the defaults
+- Look for: Traced effects lower with the defaults in open levels (headless Spiral Mountain about 197 -> 165 ms), little change indoors. Far shadows may look a little grainier; if they do, raise the distances
+- Status: waiting for L
+
 ## T539 Built-in ray tracing materials (texture sweep)
 - Asked: 2026-10-22 UTC
 - Build: claude/project-thread-rjo479 (not built on a PC yet)
