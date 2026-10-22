@@ -226,6 +226,9 @@ endif()
 set(RT64_SMAA_DIR ${CMAKE_SOURCE_DIR}/lib/smaa)
 # AMD FidelityFX FSR 1, for the FSR passes rt64.patch adds.
 set(RT64_FSR_DIR ${CMAKE_SOURCE_DIR}/lib/fsr)
+# Our additions to RT64 that live in this repository, not in rt64.patch (rt64-ext/README.md).
+set(RT64_EXTENSION_CMAKE ${CMAKE_SOURCE_DIR}/rt64-ext/rt64_ext.cmake)
+set(RT64_EXTENSION_SOURCE_DIR ${CMAKE_SOURCE_DIR}/rt64-ext/src)
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 set(BUILD_SHARED_LIBS OFF)
@@ -307,6 +310,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/player_cheats.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_picker.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/enemy_spawner.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/explode_test.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/transform_anywhere.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/menu_pause.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/music_player.cpp
@@ -335,11 +339,13 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/input/control_scheme.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/talon_trot.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hold_to_run.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/dive.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/canary_mary.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/fine_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/display/picture_filters.cpp
     ${CMAKE_SOURCE_DIR}/src/display/smaa.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fxaa.cpp
+    ${CMAKE_SOURCE_DIR}/src/display/mirror_mode.cpp
     ${CMAKE_SOURCE_DIR}/src/input/low_latency.cpp
     ${CMAKE_SOURCE_DIR}/src/display/frame_readback.cpp
     ${CMAKE_SOURCE_DIR}/src/display/fsr.cpp
@@ -349,6 +355,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/gameplay/free_camera.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/high_detail_models.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/day_night.cpp
+    ${CMAKE_SOURCE_DIR}/src/gameplay/sun_control.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/night_sounds.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/hd_shadows.cpp
     ${CMAKE_SOURCE_DIR}/src/gameplay/field_of_view.cpp
@@ -370,6 +377,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/debug/texture_slide.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/interp_tags.cpp
     ${CMAKE_SOURCE_DIR}/src/debug/parallax_pick.cpp
+    ${CMAKE_SOURCE_DIR}/src/debug/material_pick.cpp
     ${CMAKE_SOURCE_DIR}/src/game/widescreen.cpp
     ${CMAKE_SOURCE_DIR}/src/game/wide_transitions.cpp
     ${CMAKE_SOURCE_DIR}/src/game/save_backup.cpp
@@ -377,6 +385,7 @@ set (SOURCES
     ${CMAKE_SOURCE_DIR}/src/game/texture_sweep.cpp
     ${CMAKE_SOURCE_DIR}/src/game/memory_guard.cpp
     ${CMAKE_SOURCE_DIR}/src/game/asset_mods.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/sound_dump.cpp
     ${CMAKE_SOURCE_DIR}/src/game/level_warp.cpp
     ${CMAKE_SOURCE_DIR}/src/game/achievements.cpp
     ${CMAKE_SOURCE_DIR}/src/game/hide_hud.cpp
@@ -487,6 +496,8 @@ if (WIN32)
     )
 
     target_sources(BanjoTooieN64Recomp PRIVATE ${CMAKE_SOURCE_DIR}/icons/app.rc)
+    # CMake does not see the ICON line in app.rc, so rebuild the resource when app.ico changes.
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/icons/app.rc PROPERTIES OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/icons/app.ico)
     target_link_libraries(BanjoTooieN64Recomp PRIVATE SDL2 Winmm.lib Dbghelp.lib)
 endif()
 
@@ -582,6 +593,8 @@ set(RECOMP_FRONTEND_N64MODERNRUNTIME_PATH ${CMAKE_SOURCE_DIR}/lib/N64ModernRunti
 set(RECOMP_FRONTEND_RT64_PATH ${CMAKE_SOURCE_DIR}/lib/rt64)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/RecompFrontend)
+# recompui lists RT64's include folders itself; RT64's headers also include files from rt64-ext/.
+target_include_directories(recompui PRIVATE ${CMAKE_SOURCE_DIR}/rt64-ext/src ${CMAKE_SOURCE_DIR}/rt64-ext/src/render)
 
 if (ANDROID)
     # SDL copies its headers into its build folder while building; these include them without linking SDL.

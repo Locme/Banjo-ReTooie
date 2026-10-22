@@ -3797,6 +3797,7 @@ L_80802EB8:
     // 0x80802EC0: addiu       $v0, $v0, 0x3
     ctx->r2 = ADD32(ctx->r2, 0X3);
 L_80802EC4:
+    tooie_klungo_replay_potions(rdram, ctx);
     // 0x80802EC4: addiu       $a0, $zero, 0x315
     ctx->r4 = ADD32(0, 0X315);
     // 0x80802EC8: lw          $a1, 0x28($sp)

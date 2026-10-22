@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "ultramodern/ultramodern.hpp"
+#include "tooie_mirror_mode.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_debug.h"
 #include "tooie_control_scheme.h"
@@ -39,6 +40,7 @@
 #include "tooie_player_cheats.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_dive.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_fine_aim.h"
 #include "tooie_frame_overlay.h"
@@ -296,6 +298,13 @@ bool tooie::debug::get_scripted_right_stick(float* x_out, float* y_out) {
 bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float* x_out, float* y_out) {
     bool ok = merged_n64_input(player_index, buttons_out, x_out, y_out);
     if (player_index == 0) {
+        // Mirror Mode: the controls follow the flipped picture (left stick and the left/right camera buttons).
+        if (tooie::mirror_mode::active()) {
+            *x_out = -*x_out;
+            const uint16_t c_left_right = 0x0003;
+            const uint16_t swapped = uint16_t(((*buttons_out & 0x0001) << 1) | ((*buttons_out & 0x0002) >> 1));
+            *buttons_out = uint16_t((*buttons_out & ~c_left_right) | swapped);
+        }
         tooie::frame_overlay::note_input_read();
         static const bool vi_log = std::getenv("TOOIE_VI_LOG") != nullptr;
         if (vi_log) {
@@ -307,6 +316,7 @@ bool tooie::debug::get_n64_input(int player_index, uint16_t* buttons_out, float*
         tooie::input::apply_tiptoe(buttons_out, x_out, y_out);
         tooie::hold_to_run::apply(x_out, y_out);
         tooie::talon_trot::apply(buttons_out);
+        tooie::dive::apply(buttons_out);
         tooie::motion_aim::collect();
         tooie::cutscene_skip_apply(buttons_out);
         tooie::player_cheats::apply_input(buttons_out);

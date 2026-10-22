@@ -82,6 +82,11 @@ namespace RT64 {
         uint32_t shaderCompiles = 0;
         double sectionMs[14] = {};
         uint32_t sectionCount[14] = {};
+        uint32_t cpuFrames = 0;
+        double cpuMs[5] = {};
+        double snowMs[4] = {};
+        double effectsMs[6] = {};
+        uint32_t snowRedone = 0;
     };
     FrameStats TakeFrameStats();
     void SetGpuSectionTiming(bool wanted);
@@ -667,6 +672,26 @@ namespace {
             std::string traced = section_line(frames, "GPU ray tracing: ", traced_order, frames.gpuFrames);
             if (!traced.empty()) {
                 text.push_back(traced);
+            }
+        }
+        // The renderer thread's own time on each game frame: where a frame goes when the GPU isn't the slow part.
+        if (frames.cpuFrames > 0) {
+            const double n = frames.cpuFrames;
+            std::snprintf(line, sizeof(line), "Renderer CPU %.2f ms per game frame: draws %.2f, effects setup %.2f, record %.2f, GPU wait %.2f, after %.2f",
+                (frames.cpuMs[0] + frames.cpuMs[1] + frames.cpuMs[2] + frames.cpuMs[3] + frames.cpuMs[4]) / n,
+                frames.cpuMs[0] / n, frames.cpuMs[1] / n, frames.cpuMs[2] / n, frames.cpuMs[3] / n, frames.cpuMs[4] / n);
+            text.push_back(line);
+            const double snow = frames.snowMs[0] + frames.snowMs[1] + frames.snowMs[2] + frames.snowMs[3];
+            if (snow > 0.0) {
+                std::snprintf(line, sizeof(line), "Snow and sand CPU %.2f ms: trail %.2f, ground %.2f, models pressing %.2f, edges %.2f (worked out %u times)",
+                    snow / n, frames.snowMs[0] / n, frames.snowMs[1] / n, frames.snowMs[2] / n, frames.snowMs[3] / n, frames.snowRedone);
+                text.push_back(line);
+            }
+            const double *e = frames.effectsMs;
+            if (e[0] + e[1] + e[2] + e[3] + e[4] + e[5] > 0.0) {
+                std::snprintf(line, sizeof(line), "Effects setup: fur %.2f, grass mask, snow and sand %.2f, grass %.2f, ray traced scene %.2f, uploads %.2f, shader views %.2f",
+                    e[0] / n, e[1] / n, e[2] / n, e[3] / n, e[4] / n, e[5] / n);
+                text.push_back(line);
             }
         }
         if (frames.presents > 0) {

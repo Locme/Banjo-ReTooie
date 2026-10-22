@@ -250,6 +250,8 @@ namespace {
         uint8_t type;   // 0-2 rotation x/y/z, 3-5 scale, 6-8 translation
         float scale;    // swing about the track's average
         float offset;   // added to every key (rotations: degrees)
+        // Set instead: every key moves to offset, scale of the way (1 = all of it), whatever the animation had.
+        bool set = false;
     };
 
     struct Key {
@@ -411,8 +413,10 @@ namespace {
                 if (r.offset == 0.0f) {
                     continue;
                 }
-                // A track the run does not move: one key holding the offset (frame flags as the game's own).
-                tracks.push_back({ r.bone, r.type, { Key{ (uint16_t)(0xC000 | start), 0 } } });
+                // A track the run does not move: one key at the rest value (scales 64, the rest 0; frame flags
+                // as the game's own), which the rule then moves.
+                const int16_t rest = r.type >= 3 && r.type <= 5 ? 64 : 0;
+                tracks.push_back({ r.bone, r.type, { Key{ (uint16_t)(0xC000 | start), rest } } });
                 track = &tracks.back();
             }
             double mean = 0;
@@ -421,7 +425,14 @@ namespace {
             }
             mean /= (double)track->keys.size();
             for (Key& k : track->keys) {
-                const double v = mean + (k.value - mean) * r.scale + r.offset * rotation_units(r.type);
+                double target = r.offset * rotation_units(r.type);
+                if (r.set && r.type <= 2) {
+                    // The same angle nearest the key's, so a part of the way doesn't spin the long way round
+                    // (180 and -180 degrees are the same turn).
+                    target += std::round((k.value - target) / (360.0 * 64.0)) * (360.0 * 64.0);
+                }
+                const double v = r.set ? k.value + (target - k.value) * r.scale
+                                       : mean + (k.value - mean) * r.scale + target;
                 k.value = (int16_t)std::clamp(v, -32768.0, 32767.0);
             }
         }
@@ -502,6 +513,240 @@ namespace {
         if (log_on()) {
             std::printf("[run] sprint animation made from 0x%X (blend %d/%d): %zu tracks, %zu rules, at 0x%08X\n",
                 index, level, blend_levels, tracks.size(), rules->size(), vram);
+            std::fflush(stdout);
+        }
+        return vram;
+    }
+
+    // --- The dive pose ----------------------------------------------------------------------------
+    //
+    // While Banjo-Kazooie dives (src/gameplay/dive.cpp) the animation he is already playing in the air is
+    // replaced by a copy holding the dive pose of L's reference picture (2026-10-21): body flat along the
+    // lunge, head up, both arms stretched forward, legs straight out behind, and Kazooie out of the pack with
+    // her wings swept back along his body.
+    //
+    // Bone ids and rest positions come from the Banjo-Kazooie model 0x062A's bone table (in the rest pose
+    // Banjo's arms and legs stick straight out sideways and Kazooie's wings sideways from her neck). Each
+    // bone turns about x, then y, then z, right-handed, about its rest position: the run animation's right
+    // arm hangs at z -41 to -67 and its right hip at z -92. The pose was checked by drawing the skeleton
+    // offline from the ROM's animations (the same pose comes out of the run and of a Kazooie-out flap).
+    //   Banjo: root 43 (everything hangs from it), spine 3, chest 1, head 18; right arm 14 shoulder, 8 elbow,
+    //   16 hand; left arm 28, 22, 30; right leg 10 hip, 12 knee, 6 ankle; left leg 24, 26, 20.
+    //   Pack: 59 and 60, lid 44-46. Kazooie: 106 and 107 (her body, turned 180 degrees about y; its scale
+    //   hides her in the pack, 64 being full size), head 108, wings 103-105 and 100-102 (root to tip).
+    // Every value here is set, not added, so the pose is the same whatever animation it replaces.
+    // TOOIE_DIVE_POSE_TUNE=<file> replaces the rules, one a line: "<bone> <type> <scale> <offset degrees>",
+    // with "set" at the end to set the value (scale then the share, 1 = all) instead of adding to it, so the
+    // pose can be tuned on a PC without a rebuild.
+    constexpr Rule set_to(uint16_t bone, uint8_t type, float value) {
+        return Rule{ bone, type, 1.0f, value, true };
+    }
+    const std::vector<Rule> dive_rules_default = {
+        // The whole body tipped flat from the root; spine and chest straight, head raised to look ahead.
+        set_to(43, 0, 80.0f), set_to(43, 1, 0.0f), set_to(43, 2, 0.0f),
+        set_to(3, 0, 0.0f), set_to(3, 1, 0.0f), set_to(3, 2, 0.0f),
+        set_to(3, 6, 0.0f), set_to(3, 7, 0.0f), set_to(3, 8, 0.0f),
+        set_to(1, 0, 0.0f), set_to(1, 1, 0.0f), set_to(1, 2, 0.0f),
+        set_to(18, 0, -45.0f),
+        // Arms stretched forward along the body (z +-88 from straight out), elbows nearly straight.
+        set_to(14, 0, 0.0f), set_to(14, 1, -10.0f), set_to(14, 2, 88.0f),
+        set_to(8, 0, 0.0f), set_to(8, 1, -10.0f), set_to(8, 2, 0.0f),
+        set_to(16, 0, 0.0f), set_to(16, 1, 0.0f), set_to(16, 2, 0.0f),
+        set_to(28, 0, 0.0f), set_to(28, 1, 10.0f), set_to(28, 2, -88.0f),
+        set_to(22, 0, 0.0f), set_to(22, 1, 10.0f), set_to(22, 2, 0.0f),
+        set_to(30, 0, 0.0f), set_to(30, 1, 0.0f), set_to(30, 2, 0.0f),
+        // Legs straight down the body (z -+90), so they trail behind; knees a little bent, no stride.
+        set_to(10, 0, 0.0f), set_to(10, 1, 0.0f), set_to(10, 2, -90.0f),
+        set_to(12, 1, 20.0f), set_to(6, 1, 0.0f),
+        set_to(24, 0, 0.0f), set_to(24, 1, 0.0f), set_to(24, 2, 90.0f),
+        set_to(26, 1, -20.0f), set_to(20, 1, 0.0f),
+        // The pack at rest with its lid open, and Kazooie out at full size, as the game's own flap has her
+        // (lid 154, 7 and 50 degrees; her body pitched 8.6, raised 10).
+        set_to(59, 0, 0.0f), set_to(59, 1, 0.0f), set_to(59, 2, 0.0f),
+        set_to(59, 6, 0.0f), set_to(59, 7, 0.0f), set_to(59, 8, 0.0f),
+        set_to(60, 0, 0.0f), set_to(60, 1, 0.0f), set_to(60, 2, 0.0f),
+        set_to(60, 6, 0.0f), set_to(60, 7, 0.0f), set_to(60, 8, 0.0f),
+        set_to(44, 0, 154.0f), set_to(45, 0, 7.0f), set_to(46, 0, 50.0f),
+        set_to(106, 0, 0.0f), set_to(106, 1, 0.0f), set_to(106, 2, 0.0f),
+        set_to(106, 6, 0.0f), set_to(106, 7, 0.0f), set_to(106, 8, 0.0f),
+        set_to(107, 0, 8.6f), set_to(107, 1, 180.0f), set_to(107, 2, 0.0f),
+        set_to(107, 3, 64.0f), set_to(107, 4, 64.0f), set_to(107, 5, 64.0f),
+        set_to(107, 6, 0.0f), set_to(107, 7, 10.0f), set_to(107, 8, -1.0f),
+        set_to(108, 0, 32.0f),
+        // Kazooie's wings swept back along Banjo's body, level, tips trailing past his hips; feathers in line.
+        set_to(103, 0, 0.0f), set_to(103, 1, -10.0f), set_to(103, 2, -75.0f),
+        set_to(104, 2, 0.0f), set_to(105, 2, 0.0f),
+        set_to(100, 0, 0.0f), set_to(100, 1, 10.0f), set_to(100, 2, 75.0f),
+        set_to(101, 2, 0.0f), set_to(102, 2, 0.0f),
+    };
+
+    const std::vector<Rule>& dive_rules() {
+        static std::vector<Rule> rules = [] {
+            std::vector<Rule> r = dive_rules_default;
+            if (const char* path = std::getenv("TOOIE_DIVE_POSE_TUNE")) {
+                r.clear();
+                if (FILE* f = std::fopen(path, "r")) {
+                    char line[256];
+                    while (std::fgets(line, sizeof(line), f)) {
+                        unsigned bone = 0, type = 0;
+                        float scale = 1, offset = 0;
+                        char mode[8] = {};
+                        const int got = std::sscanf(line, "%u %u %f %f %7s", &bone, &type, &scale, &offset, mode);
+                        if (line[0] != '#' && got >= 4) {
+                            r.push_back(Rule{ (uint16_t)bone, (uint8_t)type, scale, offset, got == 5 && std::string(mode) == "set" });
+                        }
+                    }
+                    std::fclose(f);
+                }
+            }
+            return r;
+        }();
+        return rules;
+    }
+
+    // The animation struct and the animation index the dive pose replaces, while it is on, and which frame
+    // of the dive shows: how much of the pose (1 to dive_levels), the step of the beat (0 to dive_steps - 1)
+    // and whether Banjo is sliding on his belly (pose_code packs them; 0 is off).
+    constexpr int dive_levels = 6;
+    constexpr int dive_steps = 16;
+    std::atomic<uint32_t> pose_struct{0};
+    std::atomic<uint32_t> pose_source{0};
+    std::atomic<int> pose_code{0};
+
+    int pack_pose(int level, int step, bool slide) {
+        return level | (step << 4) | (slide ? 0x100 : 0);
+    }
+
+    // Adds `delta` to the set value of rule (bone, type), or adds a rule setting it to delta.
+    void nudge(std::vector<Rule>& rules, uint16_t bone, uint8_t type, float delta) {
+        for (Rule& r : rules) {
+            if (r.bone == bone && r.type == type && r.set) {
+                r.offset += delta;
+                return;
+            }
+        }
+        rules.push_back(set_to(bone, type, delta));
+    }
+
+    // The dive's motion on top of the pose. Pushing off (level below dive_levels) Banjo's arms swing back
+    // and his knees tuck before they stretch out. Through the lunge it beats in dive_steps steps: Kazooie's
+    // wings beat while swept back, their tips trailing the beat; Banjo's legs kick in turn, his arms and body
+    // sway with them and Kazooie's head bobs. On the belly slide the body drops onto the ground.
+    std::vector<Rule> dive_motion(int level, int step, bool slide) {
+        std::vector<Rule> rules = dive_rules();
+        if (slide) {
+            // On his belly, until a jump: root down onto the ground, head up a little more, wings lifted.
+            // While still sliding (step above 0) the legs flutter behind him.
+            nudge(rules, 43, 7, -40.0f);
+            nudge(rules, 18, 0, -10.0f);
+            nudge(rules, 103, 2, 15.0f);
+            nudge(rules, 100, 2, -15.0f);
+            if (step > 0) {
+                const float kick = std::sin(6.2831853f * (float)step / dive_steps);
+                nudge(rules, 10, 1, 8.0f * kick);
+                nudge(rules, 24, 1, 8.0f * kick);
+                nudge(rules, 12, 1, 10.0f * std::max(0.0f, kick));
+                nudge(rules, 26, 1, -10.0f * std::max(0.0f, -kick));
+            }
+            return rules;
+        }
+        if (level < dive_levels) {
+            // Anticipation, strongest halfway through the push-off. The blend multiplies it by the level
+            // again, so it peaks early and is gone once the pose is all there.
+            const float w = (float)level / dive_levels;
+            const float wind = std::sin(3.1415927f * w) / std::max(w, 0.25f);
+            nudge(rules, 14, 2, -60.0f * wind);
+            nudge(rules, 28, 2, 60.0f * wind);
+            nudge(rules, 12, 1, 35.0f * wind);
+            nudge(rules, 26, 1, -35.0f * wind);
+            nudge(rules, 103, 2, 30.0f * wind);
+            nudge(rules, 100, 2, -30.0f * wind);
+            return rules;
+        }
+        const float a = 6.2831853f * (float)step / dive_steps;
+        const float beat = std::sin(a);
+        const float trail = std::sin(a - 0.9f);
+        // Wings (mirrored: 103-105 on one side, 100-102 on the other).
+        nudge(rules, 103, 2, 18.0f * beat);
+        nudge(rules, 100, 2, -18.0f * beat);
+        nudge(rules, 103, 1, -6.0f * std::cos(a));
+        nudge(rules, 100, 1, 6.0f * std::cos(a));
+        nudge(rules, 104, 2, 12.0f * trail);
+        nudge(rules, 101, 2, -12.0f * trail);
+        nudge(rules, 105, 2, 12.0f * trail);
+        nudge(rules, 102, 2, -12.0f * trail);
+        // Legs kick in turn (the same y on both hips swings them opposite ways), knees bend on the kick.
+        nudge(rules, 10, 1, 15.0f * beat);
+        nudge(rules, 24, 1, 15.0f * beat);
+        nudge(rules, 12, 1, 18.0f * std::max(0.0f, beat));
+        nudge(rules, 26, 1, -18.0f * std::max(0.0f, -beat));
+        // Arms sway against the legs, body rolls a little, heads bob.
+        nudge(rules, 14, 1, -5.0f * beat);
+        nudge(rules, 28, 1, -5.0f * beat);
+        nudge(rules, 43, 2, 3.0f * beat);
+        nudge(rules, 43, 0, 2.0f * std::sin(2.0f * a));
+        nudge(rules, 18, 0, 4.0f * std::sin(2.0f * a));
+        nudge(rules, 108, 0, 6.0f * std::sin(2.0f * a - 0.6f));
+        return rules;
+    }
+
+    // The dive file for animation `index` at frame `code` (pack_pose), made from the file at `file` the first time.
+    uint32_t dive_file(uint8_t* rdram, uint32_t index, uint32_t file, int code) {
+        struct DiveBuilt {
+            uint32_t index;
+            int code;
+            uint32_t vram;
+        };
+        static std::vector<DiveBuilt> built;
+        for (const DiveBuilt& b : built) {
+            if (b.index == index && b.code == code) {
+                return b.vram;
+            }
+        }
+        uint16_t start = 0, end = 0;
+        std::vector<Track> tracks;
+        if (read_anim(rdram, file, &start, &end, &tracks) == 0) {
+            return 0;
+        }
+        const int level = code & 0xF;
+        const float w = (float)level / dive_levels;
+        std::vector<Rule> rules = dive_motion(level, (code >> 4) & 0xF, (code & 0x100) != 0);
+        for (Rule& r : rules) {
+            if (r.set) {
+                r.scale *= w;
+            } else {
+                r.scale = 1.0f + (r.scale - 1.0f) * w;
+                r.offset *= w;
+            }
+        }
+        apply_rules(tracks, rules, start);
+        uint32_t size = 8;
+        for (const Track& t : tracks) {
+            size += 4 + 4 * (uint32_t)t.keys.size();
+        }
+        void* mem = recomp::alloc(rdram, size + 16);
+        if (mem == nullptr) {
+            return 0;
+        }
+        const uint32_t vram = ((uint32_t)(static_cast<uint8_t*>(mem) - rdram) + 0x80000000u + 15u) & ~15u;
+        wr_half(rdram, vram, start);
+        wr_half(rdram, vram + 2, end);
+        wr_half(rdram, vram + 4, (uint16_t)tracks.size());
+        wr_half(rdram, vram + 6, 0);
+        uint32_t at = vram + 8;
+        for (const Track& t : tracks) {
+            wr_half(rdram, at, (uint16_t)((t.bone << 4) | t.type));
+            wr_half(rdram, at + 2, (uint16_t)t.keys.size());
+            at += 4;
+            for (const Key& k : t.keys) {
+                wr_half(rdram, at, k.frame);
+                wr_half(rdram, at + 2, (uint16_t)k.value);
+                at += 4;
+            }
+        }
+        built.push_back({ index, code, vram });
+        if (log_on()) {
+            std::printf("[dive] pose animation made from 0x%X (frame 0x%X): %zu tracks, at 0x%08X\n", index, code, tracks.size(), vram);
             std::fflush(stdout);
         }
         return vram;
@@ -814,6 +1059,14 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t index = (uint32_t)(uint16_t)MEM_H(0x18, (gpr)(int32_t)anim);
     dump_anim(rdram, index, file);
     reload_tune();
+    const int code = pose_code.load();
+    if (anim == pose_struct.load() && index == pose_source.load() && (code & 0xF) > 0) {
+        const uint32_t dive = dive_file(rdram, index, file, code);
+        if (dive != 0) {
+            ctx->r2 = (gpr)(int32_t)dive;
+        }
+        return;
+    }
     if (anim != sprint_anim_struct.load() || index != sprint_source.load()) {
         return;
     }
@@ -827,4 +1080,18 @@ extern "C" void tooie_run_anim_file(uint8_t* rdram, recomp_context* ctx) {
     if (sprint != 0) {
         ctx->r2 = (gpr)(int32_t)sprint;
     }
+}
+
+void tooie::hold_to_run::set_dive_pose(uint8_t* rdram, recomp_context* ctx, float weight, float beat, bool slide) {
+    const int level = (int)std::lround(std::clamp(weight, 0.0f, 1.0f) * dive_levels);
+    const float b = beat - std::floor(beat);
+    int step = std::min((int)(b * dive_steps), dive_steps - 1);
+    if (slide && beat > 0.0f) {
+        step = std::max(step, 1);  // step 0 on the belly is lying still
+    }
+    pose_code = level > 0 ? pack_pose(level, level < dive_levels ? 0 : step, slide) : 0;
+    const uint32_t player = read_word(rdram, player_table);
+    const uint32_t ctrl = level > 0 && valid_ptr(player) ? anim_ctrl(rdram, ctx, player) : 0;
+    pose_struct = ctrl != 0 ? ctrl + anctrl_animation : 0;
+    pose_source = ctrl != 0 ? anim_index(rdram, ctx, ctrl) : 0;
 }

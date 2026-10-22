@@ -31,7 +31,9 @@
 #include "tooie_level_warp.h"
 #include "tooie_tiptoe.h"
 #include "tooie_talon_trot.h"
+#include "tooie_player_cheats.h"
 #include "tooie_hold_to_run.h"
+#include "tooie_dive.h"
 #include "tooie_transform_anywhere.h"
 #include "tooie_menu_pause.h"
 #include "tooie_totals_checklist.h"
@@ -48,6 +50,7 @@
 #include "tooie_speedup.h"
 #include "tooie_achievements.h"
 #include "tooie_fxaa.h"
+#include "tooie_mirror_mode.h"
 #include "tooie_low_latency.h"
 #include "tooie_frame_readback.h"
 #include "tooie_fsr.h"
@@ -58,6 +61,7 @@
 #include "tooie_texture_sweep.h"
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
+#include "tooie_sound_dump.h"
 #include "tooie_damage.h"
 #include "tooie_aim_trace.h"
 
@@ -150,6 +154,37 @@ namespace {
         qol.save_config();
     }
 
+    // The Dive and Mouse in the game's menus moved from QOL to the WIP tab (L, 2026-10-21), which shows
+    // Graphics options (graphics.json): carry a value saved in qol.json (or work_in_progress.json, the
+    // first WIP tab's own file) over once, while graphics.json doesn't have it yet.
+    void move_saved_options_to_wip() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        auto load = [&](const std::string& file) {
+            std::ifstream in(dir / file);
+            nlohmann::json json = in ? nlohmann::json::parse(in, nullptr, false) : nlohmann::json();
+            return json.is_object() ? json : nlohmann::json::object();
+        };
+        const nlohmann::json graphics_json = load("graphics.json");
+        const nlohmann::json sources[] = { load(tooie::work_in_progress_tab_id + ".json"), load("qol.json") };
+        recomp::config::Config& graphics = recompui::config::get_config(recompui::config::graphics::id);
+        bool changed = false;
+        for (const std::string& option : {tooie::dive::option, tooie::menu_mouse::enabled_option}) {
+            if (graphics_json.contains(option)) {
+                continue;
+            }
+            for (const nlohmann::json& source : sources) {
+                if (source.contains(option) && source[option].is_boolean()) {
+                    graphics.set_option_value(option, source[option].get<bool>());
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if (changed) {
+            graphics.save_config();
+        }
+    }
+
     // Transform anywhere became on by default (L, 2026-10-19): a saved "off" from the old default turns
     // on once; turning it off again afterwards stays.
     void turn_on_transform_anywhere_once() {
@@ -230,6 +265,36 @@ namespace {
     }
 }
 
+namespace {
+    // Toon shading became two sliders, Characters and World (L, 2026-10-21). A value saved under the old single
+    // "toon_shading" is carried to both once, unless graphics.json already has either of the new ones. Done on the
+    // file before the configs load.
+    void split_saved_toon_shading() {
+        const std::filesystem::path dir = recomp::get_config_path();
+        const std::filesystem::path marker = dir / "toon_shading_split.done";
+        if (std::filesystem::exists(marker)) {
+            return;
+        }
+        const std::filesystem::path path = dir / "graphics.json";
+        nlohmann::json json;
+        if (std::ifstream file(path); file) {
+            json = nlohmann::json::parse(file, nullptr, false);
+        }
+        if (json.is_object() && json.contains("toon_shading")) {
+            if (json["toon_shading"].is_number() && !json.contains(tooie::picture_filters::toon_world_option) &&
+                !json.contains(tooie::picture_filters::toon_characters_option))
+            {
+                json[tooie::picture_filters::toon_world_option] = json["toon_shading"];
+                json[tooie::picture_filters::toon_characters_option] = json["toon_shading"];
+            }
+            json.erase("toon_shading");
+            std::ofstream file(path, std::ios::trunc);
+            file << json.dump(4);
+        }
+        std::ofstream{marker};
+    }
+}
+
 void tooie::init_config() {
     // Before finalize(), which loads the controls config and with it the hotkey bindings.
     tooie::speedup::register_input();
@@ -241,6 +306,7 @@ void tooie::init_config() {
     tooie::save_state::register_input();
     tooie::fine_aim::register_input();
     tooie::talon_trot::register_input();
+    tooie::player_cheats::register_input();
     tooie::hotkeys::register_inputs();
 
     std::filesystem::path app_dir = recomp::get_config_path();
@@ -301,6 +367,7 @@ void tooie::init_config() {
     tooie::bottles_revenge::add_option(general);
     tooie::torch_enemy::add_option(general);
     tooie::boss_rush::add_option(general);
+    tooie::mirror_mode::add_option(general);
     general.add_bool_option(
         tooie::snout_jiggle::option,
         "Snout jiggle",
@@ -565,11 +632,6 @@ void tooie::init_config() {
         "Free camera: smooth walls",
         "The camera glides in when a wall gets between it and Banjo and glides back out afterwards, instead of jumping. Banjo fades out when the camera gets very close to him.",
         false);
-    qol.add_bool_option(
-        tooie::photo_mode_collision_option,
-        "Photo mode camera collision",
-        "In photo mode (F10) the camera stops at the ground and slides along walls. Off lets it fly through everything.",
-        true);
     tooie::photo_mode::add_options(qol);
     for (const std::string* id : { &tooie::free_camera_speed_option, &tooie::free_camera_invert_x_option,
                                    &tooie::free_camera_invert_y_option, &tooie::free_camera_ease_back_option,
@@ -623,7 +685,6 @@ void tooie::init_config() {
         tooie::fine_aim::Speed::Medium);
     qol.add_option_hidden_dependency(tooie::fine_aim::speed_option, tooie::fine_aim::mode_option, tooie::fine_aim::Mode::Off);
     tooie::motion_aim::add_options(qol);
-    tooie::menu_mouse::add_options(qol);
     qol.add_enum_option(
         tooie::canary_mary::mode_option,
         "Canary Mary races",
@@ -644,8 +705,37 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::free_camera_option, "Camera");
     recompui::config::set_option_group(tooie::talon_trot::mode_option, "Moves and aiming");
 
+    // Features still being worked on (L, 2026-10-21), in a section named like the tab. When one is done it
+    // moves to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's menus back to QOL, the
+    // Grass section back to Graphics). The tab is a page of Graphics options, so they all save to
+    // graphics.json and the grass keeps its live preview; the options are added below with the graphics ones.
+    recompui::config::create_page_tab("WIP", tooie::work_in_progress_tab_id, recompui::config::graphics::id);
+
     recomp::config::Config& graphics = recompui::config::create_graphics_tab();
     tooie::picture_filters::add_options(graphics);
+    graphics.add_bool_option(
+        tooie::dive::option,
+        "Dive",
+        "Press the Run key (B on a controller) in the air as Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and lies there until you jump. Works from a jump, after the Feathery Flap and in the ground pound, once per jump. Off (the default) leaves B in the air to the game.",
+        false);
+    tooie::menu_mouse::add_options(graphics);
+    {
+        namespace pf = tooie::picture_filters;
+        for (const std::string* id : { &tooie::dive::option, &tooie::menu_mouse::enabled_option, &pf::grass_section_option,
+                &pf::grass_option, &pf::grass_height_option, &pf::grass_distance_option, &pf::grass_density_option,
+                &pf::grass_patches_option, &pf::grass_thickness_option, &pf::grass_random_length_option,
+                &pf::grass_blend_option, &pf::grass_chunky_option, &pf::grass_chunk_size_option,
+                &pf::grass_pixelated_option, &pf::grass_pixel_size_option, &pf::grass_edges_option,
+                &pf::grass_frustum_cull_option, &pf::grass_occlusion_cull_option, &pf::grass_chunking_option,
+                &pf::grass_lod_option, &pf::grass_half_rate_option, &pf::grass_ray_tracing_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        // Dive and Mouse in the game's menus first, then the Grass toggle and its settings, all under one
+        // WIP heading.
+        recompui::config::set_option_display_before(tooie::dive::option, pf::grass_section_option);
+        recompui::config::set_option_display_before(tooie::menu_mouse::enabled_option, pf::grass_section_option);
+        recompui::config::set_option_group(tooie::dive::option, "WIP");
+    }
     graphics.add_bool_option(
         tooie::high_detail_models_option,
         "Always High-Detail Models",
@@ -678,6 +768,18 @@ void tooie::init_config() {
         tooie::hd_shadows::Direction::Overhead);
     graphics.add_option_hidden_dependency(tooie::hd_shadows::banjo_direction_option, tooie::hd_shadows_option, false);
     tooie::day_night::add_options(graphics);
+    {
+        // Day and night is a WIP section for now (L, 2026-10-22): its options sit in the WIP tab under one
+        // "Day and night" heading. They are still Graphics options, so they save to graphics.json as before.
+        namespace dn = tooie::day_night;
+        for (const std::string* id : { &dn::option, &dn::length_option, &dn::flare_option, &dn::fireflies_option,
+                &dn::weather_option, &dn::aurora_option, &dn::clouds_option, &dn::cloud_amount_option,
+                &dn::cloud_height_option, &dn::cloud_thickness_option, &dn::cloud_speed_option, &dn::wet_ground_option,
+                &dn::drops_option, &dn::mist_option, &dn::mist_time_option, &dn::sounds_option }) {
+            recompui::config::set_option_page(*id, tooie::work_in_progress_tab_id);
+        }
+        recompui::config::set_option_group(dn::option, "Day and night");
+    }
     graphics.add_bool_option(
         tooie::draw_distance_option,
         "Extended Draw Distance",
@@ -746,8 +848,21 @@ void tooie::init_config() {
     }
     recompui::config::set_option_group(tooie::picture_filters::character_section_option, "Character Shaders");
     recompui::config::set_option_group(tooie::picture_filters::contrast_option, "Colour grading");
-    // 3D grass has its own section after the colour grading (L, 2026-10-16).
-    recompui::config::set_option_group(tooie::picture_filters::grass_section_option, "Grass");
+    // 3D grass had its own section after the colour grading (L, 2026-10-16); it is in the WIP tab for now
+    // (L, 2026-10-21), and gets set_option_group(grass_section_option, "Grass") back when it returns.
+    // Ray Tracing has its own section after the grass, always shown (L, 2026-10-21).
+    for (const std::string* option : { &tooie::picture_filters::ray_tracing_option, &tooie::picture_filters::ray_tracing_strength_option,
+                                       &tooie::picture_filters::ray_tracing_reflections_option, &tooie::picture_filters::ray_tracing_water_reflections_option,
+                                       &tooie::picture_filters::ray_tracing_metal_option, &tooie::picture_filters::ray_tracing_tiles_option,
+                                       &tooie::picture_filters::ray_tracing_smooth_option, &tooie::picture_filters::ray_tracing_smoothing_option,
+                                       &tooie::picture_filters::ray_tracing_brdf_option, &tooie::picture_filters::ray_tracing_subsurface_option,
+                                       &tooie::picture_filters::path_tracing_option, &tooie::picture_filters::path_tracing_bounces_option,
+                                       &tooie::picture_filters::traced_beams_option, &tooie::picture_filters::ray_tracing_player_shadows_option,
+                                       &tooie::picture_filters::ray_tracing_hit_colours_option, &tooie::picture_filters::ray_tracing_half_option,
+                                       &tooie::picture_filters::ray_detail_half_option, &tooie::picture_filters::ray_detail_quarter_option }) {
+        recompui::config::set_option_display_before(*option, tooie::high_detail_models_option);
+    }
+    recompui::config::set_option_group(tooie::picture_filters::ray_tracing_option, "Ray Tracing");
     recompui::config::set_option_group(tooie::high_detail_models_option, "Game view");
     recompui::config::set_option_group(tooie::window_beams::option, "Vanilla Enhancements");
     // MSAA is added by the frontend with the display options; show it with the other anti-aliasing (L).
@@ -809,6 +924,11 @@ void tooie::init_config() {
         "Dump assets",
         "Writes every model, animation, sprite and other game asset to the asset_dump folder as asset_<id>.bin, with assets.txt listing them (kind 0 is a model). Takes a few seconds. To replace an asset, put an edited asset_<id>.bin in mods/assets: it loads in place of the game's, at any size, the next time the game loads it.",
         false);
+    wip.add_bool_option(
+        tooie::sound_dump_option,
+        "Dump sounds",
+        "Saves the game's sounds as WAV files to the sound_dump folder, sorted into a folder for each sound bank and instrument (bank0_0/inst3/snd12_rom01A2B40_22050hz_1ch.wav), with index.txt listing each one's place in the ROM. Each sound is written once, as banks load while you play, so visit different areas to collect more. Samples are saved at the bank's rate; the game bends some sounds' pitch when it plays them.",
+        false);
     // L, 2026-10-17: on by default; the game's own widescreen mode is for stretched TVs.
     wip.add_bool_option(
         tooie::hide_vanilla_widescreen_option,
@@ -816,7 +936,6 @@ void tooie::init_config() {
         "Hides the settings entries this port makes unnecessary: Wide-screen Mode and Screen Alignment in the global settings on the save select screen (the TV) and in the Start menu's Settings page, leaving Speaker Mode, and while it is on keeps the game's own widescreen mode off and the picture centred: the game's widescreen squashes the picture for a stretched TV, and this port's widescreen is Aspect Ratio in the Graphics tab. The menu change shows the next time it opens.",
         true);
     tooie::game_frame_rate::add_dev_options(wip);
-    tooie::torch_enemy::add_sound_test_option(wip);
     // Debug options (under the Debug heading): they moved here from Graphics.
     tooie::effect_views::add_option(wip);
     tooie::interp_check::add_options(wip);
@@ -847,6 +966,7 @@ void tooie::init_config() {
     recompui::config::set_option_group(tooie::achievements_tab_option, "Additional Tabs");
 
     move_saved_hud_placement();
+    split_saved_toon_shading();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
@@ -857,6 +977,7 @@ void tooie::init_config() {
     tooie::level_warp::refresh();
     move_saved_cutscene_skip();
     turn_on_transform_anywhere_once();
+    move_saved_options_to_wip();
     // The settings menu's layout (L, 2026-10-16): tabs in a sidebar on the left, descriptions along the bottom.
     recompui::config::set_sidebar_layout(true);
     tooie::picture_filters::apply();
@@ -864,6 +985,7 @@ void tooie::init_config() {
     tooie::texture_slide::apply();
     tooie::debug::apply_heap_check();
     tooie::fxaa::apply();
+    tooie::mirror_mode::apply();
     tooie::fsr::apply();
     tooie::low_latency::apply();
     tooie::frame_readback::apply();

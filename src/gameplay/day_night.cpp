@@ -25,9 +25,10 @@
 #include "tooie_debug.h"
 #include "tooie_game_frame_rate.h"
 #include "tooie_picture_filters.h"
+#include "tooie_sun_control.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h.
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneTimeOfDay(bool enabled, const float tint[3], float shafts, bool flare, bool fireflies, bool clouds);
     void SetSceneSun(bool custom, float x, float y, float z);
     void SetSceneWeather(float rain, float flash, bool snow);
@@ -108,12 +109,16 @@ namespace {
         { 0x142, { -0.25f, 0.90f, -0.35f } },
     };
 
-    // The map's own sun, false if it has none. Test aid: TOOIE_MAP_SUN=<x>,<y>,<z> gives every map that one.
+    // The map's own sun, false if it has none: one moved with Move Sun or saved in sun.txt first (sun_control.cpp),
+    // then the table. Test aid: TOOIE_MAP_SUN=<x>,<y>,<z> gives every map that one.
     bool map_sun(uint16_t map, float out[3]) {
         if (const char* v = std::getenv("TOOIE_MAP_SUN")) {
             if (sscanf(v, "%f,%f,%f", &out[0], &out[1], &out[2]) == 3) {
                 return true;
             }
+        }
+        if (tooie::sun_control::map_sun(map, out)) {
+            return true;
         }
         for (const MapSun& s : map_suns) {
             if (s.map == map) {
@@ -145,6 +150,8 @@ namespace {
     std::mutex mutex;
     bool active = false;
     float sun[3] = { 0.0f, 1.0f, 0.0f };
+    // While the cycle is off: a sun moved by hand or saved in sun.txt, for HD shadows (sun_direction).
+    bool hand_sun = false;
 
     // The running clock, from morning when the game starts. Test aid: TOOIE_TIME_OF_DAY=<0 to 1> starts there.
     double day_clock = std::getenv("TOOIE_TIME_OF_DAY") ? std::atof(std::getenv("TOOIE_TIME_OF_DAY")) : morning_time;
@@ -383,13 +390,31 @@ void tooie::day_night::tick(uint8_t* rdram) {
     }
     amount = on ? std::min(1.0f, amount + dt * 2.0f) : std::max(0.0f, amount - dt * 2.0f);
 
+    // Move Sun (Controls > Ray Trace Debug) starts from the sun the level shows when it has none of its own yet.
+    bool sun_moved = false;
+    {
+        float start[3] = { 0.47f, 0.42f, -0.78f };
+        map_sun(map, start);
+        normalize(start);
+        sun_moved = tooie::sun_control::tick(map, start);
+    }
+
     if (amount <= 0.0f) {
+        float by_hand[3];
+        const bool have_hand = tooie::sun_control::map_sun(map, by_hand);
         {
             std::lock_guard lock{mutex};
             active = false;
+            hand_sun = have_hand;
+            if (have_hand) {
+                // As the cycle's: never lower than about 10 degrees for the shadows.
+                by_hand[1] = std::max(by_hand[1], 0.18f);
+                normalize(by_hand);
+                std::copy(std::begin(by_hand), std::end(by_hand), sun);
+            }
         }
         tooie::night_sounds::set(0.0f, 0.0f, 0.0f, 0.0f);
-        if (!sent_off || new_map) {
+        if (!sent_off || new_map || sun_moved) {
             // The level's own sun, if it has one (for the sun shadows and the sun in the sky).
             float held[3] = { 0.0f, 1.0f, 0.0f };
             const bool own = map_sun(map, held);
@@ -548,6 +573,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
     {
         std::lock_guard lock{mutex};
         active = (amount >= 1.0f);
+        hand_sun = false;
         std::copy(std::begin(direction), std::end(direction), sun);
     }
 
@@ -564,7 +590,7 @@ void tooie::day_night::tick(uint8_t* rdram) {
 
 bool tooie::day_night::sun_direction(float out[3]) {
     std::lock_guard lock{mutex};
-    if (!active) {
+    if (!active && !hand_sun) {
         return false;
     }
     std::copy(std::begin(sun), std::end(sun), out);

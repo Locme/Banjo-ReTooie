@@ -1,5 +1,491 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T549 175 FPS in Terrydactyland: shown frames and renderer CPU (mailbox presenting + cheaper texture seams)
+- Asked: 2026-10-22 14:46 UTC
+- Build: main @ fdca435
+- Steps:
+  1. Pull main (fdca435 or later) and build, Vulkan API
+  2. Game Frame Rate 175 FPS, overlay Full
+  3. Stand where your last 175 FPS overlay was taken in Terrydactyland and wait 10 s
+  4. Send the overlay
+  5. Optional: General > DEV > Blend texture seams off, then send the overlay again
+- Look for: The top fps close to the Game fps (it was 53 shown with the game at 99). Renderer CPU draws lower than 2.07 ms. Input latency at or below the old 30 ms. No tearing, no new stutter. Seams on the title screen logo still blended.
+- Status: waiting for L
+
+## T548 Displaced ground in every framebuffer
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Displaced ground on, HD Shadows on, in Isle o' Hags (the world is drawn in two framebuffers there) and Terrydactyland
+  2. Walk and turn the camera past the spots where parallax flickered (T547)
+- Look for: floors that jump, go flat, vanish or flicker for a frame. Each framebuffer now places its ground with its own camera.
+- Status: waiting for L
+
+## T547 Parallax flicker (each world pass has its own camera)
+- Asked: 2026-10-22 13:20 UTC
+- Build: main
+- Steps:
+  1. Parallax at 100, HD shadows on as you play them
+  2. Play where you saw parallax flatten out and come back, walking past walls and things that cast shadows
+- Look for: Whether parallax still turns itself off and on
+- Status: waiting for L
+
+## T546 Displaced ground shaders built at start
+- Asked: 2026-10-22 UTC
+- Build: main
+- Steps:
+  1. Graphics > Shaders > Displaced ground above 0, then close the game
+  2. Start the game again: "Compiling shaders N%" counts the floors' displaced shaders too (the log says "compiling N displaced ground shaders")
+  3. Once it reaches 100%, go into a level you have visited before (Terrydactyland, Mayahem Temple)
+- Look for: no hitch or flat floor that turns displaced a moment later on entering. Turning Displaced ground on in the menu starts the same compile at once.
+- Status: waiting for L
+
+## T545 Ray detail distances (half and quarter)
+- Asked: 2026-10-22 12:55 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full, in an open level (Terrydactyland, Spiral Mountain from a high spot)
+  2. Note "traced effects" with Graphics > Ray Tracing > Ray detail distance (half) and (quarter) both at 0 (all the rays), then at their defaults 2000 and 4000
+  3. Look at far shadows and light beams with the defaults
+- Look for: Traced effects lower with the defaults in open levels (headless Spiral Mountain about 197 -> 165 ms), little change indoors. Far shadows may look a little grainier; if they do, raise the distances
+- Status: waiting for L
+
+## T539 Built-in ray tracing materials (texture sweep)
+- Asked: 2026-10-22 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; turn Graphics > Ray tracing on (no picks needed)
+  2. Walk a level with metal, rust, gold, leaves, gems: shiny textures should reflect with the right roughness
+  3. In Ray Tracing Material Pick Mode press 9 (Show All) to see every textured material; aim at one: the label says built-in
+  4. Left click a built-in one to switch it off; Shift + left puts the built-in back
+  5. Check the frame rate in a metal-heavy room (rough metals use 3 to 4 rays per pixel)
+  6. Aim at ice, a lamp or grass: the label says a shader effect owns it and it has no built-in material; on a parallax stone it says parallax stacks
+- Look for: wrong calls (a stone shown as steel, a lamp as gold), too noisy or too costly spots. Send me the textures to fix.
+- Status: waiting for L
+
+## T538 Ray traced BRDF and subsurface scattering
+- Asked: 2026-10-22 12:06 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull the build; Graphics > Ray Tracing: turn Ray tracing on
+  2. Find a shiny surface (metal, gold) and set Ray traced BRDF to 0, 30, 70: the reflection goes from a mirror to a blur
+  3. With Ray traced BRDF above 0, turn Reflections > Stochastic reflections up: it should do nothing (the traced BRDF is in charge)
+  4. Stand under or beside a tree or bush with the sun behind it; raise Ray traced subsurface scattering to 50 and 100
+  5. In Ray Tracing Material Pick Mode give a texture the Wax or Leaf preset and Shift + wheel Subsurface (key 7 chooses it)
+  6. Set both sliders back to 0
+- Look for: BRDF 0 looks exactly as before. Above 0 shiny surfaces blur like brushed metal (grain at 70+ is expected). Leaves with the sun behind them glow and their shaded side keeps a soft glow rather than flat dark; nothing else changes. Frame rate cost of each?
+- Status: waiting for L
+
+## T537 Ray Tracing Material Pick Mode (PBR materials)
+- Asked: 2026-10-22 11:58 UTC
+- Build: claude/project-thread-rjo479 (not built on a PC yet)
+- Steps:
+  1. Pull main and build; bind Controls > Pick Modes > Ray Tracing Material Pick Mode; turn Graphics > Ray tracing on
+  2. Spiral Mountain or any level: press the key, aim at a stone or metal texture and left click (the label says it has a material); middle click steps presets (Mirror, Brushed metal, Gold, Plastic, Rubber, Glowing)
+  3. Shift + wheel changes the chosen property (right click or keys 1 to 6 choose: albedo red/green/blue, roughness, metalness, emissive; Ctrl for fine)
+  4. Set Mirror: roughness 0, metalness 100; then raise roughness to 40 and 80 and watch the reflection go from sharp to brushed
+  5. Set metalness 0 and 100 with the same roughness; set Albedo to a strong colour and see a metal reflect in that colour
+  6. Set Emissive to 100 and 300 on a wall near a dark corner and on a floor, and look at the walls round it
+  7. Save Pick (the key you bound), restart and see it kept; Delete Saved Pick takes it off
+  8. Turn Ray tracing off, and look at textures with no pick
+- Look for: Textures you did not pick look exactly as before. A picked one: albedo tints it; roughness widens the reflection from a mirror to a blur (noisy at high roughness is expected for now); metalness 100 darkens the surface to almost only its reflection, in the albedo's colour; emissive makes it glow past the shadows and lights what is near it, also showing in other shiny surfaces' reflections. Anything that costs frame rate with materials on? Does the label read well and does Show All (key 8) pulse every textured material?
+## T535 Ray tracing speed-ups (masks, kept level structure, lamps at half resolution)
+- Asked: 2026-10-22 12:45 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Frame overlay Full; compare "ray tracing build" and "traced effects" with the numbers before this build (same spot)
+  2. Check lamp and fire shadows (Bottles' House, a cave), Banjo's shadow with Traced shadows of the player off and on, and sun shadows outdoors
+  3. Turn on Half-resolution ray tracing indoors with lamps and check the lamp light
+- Look for: Same picture as before with Half-resolution off (lamp light may reach a little closer to the lamp's own fitting). Faster: headless Spiral Mountain build 4 -> 1.5 ms (the level's structure is kept), traced effects about 290 -> 200 ms. Wrong or missing shadows after a door or platform moves would mean the kept level structure missed a change
+- Status: waiting for L
+
+## T534 Half-resolution ray tracing (175 FPS)
+- Asked: 2026-10-22 12:20 UTC
+- Build: main
+- Steps:
+  1. Ray tracing on, Traced light beams at 60, Frame overlay Full
+  2. In Terrydactyland at 175 FPS, note "traced effects" and the fps
+  3. Turn on Graphics > Ray Tracing > Half-resolution ray tracing (applies live) and note them again
+  4. Look at sun shadow edges and light beams with it on
+- Look for: Traced effects should drop by about half (headless: 256-318 ms down to about 88 ms plus about 40 ms more in "AO and bounce light", which now traces them). Shadow edges a little softer, no blocky edges or shadows bleeding across objects. Off should look exactly as before
+- Status: waiting for L
+
+## T533 Displaced ground cost (floors' own shaders)
+- Asked: 2026-10-22 11:32 UTC
+- Build: main
+- Steps:
+  1. Pull main and build; Displaced ground at 60
+  2. Stand where your screenshot was in Terrydactyland (-4367, 3322, -1133) and note the fps and GPU ms with Displaced ground at 60, then at 0
+  3. Do the same in the intro
+- Look for: Displaced ground should now cost a few ms, not half the frame rate. In the first seconds after loading a level it may still be slower (the floors' shaders are built in the background). Check that floors look the same as before (colours, lighting) and no floor turns black or disappears. Send console.log if a message says the graphics driver could not build a pipeline.
+- Status: waiting for L
+
+## T532 Light Source lights from the object itself (no balls)
+- Asked: 2026-10-22 11:37 UTC
+- Build: main (next build)
+- Steps:
+  1. Graphics > Ray tracing on
+  2. Pick an object in Shader Effects pick mode and give it Light Source (9), e.g. the one from your screenshot (31d98c...)
+  3. Look round it, then try a few strengths with Shift + mouse wheel
+- Look for: No bright blobs round the object any more; the area round it is lit evenly, as if the whole object glowed
+- Status: waiting for L
+
+## T531 Sand footprints with the camera straight above
+- Asked: 2026-10-22 11:08 UTC
+- Build: main 3da2b67
+- Steps:
+  1. Tessellated sand on, Terrydactyland
+  2. Walk on the sand to leave footprints
+  3. Move the camera so it looks straight down on Banjo, as high as it goes
+- Look for: The footprints and dips round Banjo stay. If the sand still goes flat, tell me roughly how high the camera is
+- Status: waiting for L
+
+## T530 Displaced ground cost
+- Asked: 2026-10-22 10:53 UTC
+- Build: main
+- Steps:
+  1. Pull main and build; Displaced ground at 60, distance 8000
+  2. Run the Effect Cost Check in the intro and in Terrydactyland, once with Displaced ground on and once at 0
+  3. Walk around Spiral Mountain's stone and dirt floors and turn the camera
+- Look for: How many ms Displaced ground costs now (it was part of the 75 ms in the intro). The ground near you must not wobble; far off (past about 2000 units) the dips are coarser and may shift a little as you walk.
+- Status: waiting for L
+
+## T529 Terrydactyland sand frame rate (edge cache)
+- Asked: 2026-10-22 10:28 UTC
+- Build: main 9beb710 or later (edges worked out on another thread; overlay shows how many times)
+- Steps:
+  1. Graphics: Tessellated sand on, Parallax off, Frame overlay on Full
+  2. Go to Terrydactyland and stand on the sand
+  3. Read the fps and the overlay's 'Snow and sand CPU' and 'Renderer CPU' lines
+  4. Turn Parallax back on and read them again
+- Look for: Edges on the 'Snow and sand CPU' line should be near 0 ms (was 36 ms) and effects setup much lower than 100 ms. The new 'Effects setup' line shows where the rest goes. Send a screenshot of the overlay either way.
+- Status: answered 2026-10-22 11:08 UTC
+- L's result: L 2026-10-22 11:04: performance fixed (e210f77: 60 fps, sand CPU 0.25 ms, edges 0.15 ms, worked out 5 times in 5 s)
+
+## T528 Parallax shapes per texture (frame rate check)
+- Asked: 2026-10-22 10:15 UTC
+- Build: main
+- Steps:
+  1. Set Parallax to 100 with Parallax on original textures on
+  2. Go to Terrydactyland, then two other worlds where parallax felt slow
+  3. In each place, note the fps with Graphics > Parallax shapes per texture on, then flip it off and note the fps again (it applies live)
+- Look for: Whether the fps comes back with the switch off. If it does, the per-texture shapes are the cost and I make them cheaper; if not, the slowdown is elsewhere
+- Status: answered 2026-10-22 10:25 UTC
+- L's result: L 2026-10-22: 12 fps on and 12 fps off in Terrydactyland, so the shapes are not the cost. Switch removed at L's request.
+
+## T527 Move Sun and Save Sun Location
+- Asked: 2026-10-22 09:29 UTC
+- Build: main (Move Sun)
+- Steps:
+  1. In Controls > Ray Trace Debug, bind Move Sun and Save Sun Location
+  2. Turn on Graphics > Ray tracing (or Sun shadows) and go to Spiral Mountain outside, Day and Night Off
+  3. Hold Move Sun and turn the mouse wheel: the sun goes round and the shadows turn with it; Ctrl + wheel raises or lowers it; Shift for fine steps. A toast shows the angles
+  4. Press Save Sun Location: a toast says it saved to sun.txt. Restart the game: the sun is where you left it
+  5. Send me Dev Files/sun.txt (next to the save files)
+- Look for: Do the shadows and the traced light follow the sun as you turn the wheel, and does the saved sun come back after a restart? Not tested headless (skipped at L's word).
+- Status: waiting for L
+
+## T526 Fire lights and glows; likely explosion frames
+- Asked: 2026-10-22 08:51 UTC
+- Build: main (next build)
+- Steps:
+  1. Graphics > Ray tracing on
+  2. Look at torches, candles and fires (Mayahem Temple, Hailfire Peaks' lava side, Bottles' house): they glow a little and light the area, with no glowing ball in the air
+  3. Blow something up (grenade egg, TNT): does it light up? The grenade egg's fireball should now (added after a headless blow-up run). If not, tag it in pick mode (9 for Light Source) and send shader_effect_tags.txt
+- Look for: Do fires glow and light the area, and which explosions still don't light up?
+- Status: waiting for L
+
+## T525 Shipped shader tags and Disable RT on the lanterns
+- Asked: 2026-10-22 08:47 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Graphics > Ray tracing; move your own Dev Files/shader_effect_tags.txt aside so the shipped picks show
+  2. Go to the lanterns in your screenshot: no black squares round them, and the lanterns still light the place
+  3. In Shader Effects pick mode the lanterns' glass says Disable RT (built-in); Shift + 1 toggles it on other textures
+  4. Point at an explosion: it lights the area; Shift + mouse wheel changes its strength
+- Look for: Are the black squares gone, and do the shipped tags and Disable RT work?
+- Status: waiting for L
+
+## T524 Ice parallax shape
+- Asked: 2026-10-21 23:57 UTC
+- Build: main (Ice parallax)
+- Steps:
+  1. Set Parallax to 100
+  2. Go to Hailfire Peaks' Icy Side and walk on the ice floors past the ice walls
+  3. Turn on Parallax Pick Mode and hover the ice: the label says Ice, no shadows (built-in); left click steps to Ice after Smooth on other textures
+- Look for: Does the ice look like clear ice with the pattern inside it as the camera moves, with no dark shadows? Too deep or too shallow?
+- Status: waiting for L
+
+## T523 Light Source pick effect and its strength
+- Asked: 2026-10-21 23:11 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Graphics > Ray tracing and Shader Effects pick mode
+  2. Go somewhere dark (Bottles' house), point at a lamp or window texture and press 9: the label says Light Source 100% and the room lights up from it with no glowing ball in the air
+  3. Shift + mouse wheel up and down over it: the toast shows 10% to 500% and the light reaches further or less far
+  4. Save Pick, restart: the strength comes back
+- Look for: Does Light Source light the scene with no ball, and does Shift + wheel change its strength?
+- Status: waiting for L
+
+## T522 Pick mode number keys, paint, Show All and Slight Glow
+- Asked: 2026-10-21 22:56 UTC
+- Build: main (next build)
+- Steps:
+  1. Turn on Shader Effects pick mode
+  2. Press 2 over a texture: Grass turns on or off there; 8 does Slight Glow (a little brighter); Shift + a number does nothing, as there are only 9 effects
+  3. Hold left click and sweep over several textures: each gets the same change as the first
+  4. Middle click: textures with the chosen effect pulse orange; press other number keys to see other effects' textures; middle click again turns it off
+- Look for: Do the keys, painting, Show All and Slight Glow work as described?
+- Status: waiting for L
+
+## T521 Thick 3D picket fence mod (Spiral Mountain)
+- Asked: 2026-10-21 21:44 UTC
+- Build: main @ 5236e52 + mod zip in project files
+- Steps:
+  1. Copy mods/Thick Fence v1.zip into the game's mods folder and turn it on in the Mods tab
+  2. Start a new area load (warp to Spiral Mountain from the Warp tab, or restart the game)
+  3. Walk to the yellow picket fences in Spiral Mountain and look along them from the side and from a slant
+- Look for: Do the pickets and rails now have a thick side view, with the same front look as before? Any holes, wrong colours on the sides, or a big frame rate drop? (about 20,000 extra triangles; the fence is 12 units thick)
+- Status: waiting for L
+
+## T520 Several shader effects on one texture
+- Asked: 2026-10-21 21:12 UTC
+- Build: main (next build)
+- Steps:
+  1. Bind Controls > Pick Modes > Shader Effects Pick Mode and turn it on
+  2. Point at a grass texture: the label lists its built-in effects and the chosen effect
+  3. Right click until Ice Reflection is chosen, left click: the label shows Grass + Ice Reflection and both show in game
+  4. Give a texture Grass + Ice, Save Pick, restart: both come back from Dev Files/shader_effect_tags.txt
+  5. An old shader_effect_tags.txt (one effect a line) still loads
+- Look for: Can one texture hold several effects? (Ignore was removed 2026-10-21 at L's word: it broke things.)
+- Status: waiting for L
+
+## T519 Intro: normal wide view from the first shot (replaces T403)
+- Asked: 2026-10-21 20:35 UTC
+- Build: main
+- Steps:
+  1. Aspect Ratio Expand in your wide window (3440x1417)
+  2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave, and compare its shape with the game after it
+- Look for: The intro has the same shape as the game after it from its first shot: no zoom, nothing cut off at the top and bottom. The opening cloud shot may show the ends of its cloud backdrop at the sides (the original game built it for 4:3); tell me if that bothers you. Checked headless: builds and boots to the attract demo wide; the story intro itself could not be reached headless (the software renderer stalls before it).
+- Status: waiting for L
+
+## T518 Displaced ground: wobble, distance, grass edging
+- Asked: 2026-10-21 17:39 UTC
+- Build: main
+- Steps:
+  1. Pull main and build; keep Parallax on original textures on and Displaced ground at 60
+  2. Walk and turn the camera on Spiral Mountain's dirt and stone floors, the spot from your screenshot (the eggs by the dirt slope)
+  3. Try Graphics > Shaders > Displaced ground distance at 8000 (default), 4000 and 16000
+- Look for: The ground no longer wobbles as the camera moves; the grass edging over the dirt shows in full again (the dirt stays flat under it); the dips reach much further off and fade out gently. Say how the frame rate changes with the distance.
+- Status: waiting for L
+
+## T517 Mirror Mode: transitions not mirrored
+- Asked: 2026-10-21 15:59 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Enter a level or collect a Jiggy so the Jiggy wipe plays
+  3. Watch the wipe close and open
+- Look for: The Jiggy-shaped wipe looks the same as with Mirror Mode off (shape not mirrored, hole clears the whole screen). Also check the title and file select, which should read normally. Not built or run.
+- Status: waiting for L
+
+## T516 Dive animation and belly slide
+- Asked: 2026-10-21 15:56 UTC
+- Build: main
+- Steps:
+  1. Settings > WIP > Dive on
+  2. As Banjo-Kazooie jump, then press Run (B) in the air
+  3. Land and keep still, then move the stick, then press A
+- Look for: Banjo pushes off and his arms, legs and Kazooie's wings move during the dive (not a still pose); he slides on his belly and stays lying until A; the stick doesn't walk him off; he gets up smoothly into the jump
+- Status: waiting for L
+
+## T515 3D grass speed (road map cached)
+- Asked: 2026-10-21 15:01 UTC
+- Build: main
+- Steps:
+  1. Turn on Graphics > 3D grass with your usual settings
+  2. Walk and run around Spiral Mountain and Jinjo Village, turning the camera
+  3. Watch the frame rate and the overlay's CPU time
+- Look for: Is the frame rate much better than before? Do roads and paths still stay clear of grass, with no grass popping onto a road as you move?
+- Status: waiting for L
+
+## T514 Tessellated sand: occlusion culling and props fix (Terrydactyland speed)
+- Asked: 2026-10-21 14:40 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Walk behind hills and turn the camera quickly
+- Look for: Is it playable now? Footprints still show near Banjo; no sand patches popping in or missing at hill edges or after quick camera turns (also check Icy Side's deep snow)
+- Status: L 2026-10-21 22:37: occlusion breaks the sand, removed (the props fix stays). Still 10 fps in Terrydactyland, being looked at.
+
+## T513 Displaced ground (floors)
+- Asked: 2026-10-21 12:39 UTC
+- Build: claude/project-thread-zaob1b
+- Steps:
+  1. Settings > Graphics: switch on Parallax on original textures and set Displaced ground to 60
+  2. Go to Spiral Mountain and Mumbo's Mountain and walk over stone, brick, cracked and dirt floors
+  3. Look at the ground from a low angle and from far away, then set Displaced ground back to 0 and compare the frame rate
+- Look for: Cracks, gaps and grooves in floors are real dips (they change the outline of the ground and hide what is behind them), the deeper parts are a little darker, and walls keep their old parallax. No holes or cracks between pieces of ground, nothing flickers. Say how much slower it is on your GPU. Send console.log if a message says the graphics driver could not build the pipeline.
+- Status: waiting for L
+
+## T512 Mirror Mode: Start menu readable
+- Asked: 2026-10-21 13:11 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Press Start in the world
+  3. Read the menu rows and the Jiggy/Note counters
+- Look for: The Start menu text and icons are not mirrored (they sit where they do with Mirror Mode off); the world behind is mirrored. Not built or run.
+- Status: waiting for L
+
+## T511 Faint line on top of fences with texture upscaling
+- Asked: 2026-10-21 13:06 UTC
+- Build: main
+- Steps:
+  1. Turn Texture upscaling on (2x or 4x)
+  2. Look at a fence's top edge
+  3. Compare with upscaling off
+- Look for: Is the faint line along the top edge of the fence gone? If it stays with upscaling off too, say so: then it is the game's own texture
+- Status: waiting for L
+
+## T510 Dump sounds (DEV)
+- Asked: 2026-10-21 12:38 UTC
+- Build: main @ cbfad44
+- Steps:
+  1. Open Settings > DEV and switch on Dump sounds
+  2. Play for a minute, then enter a few different areas
+  3. Open the sound_dump folder in the app-data folder
+- Look for: Are there WAV files in bank*/inst*/ folders, and do they sound right (not noise)? Are Kazooie's sounds among them? Send index.txt if the sounds are wrong or missing.
+- Status: waiting for L
+
+## T509 3D grass in ray tracing
+- Asked: 2026-10-21 12:29 UTC
+- Build: main
+- Steps:
+  1. Turn on Ray tracing and 3D grass, leave 3D grass in ray tracing on (Graphics > 3D grass)
+  2. Stand in Spiral Mountain's grass in sunlight and walk through it
+  3. Look at the grass shadows on Banjo and the ground, then turn 3D grass in ray tracing off and on again and compare the frame rate
+- Look for: The grass casts shadows on Banjo's legs and on the ground beside it, and nothing flickers or goes black. Say how much slower it is with it on. Send console.log if the game crashes.
+- Status: waiting for L
+
+## T508 Tessellated sand speed in Terrydactyland
+- Asked: 2026-10-21 12:27 UTC
+- Build: main
+- Steps:
+  1. Graphics: turn on Tessellated sand
+  2. Go to Terrydactyland and walk around the sand
+  3. Turn the camera around and walk a long way on sand
+- Look for: Is it playable now (frame rate close to Tessellated sand off)? Footprints still show near Banjo; no sand or snow vanishing at the screen edges (also check Icy Side's deep snow)
+
+## T507 Mirror Mode: controls follow the picture
+- Asked: 2026-10-21 12:26 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on
+  2. Push the stick left, then right
+  3. Turn the camera with C-left and C-right
+- Look for: Banjo walks towards the side you push on screen (stick left goes to the screen's left), and the camera buttons turn the way they look. Mirror Mode off puts it all back. Not built or run.
+- Status: waiting for L
+
+## T505 Mirror Mode: signs readable, Text pick
+- Asked: 2026-10-21 10:55 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Mirror Mode on (T504)
+  2. Find a sign (Spiral Mountain), press the Shader Effects Pick Mode key, click its writing until the label says Text
+  3. Look at the sign again
+  4. Walk to other signs and pick any whose writing is still mirrored
+- Look for: Text-picked textures read normally on the mirrored world while the sign's shape is mirrored. Send shader_effect_tags.txt from the Dev Files folder so I can build the picks into the default list. The list starts empty, so nothing is flipped back until you pick. Not built or run.
+- Status: waiting for L
+
+## T504 General: Mirror Mode
+- Asked: 2026-10-21 10:51 UTC
+- Build: main, next push (untested)
+- Steps:
+  1. Settings > General: turn Mirror Mode on (no restart)
+  2. Walk around Spiral Mountain, open the pause menu, talk to someone, collect a Note
+  3. Look at the Jiggy and Note counters and the dialogue box
+  4. Turn Mirror Mode off again
+- Look for: The world is flipped left to right (Banjo's house on the other side, camera turns the opposite way on screen). The HUD stays in its usual place and every counter, dialogue box and menu text is readable, not mirrored. Signs on the world's surfaces are still mirrored (known). Menus with no 3D world may be mirrored whole. Off puts everything back at once. Not yet built or run: please report any crash or black screen
+- Status: waiting for L
+
+## T503 See-through textures look solid with shaders
+- Asked: 2026-10-21 10:49 UTC
+- Build: main
+- Steps:
+  1. Turn on the shaders (ambient occlusion, fog, outlines)
+  2. Go to the cave in your photo (the dark sheet with the straight edge on the floor)
+  3. Compare with the shaders off
+- Look for: Does the dark sheet and its straight edge now read as see-through? Nearly clear parts of see-through quads (under about 20% opaque) no longer leave depth for the effects; if the sheet is still there, say so and send a photo
+- Status: waiting for L
+
+## T502 Klungo fights 2 and 3 replay
+- Asked: 2026-10-21 10:24 UTC
+- Build: main
+- Steps:
+  1. Cheats > Replays: pick Klungo (second fight)
+  2. Let the intro play; touch or hit Klungo when he walks up
+  3. Repeat with Klungo (third fight)
+- Look for: He drinks a potion, the bottle shows, and the fight starts (throws) instead of him standing still
+- Status: waiting for L
+
+## T501 3D grass stays put, LOD slider and 30 FPS grass
+- Asked: 2026-10-21 10:14 UTC
+- Build: main
+- Steps:
+  1. Turn 3D grass on (Graphics > 3D grass), leave 3D grass LOD at 0 (Off) and 30 FPS 3D grass on
+  2. Walk and turn around in Spiral Mountain's grass fields and on the lawn by Banjo's house
+  3. Watch the frame rate overlay, then turn 30 FPS 3D grass off and compare
+  4. Move 3D grass LOD to 50 and to 100 and walk again
+- Look for: With LOD 0 no blade changes, pops or disappears while you move. Better frame rate than the last build with grass on, and higher with 30 FPS 3D grass on. With LOD up, far grass gets thinner but still does not flicker as you walk. Send console.log if the game crashes or the grass is missing.
+- Status: waiting for L
+
+## T500 Noclip: Y toggles it, and no damage
+- Asked: 2026-10-21 10:09 UTC
+- Build: main, next push
+- Steps:
+  1. Settings > Cheats: turn Enable cheats on
+  2. In the game press Y on the controller: noclip turns on (the Noclip row in Cheats switches on)
+  3. Walk into an enemy or a hazard: no damage, no hurt reaction
+  4. Press Y again to leave noclip; check Controls > Movement > Toggle Noclip
+- Look for: Y flips Noclip, and while it is on you take no damage. Y is also C-left by default, so it still sends C-left to the game; rebind Toggle Noclip if that gets in the way. LT+Y still transforms.
+- Status: waiting for L
+
+## T499 Take no damage cheat is listed again
+- Asked: 2026-10-21 09:59 UTC
+- Build: main, next push
+- Steps:
+  1. Open Settings > Cheats and turn the master switch on
+  2. Find 'Take no damage (Cheato: HONEYKING)' in the list (it sits after SUPERBADDY)
+  3. Turn it on and get hit by an enemy
+- Look for: The cheat shows under its plain name and your health does not drop.
+- Status: waiting for L
+
+## T498 Hold Speed-Up 3 s to skip a cutscene
+- Asked: 2026-10-21 09:48 UTC
+- Build: main (not built or run in the container)
+- Steps:
+  1. Settings: Cheats tab, Enable cheats and Speed-up on; QOL tab, Fast Forward Cutscenes on
+  2. Start a cutscene (Klungo intro, a boss intro)
+  3. Hold the Speed-Up key (F2) for under 3 s, then release
+  4. Hold it again for 3 s or more
+  5. Try the same in normal gameplay
+- Look for: Under 3 s it is the normal speed-up. At 3 s a toast says Skipping cutscene, the scene fast-forwards, and when it ends a toast says Cutscene skipped. Nothing happens in gameplay, on the title screen or file select. Start still fast-forwards and stops it as before.
+- Status: waiting for L
+
+## T497 Toon shading split: Characters and World
+- Asked: 2026-10-21 09:35 UTC
+- Build: main (this commit; not built or run in the container)
+- Steps:
+  1. Graphics > Lighting: set Toon shading: Characters to 100 and Toon shading: World to 0
+  2. Walk round Spiral Mountain, look at Banjo, Kazooie and any enemy
+  3. Swap them: Characters 0, World 100
+  4. Both 100, then both 0
+  5. If you had Toon shading raised before, check both sliders start at that value
+- Look for: (Updated 2026-10-21 after L: rocks and other props now follow World; Characters is only models with several bones, so Banjo, Kazooie, NPCs and enemies. Tell me if a prop still follows Characters or a character is missed.) Characters 100 alone flattens only Banjo, Kazooie and enemies, leaving the ground, walls and rocks as the game drew them. World 100 alone flattens the level and props and leaves characters alone. Both at 0 look exactly like before. Tell me if a character edge shows a halo, if characters in water or behind water are wrong, or if water, reflections or shiny metal look different with Characters raised. Note: gold or metal characters count as shiny and may follow the World slider.
+- Status: waiting for L
+
 ## T496 Tessellated sand: edges, tire tracks, sharper footprints
 - Asked: 2026-10-21 08:59 UTC
 - Build: main
@@ -102,11 +588,11 @@
 - Look for: (Updated 2026-10-21 after L's first look: beams now take each window's shape, round, hexagonal or tall, and end in a lit patch of that shape on the floor.) See-through white beams fall from each window down onto the floor and light a patch of it, with the same streaky look as the beams in Mumbo's Skull; they don't flicker, cut off or show through walls, and Banjo walking through them looks right. Off gives the rooms back as before. Checked offline (the game's models drawn with its own textures): screens/window-beams/ in project files. Headless the game loaded the beams' models in all three rooms with no error, but the container could not draw a picture, so how they look in the game is untested. Too bright, too faint, too long or too short?
 - Status: waiting for L
 
-## T485 Toon shading (BotW style)
+## T485 Toon shading (now two sliders, see the newest test)
 - Asked: 2026-10-20 23:40 UTC
 - Build: claude/project-thread-xxxtu1 (not built or run in the container; the shader compiles to DXIL and SPIR-V)
 - Steps:
-  1. Graphics > Lighting: raise Toon shading (default 0 = off) to 100
+  1. Graphics > Lighting: raise Toon shading: World and Characters (default 0 = off) to 100
   2. Walk round Spiral Mountain in sun and in shade; try with Toon outlines and Rim light on
 - Look for: Light, mid and shadow areas become flat bands with soft steps, shadows a little cool and lit parts warm, colours kept; 0 looks exactly like before. Tell me if the bands are too harsh, too dark or too bright, or if it flickers.
 - Status: waiting for L
@@ -294,6 +780,22 @@
 - New debug view (L 07:58, grate still blocks light): F6 or Graphics > Debug > Effect debug view > "Ray traced scene": green where the traced rays meet the surface, blue where the surface isn't in the traced scene (light passes through it), red where something traced stands in front of it. Screenshot it over the Spiral Mountain grate.
 - Fixed (L 08:10 grate, L lantern red bars, 2026-10-21): rays now read the texture where they hit. Where a cut-out or see-through texture is clear (the Spiral Mountain grate holes, fences, leaves), shadow, lamp and reflection rays go through; where it is solid they stop. A lamp's light is also dimmed by dark texels of its own casing within 60 units of the flame, so the bars painted on the lantern texture cut dark streaks into the light and glow. Check the grate in sunlight and Bottles' house lanterns; if the grate still blocks, send the "Ray traced scene" view; tell me any lamp that went dark.
 - Fixed (L 09:04-09:07, 2026-10-21): (a) Path tracing now brings real light: every spot a bounce lands on adds the sun's and the nearest lamps' traced light there, so sunlit patches and lamps light round corners; compare a room or cave with it off and on. (b) Grate: under cover (something straight above and on most sides) the sun let in through an opening now lights the spot, so the grate's holes throw a lit pattern below (before, traced shadows could only darken). (c) "Ray traced scene" view now shows cut-outs yellow, their clear parts blue, and with the textures read, each surface shaded by the texel the ray sees (a lantern's bars should show dark). (d) Parallax picks as Metal now count as shiny for reflections (the split pads' second half).
+- Fixed (L 10:22-10:39, 2026-10-21): (a) the sun let in through openings now only lights floors in a pit or room under a see-through cover (a grate): no more orange strips round the Jiggy shrine and stumps, or bright triangles on King Jingaling's house. (b) Models (Jinjos, birds, enemies) cast a soft traced shadow straight down, darker the closer they are to the ground. (c) New Ray Tracing option "Traced shadows of the player" (on by default): off, Banjo casts no traced shadows (sun, lamps, contact), everything else does. (d) The traced bounce light is capped and gives less to what is already bright, so sand and snow don't blow out; path tracing's sunlight per hop halved. (e) Banjo's traced shadows: leaving him out used a capsule that missed his backpack and nose and also cut the level's own triangles near him (his "shadow" was only those two, and a lit Banjo-shaped hole showed in shadows he stood or swam in). Now only his model is left out, and under ray tracing "Traced shadows of the player" decides (Sun shadow on Banjo is for the screen-space shadows). On, he casts his whole shadow. Check: Jingaling's house, a shrine in a cave, the sand, a Jinjo's shadow, Banjo swimming in sunlight with the option on and off.
+- Fixed (L 11:00-12:39, 2026-10-21): (a) Banjo's body was missing from the traced scene: the game draws characters see-through-capable with no texture on most of the body, and those parts were left out, so only his textured backpack, belt and nose cast a shadow. They are in now (checked headless in the Ray traced scene view: Banjo shows whole), so his traced shadow and enemies' should be complete. (b) Lit lamps are light sources: Bottles' house's lantern had no game light (its two lights are 2000 units away), so nothing was traced from it. Draws with a lamp texture now light the scene from where they hang, and the frame and bars (untextured or dark texels) cut the light. Bottles' lantern is built in; for other lamps use Shader Effects pick mode's new "Lamp" pick. (c) Ray tracing reads Parallax's material list (built-in and your picks): Metal, Tiles and Smooth reflect, stone, wood, dirt and the rest stay matte. (d) Graphics has its own "Ray Tracing" section after Grass, always shown (the hide toggle is gone), with new sliders: Traced reflections, Traced water reflections, Metal / Tiles / Smooth surface reflection. Check: Banjo's shadow in the sun, Bottles' lantern, a Metal-picked floor, the new sliders.
+- Fixed (L 12:39 performance, 14:14 light sweep, 2026-10-21): (a) Faster ray tracing, about 40% off the traced pass headless: outdoor light beams take 4 steps instead of 12 (rooms 8), sun shadows trace 2 rays and add 2 more only on a shadow's soft edge, the model shadow takes 2 cheaper rays, and the material and grate rays are skipped where the scene has nothing for them. (b) Open ground no longer goes black: the traced ambient occlusion started its rays a unit off the ground and hit a second layer the game draws just over it (Spiral Mountain's open grass read as fully covered). (c) Light source sweep: the 7,259-texture dump was gone through and torch and candle flames, strip and ceiling lamps and the lanterns' glow are light sources now (sheet: textures/lamp-sweep/lamp-sweep.png, with what was left out). Check: frame rate with Ray tracing on before and after, Spiral Mountain's open grass, torches in a cave, Grunty Industries' lamps.
+- Fixed (L 19:03, 2026-10-21): lanterns as windows of light. A lamp's light now leaves its lantern only through the lit yellow parts of its texture (the panes); the dark frame and bars and the grey roof block it, so the light falls in the shape of the windows. Near-white still counts, for the strip lamps. Check: Bottles' / Jinjo Village lanterns (a window-shaped pool of light below and beside them), torches.
+- Fixed (L 19:23-19:33, 2026-10-21): (a) Ice reflections did nothing outside the six icy maps, even on your own Ice picks: ice only counted there. Ice picks, and a new built-in "ice anywhere" list (your 16 Waterfall Cavern picks), now reflect in every map (checked headless in Waterfall Cavern: the ice shows in the mask and reflects). (b) Traced ice and water reflections: no more smeared stripes. Under ray tracing the ice uses its true reflected ray (no bent-into-the-picture rays), and a ray that lands off screen or behind something no longer copies the screen's edge (it shows the remembered colour with Ray tracing hit colours on, else the ice's own picture). (c) Ice sweep: 14 more ice textures (crystal ice, ice blocks, icicle walls) from the texture dump reflect in every map (sheet: textures/ice-sweep/ice-sweep.png, with what was left out). Check: Waterfall Cavern with Ice reflections up, Icy Side.
+- Added (L 19:50, 2026-10-21, "a sweep of everything relevant to RT"): 16 more light sources (small flames, fires, a furnace door, lit round and barred windows, panel and ceiling lamps; the commit message says 19, the right count is 16) and 15 more shiny textures (chrome, steel, brass, gold, a glass tube). Sheet: textures/rt-sweep/rt-sweep.png. Left out: lava and Hailfire Peaks' burning walls, which filled all 32 lights on the lava side headless. Also fixed: the Windows link error "undefined symbol SceneIceTexture" (ef2fdbf). Check: Hailfire Peaks lava side (round window light), any lit window or torch.
+- Fixed (L 20:23 and 20:36, 2026-10-21): (a) a metal grate's shine no longer covers its holes: reflections skip pixels seen through a cut-out's see-through parts (checked headless on the Spiral Mountain grate in the reflection view). (b) The light balls in the round windows are gone: the windows are off the light list again (Window Light Beams lights them). Check the Spiral Mountain grate and the room with the round windows.
+- Fixed (L 21:02-21:18, 2026-10-21): (a) the grate's sheen over its holes: the shiny mask now leaves out a cut-out's see-through parts where it is drawn; (b) RT slower: the extra per-pixel ray from the first grate fix is gone; (c) Photo mode warp crash (e58d3ba); (d) metal statue squares (e58d3ba). Check: the Spiral Mountain grate (no sheen in the holes), RT frame rate back to before, the statue, warping from Photo mode. Not checked headless (L: no need).
+- Fixed (L 21:25, 2026-10-21): the lantern's window pattern. Its panes were drawn see-through without depth, so they were never in the traced scene and the light escaped everywhere. Lamp-textured draws now always go into it, and near the light their colour decides (yellow passes, dark bars block) even where the texture is see-through. Check: Bottles' house / Jinjo Village lanterns, the floor and walls round them should show the pane pattern. Not checked headless.
+- Fixed (L 21:41, 2026-10-21): the lantern's light now leaves only through its pale panes (red and green equal, bright); the ochre and gold frame round them blocks it too, so the floor shows the window pattern. Not checked headless.
+- Fixed (L 21:50, 2026-10-21): no more glowing balls at Lamp picks and lamp textures: the air glow (Traced light beams) leaves out the inside of the lamp (within 90 units), where it was drawn without a ray, through the lamp itself. Not checked headless.
+- Changed (L 22:18, 2026-10-21): the lantern window-pattern attempts are removed. Lamps light up as normal: nothing within the lamp's own fitting blocks its light, and the lamp panes are no longer added to the traced scene. Not checked headless.
+- Fixed (L 23:07-23:10, 2026-10-21): (a) blocky traced ice/water reflections: the reflected colour is now sampled between pixels (a point load gave squares up close), and remembered hit colours blend the 8 nearest 16-unit cells instead of one; (b) the glow round lights in the air (Traced light beams) is removed: it showed as balls round every light. Not checked headless.
+- Fixed (L 23:15, 2026-10-21, Ice reflections without ray tracing): the reflection no longer cuts off along a straight line across the ice: where the ray turns back towards the camera it now changes over a band of angles instead of at one. Check: Icy Side ice at the spot of your screenshot, camera tilted up and down. Not checked headless.
+- Faster (L 08:11, 2026-10-22, Bottles' House at 20 fps): lamp shadows trace 2 rays a light instead of 4 (turned from pixel to pixel) and at most 6 lights a pixel; path tracing adds lamp light from one lamp a hop and only on the first spot it lands. Measured headless with your graphics.json before the change: ray tracing 89% of GPU time, path tracing 36%, traced light beams 7%. Check: Bottles' House fps, and that lamp shadows still look soft (maybe a little grainier). Not re-measured after.
+- Fixed? (L 08:20, 2026-10-22, reverse shadow under a note pedestal): the "is this spot inside a room" test now counts only level geometry, not models. A model beside the floor (the pedestal) made the floor round it count as a room, so its shadow there came out lit and the rest dark. If the pedestal is level geometry this does not cover it; tell me. Not checked headless.
 - Known gaps: Vulkan only (D3D12 says unsupported); sky not reflected; hits show the scene's colour from the picture (or the nearest colour in that direction), not the hit surface's own texture.
 - Status: waiting for L
 
@@ -479,7 +981,7 @@
 - Asked: 2026-10-20 03:49 UTC
 - Build: main
 - Steps:
-  1. Cheats on, Cheats > Cheato: HONEYKING on
+  1. Cheats on, Cheats > Take no damage (Cheato: HONEYKING) on
   2. Let an enemy hit Banjo (a Snapdragon, Ugger or Grublin)
   3. Walk into a hazard that throws him up (fire, hot or electric ground)
   4. Get grabbed by something that holds him (Dragunda)
@@ -916,7 +1418,8 @@
   1. Aspect Ratio Expand in your wide window (3440x1417)
   2. Start a new game and watch the intro ("Two years have passed..") from the start, through Klungo at the grave
 - Look for: The opening cloud shot fills the width with no panel ends (it is zoomed in, so the top and bottom of that one shot are cut), and every shot after it, Klungo's "No good, missstress" close-up included, has normal proportions instead of looking stretched sideways. Checked headless at 3440x1417 shape and 16:9: screens/intro-stretch/before-after.png
-- Status: waiting for L
+- Status: answered 2026-10-21 20:35 UTC
+- L's result: replaced by T519: L chose the normal wide view, no zoom (2026-10-21)
 
 ## T402 Split-Up pads: no lines across the pictures (DEV Blend texture seams, on)
 - Asked: 2026-10-17 20:44 UTC
@@ -2898,7 +3401,7 @@
 - Checked headless: Stony in Mayahem Temple and the Daddy T-Rex in Terrydactyland, both ways; the line on the 1st change only; refused when not unlocked, in the air, while the caveman talks, and with the T-Rex against a wall. Not checked headless: the submarine, bee, van, washer, snowball, detonator and baby T-Rex (same game call), and how the refusal sound sounds.
 - Status: waiting for L
 
-## T183 3D grass, Breath of the Wild style (roadmap 4.47)
+## T183 3D grass, tufted field style (roadmap 4.47)
 - Asked: 2026-10-15 20:55 UTC
 - Build: main (pull and build)
 - Steps:
@@ -2906,7 +3409,7 @@
   2. Spiral Mountain: stand on the meadow by Klungo and watch the grass for a few seconds, then walk and run through it and stop
   3. Isle o' Hags (Jinjo Village) and Mayahem Temple's courtyard: look at it close up and far away
   4. Try 3D grass height 150 and 200, then set 3D grass to 0
-- Look for: Knee-high tufts of thin blades arching out, dark at the roots and lighter at the tips. Waves of wind rolling across the field. Grass pressed down and out of the way round Banjo, with a trail behind him that springs back up over about a second. Is it close enough to Breath of the Wild, and is anything off (too dense, too thin, too tall, the wind too strong or too weak)? Frame rate with it on compared with off? It costs more than the T163 version (24 layers instead of 16); lower 3D grass distance if it is too slow. Checked headless: the look and the pressed-down patch round Banjo in Spiral Mountain. Not checked headless: the motion itself (the container runs at a few frames a second).
+- Look for: Knee-high tufts of thin blades arching out, dark at the roots and lighter at the tips. Waves of wind rolling across the field. Grass pressed down and out of the way round Banjo, with a trail behind him that springs back up over about a second. Is it close enough to the tufted field look, and is anything off (too dense, too thin, too tall, the wind too strong or too weak)? Frame rate with it on compared with off? It costs more than the T163 version (24 layers instead of 16); lower 3D grass distance if it is too slow. Checked headless: the look and the pressed-down patch round Banjo in Spiral Mountain. Not checked headless: the motion itself (the container runs at a few frames a second).
 - Status: waiting for L
 
 ## T182 Totals checklist off by default, and the 8 FPS

@@ -92,10 +92,10 @@ index 1961e29..e4b14fa 100644
 +    int32_t get_game_mouse_wheel();
  }
 diff --git a/recompinput/include/recompinput/input_types.h b/recompinput/include/recompinput/input_types.h
-index f5ed6c0..3b3dd29 100644
+index f5ed6c0..bbec3e9 100644
 --- a/recompinput/include/recompinput/input_types.h
 +++ b/recompinput/include/recompinput/input_types.h
-@@ -37,10 +37,49 @@ namespace recompinput {
+@@ -37,10 +37,53 @@ namespace recompinput {
          DEFINE_INPUT(TAB_LEFT_MENU, 0, "Tab Left (Menu)") \
          DEFINE_INPUT(TAB_RIGHT_MENU, 0, "Tab Right (Menu)")
  
@@ -135,7 +135,11 @@ index f5ed6c0..3b3dd29 100644
 +    DEFINE_INPUT(PICK_PASTE, 0, "Paste Pick") \
 +    DEFINE_INPUT(PICK_UNDO, 0, "Undo Pick") \
 +    DEFINE_INPUT(TALON_TROT, 0, "Talon Trot") \
-+    DEFINE_INPUT(EFFECT_COST, 0, "Effect Cost Check")
++    DEFINE_INPUT(EFFECT_COST, 0, "Effect Cost Check") \
++    DEFINE_INPUT(NOCLIP_TOGGLE, 0, "Toggle Noclip") \
++    DEFINE_INPUT(SUN_MOVE, 0, "Move Sun") \
++    DEFINE_INPUT(SUN_SAVE, 0, "Save Sun Location") \
++    DEFINE_INPUT(MATERIAL_PICK, 0, "Ray Tracing Material Pick Mode")
 +
      #define DEFINE_ALL_INPUTS() \
          DEFINE_N64_AXIS_INPUTS() \
@@ -146,7 +150,7 @@ index f5ed6c0..3b3dd29 100644
  
      #define DEFINE_INPUT(name, value, readable) name,
      // - Enum containing every recomp input.
-@@ -72,6 +111,9 @@ namespace recompinput {
+@@ -72,6 +115,9 @@ namespace recompinput {
          InputType input_type;
          // Represents a single source input. e.g. A keyboard's shift key, or a controller's R trigger
          int32_t input_id;
@@ -156,7 +160,7 @@ index f5ed6c0..3b3dd29 100644
          std::string to_string() const;
          auto operator<=>(const InputField& rhs) const = default;
  
-@@ -90,15 +132,33 @@ namespace recompinput {
+@@ -90,15 +136,33 @@ namespace recompinput {
          bool is_empty() const {
              return input_type == InputType::None;
          }
@@ -190,7 +194,7 @@ index f5ed6c0..3b3dd29 100644
      }
  
      // Represents the types of mapping/profiles that can be done.
-@@ -127,6 +187,10 @@ namespace recompinput {
+@@ -127,6 +191,10 @@ namespace recompinput {
  
      bool get_game_input_clearable(GameInput input);
      bool get_game_input_is_menu(GameInput input);
@@ -1894,7 +1898,7 @@ index f379a6f..388d5a2 100644
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..7db41dd 100644
+index 6ba64e2..aa9cb5b 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -1925,7 +1929,7 @@ index 6ba64e2..7db41dd 100644
  {
      ContextId context = recompui::get_current_context();
      set_as_navigation_container(NavigationType::Vertical);
-@@ -21,19 +31,98 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,19 +31,103 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -1982,7 +1986,10 @@ index 6ba64e2..7db41dd 100644
 +        right->set_flex_grow(0.0f);
 +        right->set_flex_shrink(0.0f);
 +        right->set_flex_basis_auto();
-+        right->set_height(112.0f);
++        // Grows to fit the whole text (at least three lines), up to half the page, then scrolls.
++        right->set_height_auto();
++        right->set_min_height(112.0f);
++        right->set_max_height(50.0f, Unit::Percent);
 +        right->set_padding_left(32.0f);
 +        right->set_padding_right(32.0f);
 +        right->set_padding_top(10.0f);
@@ -1998,6 +2005,8 @@ index 6ba64e2..7db41dd 100644
 +        right->set_flex_shrink(1.0f);
 +        right->set_flex_basis(100.0f, Unit::Percent);
 +        right->set_height_auto();
++        right->set_min_height(0.0f);
++        right->set_max_height(100.0f, Unit::Percent);
 +        right->set_padding(16.0f);
 +        right->set_border_top_width(0.0f);
 +        right->set_background_color(theme::color::Transparent);
@@ -2030,7 +2039,7 @@ index 6ba64e2..7db41dd 100644
          }
      }
  }
-@@ -59,7 +148,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+@@ -59,7 +153,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
          std::string &option_id = schema.options[option_index].id;
          ConfigOptionElement* element = get_element_from_option_id(option_id);
          if (element == nullptr) {
@@ -2042,7 +2051,7 @@ index 6ba64e2..7db41dd 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -109,6 +201,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +206,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -2052,7 +2061,7 @@ index 6ba64e2..7db41dd 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -117,6 +212,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -117,6 +217,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
              }
          }
          perform_option_render_updates();
@@ -2060,7 +2069,7 @@ index 6ba64e2..7db41dd 100644
          break;
      }
      case EventType::MenuAction: {
-@@ -149,6 +245,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +250,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -2071,7 +2080,7 @@ index 6ba64e2..7db41dd 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,7 +273,19 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,7 +278,19 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -2091,7 +2100,7 @@ index 6ba64e2..7db41dd 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +293,37 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +298,37 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -2129,7 +2138,7 @@ index 6ba64e2..7db41dd 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +374,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +379,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -2137,7 +2146,7 @@ index 6ba64e2..7db41dd 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -241,6 +383,18 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -241,6 +388,18 @@ void ConfigPageOptionsMenu::render_config_options() {
  }
  
  void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {

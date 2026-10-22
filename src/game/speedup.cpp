@@ -24,6 +24,7 @@
 #include "tooie_speedup.h"
 #include "tooie_toast.h"
 #include "tooie_hotkeys.h"
+#include "tooie_game.h"
 
 extern uint64_t total_vis;
 
@@ -31,6 +32,8 @@ namespace {
     using namespace std::chrono_literals;
 
     constexpr auto poll_interval = 10ms;
+    // Holding the key this long in a cutscene skips it (src/gameplay/cutscene_skip.cpp).
+    constexpr auto skip_hold = 3s;
 
     std::once_flag started;
 
@@ -78,6 +81,8 @@ namespace {
         auto begin = std::chrono::steady_clock::now();
         bool on = false;
         bool was_down = false;
+        auto down_since = begin;
+        bool skip_tried = false;
         auto last_log = begin;
         uint64_t last_vis = total_vis;
         for (;;) {
@@ -108,6 +113,21 @@ namespace {
                 }
                 was_down = false;
                 continue;
+            }
+
+            // A cutscene skip owns the game clock while it runs.
+            if (tooie::cutscene_skip_active()) {
+                was_down = down;
+                skip_tried = true;
+                continue;
+            }
+            if (down && !was_down) {
+                down_since = std::chrono::steady_clock::now();
+                skip_tried = false;
+            }
+            if (down && !skip_tried && std::chrono::steady_clock::now() - down_since >= skip_hold) {
+                skip_tried = true;
+                tooie::cutscene_skip_hold_request();
             }
 
             bool toggle = option<bool>(tooie::speedup::toggle_option, false);

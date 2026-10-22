@@ -176,6 +176,33 @@ framework, not from this port's code, so it is not described here.
     between it and Banjo and glides back out afterwards, instead of jumping,
     and Banjo fades out when the camera comes very close to him. Default: off.
 
+## WIP
+
+Features still being worked on, in the WIP tab's WIP section. When one is done it
+moves back to its own tab (the Dive to QOL > Moves and aiming, Mouse in the game's
+menus to QOL, Grass to Graphics after the colour grading). The tab is a page of Graphics
+options: all of them save in graphics.json. The Grass toggle and the 3D grass settings
+under it are described in the Graphics sections.
+
+- **Mouse in the game's menus** (on by default): the pause menu and the save select follow
+  the mouse; the row under the cursor is picked and a left click presses A, a right click B.
+
+- **Dive** (off by default): press the Run key (B on a controller) in the air as
+  Banjo-Kazooie for a fast forward lunge. On landing Banjo slides on his belly and stays
+  lying on it until you jump (the stick can't walk him off it). Works from a jump, after the
+  Feathery Flap and in the ground pound (Bill Drill), once per jump (the jump off the belly is
+  a new jump); a wall ends it. Banjo alone, Kazooie alone and the transformations are
+  unchanged. While it is on and Run is held, B in the air belongs to the dive (not in the
+  pause menu, and not when Run is on another key). Tuning (src/gameplay/dive.cpp, units per
+  second; the run is 500): starts at 850 (1.7x), settles to 700 (1.4x) over 0.25 s, a 150
+  lift at the start, falling held to 450, then the slide slows from 600 to a stop over 0.4 s.
+  Pose (rules in src/gameplay/hold_to_run.cpp): a push-off as it eases in over 0.16 s, then
+  Banjo flat with arms forward and legs trailing, wings beating and legs kicking every 0.45 s;
+  on the belly his legs flutter while he slides; the pose fades into the jump over 0.15 s.
+  Kazooie shows when the game shows her (after the Feathery Flap).
+  `TOOIE_DIVE_POSE_TUNE=<file>` replaces the pose rules, lines
+  `<bone> <type> <scale> <offset degrees> [set]`.
+
 ## Controls: Movement
 
 - **Tiptoe**: hold it to tiptoe at any left stick tilt. Default: Left stick
@@ -241,12 +268,36 @@ F12 screenshots are taken before these filters, so they don't show them.
   as the camera moves. Higher is deeper; 100 is about 16 world units (Banjo is
   about 150 tall). Fades out on walls seen edge on and in the distance.
   Default: 0 (off).
-- **Parallax on original textures**: the game's own textures (3,481 of them,
+- **Parallax on original textures**: the game's own textures (3,517 of them,
   picked by eye, each with its own shape and depth: stone, brick, metal, wood,
-  bark, leaves, sand and the rest), whose depth is worked out from how dark each
+  bark, leaves, sand, ice and the rest), whose depth is worked out from how dark each
   part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.
+
+### Displaced ground
+
+- **Displaced ground** (under Shaders): 0 to 100. The ground's cracks, gaps and
+  grooves become real dips instead of a painted-on look: floors drawn with a
+  Parallax texture of a floor-like shape (cracks, terraced slabs, rounded
+  cobbles, bumpy dirt, brick, tiles, smooth stone) are cut into fine triangles
+  (by their size, so they stay put as the camera moves) and the dark parts of the
+  texture pushed straight down by up to
+  16 world units at 100 (times the texture's own Parallax depth). The ground's
+  outline and depth change, not only its shading, and the deeper parts are a
+  little darker. Walls and the ground within about 24 units of each triangle's
+  edge are left as they are, so no gaps open between pieces of ground, and so is
+  the ground under other draws laid over it (the grass edging painted over dirt).
+  The depth is blurred to the spacing of the new triangles, so it never gets
+  noisier than the mesh can show. It takes
+  Parallax's list of textures, shapes and depths (including those picked in
+  Parallax pick mode) and needs Parallax on original textures to be on, but the
+  Parallax setting itself can stay at 0. Needs a graphics card with tessellation;
+  without it the ground is drawn as the game did. Drawn on the picture, so
+  nothing in the game changes. Default: 0 (off).
+- **Displaced ground distance** (under Shaders): 2000 to 20000 world units. How
+  far from the camera the ground is displaced; the dips fade out over the last
+  quarter. Further costs more. Default: 8000.
 
 ### Parallax pick mode
 
@@ -261,9 +312,11 @@ the cursor names the texture and its parallax ("yours" or "built-in").
   Wood (shallow grain, deep gaps between planks), Bark (deep furrows), Brick
   (flat bricks, wide sunk mortar), Dirt (soft shallow lumps), Metal (flat
   plates, only the seams sink), Leaves (rounded, the shade under each sunk),
-  Tiles (flat tiles, a narrow sharp grout line), Sand (low soft ripples) and
-  Smooth (Bumpy's depth with no stair steps; Sand and Smooth blur the texture's
-  brightness first, which hides the jaggies of small textures), then Off.
+  Tiles (flat tiles, a narrow sharp grout line), Sand (low soft ripples),
+  Smooth (Bumpy's depth with no stair steps) and Ice (a clear top layer with the
+  frost and bubbles just under it and the dark parts deep inside; Sand, Smooth
+  and Ice blur the texture's brightness first, which hides the jaggies of small
+  textures), then Off. 25% depth is kept as 30%.
 - **Right click**: the depth, as a share of the Parallax slider: 100, 150, 200,
   300, 25 and 50%.
 - **Middle click**: its shadows off or on.
@@ -279,16 +332,65 @@ built-in choice and takes it out of the file (one line a texture: `<hash> <shape
 the file in to have them added to the port. Parallax must be above 0 to see the
 result. Press the key again for the normal mouse.
 
+**Ray Tracing Material Pick Mode** (Controls, Pick Modes, no default) gives a
+texture a production PBR material for Graphics > Ray tracing: **Albedo** (the
+base colour it is tinted by, red, green and blue), **Roughness** (0 a mirror, 100
+a wide brushed lobe: its reflection rays are scattered over a GGX lobe that
+wide), **Metalness** (0 a plain dielectric with a faint Fresnel reflection, 100 a
+metal with almost no diffuse that reflects in its albedo colour) and
+**Emissive** (percent of its own colour added as light the shadows don't dim; the
+traced light bounces pick it up, and it lights the scene like a Light Source) and
+**Subsurface** (how much of a lamp's or the sun's light behind the surface comes
+through it).
+**Left click** gives the texture a material (the default one) or takes it off,
+**middle click** steps through presets (Mirror, Brushed metal, Gold, Plastic,
+Rubber, Glowing, Wax, Leaf, Default), **Shift + wheel** changes the chosen property
+(**Ctrl** for fine steps), **right click** or the **number keys 1 to 7** choose
+which property (albedo red, green, blue, roughness, metalness, emissive,
+subsurface), key **8** steps the preset and key **9** turns Show All on or off. Save Pick, Delete
+Saved Pick, Copy, Paste and Undo work as in the other modes; the picks are kept in
+`rt_material_tags.txt` in the Dev Files folder (one line a texture:
+`<hash> albedo=RRGGBB roughness=N metalness=N emissive=N subsurface=N`). Without Ray tracing
+the picks do nothing.
+
+Graphics > Ray Tracing also has **Ray traced BRDF** (0 to 100: every traced
+reflection is scattered over a GGX lobe that rough; above 0 it turns the
+screen-space Stochastic reflections off) and **Ray traced subsurface scattering**
+(0 to 100: sun and lamp light carried through leaves, with a soft coloured glow
+in their shade).
+
 **Shader Effects Pick Mode** (Controls, Pick Modes, no default) works the
-same way for the texture effects. The label names the texture's effect ("yours"
-or "built-in"), and each **left click** steps it: Disable (no grass, ice
-reflection or deep snow on it), Grass, Deep Snow, Ice Reflection, then back to
-the built-in choice. **Shift + left click** puts it back at once and the
-**mouse wheel** picks the surface behind. Grass and Ice Reflection show at once;
-Deep Snow is only recorded for now, as deep snow goes by level and colour, not
-texture. Save Pick writes the texture under the cursor to `shader_effect_tags.txt` in the `Dev Files` folder
-(one line a texture: `<hash> disable|grass|deep_snow|ice`); send it in to have
-them added to the port.
+same way for the texture effects. A texture can have several effects at once.
+The label lists the texture's effects ("yours" or "built-in") and the effect
+you have chosen. **Right click** chooses the effect (Disable, Grass, Deep Snow,
+Ice Reflection, Shiny Reflection, Text, Lamp, Slight Glow, Light Source, Disable RT; **Shift +
+right click** goes back one) and **left click** turns it on or off for the
+texture under the cursor. The **number keys 1 to 9** choose effect 1 to 9 in
+that order and turn it on or off in one press; **Shift + 1 to 9** do the same
+for effects 10 to 18 once there are that many (a key with no effect does
+nothing). **Hold left click and sweep** to paint the same change (on or off, as
+the first click did) over every texture the cursor passes. **Middle click**
+turns Show All on or off: every texture with the chosen effect, built-in ones
+included, pulses orange between the cursor texture's blue pulses. **Slight
+Glow** draws the texture a little brighter, most on its lighter parts, as if
+lit from inside. **Light Source** lights the scene from the texture like a Lamp
+(needs Graphics > Ray tracing), with no glow in the air round it; **Shift +
+mouse wheel** over it sets its strength from 10% to 500% (up is stronger; 100%
+reaches as far as a lamp), saved as `light:<percent>`; on a built-in Light
+Source it makes your own pick at the new strength. **Disable RT** (Shift + 1)
+leaves the texture out of the ray traced scene: it casts no traced shadow and
+blocks no traced light. The port ships some picks of its own (L's tag file of
+2026-10-22: explosions, lamps, the lanterns' glass); your own pick of a texture
+replaces them. The first left click starts from the built-in effects, so adding Ice
+to built-in grass keeps the grass. Disable (no texture effect on it) turns the
+others off, and any other effect turns Disable off; turning the last effect off
+leaves Disable, and turning Disable off puts the built-in choice back. **Shift + left
+click** puts the built-in choice back at once and the **mouse wheel** picks the
+surface behind. Deep Snow is only recorded for now, as deep snow goes by level
+and colour, not texture. Save Pick writes the texture under the cursor to
+`shader_effect_tags.txt` in the `Dev Files` folder (one line a texture: the
+hash, then its effects, for example `<hash> grass ice`; files from before keep
+working); send it in to have them added to the port.
 
 **Interpolation Pick Mode** (Controls, Pick Modes, no default) does the
 same for models and characters, NPCs and enemies included: the label names the

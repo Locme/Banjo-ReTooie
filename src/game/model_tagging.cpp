@@ -1048,7 +1048,7 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     const bool interpolating = (interpolation_on() || mouse) && end > start && blend_mode != 1;
     // Without interpolation the scene is still read for the models drawn
     // without effects and for the Pick Model and Model Effects keys.
-    const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || effects_now || pick_now || mouse);
+    const bool excluding = !overlay && end > start && (tooie::interp_tags::any_no_effects() || tooie::picture_filters::toon_characters_on() || effects_now || pick_now || mouse);
     // Banjo's fur (Graphics > Banjo fur) needs his model found in the scene.
     const bool banjo_fur = tooie::picture_filters::banjo_fur_on();
     const bool kazooie_feathers = tooie::picture_filters::kazooie_feathers_on();
@@ -1319,7 +1319,8 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
     // commands as they are now, so after the interpolation tags. A model is
     // only marked when both its on and its off have a place and room.
     auto mark_no_effects = [&](uint32_t& cursor, uint32_t limit) {
-        if (!tooie::interp_tags::any_no_effects()) {
+        const bool character_toon = tooie::picture_filters::toon_characters_on();
+        if (!tooie::interp_tags::any_no_effects() && !character_toon) {
             return;
         }
         std::vector<int> mark(commands.size() + 1, -1);
@@ -1329,7 +1330,11 @@ static uint32_t tag(uint8_t* rdram, uint32_t start, uint32_t end, bool overlay) 
                 continue;
             }
             // 1: drawn after the effects; 2: drawn in place without writing depth.
-            const int value = tooie::interp_tags::no_effects_for(block.print) ? 1 : (tooie::interp_tags::no_depth_for(block.print) ? 2 : 0);
+            // 3: a character for Toon shading (a model with several bones; a rock or other prop has one).
+            int value = tooie::interp_tags::no_effects_for(block.print) ? 1 : (tooie::interp_tags::no_depth_for(block.print) ? 2 : 0);
+            if (value == 0 && character_toon && block.model != 0 && block.matrices >= 2) {
+                value = 3;
+            }
             if (value == 0) {
                 continue;
             }

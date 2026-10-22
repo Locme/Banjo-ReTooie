@@ -308,7 +308,8 @@ void tooie::asset_mods::tick(uint8_t* rdram) {
         uint8_t exit = MEM_B(0x13, game_state_addr);
         printf("[assets] reloading the area (map 0x%X, exit %u) for the switched mod\n", map, exit);
         fflush(stdout);
-        tooie::debug::request_warp(map, exit);
+        // The same map: a plain warp there is refused as "already in map".
+        tooie::debug::request_warp(map, exit, true);
     }
     bool want = dump_wanted();
     if (want && !dump_requested_before && !dump_running.exchange(true)) {

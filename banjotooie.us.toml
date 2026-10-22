@@ -951,6 +951,14 @@ func = "func_808023A4_chklungo"
 before_vram = 0x808023A4
 text = "if (tooie_klungo_fade(rdram, ctx, 1)) return;"
 
+# Klungo's potions in a replay (src/gameplay/replays.cpp): func_80802DF4 stores the potion set
+# number ($sp+0x28) to flags 0x315; a replay with no potions seen stores 0, which leaves fights 2 and
+# 3 stuck in the drink. A 0 is replaced by a random set just before the store.
+[[patches.hook]]
+func = "func_80802DF4_chklungo"
+before_vram = 0x80802EC4
+text = "tooie_klungo_replay_potions(rdram, ctx);"
+
 # func_80013D94 queues a sound frame's task in the scheduler's ring ($a0 = the entry). The list is
 # checksummed so a list that changes before it plays is logged (src/game/audio_task_check.cpp).
 [[patches.hook]]

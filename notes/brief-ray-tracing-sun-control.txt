@@ -1,0 +1,116 @@
+BRIEF: Ray tracing sun control (for a Sonnet implementation thread)
+Written 2026-10-22 for L. Not implemented yet. Check origin/main first (git fetch origin main, read the log for
+src/gameplay/day_night.cpp, src/gameplay/hd_shadows.cpp, rt64-ext/src/render/rt64_scene_effects.cpp).
+
+WHAT L WANTS
+L picks where the main light (the sun) stands, then hands the result over as a plain txt file, and Claude turns it
+into the game's defaults. So there are two halves:
+  A. A live control in the game: move the sun and watch the ray traced lighting and shadows change.
+  B. A txt file the control writes (and the game can also read), one line per map, which becomes the shipped
+     per-map sun.
+
+CURRENT BEHAVIOUR (verified in code 2026-10-22)
+- One sun vector is sent to RT64: RT64::SetSceneSun(custom, x, y, z) in rt64-ext/src/render/rt64_scene_effects.cpp.
+  It is a unit vector TOWARDS the sun in world space. y is up. Called only from src/gameplay/day_night.cpp:
+    - line ~397: cycle off. Uses map_sun(map, ...) (the map_suns[] table, lines ~100-115: Spiral Mountain 0xAF and
+      Jinjo Village 0x142 today) or custom=false, which falls back to FixedSun {0.47, 0.42, -0.78}.
+    - line ~508: cycle on. Uses the moving "sky" vector.
+- Readers of effectsSettings.sunDirection / FixedSun in rt64_scene_effects.cpp: sun shadow map (~2792, ~3303),
+  snow light (~2262, needs y > 0.15), traced shadows, light beams and sky. The ray traced scene (debug view 21) and
+  the traced sun shadows use the same vector, so changing the vector changes everything at once.
+- tooie::day_night::sun_direction(out) returns the cycle's sun (y never below 0.18) for HD shadows tilt
+  (src/gameplay/hd_shadows.cpp tilt_direction, lines ~78 and ~125-130 and ~366). It returns false when the cycle is
+  off, and HD shadows then use tilt_light {0.47, 0.82, 0.33}.
+- Test aid already there: TOOIE_MAP_SUN=<x>,<y>,<z> forces one sun on every map (day_night.cpp map_sun).
+
+REVISION 2026-10-22 08:24 (L) - THIS REPLACES DESIGN items 1, 2, 3 and 6 BELOW. No sliders.
+- Hold a key and turn the mouse wheel to move the sun. Key option "Move sun key" (a hotkey option, default
+  unbound or a free key; check notes/keys.md and tooie::hotkeys::down in include/tooie_rdram.h/hotkeys.cpp;
+  wheel handling is in src/input/hotkeys.cpp and menu_mouse.cpp). While the key is held, the wheel is swallowed
+  (the game and the free camera must not also zoom) and:
+    wheel          = azimuth, 5 degrees per notch (hold Shift for 1 degree)
+    wheel + Ctrl   = elevation, 2 degrees per notch, clamped 5..90 (y >= 0.15)
+  The sun applies live through RT64::SetSceneSun every frame it changes. Azimuth 0 = +z, 90 = +x.
+  Print "[sun] az 150 el 40" to the console on change.
+- That key and its settings live in a NEW "Ray Trace Debug" section of Graphics > Ray Tracing (group name
+  "Ray Trace Debug", after the other ray tracing options).
+- Its own setting there: "Save world sun location" (bool, default off). When on, every change to the sun is
+  written to sun.txt (format in item 6 below, one line per map, replaced in place) so L can send the file.
+  Off: the sun is held for the session only and goes back to the game's sun on restart.
+- The sun override is active only while a moved sun exists for the current map (or sun.txt has a line for it);
+  with nothing moved and no file, the picture is identical to main. No Game/Custom enum, no F9 key.
+- Priority and everything else stay as written: the Day and Night cycle wins over the moved sun.
+
+DESIGN (defaults chosen; L can change any of them)
+1. Setting: "Sun direction" in Graphics > Ray Tracing section (group "Ray Tracing", shown before
+   high_detail_models_option like the other ray tracing options in src/game/config.cpp ~842-851).
+   Id: ray_tracing_sun_option. Enum: Game (default) / Custom.
+     Game   = today's behaviour, nothing changes. Default must leave the picture identical.
+     Custom = use the numbers below, on every map that is not driven by the Day and Night cycle.
+2. Two sliders, shown only when Custom (add_option_hidden_dependency like day_night's length_option):
+     ray_tracing_sun_azimuth   0 to 359 degrees, step 1, default 150. 0 = +z, 90 = +x (state the compass in the
+                                description; pick one and write it in the option text).
+     ray_tracing_sun_elevation 5 to 90 degrees, step 1, default 40. 90 = straight up.
+   Vector: x = cos(el)*sin(az), y = sin(el), z = cos(el)*cos(az). Normalise. Clamp y >= 0.15 so the snow light
+   (needs > 0.15) and shadows stay valid.
+3. Live: the sliders apply as they move (project rule: settings apply live). Send through RT64::SetSceneSun each
+   frame the value changes, from a small tick function; no restart. Do not reorder RasterParams or FrameParams
+   (displaced ground rule). Do NOT touch lib-patches/rt64.patch; all RT64-side change stays in rt64-ext/ if any is
+   needed. Ray tracing owns rt64_scene_effects.* and SceneEffectsPS.hlsl: message that thread before editing them.
+   The brief needs no change there: SetSceneSun already exists.
+4. HD shadows tilt: when Custom, tilt_direction (hd_shadows.cpp) should use the same vector so character shadows
+   agree with the traced sun. Add tooie::sun_control::direction(out) (new small file, or put it next to
+   day_night) and have both hd_shadows.cpp and day_night.cpp ask it first.
+5. Priority when several sources exist (highest first):
+     a. Day and Night cycle running (it moves the sun on purpose). The setting is ignored then; say so in the
+        description.
+     b. Custom setting.
+     c. Per-map entry from the txt file (below).
+     d. map_suns[] table, then FixedSun.
+6. Saving the txt (this is the hand-off to Claude): a hotkey, F9 unless taken (check notes/keys.md and
+   tooie::hotkeys), appends or replaces the line for the current map in sun.txt next to the config files, and
+   prints "[sun] saved map 0xAF az 150 el 40" to the console. A second press of the same key is not needed.
+   File format, one map per line, comments with #:
+       # map(hex)  azimuth  elevation   name
+       0xAF        150      40          Spiral Mountain
+       0x142       262      64          Jinjo Village
+   On start the game reads sun.txt if it exists; a map with a line uses that sun when the setting is Game
+   (so L's file works without turning Custom on). The hand-off from L is this file: Claude then copies the lines
+   into map_suns[] in day_night.cpp (converting az/el to the vector) so the default ships in code.
+7. Map number: day_night.cpp already has the current map id in tick(); reuse it.
+
+FILES TO TOUCH
+- new: src/gameplay/sun_control.cpp, include/tooie_sun_control.h (options, tick, direction(), file read/write)
+- src/game/config.cpp: call add_options, option_group "Ray Tracing", display_before high_detail_models_option
+- src/gameplay/day_night.cpp: both SetSceneSun call sites use sun_control first (priority above)
+- src/gameplay/hd_shadows.cpp: tilt_direction uses sun_control::direction when Custom
+- CMakeLists.txt: add the new .cpp
+- notes/settings-guide.md and notes/keys.md: document the setting and the key
+- notes/for-L-to-test.md: new test at the top (use tools/test_request.py; ask Main for the next T number)
+
+CHECKS TO RUN (headless where possible, see notes/headless-testing.md; lavapipe stalls move the intro, so use
+a saved state or TOOIE_MAP_SUN-style forcing rather than timing)
+1. Default (Game, no sun.txt): frame output identical to main on Spiral Mountain, Jinjo Village and one map with no
+   table entry. Compare screenshots at the same frame.
+2. Custom az 150 el 40 vs az 330 el 40: the traced shadow of Banjo and of a tree flips to the other side with
+   ray tracing on (debug view 21, and F6 views). Also one with the sun low (el 10) and one overhead (el 90).
+3. Elevation 5 is clamped to y >= 0.15 with no black frame, no NaN (check the snow map 0x128 too).
+4. Day and Night = Cycle: setting has no effect, sun still moves.
+5. HD shadows (tilted option): character shadow direction matches the traced sun under Custom.
+6. sun.txt: save on two maps, restart, both come back. Bad lines (missing numbers, unknown map) are skipped with a
+   console line, no crash.
+7. Ray tracing off: Custom still moves the sun shadow map / HD shadows; nothing crashes.
+8. Windows build compiles (CI is not available; L tests). Check the new header has no MSVC return-type mangling trap
+   (see memory lesson-msvc-return-type-mangling): keep function signatures identical in header and cpp.
+
+OPEN QUESTIONS FOR L (defaults in brackets; the thread continues on the default)
+- (answered by L 08:24: key + mouse wheel, no sliders, save setting in Ray Trace Debug)
+- Should Custom also override the Day and Night cycle's sun? [no, the cycle wins]
+- One sun for all maps, or per map? [per map through sun.txt, one global value through Custom]
+
+HINTS FROM EXISTING CODE (added 2026-10-22)
+- Wheel + held-key handling already exists for the pick modes (src/debug/parallax_pick.cpp, src/input/hotkeys.cpp:
+  Shift+wheel = fine step). Copy that pattern for swallowing the wheel; keep Shift = fine.
+- Put sun.txt in the Dev Files folder (include/tooie_dev_files.h, "Dev Files" beside the config), like parallax_tags.txt.
+- Hotkey sections come from the section name in src/input/hotkeys.cpp: use "Ray Trace Debug" for the key so it
+  shows in Controls too.

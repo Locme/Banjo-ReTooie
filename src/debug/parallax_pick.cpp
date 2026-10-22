@@ -1,5 +1,5 @@
-// Parallax pick mode and Shader Effects pick mode (see include/tooie_parallax_pick.h and include/tooie_effect_pick.h):
-// one worker, as both drive the same pick in RT64.
+// Parallax pick mode, Shader Effects pick mode and Ray Tracing Material pick mode (see include/tooie_parallax_pick.h,
+// include/tooie_effect_pick.h and include/tooie_material_pick.h): one worker, as they all drive the same pick in RT64.
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -31,6 +31,7 @@
 #include "tooie_effect_pick.h"
 #include "tooie_hotkeys.h"
 #include "tooie_interp_tags.h"
+#include "tooie_material_pick.h"
 #include "tooie_parallax_pick.h"
 #include "tooie_toast.h"
 
@@ -41,8 +42,13 @@ namespace RT64 {
     void ScenePickResult(uint64_t &hash, uint32_t &layers);
     uint32_t SceneParallaxTexture(uint64_t hash);
     uint32_t SceneGrassTexture(uint64_t hash);
-    bool SceneIceTexture(uint64_t hash);
+    uint32_t SceneIceTexture(uint64_t hash);
     bool SceneShinyTexture(uint64_t hash);
+    bool SceneLampTexture(uint64_t hash);
+    bool SceneGlowTexture(uint64_t hash);
+    float SceneLightSourceReach(uint64_t hash);
+    bool SceneRayOffTexture(uint64_t hash);
+    void SetScenePickMarkedTextures(const uint64_t *hashes, size_t count);
 }
 
 namespace {
@@ -60,9 +66,9 @@ namespace {
     }
 
     const char* shape_names[tooie::parallax_pick::shape_count] = { "stone", "bumpy", "inverted", "cracks", "terraced", "rounded",
-        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth" };
+        "grass", "wood", "bark", "brick", "dirt", "metal", "leaves", "tiles", "sand", "smooth", "ice" };
     const char* shape_labels[tooie::parallax_pick::shape_count] = { "Stone", "Bumpy", "Inverted", "Cracks", "Terraced", "Rounded",
-        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth" };
+        "Grass", "Wood", "Bark", "Brick", "Dirt", "Metal", "Leaves", "Tiles", "Sand", "Smooth", "Ice" };
     const int depth_percents[tooie::parallax_pick::depth_count] = { 100, 25, 50, 150, 200, 300 };
     // Right click goes up from 100%, then round from the shallowest.
     const uint8_t depth_next[tooie::parallax_pick::depth_count] = { 3, 2, 0, 4, 5, 1 };
@@ -214,8 +220,7 @@ namespace {
         const uint32_t bits = RT64::SceneParallaxTexture(hash);
         pick.off = (bits == 0);
         if (!pick.off) {
-            pick.shape = uint8_t(((bits >> 17) & 0x7u) | (((bits >> 24) & 0x1u) << 3));
-            pick.depth = uint8_t((bits >> 20) & 0x7u);
+            pick.shape = uint8_t(((bits >> 17) & 0x7u) | (((bits >> 24) & 0x1u) << 3) | (((bits >> 20) & 0x1u) << 4));
             pick.shadows = ((bits >> 23) & 0x1u) == 0;
             pick.fine = uint8_t((bits >> 25) & 0x1Fu);
         }
@@ -256,18 +261,46 @@ namespace {
 
     // Shader Effects pick mode's picks.
     using tooie::effect_pick::Effect;
+    using tooie::effect_pick::Effects;
     std::mutex effects_mutex;
-    std::map<uint64_t, Effect> effects;
-    std::map<uint64_t, Effect> saved_effects;
+    std::map<uint64_t, Effects> effects;
+    std::map<uint64_t, Effects> saved_effects;
     std::atomic<uint32_t> effects_version{1};
-    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny" };
-    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection" };
+    const char* effect_names[tooie::effect_pick::effect_count] = { "disable", "grass", "deep_snow", "ice", "shiny", "text", "lamp", "glow", "light", "rt_off" };
+    const char* effect_labels[tooie::effect_pick::effect_count] = { "Disable", "Grass", "Deep Snow", "Ice Reflection", "Shiny Reflection", "Text (Mirror Mode keeps it readable)", "Lamp (ray traced light)", "Slight Glow", "Light Source", "Disable RT" };
 
     std::filesystem::path effects_path() {
         return tooie::dev_files::path("shader_effect_tags.txt");
     }
 
-    // One line a texture: "<hash> disable|grass|deep_snow|ice|shiny".
+    constexpr Effects bit(Effect effect) {
+        return Effects(1) << effect;
+    }
+
+    // Disable goes with nothing else.
+    constexpr Effects solo_effects = bit(tooie::effect_pick::effect_disable);
+    constexpr Effects alone(Effects set) {
+        return tooie::effect_pick::has(set, tooie::effect_pick::effect_disable) ? bit(tooie::effect_pick::effect_disable) : set;
+    }
+
+    // The effects, joined with " + " (labels) or spaces (names, as in the file).
+    std::string effects_text(Effects set, bool names) {
+        std::string text;
+        for (int e = 0; e < tooie::effect_pick::effect_count; e++) {
+            if (tooie::effect_pick::has(set, Effect(e))) {
+                text += text.empty() ? "" : (names ? " " : " + ");
+                text += names ? effect_names[e] : effect_labels[e];
+                const int strength = tooie::effect_pick::light_strength(set);
+                if ((e == tooie::effect_pick::effect_light) && (!names || (strength != 100))) {
+                    text += (names ? ":" : " ") + std::to_string(strength) + (names ? "" : "%");
+                }
+            }
+        }
+        return text.empty() ? (names ? "disable" : "None") : text;
+    }
+
+    // One line a texture: "<hash>" and its effects, any of disable grass deep_snow ice shiny text lamp glow light rt_off (light:<percent> with a strength other than 100) (lines
+    // from before several effects a texture have just one).
     void load_effects() {
         std::ifstream in(tooie::dev_files::read_path("shader_effect_tags.txt"));
         std::string line;
@@ -275,13 +308,27 @@ namespace {
         while (std::getline(in, line)) {
             std::istringstream words(line);
             std::string hash_text, effect_text;
-            if (!(words >> hash_text >> effect_text) || (hash_text[0] == '#')) {
+            if (!(words >> hash_text) || (hash_text[0] == '#')) {
                 continue;
             }
-            for (int e = 0; e < tooie::effect_pick::effect_count; e++) {
-                if (effect_text == effect_names[e]) {
-                    effects[std::strtoull(hash_text.c_str(), nullptr, 16)] = Effect(e);
+            Effects set = 0;
+            while (words >> effect_text) {
+                // light:<percent>: Light Source at that strength.
+                const size_t colon = effect_text.find(':');
+                const int strength = (colon == std::string::npos) ? 100 : std::atoi(effect_text.c_str() + colon + 1);
+                effect_text = effect_text.substr(0, colon);
+                for (int e = 0; e < tooie::effect_pick::effect_count; e++) {
+                    if (effect_text == effect_names[e]) {
+                        set |= bit(Effect(e));
+                        if (e == tooie::effect_pick::effect_light) {
+                            set = tooie::effect_pick::with_light_strength(set, strength);
+                        }
+                    }
                 }
+            }
+            // A line with no known effect (the removed "ignore") is left out: that texture is built-in again.
+            if (set != 0) {
+                effects[std::strtoull(hash_text.c_str(), nullptr, 16)] = alone(set);
             }
         }
         if (!effects.empty()) {
@@ -296,11 +343,11 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(effects_path().parent_path(), ec);
         std::ofstream out(effects_path());
-        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, effect (disable, grass, deep_snow, ice, shiny). Send this file in for the port's lists.\n";
+        out << "# Shader effect picks (Shader Effects Pick Mode key): texture, then its effects (disable, grass, deep_snow, ice, shiny, text, lamp, glow, light or light:<strength %>, rt_off). Send this file in for the port's lists.\n";
         for (const auto& [hash, effect] : saved_effects) {
             char text[32];
             snprintf(text, sizeof(text), "%016llx", (unsigned long long)hash);
-            out << text << " " << effect_names[effect] << "\n";
+            out << text << " " << effects_text(effect, true) << "\n";
         }
     }
 
@@ -367,29 +414,39 @@ namespace {
         return (has_live && (live->second != saved->second)) ? ", not saved" : "";
     }
 
-    // The built-in choice: grass (or grass along an edge), ice or shiny from the lists, else none. Shiny shows only
-    // while Screen-space reflections are on, as the list is looked up only then.
-    const char* built_in_effect(uint64_t hash) {
+    // The built-in choice: grass, ice, shiny and lamp from the lists (grass along an edge is not in the set,
+    // edges_only says so). Shiny shows only while Screen-space reflections are on, as the list is looked up only then.
+    Effects built_in_effects(uint64_t hash, bool& edges_only) {
+        Effects set = 0;
         const uint32_t grass = RT64::SceneGrassTexture(hash);
-        if (grass == 1) {
-            return "Grass";
-        }
-        if (grass == 2) {
-            return "Grass along edges";
-        }
-        if (RT64::SceneIceTexture(hash)) {
-            return "Ice Reflection";
-        }
-        return RT64::SceneShinyTexture(hash) ? "Shiny Reflection" : "None";
+        edges_only = (grass == 2);
+        set |= (grass == 1) ? bit(tooie::effect_pick::effect_grass) : 0;
+        set |= (RT64::SceneIceTexture(hash) != 0u) ? bit(tooie::effect_pick::effect_ice) : 0;
+        set |= RT64::SceneShinyTexture(hash) ? bit(tooie::effect_pick::effect_shiny) : 0;
+        set |= RT64::SceneLampTexture(hash) ? bit(tooie::effect_pick::effect_lamp) : 0;
+        set |= RT64::SceneGlowTexture(hash) ? bit(tooie::effect_pick::effect_glow) : 0;
+        const float reach = RT64::SceneLightSourceReach(hash);
+        set |= (reach > 0.0f) ? tooie::effect_pick::with_light_strength(bit(tooie::effect_pick::effect_light), int(reach / 9.0f + 0.5f)) : 0;
+        set |= RT64::SceneRayOffTexture(hash) ? bit(tooie::effect_pick::effect_rt_off) : 0;
+        return set;
     }
+
+    // The effect right click has chosen, which left click turns on or off.
+    std::atomic<int> chosen_effect{ tooie::effect_pick::effect_disable };
+    // Show All (middle click): every texture with the chosen effect pulses orange.
+    std::atomic<bool> show_all{ false };
+    // Each effect's textures as last sent to RT64 (tooie::effect_pick::set_list), for Show All.
+    std::mutex lists_mutex;
+    std::vector<uint64_t> effect_lists[tooie::effect_pick::effect_count];
+    std::atomic<uint32_t> lists_version{ 0 };
 
     std::string describe_effect(uint64_t hash, uint32_t layer, uint32_t layers) {
         if (hash == 0) {
             return "No textured surface here";
         }
-        char text[160];
+        char text[512];
         bool own = false;
-        Effect effect = tooie::effect_pick::effect_disable;
+        Effects effect = 0;
         const char* note = "";
         {
             std::lock_guard lock{ effects_mutex };
@@ -400,11 +457,19 @@ namespace {
             }
             note = effect_unsaved_note_locked(hash);
         }
-        if (own) {
-            snprintf(text, sizeof(text), "%016llx\n%s (yours%s)", (unsigned long long)hash, effect_labels[effect], note);
-        } else {
-            snprintf(text, sizeof(text), "%016llx\n%s (built-in%s)", (unsigned long long)hash, built_in_effect(hash), note);
+        bool edges_only = false;
+        if (!own) {
+            effect = built_in_effects(hash, edges_only);
         }
+        std::string set = effects_text(effect, false);
+        if (edges_only) {
+            set = (effect == 0) ? "Grass along edges" : set + " + Grass along edges";
+        }
+        const int chosen = chosen_effect.load();
+        const bool chosen_on = tooie::effect_pick::has(effect, Effect(chosen));
+        snprintf(text, sizeof(text), "%016llx\n%s (%s%s)\n%s%d %s is %s: left click turns it %s, right click another effect\nKeys 1-9 (Shift: 10 on): that effect, hold left: paint, middle: Show All %s",
+            (unsigned long long)hash, set.c_str(), own ? "yours" : "built-in", note, (chosen >= 9) ? "Shift + " : "", (chosen % 9) + 1, effect_labels[chosen], chosen_on ? "on" : "off", chosen_on ? "off" : "on",
+            show_all.load() ? "on" : "off");
         std::string result = text;
         if (layers > 1) {
             result += "\nLayer " + std::to_string((layer % layers) + 1) + " of " + std::to_string(layers);
@@ -412,9 +477,8 @@ namespace {
         return result;
     }
 
-    // Left click: built-in, Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in again.
     // A texture's effect pick as it stands (had = false: none, the built-in choice), and setting it back.
-    bool effect_of(uint64_t hash, Effect& effect) {
+    bool effect_of(uint64_t hash, Effects& effect) {
         std::lock_guard lock{ effects_mutex };
         const auto it = effects.find(hash);
         if (it == effects.end()) {
@@ -424,7 +488,7 @@ namespace {
         return true;
     }
 
-    void set_effect(uint64_t hash, bool had, Effect effect) {
+    void set_effect(uint64_t hash, bool had, Effects effect) {
         {
             std::lock_guard lock{ effects_mutex };
             if (had) {
@@ -446,19 +510,74 @@ namespace {
         return true;
     }
 
-    void step_effect(uint64_t hash, bool reset) {
+    // Puts the chosen effect on (on) or off a texture, starting from the built-in effects. Disable turns the others
+    // off and any other turns Disable off; turning the last one off leaves Disable, and Disable off is the built-in
+    // choice again. Returns whether the effect is on now.
+    bool paint_effect(uint64_t hash, Effect chosen, bool on) {
+        bool edges_only = false;
+        const Effects built_in = built_in_effects(hash, edges_only);
         {
             std::lock_guard lock{ effects_mutex };
             const auto it = effects.find(hash);
-            if (reset || ((it != effects.end()) && (it->second + 1 >= tooie::effect_pick::effect_count))) {
-                effects.erase(hash);
-            } else if (it == effects.end()) {
-                effects[hash] = tooie::effect_pick::effect_disable;
+            Effects set = (it != effects.end()) ? it->second : built_in;
+            if ((bit(chosen) & solo_effects) != 0) {
+                set = on ? bit(chosen) : ((set == bit(chosen)) ? 0 : set);
             } else {
-                it->second = Effect(it->second + 1);
+                set = (on ? (set | bit(chosen)) : (set & ~bit(chosen))) & ~solo_effects;
+                // Light Source off: its strength goes too.
+                set = tooie::effect_pick::has(set, tooie::effect_pick::effect_light) ? set : (set & tooie::effect_pick::effect_bits);
+                set = ((set & tooie::effect_pick::effect_bits) != 0) ? set : bit(tooie::effect_pick::effect_disable);
+            }
+            if (set != 0) {
+                effects[hash] = set;
+            } else {
+                effects.erase(hash);
             }
         }
         effects_version.fetch_add(1);
+        return on;
+    }
+
+    // Shift + wheel on a Light Source texture: its strength up or down by 10% a notch (10% to 500%). False when the
+    // texture has no Light Source pick.
+    bool step_light_strength(uint64_t hash, int notches, int& strength) {
+        // A built-in Light Source (a shipped pick) becomes the player's own pick with the same effects.
+        bool edges_only = false;
+        const Effects built_in = built_in_effects(hash, edges_only);
+        {
+            std::lock_guard lock{ effects_mutex };
+            auto it = effects.find(hash);
+            if ((it == effects.end()) && tooie::effect_pick::has(built_in, tooie::effect_pick::effect_light)) {
+                it = effects.emplace(hash, built_in).first;
+            }
+            if ((it == effects.end()) || !tooie::effect_pick::has(it->second, tooie::effect_pick::effect_light)) {
+                return false;
+            }
+            strength = std::clamp(tooie::effect_pick::light_strength(it->second) + notches * 10, 10, 500);
+            it->second = tooie::effect_pick::with_light_strength(it->second, strength);
+        }
+        effects_version.fetch_add(1);
+        return true;
+    }
+
+    // Left click (or a number key): the chosen effect on or off. Shift + left click (reset): built-in. Returns whether
+    // the effect is on now.
+    bool toggle_effect(uint64_t hash, bool reset) {
+        if (reset) {
+            {
+                std::lock_guard lock{ effects_mutex };
+                effects.erase(hash);
+            }
+            effects_version.fetch_add(1);
+            return false;
+        }
+        const Effect chosen = Effect(chosen_effect.load());
+        Effects set = 0;
+        if (!effect_of(hash, set)) {
+            bool edges_only = false;
+            set = built_in_effects(hash, edges_only);
+        }
+        return paint_effect(hash, chosen, !tooie::effect_pick::has(set, chosen));
     }
 
     // The Save All and Delete All Changes buttons at the top left, under the unsaved count, as fractions of the window
@@ -657,6 +776,7 @@ namespace {
     void worker() {
         load();
         load_effects();
+        tooie::material_pick::load();
         float forced_x = -1.0f, forced_y = -1.0f;
         if (const char* v = std::getenv("TOOIE_PICK")) {
             std::sscanf(v, "%f,%f", &forced_x, &forced_y);
@@ -678,32 +798,45 @@ namespace {
         const auto start = std::chrono::steady_clock::now();
         Label label;
         // One pick mode at a time. TOOIE_PICK_MODE=effects or interp: the headless pick is that mode's.
-        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp };
+        enum Mode { mode_off, mode_parallax, mode_effects, mode_interp, mode_material };
         Mode mode = mode_off;
         if (forced_x >= 0.0f) {
             const char* forced = std::getenv("TOOIE_PICK_MODE");
             const std::string name = forced != nullptr ? forced : "";
-            mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : mode_parallax);
+            mode = name == "effects" ? mode_effects : (name == "interp" ? mode_interp : (name == "material" ? mode_material : mode_parallax));
         }
-        bool key_was_down[3] = {};
+        bool key_was_down[4] = {};
         bool save_was_down = false, delete_was_down = false;
         bool copy_was_down = false, paste_was_down = false, undo_was_down = false;
+        // Shader Effects pick mode: the number keys held last poll, and a left click held down to paint: whether it
+        // puts the chosen effect on or off, and the textures it has passed over.
+        bool number_was_down[9] = {};
+        bool painting = false, paint_on = false;
+        std::vector<uint64_t> painted;
+        uint32_t marks_sent = 0;
+        // Ray Tracing Material pick mode: what the wheel changes, the preset middle click gives next, the number keys held
+        // last poll and Show All.
+        tooie::material_pick::Property chosen_property = tooie::material_pick::property_roughness;
+        int next_preset = 1;
+        bool material_number_was_down[9] = {};
+        bool material_show_all = false;
         // Undo Pick's history: each texture or model as it was before a change, newest last.
         struct Undo {
             Mode mode;
             uint64_t key;
             bool had;
             Pick pick;
-            Effect effect;
+            Effects effect;
             int interp_mode;
             bool no_effects;
+            tooie::material_pick::Material material;
         };
         std::vector<Undo> undo_stack;
         // Copy Pick's copy (Paste Pick puts it on what is under the cursor, in the same mode).
-        Undo copied{ mode_off, 0, false, Pick{}, tooie::effect_pick::effect_disable, 0, false };
+        Undo copied{ mode_off, 0, false, Pick{}, 0, 0, false, tooie::material_pick::Material{} };
         // The texture or model's state now, in the mode's terms.
         auto snapshot = [&](Mode m, uint64_t key) {
-            Undo u{ m, key, false, Pick{}, tooie::effect_pick::effect_disable, tooie::interp_tags::mode_default, false };
+            Undo u{ m, key, false, Pick{}, 0, tooie::interp_tags::mode_default, false, tooie::material_pick::Material{} };
             if (m == mode_parallax) {
                 u.had = pick_of(key, u.pick);
             } else if (m == mode_effects) {
@@ -711,6 +844,8 @@ namespace {
             } else if (m == mode_interp) {
                 tooie::interp_tags::live(uint32_t(key), u.interp_mode, u.no_effects);
                 u.had = true;
+            } else if (m == mode_material) {
+                u.had = tooie::material_pick::get(key, u.material);
             }
             return u;
         };
@@ -722,6 +857,8 @@ namespace {
                 set_effect(key, u.had, u.effect);
             } else if (u.mode == mode_interp) {
                 tooie::interp_tags::set_live(uint32_t(key), u.interp_mode, u.no_effects);
+            } else if (u.mode == mode_material) {
+                tooie::material_pick::set(key, u.had ? &u.material : nullptr);
             }
         };
         auto remember = [&](Mode m, uint64_t key) {
@@ -739,19 +876,21 @@ namespace {
         uint64_t shown_hash = 0;
         uint32_t shown_layers = 0;
         uint32_t shown_version = 0;
+        uint32_t shown_bits = 0;
         float shown_x = -1.0f, shown_y = -1.0f;
         int64_t last_log = 0;
         for (;;) {
             std::this_thread::sleep_for(10ms);
-            static const recompinput::GameInput keys[3] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
-                recompinput::GameInput::INTERP_PICK };
-            static const char* on_toasts[3] = {
+            static const recompinput::GameInput keys[4] = { recompinput::GameInput::PARALLAX_PICK, recompinput::GameInput::EFFECTS_PICK,
+                recompinput::GameInput::INTERP_PICK, recompinput::GameInput::MATERIAL_PICK };
+            static const char* on_toasts[4] = {
                 "Parallax pick mode: left click shape, right click depth, middle click shadows, Shift + left click built-in, wheel deeper",
-                "Shader Effects pick mode: left click steps Disable, Grass, Deep Snow, Ice Reflection, Shiny Reflection, built-in; Shift + left click built-in, wheel deeper",
+                "Shader Effects pick mode: right click or keys 1-9 choose an effect, left click turns it on or off (hold to paint), middle click Show All, Shift + wheel Light Source strength, Shift + left click built-in, wheel deeper",
                 "Interpolation pick mode: left click steps the model's blend (snap, vertex, untagged, default), middle click its screen effects, "
-                    "Shift + left click default, wheel deeper" };
-            static const char* off_toasts[3] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off" };
-            for (int k = 0; k < 3; k++) {
+                    "Shift + left click default, wheel deeper",
+                "Ray Tracing Material pick mode: left click gives or switches off a material, middle click steps a preset, Shift + wheel changes albedo, roughness, metalness or emissive (right click or keys 1-7 choose which, Ctrl fine), key 9 Show All, wheel deeper" };
+            static const char* off_toasts[4] = { "Parallax pick mode off", "Shader Effects pick mode off", "Interpolation pick mode off", "Ray Tracing Material pick mode off" };
+            for (int k = 0; k < 4; k++) {
                 const bool down = tooie::hotkeys::down(keys[k]);
                 if (down && !key_was_down[k]) {
                     // The newer mode wins.
@@ -765,11 +904,31 @@ namespace {
             const bool on = (mode == mode_parallax);
             const bool effects_on = (mode == mode_effects);
             const bool interp_on = (mode == mode_interp);
+            const bool material_on = (mode == mode_material);
             recompinput::set_pick_mode(mode != mode_off);
             // The game highlights a picked model itself.
             RT64::SetScenePickHighlight(!interp_on);
             tooie::interp_tags::set_mouse_pick(interp_on, interp_on ? RT64::ScenePickMatrixId() : 0);
+            // Show All marks only while Shader Effects pick mode is on.
+            {
+                const uint32_t marks = (effects_on && show_all.load()) ? (lists_version.load() * 64u + uint32_t(chosen_effect.load()) + 1u) :
+                    ((material_on && material_show_all) ? (tooie::material_pick::version() * 64u + 63u) : 0u);
+                if (marks != marks_sent) {
+                    marks_sent = marks;
+                    std::vector<uint64_t> marked;
+                    if (marks != 0) {
+                        if (material_on) {
+                            tooie::material_pick::for_each([&](uint64_t hash, const tooie::material_pick::Material&) { marked.push_back(hash); });
+                        } else {
+                            std::lock_guard lock{ lists_mutex };
+                            marked = effect_lists[chosen_effect.load()];
+                        }
+                    }
+                    RT64::SetScenePickMarkedTextures(marked.data(), marked.size());
+                }
+            }
             if (mode == mode_off) {
+                painting = false;
                 RT64::SetScenePick(false, 0.0f, 0.0f, 0);
                 label.update(false, "", 0.0f, 0.0f);
                 buttons_were = 0;
@@ -809,6 +968,7 @@ namespace {
             bool press_save = false, press_delete = false, press_save_all = false, press_discard = false;
             bool press_copy = false, press_paste = false, press_undo = false;
             int32_t depth_steps = 0;
+            std::vector<std::string> script_keys;
             while (!script.empty() && (script.front().at <= ms)) {
                 const std::string& what = script.front().what;
                 press_save = press_save || (what == "save");
@@ -823,6 +983,9 @@ namespace {
                 press_copy = press_copy || (what == "copy");
                 press_paste = press_paste || (what == "paste");
                 press_undo = press_undo || (what == "undo");
+                if (((what.size() == 4) && (what.compare(0, 3, "key") == 0)) || ((what.size() == 5) && (what.compare(0, 4, "skey") == 0))) {
+                    script_keys.push_back(what);
+                }
                 depth_steps += (what == "depthup") ? 1 : ((what == "depthdown") ? -1 : 0);
                 script.erase(script.begin());
             }
@@ -856,6 +1019,25 @@ namespace {
                 depth_steps += deeper;
                 deeper = 0;
             }
+            // In Shader Effects pick mode, Shift + wheel sets a Light Source's strength (up stronger) instead.
+            int light_notches = 0;
+            if (effects_on && shift && (deeper != 0)) {
+                light_notches = -deeper;
+                deeper = 0;
+            }
+            if (effects_on) {
+                light_notches += depth_steps;
+            }
+            // In Ray Tracing Material pick mode, Shift + wheel steps the chosen property (up more), Ctrl for fine steps.
+            int material_notches = 0;
+            if (material_on && shift && (deeper != 0)) {
+                material_notches = -deeper;
+                deeper = 0;
+            }
+            if (material_on) {
+                material_notches += depth_steps;
+            }
+            const bool fine = (SDL_GetModState() & KMOD_CTRL) != 0;
             if (deeper > 0) {
                 layer += uint32_t(deeper);
             } else if (deeper < 0) {
@@ -870,23 +1052,23 @@ namespace {
             RT64::ScenePickResult(hash, layers);
             // The unsaved count and Save All, every poll (they only change the page when they change).
             auto show_panel = [&] {
-                const size_t unsaved = interp_on ? tooie::interp_tags::unsaved_count() : (effects_on ? effects_unsaved_count() : unsaved_count());
+                const size_t unsaved = interp_on ? tooie::interp_tags::unsaved_count() : (effects_on ? effects_unsaved_count() : (material_on ? tooie::material_pick::unsaved_count() : unsaved_count()));
                 label.update_panel(unsaved, hover_panel);
             };
             if (press_discard) {
-                const size_t count = interp_on ? tooie::interp_tags::discard_changes() : (effects_on ? discard_effect_changes() : discard_changes());
+                const size_t count = interp_on ? tooie::interp_tags::discard_changes() : (effects_on ? discard_effect_changes() : (material_on ? tooie::material_pick::discard_changes() : discard_changes()));
                 char text[96];
                 snprintf(text, sizeof(text), "Deleted all changes: %zu back as Dev Files/%s has them", count,
-                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt")));
                 tooie::toast::show(text);
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
             }
             if (press_save_all) {
-                const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_all_effects() : save_all());
+                const size_t count = interp_on ? tooie::interp_tags::save() : (effects_on ? save_all_effects() : (material_on ? tooie::material_pick::save_all() : save_all()));
                 char text[96];
                 snprintf(text, sizeof(text), "Saved all: %zu picks in Dev Files/%s", count,
-                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt"));
+                    interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt")));
                 tooie::toast::show(text);
                 fprintf(stderr, "[pick] %s\n", text);
                 shown_hash = UINT64_MAX;
@@ -921,7 +1103,7 @@ namespace {
                         apply(copied, key);
                         snprintf(text, sizeof(text), "Pasted onto %016llx (not saved yet)", (unsigned long long)key);
                     }
-                } else if ((depth_steps != 0) && (hash != 0)) {
+                } else if ((depth_steps != 0) && (hash != 0) && !material_on) {
                     remember(mode, hash);
                     bool own = false;
                     Pick pick = current(hash, own);
@@ -942,7 +1124,7 @@ namespace {
                     remember(mode, interp_on ? uint64_t(tooie::interp_tags::hovered()) : hash);
                 }
                 const uint32_t model = interp_on ? tooie::interp_tags::hovered() : 0;
-                const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : "parallax_tags.txt");
+                const char* file = interp_on ? "interp_tags.txt" : (effects_on ? "shader_effect_tags.txt" : (material_on ? "rt_material_tags.txt" : "parallax_tags.txt"));
                 char name[32];
                 if (interp_on) {
                     snprintf(name, sizeof(name), "Model %08X", model);
@@ -957,6 +1139,8 @@ namespace {
                         tooie::interp_tags::save_one(model);
                     } else if (effects_on) {
                         save_one_effect(hash);
+                    } else if (material_on) {
+                        tooie::material_pick::save_one(hash);
                     } else {
                         save_one(hash);
                     }
@@ -966,6 +1150,8 @@ namespace {
                         tooie::interp_tags::unsave(model);
                     } else if (effects_on) {
                         delete_saved_effect(hash);
+                    } else if (material_on) {
+                        tooie::material_pick::delete_saved(hash);
                     } else {
                         delete_saved(hash);
                     }
@@ -1020,10 +1206,76 @@ namespace {
                 continue;
             }
             if (effects_on) {
+                // Number keys 1 to 9 (effects 1 to 9) and Shift + 1 to 9 (effects 10 to 18): choose that effect and turn
+                // it on or off on the texture under the cursor. A key past the last effect does nothing.
+                int number_pressed = -1;
+                {
+                    const Uint8* keyboard = SDL_GetKeyboardState(nullptr);
+                    for (int k = 0; k < 9; k++) {
+                        const bool down = (keyboard != nullptr) && (keyboard[SDL_SCANCODE_1 + k] != 0);
+                        if (down && !number_was_down[k]) {
+                            number_pressed = k + (shift ? 9 : 0);
+                        }
+                        number_was_down[k] = down;
+                    }
+                }
+                // TOOIE_PICK_CLICKS key1 to key9, skey1 to skey9 (with Shift).
+                for (const std::string& key : script_keys) {
+                    number_pressed = std::atoi(key.c_str() + key.size() - 1) - 1 + ((key[0] == 's') ? 9 : 0);
+                }
+                script_keys.clear();
+                if ((number_pressed >= 0) && (number_pressed < tooie::effect_pick::effect_count)) {
+                    chosen_effect.store(number_pressed);
+                    effects_version.fetch_add(1);
+                    if (hash != 0) {
+                        remember(mode, hash);
+                        toggle_effect(hash, false);
+                        fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
+                    } else {
+                        fprintf(stderr, "[effect-pick] chosen effect: %s\n", effect_labels[number_pressed]);
+                    }
+                }
+                if ((light_notches != 0) && (hash != 0)) {
+                    remember(mode, hash);
+                    int strength = 0;
+                    char text[96];
+                    if (step_light_strength(hash, light_notches, strength)) {
+                        snprintf(text, sizeof(text), "Light Source strength %d%%", strength);
+                    } else {
+                        undo_stack.pop_back();
+                        snprintf(text, sizeof(text), "No Light Source on this texture to make stronger or weaker");
+                    }
+                    tooie::toast::show(text);
+                    fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, text);
+                }
+                if (middle) {
+                    show_all.store(!show_all.load());
+                    effects_version.fetch_add(1);
+                    tooie::toast::show(show_all.load() ? "Show All on: textures with the chosen effect pulse orange" : "Show All off");
+                }
+                if (right) {
+                    // Shift + right click goes back one.
+                    chosen_effect.store((chosen_effect.load() + (shift ? tooie::effect_pick::effect_count - 1 : 1)) % tooie::effect_pick::effect_count);
+                    effects_version.fetch_add(1);
+                    fprintf(stderr, "[effect-pick] chosen effect: %s\n", effect_labels[chosen_effect.load()]);
+                }
                 if ((hash != 0) && (left || reset)) {
                     remember(mode, hash);
-                    step_effect(hash, reset);
+                    const bool now_on = toggle_effect(hash, reset);
                     fprintf(stderr, "[effect-pick] %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
+                    // Held down, the click paints the same change over each texture the cursor passes.
+                    painting = left;
+                    paint_on = now_on;
+                    painted.assign(1, hash);
+                }
+                if (painting && ((buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) == 0)) {
+                    painting = false;
+                }
+                if (painting && (hash != 0) && (std::find(painted.begin(), painted.end(), hash) == painted.end())) {
+                    painted.push_back(hash);
+                    remember(mode, hash);
+                    paint_effect(hash, Effect(chosen_effect.load()), paint_on);
+                    fprintf(stderr, "[effect-pick] painted %016llx %s\n", (unsigned long long)hash, describe_effect(hash, layer, layers).c_str());
                 }
                 const uint32_t version = effects_version.load() + 0x80000000u;
                 if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
@@ -1032,6 +1284,96 @@ namespace {
                     label.update(true, describe_effect(hash, layer, layers), x, y);
                     if ((hash != shown_hash) && (ms - last_log > 200)) {
                         fprintf(stderr, "[effect-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
+                        last_log = ms;
+                    }
+                    shown_hash = hash;
+                    shown_layers = layers;
+                    shown_version = version;
+                    shown_x = x;
+                    shown_y = y;
+                }
+                show_panel();
+                continue;
+            }
+            if (material_on) {
+                // Number keys 1 to 7 choose what the wheel changes; 8 steps the preset; 9 turns Show All on or off.
+                {
+                    const Uint8* keyboard = SDL_GetKeyboardState(nullptr);
+                    for (int k = 0; k < 9; k++) {
+                        const bool down = (keyboard != nullptr) && (keyboard[SDL_SCANCODE_1 + k] != 0);
+                        if (down && !material_number_was_down[k]) {
+                            if (k < tooie::material_pick::property_count) {
+                                chosen_property = tooie::material_pick::Property(k);
+                                tooie::toast::show(std::string("The wheel changes: ") + tooie::material_pick::property_labels[k]);
+                            } else if (k == 7) {
+                                middle = true;
+                            } else {
+                                material_show_all = !material_show_all;
+                                tooie::toast::show(material_show_all ? "Show All on: textures with a material pulse orange" : "Show All off");
+                            }
+                        }
+                        material_number_was_down[k] = down;
+                    }
+                }
+                // TOOIE_PICK_CLICKS key1 to key9 do the same, headless.
+                for (const std::string& key : script_keys) {
+                    const int k = std::atoi(key.c_str() + key.size() - 1) - 1;
+                    if (k < tooie::material_pick::property_count) {
+                        chosen_property = tooie::material_pick::Property(k);
+                    } else if (k == 7) {
+                        middle = true;
+                    } else if (k == 8) {
+                        material_show_all = !material_show_all;
+                    }
+                }
+                script_keys.clear();
+                if (right) {
+                    const int count = tooie::material_pick::property_count;
+                    chosen_property = tooie::material_pick::Property((int(chosen_property) + (shift ? count - 1 : 1)) % count);
+                    tooie::toast::show(std::string("The wheel changes: ") + tooie::material_pick::property_labels[chosen_property]);
+                }
+                if (hash != 0) {
+                    if (left || reset) {
+                        remember(mode, hash);
+                        tooie::material_pick::Material material;
+                        bool own = false;
+                        if (reset) {
+                            // Back to the built-in choice.
+                            tooie::material_pick::set(hash, nullptr);
+                        } else if (tooie::material_pick::effective(hash, material, own)) {
+                            // Switched off (a built-in one stays off until Shift + left click).
+                            material = tooie::material_pick::Material{};
+                            material.none = true;
+                            tooie::material_pick::set(hash, &material);
+                        } else {
+                            material = tooie::material_pick::preset_material(0, material);
+                            tooie::material_pick::set(hash, &material);
+                        }
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all).c_str());
+                    }
+                    if (middle) {
+                        remember(mode, hash);
+                        tooie::material_pick::Material material;
+                        material = tooie::material_pick::preset_material(next_preset, material);
+                        tooie::material_pick::set(hash, &material);
+                        tooie::toast::show(std::string("Preset: ") + tooie::material_pick::preset_name(next_preset));
+                        next_preset = (next_preset + 1) % tooie::material_pick::preset_count;
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all).c_str());
+                    }
+                    if (material_notches != 0) {
+                        remember(mode, hash);
+                        const std::string text = tooie::material_pick::step_property(hash, chosen_property, material_notches, fine);
+                        tooie::toast::show(text);
+                        fprintf(stderr, "[material-pick] %016llx %s\n", (unsigned long long)hash, text.c_str());
+                    }
+                }
+                const uint32_t version = tooie::material_pick::version() + 0x40000000u + (material_show_all ? 0x10000000u : 0u) + uint32_t(chosen_property) * 0x01000000u;
+                if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
+                    (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
+                {
+                    label.update(true, tooie::material_pick::describe(hash, layer, layers, chosen_property, material_show_all), x, y);
+                    if ((hash != shown_hash) && (ms - last_log > 200)) {
+                        fprintf(stderr, "[material-pick] under the cursor: %016llx, %u layers\n", (unsigned long long)hash, layers);
                         last_log = ms;
                     }
                     shown_hash = hash;
@@ -1075,7 +1417,9 @@ namespace {
                 fprintf(stderr, "[parallax-pick] %016llx %s\n", (unsigned long long)hash, describe(hash, layer, layers).c_str());
             }
             const uint32_t version = picks_version.load();
-            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) ||
+            // The built-in choice can change under it too (Parallax shapes per texture, Parallax on original textures).
+            const uint32_t bits = (hash != 0) ? RT64::SceneParallaxTexture(hash) : 0;
+            if ((hash != shown_hash) || (layers != shown_layers) || (version != shown_version) || (bits != shown_bits) ||
                 (std::abs(x - shown_x) > 0.002f) || (std::abs(y - shown_y) > 0.002f))
             {
                 label.update(true, describe(hash, layer, layers), x, y);
@@ -1086,6 +1430,7 @@ namespace {
                 shown_hash = hash;
                 shown_layers = layers;
                 shown_version = version;
+                shown_bits = bits;
                 shown_x = x;
                 shown_y = y;
             }
@@ -1112,11 +1457,25 @@ void tooie::parallax_pick::for_each(const std::function<void(uint64_t hash, cons
     }
 }
 
+void tooie::effect_pick::set_list(Effect effect, const std::vector<uint64_t>& hashes) {
+    if (effect >= tooie::effect_pick::effect_count) {
+        return;
+    }
+    {
+        std::lock_guard lock{ lists_mutex };
+        if (effect_lists[effect] == hashes) {
+            return;
+        }
+        effect_lists[effect] = hashes;
+    }
+    lists_version.fetch_add(1);
+}
+
 uint32_t tooie::effect_pick::version() {
     return effects_version.load();
 }
 
-void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effect effect)>& visit) {
+void tooie::effect_pick::for_each(const std::function<void(uint64_t hash, Effects effects)>& visit) {
     std::lock_guard lock{ effects_mutex };
     for (const auto& [hash, effect] : effects) {
         visit(hash, effect);

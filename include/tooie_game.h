@@ -29,8 +29,6 @@ namespace tooie {
     // How much wider than 4:3 RT64 draws the picture: 1 unless Aspect Ratio is
     // Expand and the window is wider than 4:3 (widescreen.cpp).
     float widescreen_scale();
-    // Once a frame: stretches the intro's backdrop across a wide picture (widescreen.cpp).
-    void widescreen_tick(uint8_t* rdram);
 
     // Settings (config.cpp).
     void init_config();
@@ -82,6 +80,10 @@ namespace tooie {
     // (Developer Mode).
     inline const std::string wip_tab_id = "wip";
     inline const std::string wip_tab_option = "wip_tab";
+    // WIP tab (L, 2026-10-21): a page of Graphics options still being worked on (Dive, Mouse in the game's
+    // menus, Grass) in a section also named WIP; each moves back to its own tab when it is done. (The DEV
+    // tab keeps the old "wip" id.)
+    inline const std::string work_in_progress_tab_id = "work_in_progress";
     // DEV > Additional Tabs (L, 2026-10-16): the toggles that show the Achievements and Cheats tabs.
     // The Warp tab's toggle is there too (src/game/level_warp.cpp). Cheats tab was in General before.
     inline const std::string achievements_tab_option = "achievements_tab";
@@ -122,6 +124,8 @@ namespace tooie {
     void cutscene_skip_apply(uint16_t* buttons);
     // True while a skip is fast-forwarding (the sound is muted then).
     bool cutscene_skip_active();
+    // Starts a skip because Speed-Up was held 3 s; false outside a skippable scene or while skipping.
+    bool cutscene_skip_hold_request();
 
     // Crash handler (crash_handler.cpp): writes logs/crashes.log (plus a minidump on Windows) when the
     // game crashes, and keeps logs/running.marker so a silent death is flagged at the next start.

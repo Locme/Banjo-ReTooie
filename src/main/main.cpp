@@ -207,8 +207,17 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     SDL_GetWindowWMInfo(window, &wmInfo);
 
 #if defined(_WIN32)
-    HICON new_icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(APP_ICON));
-    SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_SMALL2, (LPARAM)(new_icon));
+    // Load each icon at the size Windows draws it, so the title bar picks the small frame from app.ico.
+    HICON small_icon = (HICON)LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(APP_ICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+    HICON big_icon = (HICON)LoadImage(GetModuleHandle(NULL), MAKEINTRESOURCE(APP_ICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR);
+    if (small_icon != nullptr) {
+        SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_SMALL, (LPARAM)(small_icon));
+    }
+    if (big_icon != nullptr) {
+        SendMessage(wmInfo.info.win.window, WM_SETICON, ICON_BIG, (LPARAM)(big_icon));
+    }
 #elif defined(__gnu_linux__)
     SetImageAsIcon("icons/app.png", window);
 #endif

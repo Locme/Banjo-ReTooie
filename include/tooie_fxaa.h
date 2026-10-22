@@ -7,7 +7,7 @@
 #include "librecomp/config.hpp"
 
 // FXAA (src/display/fxaa.cpp): a Graphics option, Off, FXAA or FXAA Extreme, run by RT64 on the
-// finished game image (lib-patches/rt64.patch, src/render/rt64_fxaa.cpp).
+// finished game image (rt64-ext/src/render/rt64_fxaa.cpp, called from lib-patches/rt64.patch).
 namespace tooie::fxaa {
     inline const std::string option = "fxaa";
 

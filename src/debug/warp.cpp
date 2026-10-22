@@ -24,6 +24,11 @@
 #include <vector>
 
 #include "recomp.h"
+
+namespace tooie::debug {
+    // TOOIE_EXPLODE=<type>@<ms>,...: the game's explosions in front of Banjo (src/debug/explode_test.cpp).
+    void explode_tick(uint8_t* rdram, recomp_context* ctx);
+}
 #include "funcs.h"
 #include "tooie_debug.h"
 #include "tooie_game_frame_rate.h"
@@ -39,6 +44,7 @@
 #include "tooie_damage.h"
 #include "tooie_player_cheats.h"
 #include "tooie_talon_trot.h"
+#include "tooie_dive.h"
 #include "tooie_hold_to_run.h"
 #include "tooie_fine_aim.h"
 #include "tooie_progress_cheats.h"
@@ -57,6 +63,7 @@
 #include "tooie_vram_log.h"
 #include "tooie_memory_guard.h"
 #include "tooie_asset_mods.h"
+#include "tooie_sound_dump.h"
 #include "tooie_test_room.h"
 #include "tooie_race_warp.h"
 #include "tooie_replays.h"
@@ -155,12 +162,12 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::player_cheats::tick(rdram, ctx);
     tooie::talon_trot::tick(rdram, ctx);
     tooie::hold_to_run::tick(rdram, ctx);
+    tooie::dive::tick(rdram, ctx);
     tooie::damage::aim_tick(rdram);
     tooie::fine_aim::tick(rdram, ctx);
     tooie::motion_aim::tick(rdram, ctx);
     tooie::menu_mouse::tick(rdram, ctx);
     tooie::picture_filters::tick(rdram, ctx);
-    tooie::widescreen_tick(rdram);
     tooie::vanilla_widescreen_tick(rdram, ctx);
     tooie::progress_cheats::tick(rdram, ctx);
     tooie::transform_picker::tick(rdram, ctx);
@@ -169,6 +176,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::bottles_revenge::tick(rdram, ctx);
     tooie::torch_enemy::tick(rdram, ctx);
     tooie::enemy_spawner::tick(rdram, ctx);
+    tooie::debug::explode_tick(rdram, ctx);
     tooie::classic_sounds::tick(rdram);
     tooie::honeycomb_glitter::tick(rdram, ctx);
     tooie::jiggy_dance::tick(rdram, ctx);
@@ -179,6 +187,7 @@ extern "C" void tooie_warp_tick(uint8_t* rdram, recomp_context* ctx) {
     tooie::memory_guard::tick(rdram);
     tooie::texture_sweep::tick(rdram);
     tooie::asset_mods::tick(rdram);
+    tooie::sound_dump::tick(rdram);
     tooie::test_room::tick(rdram, ctx);
     // Before the warp below, which it may ask for.
     tooie::replays::tick(rdram, ctx);

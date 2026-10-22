@@ -5,6 +5,7 @@
 // texture under it is highlighted, and clicks set that texture's parallax: its shape, depth and shadows, or off.
 // The picks are kept in parallax_tags.txt in the Dev Files folder next to the save files and override the built-in list
 // (parallax_textures[] in picture_filters.cpp), which they can be folded into.
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 
@@ -27,9 +28,10 @@ namespace tooie::parallax_pick {
         shape_tiles = 13,
         shape_sand = 14,
         shape_smooth = 15,
-        shape_count = 16
+        shape_ice = 16,
+        shape_count = 17
     };
-    // Depth steps, as RASTER_PARALLAX_DEPTH bits: 100%, 25, 50, 150, 200, 300%.
+    // Right click's depth steps: 100%, 25, 50, 150, 200, 300%.
     constexpr int depth_count = 6;
     struct Pick {
         bool off = false;
@@ -39,8 +41,14 @@ namespace tooie::parallax_pick {
         uint8_t fine = 0;
         bool shadows = true;
         int depth_percent() const;
-        // As SetSceneParallaxTextures takes it: shape's low 3 bits, depth << 3, no shadows << 6, shape's bit 3 << 7.
-        uint8_t style() const { return uint8_t((shape & 0x7) | (depth << 3) | (shadows ? 0 : 0x40) | ((shape & 0x8) << 4)); }
+        // As SetSceneParallaxTextures takes it: shape's low 3 bits, shape's bit 4 << 3 (RASTER_PARALLAX_SHAPE_TOP), no
+        // shadows << 6, shape's bit 3 << 7. The depth goes as fine_depth().
+        uint8_t style() const { return uint8_t((shape & 0x7) | ((shape & 0x10) >> 1) | (shadows ? 0 : 0x40) | ((shape & 0x8) << 4)); }
+        // The depth in 10% steps (0: 100%), as SetSceneParallaxTextures' fine depths take it; 25% goes as 30%.
+        uint8_t fine_depth() const {
+            const int percent = depth_percent();
+            return (percent == 100) ? 0 : uint8_t(std::clamp((percent + 5) / 10, 1, 31));
+        }
     };
 
     // Starts watching the key and the mouse and loads parallax_tags.txt (once).

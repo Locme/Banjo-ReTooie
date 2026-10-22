@@ -33,7 +33,6 @@
 
 #include "recomp.h"
 #include "recompui/config.h"
-#include "tooie_picture_filters.h"
 #include "tooie_window_beams.h"
 
 namespace {
@@ -43,19 +42,22 @@ namespace {
         float nx, nz;               // the way it faces into the room (level)
         const Outline* shape;       // the glass's corners round the middle, across and up, in order
         float floor_y;              // the floor where its beam lands
+        float depth = 0.0f;         // how deep the glass sits in the wall: the light goes straight out that far before
+                                    // it falls, so the beam doesn't cut through the sill
     };
 
-    // The windows' shapes, read off their glass in the solid models. Bottles' are round (the glass
-    // an octagon of radius 97 behind a round frame; ten corners keep the vertices in one load).
-    Outline round(float radius, int corners) {
+    // The windows' shapes, read off their glass in the solid models. Bottles' are round: the glass is
+    // an octagon of radius 99 with corners straight across and straight up, at the back of a frame
+    // 68 deep.
+    Outline octagon(float radius) {
         Outline out;
-        for (int i = 0; i < corners; i++) {
-            const float a = (i + 0.5f) * 2.0f * 3.14159265f / corners;
+        for (int i = 0; i < 8; i++) {
+            const float a = i * 2.0f * 3.14159265f / 8;
             out.push_back({ radius * std::cos(a), radius * std::sin(a) });
         }
         return out;
     }
-    const Outline bottles_window = round(100.0f, 10);
+    const Outline bottles_window = octagon(99.0f);
     const Outline banjo_window = {      // hexagonal, its glass texture 0x113
         { 76.0f, 11.0f }, { 36.0f, 63.0f }, { -36.0f, 63.0f }, { -76.0f, 11.0f }, { -50.0f, -62.0f }, { 50.0f, -62.0f },
     };
@@ -72,14 +74,20 @@ namespace {
     };
     const std::array<Room, 3> rooms = {{
         { { 0x143, 0x169, 0x191, 0x192 }, 0x1DD0, 0x1DD3, false, {
-            { 529.0f, 443.0f, -2137.0f, -0.162f, 0.987f, &bottles_window, 262.0f },   // right of the doorway (from inside)
-            { -553.0f, 422.0f, -2155.0f, 0.215f, 0.977f, &bottles_window, 282.0f },   // left of the doorway
+            // On the glass (2 in front of it), so each beam leaves its window (L, 2026-10-21: they started
+            // beside it). The frame's front is 64 to 68 out, opening to radius 125; the light goes straight
+            // out that far, or the beam cut through its sill (L, 2026-10-21).
+            { 542.0f, 443.0f, -2202.0f, -0.162f, 0.987f, &bottles_window, 262.0f, 66.0f },   // right of the doorway (from inside)
+            { -571.0f, 422.0f, -2222.0f, 0.218f, 0.976f, &bottles_window, 282.0f, 66.0f },   // left of the doorway
         } },
+        // The glass is flush with the wall: nothing to go through.
         { { 0x173, 0x173, 0x173, 0x173 }, 0x1D08, 0x1D49, true, {
             { 250.0f, 116.0f, 304.0f, 0.0f, -1.0f, &banjo_window, 0.0f },             // either side of the door
             { -250.0f, 116.0f, 304.0f, 0.0f, -1.0f, &banjo_window, 0.0f },
             { -456.0f, 116.0f, -131.0f, 1.0f, 0.0f, &banjo_window, 0.0f },            // by the fireplace
         } },
+        // The glass is 100 deep, but the reveal widens and the sill drops away (150 over the 100) faster than
+        // the light falls (70), so the beam clears it.
         { { 0x144, 0x199, 0x199, 0x199 }, 0x1DD1, 0x1D97, true, {
             { 1496.0f, -100.0f, -2350.0f, -1.0f, 0.0f, &throne_window, -650.0f },
             { 1496.0f, -100.0f, -1650.0f, -1.0f, 0.0f, &throne_window, -650.0f },
@@ -137,14 +145,15 @@ namespace {
         bool pool = false;
     };
 
-    // One window's tube: a ring of corners round the window, the same ring where the light meets
-    // the floor, each with the first corner again at the end so the texture wraps round once.
+    // One window's tube: a ring of corners round the window, the same ring at the front of its
+    // recess, and again where the light meets the floor, each with the first corner again at the
+    // end so the texture wraps round once.
     void add_tube(std::vector<Vertex>& out, const Window& w) {
         const float drop = drop_degrees * 3.14159265f / 180.0f;
         const float dx = w.nx * std::cos(drop), dy = -std::sin(drop), dz = w.nz * std::cos(drop);
         // Across the window (level) and up it.
         const float ax = -w.nz, az = w.nx;
-        for (int ring = 0; ring < 2; ring++) {
+        for (int ring = 0; ring < 3; ring++) {
             const Outline& shape = *w.shape;
             const int sides = int(shape.size());
             for (int i = 0; i <= sides; i++) {
@@ -152,13 +161,18 @@ namespace {
                 float x = w.x + across * ax;
                 float y = w.y + up;
                 float z = w.z + across * az;
-                if (ring == 1) {
-                    const float along = (y - w.floor_y) / -dy;
-                    x += dx * along; y = w.floor_y; z += dz * along;
+                const float fall = (y - w.floor_y) / -dy;
+                if (ring >= 1) {
+                    x += w.nx * w.depth; z += w.nz * w.depth;
                 }
-                // s goes twice round the 64-texel texture, t runs down the streaks (10.5 fixed point).
+                if (ring == 2) {
+                    x += dx * fall; y = w.floor_y; z += dz * fall;
+                }
+                // s goes twice round the 64-texel texture, t runs down the streaks (10.5 fixed point) over the
+                // light's whole way, recess and fall.
+                const float t = (ring == 0) ? 4096.0f : (ring == 1) ? 4096.0f * fall / std::max(fall + w.depth, 1.0f) : 0.0f;
                 out.push_back({ int16_t(std::lround(x)), int16_t(std::lround(y)), int16_t(std::lround(z)),
-                    int16_t(i * 4096 / sides), int16_t(ring == 0 ? 4096 : 0), uint8_t(ring == 0 ? top_alpha : 0) });
+                    int16_t(i * 4096 / sides), int16_t(std::lround(t)), uint8_t(ring == 2 ? 0 : top_alpha) });
             }
         }
     }
@@ -303,15 +317,17 @@ namespace {
         uint32_t ntri = 0, first = nv;
         for (const Window& w : room.windows) {
             const uint32_t sides = uint32_t(w.shape->size());
-            const uint32_t per_tube = 2 * (sides + 1), per_pool = 1 + sides * (uint32_t(pool_rings.size()) - 1);
+            const uint32_t per_tube = 3 * (sides + 1), per_pool = 1 + sides * (uint32_t(pool_rings.size()) - 1);
             beams.push_back({ 0x01000000 | (per_tube << 12) | (per_tube * 2), 0x01000000 + first * 16 });
             auto tri = [](uint32_t a, uint32_t b, uint32_t c) { return (a * 2 << 16) | (b * 2 << 8) | (c * 2); };
-            for (uint32_t i = 0; i < sides; i++) {
-                const uint32_t t0 = i, t1 = i + 1, b0 = sides + 1 + i, b1 = sides + 2 + i;
-                // Both faces, as Mumbo's: the tube is seen from inside and out.
-                beams.push_back({ 0x06000000 | tri(t0, t1, b1), tri(b1, b0, t0) });
-                beams.push_back({ 0x06000000 | tri(t0, b0, b1), tri(b1, t1, t0) });
-                ntri += 4;
+            for (uint32_t band = 0; band < 2; band++) {
+                for (uint32_t i = 0; i < sides; i++) {
+                    const uint32_t t0 = band * (sides + 1) + i, t1 = t0 + 1, b0 = t0 + sides + 1, b1 = b0 + 1;
+                    // Both faces, as Mumbo's: the tube is seen from inside and out.
+                    beams.push_back({ 0x06000000 | tri(t0, t1, b1), tri(b1, b0, t0) });
+                    beams.push_back({ 0x06000000 | tri(t0, b0, b1), tri(b1, t1, t0) });
+                    ntri += 4;
+                }
             }
             // The pool, loaded in the tube's place (more than 32 vertices don't fit at once): a fan
             // round the middle, then a band between each ring and the next.
@@ -451,10 +467,8 @@ namespace {
 }
 
 bool tooie::window_beams::enabled() {
-    // The traced light beams take over (L, 2026-10-21): the drawn tubes would double them.
-    if (tooie::picture_filters::traced_beams_on()) {
-        return false;
-    }
+    // On with ray tracing too: the traced light beams didn't show in these rooms (L, 2026-10-21), so they step
+    // aside here instead (picture_filters.cpp).
     try {
         return std::get<bool>(recompui::config::get_graphics_config().get_option_value(option));
     } catch (...) {
@@ -464,6 +478,14 @@ bool tooie::window_beams::enabled() {
 
 bool tooie::window_beams::has_beams(uint16_t map) {
     return std::any_of(rooms.begin(), rooms.end(), [map](const Room& room) { return has_map(room, map); });
+}
+
+bool tooie::window_beams::drawn_beams(uint16_t map) {
+    constexpr std::array<uint16_t, 9> skulls = { 0xB7, 0xD9, 0xEF, 0x134, 0x13E, 0x156, 0x171, 0x172, 0x176 };
+    if (std::find(skulls.begin(), skulls.end(), map) != skulls.end()) {
+        return true;
+    }
+    return enabled() && has_beams(map);
 }
 
 bool tooie::window_beams::room_light(uint16_t map, float direction[3]) {

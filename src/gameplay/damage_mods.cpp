@@ -79,7 +79,8 @@ namespace {
 }
 
 bool tooie::damage::no_damage_on(uint8_t* rdram, recomp_context* ctx) {
-    return call_game(rdram, ctx, func_800DA298, honeyking_flag) != 0;
+    // Noclip takes no damage either (L, 2026-10-21).
+    return tooie::cheats::is_on("cheat_noclip") || call_game(rdram, ctx, func_800DA298, honeyking_flag) != 0;
 }
 
 // func_800A17A8 entry: $a1 is the health change.
@@ -87,6 +88,10 @@ extern "C" void tooie_player_health_change(uint8_t* rdram, recomp_context* ctx) 
     const int32_t delta = (int32_t)ctx->r5;
     if (in_hit && delta < 0) {
         hit_damaged = true;
+    }
+    if (delta < 0 && tooie::cheats::is_on("cheat_noclip")) {
+        ctx->r5 = 0;
+        return;
     }
     if (in_fall || delta >= 0 || delta <= -999 || !double_damage_on()) {
         return;

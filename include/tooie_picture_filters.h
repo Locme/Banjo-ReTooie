@@ -27,7 +27,6 @@ namespace tooie::picture_filters {
     inline const std::string lighting_section_option = "lighting_water_fog";
     inline const std::string grass_section_option = "grass_section";
     inline const std::string reflections_section_option = "reflections_section";
-    inline const std::string ray_tracing_section_option = "ray_tracing_section";
     inline const std::string brightness_option = "brightness";
     inline const std::string brightness_pattern_option = "brightness_pattern";
     inline const std::string colourblind_option = "colourblind_filter";
@@ -51,7 +50,10 @@ namespace tooie::picture_filters {
     inline const std::string gameplay_dof_option = "gameplay_dof";
     inline const std::string eye_adaptation_option = "eye_adaptation";
     inline const std::string rim_light_option = "rim_light";
-    inline const std::string toon_shading_option = "toon_shading";
+    // Toon shading apart for the level and for characters (the old single "toon_shading" is carried over to both once, see
+    // split_saved_toon_shading in src/game/config.cpp).
+    inline const std::string toon_world_option = "toon_shading_world";
+    inline const std::string toon_characters_option = "toon_shading_characters";
     inline const std::string underwater_tint_option = "underwater_tint";
     inline const std::string underwater_haze_option = "underwater_haze";
     inline const std::string heat_haze_option = "heat_haze";
@@ -64,8 +66,23 @@ namespace tooie::picture_filters {
     inline const std::string ssr_stochastic_option = "ssr_stochastic";
     inline const std::string ray_tracing_option = "ray_tracing";
     inline const std::string ray_tracing_strength_option = "ray_tracing_strength";
+    // Graphics > Ray Tracing's reflection sliders (L, 2026-10-21): how much the traced reflections show, on water, and on
+    // the Parallax materials that reflect.
+    inline const std::string ray_tracing_reflections_option = "ray_tracing_reflections";
+    inline const std::string ray_tracing_water_reflections_option = "ray_tracing_water_reflections";
+    inline const std::string ray_tracing_metal_option = "ray_tracing_metal";
+    inline const std::string ray_tracing_tiles_option = "ray_tracing_tiles";
+    inline const std::string ray_tracing_smooth_option = "ray_tracing_smooth";
     inline const std::string ray_tracing_hit_colours_option = "ray_tracing_hit_colours";
+    inline const std::string ray_tracing_half_option = "ray_tracing_half";
+    inline const std::string ray_detail_half_option = "ray_detail_half_distance";
+    inline const std::string ray_detail_quarter_option = "ray_detail_quarter_distance";
+    inline const std::string ray_tracing_player_shadows_option = "ray_tracing_player_shadows";
     inline const std::string ray_tracing_smoothing_option = "ray_tracing_smoothing";
+    // Ray traced BRDF (reflection roughness for every traced reflection, switching the screen-space Stochastic reflections off) and
+    // traced Subsurface scattering (leaves and grass, and any texture a Ray Tracing Material pick gives subsurface) (L, 2026-10-22).
+    inline const std::string ray_tracing_brdf_option = "ray_tracing_brdf";
+    inline const std::string ray_tracing_subsurface_option = "ray_tracing_subsurface";
     inline const std::string path_tracing_option = "path_tracing";
     inline const std::string path_tracing_bounces_option = "path_tracing_bounces";
     inline const std::string traced_beams_option = "traced_light_beams";
@@ -104,7 +121,11 @@ namespace tooie::picture_filters {
     inline const std::string grass_frustum_cull_option = "grass_3d_frustum_cull";
     inline const std::string grass_occlusion_cull_option = "grass_3d_occlusion_cull";
     inline const std::string grass_chunking_option = "grass_3d_chunking";
-    // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (lib/rt64/src/shaders/Snow.hlsli),
+    // 3D grass LOD (0 off: every blade stays out to the grass distance) and 30 FPS grass (its culling every other frame).
+    inline const std::string grass_lod_option = "grass_3d_lod";
+    inline const std::string grass_half_rate_option = "grass_3d_30fps";
+    inline const std::string grass_ray_tracing_option = "grass_3d_ray_tracing";
+    // Deep snow that Banjo leaves a trail in, on the snowy ground of the snow levels (rt64-ext/src/shaders/Snow.hlsli),
     // and how deep it is.
     inline const std::string deep_snow_option = "deep_snow";
     inline const std::string tessellated_sand_option = "tessellated_sand";
@@ -112,18 +133,20 @@ namespace tooie::picture_filters {
     inline const std::string snow_detail_option = "deep_snow_detail";
     inline const std::string snow_refill_option = "deep_snow_refill_seconds";
     inline const std::string snow_lod_option = "deep_snow_lod_distance";
-    // Parallax mapping on the stone textures listed in picture_filters.cpp (lib/rt64/src/shaders/Parallax.hlsli): how
+    // Parallax mapping on the stone textures listed in picture_filters.cpp (rt64-ext/src/shaders/Parallax.hlsli): how
     // deep, 0 off.
     inline const std::string parallax_option = "parallax";
+    inline const std::string ground_displacement_option = "ground_displacement";
+    inline const std::string ground_displacement_distance_option = "ground_displacement_distance";
     inline const std::string parallax_original_option = "parallax_original";
-    // Banjo's fur: shells of strands over his brown fur (lib/rt64/src/shaders/Fur.hlsli).
+    // Banjo's fur: shells of strands over his brown fur (rt64-ext/src/shaders/Fur.hlsli).
     inline const std::string banjo_fur_option = "banjo_fur";
     inline const std::string banjo_fur_length_option = "banjo_fur_length";
     inline const std::string banjo_fur_density_option = "banjo_fur_density";
     inline const std::string banjo_fur_noisiness_option = "banjo_fur_noisiness";
     // The Character Shaders section's switch: shows Banjo's fur and Kazooie's feathers (hiding them turns none off).
     inline const std::string character_section_option = "character_shaders_section";
-    // Kazooie's feathers (GrassGS.hlsl in lib/rt64): how full (0 off) and how big.
+    // Kazooie's feathers (rt64-ext/src/shaders/GrassGS.hlsl): how full (0 off) and how big.
     inline const std::string kazooie_feathers_option = "kazooie_feathers";
     inline const std::string kazooie_feather_size_option = "kazooie_feather_size";
     // Like Banjo's fur (L): length, density, noisiness, and how see-through.
@@ -145,6 +168,8 @@ namespace tooie::picture_filters {
     // DEV tab, on by default (L, 2026-10-17): blends the seams of clamped textures, such as the lines between the
     // pieces of the title's logo (a vanilla issue that shows at high resolutions).
     inline const std::string texture_seams_option = "blend_texture_seams";
+    // Whether Toon shading: Characters is above 0, so the model tagging marks the characters' draws.
+    bool toon_characters_on();
     // Whether Banjo's fur is on, for the model tagging to mark his model's draws.
     bool banjo_fur_on();
     // Whether sun shadows are on, so the game's culling keeps what casts them from just outside the picture.

@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <variant>
@@ -40,7 +41,7 @@
 #include "tooie_picture_filters.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_scene_effects.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_scene_effects.h.
     void SetSceneLights(const float* xyzr, uint32_t count);
 }
 
@@ -280,6 +281,16 @@ namespace {
             ctx->r5 = 0;
             ctx->r6 = 1;
             func_800C878C(rdram, ctx);
+        }
+        // TOOIE_LIGHT_LOG=1: the list every 2 s, to see where a level's lights sit against its lamps.
+        static const bool log = std::getenv("TOOIE_LIGHT_LOG") != nullptr;
+        static auto last = std::chrono::steady_clock::now();
+        if (log && (std::chrono::steady_clock::now() - last > std::chrono::seconds(2))) {
+            last = std::chrono::steady_clock::now();
+            for (uint32_t i = 0; i < count; i++) {
+                std::printf("[lights] %u: %.1f %.1f %.1f range %.1f\n", i, lights[i * 4], lights[i * 4 + 1], lights[i * 4 + 2], lights[i * 4 + 3]);
+            }
+            std::fflush(stdout);
         }
         RT64::SetSceneLights(lights, count);
     }

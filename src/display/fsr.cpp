@@ -15,7 +15,7 @@
 #include "tooie_fsr.h"
 
 namespace RT64 {
-    // lib/rt64/src/render/rt64_fsr.h (from lib-patches/rt64.patch).
+    // rt64-ext/src/render/rt64_fsr.h.
     void SetFsrMode(uint32_t mode);
 }
 
