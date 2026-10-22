@@ -62,6 +62,8 @@ namespace RT64 {
         double snowMs[4] = {};
         // Of the effects setup (RendererCpuPart::Effects), each part's time (RendererEffectsPart).
         double effectsMs[6] = {};
+        // How many times deep snow's or tessellated sand's ground had to be worked out again (not in its cache).
+        uint32_t snowRedone = 0;
     };
 
     FrameStats TakeFrameStats();
@@ -76,6 +78,7 @@ namespace RT64 {
     // ground draws take it (snowShellCount), the models pressing it (snowTouchDraw), and its ground's edges.
     enum class RendererSnowPart : uint32_t { Trail, Ground, Touch, Edges, Count };
     void RecordRendererSnowTimes(const double (&ms)[uint32_t(RendererSnowPart::Count)]);
+    void RecordRendererSnowRedone(uint32_t count);
     // The effects setup's parts (endFramebuffers): fur normals, the grass mask with snow and sand (whose own parts are
     // RendererSnowPart), instanced grass, the ray traced scene's acceleration structures, the uploads, the shader views.
     enum class RendererEffectsPart : uint32_t { Fur, MaskAndSnow, Grass, RtScene, Uploads, Views, Count };
