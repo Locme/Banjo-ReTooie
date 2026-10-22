@@ -86,7 +86,7 @@ namespace {
         { "GTAO occlusion (white open, dark shaded)", 19, Solo::None },
         { "SSGI bounced light", 20, Solo::None },
         { "Screen-space reflections (red: nothing to reflect)", 21, Solo::None },
-        { "Ray traced scene (green traced, blue light passes through, red blocked in front)", 22, Solo::None },
+        { "Ray traced scene (green traced, yellow cut-out, blue light passes through, red blocked in front, magenta near lights)", 22, Solo::None },
         { "All effects off", scene_none, Solo::None },
         { "Only: sharpening", scene_none, Solo::Sharpening },
         { "Only: contrast", scene_none, Solo::Contrast },
@@ -200,6 +200,8 @@ void tooie::effect_views::add_option(recomp::config::Config& graphics) {
         "Effect debug view",
         "For testing. Shows one picture effect or filter on its own, with every other one off: at its setting, or at a default strength when it is off. "
         "<recomp-color primary>All effects off</recomp-color> shows the picture with none of them, to compare against. The first views show the scene effects' depth, normals and water mask. "
+        "Water view: red is water (yellower where it reflects), purple a waterfall, blue ice, grey everything else. "
+        "Ray traced view: green is a traced surface, yellow a cut-out (fence, grate) texel the rays treat as solid, blue where light passes through, red where something traced stands in front, magenta round each of the level's lights (grey without ray tracing). "
         "The Effect Debug View key steps to the next view (with Shift back) and the Effect Compare key splits the picture: the effect on the left, the original on the right (both bound in the Debug section of the Controls tab). Starts Off each launch.",
         options,
         0u);
