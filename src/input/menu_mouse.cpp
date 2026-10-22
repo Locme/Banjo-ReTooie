@@ -524,7 +524,10 @@ void tooie::menu_mouse::tick(uint8_t* rdram, recomp_context* /*ctx*/) {
     const bool in_save_select = tooie::debug::current_map(rdram) == save_select_map;
     const uint32_t pause = tooie::rdram::read_word(rdram, pause_menu_addr);
     const bool pause_open = tooie::rdram::valid_ptr(pause) && read_byte(rdram, pause + pause_exit_type) == 0;
-    const bool on = enabled() && (pause_open || in_save_select);
+    // The save select is the pad's and keys' only (L, 2026-10-22: "wasd should suffice"): the mouse steered its hand by
+    // snapping and by a free hand, and neither was liked. The code for both stays below, not reached.
+    (void)in_save_select;
+    const bool on = enabled() && pause_open;
     recompinput::set_game_menu_mouse(on);
     // The save select's hand is the cursor while it follows the mouse; elsewhere (copy, erase, yes/no) the system one shows.
     static int hand_idle = 100;
