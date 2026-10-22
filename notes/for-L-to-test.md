@@ -2,13 +2,13 @@
 
 ## T529 Terrydactyland sand frame rate (edge cache)
 - Asked: 2026-10-22 10:28 UTC
-- Build: main 4e3ee65
+- Build: main abd3bef or later (adds an 'Effects setup' line to the overlay)
 - Steps:
   1. Graphics: Tessellated sand on, Parallax off, Frame overlay on Full
   2. Go to Terrydactyland and stand on the sand
   3. Read the fps and the overlay's 'Snow and sand CPU' and 'Renderer CPU' lines
   4. Turn Parallax back on and read them again
-- Look for: Edges on the 'Snow and sand CPU' line should be near 0 ms (was 36 ms) and effects setup much lower than 100 ms. Send a screenshot of the overlay either way.
+- Look for: Edges on the 'Snow and sand CPU' line should be near 0 ms (was 36 ms) and effects setup much lower than 100 ms. The new 'Effects setup' line shows where the rest goes. Send a screenshot of the overlay either way.
 - Status: waiting for L
 
 ## T528 Parallax shapes per texture (frame rate check)
