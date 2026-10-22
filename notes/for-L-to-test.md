@@ -1,6 +1,6 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
-## T540 Ray detail distances (half and quarter)
+## T545 Ray detail distances (half and quarter)
 - Asked: 2026-10-22 12:55 UTC
 - Build: main
 - Steps:
