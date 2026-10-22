@@ -1,5 +1,17 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T560 Simple menu (Simple / Advanced)
+- Asked: 2026-10-22 23:28 UTC
+- Build: claude/project-thread-8oifqv
+- Steps:
+  1. Open the menu, General: top has Simple menu (on by default)
+  2. Check Graphics: each effect is one on/off switch, tuning sliders gone
+  3. Turn Simple menu off: all sliders and the DEV tab come back
+  4. Search for a hidden slider such as Banjo fur length
+  5. Turn a switch off then on and see the slider's old value return
+- Look for: Is Simple clear enough, and does anything you want to see go missing? Does the note about changed hidden settings show?
+- Status: waiting for L
+
 ## T559 Metal less shiny (rough reflections fade, steel and rust defaults)
 - Asked: 2026-10-22 23:15 UTC
 - Build: main @ HEAD

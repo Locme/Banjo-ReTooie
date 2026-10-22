@@ -5,6 +5,7 @@
 
 #include "tooie_photo_album.h"
 #include "tooie_game.h"
+#include "tooie_simple_menu.h"
 #include "tooie_hd_shadows.h"
 #include "tooie_day_night.h"
 #include "tooie_classic_sounds.h"
@@ -85,10 +86,19 @@ namespace {
             on = std::get<bool>(recompui::config::get_general_config().get_option_value(tooie::wip_tab_option));
         } catch (...) {
         }
+        // The Simple menu hides the DEV tab (switch it off to see it again) and the WIP page.
+        const bool simple = tooie::simple_menu::on();
         try {
-            recompui::config::set_tab_visible(tooie::wip_tab_id, on);
+            recompui::config::set_tab_visible(tooie::wip_tab_id, on && !simple);
+            recompui::config::set_tab_visible(tooie::work_in_progress_tab_id, !simple);
         } catch (...) {
         }
+    }
+
+    // Shows or hides the tabs that depend on the Simple menu switch.
+    void refresh_simple_menu_tabs() {
+        show_wip_tab();
+        tooie::level_warp::refresh();
     }
 
     void show_achievements_tab() {
@@ -321,6 +331,11 @@ void tooie::init_config() {
     general_options.has_gyro_sensitivity = true;
     general_options.has_mouse_sensitivity = true;
     auto& general = recompui::config::create_general_tab(general_options);
+    tooie::simple_menu::add_option(general);
+    general.add_option_change_callback(tooie::simple_menu::option,
+        [](recomp::config::ConfigValueVariant, recomp::config::ConfigValueVariant, recomp::config::OptionChangeContext) {
+            tooie::simple_menu::apply(refresh_simple_menu_tabs);
+        });
     tooie::control_scheme::add_option(general);
     general.add_bool_option(
         tooie::save_backups_option,
@@ -993,9 +1008,11 @@ void tooie::init_config() {
 
     move_saved_hud_placement();
     split_saved_toon_shading();
+    tooie::simple_menu::classify();
     recompui::config::finalize();
     tooie::cheats::reset_on_start();
     move_saved_options_to_graphics();
+    tooie::simple_menu::apply(nullptr);
     show_wip_tab();
     move_saved_tab_options();
     show_cheats_tab();

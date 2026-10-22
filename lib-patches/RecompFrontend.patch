@@ -1359,7 +1359,7 @@ index 277a421..676066d 100644
      ui_state->unload();
      ui_state.reset();
 diff --git a/recompui/src/config/ui_config.cpp b/recompui/src/config/ui_config.cpp
-index 6c84c05..730fa43 100644
+index 6c84c05..6f2e821 100644
 --- a/recompui/src/config/ui_config.cpp
 +++ b/recompui/src/config/ui_config.cpp
 @@ -1,7 +1,14 @@
@@ -1385,7 +1385,7 @@ index 6c84c05..730fa43 100644
  
  namespace recompui {
      static recompui::TabbedModal *config_modal = nullptr;
-@@ -38,6 +46,99 @@ namespace recompui {
+@@ -38,6 +46,102 @@ namespace recompui {
          throw std::runtime_error("No config with ID '" + id + "' has been added to the config modal.");
      }
  
@@ -1447,6 +1447,7 @@ index 6c84c05..730fa43 100644
 +                            break;
 +                        case recomp::config::ConfigOptionType::Number:
 +                            element = context.create_element<ConfigOptionNumber>(box, option.id, i, cfg, set_value, no_hover);
++                            static_cast<ConfigOptionNumber *>(element)->get_simple_toggle()->set_sidebar_colors(get_sidebar_layout());
 +                            break;
 +                        case recomp::config::ConfigOptionType::String:
 +                            element = context.create_element<ConfigOptionString>(box, option.id, i, cfg, set_value, no_hover);
@@ -1461,6 +1462,8 @@ index 6c84c05..730fa43 100644
 +                    if (element == nullptr) {
 +                        continue;
 +                    }
++                    element->ignore_simple = true;
++                    element->update_hidden();
 +                    context.create_element<Label>(box, option.description, LabelStyle::Annotation);
 +                    rows->push_back({ box, element, cfg, i, lower(option.name + " " + option.description + " " + cfg->name) });
 +                }
@@ -1470,7 +1473,7 @@ index 6c84c05..730fa43 100644
 +                const std::string needle = lower(text);
 +                for (Row &row : *rows) {
 +                    const bool show = !needle.empty() && row.text.find(needle) != std::string::npos &&
-+                        !row.config->is_config_option_hidden(row.index);
++                        !row.config->is_config_option_hidden(row.index, true);
 +                    if (show) {
 +                        row.element->update_value();
 +                        row.element->update_hidden();
@@ -1485,7 +1488,7 @@ index 6c84c05..730fa43 100644
      void config::create_tab(
          const std::string &name,
          const std::string &id,
-@@ -121,6 +222,80 @@ namespace recompui {
+@@ -121,6 +225,80 @@ namespace recompui {
          loaded_configs = true;
      }
  
@@ -1566,7 +1569,7 @@ index 6c84c05..730fa43 100644
      void config::set_tab_visible(const std::string &id, bool is_visible) {
          if (config_modal == nullptr) {
              for (auto &tab : pending_tabs) {
-@@ -177,6 +352,14 @@ namespace recompui {
+@@ -177,6 +355,14 @@ namespace recompui {
          return config_modal->modal_root_context;
      }
  
@@ -1581,7 +1584,7 @@ index 6c84c05..730fa43 100644
      void config::set_tab(const std::string &id) {
          if (config_modal == nullptr) {
              throw std::runtime_error("No tab with ID '" + id + "' has been added to the config modal.");
-@@ -185,6 +368,16 @@ namespace recompui {
+@@ -185,6 +371,16 @@ namespace recompui {
          config_modal->set_selected_tab(id);
      }
  
@@ -1599,7 +1602,7 @@ index 6c84c05..730fa43 100644
          if (config_modal == nullptr) {
              throw std::runtime_error("Config modal has not been initialized.");
 diff --git a/recompui/src/config/ui_config_option.cpp b/recompui/src/config/ui_config_option.cpp
-index 86428c9..5a44688 100644
+index 86428c9..4d4b1cb 100644
 --- a/recompui/src/config/ui_config_option.cpp
 +++ b/recompui/src/config/ui_config_option.cpp
 @@ -1,4 +1,7 @@
@@ -1610,7 +1613,20 @@ index 86428c9..5a44688 100644
  
  namespace recompui {
  
-@@ -87,14 +90,60 @@ void ConfigOptionElement::process_event(const Event &e) {
+@@ -59,7 +62,11 @@ bool ConfigOptionElement::get_disabled() {
+ }
+ 
+ bool ConfigOptionElement::get_hidden() {
+-    return config->is_config_option_hidden(option_index);
++    return config->is_config_option_hidden(option_index, ignore_simple);
++}
++
++bool ConfigOptionElement::simple_active() const {
++    return config->simple_mode() && !ignore_simple;
+ }
+ 
+ void ConfigOptionElement::process_event(const Event &e) {
+@@ -87,14 +94,61 @@ void ConfigOptionElement::process_event(const Event &e) {
      }
  }
  
@@ -1658,7 +1674,8 @@ index 86428c9..5a44688 100644
 +
  void ConfigOptionElement::update_hidden() {
 -    if (config->is_config_option_hidden(option_index)) {
-+    const bool hidden = config->is_config_option_hidden(option_index);
++    const bool hidden = config->is_config_option_hidden(option_index, ignore_simple);
++    update_simple_control();
 +    if (hidden) {
          set_display(Display::None);
          set_enabled(false);
@@ -1672,7 +1689,7 @@ index 86428c9..5a44688 100644
  }
  
  // ConfigOptionEnum
-@@ -110,6 +159,7 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -110,6 +164,7 @@ ConfigOptionEnum::ConfigOptionEnum(
  {
      ContextId context = recompui::get_current_context();
      Element *wrapper = context.create_element<Element>(this, 0, "div", false);
@@ -1680,7 +1697,7 @@ index 86428c9..5a44688 100644
      wrapper->set_display(Display::Flex);
      wrapper->set_flex_direction(FlexDirection::Row);
      wrapper->set_align_items(AlignItems::Center);
-@@ -120,25 +170,48 @@ ConfigOptionEnum::ConfigOptionEnum(
+@@ -120,25 +175,48 @@ ConfigOptionEnum::ConfigOptionEnum(
      // Negates the extra padding that radio tabs automatically add.
      name_label->set_margin_bottom(4.0f);
  
@@ -1746,7 +1763,7 @@ index 86428c9..5a44688 100644
      }
  
      update_value();
-@@ -153,12 +226,18 @@ void ConfigOptionEnum::update_value() {
+@@ -153,12 +231,18 @@ void ConfigOptionEnum::update_value() {
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(this->option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          if (enum_opt.options[i].value == option_value) {
@@ -1767,7 +1784,7 @@ index 86428c9..5a44688 100644
  };
  
  void ConfigOptionEnum::update_disabled() {
-@@ -176,6 +255,10 @@ void ConfigOptionEnum::update_enum_details() {
+@@ -176,6 +260,10 @@ void ConfigOptionEnum::update_enum_details() {
  
  void ConfigOptionEnum::update_enum_disabled() {
      bool all_disabled = get_disabled();
@@ -1778,7 +1795,7 @@ index 86428c9..5a44688 100644
      auto &enum_opt = config->get_option_config<recomp::config::ConfigOptionEnum>(option_index);
      for (uint32_t i = 0; i < enum_opt.options.size(); i++) {
          bool enum_disabled = all_disabled || config->get_enum_option_disabled(option_index, i);
-@@ -199,6 +282,7 @@ ConfigOptionNumber::ConfigOptionNumber(
+@@ -199,6 +287,7 @@ ConfigOptionNumber::ConfigOptionNumber(
      auto &num_opt = config->get_option_config<recomp::config::ConfigOptionNumber>(option_index);
  
      slider = context.create_element<Slider>(this, num_opt.percent ? SliderType::Percent : SliderType::Double);
@@ -1786,7 +1803,57 @@ index 86428c9..5a44688 100644
      slider->set_width(100.0f, Unit::Percent);
      slider->set_max_width(512.0f, Unit::Dp);
  
-@@ -245,6 +329,7 @@ ConfigOptionString::ConfigOptionString(
+@@ -214,14 +303,33 @@ ConfigOptionNumber::ConfigOptionNumber(
+             this->on_hover(this->option_id);
+         }
+     });
++    last_on_value = num_opt.default_value != 0.0 ? num_opt.default_value : num_opt.max;
++
++    simple_toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
++    simple_toggle->set_display(Display::None);
++    simple_toggle->add_checked_callback([this](bool checked){
++        if (checked) {
++            this->set_option_value(this->option_id, last_on_value);
++        } else {
++            this->set_option_value(this->option_id, 0.0);
++        }
++    });
++
+     update_value();
+     update_disabled();
++    update_simple_control();
+ };
+ 
+ void ConfigOptionNumber::update_value() {
+     recomp::config::ConfigValueVariant value_variant = get_value();
+     double value = std::get<double>(value_variant);
+     slider->set_value(value);
++    if (value != 0.0) {
++        last_on_value = value;
++    }
++    if (simple_toggle != nullptr) {
++        simple_toggle->set_checked(value != 0.0);
++    }
+ };
+ 
+ void ConfigOptionNumber::update_disabled() {
+@@ -229,6 +337,15 @@ void ConfigOptionNumber::update_disabled() {
+     set_enabled(!disabled);
+ };
+ 
++void ConfigOptionNumber::update_simple_control() {
++    if (simple_toggle == nullptr) {
++        return;
++    }
++    const bool as_toggle = simple_active() && config->is_option_simple_toggle(option_index);
++    slider->set_display(as_toggle ? Display::None : Display::Block);
++    simple_toggle->set_display(as_toggle ? Display::Flex : Display::None);
++};
++
+ // ConfigOptionString
+ ConfigOptionString::ConfigOptionString(
+     ResourceId rid,
+@@ -245,6 +362,7 @@ ConfigOptionString::ConfigOptionString(
  
      ContextId context = recompui::get_current_context();
      text_input = context.create_element<TextInput>(this);
@@ -1794,7 +1861,7 @@ index 86428c9..5a44688 100644
      text_input->set_width(100.0f, Unit::Percent);
      text_input->set_max_width(100.0f, Unit::Percent);
      update_value();
-@@ -284,6 +369,8 @@ ConfigOptionBool::ConfigOptionBool(
+@@ -284,6 +402,8 @@ ConfigOptionBool::ConfigOptionBool(
  
      ContextId context = recompui::get_current_context();
      toggle = context.create_element<Toggle>(this, ToggleSize::Medium);
@@ -1804,7 +1871,7 @@ index 86428c9..5a44688 100644
      update_value();
      toggle->add_checked_callback([this](bool checked){
 diff --git a/recompui/src/config/ui_config_option.h b/recompui/src/config/ui_config_option.h
-index 0561657..2984d8b 100644
+index 0561657..5648172 100644
 --- a/recompui/src/config/ui_config_option.h
 +++ b/recompui/src/config/ui_config_option.h
 @@ -4,6 +4,7 @@
@@ -1815,7 +1882,7 @@ index 0561657..2984d8b 100644
  #include "elements/ui_text_input.h"
  #include "elements/ui_slider.h"
  #include "elements/ui_toggle.h"
-@@ -20,6 +21,9 @@ namespace recompui {
+@@ -20,10 +21,17 @@ namespace recompui {
          set_option_value_t set_option_value;
          on_option_hover_t on_hover;
          Label *name_label = nullptr;
@@ -1825,10 +1892,20 @@ index 0561657..2984d8b 100644
  
          recomp::config::ConfigValueVariant get_value();
          bool get_disabled();
-@@ -42,12 +46,20 @@ namespace recompui {
+         bool get_hidden();
++        // True while the Simple menu is on (and this row obeys it).
++        bool simple_active() const;
++        // Hook for update_hidden: lets a subclass swap its control when Simple turns on or off.
++        virtual void update_simple_control() {}
+ 
+         virtual void process_event(const Event &e) override;
+         std::string_view get_type_name() override { return "ConfigOptionElement"; }
+@@ -42,12 +50,22 @@ namespace recompui {
          virtual void update_value() = 0;
          virtual void update_disabled() = 0;
          void update_hidden();
++        // Search rows show an option even when the Simple menu hides it, and as its full control.
++        bool ignore_simple = false;
 +        // The group heading shown above this option (hidden together with it).
 +        Element *group_heading = nullptr;
          const std::string &get_option_id() { return option_id; }
@@ -1846,7 +1923,27 @@ index 0561657..2984d8b 100644
      Label *details_label = nullptr;
  
      std::string_view get_type_name() override { return "ConfigOptionEnum"; }
-@@ -127,6 +139,7 @@ public:
+@@ -72,6 +90,11 @@ public:
+ class ConfigOptionNumber : public ConfigOptionElement {
+ protected:
+     Slider *slider = nullptr;
++    // Simple menu: a main effect's slider becomes an on/off switch (off is 0, on is the last non-zero value).
++    Toggle *simple_toggle = nullptr;
++    double last_on_value = 0.0;
++
++    void update_simple_control() override;
+ 
+     std::string_view get_type_name() override { return "ConfigOptionNumber"; }
+ public:
+@@ -87,6 +110,7 @@ public:
+ 
+     void update_value() override;
+     void update_disabled() override;
++    Toggle *get_simple_toggle() { return simple_toggle; }
+ };
+ 
+ class ConfigOptionString : public ConfigOptionElement {
+@@ -127,6 +151,7 @@ public:
  
      void update_value() override;
      void update_disabled() override;
@@ -1898,7 +1995,7 @@ index f379a6f..388d5a2 100644
          reset_to_defaults_button->add_pressed_callback([this]() {
              recompinput::profiles::reset_profile_bindings(this->selected_profile_index, this->get_player_input_device());
 diff --git a/recompui/src/config/ui_config_page_options_menu.cpp b/recompui/src/config/ui_config_page_options_menu.cpp
-index 6ba64e2..aa9cb5b 100644
+index 6ba64e2..1bb00be 100644
 --- a/recompui/src/config/ui_config_page_options_menu.cpp
 +++ b/recompui/src/config/ui_config_page_options_menu.cpp
 @@ -1,4 +1,10 @@
@@ -1929,7 +2026,7 @@ index 6ba64e2..aa9cb5b 100644
  {
      ContextId context = recompui::get_current_context();
      set_as_navigation_container(NavigationType::Vertical);
-@@ -21,19 +31,103 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
+@@ -21,19 +31,106 @@ ConfigPageOptionsMenu::ConfigPageOptionsMenu(
      description_container->set_line_height(28.0f);
      description_container->set_padding(8.0f);
      set_description_text("");
@@ -2024,6 +2121,9 @@ index 6ba64e2..aa9cb5b 100644
 +        if (auto *bool_element = dynamic_cast<ConfigOptionBool *>(element)) {
 +            bool_element->get_toggle()->set_sidebar_colors(strip);
 +        }
++        if (auto *number_element = dynamic_cast<ConfigOptionNumber *>(element)) {
++            number_element->get_simple_toggle()->set_sidebar_colors(strip);
++        }
 +        if (element->group_heading != nullptr) {
 +            Element *heading = element->group_heading;
 +            if (strip) {
@@ -2039,7 +2139,7 @@ index 6ba64e2..aa9cb5b 100644
          }
      }
  }
-@@ -59,7 +153,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
+@@ -59,7 +156,10 @@ void ConfigPageOptionsMenu::perform_option_render_updates() {
          std::string &option_id = schema.options[option_index].id;
          ConfigOptionElement* element = get_element_from_option_id(option_id);
          if (element == nullptr) {
@@ -2051,7 +2151,7 @@ index 6ba64e2..aa9cb5b 100644
              continue;
          }
          for (auto &update_type :option_update.updates) {
-@@ -109,6 +206,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -109,6 +209,9 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
          break;
      }
      case EventType::Update: {
@@ -2061,7 +2161,7 @@ index 6ba64e2..aa9cb5b 100644
          if (apply_button != nullptr) {
              bool apply_enabled = this->apply_button->is_enabled();
              bool is_dirty = config->is_dirty();
-@@ -117,6 +217,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
+@@ -117,6 +220,7 @@ void ConfigPageOptionsMenu::process_event(const Event &e) {
              }
          }
          perform_option_render_updates();
@@ -2069,7 +2169,7 @@ index 6ba64e2..aa9cb5b 100644
          break;
      }
      case EventType::MenuAction: {
-@@ -149,6 +250,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
+@@ -149,6 +253,10 @@ void ConfigPageOptionsMenu::render_confirmation_footer() {
  
  void ConfigPageOptionsMenu::on_set_option_value(const std::string &option_id, recomp::config::ConfigValueVariant value) {
      config->set_option_value(option_id, value);
@@ -2080,7 +2180,7 @@ index 6ba64e2..aa9cb5b 100644
      if (config->requires_confirmation && apply_button != nullptr) {
          apply_button->set_enabled(config->is_dirty());
      }
-@@ -173,7 +278,19 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -173,7 +281,19 @@ void ConfigPageOptionsMenu::render_config_options() {
          body_left_scroll->set_overflow_y(Overflow::Auto);
          body_left_scroll->set_as_navigation_container(NavigationType::Vertical);
  
@@ -2100,7 +2200,7 @@ index 6ba64e2..aa9cb5b 100644
          bound_on_option_hover = [this](const std::string &option_id) {
              this->on_option_hover(option_id);
          };
-@@ -181,8 +298,37 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -181,8 +301,37 @@ void ConfigPageOptionsMenu::render_config_options() {
              this->on_set_option_value(option_id, value);
          };
          auto schema = config->get_config_schema();
@@ -2138,7 +2238,7 @@ index 6ba64e2..aa9cb5b 100644
              ConfigOptionElement *element = nullptr;
              switch (config_option.type) {
                  case recomp::config::ConfigOptionType::Enum: {
-@@ -233,6 +379,7 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -233,6 +382,7 @@ void ConfigPageOptionsMenu::render_config_options() {
                      assert(false && "Unknown config option type");
                  }
              };
@@ -2146,7 +2246,7 @@ index 6ba64e2..aa9cb5b 100644
              element->update_disabled();
              element->update_hidden();
              config_option_elements.push_back(element);
-@@ -241,6 +388,18 @@ void ConfigPageOptionsMenu::render_config_options() {
+@@ -241,6 +391,18 @@ void ConfigPageOptionsMenu::render_config_options() {
  }
  
  void ConfigPageOptionsMenu::on_option_hover(const std::string &option_id) {

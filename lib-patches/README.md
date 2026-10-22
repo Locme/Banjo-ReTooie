@@ -55,6 +55,11 @@ so the submodules stay pinned to their upstream commits.
 To change a patch: edit the files in `lib/N64ModernRuntime`, then
 `git -C lib/N64ModernRuntime diff > lib-patches/N64ModernRuntime.patch`.
 
+* **Simple menu layer** (`librecomp/src/config.cpp`, `librecomp/include/librecomp/config.hpp`): per-config
+  sets of "advanced" options (hidden while Simple mode is on) and "simple toggle" options (numbers shown as an
+  on/off switch in Simple mode), with `set_simple_mode`. `is_config_option_hidden` takes `ignore_simple` for
+  Search. Kept separate from the hidden-dependency set, which each option has only one of.
+
 ## RecompFrontend.patch
 
 * **Option display order** (`recompui/include/recompui/config.h`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`): `set_option_display_before(id, before_id)` shows an option above another in its tab without changing the config schema (used to show MS Anti-Aliasing under Anti-aliasing and scaling).
@@ -152,6 +157,10 @@ To change a patch: edit the files in `lib/N64ModernRuntime`, then
 
 To change it: edit the files in `lib/RecompFrontend`, then
 `git -C lib/RecompFrontend diff > lib-patches/RecompFrontend.patch`.
+
+* **Simple menu** (`recompui/src/config/ui_config_option.*`, `ui_config.cpp`, `ui_config_page_options_menu.cpp`):
+  a number option in Simple mode swaps its slider for a Toggle (off is 0, on the last non-zero value); Search rows
+  ignore Simple mode so hidden options can still be found.
 
 ## rt64.patch
 

@@ -1,3 +1,34 @@
+diff --git a/librecomp/include/librecomp/config.hpp b/librecomp/include/librecomp/config.hpp
+index a1086cf..7f5d744 100644
+--- a/librecomp/include/librecomp/config.hpp
++++ b/librecomp/include/librecomp/config.hpp
+@@ -315,7 +315,15 @@ namespace recomp {
+ 
+             std::vector<ConfigOptionUpdateContext> get_config_option_updates() { return config_option_updates; }
+             bool is_config_option_disabled(size_t option_index) const { return disabled_options.contains(option_index); }
+-            bool is_config_option_hidden(size_t option_index) const;
++            // Simple menu mode (Banjo-Tooie): advanced options are hidden, and toggle options (numbers whose
++            // main use is on/off) are shown as a switch. Display only; the values are untouched.
++            void set_option_advanced(const std::string& option_id);
++            void set_option_simple_toggle(const std::string& option_id);
++            void set_simple_mode(bool simple);
++            bool simple_mode() const { return simple_mode_on; }
++            bool is_option_advanced(size_t option_index) const { return advanced_options.contains(option_index); }
++            bool is_option_simple_toggle(size_t option_index) const { return simple_toggle_options.contains(option_index); }
++            bool is_config_option_hidden(size_t option_index, bool ignore_simple = false) const;
+             void clear_config_option_updates() {
+                 config_option_updates.clear();
+             }
+@@ -347,6 +355,9 @@ namespace recomp {
+             std::vector<ConfigOptionUpdateContext> config_option_updates = {};
+             std::unordered_set<size_t> disabled_options = {};
+             std::unordered_set<size_t> hidden_options = {};
++            std::unordered_set<size_t> advanced_options = {};
++            std::unordered_set<size_t> simple_toggle_options = {};
++            bool simple_mode_on = false;
+             std::unordered_map<size_t, std::string> enum_option_details = {};
+             std::unordered_map<size_t, std::unordered_set<size_t>> enum_options_disabled = {};
+ 
 diff --git a/librecomp/include/librecomp/mods.hpp b/librecomp/include/librecomp/mods.hpp
 index 37556bd..2cab4fb 100644
 --- a/librecomp/include/librecomp/mods.hpp
@@ -62,6 +93,52 @@ index 35703bd..7095517 100644
          const std::unordered_map<uint32_t, uint16_t>& get_vrom_to_section_map();
          uint32_t get_section_ram_addr(uint16_t code_section_index);
          std::span<const RelocEntry> get_section_relocs(uint16_t code_section_index);
+diff --git a/librecomp/src/config.cpp b/librecomp/src/config.cpp
+index 6bc03fd..9305167 100644
+--- a/librecomp/src/config.cpp
++++ b/librecomp/src/config.cpp
+@@ -623,7 +623,7 @@ void Config::update_option_hidden(size_t option_index, bool hidden) {
+         // unchangeable - always hidden
+         return;
+     }
+-    bool was_hidden = is_config_option_hidden(option_index);
++    bool was_hidden = is_config_option_hidden(option_index, true);
+     if (was_hidden == hidden) {
+         return;
+     }
+@@ -692,8 +692,30 @@ std::string Config::get_enum_option_details(size_t option_index) const {
+     return enum_option_details.at(option_index);
+ }
+ 
+-bool Config::is_config_option_hidden(size_t option_index) const {
+-    return schema.options[option_index].hidden || hidden_options.contains(option_index);
++bool Config::is_config_option_hidden(size_t option_index, bool ignore_simple) const {
++    return schema.options[option_index].hidden || hidden_options.contains(option_index) ||
++        (!ignore_simple && simple_mode_on && advanced_options.contains(option_index));
++}
++
++void Config::set_option_advanced(const std::string& option_id) {
++    advanced_options.insert(schema.options_by_id[option_id]);
++}
++
++void Config::set_option_simple_toggle(const std::string& option_id) {
++    simple_toggle_options.insert(schema.options_by_id[option_id]);
++}
++
++void Config::set_simple_mode(bool simple) {
++    if (simple_mode_on == simple) {
++        return;
++    }
++    simple_mode_on = simple;
++    for (size_t option_index : advanced_options) {
++        report_config_option_update(option_index, ConfigOptionUpdateType::Hidden);
++    }
++    for (size_t option_index : simple_toggle_options) {
++        report_config_option_update(option_index, ConfigOptionUpdateType::Hidden);
++    }
+ }
+ 
+ }
 diff --git a/librecomp/src/dp.cpp b/librecomp/src/dp.cpp
 index 97dbd8e..232a054 100644
 --- a/librecomp/src/dp.cpp

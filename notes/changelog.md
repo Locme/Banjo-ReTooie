@@ -9,6 +9,7 @@ Every item below is untested on a real PC unless L's test list says otherwise
 (see notes/for-L-to-test.md, T52 onward; none is confirmed yet).
 
 ### Cheats and controls
+- New **Simple menu** (General, on by default): effects show as one on/off switch, and tuning sliders, photo mode and free camera extras, debug options and the DEV tab are hidden. Turn it off for the full menu (Advanced). Search still finds hidden options, hidden settings keep their values, and a note says when hidden ones differ from the default (L). Untested on PC.
 - Pick modes: Save Pick and Paste Pick now act on the texture under the cursor in all three texture pick modes at once (Parallax, Shader Effects, Ray Tracing Material). DEV > Picker Save Only Current Active (off by default) brings back saving only in the mode that is on (L).
 - Shader Effects pick mode's **Light Source** now only makes the object itself shine (as Slight Glow does) and lights nothing round it, so no ball of light at all; this goes for the built-in ones too (fire, explosions). Its strength (Shift + mouse wheel) no longer changes anything (L's pick). Untested on PC (T532).
 - Light Source no longer draws a bright patch (a "ball") round the object: it leaves the area's own light as it is and adds a gentle light that fades out smoothly, so what is round the object is just lit a little more (L). Untested on PC (T532).
