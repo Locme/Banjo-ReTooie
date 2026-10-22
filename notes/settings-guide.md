@@ -274,11 +274,6 @@ F12 screenshots are taken before these filters, so they don't show them.
   part is. Off,
   only texture pack textures that come with a height map get parallax.
   Default: on.
-- **Parallax shapes per texture** (test switch, under Parallax on original
-  textures): off sends every one of the game's own textures as Stone at 100%
-  with shadows, the cheapest shape (its flat top ends the ray march after one
-  step). Here only to compare frame rate against the per-texture shapes; picks
-  you saved still use their own shape. Changes apply live. Default: on.
 
 ### Displaced ground
 

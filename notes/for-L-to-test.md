@@ -8,7 +8,8 @@
   2. Go to Terrydactyland, then two other worlds where parallax felt slow
   3. In each place, note the fps with Graphics > Parallax shapes per texture on, then flip it off and note the fps again (it applies live)
 - Look for: Whether the fps comes back with the switch off. If it does, the per-texture shapes are the cost and I make them cheaper; if not, the slowdown is elsewhere
-- Status: waiting for L
+- Status: answered 2026-10-22 10:25 UTC
+- L's result: L 2026-10-22: 12 fps on and 12 fps off in Terrydactyland, so the shapes are not the cost. Switch removed at L's request.
 
 ## T527 Move Sun and Save Sun Location
 - Asked: 2026-10-22 09:29 UTC
