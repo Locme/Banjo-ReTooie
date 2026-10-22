@@ -119,11 +119,27 @@ namespace {
     const BuiltIn built_ins[] = {
 #include "ray_material_defaults.inc"
     };
+    // L's rt_material_tags.txt of 2026-10-22, round two: each overwrites the built-in material of its texture (or adds
+    // one); "none" (the material's none flag) switches it off.
+    struct ShippedMaterial {
+        uint64_t hash;
+        Material material;
+    };
+    const ShippedMaterial shipped_materials[] = {
+        { 0x3141c709d926acd4ull, { 255, 255, 255, 50, 0, 0, 0, false } },
+        { 0x34edb75eecfadfe4ull, { 255, 255, 255, 50, 0, 0, 0, true } },
+        { 0x45b2b9c646280f84ull, { 255, 255, 255, 40, 10, 0, 0, false } },
+        { 0x63436e936af9acc0ull, { 255, 255, 255, 45, 0, 125, 0, false } },
+        { 0xad0d1fa2daebc8fcull, { 255, 255, 255, 50, 0, 0, 0, false } },
+    };
     const std::unordered_map<uint64_t, Material>& built_in_map() {
         static const std::unordered_map<uint64_t, Material> map = [] {
             std::unordered_map<uint64_t, Material> built;
             for (const BuiltIn& entry : built_ins) {
                 built[entry.hash] = class_materials[entry.material];
+            }
+            for (const ShippedMaterial& shipped : shipped_materials) {
+                built[shipped.hash] = shipped.material;
             }
             return built;
         }();
@@ -221,7 +237,7 @@ bool tooie::material_pick::effective(uint64_t hash, Material& material, bool& ow
             return !material.none;
         }
     }
-    return builtin(hash, material);
+    return builtin(hash, material) && !material.none;
 }
 
 void tooie::material_pick::for_each_effective(const std::function<void(uint64_t hash, const Material& material, bool own)>& visit) {
@@ -233,7 +249,7 @@ void tooie::material_pick::for_each_effective(const std::function<void(uint64_t 
             }
         }
         for (const auto& [hash, material] : built_in_map()) {
-            if (materials.find(hash) == materials.end()) {
+            if ((materials.find(hash) == materials.end()) && !material.none) {
                 visit(hash, material, false);
             }
         }

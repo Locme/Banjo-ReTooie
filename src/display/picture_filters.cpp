@@ -510,6 +510,9 @@ namespace {
         { 0xfa7998071a44c498, fx(effect_ice) },
         { 0xfc2a94befcacd6d7, fx(effect_ice) },
         { 0xfc57075b40c809cb, fx(effect_shiny) },
+        // L's shader_effect_tags.txt of 2026-10-22, round two (the Disable picks, 34edb75eecfadfe4 also a Ray Tracing Material 'none').
+        { 0x0581557796590067, fx(effect_disable) },
+        { 0x34edb75eecfadfe4, fx(effect_disable) },
     };
 
     // Shiny textures for Screen-space reflections besides the parallax list's metal (RT64 hashes, picked by
@@ -712,7 +715,7 @@ namespace {
         { 0x0557af15df95d704, 9, 152, Metal, 7 },
         { 0x056644ebac6fbddc, 8, 110 },
         { 0x05749d611ab935e0, 7, 143, Stone, 7 },
-        { 0x0581557796590067, 17, 169, Wood },
+        { 0x0581557796590067, 17, 169, Stone, 7 },
         { 0x0583a8b5a27a0f2f, 34, 107, Bumpy },
         { 0x058502e264bc98d7, 7, 163, Metal, 7 },
         { 0x0587796c4d31d722, 24, 156, Bumpy },
@@ -1068,6 +1071,7 @@ namespace {
         { 0x217bcdd8b080800f, 20, 98, Brick },
         { 0x21b015a85b4feaea, 21, 99, Bumpy },
         { 0x21b3744ca6fe7c02, 33, 159, Bumpy },
+        { 0x21b618c38e4a3414, 40, 190, Stone },
         { 0x21ceab0812e99c55, 2, 111, Wood, 7 },
         { 0x2204434e37303bf8, 17, 152, Bumpy },
         { 0x22192b154844f2be, 0, 153 },
@@ -1344,7 +1348,7 @@ namespace {
         { 0x34b7d075683be8e1, 0, 122, Wood, 7 },
         { 0x34bc0df8bc599c11, 64, 150, Metal, 7 },
         { 0x34e036b8d3a5ccbb, 46, 113, Leaves },
-        { 0x34edb75eecfadfe4, 7, 109, Metal, 7 },
+        { 0x34edb75eecfadfe4, 7, 109, Stone, 7 },
         { 0x34f050082c5115e6, 22, 160, Ice, 0, false },
         { 0x35158ae452767f97, 33, 175, Leaves },
         { 0x351976c604fadf0d, 28, 112, Metal, 7 },
@@ -2971,7 +2975,7 @@ namespace {
         { 0xa9623177beee5f46, 15, 152, Bumpy, 7 },
         { 0xa9690b65ed36091c, 63, 172, Rounded },
         { 0xa96d959e636af4bf, 2, 129, Bumpy },
-        { 0xa98cd44b3c853507, 9, 137, Metal, 7 },
+        { 0xa98cd44b3c853507, 9, 137, Stone, 7 },
         { 0xa9a30e2c2dd1d4c9, 17, 126, Wood, 7 },
         { 0xa9c2a14aa3d16803, 24, 152, Bumpy, 7 },
         { 0xa9c6c08511d44618, 61, 185, Brick },
@@ -3693,7 +3697,7 @@ namespace {
         { 0xdd96acc525117fe8, 0, 107 },
         { 0xdd9d4d9ad015b48e, 19, 185, Bumpy },
         { 0xddbe30be48fc0e0f, 66, 251, Metal, 7 },
-        { 0xddcd958879777c51, 17, 145 },
+        { 0xddcd958879777c51, 17, 145, Stone, 7 },
         { 0xdde5e19b8c0b9ece, 25, 159, Metal, 7 },
         { 0xdde879987590af41, 21, 151, Smooth },
         { 0xddf434e3d92f546c, 58, 174, Bumpy, 7 },
