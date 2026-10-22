@@ -1,5 +1,15 @@
 <!-- Newest first: add new tests at the top, above the highest number. -->
 
+## T530 Displaced ground cost
+- Asked: 2026-10-22 10:53 UTC
+- Build: main
+- Steps:
+  1. Pull main and build; Displaced ground at 60, distance 8000
+  2. Run the Effect Cost Check in the intro and in Terrydactyland, once with Displaced ground on and once at 0
+  3. Walk around Spiral Mountain's stone and dirt floors and turn the camera
+- Look for: How many ms Displaced ground costs now (it was part of the 75 ms in the intro). The ground near you must not wobble; far off (past about 2000 units) the dips are coarser and may shift a little as you walk.
+- Status: waiting for L
+
 ## T529 Terrydactyland sand frame rate (edge cache)
 - Asked: 2026-10-22 10:28 UTC
 - Build: main 9beb710 or later (edges worked out on another thread; overlay shows how many times)
